@@ -53,6 +53,11 @@
   `status=success` / `result=success`，把 `environment-readiness=incomplete`、
   `runtime-sdk-status=missing` 与 `runtime-libc-present=false` 当成 state truth，而不是
   command failure。
+- 当前 `env status` 已继续补齐 readiness evidence：line-based output 与 envelope 都会投影
+  `environment-status` / `environmentStatus`、`toolchain-binding-status` /
+  `toolchainBindingStatus` 与 `distribution-status` / `distributionStatus`。
+- 当前 `environment-readiness` 保留为兼容字段，并与 `environment-status` 使用同一 derived
+  readiness vocabulary；`doctor` 的 binding readiness 也复用同一份 environment projection。
 - 当前 `tools/stage0/nextpas.pas` 现在也已拥有最小只读 `doctor` surface：
   `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
   会复用 `env status` 已经使用的 target/toolchain/distribution/runtime truth，并额外投影

@@ -475,8 +475,9 @@ result bridge 上。
 
 当前 `tools/stage0/nextpas.pas` 已经先把这条 contract 的最小只读面落地：`nextpas env status`
 会通过同一类 `command-envelope=<json>` 返回 target / binding / distribution / runtime state，
-即使 runtime SDK 仍缺失，也会用 `environmentReadiness`、`runtimeSdkStatus` 与
-`runtimeLibcPresent` 表达“不完整”，而不是把这类状态误报成命令执行失败。
+即使 runtime SDK 仍缺失，也会用 `environmentReadiness`、`environmentStatus`、
+`runtimeSdkStatus`、`toolchainBindingStatus`、`distributionStatus` 与 `runtimeLibcPresent`
+表达“不完整”，而不是把这类状态误报成命令执行失败。
 
 ## `doctor` 必须是正式能力，不是 support 脚本
 

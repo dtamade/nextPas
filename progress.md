@@ -5,6 +5,27 @@
 
 ## Session: 2026-04-29
 
+### Richer Env Status Readiness Evidence
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-04-29-nextpas-continuous-developer-tooling-plan.md` 的 Task 3
+    先在 `build/verify_local.sh` 加入 focused RED gate，要求 `environment-status`、
+    `toolchain-binding-status`、`distribution-status` 与 envelope mirror。
+  - 运行 fresh `bash build/verify_local.sh`，确认失败点落在
+    `missing-stage0-env-status-environment-status`，证明 gate 捕捉的是缺失的 readiness evidence。
+  - 扩展 `tools/stage0/nextpas.pas` 的 `TEnvironmentProjectionContext`，从既有
+    target/binding/distribution/runtime truth 推导 `environment-status`、
+    `toolchain-binding-status` 与 `distribution-status`。
+  - 保留 `environment-readiness` 作为兼容字段，并让它与 `environment-status` 使用同一
+    derived readiness vocabulary；`doctor` 的 binding readiness 也复用同一份 environment
+    projection。
+  - 同步回写 `tools/stage0/README.md`、
+    `docs/architecture/developer-tooling-specification.md` 与 tracking，明确
+    `env status` 仍是 execution-successful 的只读 state projection，不承担 mutation。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认 `stage0EnvStatusCheck=pass`、
+    `stage0DoctorCheck=pass` 与 `verify-local=pass`。
+
 ### Doctor Result Contract Hardening
 
 - **Status:** completed

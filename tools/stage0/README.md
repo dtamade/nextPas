@@ -100,12 +100,17 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `runtime-libc=<path>`
 - `runtime-libc-present=<true|false>`
 - `environment-readiness=<state>`
+- `environment-status=<ready|incomplete>`
 - `runtime-sdk-status=<state>`
+- `toolchain-binding-status=<ready|missing>`
+- `distribution-status=<ready|incomplete>`
 
 这条 surface 当前故意把“状态解析”和“健康诊断”分开：即使 runtime 仍然缺失，
 `env status` 也会保持 `status=success` / `result=success`，并把未就绪事实放进
-`environment-readiness`、`runtime-sdk-status` 与 `runtime-libc-present`，而不是把
-“不完整环境”误报成命令执行失败。
+`environment-readiness`、`environment-status`、`runtime-sdk-status`、
+`toolchain-binding-status`、`distribution-status` 与 `runtime-libc-present`，而不是把
+“不完整环境”误报成命令执行失败。`environment-readiness` 当前保留为兼容字段，并与
+`environment-status` 使用同一 derived readiness vocabulary。
 
 `doctor` 当前还会额外投影最小 health inspection 汇总：
 
@@ -271,7 +276,9 @@ resolution / sema / MIR / backend / toolchain skeleton：
 - `1`：参数不合法、命令不受支持、目标不受支持、源文件缺失、syntax / resolution / sema 提前失败，或 `test` / toolchain 底层执行失败
 
 当前 `env status` 与只读 `doctor` 不会因为 environment 仍不完整就退出失败；这类事实继续通过
-`environment-readiness` / `runtime-sdk-status` / `runtime-libc-present` 以及 `doctor-status` 表达。
+`environment-readiness` / `environment-status` / `runtime-sdk-status` /
+`toolchain-binding-status` / `distribution-status` / `runtime-libc-present` 以及
+`doctor-status` 表达。
 
 当输入命令不是 `build`、`test`、`env` 或 `doctor` 时，驱动入口必须打印 `unsupported-command: <name>`。
 当目标不是 `linux-x86_64` 时，驱动入口必须清晰拒绝，不把问题包装成模糊失败。
@@ -672,7 +679,9 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
 与裸 `nextpas doctor`，冻结 `environment-readiness=incomplete`、
-`runtime-sdk-status=missing`、`runtime-libc-present=false`、`stage0EnvStatusCheck=pass`
+`environment-status=incomplete`、`runtime-sdk-status=missing`、
+`runtime-libc-present=false`、`toolchain-binding-status=ready`、
+`distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass` 与
 `stage0DoctorInvalidArgumentsCheck=pass`，确保当前最小 `env` / `doctor` surface
 也进入正式 gate。

@@ -182,7 +182,10 @@ type
     RuntimeLibcPresent: Boolean;
     HasRuntimeLibcPresent: Boolean;
     EnvironmentReadiness: string;
+    EnvironmentStatus: string;
     RuntimeSdkStatus: string;
+    ToolchainBindingStatus: string;
+    DistributionStatus: string;
   end;
 
   TDoctorFinding = record
@@ -1115,8 +1118,23 @@ begin
   );
   AppendJsonStringField(
     AFields,
+    'environmentStatus',
+    ActiveEnvironmentProjection.EnvironmentStatus
+  );
+  AppendJsonStringField(
+    AFields,
     'runtimeSdkStatus',
     ActiveEnvironmentProjection.RuntimeSdkStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'toolchainBindingStatus',
+    ActiveEnvironmentProjection.ToolchainBindingStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'distributionStatus',
+    ActiveEnvironmentProjection.DistributionStatus
   );
 end;
 
@@ -1463,7 +1481,10 @@ begin
   AContext.RuntimeLibcPresent := False;
   AContext.HasRuntimeLibcPresent := False;
   AContext.EnvironmentReadiness := '';
+  AContext.EnvironmentStatus := '';
   AContext.RuntimeSdkStatus := '';
+  AContext.ToolchainBindingStatus := '';
+  AContext.DistributionStatus := '';
 end;
 
 procedure ClearDoctorFindingValue(var AFinding: TDoctorFinding);
@@ -1570,7 +1591,9 @@ procedure CaptureEnvironmentProjectionFromTargetConfig(
   const ATargetConfig: TTargetConfig
 );
 var
+  DistributionReady: Boolean;
   RuntimeRootPath: string;
+  ToolchainBindingReady: Boolean;
 begin
   RuntimeRootPath := ResolveRuntimeRootPath(ATargetConfig);
   AContext.ToolchainBindingPath := ATargetConfig.ToolchainBindingPath;
@@ -1586,16 +1609,32 @@ begin
     AContext.RuntimeLibcPath := '';
   AContext.HasRuntimeLibcPresent := AContext.RuntimeLibcPath <> '';
   AContext.RuntimeLibcPresent := FileExists(AContext.RuntimeLibcPath);
-  if AContext.RuntimeLibcPresent then
-  begin
-    AContext.EnvironmentReadiness := 'ready';
-    AContext.RuntimeSdkStatus := 'ready';
-  end
+  ToolchainBindingReady := (AContext.ToolchainBindingPath <> '') and
+    FileExists(AContext.ToolchainBindingPath);
+  DistributionReady := DirectoryExists(AContext.DistributionBinDir) and
+    DirectoryExists(AContext.DistributionLibDir) and
+    DirectoryExists(AContext.DistributionShareDir);
+
+  if ToolchainBindingReady then
+    AContext.ToolchainBindingStatus := 'ready'
   else
-  begin
-    AContext.EnvironmentReadiness := 'incomplete';
+    AContext.ToolchainBindingStatus := 'missing';
+
+  if DistributionReady then
+    AContext.DistributionStatus := 'ready'
+  else
+    AContext.DistributionStatus := 'incomplete';
+
+  if AContext.RuntimeLibcPresent then
+    AContext.RuntimeSdkStatus := 'ready'
+  else
     AContext.RuntimeSdkStatus := 'missing';
-  end;
+
+  if AContext.RuntimeLibcPresent and ToolchainBindingReady and DistributionReady then
+    AContext.EnvironmentStatus := 'ready'
+  else
+    AContext.EnvironmentStatus := 'incomplete';
+  AContext.EnvironmentReadiness := AContext.EnvironmentStatus;
 end;
 
 function DoctorFindingJson(const AFinding: TDoctorFinding): string;
@@ -1653,9 +1692,11 @@ begin
     AContext.WorkspaceStatus := 'ready'
   else
     AContext.WorkspaceStatus := 'not-provided';
-  if (AEnvironmentContext.ToolchainBindingPath <> '') and
+  if AEnvironmentContext.ToolchainBindingStatus <> '' then
+    AContext.ToolchainBindingStatus := AEnvironmentContext.ToolchainBindingStatus
+  else if (AEnvironmentContext.ToolchainBindingPath <> '') and
     FileExists(AEnvironmentContext.ToolchainBindingPath) then
-    AContext.ToolchainBindingStatus := 'ready'
+      AContext.ToolchainBindingStatus := 'ready'
   else
     AContext.ToolchainBindingStatus := 'missing';
 
@@ -2536,8 +2577,23 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'environment-status',
+    ActiveEnvironmentProjection.EnvironmentStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'runtime-sdk-status',
     ActiveEnvironmentProjection.RuntimeSdkStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'toolchain-binding-status',
+    ActiveEnvironmentProjection.ToolchainBindingStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'distribution-status',
+    ActiveEnvironmentProjection.DistributionStatus
   );
 end;
 

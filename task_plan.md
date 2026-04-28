@@ -91,6 +91,41 @@ Completed
 - [x] 重新运行 fresh `bash build/verify_local.sh`，确认结构化 finding contract 与
       `verify-local=pass`
 
+## Addendum: 2026-04-29 Richer Env Status Readiness Evidence
+
+### Goal
+
+把 `env status` 的只读 state projection 从路径与 runtime 状态继续加固到可供
+`doctor` 与 future `env sync` 复用的 readiness evidence：
+
+- `environment-readiness` 保留为兼容字段，但与新增 `environment-status` 使用同一
+  derived readiness vocabulary
+- `runtime-sdk-status` 继续表达 runtime SDK 是否 ready / missing
+- 新增 `toolchain-binding-status` 与 `distribution-status`
+- `command-envelope=<json>.result` 必须同步保留 `environmentStatus`、
+  `runtimeSdkStatus`、`toolchainBindingStatus` 与 `distributionStatus`
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 先在 `build/verify_local.sh` 加入 focused RED gate，确认 fresh
+      `bash build/verify_local.sh` 失败于缺少 `environment-status`
+- [x] 扩展 `tools/stage0/nextpas.pas` 的 `TEnvironmentProjectionContext`，
+      从既有 target/binding/distribution/runtime truth 推导 environment、runtime SDK、
+      binding 与 distribution readiness
+- [x] 保持 `env status` 为 execution-successful 的只读 projection：当前 runtime SDK /
+      distribution 仍不完整时继续返回 `status=success` / `result=success`
+- [x] 让 `doctor` 复用同一份 `toolchain-binding-status`，避免 doctor/env 各自推导
+      binding readiness
+- [x] 同步回写 `tools/stage0/README.md`、
+      `docs/architecture/developer-tooling-specification.md`、`task_plan.md`、
+      `findings.md` 与 `progress.md`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认新增 readiness evidence 与
+      `verify-local=pass`
+
 ## Addendum: 2026-04-26 Stage0 Env Status Read-only Projection
 
 ### Goal

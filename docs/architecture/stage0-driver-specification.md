@@ -129,8 +129,11 @@ result envelope，而不是另外长出一个 installer 或 channel CLI 世界�
 - 复用同一份 target facts 与 toolchain binding resolution，解析 distribution bin/lib/share、
   runtime root 与 runtime libc locator
 - 即使当前 environment 仍然不完整，也继续以 `status=success` / `result=success` 结束
-- 真实环境状态通过 `environment-readiness`、`runtime-sdk-status` 与
+- 真实环境状态通过 `environment-readiness` / `environment-status`、
+  `runtime-sdk-status`、`toolchain-binding-status`、`distribution-status` 与
   `runtime-libc-present` 投影，而不是把“未就绪”误报成 command failure
+- `environment-readiness` 当前保留为兼容字段，并与 `environment-status` 使用同一
+  derived readiness vocabulary
 - 为什么当前状态不适合 build/test/pkg/doc/query，属于当前最小 `doctor` 与后续更完整 health inspection 的诊断边界
 
 ## `stage0 doctor` 提供最小只读 health inspection
