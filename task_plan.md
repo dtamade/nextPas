@@ -15,6 +15,43 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-04-29 Package Workflow Truth Skeleton
+
+### Goal
+
+把 package workflow 的第一批 shared truth 从文档语义推进到 compiler-owned 最小实体，同时继续
+守住“只读 truth / 非执行 workflow / 不伪装完整 package manager”这条边界：
+
+- 新增 `compiler/frontend/np_package_workflow.pas`，至少拥有
+  `TPackageManifestTruth`、`TPackageLockTruth`、`TPackageInstallPlanTruth` 与
+  `TPackageWorkflowTruth`
+- 这批 truth 必须消费 `np_package_manifest.pas` 已有的 `TPackageManifestInfo`，不重新发明 parser
+- `tests/toolchain/toolchain_contract_smoke.pas` 与 `build/verify_local.sh` 必须冻结
+  `package-workflow-manifest-status=ready`、`package-workflow-lock-status=deferred`、
+  `package-install-plan-status=deferred` 与 `package-workflow-source-root-count=<non-zero>`
+- 文档与持续记录必须同步成当前 reality，并明确这批不做 registry、fetch、install、solver
+  或 lockfile write
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 先在 `tests/toolchain/toolchain_contract_smoke.pas` 与 `build/verify_local.sh`
+      写出 package workflow truth 的 RED contract，并 fresh 运行确认失败点正好落在
+      `np_package_workflow` unit 尚未存在
+- [x] 新增 `compiler/frontend/np_package_workflow.pas`，最小落地
+      `TPackageManifestTruth`、`TPackageLockTruth`、`TPackageInstallPlanTruth` 与
+      `TPackageWorkflowTruth`
+- [x] 让 manifest truth 消费 `TPackageManifestInfo` 的 manifest/package/source-root 事实；
+      让 lock/install truth 只暴露 canonical path/provenance，并继续保持 `deferred`
+- [x] 同步回写 `docs/architecture/package-workflow-specification.md`、
+      `docs/architecture/workspace-file-format-specification.md`、
+      `task_plan.md`、`findings.md` 与 `progress.md`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认新增 package workflow contract 与
+      整套 `verify-local=pass`
+
 ## Addendum: 2026-04-29 Minimal Query Symbols Surface
 
 ### Goal

@@ -935,6 +935,10 @@ require_output_pattern '^workspace-model-member-source-root-count=2$' "$TOOLCHAI
 require_output_pattern '^workspace-model-member-artifact-root=.*/tests/fixtures/workspace_member_source_root/\.nextpas$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-member-artifact-root'
 require_output_pattern '^workspace-model-member-output-dir=.*/tests/fixtures/workspace_member_source_root/\.nextpas/out/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-member-output-dir'
 require_output_pattern '^workspace-model-member-host-cache-root=.*/tests/fixtures/workspace_member_source_root/\.nextpas/cache/host-fpc/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-member-host-cache-root'
+require_output_pattern '^package-workflow-manifest-status=ready$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-manifest-status'
+require_output_pattern '^package-workflow-lock-status=deferred$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-lock-status'
+require_output_pattern '^package-install-plan-status=deferred$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-install-plan-status'
+require_output_pattern '^package-workflow-source-root-count=[1-9][0-9]*$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-source-root-count'
 printf 'toolchain-contract-check=pass\n'
 
 printf 'toolchain-failure-check=running\n'

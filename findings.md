@@ -100,6 +100,18 @@
 - 当前 `build/verify_local.sh` 也已经把 `nextpas query symbols` 的 success path 与 bare
   `nextpas query` 的 invalid-arguments contract 纳入 promotion path，因此最小 `query`
   公开面不再只靠手工 probe 留证。
+- 当前 `compiler/frontend/np_package_workflow.pas` 已经存在，并把 package workflow 的第一批
+  compiler-owned truth 收成 `TPackageManifestTruth`、`TPackageLockTruth`、
+  `TPackageInstallPlanTruth` 与 `TPackageWorkflowTruth`。
+- 当前这批 package workflow truth 仍然严格 non-executing：manifest truth 只消费
+  `TPackageManifestInfo` 的 manifest/package/source-root 事实，lock/install truth 只冻结
+  canonical path/provenance 与 `deferred` 状态，不执行 registry lookup、fetch、solver、
+  install placement 或 lockfile write。
+- 当前 `tests/toolchain/toolchain_contract_smoke.pas` 与 `build/verify_local.sh`
+  也已经把最小 package workflow contract 纳入真实 gate：
+  `package-workflow-manifest-status=ready`、`package-workflow-lock-status=deferred`、
+  `package-install-plan-status=deferred` 与 `package-workflow-source-root-count=<non-zero>`；
+  这让 package workflow skeleton 不再只靠文档留证。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。
