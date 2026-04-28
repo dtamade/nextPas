@@ -1,0 +1,824 @@
+# Progress Log
+
+说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
+2026-04-29 记录为准。
+
+## Session: 2026-04-29
+
+### Stage0 Doctor Minimal Read-only Health Surface + Verify Sync
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-04-29-nextpas-continuous-developer-tooling-plan.md` 的 Task 1
+    先在 `build/verify_local.sh` 写出 `nextpas doctor --target linux-x86_64` 的 RED
+    gate，并确认失败点落在 `unsupported-command: doctor`。
+  - 扩展 `tools/stage0/nextpas.pas`，新增
+    `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
+    的 command parse、usage、invalid-arguments behavior 与 `doctor` selector。
+  - 让 `doctor` 复用 `env status` 已经使用的 target/toolchain/distribution/runtime truth，
+    并可选消费 `--workspace <root>` 作为只读 workspace root health check 输入。
+  - 新增最小 `TDoctorProjectionContext`，把 `doctor-status`、`doctor-check-count` 与
+    `doctor-finding-count` 投影进 line-based output 与 `command-envelope=<json>.result`。
+  - 保持 `doctor` 为 execution-successful 的只读 inspection：当前仓库缺少
+    `lib/nextpas/runtime/linux-x86_64/libc.so` 时，命令继续返回
+    `status=success` / `result=success`，并把结果表达成 `doctor-status=warning` /
+    `doctor-finding-count=1`。
+  - 扩展 `build/verify_local.sh`，把 `stage0DoctorCheck` 与
+    `stage0DoctorInvalidArgumentsCheck` 纳入正式 gate。
+  - 同步回写 `tools/stage0/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 与 tracking，明确这批
+    故意不把 richer finding taxonomy、suggested action、`env sync`、`query` 或 package
+    workflow 伪装成当前实现面。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增
+    `stage0DoctorCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass` 与
+    `verify-local=pass`。
+
+## Session: 2026-04-26
+
+### Stage0 Env Status Read-only Projection + Verify Sync
+
+- **Status:** completed
+- Actions taken:
+  - 审查 `tools/stage0/nextpas.pas`、`tools/stage0/target_config.pas` 与
+    `build/targets/` / `build/toolchains/` 当前 reality 后，确认这批最小真实推进点是
+    只读 `env status` state projection，而不是提前打开 `env use` / `env sync` /
+    `doctor`。
+  - 扩展 `tools/stage0/nextpas.pas`，新增
+    `nextpas env status --target linux-x86_64 [--toolchain-binding <id>]`，并补齐
+    `env` family usage / invalid-arguments behavior。
+  - 让 `env status` 复用现有 target/toolchain/distribution/runtime truth，显式投影
+    `toolchain-binding-path`、distribution bin/lib/share、`runtime-root`、`runtime-libc`、
+    `runtime-libc-present`、`environment-readiness` 与 `runtime-sdk-status`。
+  - 保持 `env status` 为 execution-successful 的只读 surface：当前仓库缺少
+    `lib/nextpas/runtime/linux-x86_64/libc.so` 时，命令继续返回
+    `status=success` / `result=success`，并把 `environment-readiness=incomplete` /
+    `runtime-sdk-status=missing` 当成结果字段，而不是 command failure。
+  - 扩展 `build/verify_local.sh`，把 `stage0EnvStatusCheck` 与
+    `stage0EnvInvalidArgumentsCheck` 纳入正式 gate。
+  - 同步回写 `tools/stage0/README.md`、`tools/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 与 tracking，明确这批
+    故意不把 `env use` / `env sync` / `doctor` / `query` 伪装成当前实现面。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增
+    `stage0EnvStatusCheck=pass`、`stage0EnvInvalidArgumentsCheck=pass` 与
+    `verify-local=pass`。
+
+## Session: 2026-04-06
+
+### Stage0 Test Command Thin Wrapper + Verify Sync
+
+- **Status:** completed
+- Actions taken:
+  - 审查 `tools/stage0/nextpas.pas`、`tests/run_all_tests.sh` 与
+    `tests/harness/runner.pas` 后，确认这批只该把 `nextpas test` 做成最小 CLI thin wrapper，
+    不该重写 harness 现有的分组、snapshot 与 fixture execution ownership。
+  - 扩展 `tools/stage0/nextpas.pas`，新增 `test` command parse/usage，支持
+    `nextpas test --list-groups [--workspace <root>]` 与
+    `nextpas test --filter <group> [--workspace <root>]`。
+  - 让 `tools/stage0/nextpas.pas` 通过 `/usr/bin/env` thin-wrap
+    `tests/run_all_tests.sh`，并显式传入 `NEXTPAS_STAGE0`、
+    `NEXTPAS_WORKSPACE_ROOT` 与 `NEXTPAS_REPO_ROOT`；driver-side invalid arguments
+    则继续投影成 `command=test`、`selector=test`、
+    `failure-kind=invalid-arguments`。
+  - 扩展 `build/verify_local.sh`，把 `nextpas test` 的 `list-groups`、
+    `invalid-arguments`、`unknown-group`、`compiler-pass` 与 `smoke`
+    五条 contract 纳入正式 gate。
+  - 同步回写 `tools/stage0/README.md`、`tools/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 与 tracking，明确这批
+    故意不把 `doctor` / `env` / `query` 伪装成当前实现面。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 `nextpas test` gate 与
+    整套 `verify-local=pass`。
+
+### Success-path Toolchain Transcript Hardening + Doc Sync
+
+- **Status:** completed
+- Actions taken:
+  - 扩展 `compiler/toolchain/np_toolchain_runner.pas`，把 executed sidecar truth 收进
+    runner transcript，使 sidecar 也能暴露 `materialized` 与 `cleanupStatus`。
+  - 扩展 `compiler/frontend/np_compilation_session.pas`，让 success/failure 两侧都按全部
+    executed steps 投影 `tool-status-events` 与 `buildTrace.steps[*]`，并把
+    `buildTraceRef` 统一改成 plan-level
+    `trace-<session-id>-toolchain-plan`。
+  - 扩展 `tests/toolchain/toolchain_contract_smoke.pas`，新增
+    `native-run-transcript=<json>` 输出，冻结 executed sidecar truth。
+  - 扩展 `build/verify_local.sh`，把 success path `tool-status-event-count=10`、
+    full-step `buildTrace.steps[*]`、later-step failure 的 plan-level trace ref，以及
+    `native-run-transcript` sidecar cleanup truth 全部纳入正式 gate。
+  - 同步回写 README / 架构规范 / roadmap / tracking，清理“success path 仍是
+    单步摘要”的旧表述。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`toolchainFailureCheck=pass`、
+    `assemblerFailureAttributionCheck=pass`、`linkerFailureAttributionCheck=pass` 与
+    `verify-local=pass`。
+
+### Later-step Failure Attribution + Doc Sync
+
+- **Status:** completed
+- Actions taken:
+  - 先在 `build/verify_local.sh` 为 fake `as` / `ld` 负路径写出 RED gate，要求 later-step
+    failure 必须分别投影 `toolchain.assembler-exec-failed` /
+    `toolchain.linker-exec-failed`，并把 `diagnostic-step-id` / `build-trace-ref`
+    锚到真实失败 step。
+  - 扩展 `compiler/toolchain/np_toolchain_plan.pas`，让 `TToolInvocationStep` 持有
+    `ToolRole` / `ProfileId` / `SysrootRef`，并为 `native-assemble` / `native-link`
+    写入 step context。
+  - 扩展 `compiler/frontend/np_compilation_session.pas`，让 failure path 的 diagnostic /
+    build trace / status event / `buildTraceRef` 改按真实失败 step 投影。
+  - 调整 `tools/stage0/nextpas.pas`，让公开 `failure-kind` 优先使用 session 的真实
+    diagnostic code，而不是回退到 `PrimaryToolFailureMapping`。
+  - 同步回写 README / 架构规范 / roadmap / tracking，把 later-step failure attribution
+    已完成与 success-path summary residual risk 写成当前 reality。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `assembler-failure-attribution-check=pass`、
+    `linker-failure-attribution-check=pass` 与 `verify-local=pass`。
+
+## Session: 2026-04-05
+
+### Project Kickoff Recon
+
+- **Status:** completed
+- Actions taken:
+  - 读取 `task_plan.md`、`findings.md`、`progress.md`、`README.md` 与主路线图文档，
+    恢复当前 rolling window 上下文。
+  - 确认仓库当前主计划已完成 `Batch 1` 到 `Batch 17`，下一步不该继续在已收口批次上空转。
+  - 锁定 `Batch 17` 之后的三个高价值候选推进面：
+    `multi-step toolchain orchestration`、
+    `workspace/package shared truth`、
+    `semantic diagnostics warning policy`。
+  - 已并行派出三路侦察，分别阅读 toolchain、workspace/package 与 diagnostics 相关代码与文档，
+    主线程同步检索 `compiler/frontend`、`compiler/backend`、`compiler/diagnostics`、
+    `tools/stage0` 与 `build/verify_local.sh` 的关键落点。
+
+### Workspace Model Shared Truth Convergence
+
+- **Status:** completed
+- Actions taken:
+  - 先在 `tests/toolchain/toolchain_contract_smoke.pas` 与 `build/verify_local.sh`
+    写出 RED contract，覆盖 explicit workspace override、nearest package manifest 与
+    workspace member 三条 shared workspace model 代表路径。
+  - 新增 `compiler/frontend/np_workspace_model.pas`，把
+    `TWorkspaceModel`、`TPackageRef`、`TTargetSelection`、`TArtifactRootSet` 与
+    `ResolveWorkspaceModel(...)` 落成 compiler-owned shared truth。
+  - 扩展 `compiler/frontend/np_package_manifest.pas`，补齐
+    `TPackageManifestInfoArray`、`ResolveWorkspaceMemberPackageInfos(...)` 与
+    `ResolveWorkspacePackageManifestInfos(...)`，把 manifest parser 与 shared model input
+    分层写实。
+  - 让 `compiler/frontend/np_compilation_session.pas` 正式拥有并释放 `WorkspaceModel`，
+    并让 resolver / toolchain planner 从 model 读取 `ProjectUnitRootInfos` /
+    `ProjectUnitRoots`。
+  - 把 `tools/stage0/nextpas.pas` 的 workspace/package/artifact discovery 切到 shared model，
+    保持 line-based output、`command-envelope=<json>`、resolver precedence 与
+    early-failure contract 不变。
+  - 同步回写 `docs/architecture/workspace-specification.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/compiler-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `docs/plans/2026-04-05-workspace-model-shared-truth-plan.md`、
+    `task_plan.md` 与 `findings.md`。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `toolchainContractCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+### Toolchain Plan Runner Execution Contract
+
+- **Status:** completed
+- Actions taken:
+  - 审核 `compiler/backend/np_backend_plan.pas`、`compiler/toolchain/np_toolchain_plan.pas`
+    与 `tests/toolchain/toolchain_contract_smoke.pas` 的当前边界，确认
+    `backend` 仍只交付 final `executable` artifact truth，这一批不应把 `stage0 build`
+    伪装成已切到真实 `native-assemble-link` production path。
+  - 新增 `compiler/toolchain/np_toolchain_runner.pas`，让 ready
+    `TToolchainPlan` 可以按 step 顺序真实执行，并负责 working/output/sidecar
+    目录准备、可执行路径解析、`response-file` / `resource-list-script` /
+    `archive-command-script` 物化，以及 `delete-on-success` sidecar 清理。
+  - 在 `compiler/toolchain/np_toolchain_plan.pas` 补齐 `StepAt(...)`，
+    让 runner 与 contract smoke 能按 step 读取 typed invocation truth。
+  - 扩展 `tests/toolchain/toolchain_contract_smoke.pas`，在临时 fake toolchain bin 下
+    真实执行 `PlanNativeAssembleLink(...)` 生成的两步 plan，并验证
+    `native-run-status=success`、assemble/link step status、object/output
+    产出、response sidecar cleanup，以及 captured response 里确实包含 object path。
+  - 扩展 `build/verify_local.sh`，把 `compiler/toolchain/np_toolchain_runner.pas` 与
+    `native-run-*` contract 纳入 promotion path。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认最终
+    `toolchainContractCheck=pass` 与 `verify-local=pass`。
+
+### Host-compiler Runner Reuse + Tool Run Projection
+
+- **Status:** completed
+- Actions taken:
+  - 先在 `build/verify_local.sh` 为 `stage0-smoke`、`semantic-smoke` 与
+    `toolchain-failure` 补上 `tool-run-status`、`tool-run-step-count`、
+    `primary-tool-run-status` 的 RED gate，并 fresh 运行确认失败点正好落在这批新字段缺失。
+  - 在 `compiler/frontend/np_compilation_session.pas` 增加 generic execution 入口，
+    让 session 直接复用 `ExecuteToolchainPlan(...)`，并正式持有
+    `tool run` status / step count / primary-step status。
+  - 把 `tools/stage0/nextpas.pas` 的 one-step host-compiler production path 切到
+    session-owned runner execution，删除原来手工 `TProcess` 执行与 duplicated
+    selection/start/success/failure bookkeeping。
+  - 把 `tool-run-status`、`tool-run-step-count`、
+    `primary-tool-run-status` 接进 line-based projection 与
+    `command-envelope=<json>.result`，让 production path 的真实 execution result
+    进入正式 machine-readable truth。
+  - 同步回写 `tools/stage0/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/toolchain-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `task_plan.md` 与 `findings.md`。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 `tool-run-*` contract、
+    既有 tool invocation plan/status event/build trace contract，以及整套
+    `verify-local=pass` 全部继续成立。
+
+### Backend Intermediate Artifact Truth + Logical Object Input
+
+- **Status:** completed
+- Actions taken:
+  - 先在 `build/verify_local.sh` 为 `backend-artifact-count`、`backend-artifacts`、
+    `logical-link-request.objectInputs` 与 camelCase envelope fields 写出 RED gate，
+    并 fresh 运行确认失败点正好落在 backend artifact truth 缺失。
+  - 扩展 `compiler/backend/np_backend_plan.pas`，让 backend plan 固定拥有
+    `assembly-text`、`object-file` 与 `executable` 三类 artifacts，并把 `.s/.o`
+    收口到 `<artifact-root>/cache/backend/<target>/`。
+  - 扩展 `compiler/frontend/np_compilation_session.pas`，让 session 正式拥有
+    `backendArtifactCount` 与 `backendArtifacts` projection。
+  - 扩展 `compiler/toolchain/np_toolchain_plan.pas`，让
+    `logicalLinkRequest.objectInputs` 开始引用 backend-owned `object-file` artifact，
+    为 future native link selection 冻结 object-level input truth。
+  - 扩展 `tools/stage0/nextpas.pas`，把 `backend-artifact-count`、
+    `backend-artifacts`、`backendArtifactCount` 与 `backendArtifacts` 接进 line-based
+    output 和 `command-envelope=<json>.result`。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 backend artifact / logical object
+    input gate 通过，最终 `verify-local=pass`。
+
+### Bootstrap-native Assemble/Link Production Path + Doc Sync
+
+- **Status:** completed
+- Actions taken:
+  - 审核 `compiler/toolchain/np_toolchain_plan.pas` 与当前 backend artifact / binding truth，
+    确认 `PlanFromBackend` 的合法切换前提已经具备，不再需要继续停在 single-step
+    host-compiler execution。
+  - 扩展 `compiler/toolchain/np_toolchain_plan.pas`，让 production path 直接选择
+    `bootstrap-native-assemble-link`，真实执行
+    `host-fpc-emit-asm -> native-assemble -> native-link`。
+  - 扩展 `compiler/frontend/np_compilation_session.pas`，为 source-backed units 收集额外
+    assembly base names，使 explicit unit root / 多文件场景能够继续追加
+    `native-assemble-<unit>` step，而不是只让根程序三步 plan 假绿。
+  - 扩展 `build/verify_local.sh`，把
+    `toolchain-plan-family=bootstrap-native-assemble-link`、
+    `tool-invocation-count=3`、`tool-run-step-count=3`、
+    `primary-tool-step-id=host-fpc-emit-asm`、
+    `build-trace-ref=...-host-fpc-emit-asm` 以及 extra native-assemble step contract
+    纳入 success / semantic-smoke / toolchain-failure gate。
+  - 同步回写 `tools/stage0/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/toolchain-specification.md`、
+    `docs/architecture/diagnostics-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `task_plan.md` 与 `findings.md`，把“production path 仍待切换”的旧说法改成当前 reality。
+  - 在当批次文档里保留明确 residual risk：
+    `compiler/frontend/np_compilation_session.pas` 的 diagnostics / build trace /
+    status event 当时仍然是 primary-step-centric；该缺口已在 2026-04-06 的 later-step
+    failure attribution 批次收口。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认最终
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+
+## Session: 2026-04-02
+
+### Stage0 Projection Clear/Capture Helper Convergence
+
+- **Status:** completed
+- Actions taken:
+  - 继续审查 `tools/stage0/nextpas.pas` 的内部 compaction 状态，确认
+    `ClearBuildCommandContext(...)`、`ClearSessionContext(...)`、
+    `CaptureBuildCommandContext(...)` 与 `CaptureSessionContext(...)`
+    仍各自维护大段按字段逐个清理/复制逻辑。
+  - 新增按 build/session/diagnostics/syntax/resolution/semantic/MIR/backend/toolchain
+    record 分组的 clear helper 与 capture helper。
+  - 把 clear/capture 四个入口切到统一 helper 路径，保持字段来源、捕获时机、
+    pre-session/session-owned 边界与公开 line/envelope 契约不变。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `stage0Build=pass`、`stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`smokeCheck=pass`，最终
+    `verify-local=pass`。
+
+### Stage0 Projection Helper Convergence
+
+- **Status:** completed
+- Actions taken:
+  - 继续审查 `tools/stage0/nextpas.pas` 的 projection 收敛状态，确认
+    `BuildCommandEnvelopeJson(...)` 与 `PrintSessionProjection(...)` 仍各自内联维护一大段
+    分组 projection 细节，后续再做 compaction 时仍有顺序漂移风险。
+  - 新增按 build/session/syntax/resolution/semantic/mir/backend/toolchain 分组的 JSON helper，
+    并新增 session identity、diagnostics counts、syntax、resolution、semantic、MIR、
+    backend、toolchain、diagnostics detail、build trace、lifecycle 的 print helper。
+  - 把 `BuildCommandEnvelopeJson(...)` 与 `PrintSessionProjection(...)` 切到统一 helper
+    路径，保持公开字段名、字段顺序、启停条件与 pre-session/session-owned 边界不变。
+  - 手工复核 helper 化后的关键顺序，特别确认 session diagnostics accounting 仍先于
+    `sessionLifetime` / `unitLifetime` / `stageLifetime` 写出，避免
+    `command-envelope=<json>` 契约漂移。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `stage0Build=pass`、`stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`smokeCheck=pass`，最终
+    `verify-local=pass`。
+
+### Stage0 Projection Owner Context Convergence
+
+- **Status:** completed
+- Actions taken:
+  - 继续审查 `tools/stage0/nextpas.pas` 里剩余的 session/syntax/resolution/semantic/mir/backend
+    平铺 `Active*` 字段，确认它们仍同时被
+    `BuildCommandEnvelopeJson(...)`、`ClearSessionContext(...)`、
+    `CaptureSessionContext(...)` 与 `PrintSessionProjection(...)` 直接消费。
+  - 引入 `TSessionProjectionContext`、`TSyntaxProjectionContext`、
+    `TResolutionProjectionContext`、`TSemanticProjectionContext`、
+    `TMirProjectionContext`、`TBackendProjectionContext` 六个分组 record，
+    把对应状态收口成 owner-shaped projection context。
+  - 同步替换 envelope、clear/capture 与 session projection 输出路径上的读取点，
+    保持公开字段名、输出顺序、启停条件与 pre-session/session-owned 边界不变。
+  - 用搜索确认 `tools/stage0/nextpas.pas` 中已不再残留这批旧
+    `ActiveSession*` / `ActiveSyntax*` / `ActiveResolution*` /
+    `ActiveSemantic*` / `ActiveMir*` / `ActiveBackend*` 平铺字段名。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `stage0Build=pass`、`stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`smokeCheck=pass`，最终
+    `verify-local=pass`。
+
+### Stage0 Projection Writer Convergence
+
+- **Status:** completed
+- Actions taken:
+  - 重新审查 `tools/stage0/nextpas.pas` 的 projection 输出路径，确认
+    `PrintBuildContextProjection(...)` 与 `PrintSessionProjection(...)`
+    仍各自维护 stdout/stderr 两套几乎完全镜像的 `WriteLn(...)` 分支。
+  - 增加统一的 projection writer helper，把文本、整数、布尔值和条件输出收敛到
+    一组复用入口，再把 build/session projection 改成单一路径调用。
+  - 保持公开字段名、输出顺序、启停条件和 pre-session/session-owned 边界不变，
+    只消除内部 writer duplication。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `stage0Build=pass`、`stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`smokeCheck=pass`，最终
+    `verify-local=pass`。
+
+### Stage0 Projection Context Compaction Closure
+
+- **Status:** completed
+- Actions taken:
+  - 继续审查 `tools/stage0/nextpas.pas` 的 projection 收口状态，确认
+    `TDiagnosticProjectionContext` / `TToolchainProjectionContext` 已经进入
+    clear/capture/envelope 路径，但 `PrintSessionProjection(...)` 仍残留一整段旧
+    `ActiveDiagnostic*` / `ActiveToolchain*` 平铺字段引用。
+  - 把 stdout/stderr 两条 session projection mirror 全部切到
+    `ActiveDiagnosticsProjection` 与 `ActiveToolchainProjection`，
+    保持公开 key、输出顺序和 pre-session/session-owned 边界不变。
+  - 用搜索确认 `tools/stage0/nextpas.pas` 中已不再残留这批旧全局变量名。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认这次只是内部 compaction：
+    `stage0Build=pass`、`stage0Smoke=pass`、`semanticSmokeCheck=pass`、
+    `toolchainContractCheck=pass`、`smokeCheck=pass`，最终
+    `verify-local=pass`。
+
+### Convergence-first Verification Hygiene + Build-context Compaction
+
+- **Status:** completed
+- Actions taken:
+  - 把 `build/verify_local.sh` 的 toolchain contract smoke 改成编译到临时
+    `mktemp -d` build dir，并在执行后显式断言
+    `tests/toolchain/toolchain_contract_smoke` 与 `.o` 不会出现在源码树里。
+  - 让 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 不再只暴露
+    `stage0-build-failed`；现在会继续输出 `bootstrap-step`、`bootstrap-command`、
+    `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。
+  - 在 `tools/stage0/nextpas.pas` 用 `TBuildCommandContext` 收拢 command-level build truth，
+    在 `compiler/frontend/np_compilation_session.pas` 用嵌套 `TBuildContext`
+    收拢 session-owned build context，先把 build/workspace/artifact 相关字段从平铺状态收紧。
+  - 回写 `build/README.md`、`tests/harness/README.md`、
+    `docs/architecture/test-harness-specification.md`、
+    `docs/architecture/stage0-driver-specification.md`、`tools/stage0/README.md` 与
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`，让文档与当前 verify/harness 行为重新对齐。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增的
+    `toolchainContractCheck` / `harnessBootstrapDiagnosticsCheck` 继续通过，且
+    `verify-local=pass` 保持稳定。
+
+## Session: 2026-03-27
+
+### Partial Search-index Contract Hardening
+
+- **Status:** completed
+- Actions taken:
+  - 先用 focused probe 重新确认 precedence 代表路径上的真实 search-index 行为：
+    `explicit_unit_root`、`package_manifest_source_precedence`、
+    `root_source_precedence`、`unit_root_precedence` 都会稳定投影
+    `search-index-status=partial`，并且 indexed root / scan count 会随命中层级变化。
+  - 具体确认到的当前真实值是：
+    1. `root_source_precedence` 为 `partial / 1 / 1`；
+    2. `explicit_unit_root`、`package_manifest_source_precedence`、
+       `unit_root_precedence` 这几条代表路径为 `partial / 2 / 2`。
+  - 在 `build/verify_local.sh` 为上述 representative precedence success path
+    补齐 line-based `search-index-status`、`indexed-search-root-count`、
+    `search-index-scan-count` 断言，并同步补齐 envelope 里的
+    `searchIndexStatus`、`indexedSearchRootCount`、`searchIndexScanCount` 断言。
+  - 在 `docs/architecture/unit-resolution-specification.md` 与
+    `tools/stage0/README.md` 明确写下：
+    `partial` 不是失败或半成品，而是“高优先级 root 提前命中后，低优先级 tiers 未继续扫描”的正常成功状态。
+  - 重新运行 fresh `./build/verify_local.sh`，确认新增 partial-state gate 后
+    `verify-local=pass` / `human-summary=local verification passed`，
+    没有暴露新的实现漂移。
+
+### Diagnostics Accounting + Search-index Projection Sync
+
+- **Status:** completed
+- Actions taken:
+  - 重新核对 `compiler/diagnostics/np_diagnostics_sink.pas`、
+    `compiler/frontend/np_compilation_session.pas`、
+    `compiler/frontend/np_unit_resolver.pas`、`tools/stage0/nextpas.pas`、
+    `tests/toolchain/toolchain_contract_smoke.pas` 与 `build/verify_local.sh`，
+    确认 diagnostics split accounting 与 resolver search-index projection
+    都已经是真实实现，而不是只停在前一轮说明里。
+  - 在 `docs/architecture/compiler-specification.md` 补齐 compiler-owned truth：
+    `TDiagnosticsSink` 现在拥有 split error/warning accounting；
+    `TCompilationSession` 现在也会把 `diagnostics-error-count`、
+    `diagnostics-warning-count`、`search-index-status`、
+    `indexed-search-root-count`、`search-index-scan-count`
+    当成正式 session projection。
+  - 在 `docs/architecture/diagnostics-specification.md` 明确写下
+    warning-as-error contract：
+    promoted warning 会以 `severity=error` 进入 structured diagnostic，并计入
+    `ErrorCount`，而不会继续停留在 `WarningCount`。
+  - 在 `docs/architecture/unit-resolution-specification.md` 明确写下
+    per-root lazy search index contract：
+    resolver 初始化后保持 `deferred`，只有真实 lookup 才会建立 index，
+    重复 lookup 会复用既有 index，不会继续增加 scan count。
+  - 用 smoke / toolchain contract 已验证过的事实回写 planning files：
+    `examples/smoke/hello.pas` 继续如实投影
+    `search-index-status=deferred` / `indexed-search-root-count=0` /
+    `search-index-scan-count=0`；
+    `examples/smoke/hello_with_units.pas` 则继续如实投影
+    `search-index-status=ready` / `indexed-search-root-count=2` /
+    `search-index-scan-count=2`。
+  - 重新运行 fresh `./build/verify_local.sh`，确认 docs/planning sync 之后
+    `verify-local=pass` / `human-summary=local verification passed`，
+    没有引入新的实现或契约漂移。
+
+### Toolchain Contract Hardening + Roadmap Review
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `build/verify_local.sh` 扩成真正冻结“唯一且一致”的 locator contract：
+    不再假设 `session-id`、`tool-invocation-plan-ref`、`build-trace-ref` 等于某个固定字面量，
+    而是同时检查同一轮输出内引用一致、两次 build 之间不会复用。
+  - 在 `tests/toolchain/toolchain_contract_smoke.pas` 先加 RED：
+    要求 `TDiagnosticsSink` 暴露 `EmitWarning`、`WarningCount`、
+    `SetWarningAsError`，并要求 `TUnitResolver` 暴露 search index status /
+    indexed root count / candidate count / scan count contract。
+  - 在 `compiler/frontend/np_compilation_session.pas` 把 session locator 改成
+    `target + timestamp + nonce + root-file-id`，让 plan/build-trace ref 自动跟着变成
+    per-build 唯一。
+  - 在 `compiler/diagnostics/np_diagnostics_sink.pas` 补齐最小 warning contract：
+    普通 warning 会记入 warning count，warning-as-error 模式会把 severity 提升成 `error`，
+    同时进入既有 error 计数。
+  - 在 `compiler/frontend/np_unit_resolver.pas` 引入最小 per-root search index，
+    并为 `SearchIndexStatus`、`IndexedRootCount`、`CandidateCountFor`、
+    `SearchIndexScanCount` 提供可验证的公开 contract。
+  - 回写 `docs/architecture/master-roadmap.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/toolchain-specification.md`、
+    `docs/architecture/diagnostics-specification.md` 与
+    `tools/stage0/README.md`：
+    1. 去掉旧的固定 `plan-build-linux-x86_64-file-1-*` /
+       `trace-build-linux-x86_64-file-1-*` 示例；
+    2. 把近期路线图优先级从 richer toolchain projection 调回
+       semantic diagnostics / workspace source-root truth。
+  - 重新运行 fresh `./build/verify_local.sh`，确认 toolchain contract smoke、
+    warning contract、resolver index contract 与全量 smoke/verify 继续全部通过。
+
+## Session: 2026-03-26
+
+### Summary Surface Contract Hardening
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `stage0-smoke`、`semantic-smoke`、`syntax-failure`、`missing-unit`、
+    `duplicate-import`、`toolchain-failure` 与显式 workspace 的 pre-session failure
+    做 focused probe，确认当前真实输出已经稳定带上 line-based
+    `diagnostics-summary` / `human-summary`，以及 envelope 里的
+    `diagnosticsSummary` / `humanSummary`。
+  - 因为行为已在位，这一批不改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 为 representative success / sessionful failure /
+    pre-session failure 路径补齐 summary-surface 断言。
+  - 这批新增 verify 重点冻结两层 mirror：
+    1. CLI human projection 上的 `diagnostics-summary` / `human-summary`；
+    2. `command-envelope=<json>` 里的 `diagnosticsSummary` / `humanSummary`。
+  - 回写 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复时继续把
+    “summary surface 已存在但 promotion path 没保护”误判为已完成。
+  - 重新运行 fresh `bash build/verify_local.sh`，继续得到
+    `verify-local=pass` / `human-summary=local verification passed`，
+    确认这批 summary contract hardening 没有暴露新的实现缺口。
+
+### Explicit-workspace Omission Coverage Expansion
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `semantic-smoke`、`explicit-unit-root`、`out-dir-override`、
+    `root-source-precedence`、`unit-root-precedence` 与 `toolchain-failure`
+    做 focused probe，确认这些 remaining explicit-workspace 路径也都会稳定省略
+    `workspaceDescriptorPath` / `packageManifestPath`。
+  - 因为行为已在位，这一批不改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 把 omission contract 从代表性路径扩到主要路径全覆盖。
+  - 这批新增 verify 继续同时冻结两层投影面：
+    1. line-based `workspace-descriptor-path` / `package-manifest-path` 不会误出现；
+    2. `command-envelope=<json>.result` 里的 `workspaceDescriptorPath` /
+       `packageManifestPath` 也不会误出现。
+  - 回写 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复时继续把
+    “主要路径仍有 omission blind spot”误判为已经完全冻结。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认 omission coverage expansion 后
+    整套 verify-local 继续通过。
+  - 在恢复会话后再次 fresh rerun `bash build/verify_local.sh`，继续得到
+    `verify-local=pass` / `human-summary=local verification passed`，
+    确认这批新增 absence gate 没有暴露新的实现缺口。
+
+### Descriptor/Manifest Presence Contract Hardening
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `stage0-smoke`、`package-manifest-source-root`、
+    `package-manifest-source-precedence`、`source-directory-fallback`、
+    `invalid-unit-root`、`invalid-out-dir` 与 `invalid-artifact-root`
+    做 focused probe，确认当前真实行为是：
+    `workspaceDescriptorPath` / `packageManifestPath` 按 discovery truth 按需出现，
+    不会被投影成空字段或无脑常驻字段。
+  - 因为行为已在位，这一批不改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 为代表性 success / failure 路径补齐出现/缺失断言。
+  - 这批新增 verify 的重点不是再证明“字段能出现”，而是冻结“字段不该出现时也必须稳定缺失”，
+    包括 line-based output 与 `command-envelope=<json>.result` 两个投影面。
+  - 回写 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复时继续把
+    “presence 已有 gate，但 absence 仍靠实现自觉”的状态误判为已冻结。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 absence 断言后整套
+    verify-local 继续通过。
+
+### Success-path Envelope Coverage Hardening
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `explicit-unit-root`、`out-dir-override`、
+    `package-manifest-source-precedence`、`root-source-precedence`、
+    `unit-root-precedence` 做 focused probe，确认当前真实输出已经在
+    `command-envelope=<json>.result` 中携带 `outputDir`、`artifact`、
+    `searchPathCount` 与 `searchPaths`。
+  - 因为行为已在位，这一批不改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 为这些 success gate 补齐 machine-readable 断言。
+  - 这批新增的 verify 主要冻结两类 truth：
+    1. `output-dir` / `artifact` override 会同步进入 envelope；
+    2. search precedence 的实际顺序与 provenance 也会在 envelope 的 `searchPaths`
+       上继续受保护，而不是只靠 line-based `search-path-json`。
+  - 回写 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复时再次把
+    “envelope truth 已有，但 verify 只冻结了纯文本投影”的状态误判为已完成。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 envelope 断言后整套
+    verify-local 继续通过。
+
+### Verify-local Success Envelope Parity
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `build/verify_local.sh` 做 focused audit，把所有 `*=pass` gate 与最终
+    `command-envelope=<json>.result` 对照，确认当前真实缺口不是新的 stage0 行为，
+    而是 verify-local 自己的结构化 success result 仍漏掉三条已运行 gate。
+  - 具体缺失字段是：
+    `packageManifestSourceRootCheck`、`workspaceMemberSourceRootCheck`、
+    `packageManifestSourcePrecedenceCheck`。
+  - 这一批不改 `tools/stage0/nextpas.pas`；只把 `build/verify_local.sh` 的最终
+    success envelope 补齐到和真实 promotion path 同步。
+  - 回写 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复时再次把
+    “shell gate 已有，但 machine-readable result 漏字段”的状态误判为已完成。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认 envelope parity 修补后整套
+    verify-local 继续通过。
+
+### Source-directory-fallback Verify Coverage
+
+- **Status:** completed
+- Actions taken:
+  - 先做 focused probe：把 `examples/smoke/hello.pas` 复制到 `/tmp` 下的临时目录，
+    不传 `--workspace` 运行 `stage0 build`，确认当前真实行为已经是
+    `workspace-discovery-kind=source-directory-fallback`，并且 artifact 会默认进入
+    `<source-dir>/.nextpas/out/linux-x86_64/hello`。
+  - 因为行为已在位，这一批没有改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 新增 `source-directory-fallback-check`。
+  - 新 gate 冻结了 `workspace-root`、`workspace-discovery-kind`、`artifact-root`、
+    `output-dir`、artifact 默认落点、tool invocation argv 与 envelope 对应字段。
+  - 额外断言这条 fallback 路径不会投影 `workspace-descriptor-path` /
+    `package-manifest-path`，避免把“没有发现 marker”的情况误投影成 richer workspace truth。
+  - 顺手把 `verify-local` success envelope 补齐：
+    `sourceDirectoryFallbackCheck`、`invalidOutDirCheck`、`invalidArtifactRootCheck`
+    现在也会进入最终结构化结果。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 gate 与整套 verify-local 全部通过。
+
+### Pre-session Failure Gate Expansion
+
+- **Status:** completed
+- Actions taken:
+  - 先对 `invalid-out-dir` 与 `invalid-artifact-root` 做 focused probe，确认它们现在已经
+    真实复用 `invalid-unit-root` 同一条 pre-session build-context projection，
+    line-based output 与 envelope 都会保留 workspace/artifact/output truth。
+  - 因为行为已在位，这一批没有继续修改 `tools/stage0/nextpas.pas`；只在
+    `build/verify_local.sh` 新增 `invalid-out-dir-check` 与
+    `invalid-artifact-root-check`，把两条 early-failure baseline 收进 promotion path。
+  - `invalid-out-dir-check` 通过“`--out-dir` 指向已有文件”的方式冻结
+    `invalid-out-dir` failure surface。
+  - `invalid-artifact-root-check` 通过“workspace 下的 `.nextpas` 预先被文件占用”的方式
+    冻结 `invalid-artifact-root` failure surface。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认
+    `invalid-unit-root-check`、`invalid-out-dir-check` 与
+    `invalid-artifact-root-check` 全部转绿，且整套 verify-local 继续通过。
+
+### Pre-session Build Context Projection
+
+- **Status:** completed
+- Actions taken:
+  - 先核对 `tools/stage0/nextpas.pas` 与 `build/verify_local.sh`，确认
+    `invalid-unit-root` 当前会在 `TCompilationSession` 创建前失败，因此旧 failure path
+    会丢掉已经解析出的 workspace/artifact/output truth。
+  - 在 `RunBuild(...)` 里把 `ActiveSourcePath`、`ActiveTargetName` 与最小
+    workspace/artifact/output command context 提前 capture，避免这些事实必须等待
+    session 创建后才可见。
+  - 让 `PrintSessionProjection(...)` 先打印 build-context projection，再只在
+    `session-id` 存在时继续输出 session-owned fields；因此 early failure 不再伪造
+    `session-id`、`diagnostics-count`、`syntax-status` 等 pseudo-session 字段。
+  - 为 `build/verify_local.sh` 的 `invalid-unit-root-check` 补齐 line-based output 与
+    `command-envelope=<json>` 的 workspace/artifact/output 断言，冻结这条
+    pre-session failure baseline。
+  - 回写 `task_plan.md`、`findings.md`、`progress.md`，并同步
+    `docs/architecture/stage0-driver-specification.md` 与 `tools/stage0/README.md`，
+    把“pre-session 也会投影已知 build context，但不会伪造 session fields”的边界写清楚。
+
+### Workspace Discovery Truth Projection
+
+- **Status:** completed
+- Actions taken:
+  - 先运行 fresh `bash build/verify_local.sh`，确认新增 RED 的真实失败点仍是
+    `missing-stage0-workspace-root`，而不是别的 gate。
+  - 在 `compiler/frontend/np_compilation_session.pas` 为 `TCompilationOptions`
+    增加 `WorkspaceDiscoveryKind`、`WorkspaceDescriptorPath`、`PackageManifestPath`，
+    并让 `TCompilationSession` 稳定暴露 workspace/artifact/output provenance getters。
+  - 在 `tools/stage0/nextpas.pas` 增加最小 `TWorkspaceDiscoveryInfo`，
+    继续复用现有 nearest workspace/package lookup 逻辑，只把
+    explicit override / nearest workspace descriptor / nearest package manifest /
+    source directory fallback 的结果变成正式 projection。
+  - 让 stage0 的 line-based output 与 `command-envelope=<json>.result`
+    同步带上 `workspace-root`、`workspace-discovery-kind`、
+    `workspace-descriptor-path`、`package-manifest-path`、`artifact-root`、
+    `output-dir` 及其 camelCase 版本。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认整套 verify-local 全绿，
+    且新的 workspace discovery projection gate 已纳入 promotion path。
+
+### Diagnostic Provenance Closure
+
+- **Status:** completed
+- Actions taken:
+  - 复现 `build/verify_local.sh` 的新 RED，确认失败点是
+    `missing-unit-diagnostic-provenance`。
+  - 核对 `compiler/frontend/np_unit_resolver.pas` 后确认根因：
+    `SearchRootsSummary` 与 `CandidateSummary` 仍只输出裸路径，没有消费
+    `TSearchPathEntry` 的 typed metadata。
+  - 在 resolver 中新增 search-path entry formatter / candidate origin lookup，
+    让 `resolver.unit-not-found` 与 `resolver.ambiguous-unit-source`
+    在 diagnostic message 中投影 `scope` / `provenance` / `root`，
+    并为 candidate 额外投影 `path`。
+  - 重新运行 `bash build/verify_local.sh`，确认 missing/ambiguous provenance gate
+    与整套 verify-local 全部通过。
+  - 清理临时 `build/verify_local_debug.sh`，避免把一次性调试脚本留在工作区。
+
+### Post-close Reality Reconciliation
+
+- **Status:** completed
+- Actions taken:
+  - 重新核对 `tools/stage0/nextpas.pas`、`compiler/frontend/np_unit_resolver.pas`、
+    `compiler/frontend/np_package_manifest.pas` 与 `build/verify_local.sh`，
+    发现最小 package/workspace source roots 已经真实落地，不只是路线图占位。
+  - 确认当前 search precedence 已经是
+    `root-source -> package-source-root -> explicit-unit-root -> target-installed`。
+  - 确认 `package-manifest-source-root-check`、
+    `workspace-member-source-root-check` 与
+    `package-manifest-source-precedence-check`
+    已经把这条行为纳入 verify gate。
+  - 回写 `docs/architecture/unit-resolution-specification.md`、
+    `docs/architecture/stage0-driver-specification.md`、`tools/stage0/README.md`，
+    去掉“project roots 尚未接入”的旧表述。
+  - 同步 `task_plan.md`、`findings.md` 与 `progress.md`，避免下次恢复继续被旧 planning 文本误导。
+
+## Session: 2026-03-25
+
+### Phase 1: External Review Grounded Against Current Code
+
+- **Status:** completed
+- Actions taken:
+  - 逐条核对外部审查报告与仓库现状，确认这轮优先级应从“继续扩计划”切到
+    `P0` 验证可信度和 `P1` resolver correctness。
+  - 确认已完成的代码修复集中在
+    `tests/harness/runner.pas`、`tests/run_all_tests.sh`、
+    `compiler/frontend/np_unit_resolver.pas` 与
+    `compiler/frontend/np_unit_graph.pas`。
+
+### Phase 2: Harness Truthfulness Closed
+
+- **Status:** completed
+- Actions taken:
+  - 把 harness fixture 收集收紧到按 group 契约过滤 `.pas` 源文件。
+  - 让 `compiler-pass` 真正调用 `stage0 build` 后运行产物。
+  - 让 `compiler-fail`、`diagnostics` 真实执行并对比 canonical actual text。
+  - 让 `rtl`、`crt`、`regression` 真实编译并运行，而不是停在目录和 snapshot 存在性检查。
+  - 增加 `fixture-result`、`executed-fixture-count`、`passed-fixture-count`、
+    `failed-fixture-count` 和 `smoke-group ... executed=<n>` 投影。
+  - 把 runner bootstrap 产物移到 `.sisyphus/tmp/harness/bootstrap/runner`。
+
+### Phase 3: Resolver Correctness Closed
+
+- **Status:** completed
+- Actions taken:
+  - 修正根单元只解析 `interface uses` 的问题，根单元现在也解析
+    `implementation uses`。
+  - 增加 requested-name / declared-name 一致性校验，错误时发出
+    `resolver.unit-name-mismatch`。
+  - 修正 synthetic `System` placeholder 行为，让显式 `uses System` 仍会继续解析真实
+    `System.pas`，并允许 graph 节点从 placeholder 升级为 source-backed unit。
+  - 为上述行为补齐新的 fail fixture 和 snapshot baseline。
+
+### Phase 4: Docs and Repo Hygiene Synced
+
+- **Status:** completed
+- Actions taken:
+  - 扩充 `.gitignore`，纳入 `.sisyphus/`、FPC 生成物、runner/bootstrap 产物、
+    snapshot diff evidence 和当前已知 smoke/example 产物。
+  - 清理源码树里的历史 runner/fixture 生成物、过期 diff，以及 fresh verify 之后重新生成的
+    明显二进制产物。
+  - 重写 `tests/harness/README.md`、`tests/README.md`，
+    把 harness 从“inventory-style 描述”改为“真实执行语义”。
+  - 重写 `test-harness-specification.md` 与 `unit-resolution-specification.md`，
+    只保留当前已落地事实，并把 search path 与 host-backed 限制写明。
+  - 更新 `task_plan.md`、`findings.md` 与 `progress.md`，让 planning files 与这轮工作一致。
+
+### Phase 5: Fresh Verification
+
+- **Status:** completed
+- Actions taken:
+  - 运行 fresh `./tests/run_all_tests.sh --filter smoke`
+  - 运行 fresh `./build/verify_local.sh`
+  - 用 fresh 输出确认：
+    `root-implementation-check`、`requested-name-mismatch-check`、
+    `explicit-system-check`、`harness-compiler-pass-check` 与 `smoke-check`
+    都保持绿色
+  - 在 fresh verify 后再次清理 `examples/smoke/*`、`tests/toolchain/*_smoke` 与
+    `tools/stage0/nextpas` 这类临时二进制，保持工作区整洁
+
+## Test Results
+
+- `bash build/verify_local.sh`（host-compiler runner reuse + tool run projection）：pass
+- `bash build/verify_local.sh`（toolchain plan runner execution contract）：pass
+- `bash build/verify_local.sh`（stage0 projection writer convergence）：pass
+- `bash build/verify_local.sh`（stage0 projection context compaction closure）：pass
+- `bash build/verify_local.sh`（workspace discovery projection batch）：pass
+- `bash build/verify_local.sh`（pre-session failure gate expansion batch）：pass
+- `bash build/verify_local.sh`（source-directory-fallback verify coverage batch）：pass
+- `bash build/verify_local.sh`（pre-session build context projection + docs sync）：pass
+- `bash build/verify_local.sh`（diagnostic provenance batch）：pass
+- `bash build/verify_local.sh`（post-sync final rerun）：pass
+- `bash build/verify_local.sh`（fresh rerun after explicit-workspace omission coverage expansion）：pass
+- `bash build/verify_local.sh`（summary surface contract hardening batch）：pass
+- `./build/verify_local.sh`（diagnostics accounting + search-index projection sync）：pass
+- `./build/verify_local.sh`（partial search-index contract hardening）：pass
+- `bash build/verify_local.sh`（stage0 test command thin wrapper）：pass
+- `./tests/run_all_tests.sh --filter smoke`：pass
+- `./build/verify_local.sh`：pass
+
+## Error Log
+
+| Timestamp      | Error                                                                                                                                                             | Attempt | Resolution                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-25 CST | 历史 runner / fixture 生成物残留在源码树里，继续污染工作区与测试输入                                                                                              | 1       | 扩充 `.gitignore` 并清理历史生成物、过期 diff 与 fresh verify 产物                                                                                          |
+| 2026-03-25 CST | 文档仍描述旧的 inventory-style harness                                                                                                                            | 1       | 直接按当前真实实现重写 README 与架构规范                                                                                                                    |
+| 2026-03-25 CST | `unit-resolution` 文档曾把 search path 写得过窄                                                                                                                   | 1       | 先前改成“root source + target-installed”；随后在 2026-03-26 再按真实实现补回 package/workspace source roots                                                 |
+| 2026-03-26 CST | 文档与 planning files 漂回“project roots 未落地”的旧说法                                                                                                          | 1       | 依据代码与 verify gate，把 package/workspace source roots 的现状重新同步回文档与 planning files                                                             |
+| 2026-03-26 CST | missing / ambiguous unit diagnostics 仍只输出裸路径                                                                                                               | 1       | 在 resolver formatter 层接入 `TSearchPathEntry` provenance，并重新跑通 `verify_local`                                                                       |
+| 2026-03-26 CST | workspace/package/artifact discovery 真实存在，但 CLI / envelope 没有正式投影这些事实                                                                             | 1       | 补齐 `TCompilationOptions` / `TCompilationSession` metadata，并让 stage0 的 line-based output 与 envelope 同步带上 workspace discovery 字段                 |
+| 2026-03-26 CST | `invalid-unit-root` 在 session 创建前失败，导致已知 build context 先前不会进入 failure projection                                                                 | 1       | 复用 `Active...` command context，并让 `PrintSessionProjection(...)` 先投影 build context，再按 `session-id` 决定是否继续输出 session-owned fields          |
+| 2026-03-26 CST | `invalid-out-dir` / `invalid-artifact-root` 虽然已具备正确的 pre-session projection，但 verify 之前没有把它们纳入 promotion path                                  | 1       | 先做 focused probe 确认行为已在位，再把两条 failure baseline 收进 `build/verify_local.sh`                                                                   |
+| 2026-03-26 CST | `source-directory-fallback` 虽然已具备正确行为，但 verify 之前没有冻结这条默认 workspace/artifact contract，而且 verify-local success envelope 也缺少新 gate 名称 | 1       | 用临时 source-dir probe 确认现状后，补齐 `source-directory-fallback-check`，并同步扩充 verify-local success envelope                                        |
+| 2026-03-26 CST | `diagnostics-summary` / `human-summary` 已经稳定存在于共享输出路径，但 verify 之前只零散覆盖少数 case                                                             | 1       | 先做 focused probe 确认 representative success / failure / pre-session failure 行为已在位，再把 line/envelope summary contract 补进 `build/verify_local.sh` |
+| 2026-03-27 CST | precedence 成功路径上的 `partial` search-index 行为虽然稳定存在，但 promotion path 之前没有正式 gate                                                              | 1       | 先做 focused probe 确认 representative 值，再把 line/envelope 两层 partial-state contract 补进 `build/verify_local.sh`，并同步 README/架构规范              |
+| 2026-04-02 CST | `tools/stage0/nextpas.pas` 已经引入 projection record，但 `PrintSessionProjection(...)` 仍残留旧平铺全局字段引用，导致内部 shape 没有真正收口                     | 1       | 把 stdout/stderr projection 统一切到 `ActiveDiagnosticsProjection` / `ActiveToolchainProjection`，再用 fresh `bash build/verify_local.sh` 证明无行为漂移    |
+| 2026-04-02 CST | `PrintBuildContextProjection(...)` / `PrintSessionProjection(...)` 仍各自维护 stdout/stderr 双分支，导致任何后续投影调整都要改两遍                                | 1       | 引入统一 projection writer helper，把 build/session projection 收敛到单一路径，并用 fresh `bash build/verify_local.sh` 证明输出契约未变                     |
+| 2026-04-05 CST | production path 代码已经切到 bootstrap-native assemble/link，但 README / 架构规范 / roadmap / tracking 仍在描述 single-step host-compiler reality                 | 1       | 依据 fresh `verify_local` 与当前 planner/session 实现，统一回写 8 份文档，并显式标注当时 later-step attribution 仍是 residual risk                          |
+| 2026-04-06 CST | later-step failure attribution 代码已经落地，但 README / roadmap / tracking 仍在描述“尚未补齐”                                                                    | 1       | 依据 fresh `verify_local` 与当前 failure projection reality，同步回写文档与 planning files，并把 residual risk 改成 success-path summary                    |
+| 2026-04-06 CST | success-path full transcript 与 plan-level build trace 已经落地，但 README / roadmap / tracking 仍把它写成“单步摘要”                                              | 1       | 依据 fresh `verify_local` 与当前 runner/session transcript reality，同步回写文档与 planning files，并把 next-step 改回 LLVM / tooling 方向                  |
+
+## 5-Question Reboot Check
+
+| Question             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where am I?          | `P0/P1` 收口已完成；当前 shared workspace model、backend intermediate artifact truth、`bootstrap-native-assemble-link` production path、later-step failure attribution 与 success-path full transcript 都已经进入 verify gate，并 fresh rerun 拿到 `verify-local=pass`                                                                                                                                                                                                                                                                |
+| Where am I going?    | 下一步应从已收口的 `nextpas test` 继续往 developer tooling 更高层控制面推进，例如按新增 addendum 明确 `doctor` / `env` / `query` 的最小真实公开面；同时不要提前伪装 GUI / IDE 已进入默认实现路径                                                                                                                                                                                                                                                                                                                                  |
+| What's the goal?     | 让 nextPas 的“当前能力”先真实可信，再继续往现代化、高性能、优雅的全栈工具链推进                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| What have I learned? | 假绿、模糊 provenance 和没投影出来的真实 command truth 都会拖慢后续架构推进；不管是 failure attribution 还是 success transcript，只要 trace/status 没跟真实 executed step 对齐，就会同时污染 CLI、diagnostic 与 replay surface                                                                                                                                                                                                                                                                                                        |
+| What have I done?    | 已收紧 harness、修正 resolver、把 shared workspace model 收口成 compiler-owned truth，补上 typed `TToolchainPlan` 的真实 execution runner 与 `native-run-*` contract gate，把 backend intermediate artifact truth 与 logical object input 接进 session/stage0/verify，再把 production path 真正切到 `bootstrap-native-assemble-link`，补齐 later-step failure attribution 与 success-path full transcript，并新增最小 `nextpas test` thin wrapper，把 harness group/smoke truth 正式接进 stage0 CLI；fresh `bash build/verify_local.sh` 已再次确认整套 verify-local 继续全绿 |

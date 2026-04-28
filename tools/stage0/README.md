@@ -1,0 +1,688 @@
+# nextPas tools/stage0/
+
+`tools/stage0/` 承接 nextPas 第一阶段最小但真实的命令行控制面。这里现在公开
+`build`、最小 `test`、只读 `env status` 与最小 `doctor` 四条路径，但仍不假装已经是完整工具链前端。
+
+如果你要看冻结后的边界，先读
+`docs/architecture/stage0-driver-specification.md`。如果你要看当前主线批次，读
+`docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 与
+`docs/plans/2026-03-24-nextpas-mir-backend-toolchain-plan.md`。
+
+## 现在支持什么
+
+当前承诺的命令是：
+
+```text
+nextpas build <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>] [--unit-root <dir>]... [--out-dir <dir>]
+nextpas test --list-groups [--workspace <root>]
+nextpas test --filter <group> [--workspace <root>]
+nextpas env status --target linux-x86_64 [--toolchain-binding <id>]
+nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+```
+
+这个入口由 FreePascal 编译成可执行程序，再从
+`build/targets/linux-x86_64.toml` 读取目标事实，并按 binding 选择去驱动 smoke 输入的最小
+build 路径。当前如果不显式传 `--toolchain-binding`，会继续使用默认
+`linux-x86_64-to-linux-x86_64-gnu` binding；如果显式传
+`--toolchain-binding linux-x86_64-to-linux-x86_64-llvm`，则会切到同一 host/target pair
+下的 LLVM-heavy binding。
+
+Run:
+
+```bash
+mkdir -p .sisyphus/tmp/stage0-bootstrap
+fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema \
+  -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 \
+  -Furtl/core/base -Furtl/core/text \
+  -FE.sisyphus/tmp/stage0-bootstrap -FU.sisyphus/tmp/stage0-bootstrap \
+  tools/stage0/nextpas.pas
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  build examples/smoke/hello.pas --target linux-x86_64 --workspace "$PWD"
+```
+
+显式选择 LLVM binding：
+
+```bash
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  build examples/smoke/hello.pas --target linux-x86_64 \
+  --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --workspace "$PWD"
+```
+
+Then:
+
+```bash
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  test --filter smoke --workspace "$PWD"
+```
+
+Then:
+
+```bash
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  env status --target linux-x86_64
+```
+
+Then:
+
+```bash
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  doctor --target linux-x86_64 --workspace "$PWD"
+```
+
+Then:
+
+```bash
+./tools/stage0/nextpas frobnicate examples/smoke/hello.pas
+```
+
+前四条命令现在都走统一 `nextpas` 产品壳：`build` 继续由 driver 自己驱动 compiler/toolchain，
+`test` 则只做最小参数解析后 thin-wrap 到 `tests/run_all_tests.sh` 与
+`tests/harness/runner.pas`，`env status` 则只读解析 target / binding / distribution /
+runtime state，不做健康判定，也不修改环境，`doctor` 则复用同一批 environment truth 做只读健康检查。
+其中 `build`、`test --filter <group|smoke>`、`env status` 与 `doctor` 的执行路径都会额外输出一条
+`command-envelope=<json>`。这些 key/value 现在至少会对齐这些公共字段：
+
+- `command=build|test|env|doctor`
+- `selector=build|test|group|smoke|status|doctor`
+- `status=success|failure`
+- `result=success|failure`
+- `command-outcome=success|failure`
+- `failure-kind=<kind>`（仅失败路径）
+- `human-summary=<summary>`
+
+`env status` 当前还会额外投影最小 environment state：
+
+- `toolchain-binding-path=<path>`
+- `distribution-bin-dir=<path>`
+- `distribution-lib-dir=<path>`
+- `distribution-share-dir=<path>`
+- `runtime-root=<path>`
+- `runtime-libc=<path>`
+- `runtime-libc-present=<true|false>`
+- `environment-readiness=<state>`
+- `runtime-sdk-status=<state>`
+
+这条 surface 当前故意把“状态解析”和“健康诊断”分开：即使 runtime 仍然缺失，
+`env status` 也会保持 `status=success` / `result=success`，并把未就绪事实放进
+`environment-readiness`、`runtime-sdk-status` 与 `runtime-libc-present`，而不是把
+“不完整环境”误报成命令执行失败。
+
+`doctor` 当前还会额外投影最小 health inspection 汇总：
+
+- `doctor-status=healthy|warning`
+- `doctor-check-count=<count>`
+- `doctor-finding-count=<count>`
+
+这条 surface 当前仍是只读 inspection：它解释当前 target / binding / runtime / workspace
+状态是否健康，但不执行 `env sync`、不安装 runtime SDK，也不替代 `build` 或 `test`。
+
+在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
+resolution / sema / MIR / backend / toolchain skeleton：
+
+- `session-id=<id>`
+- `root-file-id=<id>`
+- `source-db-file-count=<count>`
+- `source-db-line-index=deferred`
+- `unit-state-count=<count>`
+- `diagnostics-count=<count>`
+- `diagnostics-error-count=<count>`
+- `diagnostics-warning-count=<count>`
+- `diagnostics-policy=<policy>`
+- `workspace-root=<path>`
+- `workspace-discovery-kind=explicit-workspace-override|nearest-workspace-descriptor|nearest-package-manifest|source-directory-fallback`
+- `workspace-descriptor-path=<path>`（有值时）
+- `package-manifest-path=<path>`（有值时）
+- `artifact-root=<path>`
+- `output-dir=<path>`
+- `syntax-status=ready|failure`
+- `lexer-token-count=<count>`
+- `green-node-count=<count>`
+- `ast-root-kind=<kind>`
+- `ast-declared-name=<name>`
+- `resolution-status=ready|failure|deferred`
+- `unit-graph-status=ready|failure|deferred`
+- `search-path-count=<count>`
+- `search-index-status=deferred|partial|ready|empty`
+- `indexed-search-root-count=<count>`
+- `search-index-scan-count=<count>`
+- `resolved-unit-count=<count>`
+- `unit-graph-edge-count=<count>`
+- `unit-graph-root-name=<name>`
+- `semantic-status=ready|failure|deferred`
+- `symbol-graph-status=ready|failure|deferred`
+- `type-graph-status=ready|failure|deferred`
+- `typed-hir-status=ready|failure|deferred`
+- `symbol-count=<count>`
+- `type-count=<count>`
+- `typed-hir-node-count=<count>`
+- `runtime-contract-count=<count>`
+- `typed-hir-root-name=<name>`
+- `mir-status=ready|failure|deferred`
+
+注意：`workspace-root`、`workspace-discovery-kind`、`workspace-descriptor-path`、
+`package-manifest-path`、`artifact-root`、`output-dir` 属于 command-level build context。
+当前即使 `invalid-unit-root` 这类在 `TCompilationSession` 创建前就失败的路径，也会继续投影
+这批已知字段；`command-envelope=<json>.result` 也会保留对应的 camelCase build-context 字段，
+以及已知的 `source` / `target`。但 `stage0` 不会为这类 early failure 伪造
+`session-id`、`diagnostics-count`、`syntax-status` 等 session-owned fields。
+
+- `mir-block-count=<count>`
+- `mir-operation-count=<count>`
+- `mir-entry-block=<label>`
+- `mir-root-name=<name>`
+- `backend-plan-status=ready|failure|deferred`
+- `backend-output-kind=<kind>`
+- `backend-primary-artifact-kind=<kind>`
+- `backend-primary-artifact-path=<path>`
+- `toolchain-binding-id=<binding-id>`
+- `backend-family=<family>`
+- `assembler-profile-id=<profile-id>`
+- `linker-profile-id=<profile-id>`
+- `archiver-profile-id=<profile-id>`
+- `resource-tool-profile-id=<profile-id>`
+- `host-id=<host-id>`
+- `target-object-format=<format>`
+- `target-assembler-flavor=<flavor>`
+- `target-linker-flavor=<flavor>`
+- `target-runtime-layout-key=<layout-key>`
+- `target-c-symbol-prefix=<prefix-or-empty>`
+- `target-c-library-naming=<naming-key>`
+- `target-llvm-triple=<triple>`
+- `target-llvm-data-layout=<data-layout>`
+- `sysroot-mode=<mode>`
+- `runtime-sdk-id=<sdk-id>`
+- `allow-host-fallback=<true|false>`
+- `tool-root-kind=<resolution-kind>`
+- `runtime-root-kind=<resolution-kind>`
+- `response-file-policy=<policy>`
+- `link-script-policy=<policy>`
+- `toolchain-plan-status=<status>`
+- `toolchain-plan-family=<family>`
+- `tool-profile-root=<path>`
+- `logical-link-request-status=<status>`
+- `logical-link-request-output-kind=<kind>`
+- `logical-link-request-library-count=<count>`
+- `logical-link-request=<json>`
+- `llvm-toolchain-status=<status>`
+- `llvm-executable-set-id=<id>`（有值时）
+- `llvm-executable-set=<json>`（有值时）
+- `tool-invocation-count=<count>`
+- `primary-tool-role=<role>`
+- `primary-tool-profile-id=<profile-id>`
+- `primary-tool-step-id=<step-id>`
+- `primary-tool-logical-executable=<logical-executable>`
+- `primary-tool-sysroot-ref=<sysroot-ref>`
+- `primary-tool-failure-mapping=<failure-kind>`
+- `tool-run-status=success|failure`
+- `tool-run-step-count=<count>`
+- `primary-tool-run-status=success|failed`
+- `diagnostics-summary=<summary>`
+- `lifecycle-session=<summary>`
+- `lifecycle-unit=<summary>`
+- `lifecycle-stage=<summary>`
+
+`test` 命令会把 harness 当前已有的 group / smoke 结果直接透传出来；`env status`
+会把当前 target/binding/distribution/runtime 解析结果投影成 line-based output 与
+`command-envelope=<json>`；最后一条未知命令示例应该以非零状态退出，并打印清晰的
+`unsupported-command` 消息。
+
+## workspace discovery、unit root 和产物落点
+
+当前 `stage0 build` 已经不是“只拿一个 source path 然后把产物写回原目录”的旧式壳。
+现在真实行为固定如下：
+
+- `--workspace <root>` 显式提供时，workspace root 直接取这个目录
+- 如果没有 `--workspace`，会从 source 所在目录向上先找最近的 `nextpas.workspace.toml`
+- 如果没有 workspace descriptor，再向上找最近的 `nextpas.package.toml`
+- 两者都没有时，退回 source 所在目录
+- `--unit-root <dir>` 可以重复传入，且 relative path 以 resolved workspace root 为基准
+- `--out-dir <dir>` 也按 workspace root 解析 relative path
+
+当前默认 artifact 布局固定是：
+
+```text
+<workspace-root>/.nextpas/
+  out/<target>/
+  cache/backend/<target>/
+  cache/host-fpc/<target>/
+```
+
+这意味着：
+
+- 默认主产物落在 `<workspace-root>/.nextpas/out/linux-x86_64/<program>`
+- 默认 `linux-x86_64-to-linux-x86_64-gnu` binding 会把根程序和 source-backed units 的
+  `.s`，以及确定性的 `<program>_link.res` 放进
+  `<workspace-root>/.nextpas/cache/backend/linux-x86_64/`，然后继续消费同一批
+  backend-owned `.s/.o/.res` truth
+- 显式 `linux-x86_64-to-linux-x86_64-llvm` binding 会把 `.ll/.bc/.o` 放进同一个
+  backend cache root，并由 LLVM toolchain steps 继续消费这些 backend-owned artifacts
+- `cache/host-fpc/<target>/` 仍保留在 shared workspace model 里，但当前
+  `bootstrap-native-assemble-link` 与 `llvm-ir-opt-llc-link` 成功路径都不再把根程序的
+  中间产物落到这里
+- source-adjacent output 不再是默认行为
+- 如果 nearest package manifest 或 workspace descriptor 提供了 source roots，它们会先进入
+  package source tier
+- 当前 unit search precedence 已经是
+  `root-source -> package-source-root -> explicit-unit-root -> target-installed`
+
+## 退出码与失败语义
+
+- `0`：命令输入合法，且 `build`、`test`、`env status` 或 `doctor` 的真实执行路径成功完成
+- `1`：参数不合法、命令不受支持、目标不受支持、源文件缺失、syntax / resolution / sema 提前失败，或 `test` / toolchain 底层执行失败
+
+当前 `env status` 与只读 `doctor` 不会因为 environment 仍不完整就退出失败；这类事实继续通过
+`environment-readiness` / `runtime-sdk-status` / `runtime-libc-present` 以及 `doctor-status` 表达。
+
+当输入命令不是 `build`、`test`、`env` 或 `doctor` 时，驱动入口必须打印 `unsupported-command: <name>`。
+当目标不是 `linux-x86_64` 时，驱动入口必须清晰拒绝，不把问题包装成模糊失败。
+当前受支持目标、宿主编译器和发行布局假设都来自外置目标规格，而不是再硬编码在
+`nextpas.pas` 里。当前 `stage0 build` 也会在成功路径上显式传入 target-aware
+`-Fu<resolved-units-dir>`，并从 binding config 读取 `[profiles]`、`[sysroot]` 与
+`[resolution]` policy，让 target-aware installed unit root、LLVM/C interop 相关 target
+facts，以及 future assembler/linker/archiver/resource orchestration 需要的
+profile / root / sidecar policy 一起进入执行路径。target 选择与 binding 选择是两回事：
+`--target` 继续决定目标语义，`--toolchain-binding` 只决定同一 host/target pair 下由谁来
+生产这些目标产物。
+当前默认 production path 仍是 `bootstrap-native-assemble-link`，而且继续复用同一套
+generic runner：`tools/stage0/nextpas.pas` 通过
+`TCompilationSession.ExecuteToolchain(GetEnvironmentVariable('PATH'))` 调
+`compiler/toolchain/np_toolchain_runner.pas`，先让宿主 FPC 以
+`host-fpc-emit-asm` 生成 backend-owned `.s` 与 `<program>_link.res`，再执行
+`native-assemble` 与 `native-link`。主 smoke success path 会如实投影
+`toolchain-plan-family=bootstrap-native-assemble-link`、`tool-invocation-count=3`、
+`primary-tool-step-id=host-fpc-emit-asm` 与 `tool-run-step-count=3`；如果根程序依赖额外的
+source-backed units，plan 还会继续长出 `native-assemble-<unit>` 步骤，所以成功路径也可能是
+`4+` steps，而不是再假装永远只有一步。
+显式 LLVM binding 时，同一条 generic runner 会切到 `llvm-ir-opt-llc-link`：CLI 会投影
+`compiler=opt`，backend artifacts 变成
+`llvm-ir/llvm-bitcode/object-file/executable` 四类 truth，toolchain runner 会按
+`llvm-opt-bitcode -> llvm-llc-object -> llvm-link` 执行，并通过 `ld.lld` 产出最终
+executable。默认 native binding 与显式 LLVM binding 共享同一份 target facts，但不再共用
+同一条 plan family。
+与之并行的 `stage0 test` 当前仍然故意不重写 harness：它只做最小参数解析与 workspace root
+选择，然后直接委托 `tests/run_all_tests.sh` / `tests/harness/runner.pas` 继续拥有
+fixture grouping、snapshot policy、bootstrap diagnostics 与 `command=test` 结果语义。
+当前 direct-link C interop 也开始进入这条 execution path：如果 logical link request 里出现
+最小 `{logicalId:"c", linkageKind:"shared", strength:"strong"}`，那么
+`native-assemble-link` 与 `llvm-ir-opt-llc-link` 现在会先按当前
+`distribution-runtime-root` 解析 `lib/nextpas/runtime/<runtime-sdk>/libc.so`，再把
+`-L<runtime-root>` 与 `-lc` 写进真实 linker argv；如果这份 runtime libc 缺失，planner 会直接
+给出 `toolchain.c-library-not-found`。这条 contract 当前仍只覆盖 nextPas 自己直接拥有的
+direct-link plan；默认 `bootstrap-native-assemble-link` 里的宿主 `*_link.res` 继续保持 host-owned。
+当宿主 compiler emit-asm step 真正失败时，失败种类也开始对齐 backend plan 派生的
+`toolchain.host-compiler-exec-failed`，不再继续暴露 driver 私有的
+`compiler-launch-failed` / `build-failed` 文本。
+当前仍要明确标注的残余风险已经收窄：`CompilationSession` 现在会把
+`native-assemble` / `native-link` failure 归到真实失败 step，
+`diagnostic-step-id`、`diagnostic-profile-id`、`diagnostic-logical-executable`、
+`build-trace-ref` 与 `tool-status-events` 的 step metadata 都会跟着失败 step 走；
+`build/verify_local.sh` 也已把 `assembler-failure-attribution-check` 与
+`linker-failure-attribution-check` 纳入真实 gate。当前这条 surface 已进一步收口：
+success path 现在也会暴露完整 multi-step transcript，并统一使用 plan-level
+`build-trace-ref=trace-<session-id>-toolchain-plan`。现阶段需要继续注意的不是“有没有
+transcript”，而是 success path 的 event/step 数量会跟着真实执行的
+`native-assemble-<unit>` 追加步骤增长，调用方不能再把计数冻结成固定字面量。
+
+## 当前 CLI 输出是结果语义的 human projection
+
+`stage0 build` 的长期契约不是“stdout 上刚好出现哪几行文本”，而是它表达的统一
+`CommandResultEnvelope` 语义。当前实现继续打印 line-based key/value，主要是为了让 shell、
+本地回放和 CI 在第一阶段有一条可读的最小路径；这些行本身不是 canonical truth。
+
+当前成功的 build 路径会把这些结果语义投影出来：
+
+- `mode=build`
+- `command=build`
+- `selector=build`
+- `source=<path>`
+- `target=linux-x86_64`
+- `target-config=<resolved-config-path>`
+- `compiler=fpc`
+- `compiler-exit=0`
+- `artifact=<path-without-extension>`
+- `session-id=<session-id>`
+- `root-file-id=<file-id>`
+- `source-db-file-count=<count>`
+- `source-db-line-index=deferred`
+- `unit-state-count=<count>`
+- `diagnostics-count=0`
+- `diagnostics-policy=default`
+- `syntax-status=ready`
+- `lexer-token-count=<count>`
+- `green-node-count=<count>`
+- `ast-root-kind=program`
+- `ast-declared-name=Hello`
+- `resolution-status=ready`
+- `unit-graph-status=ready`
+- `search-path-count=<count>`
+- `resolved-unit-count=<count>`
+- `unit-graph-edge-count=<count>`
+- `unit-graph-root-name=Hello`
+- `semantic-status=ready`
+- `symbol-graph-status=ready`
+- `type-graph-status=ready`
+- `typed-hir-status=ready`
+- `symbol-count=<count>`
+- `type-count=3`
+- `typed-hir-node-count=<count>`
+- `runtime-contract-count=2`
+- `typed-hir-root-name=Hello`
+- `mir-status=ready`
+- `mir-block-count=1`
+- `mir-operation-count=6`
+- `mir-entry-block=entry`
+- `mir-root-name=Hello`
+- `backend-plan-status=ready`
+- `backend-output-kind=executable`
+- `backend-primary-artifact-kind=executable`
+- `backend-primary-artifact-path=<workspace-root>/.nextpas/out/linux-x86_64/hello`
+- `backend-artifact-count=3`
+- `backend-artifacts=<json>`
+- `host-id=linux-x86_64`
+- `toolchain-binding-id=linux-x86_64-to-linux-x86_64-gnu`
+- `backend-family=native`
+- `assembler-profile-id=gnu-as`
+- `linker-profile-id=gnu-ld`
+- `archiver-profile-id=gnu-ar`
+- `resource-tool-profile-id=none`
+- `target-object-format=elf`
+- `target-assembler-flavor=gnu-as`
+- `target-linker-flavor=gnu-ld`
+- `target-runtime-layout-key=target-sdk-split`
+- `target-c-symbol-prefix=`
+- `target-c-library-naming=lib-prefix-so-a`
+- `target-llvm-triple=x86_64-unknown-linux-gnu`
+- `target-llvm-data-layout=e-p:64:64:64-...-S128`
+- `sysroot-mode=runtime-sdk`
+- `runtime-sdk-id=linux-x86_64`
+- `allow-host-fallback=false`
+- `tool-root-kind=distribution-helper-root`
+- `runtime-root-kind=distribution-runtime-root`
+- `response-file-policy=auto`
+- `link-script-policy=when-required`
+- `toolchain-plan-status=ready`
+- `toolchain-plan-family=bootstrap-native-assemble-link`
+- `tool-profile-root=<workspace-root>/build/tool_profiles`
+- `logical-link-request-status=ready`
+- `logical-link-request-output-kind=executable`
+- `logical-link-request-library-count=0`
+- `logical-link-request=<json>`
+- `llvm-toolchain-status=disabled`
+- `llvm-executable-set-id=llvm-stable`
+- `llvm-executable-set=<json>`
+- `tool-invocation-count=3`
+- `primary-tool-role=host-compiler`
+- `primary-tool-profile-id=fpc-stage0-host`
+- `primary-tool-step-id=host-fpc-emit-asm`
+- `primary-tool-logical-executable=fpc`
+- `primary-tool-sysroot-ref=runtime-sdk:linux-x86_64`
+- `primary-tool-failure-mapping=toolchain.host-compiler-exec-failed`
+- `tool-run-status=success`
+- `tool-run-step-count=3`
+- `primary-tool-run-status=success`
+- `tool-invocation-plan-ref=plan-<session-id>-primary-tool`
+- `tool-invocation-plan=<json>`
+- `tool-status-event-count=10`
+- `tool-status-events=<json>`
+- `diagnostics-summary=none`
+- `lifecycle-session=source-db,target-facts,diagnostics-sink,compilation-options`
+- `lifecycle-unit=root-input-state`
+- `lifecycle-stage=syntax:ready,resolution:ready,sema:ready,ir:ready,backend:ready`
+- `build-trace-ref=trace-<session-id>-toolchain-plan`
+- `build-trace=<json>`
+- `status=success`
+- `result=success`
+- `command-outcome=success`
+- `build-result=success`
+- `command-envelope=<json>`
+- `human-summary=build succeeded`
+
+这些字段现在对应的是命令级 outcome、输入定位、目标定位、宿主编译器事实，以及当前
+compiler session skeleton 的 owned truth 摘要。`command-envelope=<json>` 里的
+`result` 当前也会同步带上 camelCase 版本：
+`workspaceRoot`、`workspaceDiscoveryKind`、`workspaceDescriptorPath`、
+`packageManifestPath`、`artifactRoot`、`outputDir`、
+`backendArtifactCount`、`backendArtifacts`、
+`assemblerProfileId`、`linkerProfileId`、`archiverProfileId`、
+`resourceToolProfileId`、`toolRootKind`、`runtimeRootKind`、
+`responseFilePolicy`、`linkScriptPolicy`、`toolchainPlanStatus`、
+`toolchainPlanFamily`、`toolProfileRoot`、`logicalLinkRequestStatus`、
+`logicalLinkRequestOutputKind`、`logicalLibraryRequestCount`、`logicalLinkRequest`、
+`llvmToolchainStatus`、`llvmExecutableSetId`、`llvmExecutableSet`、`toolRunStatus`、
+`toolRunStepCount`、`primaryToolRunStatus`、`diagnosticErrorCount`、
+`diagnosticWarningCount`、`searchIndexStatus`、`indexedSearchRootCount` 与
+`searchIndexScanCount`。
+后续即使 CLI 渲染形式调整，调用方也应该继续把它们理解为统一 envelope 的人类可读投影，
+而不是另起一套只服务 shell 的私有协议。
+
+上面这组带具体字面量的 success 示例默认描述的是
+`linux-x86_64-to-linux-x86_64-gnu` binding。显式传入
+`--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 时，同一组 surface 会改成：
+
+- `compiler=opt`
+- `toolchain-binding-id=linux-x86_64-to-linux-x86_64-llvm`
+- `backend-family=llvm`
+- `linker-profile-id=lld-elf`
+- `backend-artifact-count=4`
+- `backend-artifacts=<json>`，其中 kinds 按顺序变成
+  `llvm-ir`、`llvm-bitcode`、`object-file`、`executable`
+- `toolchain-plan-family=llvm-ir-opt-llc-link`
+- `llvm-toolchain-status=ready`
+- `llvm-executable-set-id=llvm-stable`
+- `primary-tool-profile-id=llvm-stable`
+- `primary-tool-step-id=llvm-opt-bitcode`
+- `primary-tool-logical-executable=opt`
+
+对 `examples/smoke/hello.pas` 这条主 smoke success path，当前真实执行是三步：
+
+- `host-fpc-emit-asm`
+- `native-assemble`
+- `native-link`
+
+如果 plan 里还包含额外 source-backed units，当前会再插入
+`native-assemble-<unit>` 步骤，所以 success path 的 step count 不再被文档冻结成固定 `3`。
+
+`session-id`、`tool-invocation-plan-ref` 和 `build-trace-ref` 当前都已经改成每次 build
+唯一的 locator。它们的契约是“同一轮输出内前后一致、可以彼此引用”，而不是“永远等于某个
+固定字面量”。
+
+resolver search index 当前仍保持 lazy：
+
+- `examples/smoke/hello.pas` 这类没有触发额外 lookup 的路径，会看到
+  `search-index-status=deferred`
+- `examples/smoke/hello_with_units.pas` 这类真实解析依赖单元的路径，会看到
+  `search-index-status=ready`
+- `tests/fixtures/root_source_precedence/root_source_precedence_smoke.pas`、
+  `tests/fixtures/explicit_unit_root_smoke.pas` 以及
+  `tests/fixtures/package_manifest_source_precedence/...` 这类更高优先级 root 提前命中的路径，
+  会看到 `search-index-status=partial`
+
+这不是不一致，而是在把“是否真的消费了 search roots”作为 session-owned truth 如实投影。
+
+这里的 `partial` 不是失败语义，而是 precedence 生效后的正常状态：
+
+- root-source 命中后，不需要再去扫 explicit / installed tiers
+- package-source-root 命中后，不需要再去扫更低优先级 tiers
+- explicit-unit-root 命中后，也不需要继续把 target-installed tier 再扫一遍
+
+因此 `indexed-search-root-count` 与 `search-index-scan-count` 当前会跟随真实命中层级变化，
+而不是总被伪装成“所有 root 都已扫描完”。
+
+其中 `command-envelope=<json>` 是当前第一条 machine-readable bridge。它把
+`CommandResultEnvelope` 以单行 JSON 投影到 CLI，当前会在 top-level 继续补出
+`buildTraceRef`、`buildTrace`、`toolInvocationPlanRef`、`toolInvocationPlan` 与
+`toolStatusEvents`，方便 shell、CI、IDE 适配器和证据采集直接消费，而不需要先从其它
+key/value 行反推结果对象。
+`result.logicalLinkRequest.objectInputs` 当前也已经不再是假空数组：它会引用 backend-owned
+`object-file` artifact，为 future native link selection 提前冻结 object-level input truth。
+
+失败路径当前也会在 stderr 上补出最小失败投影，例如 `status=failure`、`result=failure`、
+`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|toolchain.host-compiler-exec-failed`、
+`diagnostic-phase=syntax|resolution|sema|toolchain`、`command-outcome=failure`、`command-envelope=<json>` 和
+`human-summary=<message>`，再附上原始失败消息。
+
+如果失败发生在 session 创建之前，stderr 仍会继续带上当前已知的
+`workspace-root`、`workspace-discovery-kind`、`workspace-descriptor-path`、
+`package-manifest-path`、`artifact-root`、`output-dir`；但不会伪造 `session-id`、
+`diagnostics-count` 或其它 session-owned projection。
+
+对当前 verify 已冻结的 primary-step failure baseline，stderr 还会继续补出：
+
+- `diagnostic-id=diag-0001`
+- `diagnostic-binding-id=linux-x86_64-to-linux-x86_64-gnu`
+- `diagnostic-profile-id=fpc-stage0-host`
+- `diagnostic-step-id=host-fpc-emit-asm`
+- `diagnostic-logical-executable=fpc`
+- `diagnostic-sysroot-ref=runtime-sdk:linux-x86_64`
+- `diagnostic-resolved-path=<resolved-host-fpc-path>`
+- `diagnostic-primary-artifact-kind=executable`
+- `diagnostic-primary-artifact-path=<workspace-root>/.nextpas/out/linux-x86_64/hello`
+- `diagnostic-exit-code=<non-zero>`
+- `tool-invocation-plan-ref=plan-<session-id>-primary-tool`
+- `tool-invocation-plan=<json>`
+- `tool-status-event-count=4`
+- `tool-status-events=<json>`
+- `build-trace-ref=trace-<session-id>-toolchain-plan`
+- `build-trace=<json>`
+
+这条 failure baseline 当前已经不再由 `stage0` 私自维护第二套 diagnostic 对象；
+它来自 `CompilationSession` 持有的 `diagnostics sink + build trace`，CLI 这里只做 projection。
+
+当前这条最小 trace payload 现在会把全部 executed steps 按顺序真实暴露出来，而不再只留下
+单步摘要。对 `examples/smoke/hello.pas` 这条主 smoke success path：
+
+- `steps[0].stepId=host-fpc-emit-asm`，`primaryOutputs` 至少包含
+  `assembly-text` 与 `linker-script`
+- `steps[1].stepId=native-assemble`，`primaryOutputs` 至少包含 `object-file`
+- `steps[2].stepId=native-link`，`primaryOutputs` 至少包含 `executable`
+- `steps[*].sidecars[*]` 现在会携带真实执行 truth，包括
+  `materialized=true|false` 与 `cleanupStatus=deleted|retained|not-requested`
+- 只有真实失败的 step 会继续带上 `diagnosticRefs=["diag-0001"]`
+
+当前这条最小 `ToolInvocationPlan` 也已经不是文档草图。它会真实暴露：
+
+- `planKind/toolRole/bindingId/profileId/hostId/targetId/sysrootRef/planFamily`
+- `steps[0].stepId=host-fpc-emit-asm`
+- `steps[0].argv=["-st","-Aas","-FE<backend-cache>","-FU<backend-cache>","-Fu<root-source-dir>","-Fu<unit-root?>","-Fu<units-dir>","<abs-source-path>"]`
+- `steps[0].workingDirectory=<workspace-root>/.nextpas/cache/backend/linux-x86_64`
+- `steps[0].inputs=[{"kind":"pascal-source","path":"<abs-source-path>"}]`
+- `steps[0].outputs` 至少包含根程序 `assembly-text` 与 `linker-script`
+- `steps[1].stepId=native-assemble`，把根程序 `.s` 变成 backend-owned `.o`
+- `steps[2].stepId=native-link`，通过 `<program>_link.res` 产出最终 executable
+- 当存在额外 source-backed units 时，还会附加 `native-assemble-<unit>` steps
+
+显式切到 LLVM binding 时，最小 `ToolInvocationPlan` 会改成
+`llvm-ir-opt-llc-link`：
+
+- `steps[0].stepId=llvm-opt-bitcode`，把 backend-owned `.ll` 产出为 `.bc`
+- `steps[1].stepId=llvm-llc-object`，把 `.bc` 产出为 backend-owned `.o`
+- `steps[2].stepId=llvm-link`，通过 `ld.lld` 产出最终 executable
+
+当前这条最小 status event spine 已经升级成完整 executed-step transcript。
+对 `examples/smoke/hello.pas` 这条三步 success path，当前真实 event 序列是：
+
+- `toolchain.tool-selected` / `toolchain.step-started` / `toolchain.step-finished`
+  for `host-fpc-emit-asm`
+- `toolchain.tool-selected` / `toolchain.step-started` / `toolchain.step-finished`
+  for `native-assemble`
+- `toolchain.tool-selected` / `toolchain.step-started` / `toolchain.step-finished`
+  for `native-link`
+- `toolchain.plan-finished`
+
+因此当前 `tool-status-event-count=10`；如果 plan 里还追加了 source-backed unit 的
+`native-assemble-<unit>`，每个额外 executed step 会再多出 3 个 event，然后才进入
+`plan-finished`。
+
+失败路径里这组 transcript 也会继续按真实执行面收口：宿主 compiler failure 当前会留下
+4 个 event，assembler failure 会留下 7 个 event，linker failure 会留下 10 个 event；
+`tool-status-events`、`diagnostic-step-id` 与 `build-trace-ref` 全都统一对齐同一条
+plan-level trace，而失败 attribution 则落在真实失败 step。
+
+## 状态、诊断与留证边界
+
+- `stage0` 可以把 toolchain progress 友好地投影到 CLI，但这些内容属于 status event
+- 真正的失败分类属于 diagnostics，而不是把每条失败都降格成随手拼出来的日志文本
+- step、artifact、sidecar 和 failure relation 的执行留证属于 build trace，不属于 `stage0`
+  私有回放格式
+- 当前 README 里列出的 key/value 字段，只回答命令最终结果；它们不替代 build trace 或 diagnostics
+
+## 这条路径现在如何被验证
+
+`build/verify_local.sh` 会复用这条公开 build 路径：先检查关键架构文档、目标规格与
+`compiler/` skeleton 输入，再用
+`fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -FE.sisyphus/tmp/stage0-bootstrap -FU.sisyphus/tmp/stage0-bootstrap tools/stage0/nextpas.pas`
+构建驱动入口，然后执行
+`.sisyphus/tmp/stage0-bootstrap/nextpas build examples/smoke/hello.pas --target linux-x86_64 --workspace <repo-root>` 并断言
+输出里存在 `command-envelope=`、`session-id=`、`source-db-file-count=1`、`syntax-status=ready`、
+`resolution-status=ready`、`semantic-status=ready`、`mir-status=ready`、
+`backend-plan-status=ready`、`host-id=linux-x86_64`、
+`assembler-profile-id=gnu-as`、`linker-profile-id=gnu-ld`、
+`archiver-profile-id=gnu-ar`、`resource-tool-profile-id=none`、
+`target-runtime-layout-key=target-sdk-split`、`sysroot-mode=runtime-sdk`、
+`tool-root-kind=distribution-helper-root`、`runtime-root-kind=distribution-runtime-root`、
+`response-file-policy=auto`、`link-script-policy=when-required`、
+`toolchain-plan-family=bootstrap-native-assemble-link`、
+`logical-link-request.objectInputs=[backend-owned <program>.o]`、
+`primary-tool-profile-id=fpc-stage0-host`、`primary-tool-step-id=host-fpc-emit-asm`、
+`primary-tool-logical-executable=fpc`、
+`primary-tool-sysroot-ref=runtime-sdk:linux-x86_64`、
+`primary-tool-failure-mapping=toolchain.host-compiler-exec-failed`、
+`tool-run-status=success`、`tool-run-step-count=3`、
+`primary-tool-run-status=success`、
+`tool-invocation-plan.steps[*].stepId=host-fpc-emit-asm/native-assemble/native-link`、
+`tool-status-event-count=10`、
+`build-trace-ref=trace-<session-id>-toolchain-plan`、
+`ast-root-kind=program` 和 session 相关结果字段；随后再对
+`examples/smoke/hello_with_units.pas` 断言 `resolved-unit-count=4` /
+`unit-graph-edge-count=4` / `typed-hir-node-count=7` / `mir-operation-count=8` /
+`backend-output-kind=executable` / `toolchain-binding-id=linux-x86_64-to-linux-x86_64-gnu` /
+`target-c-library-naming=lib-prefix-so-a` / `target-llvm-triple=x86_64-unknown-linux-gnu`，
+再对 `examples/smoke/external_cdecl_smoke.pas` 断言
+`logical-link-request-library-count=1` 与
+`logical-link-request.libraryRequests=[{logicalId:"c", linkageKind:"shared", strength:"strong"}]`，
+对 `tests/compiler/fail/missing_semicolon_fail.pas` 断言 `syntax-analysis-failed` /
+`parser.syntax-error`，并对 missing unit / ambiguous unit / unit cycle 三类 resolution
+failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
+`semantic-analysis-failed` + `sema.duplicate-declaration`，再对
+`tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
+`semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
+`toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、
+`diagnostic-step-id`、`diagnostic-logical-executable`、`diagnostic-sysroot-ref`、
+`diagnostic-resolved-path`、`diagnostic-primary-artifact-*`、`tool-run-status=failure`、
+`tool-run-step-count=1`、`primary-tool-run-status=failed` 与 envelope 里的 structured
+toolchain diagnostic；随后再通过 fake `as` / `ld` 负路径断言
+`toolchain.assembler-exec-failed` / `toolchain.linker-exec-failed` 必须把
+`diagnostic-profile-id`、`diagnostic-step-id`、`diagnostic-logical-executable`、
+`build-trace-ref=trace-<session-id>-toolchain-plan`、`tool-run-step-count` 与
+`primary-tool-run-status` 对齐到真实 executed-step transcript；同时它也会继续检查
+`buildTrace.steps[*]` 必须按顺序留下全部 executed steps，且只有失败 step 才带
+`diagnosticRefs`。最后 verify 还会把
+`assembler-failure-attribution-check` / `linker-failure-attribution-check`
+写进 verify-local success envelope；它还会把 `tests/toolchain/toolchain_contract_smoke.pas`
+编译到临时 `mktemp -d` build dir，并在执行后显式断言源码树里不存在
+`tests/toolchain/toolchain_contract_smoke` 与 `.o`；再对 explicit unit root /
+root-source precedence / out-dir override / invalid unit root 这些路径做真实 gate，
+最后通过 fake `fpc` 验证 `./tests/run_all_tests.sh --filter smoke` 的 bootstrap failure
+必须带上 `bootstrap-step`、`bootstrap-command`、`bootstrap-stderr-file` 和原始 stderr
+evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fake
+`opt` / `llc` / `ld.lld` 跑一条
+`--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` smoke，断言
+`compiler=opt`、`backend-artifact-count=4`、
+`toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
+`.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、裸
+`nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
+与裸 `nextpas doctor`，冻结 `environment-readiness=incomplete`、
+`runtime-sdk-status=missing`、`runtime-libc-present=false`、`stage0EnvStatusCheck=pass`
+与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass` 与
+`stage0DoctorInvalidArgumentsCheck=pass`，确保当前最小 `env` / `doctor` surface
+也进入正式 gate。
+
+这意味着本地验证与 Linux CI 不应该再各自拼装另一套 `stage0` 成功路径。
+
+## 这里现在不做什么
+
+- 除了 `env status` 与只读 `doctor` 之外，不承诺 environment mutation verbs，例如
+  `env use`、`env sync`、`env bootstrap` 或 `env clean`。
+- 不在这里塞入包管理、格式化、LSP 或 IDE 集成。
+- 不把多目标矩阵提前做进 CLI 表面。
+- 不绕过 `build/targets/` 目标规格边界，直接把完整平台模型做死在这里。
