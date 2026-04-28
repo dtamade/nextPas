@@ -34,9 +34,10 @@
   `toolchainFailureCheck=pass`、`assemblerFailureAttributionCheck=pass`、
   `linkerFailureAttributionCheck=pass`、`stage0EnvStatusCheck=pass`、
   `stage0DoctorCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass`、
-  `stage0EnvInvalidArgumentsCheck=pass` 与 `verify-local=pass` 已继续转绿。
+  `stage0EnvInvalidArgumentsCheck=pass` 与 `verify-local=pass` 已继续转绿；`doctor`
+  result contract 也已投影 `doctorFindings[]`、workspace readiness 与 binding readiness。
 - 这份计划从现在起接管“当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 29` 已完成。
+- `Batch 1` 到 `Batch 31` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -48,9 +49,9 @@
   `bootstrap-native-assemble-link`，显式 LLVM binding 也已能真实切到
   `llvm-ir-opt-llc-link`，later-step failure attribution 与 success-path observability
   transcript 都已收口到完整 multi-step trace。`doctor` 的第一条只读 health inspection
-  也已进入统一 command surface。下一步优先转回 richer `doctor` finding contract /
-  richer `env` actions / `query` / package workflow，而不是继续在已经闭环的 success-path
-  transcript 或最小 `env status` projection 上空转。
+  与最小 structured finding contract 也已进入统一 command surface。下一步优先转回
+  richer `env` readiness/actions / `query` / package workflow，而不是继续在已经闭环的
+  success-path transcript 或最小 `env status` / `doctor` projection 上空转。
 
 ## 执行规则
 
@@ -1507,16 +1508,30 @@ execution contract，但仍严格守住当前 ownership 边界：
 - 这批故意不提前把完整 finding taxonomy、suggested action、`env use` /
   `env sync` / `env bootstrap`、`query` 或 package workflow 伪装成当前实现面
 
+`Batch 31` 当前把 `doctor` result contract 从 aggregate summary 加固成可消费的最小
+structured finding surface：
+
+- `tools/stage0/nextpas.pas` 现在新增最小 `TDoctorFinding`，并让 `doctor` 输出
+  `doctor-workspace-status` 与 `doctor-toolchain-binding-status`
+- runtime SDK 缺失会稳定输出 `doctor-finding-code=doctor.runtime-sdk-missing` 与
+  `doctor-finding-severity=warning`
+- `command-envelope=<json>.result.doctorFindings[]` 现在保存同一条 finding 的
+  `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
+- 这批继续冻结 `doctorFindings` 是 health inspection result，不替代 compiler diagnostics sink
+- 这批仍不把 package/workspace coherence、environment mutation verbs、`query` 或 package workflow
+  伪装成当前实现面
+
 在接下来的滚动周期里，已经完成的 bootstrap-native production path、later-step failure
 attribution、success-path transcript hardening、显式 LLVM binding execution path，以及
 这次 direct-link C library resolution contract，再加上 `nextpas test` 与最小
-`nextpas env status` / `nextpas doctor`，已经让 `PlanFromBackend`、backend artifact truth、generic runner、
-logical link request、execution-side link serialization 与最小 developer tooling state
-surface / health inspection 真正接成一条更完整的控制链；下一批不应该再回头补“library request 有没有进入 argv”
-、“env state 能不能被只读投影”或“doctor 能不能作为 command surface 执行”这类已闭环问题，
+`nextpas env status` / `nextpas doctor` / `doctorFindings`，已经让 `PlanFromBackend`、
+backend artifact truth、generic runner、logical link request、execution-side link serialization
+与最小 developer tooling state surface / health inspection 真正接成一条更完整的控制链；
+下一批不应该再回头补“library request 有没有进入 argv”、“env state 能不能被只读投影”、
+“doctor 能不能作为 command surface 执行”或“runtime SDK finding 能不能结构化输出”这类已闭环问题，
 而应该转回 richer developer tooling 与更高层控制面。
 
-但这些后续批次必须建立在前三十批真实收口之后，而不是提前平行开工。
+但这些后续批次必须建立在前三十一批真实收口之后，而不是提前平行开工。
 
 ## 这份计划故意不做什么
 

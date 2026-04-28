@@ -330,7 +330,8 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
 - 当前 `env status` 只是最小 read-only projection，不等于 `env use` / `env sync` /
-  `env bootstrap`；当前 `doctor` 也只是最小 aggregate health inspection，不等于完整 finding taxonomy
+  `env bootstrap`；当前 `doctor` 已经有最小 structured finding contract，但不等于完整
+  package/workspace coherence taxonomy
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 
@@ -492,9 +493,10 @@ result bridge 上。
 
 当前 `tools/stage0/nextpas.pas` 已经先落地最小只读 `doctor` surface：它复用 `env status`
 的 target / binding / distribution / runtime truth，并额外输出
-`doctorStatus`、`doctorCheckCount` 与 `doctorFindingCount`。这只说明 health inspection
-入口已经进入统一 command surface；更细的 finding code、severity、suggested action 与
-package/workspace coherence 检查仍应继续分批加固。
+`doctorWorkspaceStatus`、`doctorToolchainBindingStatus`、`doctorStatus`、`doctorCheckCount`、
+`doctorFindingCount` 与 `doctorFindings`。当前已冻结的代表性 finding 是
+`doctor.runtime-sdk-missing`，它带有 `severity`、`subject`、`summary` 与
+`suggestedAction`；package/workspace coherence 检查仍应继续分批加固。
 
 ## design for tools 比 implement all tools 更重要
 

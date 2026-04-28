@@ -62,6 +62,13 @@
   `status=success` / `result=success`，把健康问题写进
   `doctor-status=warning` 与 `doctor-finding-count=1`，而不是修改环境或把 runtime 缺失误报成
   command execution failure。
+- 当前 `doctor` 的 result contract 已从 aggregate summary 继续加固：
+  line-based output 会投影 `doctor-workspace-status=ready`、
+  `doctor-toolchain-binding-status=ready`、`doctor-finding-code=doctor.runtime-sdk-missing`
+  与 `doctor-finding-severity=warning`。
+- 当前 `command-envelope=<json>.result.doctorFindings[]` 会保留同一条 finding 的
+  `code`、`severity`、`subject`、`summary` 与 `suggestedAction`；这属于
+  health inspection result，不替代 compiler diagnostics sink。
 - 当前 `build/verify_local.sh` 的 toolchain contract probe 已经不再把
   `tests/toolchain/toolchain_contract_smoke` 与 `.o` 写回源码树：它现在会编译到临时
   `mktemp -d` build dir，并在执行后显式断言源码树里不存在这两个生成物。

@@ -141,10 +141,14 @@ result envelope，而不是另外长出一个 installer 或 channel CLI 世界�
 - 复用 `env status` 已使用的 target facts、toolchain binding、distribution 与 runtime locator
 - 可选消费 `--workspace <root>`，只确认 workspace root 是否可解释为目录
 - 即使发现 runtime SDK 缺失，也继续以 `status=success` / `result=success` 表示 inspection 本身完成
-- 真实健康摘要通过 `doctor-status`、`doctor-check-count` 与 `doctor-finding-count` 投影
+- 真实健康摘要通过 `doctor-workspace-status`、`doctor-toolchain-binding-status`、
+  `doctor-status`、`doctor-check-count`、`doctor-finding-count` 与代表性
+  `doctor-finding-*` 字段投影
+- `command-envelope=<json>.result.doctorFindings[]` 保存同一条 finding 的
+  `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
 
-当前 `doctor` 只冻结最小 aggregate contract；更细的 finding taxonomy、suggested action 与
-workspace/package coherence 检查应在后续批次继续加固。
+当前 `doctor` 已冻结最小 structured finding contract；package/workspace coherence 检查与更完整的
+health taxonomy 应在后续批次继续加固。
 
 ## `stage0 build` 的结果语义也必须朝统一 envelope 收敛
 

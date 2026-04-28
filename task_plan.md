@@ -58,6 +58,39 @@ Completed
 - [x] 重新运行 fresh `bash build/verify_local.sh`，确认新增 `stage0DoctorCheck`、
       `stage0DoctorInvalidArgumentsCheck` 与整套 `verify-local=pass`
 
+## Addendum: 2026-04-29 Doctor Result Contract Hardening
+
+### Goal
+
+把 `doctor` 从 aggregate health summary 继续加固成可被 CLI、CI 与 future IDE adapter
+稳定消费的结构化 result contract，同时不把 health finding 误放进 compiler diagnostics sink：
+
+- `build/verify_local.sh` 必须冻结 `doctor-workspace-status` 与
+  `doctor-toolchain-binding-status`
+- runtime SDK 缺失必须输出代表性 finding：
+  `doctor-finding-code=doctor.runtime-sdk-missing` 与
+  `doctor-finding-severity=warning`
+- `command-envelope=<json>.result.doctorFindings[]` 必须同步保留
+  `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 先在 `build/verify_local.sh` 加入 focused RED gate，确认 fresh
+      `bash build/verify_local.sh` 失败于缺少 `doctor-workspace-status`
+- [x] 在 `tools/stage0/nextpas.pas` 引入最小 `TDoctorFinding` 与扩展后的
+      `TDoctorProjectionContext`，保留 first finding line projection 与 envelope array
+- [x] 继续保持 `doctor` 为只读 inspection：当前 runtime SDK 缺失仍返回
+      `status=success` / `result=success`，健康问题写进 `doctorFindings`
+- [x] 同步回写 `docs/architecture/diagnostics-specification.md`、
+      `docs/architecture/developer-tooling-specification.md`、`task_plan.md`、
+      `findings.md` 与 `progress.md`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认结构化 finding contract 与
+      `verify-local=pass`
+
 ## Addendum: 2026-04-26 Stage0 Env Status Read-only Projection
 
 ### Goal

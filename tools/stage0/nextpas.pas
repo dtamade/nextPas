@@ -185,10 +185,22 @@ type
     RuntimeSdkStatus: string;
   end;
 
+  TDoctorFinding = record
+    Code: string;
+    Severity: string;
+    Subject: string;
+    Summary: string;
+    SuggestedAction: string;
+  end;
+
   TDoctorProjectionContext = record
     Status: string;
+    WorkspaceStatus: string;
+    ToolchainBindingStatus: string;
     CheckCount: LongInt;
     FindingCount: LongInt;
+    FirstFinding: TDoctorFinding;
+    FindingsJson: string;
   end;
 
 var
@@ -1110,6 +1122,16 @@ end;
 
 procedure AppendDoctorProjectionJsonFields(var AFields: string);
 begin
+  AppendJsonStringField(
+    AFields,
+    'doctorWorkspaceStatus',
+    ActiveDoctorProjection.WorkspaceStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'doctorToolchainBindingStatus',
+    ActiveDoctorProjection.ToolchainBindingStatus
+  );
   AppendJsonStringField(AFields, 'doctorStatus', ActiveDoctorProjection.Status);
   AppendJsonIntegerField(
     AFields,
@@ -1123,6 +1145,12 @@ begin
     ActiveDoctorProjection.FindingCount,
     ActiveDoctorProjection.CheckCount > 0
   );
+  if ActiveDoctorProjection.FindingsJson <> '' then
+    AppendJsonField(
+      AFields,
+      'doctorFindings',
+      ActiveDoctorProjection.FindingsJson
+    );
 end;
 
 function BuildCommandEnvelopeJson(
@@ -1438,13 +1466,26 @@ begin
   AContext.RuntimeSdkStatus := '';
 end;
 
+procedure ClearDoctorFindingValue(var AFinding: TDoctorFinding);
+begin
+  AFinding.Code := '';
+  AFinding.Severity := '';
+  AFinding.Subject := '';
+  AFinding.Summary := '';
+  AFinding.SuggestedAction := '';
+end;
+
 procedure ClearDoctorProjectionContextValue(
   var AContext: TDoctorProjectionContext
 );
 begin
   AContext.Status := '';
+  AContext.WorkspaceStatus := '';
+  AContext.ToolchainBindingStatus := '';
   AContext.CheckCount := 0;
   AContext.FindingCount := 0;
+  ClearDoctorFindingValue(AContext.FirstFinding);
+  AContext.FindingsJson := '';
 end;
 
 procedure CaptureBuildCommandContextValue(
@@ -1557,6 +1598,47 @@ begin
   end;
 end;
 
+function DoctorFindingJson(const AFinding: TDoctorFinding): string;
+var
+  Fields: string;
+begin
+  Fields := '';
+  AppendJsonStringField(Fields, 'code', AFinding.Code);
+  AppendJsonStringField(Fields, 'severity', AFinding.Severity);
+  AppendJsonStringField(Fields, 'subject', AFinding.Subject);
+  AppendJsonStringField(Fields, 'summary', AFinding.Summary);
+  AppendJsonStringField(Fields, 'suggestedAction', AFinding.SuggestedAction);
+  Result := '{' + Fields + '}';
+end;
+
+procedure AddDoctorFinding(
+  var AContext: TDoctorProjectionContext;
+  const ACode: string;
+  const ASeverity: string;
+  const ASubject: string;
+  const ASummary: string;
+  const ASuggestedAction: string
+);
+var
+  Finding: TDoctorFinding;
+begin
+  Finding.Code := ACode;
+  Finding.Severity := ASeverity;
+  Finding.Subject := ASubject;
+  Finding.Summary := ASummary;
+  Finding.SuggestedAction := ASuggestedAction;
+
+  if AContext.FirstFinding.Code = '' then
+    AContext.FirstFinding := Finding;
+
+  if AContext.FindingsJson = '' then
+    AContext.FindingsJson := '[' + DoctorFindingJson(Finding)
+  else
+    AContext.FindingsJson := AContext.FindingsJson + ',' + DoctorFindingJson(Finding);
+
+  Inc(AContext.FindingCount);
+end;
+
 procedure CaptureDoctorProjectionFromEnvironment(
   var AContext: TDoctorProjectionContext;
   const AEnvironmentContext: TEnvironmentProjectionContext;
@@ -1565,17 +1647,48 @@ procedure CaptureDoctorProjectionFromEnvironment(
 begin
   AContext.CheckCount := 3;
   AContext.FindingCount := 0;
+  ClearDoctorFindingValue(AContext.FirstFinding);
+  AContext.FindingsJson := '';
+  if AWorkspaceRoot <> '' then
+    AContext.WorkspaceStatus := 'ready'
+  else
+    AContext.WorkspaceStatus := 'not-provided';
+  if (AEnvironmentContext.ToolchainBindingPath <> '') and
+    FileExists(AEnvironmentContext.ToolchainBindingPath) then
+    AContext.ToolchainBindingStatus := 'ready'
+  else
+    AContext.ToolchainBindingStatus := 'missing';
 
   if (not AEnvironmentContext.HasRuntimeLibcPresent) or
     (not AEnvironmentContext.RuntimeLibcPresent) then
-    Inc(AContext.FindingCount);
+    AddDoctorFinding(
+      AContext,
+      'doctor.runtime-sdk-missing',
+      'warning',
+      'runtime-sdk:' + AEnvironmentContext.RuntimeLibcPath,
+      'runtime SDK libc is missing',
+      'provide lib/nextpas/runtime/linux-x86_64/libc.so or run env sync when it is available'
+    );
 
   if AWorkspaceRoot <> '' then
   begin
     Inc(AContext.CheckCount);
     if not DirectoryExists(AWorkspaceRoot) then
-      Inc(AContext.FindingCount);
+    begin
+      AContext.WorkspaceStatus := 'missing';
+      AddDoctorFinding(
+        AContext,
+        'doctor.workspace-root-missing',
+        'warning',
+        'workspace:' + AWorkspaceRoot,
+        'workspace root is missing',
+        'pass an existing workspace root'
+      );
+    end;
   end;
+
+  if AContext.FindingsJson <> '' then
+    AContext.FindingsJson := AContext.FindingsJson + ']';
 
   if AContext.FindingCount > 0 then
     AContext.Status := 'warning'
@@ -2432,6 +2545,16 @@ procedure PrintDoctorProjectionFields(const UseStdErr: Boolean);
 begin
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'doctor-workspace-status',
+    ActiveDoctorProjection.WorkspaceStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-toolchain-binding-status',
+    ActiveDoctorProjection.ToolchainBindingStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'doctor-status',
     ActiveDoctorProjection.Status
   );
@@ -2446,6 +2569,31 @@ begin
     'doctor-finding-count',
     ActiveDoctorProjection.FindingCount,
     ActiveDoctorProjection.CheckCount > 0
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-finding-code',
+    ActiveDoctorProjection.FirstFinding.Code
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-finding-severity',
+    ActiveDoctorProjection.FirstFinding.Severity
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-finding-subject',
+    ActiveDoctorProjection.FirstFinding.Subject
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-finding-summary',
+    ActiveDoctorProjection.FirstFinding.Summary
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'doctor-finding-suggested-action',
+    ActiveDoctorProjection.FirstFinding.SuggestedAction
   );
 end;
 

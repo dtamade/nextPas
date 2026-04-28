@@ -5,6 +5,29 @@
 
 ## Session: 2026-04-29
 
+### Doctor Result Contract Hardening
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-04-29-nextpas-continuous-developer-tooling-plan.md` 的 Task 2
+    先在 `build/verify_local.sh` 加入 focused RED gate，要求 `doctor-workspace-status`、
+    `doctor-toolchain-binding-status`、`doctor-finding-code`、`doctor-finding-severity`
+    与 envelope 里的 `doctorFindings[]`。
+  - 运行 fresh `bash build/verify_local.sh`，确认失败点落在
+    `missing-stage0-doctor-workspace-status`，证明 gate 捕捉的是缺失的结构化 contract。
+  - 扩展 `tools/stage0/nextpas.pas`，新增最小 `TDoctorFinding`，并让
+    `TDoctorProjectionContext` 持有 workspace/toolchain readiness、first finding 与
+    `doctorFindings` JSON array。
+  - 对当前 runtime SDK 缺失场景输出稳定 finding：
+    `doctor.runtime-sdk-missing` / `warning` / `subject` / `summary` /
+    `suggestedAction`，同时继续保持 `doctor` inspection 本身
+    `status=success` / `result=success`。
+  - 同步回写 `docs/architecture/diagnostics-specification.md` 与
+    `docs/architecture/developer-tooling-specification.md`，明确 `doctorFindings`
+    是 health inspection result contract，不替代 compiler diagnostics sink。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认 `stage0DoctorCheck=pass`、
+    `stage0DoctorInvalidArgumentsCheck=pass` 与 `verify-local=pass`。
+
 ### Stage0 Doctor Minimal Read-only Health Surface + Verify Sync
 
 - **Status:** completed
