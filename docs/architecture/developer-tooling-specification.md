@@ -318,20 +318,23 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、只读 `env status` 与最小 `doctor`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、只读 `env status`、最小 `doctor` 与最小 `query symbols`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
 `nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface 与
-只读 `env status` surface、最小 `doctor` health inspection 收进同一个 `nextpas` 产品壳。
+只读 `env status` surface、最小 `doctor` health inspection、最小 `query symbols`
+semantic projection 收进同一个 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
 
-- 未来的 `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、`query` 不应再开辟另一套产品命令名
+- 未来的 `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
 - 当前 `env status` 只是最小 read-only projection，不等于 `env use` / `env sync` /
   `env bootstrap`；当前 `doctor` 已经有最小 structured finding contract，但不等于完整
   package/workspace coherence taxonomy
+- 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
+  language service、LSP、open document overlay 或 IDE integration
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 
@@ -442,12 +445,14 @@ FPC 的独立工具生态说明了一个长期问题：一旦每个工具都有�
 `command-envelope=<json>` bridge。当前 `tools/stage0/nextpas.pas` 也开始以 thin wrapper
 公开 `nextpas test --filter <group>` / `--filter smoke`，并新增只读
 `nextpas env status --target linux-x86_64 [--toolchain-binding <id>]` 与
-`nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
-`test`、最小 `env` state projection 与最小 `doctor` health inspection 四条公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
+`nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，以及
+`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
+`test`、最小 `env` state projection、最小 `doctor` health inspection 与最小 `query`
+semantic projection 五条公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
 结果对象。
 
 `build/verify_local.sh` 现在也会为 `verify-local` 自己输出同一类 `command-envelope=<json>`，
-这样当前 `build`、`test`、`env`、`doctor`、`verify-local` 五条最小公开命令面已经都站到了同一类
+这样当前 `build`、`test`、`env`、`doctor`、`query`、`verify-local` 六条最小公开命令面已经都站到了同一类
 result bridge 上。
 
 ## `env` 结果字段也必须是正式 contract，不是随手打印几行路径
@@ -499,6 +504,26 @@ result bridge 上。
 `doctor.runtime-sdk-missing`，它带有 `severity`、`subject`、`summary` 与
 `suggestedAction`；package/workspace coherence 检查仍应继续分批加固。
 
+## `query` 必须消费 shared analysis，不得退化成文本扫描
+
+semantic query 是 developer tooling 和 language service 的交界面。nextPas 不接受 CLI query
+另写一套 parser、私扫目录，或从 build stdout 里反推 symbol truth。
+
+因此 nextPas 冻结：
+
+- `query` family 应消费 compiler / language-service shared analysis truth
+- 当前最小 `query symbols` 已经消费 `ResolveWorkspaceModel(...)`、target facts、unit resolution
+  与 semantic model
+- 它不执行 backend 或 toolchain，也不把 query 成功误写成 build 成功
+- 它的结果同样进入统一 result envelope
+
+当前 `tools/stage0/nextpas.pas` 已经先落地最小只读 `query symbols` surface：
+`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]` 会通过
+`TCompilationSession` 执行 syntax / resolution / semantic analysis，并输出
+`queryKind=symbols`、`queryStatus=success`、`analysisSource=compilation-session` 与
+`queryResultCount`。这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有
+正式 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
+
 ## design for tools 比 implement all tools 更重要
 
 第一阶段不要求马上把所有工具做出来，但要求工具长出来时不会破坏架构。
@@ -514,7 +539,8 @@ result bridge 上。
 ## `stage0`、`stage1` 与 `stage2` 如何接这份规范
 
 - `stage0`
-  - 先承诺 `build`，再补上一条 thin-wrapped `test`
+  - 已承诺 `build`，并补上 thin-wrapped `test`、只读 `env status`、只读 `doctor` 与
+    compilation-session-backed `query symbols`
   - 但统一 command surface 的对象边界必须先冻结
 - `stage1`
   - 开始把 `doctor`、`env`、`test`、`query` 或受控的 `pkg` surface 接到共享核心上

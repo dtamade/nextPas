@@ -1,7 +1,8 @@
 # nextPas tools/stage0/
 
 `tools/stage0/` 承接 nextPas 第一阶段最小但真实的命令行控制面。这里现在公开
-`build`、最小 `test`、只读 `env status` 与最小 `doctor` 四条路径，但仍不假装已经是完整工具链前端。
+`build`、最小 `test`、只读 `env status`、最小 `doctor` 与最小 `query symbols` 五条路径，
+但仍不假装已经是完整工具链前端。
 
 如果你要看冻结后的边界，先读
 `docs/architecture/stage0-driver-specification.md`。如果你要看当前主线批次，读
@@ -18,6 +19,7 @@ nextpas test --list-groups [--workspace <root>]
 nextpas test --filter <group> [--workspace <root>]
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>]
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 ```
 
 这个入口由 FreePascal 编译成可执行程序，再从
@@ -72,18 +74,27 @@ NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
 Then:
 
 ```bash
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  query symbols examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace "$PWD"
+```
+
+Then:
+
+```bash
 ./tools/stage0/nextpas frobnicate examples/smoke/hello.pas
 ```
 
-前四条命令现在都走统一 `nextpas` 产品壳：`build` 继续由 driver 自己驱动 compiler/toolchain，
+这五条命令现在都走统一 `nextpas` 产品壳：`build` 继续由 driver 自己驱动 compiler/toolchain，
 `test` 则只做最小参数解析后 thin-wrap 到 `tests/run_all_tests.sh` 与
 `tests/harness/runner.pas`，`env status` 则只读解析 target / binding / distribution /
-runtime state，不做健康判定，也不修改环境，`doctor` 则复用同一批 environment truth 做只读健康检查。
-其中 `build`、`test --filter <group|smoke>`、`env status` 与 `doctor` 的执行路径都会额外输出一条
+runtime state，不做健康判定，也不修改环境，`doctor` 则复用同一批 environment truth 做只读健康检查，
+`query symbols` 则复用 compilation session 的 syntax / resolution / semantic truth 做只读 symbol 查询。
+其中 `build`、`test --filter <group|smoke>`、`env status`、`doctor` 与 `query symbols`
+的执行路径都会额外输出一条
 `command-envelope=<json>`。这些 key/value 现在至少会对齐这些公共字段：
 
-- `command=build|test|env|doctor`
-- `selector=build|test|group|smoke|status|doctor`
+- `command=build|test|env|doctor|query`
+- `selector=build|test|group|smoke|status|doctor|symbols`
 - `status=success|failure`
 - `result=success|failure`
 - `command-outcome=success|failure`
@@ -120,6 +131,18 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 
 这条 surface 当前仍是只读 inspection：它解释当前 target / binding / runtime / workspace
 状态是否健康，但不执行 `env sync`、不安装 runtime SDK，也不替代 `build` 或 `test`。
+
+`query symbols` 当前还会额外投影最小 query 汇总：
+
+- `query-kind=symbols`
+- `query-status=success`
+- `analysis-source=compilation-session`
+- `query-result-count=<count>`
+
+这条 surface 当前不是完整 language service，也不是 LSP server。它只把
+`TCompilationSession` 已经拥有的 syntax / resolution / semantic 结果投影为只读 query
+结果；因此成功路径会显示 `mir-status=deferred`、`backend-plan-status=deferred` 与
+`toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
 
 在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
 resolution / sema / MIR / backend / toolchain skeleton：
@@ -228,7 +251,8 @@ resolution / sema / MIR / backend / toolchain skeleton：
 
 `test` 命令会把 harness 当前已有的 group / smoke 结果直接透传出来；`env status`
 会把当前 target/binding/distribution/runtime 解析结果投影成 line-based output 与
-`command-envelope=<json>`；最后一条未知命令示例应该以非零状态退出，并打印清晰的
+`command-envelope=<json>`；`query symbols` 会把 compilation session 的 semantic symbol
+count 作为当前最小查询结果投影出来；最后一条未知命令示例应该以非零状态退出，并打印清晰的
 `unsupported-command` 消息。
 
 ## workspace discovery、unit root 和产物落点
@@ -272,7 +296,8 @@ resolution / sema / MIR / backend / toolchain skeleton：
 
 ## 退出码与失败语义
 
-- `0`：命令输入合法，且 `build`、`test`、`env status` 或 `doctor` 的真实执行路径成功完成
+- `0`：命令输入合法，且 `build`、`test`、`env status`、`doctor` 或 `query symbols`
+  的真实执行路径成功完成
 - `1`：参数不合法、命令不受支持、目标不受支持、源文件缺失、syntax / resolution / sema 提前失败，或 `test` / toolchain 底层执行失败
 
 当前 `env status` 与只读 `doctor` 不会因为 environment 仍不完整就退出失败；这类事实继续通过
@@ -280,7 +305,8 @@ resolution / sema / MIR / backend / toolchain skeleton：
 `toolchain-binding-status` / `distribution-status` / `runtime-libc-present` 以及
 `doctor-status` 表达。
 
-当输入命令不是 `build`、`test`、`env` 或 `doctor` 时，驱动入口必须打印 `unsupported-command: <name>`。
+当输入命令不是 `build`、`test`、`env`、`doctor` 或 `query` 时，驱动入口必须打印
+`unsupported-command: <name>`。
 当目标不是 `linux-x86_64` 时，驱动入口必须清晰拒绝，不把问题包装成模糊失败。
 当前受支持目标、宿主编译器和发行布局假设都来自外置目标规格，而不是再硬编码在
 `nextpas.pas` 里。当前 `stage0 build` 也会在成功路径上显式传入 target-aware
@@ -678,13 +704,17 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
-与裸 `nextpas doctor`，冻结 `environment-readiness=incomplete`、
+与裸 `nextpas doctor`，以及
+`.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
+与裸 `nextpas query`，冻结 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass` 与
-`stage0DoctorInvalidArgumentsCheck=pass`，确保当前最小 `env` / `doctor` surface
-也进入正式 gate。
+`stage0DoctorInvalidArgumentsCheck=pass`，以及 `query-kind=symbols`、
+`analysis-source=compilation-session`、`query-result-count=<non-zero>`、
+`stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`，确保当前最小
+`env` / `doctor` / `query` surface 也进入正式 gate。
 
 这意味着本地验证与 Linux CI 不应该再各自拼装另一套 `stage0` 成功路径。
 
@@ -692,6 +722,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 
 - 除了 `env status` 与只读 `doctor` 之外，不承诺 environment mutation verbs，例如
   `env use`、`env sync`、`env bootstrap` 或 `env clean`。
+- `query symbols` 当前只是 compilation-session-backed 的最小 CLI 查询，不承诺完整
+  language service、LSP 或 IDE 集成。
 - 不在这里塞入包管理、格式化、LSP 或 IDE 集成。
 - 不把多目标矩阵提前做进 CLI 表面。
 - 不绕过 `build/targets/` 目标规格边界，直接把完整平台模型做死在这里。

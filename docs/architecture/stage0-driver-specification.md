@@ -9,9 +9,9 @@
 什么对象边界上，继续读 `workspace-specification.md`。如果你要看 `build/test/pkg/fmt/doc/env/doctor/query`
 怎样最终收敛到统一产品命令面，继续读 `developer-tooling-specification.md`。
 
-## `stage0` 驱动入口当前服务四条最小公开路径
+## `stage0` 驱动入口当前服务五条最小公开路径
 
-当前仓库已经承诺这四条明确的公开命令：
+当前仓库已经承诺这五条明确的公开命令：
 
 ```text
 nextpas build <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>] [--unit-root <dir>]... [--out-dir <dir>]
@@ -19,9 +19,10 @@ nextpas test --list-groups [--workspace <root>]
 nextpas test --filter <group> [--workspace <root>]
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>]
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 ```
 
-这四条命令的意义分别是：
+这五条命令的意义分别是：
 
 - `build`
   - 让 FreePascal 托管的 `stage0` 路径在 Linux x86_64 上证明 nextPas 已经拥有最小但真实的
@@ -35,6 +36,9 @@ nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <ro
 - `doctor`
   - 让 environment / toolchain / workspace health inspection 先以只读 surface 进入统一
     `nextpas` 产品壳，而不是把健康判断混进 `env status` 或 support script
+- `query symbols`
+  - 让 CLI-facing semantic query 先以只读、compilation-session-backed surface 进入统一
+    `nextpas` 产品壳，而不是假装完整 language service 或 LSP server 已经落地
 
 当前 `--target` 与 `--toolchain-binding` 是两条分开的输入轴：
 
@@ -43,12 +47,15 @@ nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <ro
 - 不显式传 binding 时，当前默认仍是 `linux-x86_64-to-linux-x86_64-gnu`
 - 显式传 `linux-x86_64-to-linux-x86_64-llvm` 时，会切到 LLVM-heavy execution path
 
-第一阶段当前除了这四条路径之外，不承诺更多子命令，也不承诺泛化的命令树。
+第一阶段当前除了这五条路径之外，不承诺更多子命令，也不承诺泛化的命令树。
 
 这同样意味着：第一阶段除了只读 `env status` 与只读 `doctor` 之外，仍不承诺 `env bootstrap`、
 channel switch、runtime SDK install 或其他 environment management verb。但 future 如果补上
 这些能力，它们也必须继续挂在统一 `nextpas` 产品壳下，复用同一套 parser、global options 与
 result envelope，而不是另外长出一个 installer 或 channel CLI 世界。
+
+当前 `query symbols` 也只承诺最小 CLI 查询，不承诺公开 language service binary、LSP server、
+open document overlay、incremental invalidation 或 IDE integration。
 
 ## 当前已经落地的 workspace / artifact contract
 
@@ -94,7 +101,7 @@ result envelope，而不是另外长出一个 installer 或 channel CLI 世界�
 
 | 组成                       | 第一阶段职责                                                                     |
 | -------------------------- | -------------------------------------------------------------------------------- |
-| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status` 投影 target/binding/distribution/runtime state、为 `doctor` 投影最小只读健康检查 |
+| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status` 投影 target/binding/distribution/runtime state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果 |
 | `tools/stage0/README.md`   | 说明用法、退出码、范围约束和当前不支持的事项                                     |
 | `examples/smoke/hello.pas` | 作为规范输入，证明驱动路径真实可走通                                             |
 
@@ -113,9 +120,9 @@ result envelope，而不是另外长出一个 installer 或 channel CLI 世界�
 
 | 行为     | 要求                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------- |
-| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...]` 与 `nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` |
+| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...]`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` |
 | 宿主关系 | 由 FreePascal 负责把驱动入口编译成可执行程序                                                              |
-| 输出语义 | `build`、`test --filter <group|smoke>`、`env status` 与 `doctor` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
+| 输出语义 | `build`、`test --filter <group|smoke>`、`env status`、`doctor` 与 `query symbols` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
 | 未知命令 | 以非零状态退出，并打印清晰的 `unsupported-command` 消息                                                   |
 
 这组行为既是任务 9 的验收接口，也是后续 `build/verify_local.sh` 与 Linux CI
@@ -152,6 +159,23 @@ result envelope，而不是另外长出一个 installer 或 channel CLI 世界�
 
 当前 `doctor` 已冻结最小 structured finding contract；package/workspace coherence 检查与更完整的
 health taxonomy 应在后续批次继续加固。
+
+## `stage0 query symbols` 提供最小只读 semantic query
+
+`query symbols` 当前是 `stage0` 上第一条正式 CLI-facing semantic query surface。它的职责边界固定如下：
+
+- 只支持 `nextpas query symbols <source> --target linux-x86_64 [--workspace <root>]`
+- 可选接受 `--toolchain-binding <id>`，让 query 和同 target 的 build path 使用同一份 target facts
+- 复用 `ResolveWorkspaceModel(...)` 与 `TCompilationSession`，执行 syntax、unit resolution 与 semantic analysis
+- 不调用 `LowerToMir`、`PlanBackend`、`PlanToolchain` 或 `ExecuteToolchain`
+- 真实 query 摘要通过 `query-kind=symbols`、`query-status=success`、
+  `analysis-source=compilation-session` 与 `query-result-count=<count>` 投影
+- `command-envelope=<json>.result` 同步保留 `queryKind`、`queryStatus`、`analysisSource`
+  与 `queryResultCount`
+
+当前 `query symbols` 的 `analysis-source` 必须诚实写成 `compilation-session`。它不是
+`LanguageServiceSession`，也不提供 open document overlay、incremental invalidation、references、
+rename preflight 或 completion。
 
 ## `stage0 build` 的结果语义也必须朝统一 envelope 收敛
 

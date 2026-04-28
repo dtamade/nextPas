@@ -206,6 +206,14 @@ type
     FindingsJson: string;
   end;
 
+  TQueryProjectionContext = record
+    Kind: string;
+    Status: string;
+    AnalysisSource: string;
+    ResultCount: LongInt;
+    HasResultCount: Boolean;
+  end;
+
 var
   ActiveCommand: string;
   ActiveSelector: string;
@@ -220,6 +228,7 @@ var
   ActiveToolchainProjection: TToolchainProjectionContext;
   ActiveEnvironmentProjection: TEnvironmentProjectionContext;
   ActiveDoctorProjection: TDoctorProjectionContext;
+  ActiveQueryProjection: TQueryProjectionContext;
 
 function EnvelopeCommandName: string;
 begin
@@ -241,6 +250,8 @@ begin
     Exit('env');
   if ActiveCommand = 'doctor' then
     Exit('doctor');
+  if ActiveCommand = 'query' then
+    Exit('query');
 
   Result := 'cli';
 end;
@@ -307,6 +318,16 @@ begin
   );
 end;
 
+procedure PrintQueryUsage(const UseStdErr: Boolean);
+begin
+  WriteUsageLine(UseStdErr, 'Usage:');
+  WriteUsageLine(
+    UseStdErr,
+    '  nextpas query symbols <source> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+end;
+
 procedure PrintUsage;
 begin
   if ActiveCommand = 'build' then
@@ -333,6 +354,12 @@ begin
     Exit;
   end;
 
+  if ActiveCommand = 'query' then
+  begin
+    PrintQueryUsage(False);
+    Exit;
+  end;
+
   WriteUsageLine(False, 'Usage:');
   WriteUsageLine(
     False,
@@ -355,6 +382,11 @@ begin
   WriteUsageLine(
     False,
     '  nextpas doctor --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    False,
+    '  nextpas query symbols <source> --target linux-x86_64 ' +
     '[--toolchain-binding <id>] [--workspace <root>]'
   );
 end;
@@ -385,6 +417,12 @@ begin
     Exit;
   end;
 
+  if ActiveCommand = 'query' then
+  begin
+    PrintQueryUsage(True);
+    Exit;
+  end;
+
   WriteUsageLine(True, 'Usage:');
   WriteUsageLine(
     True,
@@ -407,6 +445,11 @@ begin
   WriteUsageLine(
     True,
     '  nextpas doctor --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    True,
+    '  nextpas query symbols <source> --target linux-x86_64 ' +
     '[--toolchain-binding <id>] [--workspace <root>]'
   );
 end;
@@ -1171,6 +1214,23 @@ begin
     );
 end;
 
+procedure AppendQueryProjectionJsonFields(var AFields: string);
+begin
+  AppendJsonStringField(AFields, 'queryKind', ActiveQueryProjection.Kind);
+  AppendJsonStringField(AFields, 'queryStatus', ActiveQueryProjection.Status);
+  AppendJsonStringField(
+    AFields,
+    'analysisSource',
+    ActiveQueryProjection.AnalysisSource
+  );
+  AppendJsonIntegerField(
+    AFields,
+    'queryResultCount',
+    ActiveQueryProjection.ResultCount,
+    ActiveQueryProjection.HasResultCount
+  );
+end;
+
 function BuildCommandEnvelopeJson(
   const AExitCode: LongInt;
   const ASelector: string;
@@ -1219,6 +1279,7 @@ begin
   );
   AppendEnvironmentProjectionJsonFields(ResultFields);
   AppendDoctorProjectionJsonFields(ResultFields);
+  AppendQueryProjectionJsonFields(ResultFields);
   AppendJsonStringField(
     ResultFields,
     'diagnosticsSummary',
@@ -1507,6 +1568,15 @@ begin
   AContext.FindingCount := 0;
   ClearDoctorFindingValue(AContext.FirstFinding);
   AContext.FindingsJson := '';
+end;
+
+procedure ClearQueryProjectionContextValue(var AContext: TQueryProjectionContext);
+begin
+  AContext.Kind := '';
+  AContext.Status := '';
+  AContext.AnalysisSource := '';
+  AContext.ResultCount := 0;
+  AContext.HasResultCount := False;
 end;
 
 procedure CaptureBuildCommandContextValue(
@@ -1921,6 +1991,7 @@ begin
   ClearToolchainProjectionContextValue(ActiveToolchainProjection);
   ClearEnvironmentProjectionContextValue(ActiveEnvironmentProjection);
   ClearDoctorProjectionContextValue(ActiveDoctorProjection);
+  ClearQueryProjectionContextValue(ActiveQueryProjection);
 end;
 
 procedure CaptureBuildCommandContext(
@@ -2653,6 +2724,31 @@ begin
   );
 end;
 
+procedure PrintQueryProjectionFields(const UseStdErr: Boolean);
+begin
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'query-kind',
+    ActiveQueryProjection.Kind
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'query-status',
+    ActiveQueryProjection.Status
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'analysis-source',
+    ActiveQueryProjection.AnalysisSource
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'query-result-count',
+    ActiveQueryProjection.ResultCount,
+    ActiveQueryProjection.HasResultCount
+  );
+end;
+
 procedure PrintDiagnosticsDetailProjection(const UseStdErr: Boolean);
 begin
   WriteProjectionLine(
@@ -3072,6 +3168,162 @@ begin
   WriteLn('human-summary=doctor inspection completed');
 end;
 
+function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
+begin
+  Result := BuildTargetFactsView(
+    TargetConfig.TargetId,
+    TargetConfig.ConfigPath,
+    TargetConfig.HostId,
+    TargetConfig.HostOS,
+    TargetConfig.HostCPU,
+    TargetConfig.CompilerExecutable,
+    TargetConfig.UnitsDir,
+    TargetConfig.ObjectFormat,
+    TargetConfig.AssemblerFlavor,
+    TargetConfig.LinkerFlavor,
+    TargetConfig.RuntimeLayoutKey,
+    TargetConfig.CSymbolPrefix,
+    TargetConfig.CLibraryNaming,
+    TargetConfig.LlvmTriple,
+    TargetConfig.LlvmDataLayout,
+    TargetConfig.ToolchainBindingId,
+    TargetConfig.HostCompilerProfileId,
+    TargetConfig.BackendFamily,
+    TargetConfig.AssemblerProfileId,
+    TargetConfig.LinkerProfileId,
+    TargetConfig.ArchiverProfileId,
+    TargetConfig.ResourceToolProfileId,
+    TargetConfig.SysrootMode,
+    TargetConfig.RuntimeSdkId,
+    TargetConfig.AllowHostFallback,
+    TargetConfig.ToolRootKind,
+    TargetConfig.RuntimeRootKind,
+    TargetConfig.ResponseFilePolicy,
+    TargetConfig.LinkScriptPolicy,
+    TargetConfig.LlvmEnabled,
+    TargetConfig.LlvmExecutableSetId
+  );
+end;
+
+procedure RunQuerySymbols(
+  const SourcePath: string;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+var
+  Options: TCompilationOptions;
+  ResolvedSourcePath: string;
+  ResolvedUnitRoots: TStringArray;
+  Session: TCompilationSession;
+  TargetConfig: TTargetConfig;
+  TargetFacts: TTargetFactsView;
+  WorkspaceModel: TWorkspaceModel;
+begin
+  ActiveBuildContext.SourcePath := SourcePath;
+  ActiveBuildContext.TargetName := TargetName;
+  WorkspaceModel := nil;
+  Session := nil;
+
+  if not FileExists(SourcePath) then
+    Fail('missing-source: ' + SourcePath);
+
+  ResolvedSourcePath := ExpandFileName(SourcePath);
+  try
+    WorkspaceModel := ResolveWorkspaceModel(
+      ResolvedSourcePath,
+      WorkspaceOverride,
+      TargetName,
+      ''
+    );
+  except
+    on E: Exception do
+      Fail(E.Message, True);
+  end;
+
+  try
+    CaptureBuildCommandContext(SourcePath, TargetName, WorkspaceModel);
+    SetLength(ResolvedUnitRoots, 0);
+
+    try
+      TargetConfig := LoadTargetConfig(
+        TargetName,
+        ParamStr(0),
+        ToolchainBindingOverride
+      );
+    except
+      on E: ETargetConfigError do
+        Fail(E.Message);
+    end;
+
+    ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+    ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+    TargetFacts := TargetFactsFromConfig(TargetConfig);
+
+    Options.CommandName := 'query';
+    Options.BuildContext.RequestedSourcePath := SourcePath;
+    Options.BuildContext.ResolvedSourcePath := ResolvedSourcePath;
+    Options.BuildContext.RequestedTargetId := TargetFacts.TargetId;
+    Options.BuildContext.WorkspaceRootPath := WorkspaceModel.WorkspaceRootPath;
+    Options.BuildContext.WorkspaceDiscoveryKind := WorkspaceModel.DiscoveryKind;
+    Options.BuildContext.WorkspaceDescriptorPath :=
+      WorkspaceModel.WorkspaceDescriptorPath;
+    Options.BuildContext.PackageManifestPath := WorkspaceModel.PackageManifestPath;
+    Options.BuildContext.ArtifactRootPath := WorkspaceModel.ArtifactRootPath;
+    Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
+    Options.WorkspaceModel := WorkspaceModel;
+    Options.ExplicitUnitRoots := ResolvedUnitRoots;
+
+    Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);
+    WorkspaceModel := nil;
+    CaptureSessionContext(Session);
+    Session.AnalyzeSyntax;
+    CaptureSessionContext(Session);
+    if Session.HasSyntaxErrors then
+      Fail('syntax-analysis-failed');
+    Session.ResolveUnits;
+    CaptureSessionContext(Session);
+    if Session.HasResolutionErrors then
+      Fail('unit-resolution-failed');
+    Session.AnalyzeSemantics;
+    CaptureSessionContext(Session);
+    if Session.HasSemanticErrors then
+      Fail('semantic-analysis-failed');
+
+    ActiveQueryProjection.Kind := 'symbols';
+    ActiveQueryProjection.Status := 'success';
+    ActiveQueryProjection.AnalysisSource := 'compilation-session';
+    ActiveQueryProjection.ResultCount := Session.SymbolCount;
+    ActiveQueryProjection.HasResultCount := True;
+
+    WriteLn('mode=query');
+    WriteLn('command=query');
+    WriteLn('selector=symbols');
+    WriteLn('source=', SourcePath);
+    WriteLn('target=', TargetName);
+    WriteLn('target-config=', TargetConfig.ConfigPath);
+    WriteLn('compiler=', TargetConfig.CompilerExecutable);
+    PrintSessionProjection(False);
+    PrintQueryProjectionFields(False);
+    WriteLn('status=success');
+    WriteLn('result=success');
+    WriteLn('command-outcome=success');
+    PrintCommandEnvelope(
+      ExitSuccessCode,
+      'symbols',
+      'success',
+      'success',
+      '',
+      'query symbols completed',
+      False
+    );
+    WriteLn('human-summary=query symbols completed');
+  finally
+    Session.Free;
+    WorkspaceModel.Free;
+  end;
+end;
+
 procedure RunBuild(
   const SourcePath: string;
   const TargetName: string;
@@ -3141,39 +3393,7 @@ begin
     end;
 
     ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    TargetFacts := BuildTargetFactsView(
-      TargetConfig.TargetId,
-      TargetConfig.ConfigPath,
-      TargetConfig.HostId,
-      TargetConfig.HostOS,
-      TargetConfig.HostCPU,
-      TargetConfig.CompilerExecutable,
-      TargetConfig.UnitsDir,
-      TargetConfig.ObjectFormat,
-      TargetConfig.AssemblerFlavor,
-      TargetConfig.LinkerFlavor,
-      TargetConfig.RuntimeLayoutKey,
-      TargetConfig.CSymbolPrefix,
-      TargetConfig.CLibraryNaming,
-      TargetConfig.LlvmTriple,
-      TargetConfig.LlvmDataLayout,
-      TargetConfig.ToolchainBindingId,
-      TargetConfig.HostCompilerProfileId,
-      TargetConfig.BackendFamily,
-      TargetConfig.AssemblerProfileId,
-      TargetConfig.LinkerProfileId,
-      TargetConfig.ArchiverProfileId,
-      TargetConfig.ResourceToolProfileId,
-      TargetConfig.SysrootMode,
-      TargetConfig.RuntimeSdkId,
-      TargetConfig.AllowHostFallback,
-      TargetConfig.ToolRootKind,
-      TargetConfig.RuntimeRootKind,
-      TargetConfig.ResponseFilePolicy,
-      TargetConfig.LinkScriptPolicy,
-      TargetConfig.LlvmEnabled,
-      TargetConfig.LlvmExecutableSetId
-    );
+    TargetFacts := TargetFactsFromConfig(TargetConfig);
     ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
     Options.CommandName := 'build';
     Options.BuildContext.RequestedSourcePath := SourcePath;
@@ -3327,7 +3547,8 @@ begin
   ActiveCommand := CommandName;
 
   if (CommandName <> 'build') and (CommandName <> 'test') and
-    (CommandName <> 'env') and (CommandName <> 'doctor') then
+    (CommandName <> 'env') and (CommandName <> 'doctor') and
+    (CommandName <> 'query') then
     Fail('unsupported-command: ' + CommandName);
 
   if CommandName = 'test' then
@@ -3462,6 +3683,63 @@ begin
       Fail('missing-required-option: --target', True);
 
     RunDoctor(TargetName, ToolchainBindingOverride, WorkspaceOverride);
+    Halt(ExitSuccessCode);
+  end;
+
+  if CommandName = 'query' then
+  begin
+    ActiveSelector := 'query';
+    if ParamCount < 3 then
+      Fail('invalid-arguments', True);
+    if ParamStr(2) <> 'symbols' then
+      Fail('invalid-arguments', True);
+
+    ActiveSelector := 'symbols';
+    SourcePath := ParamStr(3);
+    TargetName := '';
+    ToolchainBindingOverride := '';
+    WorkspaceOverride := '';
+    Index := 4;
+    while Index <= ParamCount do
+    begin
+      OptionName := ParamStr(Index);
+      if (OptionName <> '--target') and
+        (OptionName <> '--toolchain-binding') and
+        (OptionName <> '--workspace') then
+        Fail('unknown-option: ' + OptionName, True);
+      if Index = ParamCount then
+        Fail('invalid-arguments', True);
+      Inc(Index);
+      if OptionName = '--target' then
+      begin
+        if TargetName <> '' then
+          Fail('duplicate-option: --target', True);
+        TargetName := ParamStr(Index);
+      end
+      else if OptionName = '--toolchain-binding' then
+      begin
+        if ToolchainBindingOverride <> '' then
+          Fail('duplicate-option: --toolchain-binding', True);
+        ToolchainBindingOverride := ParamStr(Index);
+      end
+      else
+      begin
+        if WorkspaceOverride <> '' then
+          Fail('duplicate-option: --workspace', True);
+        WorkspaceOverride := ParamStr(Index);
+      end;
+      Inc(Index);
+    end;
+
+    if TargetName = '' then
+      Fail('missing-required-option: --target', True);
+
+    RunQuerySymbols(
+      SourcePath,
+      TargetName,
+      ToolchainBindingOverride,
+      WorkspaceOverride
+    );
     Halt(ExitSuccessCode);
   end;
 

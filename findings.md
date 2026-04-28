@@ -87,6 +87,19 @@
 - 当前 `build/verify_local.sh` 也已经把 `nextpas doctor` 的 success path 与 bare
   `nextpas doctor` 的 invalid-arguments contract 纳入 promotion path，因此最小 `doctor`
   健康检查入口不再只靠手工 probe 留证。
+- 当前 `tools/stage0/nextpas.pas` 现在也已拥有最小只读 `query symbols` surface：
+  `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
+  会复用 shared workspace model、target facts 与 `TCompilationSession`，只执行 syntax、
+  unit resolution 与 semantic analysis。
+- 当前 `query symbols` 已明确和完整 language service 分层：它输出
+  `analysis-source=compilation-session`，不宣称拥有 `LanguageServiceSession`、open document
+  overlay、incremental invalidation、references、rename preflight 或 completion。
+- 当前 `query symbols` 成功路径会投影 `query-kind=symbols`、`query-status=success` 与
+  `query-result-count=<count>`，并让 `command-envelope=<json>.result` 同步保留
+  `queryKind`、`queryStatus`、`analysisSource` 与 `queryResultCount`。
+- 当前 `build/verify_local.sh` 也已经把 `nextpas query symbols` 的 success path 与 bare
+  `nextpas query` 的 invalid-arguments contract 纳入 promotion path，因此最小 `query`
+  公开面不再只靠手工 probe 留证。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

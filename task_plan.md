@@ -12,8 +12,50 @@
 
 同时，这轮还要把文档、规划文件和仓库卫生同步到真实实现状态。
 
-说明：下面的 addendum 按时间保留当时的批次范围；当前 production-path reality 以最新的
-`Bootstrap-native Assemble/Link Production Path` addendum 为准。
+说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
+fresh `bash build/verify_local.sh` 为准。
+
+## Addendum: 2026-04-29 Minimal Query Symbols Surface
+
+### Goal
+
+把 developer tooling 里的第一条 semantic query surface 收成最小但真实的统一 `nextpas`
+命令入口，同时继续守住“query / language service / build execution”的分层：
+
+- `tools/stage0/nextpas.pas` 必须新增最小 `query` family，至少支持
+  `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
+- `query symbols` 只负责只读 semantic query，不承担 LSP、open document overlay、
+  incremental invalidation、references、rename 或 completion
+- 当前 query 必须复用 compilation session 的 syntax / resolution / semantic truth，
+  并显式投影 `analysis-source=compilation-session`
+- `build/verify_local.sh` 必须新增 `nextpas query symbols` 的 success gate 与 bare
+  `nextpas query` 的 invalid-arguments gate
+- 文档与持续记录必须同步成当前 reality，并明确这批不执行 MIR、backend 或 toolchain
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 先在 `build/verify_local.sh` 为
+      `nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace <repo>`
+      与 bare `nextpas query` 写出 RED contract，并 fresh 运行确认失败点正好落在
+      `query` command 尚未实现
+- [x] 扩展 `tools/stage0/nextpas.pas`，新增 `query` command parse/usage 与 `symbols`
+      selector，支持可选 `--toolchain-binding <id>` 与 `--workspace <root>`
+- [x] 让 `query symbols` 复用 `ResolveWorkspaceModel(...)`、target facts 与
+      `TCompilationSession`，只执行 syntax、unit resolution 与 semantic analysis
+- [x] 新增最小 query projection，把 `query-kind`、`query-status`、`analysis-source`
+      与 `query-result-count` 投影到 line-based output 和 `command-envelope=<json>.result`
+- [x] 同步回写 `tools/stage0/README.md`、`tools/README.md`、
+      `docs/architecture/stage0-driver-specification.md`、
+      `docs/architecture/language-service-specification.md`、
+      `docs/architecture/developer-tooling-specification.md`、
+      `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+      `task_plan.md`、`findings.md` 与 `progress.md`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认新增 `stage0QueryCheck`、
+      `stage0QueryInvalidArgumentsCheck` 与整套 `verify-local=pass`
 
 ## Addendum: 2026-04-29 Stage0 Doctor Minimal Read-only Health Surface
 

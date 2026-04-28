@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 29` 为准。
+以最新完成的 `Batch 33` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -34,12 +34,14 @@
   `toolchainFailureCheck=pass`、`assemblerFailureAttributionCheck=pass`、
   `linkerFailureAttributionCheck=pass`、`stage0EnvStatusCheck=pass`、
   `stage0DoctorCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass`、
+  `stage0QueryCheck=pass`、`stage0QueryInvalidArgumentsCheck=pass`、
   `stage0EnvInvalidArgumentsCheck=pass` 与 `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
-  readiness 与 binding readiness。
+  readiness 与 binding readiness，`query symbols` 也已投影
+  `analysisSource=compilation-session` 与 `queryResultCount`。
 - 这份计划从现在起接管“当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 32` 已完成。
+- `Batch 1` 到 `Batch 33` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -50,10 +52,11 @@
   `llvm-ir/llvm-bitcode/object-file/executable`；当前默认 production path 维持
   `bootstrap-native-assemble-link`，显式 LLVM binding 也已能真实切到
   `llvm-ir-opt-llc-link`，later-step failure attribution 与 success-path observability
-  transcript 都已收口到完整 multi-step trace。`doctor` 的第一条只读 health inspection
-  与最小 structured finding contract 也已进入统一 command surface。下一步优先转回
-  richer `env` actions / `query` / package workflow，而不是继续在已经闭环的
-  success-path transcript 或最小 `env status` / `doctor` projection 上空转。
+  transcript 都已收口到完整 multi-step trace。`doctor` 的第一条只读 health inspection、
+  最小 structured finding contract 与 `query symbols` 的第一条 compilation-session-backed
+  semantic query 也已进入统一 command surface。下一步优先转回 richer `env` actions /
+  richer `query` / package workflow，而不是继续在已经闭环的 success-path transcript、
+  最小 `env status` / `doctor` projection 或最小 `query symbols` surface 上空转。
 
 ## 执行规则
 
@@ -1536,19 +1539,36 @@ structured finding surface：
   把未就绪事实留在 state fields，而不是伪装成 command failure
 - 这批继续冻结 `env status` 不承担 `env sync` / `env use` / `env bootstrap`
 
+`Batch 33` 当前把 `query` family 的第一条只读 semantic surface 收成真实公开面：
+
+- `tools/stage0/nextpas.pas` 现在新增
+  `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
+- 这批故意只做 compilation-session-backed semantic query：当前会复用 shared workspace model、
+  target facts、unit resolution 与 semantic model，并投影 `query-kind=symbols`、
+  `query-status=success`、`analysis-source=compilation-session` 与
+  `query-result-count=<count>`
+- 这批继续冻结 `query symbols` 不是完整 language service：它不提供 LSP server、open document
+  overlay、incremental invalidation、references、rename preflight 或 completion
+- `build/verify_local.sh` 现在把 `stage0QueryCheck` 与
+  `stage0QueryInvalidArgumentsCheck` 收进真实 gate
+- 这批不执行 MIR、backend 或 toolchain；成功 transcript 会如实停在
+  `ir:deferred,backend:deferred,toolchain:deferred`
+
 在接下来的滚动周期里，已经完成的 bootstrap-native production path、later-step failure
 attribution、success-path transcript hardening、显式 LLVM binding execution path，以及
 这次 direct-link C library resolution contract，再加上 `nextpas test` 与最小
-`nextpas env status` / `nextpas doctor` / `doctorFindings` / env readiness evidence，已经让
+`nextpas env status` / `nextpas doctor` / `doctorFindings` / env readiness evidence /
+`nextpas query symbols`，已经让
 `PlanFromBackend`、backend artifact truth、generic runner、logical link request、
 execution-side link serialization 与最小 developer tooling state surface / health inspection
-真正接成一条更完整的控制链；
+以及 semantic query surface 真正接成一条更完整的控制链；
 下一批不应该再回头补“library request 有没有进入 argv”、“env state 能不能被只读投影”、
 “doctor 能不能作为 command surface 执行”、“runtime SDK finding 能不能结构化输出”或
-“env readiness evidence 能不能稳定输出”这类已闭环问题，
+“env readiness evidence 能不能稳定输出”、“query symbols 能不能走 compilation session”
+这类已闭环问题，
 而应该转回 richer developer tooling 与更高层控制面。
 
-但这些后续批次必须建立在前三十二批真实收口之后，而不是提前平行开工。
+但这些后续批次必须建立在前三十三批真实收口之后，而不是提前平行开工。
 
 ## 这份计划故意不做什么
 

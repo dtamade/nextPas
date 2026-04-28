@@ -5,6 +5,34 @@
 
 ## Session: 2026-04-29
 
+### Minimal Query Symbols Surface
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-04-29-nextpas-continuous-developer-tooling-plan.md` 的 Task 4
+    先在 `build/verify_local.sh` 加入 RED gate，要求
+    `nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace <repo>`
+    输出 `query-kind=symbols`、`analysis-source=compilation-session`、
+    `query-result-count=<non-zero>` 与 envelope mirror。
+  - 运行 fresh `bash build/verify_local.sh`，确认失败点落在
+    `unsupported-command: query`，证明 gate 捕捉的是缺失的 command surface。
+  - 扩展 `tools/stage0/nextpas.pas`，新增
+    `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`
+    的 command parse、usage、invalid-arguments behavior 与 `symbols` selector。
+  - 让 `query symbols` 复用 `ResolveWorkspaceModel(...)`、target facts 与
+    `TCompilationSession`，只执行 syntax、unit resolution 与 semantic analysis；成功
+    transcript 如实停在 `ir:deferred,backend:deferred,toolchain:deferred`。
+  - 新增最小 query projection，把 `query-kind`、`query-status`、`analysis-source`
+    与 `query-result-count` 投影进 line-based output 与 `command-envelope=<json>.result`。
+  - 同步回写 `tools/stage0/README.md`、`tools/README.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/language-service-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 与 tracking，明确这批
+    故意不把 `query symbols` 伪装成完整 language service、LSP 或 IDE integration。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认 `stage0QueryCheck=pass`、
+    `stage0QueryInvalidArgumentsCheck=pass` 与 `verify-local=pass`。
+
 ### Richer Env Status Readiness Evidence
 
 - **Status:** completed
@@ -833,6 +861,7 @@
 - `./build/verify_local.sh`（diagnostics accounting + search-index projection sync）：pass
 - `./build/verify_local.sh`（partial search-index contract hardening）：pass
 - `bash build/verify_local.sh`（stage0 test command thin wrapper）：pass
+- `bash build/verify_local.sh`（minimal query symbols surface）：pass
 - `./tests/run_all_tests.sh --filter smoke`：pass
 - `./build/verify_local.sh`：pass
 
@@ -861,8 +890,8 @@
 
 | Question             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where am I?          | `P0/P1` 收口已完成；当前 shared workspace model、backend intermediate artifact truth、`bootstrap-native-assemble-link` production path、later-step failure attribution 与 success-path full transcript 都已经进入 verify gate，并 fresh rerun 拿到 `verify-local=pass`                                                                                                                                                                                                                                                                |
-| Where am I going?    | 下一步应从已收口的 `nextpas test` 继续往 developer tooling 更高层控制面推进，例如按新增 addendum 明确 `doctor` / `env` / `query` 的最小真实公开面；同时不要提前伪装 GUI / IDE 已进入默认实现路径                                                                                                                                                                                                                                                                                                                                  |
+| Where am I?          | `P0/P1` 收口已完成；当前 shared workspace model、backend intermediate artifact truth、`bootstrap-native-assemble-link` production path、later-step failure attribution、success-path full transcript，以及最小 `test` / `env status` / `doctor` / `query symbols` command surface 都已经进入 verify gate，并 fresh rerun 拿到 `verify-local=pass`                                                                                                                                                                                |
+| Where am I going?    | 下一步应从已收口的最小 developer tooling surface 继续往 richer `env` actions、richer semantic query 或 package workflow 推进；同时不要提前伪装 GUI / IDE、完整 language service 或 LSP 已进入默认实现路径                                                                                                                                                                                                                                                                                                                     |
 | What's the goal?     | 让 nextPas 的“当前能力”先真实可信，再继续往现代化、高性能、优雅的全栈工具链推进                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | What have I learned? | 假绿、模糊 provenance 和没投影出来的真实 command truth 都会拖慢后续架构推进；不管是 failure attribution 还是 success transcript，只要 trace/status 没跟真实 executed step 对齐，就会同时污染 CLI、diagnostic 与 replay surface                                                                                                                                                                                                                                                                                                        |
-| What have I done?    | 已收紧 harness、修正 resolver、把 shared workspace model 收口成 compiler-owned truth，补上 typed `TToolchainPlan` 的真实 execution runner 与 `native-run-*` contract gate，把 backend intermediate artifact truth 与 logical object input 接进 session/stage0/verify，再把 production path 真正切到 `bootstrap-native-assemble-link`，补齐 later-step failure attribution 与 success-path full transcript，并新增最小 `nextpas test` thin wrapper，把 harness group/smoke truth 正式接进 stage0 CLI；fresh `bash build/verify_local.sh` 已再次确认整套 verify-local 继续全绿 |
+| What have I done?    | 已收紧 harness、修正 resolver、把 shared workspace model 收口成 compiler-owned truth，补上 typed `TToolchainPlan` 的真实 execution runner 与 `native-run-*` contract gate，把 backend intermediate artifact truth 与 logical object input 接进 session/stage0/verify，再把 production path 真正切到 `bootstrap-native-assemble-link`，补齐 later-step failure attribution 与 success-path full transcript，并新增最小 `nextpas test`、`env status`、`doctor` 与 `query symbols` surface；fresh `bash build/verify_local.sh` 已再次确认整套 verify-local 继续全绿 |

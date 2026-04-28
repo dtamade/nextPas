@@ -40,6 +40,8 @@ STAGE0_ENV_STATUS_OUTPUT=$(mktemp)
 STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
+STAGE0_QUERY_SYMBOLS_OUTPUT=$(mktemp)
+STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
 TOOLCHAIN_CONTRACT_OUTPUT=$(mktemp)
 TOOLCHAIN_CONTRACT_BUILD_DIR=$(mktemp -d)
@@ -105,6 +107,8 @@ cleanup() {
   rm -f "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_DOCTOR_OUTPUT"
   rm -f "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT"
+  rm -f "$STAGE0_QUERY_SYMBOLS_OUTPUT"
+  rm -f "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -f "$TOOLCHAIN_CONTRACT_OUTPUT"
   rm -rf "$TOOLCHAIN_CONTRACT_BUILD_DIR"
@@ -1906,6 +1910,48 @@ require_output_pattern '^command-envelope=.*"command":"doctor"' "$STAGE0_DOCTOR_
 require_output_pattern '^command-envelope=.*"selector":"doctor".*"failureKind":"invalid-arguments"' "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-doctor-invalid-arguments-envelope-failure'
 printf 'stage0-doctor-check=pass\n'
 
+printf 'stage0-query-symbols-check=running\n'
+printf 'stage0-query-symbols-command=%s query symbols examples/smoke/hello_with_units.pas --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" query symbols examples/smoke/hello_with_units.pas --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$STAGE0_QUERY_SYMBOLS_OUTPUT" 2>&1; then
+  cat "$STAGE0_QUERY_SYMBOLS_OUTPUT"
+  fail 'stage0-query-symbols-failed'
+fi
+cat "$STAGE0_QUERY_SYMBOLS_OUTPUT"
+require_output_pattern '^mode=query$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-mode'
+require_output_pattern '^command=query$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-command'
+require_output_pattern '^selector=symbols$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-selector'
+require_output_pattern '^query-kind=symbols$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-kind'
+require_output_pattern '^query-status=success$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-status'
+require_output_pattern '^analysis-source=compilation-session$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-analysis-source'
+require_output_pattern '^query-result-count=[1-9][0-9]*$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-result-count'
+require_output_pattern '^mir-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-mir'
+require_output_pattern '^backend-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-backend'
+require_output_pattern '^toolchain-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-toolchain'
+require_output_pattern '^lifecycle-stage=syntax:ready,resolution:ready,sema:ready,ir:deferred,backend:deferred,toolchain:deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-lifecycle'
+require_output_pattern '^status=success$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-success-status'
+require_output_pattern '^result=success$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-success-result'
+require_output_pattern '^command-outcome=success$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-command-outcome'
+require_output_pattern '^human-summary=query symbols completed$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-human-summary'
+require_output_pattern '^command-envelope=.*"command":"query"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-command'
+require_output_pattern '^command-envelope=.*"selector":"symbols".*"queryKind":"symbols"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-kind'
+require_output_pattern '^command-envelope=.*"queryStatus":"success".*"analysisSource":"compilation-session".*"queryResultCount":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-result'
+require_output_pattern '^command-envelope=.*"mirStatus":"deferred".*"backendPlanStatus":"deferred".*"toolchainPlanStatus":"deferred"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-deferred-stages'
+
+printf 'stage0-query-invalid-arguments-check=running\n'
+printf 'stage0-query-invalid-arguments-command=%s query\n' "$STAGE0_BINARY"
+if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" query >"$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 2>&1; then
+  cat "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT"
+  fail 'expected-stage0-query-invalid-arguments-did-not-fail'
+fi
+cat "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT"
+require_output_pattern '^command=query$' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-command'
+require_output_pattern '^selector=query$' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-selector'
+require_output_pattern '^failure-kind=invalid-arguments$' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-failure-kind'
+require_output_pattern '^human-summary=invalid-arguments$' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-human-summary'
+require_output_pattern '^command-envelope=.*"command":"query"' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-envelope-command'
+require_output_pattern '^command-envelope=.*"selector":"query".*"failureKind":"invalid-arguments"' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-envelope-failure'
+printf 'stage0-query-check=pass\n'
+
 printf 'stage0-env-invalid-arguments-check=running\n'
 printf 'stage0-env-invalid-arguments-command=%s env\n' "$STAGE0_BINARY"
 if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" env >"$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 2>&1; then
@@ -1950,6 +1996,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'
