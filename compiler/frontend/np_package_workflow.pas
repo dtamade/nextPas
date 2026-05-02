@@ -5,7 +5,7 @@ unit np_package_workflow;
 interface
 
 uses
-  SysUtils, np_package_manifest;
+  SysUtils, np_package_manifest, np_workspace_model;
 
 type
   TPackageManifestTruth = record
@@ -39,6 +39,9 @@ type
 function BuildPackageWorkflowTruth(
   const AManifestInfo: TPackageManifestInfo;
   const AWorkspaceRootPath: string
+): TPackageWorkflowTruth;
+function BuildPackageWorkflowTruthFromWorkspaceModel(
+  const AWorkspaceModel: TWorkspaceModel
 ): TPackageWorkflowTruth;
 
 implementation
@@ -89,6 +92,36 @@ begin
     Result.Status := 'ready'
   else
     Result.Status := 'missing';
+end;
+
+function BuildPackageWorkflowTruthFromWorkspaceModel(
+  const AWorkspaceModel: TWorkspaceModel
+): TPackageWorkflowTruth;
+var
+  ManifestInfo: TPackageManifestInfo;
+  PackageRef: TPackageRef;
+begin
+  ManifestInfo.ManifestPath := '';
+  ManifestInfo.PackageRootPath := '';
+  ManifestInfo.PackageName := '';
+  SetLength(ManifestInfo.SourceRoots, 0);
+
+  if (AWorkspaceModel <> nil) and (AWorkspaceModel.PackageRefCount > 0) then
+  begin
+    PackageRef := AWorkspaceModel.PackageRefAt(0);
+    ManifestInfo.ManifestPath := PackageRef.ManifestPath;
+    ManifestInfo.PackageRootPath := PackageRef.PackageRootPath;
+    ManifestInfo.PackageName := PackageRef.PackageName;
+    ManifestInfo.SourceRoots := PackageRef.SourceRoots;
+  end;
+
+  if AWorkspaceModel <> nil then
+    Result := BuildPackageWorkflowTruth(
+      ManifestInfo,
+      AWorkspaceModel.WorkspaceRootPath
+    )
+  else
+    Result := BuildPackageWorkflowTruth(ManifestInfo, '');
 end;
 
 end.

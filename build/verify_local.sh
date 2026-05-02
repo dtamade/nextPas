@@ -42,6 +42,8 @@ STAGE0_DOCTOR_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_QUERY_SYMBOLS_OUTPUT=$(mktemp)
 STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
+STAGE0_PKG_INSPECT_OUTPUT=$(mktemp)
+STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
 TOOLCHAIN_CONTRACT_OUTPUT=$(mktemp)
 TOOLCHAIN_CONTRACT_BUILD_DIR=$(mktemp -d)
@@ -109,6 +111,8 @@ cleanup() {
   rm -f "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_QUERY_SYMBOLS_OUTPUT"
   rm -f "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT"
+  rm -f "$STAGE0_PKG_INSPECT_OUTPUT"
+  rm -f "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -f "$TOOLCHAIN_CONTRACT_OUTPUT"
   rm -rf "$TOOLCHAIN_CONTRACT_BUILD_DIR"
@@ -1956,6 +1960,41 @@ require_output_pattern '^command-envelope=.*"command":"query"' "$STAGE0_QUERY_IN
 require_output_pattern '^command-envelope=.*"selector":"query".*"failureKind":"invalid-arguments"' "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-query-invalid-arguments-envelope-failure'
 printf 'stage0-query-check=pass\n'
 
+printf 'stage0-pkg-inspect-check=running\n'
+printf 'stage0-pkg-inspect-command=%s pkg inspect --workspace %s --target %s\n' "$STAGE0_BINARY" "$PACKAGE_MANIFEST_FIXTURE_ROOT" "$TARGET_ID"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target "$TARGET_ID" >"$STAGE0_PKG_INSPECT_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_INSPECT_OUTPUT"
+  fail 'stage0-pkg-inspect-failed'
+fi
+cat "$STAGE0_PKG_INSPECT_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-command'
+require_output_pattern '^selector=inspect$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-selector'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-workflow-status'
+require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-manifest-status'
+require_output_pattern '^package-source-root-count=[1-9][0-9]*$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-source-root-count'
+require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-install-plan-status'
+require_output_pattern '^status=success$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-success-status'
+require_output_pattern '^result=success$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-success-result'
+require_output_pattern '^command-outcome=success$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-command-outcome'
+require_output_pattern '^command-envelope=.*"command":"pkg"' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-command'
+require_output_pattern '^command-envelope=.*"selector":"inspect".*"packageWorkflowStatus":"ready"' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-workflow'
+require_output_pattern '^command-envelope=.*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":[1-9][0-9]*' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-result'
+
+printf 'stage0-pkg-invalid-arguments-check=running\n'
+printf 'stage0-pkg-invalid-arguments-command=%s pkg\n' "$STAGE0_BINARY"
+if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg >"$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
+  fail 'expected-stage0-pkg-invalid-arguments-did-not-fail'
+fi
+cat "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-command'
+require_output_pattern '^selector=pkg$' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-selector'
+require_output_pattern '^failure-kind=invalid-arguments$' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-failure-kind'
+require_output_pattern '^human-summary=invalid-arguments$' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-human-summary'
+require_output_pattern '^command-envelope=.*"command":"pkg"' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-envelope-command'
+require_output_pattern '^command-envelope=.*"selector":"pkg".*"failureKind":"invalid-arguments"' "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-pkg-invalid-arguments-envelope-failure'
+printf 'stage0-pkg-check=pass\n'
+
 printf 'stage0-env-invalid-arguments-check=running\n'
 printf 'stage0-env-invalid-arguments-command=%s env\n' "$STAGE0_BINARY"
 if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" env >"$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 2>&1; then
@@ -2000,6 +2039,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

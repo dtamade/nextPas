@@ -12,7 +12,8 @@ program nextpas;
 
 uses
   SysUtils, process, target_config, np_compilation_session, np_target_facts,
-  np_toolchain_profiles, np_toolchain_runner, np_workspace_model;
+  np_package_workflow, np_toolchain_profiles, np_toolchain_runner,
+  np_workspace_model;
 
 const
   ExitSuccessCode = 0;
@@ -214,6 +215,19 @@ type
     HasResultCount: Boolean;
   end;
 
+  TPackageProjectionContext = record
+    WorkflowStatus: string;
+    ManifestStatus: string;
+    LockStatus: string;
+    InstallPlanStatus: string;
+    ManifestPath: string;
+    PackageRootPath: string;
+    PackageName: string;
+    LockfilePath: string;
+    SourceRootCount: LongInt;
+    HasSourceRootCount: Boolean;
+  end;
+
 var
   ActiveCommand: string;
   ActiveSelector: string;
@@ -229,6 +243,7 @@ var
   ActiveEnvironmentProjection: TEnvironmentProjectionContext;
   ActiveDoctorProjection: TDoctorProjectionContext;
   ActiveQueryProjection: TQueryProjectionContext;
+  ActivePackageProjection: TPackageProjectionContext;
 
 function EnvelopeCommandName: string;
 begin
@@ -252,6 +267,8 @@ begin
     Exit('doctor');
   if ActiveCommand = 'query' then
     Exit('query');
+  if ActiveCommand = 'pkg' then
+    Exit('pkg');
 
   Result := 'cli';
 end;
@@ -328,6 +345,16 @@ begin
   );
 end;
 
+procedure PrintPkgUsage(const UseStdErr: Boolean);
+begin
+  WriteUsageLine(UseStdErr, 'Usage:');
+  WriteUsageLine(
+    UseStdErr,
+    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
+end;
+
 procedure PrintUsage;
 begin
   if ActiveCommand = 'build' then
@@ -360,6 +387,12 @@ begin
     Exit;
   end;
 
+  if ActiveCommand = 'pkg' then
+  begin
+    PrintPkgUsage(False);
+    Exit;
+  end;
+
   WriteUsageLine(False, 'Usage:');
   WriteUsageLine(
     False,
@@ -388,6 +421,11 @@ begin
     False,
     '  nextpas query symbols <source> --target linux-x86_64 ' +
     '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    False,
+    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
   );
 end;
 
@@ -423,6 +461,12 @@ begin
     Exit;
   end;
 
+  if ActiveCommand = 'pkg' then
+  begin
+    PrintPkgUsage(True);
+    Exit;
+  end;
+
   WriteUsageLine(True, 'Usage:');
   WriteUsageLine(
     True,
@@ -451,6 +495,11 @@ begin
     True,
     '  nextpas query symbols <source> --target linux-x86_64 ' +
     '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    True,
+    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
   );
 end;
 
@@ -1231,6 +1280,51 @@ begin
   );
 end;
 
+procedure AppendPackageProjectionJsonFields(var AFields: string);
+begin
+  AppendJsonStringField(
+    AFields,
+    'packageWorkflowStatus',
+    ActivePackageProjection.WorkflowStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageManifestStatus',
+    ActivePackageProjection.ManifestStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageLockStatus',
+    ActivePackageProjection.LockStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageInstallPlanStatus',
+    ActivePackageProjection.InstallPlanStatus
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageRootPath',
+    ActivePackageProjection.PackageRootPath
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageName',
+    ActivePackageProjection.PackageName
+  );
+  AppendJsonStringField(
+    AFields,
+    'packageLockfilePath',
+    ActivePackageProjection.LockfilePath
+  );
+  AppendJsonIntegerField(
+    AFields,
+    'packageSourceRootCount',
+    ActivePackageProjection.SourceRootCount,
+    ActivePackageProjection.HasSourceRootCount
+  );
+end;
+
 function BuildCommandEnvelopeJson(
   const AExitCode: LongInt;
   const ASelector: string;
@@ -1280,6 +1374,7 @@ begin
   AppendEnvironmentProjectionJsonFields(ResultFields);
   AppendDoctorProjectionJsonFields(ResultFields);
   AppendQueryProjectionJsonFields(ResultFields);
+  AppendPackageProjectionJsonFields(ResultFields);
   AppendJsonStringField(
     ResultFields,
     'diagnosticsSummary',
@@ -1579,6 +1674,22 @@ begin
   AContext.HasResultCount := False;
 end;
 
+procedure ClearPackageProjectionContextValue(
+  var AContext: TPackageProjectionContext
+);
+begin
+  AContext.WorkflowStatus := '';
+  AContext.ManifestStatus := '';
+  AContext.LockStatus := '';
+  AContext.InstallPlanStatus := '';
+  AContext.ManifestPath := '';
+  AContext.PackageRootPath := '';
+  AContext.PackageName := '';
+  AContext.LockfilePath := '';
+  AContext.SourceRootCount := 0;
+  AContext.HasSourceRootCount := False;
+end;
+
 procedure CaptureBuildCommandContextValue(
   var AContext: TBuildCommandContext;
   const ASourcePath: string;
@@ -1807,6 +1918,43 @@ begin
     AContext.Status := 'healthy';
 end;
 
+procedure CapturePackageProjectionFromWorkflowTruth(
+  var AContext: TPackageProjectionContext;
+  const AWorkflowTruth: TPackageWorkflowTruth
+);
+begin
+  AContext.WorkflowStatus := AWorkflowTruth.Status;
+  AContext.ManifestStatus := AWorkflowTruth.ManifestTruth.Status;
+  AContext.LockStatus := AWorkflowTruth.LockTruth.Status;
+  AContext.InstallPlanStatus := AWorkflowTruth.InstallPlanTruth.Status;
+  AContext.ManifestPath := AWorkflowTruth.ManifestTruth.ManifestPath;
+  AContext.PackageRootPath := AWorkflowTruth.ManifestTruth.PackageRootPath;
+  AContext.PackageName := AWorkflowTruth.ManifestTruth.PackageName;
+  AContext.LockfilePath := AWorkflowTruth.LockTruth.LockfilePath;
+  AContext.SourceRootCount := AWorkflowTruth.PackageSourceRootCount;
+  AContext.HasSourceRootCount := AWorkflowTruth.ManifestTruth.Status <> '';
+end;
+
+function ResolvePackageInspectionSourcePath(const AWorkspaceRoot: string): string;
+var
+  ManifestPath: string;
+  WorkspaceDescriptorPath: string;
+begin
+  ManifestPath := ExpandFileName(
+    IncludeTrailingPathDelimiter(AWorkspaceRoot) + 'nextpas.package.toml'
+  );
+  if FileExists(ManifestPath) then
+    Exit(ManifestPath);
+
+  WorkspaceDescriptorPath := ExpandFileName(
+    IncludeTrailingPathDelimiter(AWorkspaceRoot) + 'nextpas.workspace.toml'
+  );
+  if FileExists(WorkspaceDescriptorPath) then
+    Exit(WorkspaceDescriptorPath);
+
+  Result := ExpandFileName(AWorkspaceRoot);
+end;
+
 procedure CaptureSessionProjectionContextValue(
   var AContext: TSessionProjectionContext;
   const Session: TCompilationSession
@@ -1992,6 +2140,7 @@ begin
   ClearEnvironmentProjectionContextValue(ActiveEnvironmentProjection);
   ClearDoctorProjectionContextValue(ActiveDoctorProjection);
   ClearQueryProjectionContextValue(ActiveQueryProjection);
+  ClearPackageProjectionContextValue(ActivePackageProjection);
 end;
 
 procedure CaptureBuildCommandContext(
@@ -2749,6 +2898,51 @@ begin
   );
 end;
 
+procedure PrintPackageProjectionFields(const UseStdErr: Boolean);
+begin
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-workflow-status',
+    ActivePackageProjection.WorkflowStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-manifest-status',
+    ActivePackageProjection.ManifestStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-lock-status',
+    ActivePackageProjection.LockStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-install-plan-status',
+    ActivePackageProjection.InstallPlanStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-root-path',
+    ActivePackageProjection.PackageRootPath
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-name',
+    ActivePackageProjection.PackageName
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-lockfile-path',
+    ActivePackageProjection.LockfilePath
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-source-root-count',
+    ActivePackageProjection.SourceRootCount,
+    ActivePackageProjection.HasSourceRootCount
+  );
+end;
+
 procedure PrintDiagnosticsDetailProjection(const UseStdErr: Boolean);
 begin
   WriteProjectionLine(
@@ -3168,6 +3362,87 @@ begin
   WriteLn('human-summary=doctor inspection completed');
 end;
 
+procedure RunPkgInspect(
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+var
+  InspectionSourcePath: string;
+  TargetConfig: TTargetConfig;
+  WorkflowTruth: TPackageWorkflowTruth;
+  WorkspaceModel: TWorkspaceModel;
+  WorkspaceRoot: string;
+begin
+  ActiveBuildContext.TargetName := TargetName;
+  if WorkspaceOverride = '' then
+    Fail('missing-required-option: --workspace', True);
+
+  WorkspaceRoot := ExpandFileName(WorkspaceOverride);
+  if not DirectoryExists(WorkspaceRoot) then
+    Fail('invalid-workspace-root: ' + WorkspaceOverride, True);
+
+  InspectionSourcePath := ResolvePackageInspectionSourcePath(WorkspaceRoot);
+  WorkspaceModel := nil;
+  try
+    WorkspaceModel := ResolveWorkspaceModel(
+      InspectionSourcePath,
+      WorkspaceRoot,
+      TargetName,
+      ''
+    );
+    CaptureBuildCommandContext('', TargetName, WorkspaceModel);
+
+    try
+      TargetConfig := LoadTargetConfig(
+        TargetName,
+        ParamStr(0),
+        ToolchainBindingOverride
+      );
+    except
+      on E: ETargetConfigError do
+        Fail(E.Message);
+    end;
+
+    ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+    ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+    CaptureToolchainProjectionFromTargetConfig(
+      ActiveToolchainProjection,
+      TargetConfig
+    );
+    WorkflowTruth := BuildPackageWorkflowTruthFromWorkspaceModel(WorkspaceModel);
+    CapturePackageProjectionFromWorkflowTruth(
+      ActivePackageProjection,
+      WorkflowTruth
+    );
+
+    WriteLn('mode=pkg');
+    WriteLn('command=pkg');
+    WriteLn('selector=inspect');
+    WriteLn('target=', TargetName);
+    WriteLn('target-config=', TargetConfig.ConfigPath);
+    WriteLn('compiler=', TargetConfig.CompilerExecutable);
+    PrintBuildContextProjection(False);
+    PrintToolchainProjectionFields(False);
+    PrintPackageProjectionFields(False);
+    WriteLn('status=success');
+    WriteLn('result=success');
+    WriteLn('command-outcome=success');
+    PrintCommandEnvelope(
+      ExitSuccessCode,
+      'inspect',
+      'success',
+      'success',
+      '',
+      'package inspection completed',
+      False
+    );
+    WriteLn('human-summary=package inspection completed');
+  finally
+    WorkspaceModel.Free;
+  end;
+end;
+
 function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
 begin
   Result := BuildTargetFactsView(
@@ -3548,7 +3823,7 @@ begin
 
   if (CommandName <> 'build') and (CommandName <> 'test') and
     (CommandName <> 'env') and (CommandName <> 'doctor') and
-    (CommandName <> 'query') then
+    (CommandName <> 'query') and (CommandName <> 'pkg') then
     Fail('unsupported-command: ' + CommandName);
 
   if CommandName = 'test' then
@@ -3740,6 +4015,57 @@ begin
       ToolchainBindingOverride,
       WorkspaceOverride
     );
+    Halt(ExitSuccessCode);
+  end;
+
+  if CommandName = 'pkg' then
+  begin
+    ActiveSelector := 'pkg';
+    if ParamCount < 3 then
+      Fail('invalid-arguments', True);
+    if ParamStr(2) <> 'inspect' then
+      Fail('invalid-arguments', True);
+
+    ActiveSelector := 'inspect';
+    TargetName := '';
+    ToolchainBindingOverride := '';
+    WorkspaceOverride := '';
+    Index := 3;
+    while Index <= ParamCount do
+    begin
+      OptionName := ParamStr(Index);
+      if (OptionName <> '--target') and
+        (OptionName <> '--toolchain-binding') and
+        (OptionName <> '--workspace') then
+        Fail('unknown-option: ' + OptionName, True);
+      if Index = ParamCount then
+        Fail('invalid-arguments', True);
+      Inc(Index);
+      if OptionName = '--target' then
+      begin
+        if TargetName <> '' then
+          Fail('duplicate-option: --target', True);
+        TargetName := ParamStr(Index);
+      end
+      else if OptionName = '--toolchain-binding' then
+      begin
+        if ToolchainBindingOverride <> '' then
+          Fail('duplicate-option: --toolchain-binding', True);
+        ToolchainBindingOverride := ParamStr(Index);
+      end
+      else
+      begin
+        if WorkspaceOverride <> '' then
+          Fail('duplicate-option: --workspace', True);
+        WorkspaceOverride := ParamStr(Index);
+      end;
+      Inc(Index);
+    end;
+
+    if TargetName = '' then
+      Fail('missing-required-option: --target', True);
+
+    RunPkgInspect(TargetName, ToolchainBindingOverride, WorkspaceOverride);
     Halt(ExitSuccessCode);
   end;
 
