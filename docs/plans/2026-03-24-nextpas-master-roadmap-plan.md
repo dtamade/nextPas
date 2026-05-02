@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 34` 为准。
+以最新完成的 `Batch 35` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -36,7 +36,8 @@
   `stage0DoctorCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryInvalidArgumentsCheck=pass`、
   `stage0PkgCheck=pass`、`stage0PkgInvalidArgumentsCheck=pass`、
-  `stage0EnvInvalidArgumentsCheck=pass` 与 `verify-local=pass` 已继续转绿；`env status`
+  `stage0EnvInvalidArgumentsCheck=pass`、`multipleMissingUnitsCheck=pass` 与
+  `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
   readiness 与 binding readiness，`query symbols` 也已投影
@@ -44,7 +45,7 @@
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
   `packageInstallPlanStatus`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 34` 已完成。
+- `Batch 1` 到 `Batch 35` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -1577,23 +1578,38 @@ structured finding surface：
 - 这批不把 registry lookup、mirror selection、package graph resolution、install placement
   或 render asset preprocessing 伪装成当前实现面
 
+`Batch 35` 当前把 resolver error recovery 收成真实编译器核心加固：
+
+- `compiler/frontend/np_unit_resolver.pas` 现在修改 `ResolveDependencyList`，从”遇到第一个
+  失败就退出”改为”累积所有失败并继续处理剩余 dependencies”
+- 当多个 units 缺失时，resolver 现在会报告所有缺失的 units，而不是只报告第一个
+- `tests/compiler/fail/multiple_missing_units_fail.pas` 新增测试用例，包含两个缺失的 units
+- `build/verify_local.sh` 新增 `multiple-missing-units-check`，验证 `diagnostics-count=2`
+  且两个 unit-not-found 错误都被报告
+- `docs/architecture/unit-resolution-specification.md` 新增”resolver 在部分失败时继续处理
+  并累积所有错误”章节，文档化错误恢复策略及其对 future language service 的意义
+- 这批故意只做 resolver error recovery，不改变 workspace discovery 或 diagnostics 结构：
+  当前 workspace model 对 malformed manifest 的处理已经足够健壮（不存在时返回空结果，
+  格式错误时立即失败），diagnostics 结构扩展（RelatedInformation、SuggestedFix）留待
+  future language service 需求明确后再统一设计
+
 在接下来的滚动周期里，已经完成的 bootstrap-native production path、later-step failure
 attribution、success-path transcript hardening、显式 LLVM binding execution path，以及
 这次 direct-link C library resolution contract，再加上 `nextpas test` 与最小
 `nextpas env status` / `nextpas doctor` / `doctorFindings` / env readiness evidence /
-`nextpas query symbols` / `nextpas pkg inspect`，已经让
+`nextpas query symbols` / `nextpas pkg inspect`，以及 resolver error recovery，已经让
 `PlanFromBackend`、backend artifact truth、generic runner、logical link request、
 execution-side link serialization、最小 developer tooling state surface / health inspection、
-semantic query surface 与 package workflow projection
-以及 semantic query surface 真正接成一条更完整的控制链；
+semantic query surface、package workflow projection 与 compiler core robustness
+真正接成一条更完整的控制链；
 下一批不应该再回头补”library request 有没有进入 argv”、”env state 能不能被只读投影”、
 “doctor 能不能作为 command surface 执行”、”runtime SDK finding 能不能结构化输出”、
-“env readiness evidence 能不能稳定输出”、”query symbols 能不能走 compilation session”
-或”pkg inspect 能不能投影 package workflow status”
+“env readiness evidence 能不能稳定输出”、”query symbols 能不能走 compilation session”、
+“pkg inspect 能不能投影 package workflow status”或”resolver 能不能累积多个错误”
 这类已闭环问题，
 而应该转回 richer developer tooling 与更高层控制面。
 
-但这些后续批次必须建立在前三十四批真实收口之后，而不是提前平行开工。
+但这些后续批次必须建立在前三十五批真实收口之后，而不是提前平行开工。
 
 ## 这份计划故意不做什么
 
