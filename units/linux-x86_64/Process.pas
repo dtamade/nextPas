@@ -36,6 +36,9 @@ type
 
 implementation
 
+{ External C functions }
+function system(command: PChar): LongInt; cdecl; external 'c' name 'system';
+
 { TProcess }
 
 constructor TProcess.Create(AOwner: TComponent);
@@ -64,7 +67,7 @@ begin
   // Build command line
   CommandLine := FExecutable;
   for I := 0 to FParameters.Count - 1 do
-    CommandLine := CommandLine + ' ' + FParameters[I];
+    CommandLine := CommandLine + ' "' + FParameters[I] + '"';
 
   // Save current directory if needed
   if FCurrentDirectory <> '' then
@@ -78,13 +81,10 @@ begin
   end;
 
   try
-    // Execute command
-    {$I-}
-    ExitCode := 0;
-    // TODO: Implement actual process execution
-    // For now, this is a stub that always succeeds
-    FExitStatus := ExitCode;
-    {$I+}
+    // Execute command using system() from libc
+    ExitCode := system(PChar(CommandLine));
+    // Extract actual exit code (high byte of status)
+    FExitStatus := ExitCode shr 8;
   finally
     // Restore directory
     if FCurrentDirectory <> '' then

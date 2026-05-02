@@ -81,6 +81,9 @@ procedure FreeAndNil(var Obj);
 
 implementation
 
+{ External C functions }
+function getenv(name: PChar): PChar; cdecl; external 'c' name 'getenv';
+
 { Exception }
 
 constructor Exception.Create(const Msg: string);
@@ -158,29 +161,23 @@ end;
 
 function DirectoryExists(const Directory: string): Boolean;
 var
-  F: File;
+  OldDir: string;
 begin
-  // Try to open as file first
-  Assign(F, Directory);
+  // Try to change to the directory
+  GetDir(0, OldDir);
   {$I-}
-  Reset(F);
+  ChDir(Directory);
   {$I+}
-  if IOResult = 0 then
-  begin
-    Close(F);
-    Result := False; // It's a file, not a directory
-    Exit;
-  end;
+  Result := IOResult = 0;
 
-  // If we can't open it as a file, check if it's a directory
-  // by trying to access a non-existent file inside it
-  Assign(F, Directory + '/.nextpas_dir_test_' + IntToStr(Random(99999)));
-  {$I-}
-  Reset(F);
-  {$I+}
-  // If we get "file not found" error, the directory exists
-  // If we get "path not found" error, the directory doesn't exist
-  Result := (IOResult = 2); // Error 2 = file not found (directory exists)
+  if Result then
+  begin
+    // Restore original directory
+    {$I-}
+    ChDir(OldDir);
+    {$I+}
+    IOResult; // Clear error
+  end;
 end;
 
 function DeleteFile(const FileName: string): Boolean;
@@ -232,10 +229,39 @@ begin
 end;
 
 function ForceDirectories(const Dir: string): Boolean;
+var
+  ParentDir: string;
 begin
-  // Stub implementation - always returns true
-  // TODO: Implement directory creation
-  Result := True;
+  // Empty or root directory
+  if (Dir = '') or (Dir = '/') then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  // Already exists
+  if DirectoryExists(Dir) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  // Create parent first
+  ParentDir := ExtractFileDir(Dir);
+  if ParentDir <> Dir then
+  begin
+    if not ForceDirectories(ParentDir) then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+
+  // Create this directory
+  {$I-}
+  MkDir(Dir);
+  {$I+}
+  Result := IOResult = 0;
 end;
 
 function ExpandFileName(const FileName: string): string;
@@ -362,10 +388,14 @@ end;
 { Environment }
 
 function GetEnvironmentVariable(const Name: string): string;
+var
+  P: PChar;
 begin
-  // Stub implementation - returns empty string
-  // TODO: Implement using system calls
-  Result := '';
+  P := getenv(PChar(Name));
+  if P <> nil then
+    Result := string(P)
+  else
+    Result := '';
 end;
 
 { Date/Time }

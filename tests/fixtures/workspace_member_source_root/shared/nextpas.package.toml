@@ -1,0 +1,6 @@
+[package]
+name = "tests.workspace-member-source-root.shared"
+version = "0.1.0"
+
+[sources]
+roots = ["src"]

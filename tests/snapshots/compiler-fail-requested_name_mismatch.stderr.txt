@@ -1,0 +1,3 @@
+error: unit name mismatch
+fixture: tests/compiler/fail/requested_name_mismatch_fail.pas
+classification: expected-compile-failure

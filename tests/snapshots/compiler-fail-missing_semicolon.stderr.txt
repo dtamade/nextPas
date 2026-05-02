@@ -1,0 +1,3 @@
+error: expected ";" before BEGIN
+fixture: tests/compiler/fail/missing_semicolon_fail.pas
+classification: expected-compile-failure

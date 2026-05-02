@@ -1,0 +1,3 @@
+error: duplicate unit import
+fixture: tests/compiler/fail/duplicate_unit_import_fail.pas
+classification: expected-compile-failure

@@ -1,0 +1,3 @@
+error: unit not found
+fixture: tests/compiler/fail/explicit_system_missing_unit_fail.pas
+classification: expected-compile-failure
