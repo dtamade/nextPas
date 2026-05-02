@@ -1,0 +1,20 @@
+# nextPas phase1 target facts
+# Only one target is supported in phase1. All other targets must be rejected.
+
+target = "linux-x86_64"
+host_os = "linux"
+host_cpu = "x86_64"
+compiler = "fpc"
+units_dir = "units/linux-x86_64"
+distribution_bin_dir = "bin"
+distribution_lib_dir = "lib"
+distribution_share_dir = "share"
+object_format = "elf"
+assembler_flavor = "gnu-as"
+linker_flavor = "gnu-ld"
+runtime_layout_key = "target-sdk-split"
+c_symbol_prefix = ""
+c_library_naming = "lib-prefix-so-a"
+llvm_triple = "x86_64-unknown-linux-gnu"
+llvm_data_layout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
+toolchain_binding = "build/toolchains/linux-x86_64-to-linux-x86_64-gnu.toml"

@@ -1,0 +1,11 @@
+[assembler_profile]
+id = "gnu-as"
+tool_flavor = "gnu-as"
+driver_candidates = ["as"]
+input_kind = "assembly-text"
+output_kind = "object-file"
+command_template_kind = "gnu-as"
+response_file_mode = "unsupported"
+target_selector_mode = "none"
+llvm_toolchain_member = false
+smartlink_section_support = "native"

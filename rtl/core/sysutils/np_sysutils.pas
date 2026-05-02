@@ -15,6 +15,8 @@ const
 type
   TStringArray = array of string;
 
+  TDateTime = Double;
+
   TSearchRec = record
     Name: string;
     Attr: LongInt;
@@ -44,12 +46,18 @@ procedure Insert(const Source: string; var S: string; Index: Integer);
 // File operations
 function FileExists(const FileName: string): Boolean;
 function DirectoryExists(const Directory: string): Boolean;
+function DeleteFile(const FileName: string): Boolean;
+function FileSearch(const Name, DirList: string): string;
+function ForceDirectories(const Dir: string): Boolean;
 function ExpandFileName(const FileName: string): string;
 function ExtractFileDir(const FileName: string): string;
 function ExtractFileName(const FileName: string): string;
 function ChangeFileExt(const FileName, Extension: string): string;
 function IncludeTrailingPathDelimiter(const Path: string): string;
 function ExcludeTrailingPathDelimiter(const Path: string): string;
+
+// Environment
+function GetEnvironmentVariable(const Name: string): string;
 
 // File search
 function FindFirst(const Path: string; Attr: LongInt; var F: TSearchRec): LongInt;
@@ -60,6 +68,16 @@ procedure FindClose(var F: TSearchRec);
 function IntToStr(Value: Integer): string;
 function StrToInt(const S: string): Integer;
 function StrToIntDef(const S: string; Default: Integer): Integer;
+
+// Date/Time
+function Now: TDateTime;
+function FormatDateTime(const Format: string; DateTime: TDateTime): string;
+
+// String formatting
+function Format(const Fmt: string; const Args: array of const): string;
+
+// Memory management
+procedure FreeAndNil(var Obj);
 
 implementation
 
@@ -163,6 +181,61 @@ begin
   // If we get "file not found" error, the directory exists
   // If we get "path not found" error, the directory doesn't exist
   Result := (IOResult = 2); // Error 2 = file not found (directory exists)
+end;
+
+function DeleteFile(const FileName: string): Boolean;
+var
+  F: File;
+begin
+  Assign(F, FileName);
+  {$I-}
+  Erase(F);
+  {$I+}
+  Result := IOResult = 0;
+end;
+
+function FileSearch(const Name, DirList: string): string;
+var
+  StartPos, EndPos: Integer;
+  Dir, TestPath: string;
+begin
+  // If Name is absolute path and exists, return it
+  if (Length(Name) > 0) and (Name[1] = '/') then
+  begin
+    if FileExists(Name) then
+      Exit(Name)
+    else
+      Exit('');
+  end;
+
+  // Search in DirList (colon-separated paths)
+  StartPos := 1;
+  while StartPos <= Length(DirList) do
+  begin
+    EndPos := StartPos;
+    while (EndPos <= Length(DirList)) and (DirList[EndPos] <> ':') do
+      Inc(EndPos);
+
+    Dir := Copy(DirList, StartPos, EndPos - StartPos);
+    if Dir <> '' then
+    begin
+      TestPath := IncludeTrailingPathDelimiter(Dir) + Name;
+      if FileExists(TestPath) then
+        Exit(TestPath);
+    end;
+
+    StartPos := EndPos + 1;
+  end;
+
+  // Not found
+  Result := '';
+end;
+
+function ForceDirectories(const Dir: string): Boolean;
+begin
+  // Stub implementation - always returns true
+  // TODO: Implement directory creation
+  Result := True;
 end;
 
 function ExpandFileName(const FileName: string): string;
@@ -284,6 +357,50 @@ begin
   Val(S, Result, Code);
   if Code <> 0 then
     Result := Default;
+end;
+
+{ Environment }
+
+function GetEnvironmentVariable(const Name: string): string;
+begin
+  // Stub implementation - returns empty string
+  // TODO: Implement using system calls
+  Result := '';
+end;
+
+{ Date/Time }
+
+function Now: TDateTime;
+begin
+  // Stub implementation - returns 0
+  // TODO: Implement using system calls
+  Result := 0.0;
+end;
+
+function FormatDateTime(const Format: string; DateTime: TDateTime): string;
+begin
+  // Stub implementation - returns fixed string
+  Result := '2026-05-02 00:00:00';
+end;
+
+{ String formatting }
+
+function Format(const Fmt: string; const Args: array of const): string;
+begin
+  // Stub implementation - returns format string as-is
+  // TODO: Implement proper formatting
+  Result := Fmt;
+end;
+
+{ Memory management }
+
+procedure FreeAndNil(var Obj);
+var
+  Temp: TObject;
+begin
+  Temp := TObject(Obj);
+  Pointer(Obj) := nil;
+  Temp.Free;
 end;
 
 end.

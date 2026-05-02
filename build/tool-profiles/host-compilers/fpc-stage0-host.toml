@@ -1,0 +1,9 @@
+[host_compiler_profile]
+id = "fpc-stage0-host"
+tool_flavor = "freepascal"
+driver_candidates = ["fpc"]
+command_template_kind = "freepascal-host-compile"
+source_input_kind = "pascal-source"
+output_kind = "executable"
+units_flag = "-Fu"
+response_file_mode = "unsupported"

@@ -10,19 +10,40 @@ RUNTIME_SDK="units/linux-x86_64"
 
 # List of modules to compile (in dependency order)
 MODULES=(
+  # Diagnostics
   "compiler/diagnostics/np_diagnostics_sink.pas"
+
+  # Frontend
   "compiler/frontend/np_source_database.pas"
-  "compiler/sema/np_semantic_model.pas"
-  "compiler/syntax/np_lexer.pas"
-  "compiler/syntax/np_green_tree.pas"
-  "compiler/syntax/np_ast_facade.pas"
-  "compiler/sema/np_semantic_analyzer.pas"
   "compiler/frontend/np_unit_graph.pas"
   "compiler/frontend/np_workspace_model.pas"
   "compiler/frontend/np_package_manifest.pas"
-  "compiler/targets/np_target_facts.pas"
-  "compiler/toolchain/np_toolchain_profiles.pas"
+  "compiler/frontend/np_package_workflow.pas"
   "compiler/frontend/np_unit_resolver.pas"
+  "compiler/frontend/np_compilation_session.pas"
+
+  # Syntax
+  "compiler/syntax/np_lexer.pas"
+  "compiler/syntax/np_green_tree.pas"
+  "compiler/syntax/np_ast_facade.pas"
+
+  # Sema
+  "compiler/sema/np_semantic_model.pas"
+  "compiler/sema/np_semantic_analyzer.pas"
+
+  # Targets
+  "compiler/targets/np_target_facts.pas"
+
+  # Toolchain
+  "compiler/toolchain/np_toolchain_profiles.pas"
+  "compiler/toolchain/np_toolchain_plan.pas"
+  "compiler/toolchain/np_toolchain_runner.pas"
+
+  # IR
+  "compiler/ir/np_mir_model.pas"
+
+  # Backend
+  "compiler/backend/np_backend_plan.pas"
 )
 
 SUCCESS_COUNT=0

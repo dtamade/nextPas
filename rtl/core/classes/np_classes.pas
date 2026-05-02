@@ -11,6 +11,7 @@ const
   fmOpenRead = $0000;
   fmOpenWrite = $0001;
   fmOpenReadWrite = $0002;
+  fmCreate = $FF00;
   fmShareDenyNone = $0040;
 
 type

@@ -1,0 +1,31 @@
+# nextPas stage0 llvm-adapter binding
+# This keeps target facts stable while selecting the llvm backend/toolchain surface explicitly.
+
+[binding]
+id = "linux-x86_64-to-linux-x86_64-llvm"
+host = "linux-x86_64"
+target = "linux-x86_64"
+backend_family = "llvm"
+host_compiler = "fpc"
+host_compiler_profile = "fpc-stage0-host"
+
+[profiles]
+assembler = "gnu-as"
+linker = "lld-elf"
+archiver = "gnu-ar"
+resource = "none"
+
+[llvm]
+enabled = true
+executable_set = "llvm-stable"
+
+[sysroot]
+mode = "runtime-sdk"
+runtime_sdk = "linux-x86_64"
+allow_host_fallback = false
+
+[resolution]
+tool_root_kind = "distribution-helper-root"
+runtime_root_kind = "distribution-runtime-root"
+response_files = "auto"
+link_scripts = "when-required"

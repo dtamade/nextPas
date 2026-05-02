@@ -1,0 +1,31 @@
+# nextPas phase1 toolchain binding
+# This remains a stage0 host-adapter binding until nextPas takes over real backend execution.
+
+[binding]
+id = "linux-x86_64-to-linux-x86_64-gnu"
+host = "linux-x86_64"
+target = "linux-x86_64"
+backend_family = "native"
+host_compiler = "fpc"
+host_compiler_profile = "fpc-stage0-host"
+
+[profiles]
+assembler = "gnu-as"
+linker = "gnu-ld"
+archiver = "gnu-ar"
+resource = "none"
+
+[llvm]
+enabled = false
+executable_set = "llvm-stable"
+
+[sysroot]
+mode = "runtime-sdk"
+runtime_sdk = "linux-x86_64"
+allow_host_fallback = false
+
+[resolution]
+tool_root_kind = "distribution-helper-root"
+runtime_root_kind = "distribution-runtime-root"
+response_files = "auto"
+link_scripts = "when-required"
