@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-02 记录为准。
 
+## Session: 2026-05-02 (Stage2 Feasibility Assessment)
+
+### Stage2 Self-Hosting 可行性评估
+
+- **Status:** completed
+- Actions taken:
+  - 在 Stage1 完成后，立即评估 Stage2（self-hosting）的可行性。
+  - 实际尝试用 nextPas 编译 compiler module (`np_diagnostics_sink.pas`)。
+  - 发现关键阻塞因素：**RTL 不完整**，缺少 `SysUtils`、`Classes` 等标准库单元。
+  - 分析了所有 compiler modules 的外部依赖，确认几乎所有模块都依赖 `SysUtils`。
+  - 评估了后端成熟度、bootstrap 循环设计、一致性验证等其他潜在问题。
+  - 创建 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 记录详细评估结果。
+
+**关键发现**：
+- ❌ Stage2 当前**不可行**，主要阻塞因素是 RTL 不完整
+- 🔴 Critical: 缺少 `SysUtils`（字符串、文件、路径操作）
+- 🔴 Critical: 缺少 `Classes`（TStringList 等容器，或可用 dynamic arrays 替代）
+- 🟡 Medium: 后端未验证能否处理 compiler modules 的复杂性
+- 🟡 Medium: 需要设计 bootstrap 循环和一致性验证策略
+
+**工作量估算**：
+- Phase 1 (RTL 基础设施): ~1000-1800 LOC, 2-3 周
+- Phase 2 (渐进式验证): 1-2 周
+- Phase 3 (完整 Self-hosting): 1-2 周
+- **总计**: ~4-7 周
+
+**推荐路径**：
+1. 实现 `SysUtils` 子集（compiler modules 实际使用的功能）
+2. 实现 `Classes` 子集（如果需要）
+3. 渐进式验证：从最简单的 module 开始，逐步扩大
+4. 完整 self-hosting + bootstrap 循环验证
+
+**下一步**：开始 RTL 实现（选项 A），为 Stage2 铺路。
+
 ## Session: 2026-05-02 (Stage1 Completion Milestone)
 
 ### Stage1 正式完成
