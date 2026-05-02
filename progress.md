@@ -3,6 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-02 记录为准。
 
+## Session: 2026-05-02 (RTL Implementation - SysUtils)
+
+### RTL SysUtils 实现完成
+
+- **Status:** completed
+- Actions taken:
+  - 实现了 `SysUtils` 子集，包含 compiler modules 需要的核心功能。
+  - 创建 `rtl/core/sysutils/np_sysutils.pas` 和单元测试。
+  - 实现了字符串操作（Trim, LowerCase, UpperCase, Delete, Insert）。
+  - 实现了文件操作（FileExists, DirectoryExists, ExtractFileDir, ExtractFileName, 
+    IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter, ExpandFileName）。
+  - 实现了异常支持（Exception, EConvertError）。
+  - 实现了类型转换（IntToStr, StrToInt, StrToIntDef）。
+  - 所有实现不依赖 BaseUnix/Unix，使用纯 Pascal 和内置函数。
+  - 所有单元测试通过（34/34 tests passed）。
+  - 安装 SysUtils 和 np_base_types 到 `units/linux-x86_64/`。
+  - **成功用 nextPas 编译了第一个 compiler module**：`np_diagnostics_sink.pas`！
+
+**关键成就**：
+- ✅ `nextpas build compiler/diagnostics/np_diagnostics_sink.pas` 成功
+- ✅ `status=success`, `result=success`, `command-outcome=success`
+- ✅ Resolution, semantic analysis, MIR, backend 全部通过
+- ✅ 这是 Stage2 self-hosting 的第一步！
+
+**实现的 SysUtils 功能**：
+- String: Trim, LowerCase, UpperCase, Delete, Insert
+- File: FileExists, DirectoryExists, ExpandFileName, ExtractFileDir, ExtractFileName
+- Path: IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter
+- Exception: Exception, EConvertError
+- Conversion: IntToStr, StrToInt, StrToIntDef
+
+**下一步**：
+- 尝试编译更多 compiler modules
+- 识别并实现缺失的 RTL 功能
+- 渐进式扩大到整个 compiler
+
 ## Session: 2026-05-02 (Stage2 Feasibility Assessment)
 
 ### Stage2 Self-Hosting 可行性评估
