@@ -511,7 +511,9 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
 
 - `stage0`
   - 当前不承诺完整 `pkg` family，也不承诺 manifest/lock file format
-  - 当前最小 reality 只先落地 non-executing package workflow truth skeleton
+  - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect` surface
+  - `pkg inspect` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
+    manifest status、source root count 与 install plan status
   - 但 package workflow 的对象边界、install root 角色与相邻控制面必须先冻结
 - `stage1`
   - 可以开始把受控的 package fetch/install/graph workflow 接到统一 command surface

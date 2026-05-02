@@ -318,16 +318,16 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、只读 `env status`、最小 `doctor` 与最小 `query symbols`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、只读 `env status`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
-`nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface 与
+`nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface、
 只读 `env status` surface、最小 `doctor` health inspection、最小 `query symbols`
-semantic projection 收进同一个 `nextpas` 产品壳。
+semantic projection 与只读 `pkg inspect` package workflow projection 收进同一个 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
 
-- 未来的 `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
+- 未来的 richer `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
 - 当前 `env status` 只是最小 read-only projection，不等于 `env use` / `env sync` /
@@ -335,6 +335,8 @@ semantic projection 收进同一个 `nextpas` 产品壳。
   package/workspace coherence taxonomy
 - 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
   language service、LSP、open document overlay 或 IDE integration
+- 当前 `pkg inspect` 只是 workspace-model-backed 的最小只读投影，不等于完整
+  package manager、fetch/install/update/publish workflow 或 dependency resolution
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 

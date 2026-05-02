@@ -1,7 +1,35 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-04-29 记录为准。
+2026-05-02 记录为准。
+
+## Session: 2026-05-02
+
+### Minimal `pkg inspect` Read-only Surface
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-04-29-nextpas-continuous-developer-tooling-plan.md` 的 Task 6
+    先在 `compiler/frontend/np_package_workflow.pas` 补齐
+    `BuildPackageWorkflowTruthFromWorkspaceModel`，让 package workflow truth 可以直接消费
+    `WorkspaceModel` 并投影 manifest/lock/install plan status。
+  - 在 `tools/stage0/nextpas.pas` 新增 `RunPkgInspect` 过程，支持
+    `nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]`。
+  - 新增 `TPackageProjectionContext`，把 `package-workflow-status`、`package-manifest-status`、
+    `package-source-root-count`、`package-install-plan-status` 投影进 line-based output 与
+    `command-envelope=<json>.result`。
+  - 让 `pkg inspect` 复用 `ResolveWorkspaceModel(...)`、target facts 与 toolchain binding，
+    但不执行 fetch、install、dependency resolution 或 lockfile write。
+  - 在 `build/verify_local.sh` 新增 `stage0-pkg-inspect-check` 与
+    `stage0-pkg-invalid-arguments-check`，冻结 `package-workflow-status=ready`、
+    `package-manifest-status=ready`、`package-source-root-count=<non-zero>`、
+    `package-install-plan-status=deferred` 与 envelope mirror。
+  - 同步回写 `tools/stage0/README.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/architecture/package-workflow-specification.md`，明确这批故意不把
+    fetch/install/update/publish workflow 或 dependency resolution 伪装成当前实现面。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 `stage0PkgCheck=pass`、
+    `stage0PkgInvalidArgumentsCheck=pass` 与 `verify-local=pass`。
 
 ## Session: 2026-04-29
 
