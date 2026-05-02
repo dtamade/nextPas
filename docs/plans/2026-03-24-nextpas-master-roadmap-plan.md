@@ -28,6 +28,8 @@
 ## 当前状态
 
 - phase1 自举与实施计划已经完成并冻结为历史入口。
+- **Stage1 已完成**：nextPas 已接管前端、语义分析、IR、后端和工具链集成。
+  FreePascal 仅作为宿主编译器构建 nextPas 自身。详见 `docs/architecture/stage1-completion-assessment.md`。
 - `stage0 build`、`test harness` 与 `build/verify_local.sh` 的 envelope baseline 已真实落地。
 - 当前 freshest verification evidence 是 fresh `bash build/verify_local.sh`，
   其中 `toolchainContractCheck=pass`、`semanticSmokeCheck=pass`、

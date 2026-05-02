@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-02 记录为准。
 
+## Session: 2026-05-02 (Stage1 Completion Milestone)
+
+### Stage1 正式完成
+
+- **Status:** completed
+- Actions taken:
+  - 经过 Batch 1-35 的持续推进，nextPas 已经满足 `bootstrap-roadmap.md` 中定义的
+    stage1 所有核心要求。
+  - nextPas 现在拥有完整的前端（syntax、sema、frontend）、IR（HIR/MIR）、
+    后端（code generation）和工具链集成模块。
+  - FreePascal 仅作为宿主编译器构建 nextPas 自身，用户代码完全由 nextPas 自有模块处理。
+  - 创建 `docs/architecture/stage1-completion-assessment.md` 记录详细的完成证据。
+  - 更新 `docs/architecture/bootstrap-roadmap.md`，标记 stage1 为"已完成"。
+  - 当前验证状态：`verify-local=pass`，包含所有 smoke、failure、regression 测试。
+  - 清晰的控制面边界：`tools/stage0/nextpas.pas` (driver) vs. `compiler/` modules。
+  - 保留回退到 stage0 的能力（可以移除 compiler modules，回到纯 FPC）。
+
+**Stage1 核心能力：**
+- ✅ Syntax: lexer, parser, AST
+- ✅ Sema: semantic analysis, type checking
+- ✅ Frontend: unit resolution, workspace discovery, package manifest
+- ✅ IR: HIR, MIR
+- ✅ Backend: FPC backend, LLVM backend, native code generation
+- ✅ Toolchain: assembler, linker integration
+- ✅ Diagnostics: error recovery, rich diagnostics
+- ✅ Developer tooling: test, env status, doctor, query symbols, pkg inspect
+
+**下一步：** 评估 stage2（self-hosting）可行性。
+
 ## Session: 2026-05-02 (Compiler Core Hardening)
 
 ### Resolver Error Recovery - Partial Resolution Success
