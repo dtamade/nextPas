@@ -43,9 +43,37 @@ nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] 
 当前 `--target` 与 `--toolchain-binding` 是两条分开的输入轴：
 
 - `--target` 继续定义目标语义
-- `--toolchain-binding` 只允许在同一 host/target pair 下覆盖“谁来生产这些目标产物”
+- `--toolchain-binding` 只允许在同一 host/target pair 下覆盖”谁来生产这些目标产物”
 - 不显式传 binding 时，当前默认仍是 `linux-x86_64-to-linux-x86_64-gnu`
 - 显式传 `linux-x86_64-to-linux-x86_64-llvm` 时，会切到 LLVM-heavy execution path
+
+### Toolchain Binding 验证的三个检查点
+
+当用户通过 `--toolchain-binding` 覆盖默认 binding 时，`stage0` 在三个不同阶段执行验证：
+
+| 检查点                | 验证内容                                                     | 失败行为                                                     |
+| --------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **CLI 解析**          | 检查 binding ID 格式是否合法（`<host>-to-<target>-<family>`） | 立即退出，输出 `invalid-toolchain-binding-format`           |
+| **Target Config 加载** | 检查 binding 配置文件是否存在（`build/toolchains/<binding-id>.toml`） | 立即退出，输出 `toolchain-binding-not-found: <binding-id>`  |
+| **Session 创建**      | 检查 binding 的 host/target 是否与 `--target` 一致          | 立即退出，输出 `toolchain-binding-target-mismatch`          |
+
+**错误消息质量**：
+
+- 如果用户提供了不存在的 binding ID，错误消息必须包含：
+  - 用户提供的 binding ID
+  - 预期的 binding 文件路径
+  - 可用的 binding ID 列表（如果可以 cheap to enumerate）
+- 如果 binding 的 target 与 `--target` 不匹配，错误消息必须包含：
+  - binding 声明的 target
+  - 用户请求的 target
+  - 建议的正确 binding ID
+
+**Artifact Cache 隔离策略**：
+
+- 不同 binding 的 backend artifacts 必须隔离，即使它们的 target 相同
+- 当前策略：backend cache 路径包含 binding family（`cache/backend/<target>/`），
+  但 binding switch 会导致 cache miss
+- future 可以考虑更细粒度的 cache key（包含 binding ID），但这不是 `stage0` 的承诺
 
 第一阶段当前除了这五条路径之外，不承诺更多子命令，也不承诺泛化的命令树。
 
