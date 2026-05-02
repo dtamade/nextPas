@@ -8,7 +8,21 @@ const
   PathDelim = '/';
   DirectorySeparator = '/';
 
+  // File attributes
+  faAnyFile = $0000003F;
+  faDirectory = $00000010;
+
 type
+  TStringArray = array of string;
+
+  TSearchRec = record
+    Name: string;
+    Attr: LongInt;
+    Size: Int64;
+    Time: LongInt;
+    FindHandle: Pointer;
+  end;
+
   Exception = class
   private
     FMessage: string;
@@ -23,6 +37,7 @@ type
 function Trim(const S: string): string;
 function LowerCase(const S: string): string;
 function UpperCase(const S: string): string;
+function SameText(const S1, S2: string): Boolean;
 procedure Delete(var S: string; Index, Count: Integer);
 procedure Insert(const Source: string; var S: string; Index: Integer);
 
@@ -32,8 +47,14 @@ function DirectoryExists(const Directory: string): Boolean;
 function ExpandFileName(const FileName: string): string;
 function ExtractFileDir(const FileName: string): string;
 function ExtractFileName(const FileName: string): string;
+function ChangeFileExt(const FileName, Extension: string): string;
 function IncludeTrailingPathDelimiter(const Path: string): string;
 function ExcludeTrailingPathDelimiter(const Path: string): string;
+
+// File search
+function FindFirst(const Path: string; Attr: LongInt; var F: TSearchRec): LongInt;
+function FindNext(var F: TSearchRec): LongInt;
+procedure FindClose(var F: TSearchRec);
 
 // Type conversions
 function IntToStr(Value: Integer): string;
@@ -85,6 +106,11 @@ begin
   for I := 1 to Length(Result) do
     if Result[I] in ['a'..'z'] then
       Result[I] := Chr(Ord(Result[I]) - 32);
+end;
+
+function SameText(const S1, S2: string): Boolean;
+begin
+  Result := LowerCase(S1) = LowerCase(S2);
 end;
 
 procedure Delete(var S: string; Index, Count: Integer);
@@ -181,6 +207,20 @@ begin
   Result := Copy(FileName, I + 1, Length(FileName) - I);
 end;
 
+function ChangeFileExt(const FileName, Extension: string): string;
+var
+  I: Integer;
+begin
+  I := Length(FileName);
+  while (I > 0) and (FileName[I] <> '.') and (FileName[I] <> '/') do
+    Dec(I);
+
+  if (I > 0) and (FileName[I] = '.') then
+    Result := Copy(FileName, 1, I - 1) + Extension
+  else
+    Result := FileName + Extension;
+end;
+
 function IncludeTrailingPathDelimiter(const Path: string): string;
 begin
   Result := Path;
@@ -193,6 +233,32 @@ begin
   Result := Path;
   while (Result <> '') and (Result[Length(Result)] = '/') do
     SetLength(Result, Length(Result) - 1);
+end;
+
+{ File search - simplified stub implementation }
+{ TODO: Implement proper file search using system calls }
+
+function FindFirst(const Path: string; Attr: LongInt; var F: TSearchRec): LongInt;
+begin
+  // Stub implementation - always returns "not found"
+  F.Name := '';
+  F.Attr := 0;
+  F.Size := 0;
+  F.Time := 0;
+  F.FindHandle := nil;
+  Result := -1; // Error: no files found
+end;
+
+function FindNext(var F: TSearchRec): LongInt;
+begin
+  // Stub implementation - always returns "no more files"
+  Result := -1;
+end;
+
+procedure FindClose(var F: TSearchRec);
+begin
+  // Stub implementation - nothing to close
+  F.FindHandle := nil;
 end;
 
 { Type conversions }

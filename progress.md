@@ -3,6 +3,66 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-02 记录为准。
 
+## Session: 2026-05-02 (RTL Expansion - Batch Compilation Success)
+
+### 成功编译 13 个 Compiler Modules
+
+- **Status:** completed
+- Actions taken:
+  - 扩展 SysUtils：添加 `SameText`, `ChangeFileExt`, `TSearchRec`, `FindFirst`, `FindNext`, `FindClose`
+  - 实现 Classes 单元：`TStringList`, `TFileStream` (包括 `ReadBuffer`, `WriteBuffer`)
+  - 添加 `TStringArray` 类型到 SysUtils
+  - 添加文件属性常量：`faAnyFile`, `faDirectory`
+  - 创建批量编译脚本 `build/compile_compiler_modules.sh`
+  - 所有 13 个 compiler modules 编译成功！
+
+**成功编译的 Compiler Modules (13)**：
+1. `np_diagnostics_sink` - 诊断系统
+2. `np_source_database` - 源码数据库
+3. `np_semantic_model` - 语义模型
+4. `np_lexer` - 词法分析器
+5. `np_green_tree` - 绿树（CST）
+6. `np_ast_facade` - AST 门面
+7. `np_semantic_analyzer` - 语义分析器
+8. `np_unit_graph` - 单元依赖图
+9. `np_workspace_model` - 工作区模型
+10. `np_package_manifest` - 包清单
+11. `np_target_facts` - 目标平台信息
+12. `np_toolchain_profiles` - 工具链配置
+13. `np_unit_resolver` - 单元解析器
+
+**RTL 实现总结**：
+
+**SysUtils 功能**：
+- String: Trim, LowerCase, UpperCase, SameText, Delete, Insert
+- File: FileExists, DirectoryExists, ExpandFileName, ExtractFileDir, ExtractFileName, ChangeFileExt
+- Path: IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter
+- Search: FindFirst, FindNext, FindClose (stub implementation)
+- Exception: Exception, EConvertError
+- Conversion: IntToStr, StrToInt, StrToIntDef
+- Types: TStringArray, TSearchRec
+
+**Classes 功能**：
+- TStringList: Add, Clear, IndexOf, Delete, LoadFromFile, SaveToFile, Count, Strings[]
+- TFileStream: Create, Read, Write, ReadBuffer, WriteBuffer, Seek, Size
+- Constants: fmOpenRead, fmOpenWrite, fmOpenReadWrite, fmShareDenyNone
+
+**关键成就**：
+- ✅ 13/13 compiler modules 编译成功
+- ✅ 覆盖了 frontend, syntax, sema, targets, toolchain 等核心模块
+- ✅ RTL 实现足够支持大部分 compiler 代码
+- ✅ 批量编译脚本可重复使用
+
+**技术亮点**：
+- 渐进式依赖发现：编译 → 发现缺失 → 实现 → 重试
+- 最小化实现：只实现实际需要的功能
+- Stub 实现：FindFirst/FindNext/FindClose 使用 stub，足够通过编译
+
+**下一步**：
+- 尝试编译更多 compiler modules（IR, backend）
+- 实现 FindFirst/FindNext/FindClose 的真实版本（如果需要）
+- 尝试编译完整的 compiler 可执行文件
+
 ## Session: 2026-05-02 (RTL Implementation - SysUtils)
 
 ### RTL SysUtils 实现完成

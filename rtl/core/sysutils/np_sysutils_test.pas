@@ -64,6 +64,14 @@ begin
   AssertEqual('HELLO123', UpperCase('hello123'), 'UpperCase with numbers');
 end;
 
+procedure TestSameText;
+begin
+  AssertTrue(SameText('hello', 'HELLO'), 'SameText case insensitive');
+  AssertTrue(SameText('Hello', 'hello'), 'SameText mixed case');
+  AssertTrue(SameText('test', 'test'), 'SameText same case');
+  AssertTrue(not SameText('hello', 'world'), 'SameText different strings');
+end;
+
 procedure TestExtractFileName;
 begin
   AssertEqual('test.pas', ExtractFileName('/home/user/test.pas'), 'ExtractFileName with path');
@@ -141,6 +149,7 @@ begin
   TestTrim;
   TestLowerCase;
   TestUpperCase;
+  TestSameText;
   TestExtractFileName;
   TestExtractFileDir;
   TestIncludeTrailingPathDelimiter;
