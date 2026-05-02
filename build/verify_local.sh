@@ -60,6 +60,7 @@ HARNESS_BOOTSTRAP_FAKE_FPC_DIR=$(mktemp -d)
 SYNTAX_FAILURE_OUTPUT=$(mktemp)
 MISSING_UNIT_OUTPUT=$(mktemp)
 AMBIGUOUS_UNIT_OUTPUT=$(mktemp)
+MULTIPLE_MISSING_OUTPUT=$(mktemp)
 UNIT_CYCLE_OUTPUT=$(mktemp)
 DUPLICATE_IMPORT_OUTPUT=$(mktemp)
 MISSING_EXTERNAL_SYMBOL_NAME_OUTPUT=$(mktemp)
@@ -124,6 +125,7 @@ cleanup() {
   rm -f "$SYNTAX_FAILURE_OUTPUT"
   rm -f "$MISSING_UNIT_OUTPUT"
   rm -f "$AMBIGUOUS_UNIT_OUTPUT"
+  rm -f "$MULTIPLE_MISSING_OUTPUT"
   rm -f "$UNIT_CYCLE_OUTPUT"
   rm -f "$DUPLICATE_IMPORT_OUTPUT"
   rm -f "$MISSING_EXTERNAL_SYMBOL_NAME_OUTPUT"
@@ -318,6 +320,7 @@ require_path examples/smoke/external_cdecl_smoke.pas
 require_path tests/rtl/core_text_smoke.pas
 require_path tests/compiler/fail/missing_unit_fail.pas
 require_path tests/compiler/fail/ambiguous_unit_fail.pas
+require_path tests/compiler/fail/multiple_missing_units_fail.pas
 require_path tests/compiler/fail/unit_cycle_fail.pas
 require_path tests/compiler/fail/duplicate_unit_import_fail.pas
 require_path tests/compiler/fail/missing_external_symbol_name_fail.pas
@@ -1246,6 +1249,19 @@ require_output_pattern '^diagnostic-phase=resolution$' "$AMBIGUOUS_UNIT_OUTPUT" 
 require_output_pattern '^diagnostic-message=unit "AmbiguousHelper" resolved to multiple sources: .*path=.*/units/linux-x86_64/AmbiguousHelper\.pas .*scope=target-installed .*root=.*/units/linux-x86_64.*path=.*/units/linux-x86_64/AMBIGUOUSHELPER\.pas .*scope=target-installed .*root=.*/units/linux-x86_64.*$' "$AMBIGUOUS_UNIT_OUTPUT" 'missing-ambiguous-unit-diagnostic-provenance'
 require_output_pattern '"code":"resolver.ambiguous-unit-source"' "$AMBIGUOUS_UNIT_OUTPUT" 'missing-ambiguous-unit-diagnostic-envelope'
 printf 'ambiguous-unit-check=pass\n'
+
+printf 'multiple-missing-units-check=running\n'
+printf 'multiple-missing-units-command=%s build tests/compiler/fail/multiple_missing_units_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
+if run_stage0_build_capture "$MULTIPLE_MISSING_OUTPUT" tests/compiler/fail/multiple_missing_units_fail.pas; then
+  cat "$MULTIPLE_MISSING_OUTPUT"
+  fail 'expected-multiple-missing-units-failure-did-not-fail'
+fi
+cat "$MULTIPLE_MISSING_OUTPUT"
+require_output_pattern '^failure-kind=unit-resolution-failed$' "$MULTIPLE_MISSING_OUTPUT" 'missing-multiple-missing-units-failure-kind'
+require_output_pattern '^diagnostics-count=2$' "$MULTIPLE_MISSING_OUTPUT" 'missing-multiple-diagnostics-count'
+require_output_pattern 'MissingUnitA.*not found' "$MULTIPLE_MISSING_OUTPUT" 'missing-first-unit-diagnostic'
+require_output_pattern 'MissingUnitB.*not found' "$MULTIPLE_MISSING_OUTPUT" 'missing-second-unit-diagnostic'
+printf 'multiple-missing-units-check=pass\n'
 
 printf 'unit-cycle-check=running\n'
 printf 'unit-cycle-command=%s build tests/compiler/fail/unit_cycle_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"

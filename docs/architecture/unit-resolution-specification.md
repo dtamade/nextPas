@@ -164,8 +164,30 @@ session-owned truth 公开出来。
   - `implementation-use`
   - `implicit-runtime`
 
-这意味着 implementation-only dependency 已经不再只是“依赖单元会处理，根单元先忽略”的
+这意味着 implementation-only dependency 已经不再只是”依赖单元会处理，根单元先忽略”的
 半成品行为。根单元的 implementation imports 现在同样是 resolution graph 的正式输入。
+
+## resolver 在部分失败时继续处理并累积所有错误
+
+当前 resolver 采用 **error recovery** 策略：当某个 unit 解析失败时，resolver 不会立即停止，
+而是继续处理剩余的 dependencies，并将所有失败累积到 diagnostics sink。
+
+这条规则的意义：
+
+- 用户一次能看到所有缺失的 units，而不是修复一个后才发现下一个
+- 多个 resolution 错误会同时出现在 `diagnostics-count` 和 `command-envelope.diagnostics[]`
+- `resolution-status=failure` 和 `unit-graph-status=failure` 仍然正确标记整体失败
+- 后续阶段（sema/MIR/backend）仍然正确 defer，不会在不完整的 graph 上继续执行
+
+当前实现：
+
+- `ResolveDependencyList` 遍历所有 uses 子句，即使某些失败也继续处理
+- 每个失败的 dependency 都会调用 `EmitResolutionError` 添加 diagnostic
+- 最终返回值反映”是否有任何失败”，但不提前退出循环
+- `FResolutionStatus` 在任何失败时设为 `'failure'`
+
+这条策略对 future language service 也很重要：IDE 需要在部分 resolution 失败时仍能提供
+有限的补全和导航，而不是完全放弃整个 session。
 
 ## 请求名和文件内声明名必须一致
 

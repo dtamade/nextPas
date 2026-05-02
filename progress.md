@@ -3,7 +3,26 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-02 记录为准。
 
-## Session: 2026-05-02
+## Session: 2026-05-02 (Compiler Core Hardening)
+
+### Resolver Error Recovery - Partial Resolution Success
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-05-02-compiler-core-hardening-plan.md` 的 Task 1，加固 resolver
+    在部分 unit 解析失败时的错误恢复能力。
+  - 在 `compiler/frontend/np_unit_resolver.pas` 修改 `ResolveDependencyList`，从"遇到第一个
+    失败就退出"改为"累积所有失败并继续处理剩余 dependencies"。
+  - 新增测试用例 `tests/compiler/fail/multiple_missing_units_fail.pas`，包含两个缺失的 units。
+  - 在 `build/verify_local.sh` 新增 `multiple-missing-units-check`，验证
+    `diagnostics-count=2` 且两个 unit-not-found 错误都被报告。
+  - 新增 snapshot `tests/snapshots/compiler-fail-multiple_missing_units.stderr.txt`。
+  - 在 `docs/architecture/unit-resolution-specification.md` 新增"resolver 在部分失败时继续处理
+    并累积所有错误"章节，文档化错误恢复策略及其对 future language service 的意义。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增 `multiple-missing-units-check=pass`
+    与 `verify-local=pass`。
+
+## Session: 2026-05-02 (Developer Tooling Completion)
 
 ### Minimal `pkg inspect` Read-only Surface
 
