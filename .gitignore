@@ -1,0 +1,16 @@
+.ace-tool/
+.nextpas/
+.sisyphus/
+*.o
+*.ppu
+tests/snapshots/*.diff.txt
+tests/harness/runner
+tools/stage0/nextpas
+tests/compiler/pass/*_pass
+tests/compiler/fail/*_fail
+tests/rtl/*_smoke
+tests/crt/*_smoke
+tests/regression/*_regression
+tests/toolchain/*_smoke
+examples/smoke/hello
+examples/smoke/hello_with_units

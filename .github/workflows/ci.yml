@@ -1,0 +1,27 @@
+name: Linux Verification
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify-linux-x86_64:
+    name: Verify Linux x86_64 baseline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install FreePascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler
+
+      - name: Prepare verification entrypoints
+        run: |
+          chmod +x build/verify_local.sh
+          chmod +x tests/run_all_tests.sh
+
+      - name: Run Linux local verification mirror
+        run: ./build/verify_local.sh
