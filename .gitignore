@@ -14,3 +14,4 @@ tests/regression/*_regression
 tests/toolchain/*_smoke
 examples/smoke/hello
 examples/smoke/hello_with_units
+rtl/core/sysutils/np_sysutils_test
