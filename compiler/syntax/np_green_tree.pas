@@ -20,6 +20,33 @@ type
     ByteOffset: LongInt;
   end;
 
+  TGreenNodeKind = (
+    gnkUnknown,
+    gnkProgram, gnkUnit, gnkLibrary, gnkPackage,
+    gnkUsesClause, gnkUseEntry,
+    gnkInterfaceSection, gnkImplementationSection,
+    gnkForeignProcedureDecl,
+    gnkBeginBlock, gnkEndBlock,
+    gnkStatementList,
+    gnkIfStatement, gnkWhileStatement, gnkForStatement,
+    gnkRepeatStatement, gnkWithStatement, gnkCaseStatement,
+    gnkAssignmentStatement, gnkProcedureCallStatement,
+    gnkGotoStatement, gnkBreakStatement, gnkContinueStatement,
+    gnkExitStatement,
+    gnkVarSection, gnkConstSection, gnkTypeSection,
+    gnkVarDecl, gnkConstDecl, gnkTypeDecl,
+    gnkProcedureDecl, gnkFunctionDecl,
+    gnkRecordType, gnkArrayType,
+    gnkIdentifier, gnkStringLiteral, gnkIntegerLiteral,
+    gnkRealLiteral, gnkCharLiteral,
+    gnkBinaryExpression, gnkUnaryExpression,
+    gnkDotAccess, gnkArrayAccess, gnkFunctionCall,
+    gnkDereference, gnkAddressOf,
+    gnkParameterList, gnkParameterDecl,
+    gnkFieldList,
+    gnkError
+  );
+
   TGreenRootKind = (
     grkUnknown,
     grkProgram,
@@ -27,6 +54,31 @@ type
     grkLibrary,
     grkPackage
   );
+
+  TGreenNode = class
+  private
+    FNodeKind: TGreenNodeKind;
+    FByteOffset: LongInt;
+    FByteLength: LongInt;
+    FText: string;
+    FChildren: array of TGreenNode;
+    procedure AppendChild(const AChild: TGreenNode);
+  public
+    constructor Create(
+      const ANodeKind: TGreenNodeKind;
+      const AByteOffset: LongInt;
+      const AByteLength: LongInt;
+      const AText: string
+    );
+    destructor Destroy; override;
+    function NodeKindName: string;
+    function ChildCount: LongInt;
+    function ChildAt(const AIndex: LongInt): TGreenNode;
+    property NodeKind: TGreenNodeKind read FNodeKind;
+    property ByteOffset: LongInt read FByteOffset;
+    property ByteLength: LongInt read FByteLength;
+    property Text: string read FText;
+  end;
 
   TGreenTree = class
   private
@@ -37,6 +89,7 @@ type
     FInterfaceUses: array of string;
     FImplementationUses: array of string;
     FForeignProcedureDecls: array of TForeignProcedureDecl;
+    FRootNode: TGreenNode;
     procedure AppendInterfaceUse(const AUseName: string);
     procedure AppendImplementationUse(const AUseName: string);
     procedure AppendForeignProcedureDecl(
@@ -44,6 +97,7 @@ type
     );
   public
     constructor Create;
+    destructor Destroy; override;
     function RootKindName: string;
     function InterfaceUseCount: LongInt;
     function InterfaceUseAt(const AIndex: LongInt): string;
@@ -53,10 +107,12 @@ type
     function ForeignProcedureDeclAt(
       const AIndex: LongInt
     ): TForeignProcedureDecl;
+    function GreenNodeCount: LongInt;
     property RootKind: TGreenRootKind read FRootKind;
     property DeclaredName: string read FDeclaredName;
     property NodeCount: LongInt read FNodeCount;
     property IsValid: Boolean read FIsValid;
+    property RootNode: TGreenNode read FRootNode;
   end;
 
 function ParseGreenTree(
@@ -64,6 +120,10 @@ function ParseGreenTree(
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): TGreenTree;
+
+function GreenNodeKindLabel(const AKind: TGreenNodeKind): string;
+function GreenNodeIsNil(const ANode: TGreenNode): Boolean;
+function GreenNodeKindNameOf(const ANode: TGreenNode): string;
 
 implementation
 
@@ -117,6 +177,22 @@ begin
   end;
 end;
 
+function GreenNodeKindFromRootKind(const AKind: TGreenRootKind): TGreenNodeKind;
+begin
+  case AKind of
+    grkProgram:
+      Result := gnkProgram;
+    grkUnit:
+      Result := gnkUnit;
+    grkLibrary:
+      Result := gnkLibrary;
+    grkPackage:
+      Result := gnkPackage;
+  else
+    Result := gnkUnknown;
+  end;
+end;
+
 function RootKeywordLabel(const AKind: TGreenRootKind): string;
 begin
   case AKind of
@@ -131,6 +207,77 @@ begin
   else
     Result := 'unknown';
   end;
+end;
+
+function GreenNodeKindLabel(const AKind: TGreenNodeKind): string;
+begin
+  case AKind of
+    gnkUnknown: Result := 'unknown';
+    gnkProgram: Result := 'program';
+    gnkUnit: Result := 'unit';
+    gnkLibrary: Result := 'library';
+    gnkPackage: Result := 'package';
+    gnkUsesClause: Result := 'uses-clause';
+    gnkUseEntry: Result := 'use-entry';
+    gnkInterfaceSection: Result := 'interface-section';
+    gnkImplementationSection: Result := 'implementation-section';
+    gnkForeignProcedureDecl: Result := 'foreign-procedure-decl';
+    gnkBeginBlock: Result := 'begin-block';
+    gnkEndBlock: Result := 'end-block';
+    gnkStatementList: Result := 'statement-list';
+    gnkIfStatement: Result := 'if-statement';
+    gnkWhileStatement: Result := 'while-statement';
+    gnkForStatement: Result := 'for-statement';
+    gnkRepeatStatement: Result := 'repeat-statement';
+    gnkWithStatement: Result := 'with-statement';
+    gnkCaseStatement: Result := 'case-statement';
+    gnkAssignmentStatement: Result := 'assignment-statement';
+    gnkProcedureCallStatement: Result := 'procedure-call-statement';
+    gnkGotoStatement: Result := 'goto-statement';
+    gnkBreakStatement: Result := 'break-statement';
+    gnkContinueStatement: Result := 'continue-statement';
+    gnkExitStatement: Result := 'exit-statement';
+    gnkVarSection: Result := 'var-section';
+    gnkConstSection: Result := 'const-section';
+    gnkTypeSection: Result := 'type-section';
+    gnkVarDecl: Result := 'var-decl';
+    gnkConstDecl: Result := 'const-decl';
+    gnkTypeDecl: Result := 'type-decl';
+    gnkProcedureDecl: Result := 'procedure-decl';
+    gnkFunctionDecl: Result := 'function-decl';
+    gnkRecordType: Result := 'record-type';
+    gnkArrayType: Result := 'array-type';
+    gnkIdentifier: Result := 'identifier';
+    gnkStringLiteral: Result := 'string-literal';
+    gnkIntegerLiteral: Result := 'integer-literal';
+    gnkRealLiteral: Result := 'real-literal';
+    gnkCharLiteral: Result := 'char-literal';
+    gnkBinaryExpression: Result := 'binary-expression';
+    gnkUnaryExpression: Result := 'unary-expression';
+    gnkDotAccess: Result := 'dot-access';
+    gnkArrayAccess: Result := 'array-access';
+    gnkFunctionCall: Result := 'function-call';
+    gnkDereference: Result := 'dereference';
+    gnkAddressOf: Result := 'address-of';
+    gnkParameterList: Result := 'parameter-list';
+    gnkParameterDecl: Result := 'parameter-decl';
+    gnkFieldList: Result := 'field-list';
+    gnkError: Result := 'error';
+  else
+    Result := 'unknown';
+  end;
+end;
+
+function GreenNodeIsNil(const ANode: TGreenNode): Boolean;
+begin
+  Result := ANode = nil;
+end;
+
+function GreenNodeKindNameOf(const ANode: TGreenNode): string;
+begin
+  if ANode = nil then
+    Exit('unknown');
+  Result := ANode.NodeKindName;
 end;
 
 function TokenLabel(const AToken: TToken): string;
@@ -213,16 +360,25 @@ function ParseUsesClause(
   var ACursor: LongInt;
   const ATree: TGreenTree;
   const ASectionKind: TUseSectionKind;
+  const AParent: TGreenNode;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): Boolean;
 var
   UseName: string;
+  UsesNode: TGreenNode;
+  UseToken: TToken;
 begin
   Result := True;
   if CurrentToken(ALexer, ACursor).Kind <> tkUsesKeyword then
     Exit;
 
+  UsesNode := TGreenNode.Create(
+    gnkUsesClause,
+    CurrentToken(ALexer, ACursor).ByteOffset,
+    0,
+    ''
+  );
   Inc(ATree.FNodeCount);
   AdvanceCursor(ACursor);
 
@@ -236,14 +392,23 @@ begin
         CurrentToken(ALexer, ACursor),
         'identifier'
       );
+      UsesNode.Free;
       Exit(False);
     end;
 
-    UseName := CurrentToken(ALexer, ACursor).Lexeme;
+    UseToken := CurrentToken(ALexer, ACursor);
+    UseName := UseToken.Lexeme;
     if ASectionKind = uskInterface then
       ATree.AppendInterfaceUse(UseName)
     else
       ATree.AppendImplementationUse(UseName);
+
+    UsesNode.AppendChild(TGreenNode.Create(
+      gnkUseEntry,
+      UseToken.ByteOffset,
+      Length(UseToken.Lexeme),
+      UseName
+    ));
 
     Inc(ATree.FNodeCount);
     AdvanceCursor(ACursor);
@@ -263,8 +428,12 @@ begin
     ARootFileId,
     ';'
   ) then
+  begin
+    UsesNode.Free;
     Exit(False);
+  end;
 
+  AParent.AppendChild(UsesNode);
   Inc(ATree.FNodeCount);
 end;
 
@@ -286,11 +455,13 @@ end;
 function TryParseForeignProcedureDecl(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
-  const ATree: TGreenTree
+  const ATree: TGreenTree;
+  const AParent: TGreenNode
 ): Boolean;
 var
   ForeignProcedureDecl: TForeignProcedureDecl;
   LookaheadCursor: LongInt;
+  DeclNode: TGreenNode;
 begin
   Result := False;
   if CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword then
@@ -353,6 +524,15 @@ begin
   AdvanceCursor(LookaheadCursor);
 
   ATree.AppendForeignProcedureDecl(ForeignProcedureDecl);
+
+  DeclNode := TGreenNode.Create(
+    gnkForeignProcedureDecl,
+    ForeignProcedureDecl.ByteOffset,
+    0,
+    ForeignProcedureDecl.ProcedureName
+  );
+  AParent.AppendChild(DeclNode);
+
   Inc(ATree.FNodeCount);
   ACursor := LookaheadCursor;
   Result := True;
@@ -362,6 +542,7 @@ function ParseProgramLikeRoot(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const ATree: TGreenTree;
+  const AParent: TGreenNode;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): Boolean;
@@ -371,6 +552,7 @@ begin
     ACursor,
     ATree,
     uskInterface,
+    AParent,
     ADiagnostics,
     ARootFileId
   );
@@ -380,7 +562,7 @@ begin
   while (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
     (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
   begin
-    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree) then
+    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree, AParent) then
       Continue;
     AdvanceCursor(ACursor);
   end;
@@ -396,6 +578,12 @@ begin
   if not Result then
     Exit;
 
+  AParent.AppendChild(TGreenNode.Create(
+    gnkBeginBlock,
+    CurrentToken(ALexer, ACursor - 1).ByteOffset,
+    0,
+    ''
+  ));
   Inc(ATree.FNodeCount);
 end;
 
@@ -403,9 +591,13 @@ function ParseUnitRoot(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const ATree: TGreenTree;
+  const AParent: TGreenNode;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): Boolean;
+var
+  InterfaceNode: TGreenNode;
+  ImplementationNode: TGreenNode;
 begin
   Result := MatchToken(
     ALexer,
@@ -418,12 +610,21 @@ begin
   if not Result then
     Exit;
 
+  InterfaceNode := TGreenNode.Create(
+    gnkInterfaceSection,
+    CurrentToken(ALexer, ACursor - 1).ByteOffset,
+    0,
+    ''
+  );
+  AParent.AppendChild(InterfaceNode);
   Inc(ATree.FNodeCount);
+
   Result := ParseUsesClause(
     ALexer,
     ACursor,
     ATree,
     uskInterface,
+    InterfaceNode,
     ADiagnostics,
     ARootFileId
   );
@@ -433,7 +634,7 @@ begin
   while (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
     (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
   begin
-    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree) then
+    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree, InterfaceNode) then
       Continue;
     AdvanceCursor(ACursor);
   end;
@@ -449,12 +650,21 @@ begin
   if not Result then
     Exit;
 
+  ImplementationNode := TGreenNode.Create(
+    gnkImplementationSection,
+    CurrentToken(ALexer, ACursor - 1).ByteOffset,
+    0,
+    ''
+  );
+  AParent.AppendChild(ImplementationNode);
   Inc(ATree.FNodeCount);
+
   Result := ParseUsesClause(
     ALexer,
     ACursor,
     ATree,
     uskImplementation,
+    ImplementationNode,
     ADiagnostics,
     ARootFileId
   );
@@ -464,7 +674,7 @@ begin
   while (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
     (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
   begin
-    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree) then
+    if TryParseForeignProcedureDecl(ALexer, ACursor, ATree, ImplementationNode) then
       Continue;
     AdvanceCursor(ACursor);
   end;
@@ -480,6 +690,12 @@ begin
   if not Result then
     Exit;
 
+  AParent.AppendChild(TGreenNode.Create(
+    gnkEndBlock,
+    CurrentToken(ALexer, ACursor - 1).ByteOffset,
+    0,
+    ''
+  ));
   Inc(ATree.FNodeCount);
 end;
 
@@ -490,9 +706,16 @@ begin
   FDeclaredName := '';
   FNodeCount := 0;
   FIsValid := False;
+  FRootNode := nil;
   SetLength(FInterfaceUses, 0);
   SetLength(FImplementationUses, 0);
   SetLength(FForeignProcedureDecls, 0);
+end;
+
+destructor TGreenTree.Destroy;
+begin
+  FRootNode.Free;
+  inherited Destroy;
 end;
 
 procedure TGreenTree.AppendInterfaceUse(const AUseName: string);
@@ -578,6 +801,23 @@ begin
   Result := FForeignProcedureDecls[AIndex];
 end;
 
+function TGreenTree.GreenNodeCount: LongInt;
+
+  function CountNodes(const ANode: TGreenNode): LongInt;
+  var
+    Index: LongInt;
+  begin
+    if ANode = nil then
+      Exit(0);
+    Result := 1;
+    for Index := 0 to ANode.ChildCount - 1 do
+      Result := Result + CountNodes(ANode.ChildAt(Index));
+  end;
+
+begin
+  Result := CountNodes(FRootNode);
+end;
+
 function ParseGreenTree(
   const ALexer: TLexerResult;
   const ADiagnostics: TDiagnosticsSink;
@@ -586,6 +826,7 @@ function ParseGreenTree(
 var
   Cursor: LongInt;
   Current: TToken;
+  RootNode: TGreenNode;
 begin
   Result := TGreenTree.Create;
   Cursor := 0;
@@ -603,6 +844,13 @@ begin
     Exit;
   end;
 
+  RootNode := TGreenNode.Create(
+    GreenNodeKindFromRootKind(Result.FRootKind),
+    Current.ByteOffset,
+    Length(Current.Lexeme),
+    Current.Lexeme
+  );
+  Result.FRootNode := RootNode;
   Result.FNodeCount := 1;
   AdvanceCursor(Cursor);
   Current := CurrentToken(ALexer, Cursor);
@@ -614,6 +862,12 @@ begin
   end;
 
   Result.FDeclaredName := Current.Lexeme;
+  RootNode.AppendChild(TGreenNode.Create(
+    gnkIdentifier,
+    Current.ByteOffset,
+    Length(Current.Lexeme),
+    Current.Lexeme
+  ));
   Inc(Result.FNodeCount);
   AdvanceCursor(Cursor);
 
@@ -628,6 +882,7 @@ begin
           ALexer,
           Cursor,
           Result,
+          RootNode,
           ADiagnostics,
           ARootFileId
         ) then
@@ -639,6 +894,7 @@ begin
           ALexer,
           Cursor,
           Result,
+          RootNode,
           ADiagnostics,
           ARootFileId
         ) then
@@ -649,6 +905,57 @@ begin
   end;
 
   Result.FIsValid := not ADiagnostics.HasErrors;
+end;
+
+constructor TGreenNode.Create(
+  const ANodeKind: TGreenNodeKind;
+  const AByteOffset: LongInt;
+  const AByteLength: LongInt;
+  const AText: string
+);
+begin
+  inherited Create;
+  FNodeKind := ANodeKind;
+  FByteOffset := AByteOffset;
+  FByteLength := AByteLength;
+  FText := AText;
+  SetLength(FChildren, 0);
+end;
+
+destructor TGreenNode.Destroy;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FChildren) - 1 do
+    FChildren[Index].Free;
+  SetLength(FChildren, 0);
+  inherited Destroy;
+end;
+
+procedure TGreenNode.AppendChild(const AChild: TGreenNode);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FChildren);
+  SetLength(FChildren, NextIndex + 1);
+  FChildren[NextIndex] := AChild;
+end;
+
+function TGreenNode.NodeKindName: string;
+begin
+  Result := GreenNodeKindLabel(FNodeKind);
+end;
+
+function TGreenNode.ChildCount: LongInt;
+begin
+  Result := Length(FChildren);
+end;
+
+function TGreenNode.ChildAt(const AIndex: LongInt): TGreenNode;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FChildren)) then
+    Exit(nil);
+  Result := FChildren[AIndex];
 end;
 
 end.
