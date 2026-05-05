@@ -1,7 +1,64 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-02 记录为准。
+2026-05-05 记录为准。
+
+## Session: 2026-05-05 (Phase 1 Driver Decomposition + Phase 2 Compiler Core Hardening)
+
+### Phase 1: Monolithic Driver Decomposition (4140 → 372 lines)
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-05-02-compiler-core-hardening-plan.md` 之前的开发计划，
+    把 `tools/stage0/nextpas.pas` 从 4140 行单体驱动拆分为纯 CLI 解析 + 命令分发（372 行）。
+  - 提取 `nextpas_projection_types.pas`（237 行）：12 个投影 record 类型 + TNextPasState。
+  - 提取 `nextpas_json_helpers.pas`（142 行）：JsonEscape, JsonString, AppendJsonField 等。
+  - 提取 `nextpas_projection_json.pas`（825 行）：~20 个 Append*ProjectionJsonFields + BuildCommandEnvelopeJson。
+  - 提取 `nextpas_projection_text.pas`（999 行）：WriteProjectionLine + ~20 个 Print*Projection。
+  - 提取 `nextpas_projection_context.pas`（~796 行）：~30 个 Clear*/Capture* 过程。
+  - 提取 `nextpas_command_envelope.pas`（~321 行）：EnvelopeSelectorName, PrintUsage, Fail 等。
+  - 提取 `nextpas_command_build.pas`（~335 行）：RunBuild + TargetFactsFromConfig + 路径工具函数。
+  - 提取 `nextpas_command_test.pas`（~75 行）：RunTest。
+  - 提取 `nextpas_command_env.pas`（~79 行）：RunEnvStatus。
+  - 提取 `nextpas_command_doctor.pas`（~85 行）：RunDoctor。
+  - 提取 `nextpas_command_query.pas`（~108 行）：RunQuerySymbols。
+  - 提取 `nextpas_command_pkg.pas`（~83 行）：RunPkgInspect。
+  - 消除所有 Active* 全局变量，改为 TNextPasState 参数传入。
+  - 消除 4 处重复 JSON helper 实现（np_compilation_session, np_backend_plan,
+    np_toolchain_plan, np_diagnostics_sink），统一到 nextpas_json_helpers。
+  - 全部 verify-local=pass 通过，所有命令表面输出不变。
+
+### Phase 2: Compiler Core Hardening
+
+- **Status:** completed
+- Actions taken:
+  - **2.1 Resolver error recovery**：已在 Batch 35 完成，multiple-missing-units-check=pass。
+  - **2.2 Malformed manifest graceful degradation**：
+    新增 `TryLoadPackageManifestInfo`（np_package_manifest.pas）和
+    `TryResolveWorkspaceModel`（np_workspace_model.pas），manifest 解析失败时发诊断
+    但继续 workspace-root-only 模型；新增 tests/fixtures/malformed_manifest/ fixture。
+  - **2.3 Diagnostic model extension**：
+    在 np_diagnostics_sink.pas 添加 TRelatedInformation + TSuggestedFix record 类型和
+    对应数组字段；DiagnosticsJson 已包含这些字段；resolver 诊断增强留待后续需求明确。
+  - **2.4 Search index staleness tracking**：
+    在 np_unit_resolver.pas 的 TRootSearchIndex 添加 LastScanTimestamp: Int64，
+    EnsureRootIndex 后设置时间戳，暴露 SearchIndexLastScanTimestamp accessor。
+  - **2.5 Document synchronization**：进行中。
+
+**Commits created (Phase 1 + Phase 2):**
+- `467a960` refactor: extract command envelope + Fail into separate unit
+- `f1c24a9` refactor: reduce command_envelope interface to public API only
+- `23013f9` refactor: extract RunBuild + path utilities into command_build unit
+- `9b5f1bd` refactor: extract all command handlers into dedicated units
+- `049bfa6` refactor: eliminate duplicate JSON helpers across compiler modules
+- `af84379` fix: make nextpas_json_helpers discoverable by compiler modules
+- `306fd9c` feat: add malformed manifest graceful degradation
+- `11b6bf8` feat: extend diagnostic model with RelatedInformation + SuggestedFix
+- `becc05b` feat: add staleness tracking to unit search index
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass
+
+**Next:** Phase 3 (Lexer extension): expand from ~35 tokens to 130+
 
 ## Session: 2026-05-02 (Critical RTL Implementation - Process Execution Works!)
 
