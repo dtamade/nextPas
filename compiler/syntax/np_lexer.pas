@@ -23,15 +23,132 @@ type
     tkCdeclKeyword,
     tkBeginKeyword,
     tkEndKeyword,
+    tkIfKeyword,
+    tkThenKeyword,
+    tkElseKeyword,
+    tkWhileKeyword,
+    tkDoKeyword,
+    tkForKeyword,
+    tkToKeyword,
+    tkDownToKeyword,
+    tkRepeatKeyword,
+    tkUntilKeyword,
+    tkWithKeyword,
+    tkCaseKeyword,
+    tkOfKeyword,
+    tkGotoKeyword,
+    tkBreakKeyword,
+    tkContinueKeyword,
+    tkExitKeyword,
+    tkVarKeyword,
+    tkConstKeyword,
+    tkTypeKeyword,
+    tkFunctionKeyword,
+    tkArrayKeyword,
+    tkSetKeyword,
+    tkRecordKeyword,
+    tkStringKeyword,
+    tkClassKeyword,
+    tkObjectKeyword,
+    tkConstructorKeyword,
+    tkDestructorKeyword,
+    tkPropertyKeyword,
+    tkInitializationKeyword,
+    tkFinalizationKeyword,
+    tkExportsKeyword,
+    tkLabelKeyword,
+    tkThreadVarKeyword,
+    tkPublishedKeyword,
+    tkPublicKeyword,
+    tkPrivateKeyword,
+    tkProtectedKeyword,
+    tkVirtualKeyword,
+    tkOverrideKeyword,
+    tkAbstractKeyword,
+    tkReintroduceKeyword,
+    tkOverloadKeyword,
+    tkDynamicKeyword,
+    tkMessageKeyword,
+    tkStaticKeyword,
+    tkInlineKeyword,
+    tkForwardKeyword,
+    tkDeprecatedKeyword,
+    tkPlatformKeyword,
+    tkExperimentalKeyword,
+    tkStdCallKeyword,
+    tkSafeCallKeyword,
+    tkRegisterKeyword,
+    tkPascalKeyword,
+    tkFarKeyword,
+    tkNearKeyword,
+    tkCppDeclKeyword,
+    tkVarArgsKeyword,
+    tkOutKeyword,
+    tkAbsoluteKeyword,
+    tkAsmKeyword,
+    tkAndKeyword,
+    tkOrKeyword,
+    tkNotKeyword,
+    tkXorKeyword,
+    tkShlKeyword,
+    tkShrKeyword,
+    tkDivKeyword,
+    tkModKeyword,
+    tkInKeyword,
+    tkIsKeyword,
+    tkAsKeyword,
+    tkNilKeyword,
+    tkTrueKeyword,
+    tkFalseKeyword,
+    tkRaiseKeyword,
+    tkTryKeyword,
+    tkExceptKeyword,
+    tkFinallyKeyword,
+    tkOnKeyword,
+    tkInheritedKeyword,
+    tkSelfKeyword,
+    tkFileKeyword,
+    tkResourceStringKeyword,
+    tkStrictKeyword,
+    tkOperatorKeyword,
+    tkGenericKeyword,
+    tkSpecializeKeyword,
+    tkReferenceKeyword,
+    tkPackedKeyword,
+    tkContainsKeyword,
+    tkRequiresKeyword,
     tkIdentifier,
     tkStringLiteral,
+    tkIntegerLiteral,
+    tkRealLiteral,
+    tkCharLiteral,
+    tkCompilerDirective,
     tkSemicolon,
     tkDot,
-    tkLParen,
-    tkRParen,
+    tkDotDot,
     tkComma,
     tkColon,
     tkAssign,
+    tkPlusAssign,
+    tkMinusAssign,
+    tkStarAssign,
+    tkSlashAssign,
+    tkLParen,
+    tkRParen,
+    tkLBracket,
+    tkRBracket,
+    tkPlus,
+    tkMinus,
+    tkStar,
+    tkSlash,
+    tkEquals,
+    tkNotEquals,
+    tkLessThan,
+    tkGreaterThan,
+    tkLessEqual,
+    tkGreaterEqual,
+    tkAt,
+    tkCaret,
     tkEOF
   );
 
@@ -75,33 +192,115 @@ var
   Lowered: string;
 begin
   Lowered := LowerCase(ALexeme);
-  if Lowered = 'program' then
-    Exit(tkProgramKeyword);
-  if Lowered = 'unit' then
-    Exit(tkUnitKeyword);
-  if Lowered = 'library' then
-    Exit(tkLibraryKeyword);
-  if Lowered = 'package' then
-    Exit(tkPackageKeyword);
-  if Lowered = 'uses' then
-    Exit(tkUsesKeyword);
-  if Lowered = 'interface' then
-    Exit(tkInterfaceKeyword);
-  if Lowered = 'implementation' then
-    Exit(tkImplementationKeyword);
-  if Lowered = 'procedure' then
-    Exit(tkProcedureKeyword);
-  if Lowered = 'external' then
-    Exit(tkExternalKeyword);
-  if Lowered = 'name' then
-    Exit(tkNameKeyword);
-  if Lowered = 'cdecl' then
-    Exit(tkCdeclKeyword);
-  if Lowered = 'begin' then
-    Exit(tkBeginKeyword);
-  if Lowered = 'end' then
-    Exit(tkEndKeyword);
-
+  case Lowered of
+    'program': Exit(tkProgramKeyword);
+    'unit': Exit(tkUnitKeyword);
+    'library': Exit(tkLibraryKeyword);
+    'package': Exit(tkPackageKeyword);
+    'uses': Exit(tkUsesKeyword);
+    'interface': Exit(tkInterfaceKeyword);
+    'implementation': Exit(tkImplementationKeyword);
+    'procedure': Exit(tkProcedureKeyword);
+    'function': Exit(tkFunctionKeyword);
+    'external': Exit(tkExternalKeyword);
+    'name': Exit(tkNameKeyword);
+    'cdecl': Exit(tkCdeclKeyword);
+    'begin': Exit(tkBeginKeyword);
+    'end': Exit(tkEndKeyword);
+    'if': Exit(tkIfKeyword);
+    'then': Exit(tkThenKeyword);
+    'else': Exit(tkElseKeyword);
+    'while': Exit(tkWhileKeyword);
+    'do': Exit(tkDoKeyword);
+    'for': Exit(tkForKeyword);
+    'to': Exit(tkToKeyword);
+    'downto': Exit(tkDownToKeyword);
+    'repeat': Exit(tkRepeatKeyword);
+    'until': Exit(tkUntilKeyword);
+    'with': Exit(tkWithKeyword);
+    'case': Exit(tkCaseKeyword);
+    'of': Exit(tkOfKeyword);
+    'goto': Exit(tkGotoKeyword);
+    'break': Exit(tkBreakKeyword);
+    'continue': Exit(tkContinueKeyword);
+    'exit': Exit(tkExitKeyword);
+    'var': Exit(tkVarKeyword);
+    'const': Exit(tkConstKeyword);
+    'type': Exit(tkTypeKeyword);
+    'array': Exit(tkArrayKeyword);
+    'set': Exit(tkSetKeyword);
+    'record': Exit(tkRecordKeyword);
+    'string': Exit(tkStringKeyword);
+    'class': Exit(tkClassKeyword);
+    'object': Exit(tkObjectKeyword);
+    'constructor': Exit(tkConstructorKeyword);
+    'destructor': Exit(tkDestructorKeyword);
+    'property': Exit(tkPropertyKeyword);
+    'initialization': Exit(tkInitializationKeyword);
+    'finalization': Exit(tkFinalizationKeyword);
+    'exports': Exit(tkExportsKeyword);
+    'label': Exit(tkLabelKeyword);
+    'threadvar': Exit(tkThreadVarKeyword);
+    'published': Exit(tkPublishedKeyword);
+    'public': Exit(tkPublicKeyword);
+    'private': Exit(tkPrivateKeyword);
+    'protected': Exit(tkProtectedKeyword);
+    'virtual': Exit(tkVirtualKeyword);
+    'override': Exit(tkOverrideKeyword);
+    'abstract': Exit(tkAbstractKeyword);
+    'reintroduce': Exit(tkReintroduceKeyword);
+    'overload': Exit(tkOverloadKeyword);
+    'dynamic': Exit(tkDynamicKeyword);
+    'message': Exit(tkMessageKeyword);
+    'static': Exit(tkStaticKeyword);
+    'inline': Exit(tkInlineKeyword);
+    'forward': Exit(tkForwardKeyword);
+    'deprecated': Exit(tkDeprecatedKeyword);
+    'platform': Exit(tkPlatformKeyword);
+    'experimental': Exit(tkExperimentalKeyword);
+    'stdcall': Exit(tkStdCallKeyword);
+    'safecall': Exit(tkSafeCallKeyword);
+    'register': Exit(tkRegisterKeyword);
+    'pascal': Exit(tkPascalKeyword);
+    'far': Exit(tkFarKeyword);
+    'near': Exit(tkNearKeyword);
+    'cppdecl': Exit(tkCppDeclKeyword);
+    'varargs': Exit(tkVarArgsKeyword);
+    'out': Exit(tkOutKeyword);
+    'absolute': Exit(tkAbsoluteKeyword);
+    'asm': Exit(tkAsmKeyword);
+    'and': Exit(tkAndKeyword);
+    'or': Exit(tkOrKeyword);
+    'not': Exit(tkNotKeyword);
+    'xor': Exit(tkXorKeyword);
+    'shl': Exit(tkShlKeyword);
+    'shr': Exit(tkShrKeyword);
+    'div': Exit(tkDivKeyword);
+    'mod': Exit(tkModKeyword);
+    'in': Exit(tkInKeyword);
+    'is': Exit(tkIsKeyword);
+    'as': Exit(tkAsKeyword);
+    'nil': Exit(tkNilKeyword);
+    'true': Exit(tkTrueKeyword);
+    'false': Exit(tkFalseKeyword);
+    'raise': Exit(tkRaiseKeyword);
+    'try': Exit(tkTryKeyword);
+    'except': Exit(tkExceptKeyword);
+    'finally': Exit(tkFinallyKeyword);
+    'on': Exit(tkOnKeyword);
+    'inherited': Exit(tkInheritedKeyword);
+    'self': Exit(tkSelfKeyword);
+    'file': Exit(tkFileKeyword);
+    'resourcestring': Exit(tkResourceStringKeyword);
+    'strict': Exit(tkStrictKeyword);
+    'operator': Exit(tkOperatorKeyword);
+    'generic': Exit(tkGenericKeyword);
+    'specialize': Exit(tkSpecializeKeyword);
+    'reference': Exit(tkReferenceKeyword);
+    'packed': Exit(tkPackedKeyword);
+    'contains': Exit(tkContainsKeyword);
+    'requires': Exit(tkRequiresKeyword);
+  end;
   Result := tkIdentifier;
 end;
 
@@ -163,6 +362,127 @@ begin
   Result := Copy(ASourceText, StartIndex, AIndex - StartIndex);
 end;
 
+function IsDigit(const AChar: Char): Boolean;
+begin
+  Result := AChar in ['0'..'9'];
+end;
+
+function IsHexDigit(const AChar: Char): Boolean;
+begin
+  Result := (AChar in ['0'..'9']) or (AChar in ['A'..'F']) or (AChar in ['a'..'f']);
+end;
+
+function ReadIntegerLiteral(const ASourceText: string;
+  var AIndex: SizeInt; out ALexeme: string): Boolean;
+var
+  StartIndex: SizeInt;
+begin
+  StartIndex := AIndex;
+  if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '$') then
+  begin
+    Inc(AIndex);
+    if (AIndex > Length(ASourceText)) or not IsHexDigit(ASourceText[AIndex]) then
+    begin
+      AIndex := StartIndex;
+      ALexeme := '';
+      Exit(False);
+    end;
+    while (AIndex <= Length(ASourceText)) and IsHexDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end
+  else
+  begin
+    while (AIndex <= Length(ASourceText)) and IsDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end;
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Result := True;
+end;
+
+function ReadCharLiteral(const ASourceText: string;
+  var AIndex: SizeInt; out ALexeme: string): Boolean;
+var
+  StartIndex: SizeInt;
+begin
+  StartIndex := AIndex;
+  Inc(AIndex);
+  if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '$') then
+  begin
+    Inc(AIndex);
+    if (AIndex > Length(ASourceText)) or not IsHexDigit(ASourceText[AIndex]) then
+    begin
+      AIndex := StartIndex;
+      ALexeme := '';
+      Exit(False);
+    end;
+    while (AIndex <= Length(ASourceText)) and IsHexDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end
+  else
+  begin
+    if (AIndex > Length(ASourceText)) or not IsDigit(ASourceText[AIndex]) then
+    begin
+      AIndex := StartIndex;
+      ALexeme := '';
+      Exit(False);
+    end;
+    while (AIndex <= Length(ASourceText)) and IsDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end;
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Result := True;
+end;
+
+function TryReadCompilerDirective(const ASourceText: string;
+  var AIndex: SizeInt; out ALexeme: string): Boolean;
+var
+  StartIndex: SizeInt;
+begin
+  if (AIndex > Length(ASourceText)) or (ASourceText[AIndex] <> '{') then
+    Exit(False);
+  if (AIndex >= Length(ASourceText)) or (ASourceText[AIndex + 1] <> '$') then
+    Exit(False);
+
+  StartIndex := AIndex;
+  Inc(AIndex, 2);
+  while (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] <> '}') do
+    Inc(AIndex);
+  if AIndex <= Length(ASourceText) then
+    Inc(AIndex);
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Exit(True);
+end;
+
+function TryReadParenStarDirective(const ASourceText: string;
+  var AIndex: SizeInt; out ALexeme: string): Boolean;
+var
+  StartIndex: SizeInt;
+begin
+  if (AIndex + 2 > Length(ASourceText)) then
+    Exit(False);
+  if (ASourceText[AIndex] <> '(') or (ASourceText[AIndex + 1] <> '*') then
+    Exit(False);
+  if (AIndex + 2 > Length(ASourceText)) or (ASourceText[AIndex + 2] <> '$') then
+    Exit(False);
+
+  StartIndex := AIndex;
+  Inc(AIndex, 3);
+  while AIndex <= Length(ASourceText) - 1 do
+  begin
+    if (ASourceText[AIndex] = '*') and (ASourceText[AIndex + 1] = ')') then
+    begin
+      Inc(AIndex, 2);
+      ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+      Exit(True);
+    end;
+    Inc(AIndex);
+  end;
+  if AIndex <= Length(ASourceText) then
+    Inc(AIndex);
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Exit(True);
+end;
+
 constructor TLexerResult.Create(const ASourceText: string);
 begin
   inherited Create;
@@ -188,8 +508,13 @@ end;
 procedure TLexerResult.LexSource(const ASourceText: string);
 var
   CurrentChar: Char;
-  StartIndex: SizeInt;
+  ExponentSaveIndex: SizeInt;
+  IntegerLexeme: string;
+  IsReal: Boolean;
   Lexeme: string;
+  NumberStartIndex: SizeInt;
+  SaveIndex: SizeInt;
+  StartIndex: SizeInt;
 begin
   StartIndex := 1;
   while StartIndex <= Length(ASourceText) do
@@ -204,6 +529,12 @@ begin
 
     if CurrentChar = '{' then
     begin
+      SaveIndex := StartIndex;
+      if TryReadCompilerDirective(ASourceText, StartIndex, Lexeme) then
+      begin
+        AddToken(tkCompilerDirective, Lexeme, SaveIndex - 1);
+        Continue;
+      end;
       SkipBraceComment(ASourceText, StartIndex);
       Continue;
     end;
@@ -212,6 +543,12 @@ begin
       (StartIndex < Length(ASourceText)) and
       (ASourceText[StartIndex + 1] = '*') then
     begin
+      SaveIndex := StartIndex;
+      if TryReadParenStarDirective(ASourceText, StartIndex, Lexeme) then
+      begin
+        AddToken(tkCompilerDirective, Lexeme, SaveIndex - 1);
+        Continue;
+      end;
       SkipParenStarComment(ASourceText, StartIndex);
       Continue;
     end;
@@ -221,6 +558,125 @@ begin
       (ASourceText[StartIndex + 1] = '/') then
     begin
       SkipLineComment(ASourceText, StartIndex);
+      Continue;
+    end;
+
+    if CurrentChar = '#' then
+    begin
+      SaveIndex := StartIndex;
+      if ReadCharLiteral(ASourceText, StartIndex, Lexeme) then
+        AddToken(tkCharLiteral, Lexeme, SaveIndex - 1)
+      else
+        AddToken(tkUnknown, '#', SaveIndex - 1);
+      Continue;
+    end;
+
+    if (CurrentChar = '$') or IsDigit(CurrentChar) then
+    begin
+      SaveIndex := StartIndex;
+      if not ReadIntegerLiteral(ASourceText, StartIndex, IntegerLexeme) then
+      begin
+        AddToken(tkUnknown, '$', SaveIndex - 1);
+        Continue;
+      end;
+      NumberStartIndex := SaveIndex;
+      IsReal := False;
+      if (CurrentChar <> '$') and
+        (StartIndex <= Length(ASourceText)) and (ASourceText[StartIndex] = '.') and
+        ((StartIndex >= Length(ASourceText)) or (ASourceText[StartIndex + 1] <> '.')) then
+      begin
+        if (StartIndex + 1 <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex + 1]) then
+        begin
+          IntegerLexeme := IntegerLexeme + '.';
+          Inc(StartIndex);
+          while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
+          begin
+            IntegerLexeme := IntegerLexeme + ASourceText[StartIndex];
+            Inc(StartIndex);
+          end;
+          IsReal := True;
+          if (StartIndex <= Length(ASourceText)) and
+            ((ASourceText[StartIndex] = 'e') or (ASourceText[StartIndex] = 'E')) then
+          begin
+            ExponentSaveIndex := StartIndex;
+            Lexeme := IntegerLexeme + ASourceText[StartIndex];
+            Inc(StartIndex);
+            if (StartIndex <= Length(ASourceText)) and
+              ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
+            begin
+              Lexeme := Lexeme + ASourceText[StartIndex];
+              Inc(StartIndex);
+            end;
+            if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
+            begin
+              while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
+              begin
+                Lexeme := Lexeme + ASourceText[StartIndex];
+                Inc(StartIndex);
+              end;
+              IntegerLexeme := Lexeme;
+            end
+            else
+              StartIndex := ExponentSaveIndex;
+          end;
+        end
+        else if (StartIndex + 1 <= Length(ASourceText)) and
+          ((ASourceText[StartIndex + 1] = 'e') or (ASourceText[StartIndex + 1] = 'E')) then
+        begin
+          IntegerLexeme := IntegerLexeme + '.';
+          Inc(StartIndex);
+          ExponentSaveIndex := StartIndex;
+          Lexeme := IntegerLexeme + ASourceText[StartIndex];
+          Inc(StartIndex);
+          if (StartIndex <= Length(ASourceText)) and
+            ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
+          begin
+            Lexeme := Lexeme + ASourceText[StartIndex];
+            Inc(StartIndex);
+          end;
+          if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
+          begin
+            while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
+            begin
+              Lexeme := Lexeme + ASourceText[StartIndex];
+              Inc(StartIndex);
+            end;
+            IntegerLexeme := Lexeme;
+            IsReal := True;
+          end
+          else
+            StartIndex := ExponentSaveIndex;
+        end;
+      end
+      else if (CurrentChar <> '$') and (StartIndex <= Length(ASourceText)) and
+        ((ASourceText[StartIndex] = 'e') or (ASourceText[StartIndex] = 'E')) then
+      begin
+        ExponentSaveIndex := StartIndex;
+        Lexeme := IntegerLexeme + ASourceText[StartIndex];
+        Inc(StartIndex);
+        if (StartIndex <= Length(ASourceText)) and
+          ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
+        begin
+          Lexeme := Lexeme + ASourceText[StartIndex];
+          Inc(StartIndex);
+        end;
+        if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
+        begin
+          while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
+          begin
+            Lexeme := Lexeme + ASourceText[StartIndex];
+            Inc(StartIndex);
+          end;
+          IntegerLexeme := Lexeme;
+          IsReal := True;
+        end
+        else
+          StartIndex := ExponentSaveIndex;
+      end;
+      if IsReal then
+        AddToken(tkRealLiteral, IntegerLexeme, NumberStartIndex - 1)
+      else
+        AddToken(tkIntegerLiteral, IntegerLexeme, NumberStartIndex - 1);
       Continue;
     end;
 
@@ -240,8 +696,9 @@ begin
 
     if CurrentChar = '''' then
     begin
+      SaveIndex := StartIndex;
       Lexeme := ReadStringLiteral(ASourceText, StartIndex);
-      AddToken(tkStringLiteral, Lexeme, StartIndex - Length(Lexeme) - 1);
+      AddToken(tkStringLiteral, Lexeme, SaveIndex - 1);
       Continue;
     end;
 
@@ -249,11 +706,16 @@ begin
       ';':
         AddToken(tkSemicolon, ';', StartIndex - 1);
       '.':
-        AddToken(tkDot, '.', StartIndex - 1);
-      '(':
-        AddToken(tkLParen, '(', StartIndex - 1);
-      ')':
-        AddToken(tkRParen, ')', StartIndex - 1);
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '.') then
+          begin
+            AddToken(tkDotDot, '..', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkDot, '.', StartIndex - 1);
+        end;
       ',':
         AddToken(tkComma, ',', StartIndex - 1);
       ':':
@@ -267,6 +729,92 @@ begin
           else
             AddToken(tkColon, ':', StartIndex - 1);
         end;
+      '+':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkPlusAssign, '+=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkPlus, '+', StartIndex - 1);
+        end;
+      '-':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkMinusAssign, '-=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkMinus, '-', StartIndex - 1);
+        end;
+      '*':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkStarAssign, '*=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkStar, '*', StartIndex - 1);
+        end;
+      '/':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkSlashAssign, '/=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkSlash, '/', StartIndex - 1);
+        end;
+      '=':
+        AddToken(tkEquals, '=', StartIndex - 1);
+      '<':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '>') then
+          begin
+            AddToken(tkNotEquals, '<>', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkLessEqual, '<=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkLessThan, '<', StartIndex - 1);
+        end;
+      '>':
+        begin
+          if (StartIndex < Length(ASourceText)) and
+            (ASourceText[StartIndex + 1] = '=') then
+          begin
+            AddToken(tkGreaterEqual, '>=', StartIndex - 1);
+            Inc(StartIndex);
+          end
+          else
+            AddToken(tkGreaterThan, '>', StartIndex - 1);
+        end;
+      '(':
+        AddToken(tkLParen, '(', StartIndex - 1);
+      ')':
+        AddToken(tkRParen, ')', StartIndex - 1);
+      '[':
+        AddToken(tkLBracket, '[', StartIndex - 1);
+      ']':
+        AddToken(tkRBracket, ']', StartIndex - 1);
+      '@':
+        AddToken(tkAt, '@', StartIndex - 1);
+      '^':
+        AddToken(tkCaret, '^', StartIndex - 1);
     else
       AddToken(tkUnknown, CurrentChar, StartIndex - 1);
     end;
@@ -298,52 +846,146 @@ end;
 function TokenKindName(const AKind: TTokenKind): string;
 begin
   case AKind of
-    tkProgramKeyword:
-      Result := 'program';
-    tkUnitKeyword:
-      Result := 'unit';
-    tkLibraryKeyword:
-      Result := 'library';
-    tkPackageKeyword:
-      Result := 'package';
-    tkUsesKeyword:
-      Result := 'uses';
-    tkInterfaceKeyword:
-      Result := 'interface';
-    tkImplementationKeyword:
-      Result := 'implementation';
-    tkProcedureKeyword:
-      Result := 'procedure';
-    tkExternalKeyword:
-      Result := 'external';
-    tkNameKeyword:
-      Result := 'name';
-    tkCdeclKeyword:
-      Result := 'cdecl';
-    tkBeginKeyword:
-      Result := 'begin';
-    tkEndKeyword:
-      Result := 'end';
-    tkIdentifier:
-      Result := 'identifier';
-    tkStringLiteral:
-      Result := 'string-literal';
-    tkSemicolon:
-      Result := ';';
-    tkDot:
-      Result := '.';
-    tkLParen:
-      Result := '(';
-    tkRParen:
-      Result := ')';
-    tkComma:
-      Result := ',';
-    tkColon:
-      Result := ':';
-    tkAssign:
-      Result := ':=';
-    tkEOF:
-      Result := 'end-of-file';
+    tkProgramKeyword: Result := 'program';
+    tkUnitKeyword: Result := 'unit';
+    tkLibraryKeyword: Result := 'library';
+    tkPackageKeyword: Result := 'package';
+    tkUsesKeyword: Result := 'uses';
+    tkInterfaceKeyword: Result := 'interface';
+    tkImplementationKeyword: Result := 'implementation';
+    tkProcedureKeyword: Result := 'procedure';
+    tkFunctionKeyword: Result := 'function';
+    tkExternalKeyword: Result := 'external';
+    tkNameKeyword: Result := 'name';
+    tkCdeclKeyword: Result := 'cdecl';
+    tkBeginKeyword: Result := 'begin';
+    tkEndKeyword: Result := 'end';
+    tkIfKeyword: Result := 'if';
+    tkThenKeyword: Result := 'then';
+    tkElseKeyword: Result := 'else';
+    tkWhileKeyword: Result := 'while';
+    tkDoKeyword: Result := 'do';
+    tkForKeyword: Result := 'for';
+    tkToKeyword: Result := 'to';
+    tkDownToKeyword: Result := 'downto';
+    tkRepeatKeyword: Result := 'repeat';
+    tkUntilKeyword: Result := 'until';
+    tkWithKeyword: Result := 'with';
+    tkCaseKeyword: Result := 'case';
+    tkOfKeyword: Result := 'of';
+    tkGotoKeyword: Result := 'goto';
+    tkBreakKeyword: Result := 'break';
+    tkContinueKeyword: Result := 'continue';
+    tkExitKeyword: Result := 'exit';
+    tkVarKeyword: Result := 'var';
+    tkConstKeyword: Result := 'const';
+    tkTypeKeyword: Result := 'type';
+    tkArrayKeyword: Result := 'array';
+    tkSetKeyword: Result := 'set';
+    tkRecordKeyword: Result := 'record';
+    tkStringKeyword: Result := 'string';
+    tkClassKeyword: Result := 'class';
+    tkObjectKeyword: Result := 'object';
+    tkConstructorKeyword: Result := 'constructor';
+    tkDestructorKeyword: Result := 'destructor';
+    tkPropertyKeyword: Result := 'property';
+    tkInitializationKeyword: Result := 'initialization';
+    tkFinalizationKeyword: Result := 'finalization';
+    tkExportsKeyword: Result := 'exports';
+    tkLabelKeyword: Result := 'label';
+    tkThreadVarKeyword: Result := 'threadvar';
+    tkPublishedKeyword: Result := 'published';
+    tkPublicKeyword: Result := 'public';
+    tkPrivateKeyword: Result := 'private';
+    tkProtectedKeyword: Result := 'protected';
+    tkVirtualKeyword: Result := 'virtual';
+    tkOverrideKeyword: Result := 'override';
+    tkAbstractKeyword: Result := 'abstract';
+    tkReintroduceKeyword: Result := 'reintroduce';
+    tkOverloadKeyword: Result := 'overload';
+    tkDynamicKeyword: Result := 'dynamic';
+    tkMessageKeyword: Result := 'message';
+    tkStaticKeyword: Result := 'static';
+    tkInlineKeyword: Result := 'inline';
+    tkForwardKeyword: Result := 'forward';
+    tkDeprecatedKeyword: Result := 'deprecated';
+    tkPlatformKeyword: Result := 'platform';
+    tkExperimentalKeyword: Result := 'experimental';
+    tkStdCallKeyword: Result := 'stdcall';
+    tkSafeCallKeyword: Result := 'safecall';
+    tkRegisterKeyword: Result := 'register';
+    tkPascalKeyword: Result := 'pascal';
+    tkFarKeyword: Result := 'far';
+    tkNearKeyword: Result := 'near';
+    tkCppDeclKeyword: Result := 'cppdecl';
+    tkVarArgsKeyword: Result := 'varargs';
+    tkOutKeyword: Result := 'out';
+    tkAbsoluteKeyword: Result := 'absolute';
+    tkAsmKeyword: Result := 'asm';
+    tkAndKeyword: Result := 'and';
+    tkOrKeyword: Result := 'or';
+    tkNotKeyword: Result := 'not';
+    tkXorKeyword: Result := 'xor';
+    tkShlKeyword: Result := 'shl';
+    tkShrKeyword: Result := 'shr';
+    tkDivKeyword: Result := 'div';
+    tkModKeyword: Result := 'mod';
+    tkInKeyword: Result := 'in';
+    tkIsKeyword: Result := 'is';
+    tkAsKeyword: Result := 'as';
+    tkNilKeyword: Result := 'nil';
+    tkTrueKeyword: Result := 'true';
+    tkFalseKeyword: Result := 'false';
+    tkRaiseKeyword: Result := 'raise';
+    tkTryKeyword: Result := 'try';
+    tkExceptKeyword: Result := 'except';
+    tkFinallyKeyword: Result := 'finally';
+    tkOnKeyword: Result := 'on';
+    tkInheritedKeyword: Result := 'inherited';
+    tkSelfKeyword: Result := 'self';
+    tkFileKeyword: Result := 'file';
+    tkResourceStringKeyword: Result := 'resourcestring';
+    tkStrictKeyword: Result := 'strict';
+    tkOperatorKeyword: Result := 'operator';
+    tkGenericKeyword: Result := 'generic';
+    tkSpecializeKeyword: Result := 'specialize';
+    tkReferenceKeyword: Result := 'reference';
+    tkPackedKeyword: Result := 'packed';
+    tkContainsKeyword: Result := 'contains';
+    tkRequiresKeyword: Result := 'requires';
+    tkIdentifier: Result := 'identifier';
+    tkStringLiteral: Result := 'string-literal';
+    tkIntegerLiteral: Result := 'integer-literal';
+    tkRealLiteral: Result := 'real-literal';
+    tkCharLiteral: Result := 'char-literal';
+    tkCompilerDirective: Result := 'compiler-directive';
+    tkSemicolon: Result := ';';
+    tkDot: Result := '.';
+    tkDotDot: Result := '..';
+    tkComma: Result := ',';
+    tkColon: Result := ':';
+    tkAssign: Result := ':=';
+    tkPlusAssign: Result := '+=';
+    tkMinusAssign: Result := '-=';
+    tkStarAssign: Result := '*=';
+    tkSlashAssign: Result := '/=';
+    tkLParen: Result := '(';
+    tkRParen: Result := ')';
+    tkLBracket: Result := '[';
+    tkRBracket: Result := ']';
+    tkPlus: Result := '+';
+    tkMinus: Result := '-';
+    tkStar: Result := '*';
+    tkSlash: Result := '/';
+    tkEquals: Result := '=';
+    tkNotEquals: Result := '<>';
+    tkLessThan: Result := '<';
+    tkGreaterThan: Result := '>';
+    tkLessEqual: Result := '<=';
+    tkGreaterEqual: Result := '>=';
+    tkAt: Result := '@';
+    tkCaret: Result := '^';
+    tkEOF: Result := 'end-of-file';
   else
     Result := 'unknown';
   end;
