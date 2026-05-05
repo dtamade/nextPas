@@ -623,10 +623,9 @@ begin
         else if (StartIndex + 1 <= Length(ASourceText)) and
           ((ASourceText[StartIndex + 1] = 'e') or (ASourceText[StartIndex + 1] = 'E')) then
         begin
-          IntegerLexeme := IntegerLexeme + '.';
-          Inc(StartIndex);
           ExponentSaveIndex := StartIndex;
-          Lexeme := IntegerLexeme + ASourceText[StartIndex];
+          Inc(StartIndex);
+          Lexeme := IntegerLexeme + '.' + ASourceText[StartIndex];
           Inc(StartIndex);
           if (StartIndex <= Length(ASourceText)) and
             ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
