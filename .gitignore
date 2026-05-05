@@ -15,3 +15,7 @@ tests/toolchain/*_smoke
 examples/smoke/hello
 examples/smoke/hello_with_units
 rtl/core/sysutils/np_sysutils_test
+rtl/core/sysutils/SysUtils.pas
+rtl/core/sysutils/SysUtils.o
+rtl/core/sysutils/SysUtils.ppu
+rtl/core/sysutils/np_sysutils_test

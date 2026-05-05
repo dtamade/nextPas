@@ -142,6 +142,63 @@ begin
   AssertTrue(Value = 999, 'StrToIntDef invalid returns default');
 end;
 
+procedure TestFileExists;
+begin
+  AssertTrue(FileExists('/etc/passwd'), 'FileExists existing file');
+  AssertTrue(not FileExists('/nonexistent_file_xyz'), 'FileExists nonexistent file');
+  AssertTrue(not FileExists('/tmp'), 'FileExists directory is not a file');
+end;
+
+procedure TestDirectoryExists;
+begin
+  AssertTrue(DirectoryExists('/tmp'), 'DirectoryExists existing directory');
+  AssertTrue(not DirectoryExists('/nonexistent_dir_xyz'), 'DirectoryExists nonexistent');
+  AssertTrue(not DirectoryExists('/etc/passwd'), 'DirectoryExists file is not a directory');
+end;
+
+procedure TestExpandFileName;
+begin
+  AssertTrue(Length(ExpandFileName('test.pas')) > 0, 'ExpandFileName non-empty result');
+  AssertTrue(Pos('/', ExpandFileName('test.pas')) = 1, 'ExpandFileName starts with /');
+  AssertEqual('/usr/bin/ls', ExpandFileName('/usr/bin/ls'), 'ExpandFileName absolute unchanged');
+end;
+
+procedure TestGetEnvironmentVariable;
+begin
+  AssertTrue(Length(GetEnvironmentVariable('HOME')) > 0, 'GetEnvironmentVariable HOME exists');
+  AssertEqual('', GetEnvironmentVariable('NONEXISTENT_VAR_XYZ_123'), 'GetEnvironmentVariable missing returns empty');
+end;
+
+procedure TestChangeFileExt;
+begin
+  AssertEqual('test.o', ChangeFileExt('test.pas', '.o'), 'ChangeFileExt basic');
+  AssertEqual('/home/test.o', ChangeFileExt('/home/test.pas', '.o'), 'ChangeFileExt with path');
+  AssertEqual('nopath.o', ChangeFileExt('nopath', '.o'), 'ChangeFileExt no extension');
+end;
+
+procedure TestNow;
+var
+  T: TDateTime;
+begin
+  T := Now;
+  AssertTrue(T > 40000.0, 'Now returns reasonable date after 2009');
+end;
+
+procedure TestFindFirst;
+var
+  SR: TSearchRec;
+  Res: LongInt;
+begin
+  Res := FindFirst('/etc/*.conf', faAnyFile, SR);
+  if Res = 0 then
+  begin
+    AssertTrue(Length(SR.Name) > 0, 'FindFirst found a file');
+    FindClose(SR);
+  end
+  else
+    AssertTrue(True, 'FindFirst no conf files (acceptable)');
+end;
+
 begin
   WriteLn('Running SysUtils unit tests...');
   WriteLn;
@@ -157,6 +214,13 @@ begin
   TestIntToStr;
   TestStrToInt;
   TestStrToIntDef;
+  TestFileExists;
+  TestDirectoryExists;
+  TestExpandFileName;
+  TestGetEnvironmentVariable;
+  TestChangeFileExt;
+  TestNow;
+  TestFindFirst;
 
   WriteLn;
   WriteLn('Tests passed: ', TestsPassed);

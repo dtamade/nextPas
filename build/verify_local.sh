@@ -1200,6 +1200,27 @@ require_output_pattern '^canonical-path=' "$CORE_TEXT_SMOKE_OUTPUT" 'missing-cor
 require_output_pattern '^text-length=' "$CORE_TEXT_SMOKE_OUTPUT" 'missing-core-text-length-output'
 printf 'core-text-smoke-check=pass\n'
 
+printf 'rtl-sysutils-check=running\n'
+RTL_SYSUTILS_OUTPUT=$(mktemp)
+RTL_SYSUTILS_BIN=$(mktemp)
+printf 'rtl-sysutils-command=fpc -Fu%s/rtl/core/sysutils %s/rtl/core/sysutils/np_sysutils_test.pas\n' "$REPO_ROOT" "$REPO_ROOT"
+if ! fpc \
+  -Fu"$REPO_ROOT/rtl/core/sysutils" \
+  -o"$RTL_SYSUTILS_BIN" \
+  "$REPO_ROOT/rtl/core/sysutils/np_sysutils_test.pas" \
+  >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
+  cat "$RTL_SYSUTILS_OUTPUT"
+  fail 'rtl-sysutils-build-failed'
+fi
+if ! "$RTL_SYSUTILS_BIN" >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
+  cat "$RTL_SYSUTILS_OUTPUT"
+  fail 'rtl-sysutils-run-failed'
+fi
+cat "$RTL_SYSUTILS_OUTPUT"
+require_output_pattern '^Tests passed: 54$' "$RTL_SYSUTILS_OUTPUT" 'missing-rtl-sysutils-pass-count'
+require_output_pattern '^Tests failed: 0$' "$RTL_SYSUTILS_OUTPUT" 'missing-rtl-sysutils-zero-failures'
+printf 'rtl-sysutils-check=pass\n'
+
 printf 'syntax-failure-check=running\n'
 printf 'syntax-failure-command=%s build tests/compiler/fail/missing_semicolon_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if run_stage0_build_capture "$SYNTAX_FAILURE_OUTPUT" tests/compiler/fail/missing_semicolon_fail.pas; then
