@@ -10,6 +10,8 @@ type
     Name: string;
     Kind: string;
     OwnerUnitId: string;
+    TypeId: LongInt;
+    ByteOffset: LongInt;
   end;
 
   TSemanticType = record
@@ -62,7 +64,9 @@ type
     function AddSymbol(
       const AName: string;
       const AKind: string;
-      const AOwnerUnitId: string
+      const AOwnerUnitId: string;
+      const ATypeId: LongInt;
+      const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
     function AddTypedHirNode(
@@ -85,6 +89,10 @@ type
       const AStrength: string
     ): LongInt;
     function SymbolCount: LongInt;
+    function SymbolAt(const AIndex: LongInt): TSemanticSymbol;
+    function FindTypeByName(const AName: string): LongInt;
+    function FindSymbolByName(const AName: string): LongInt;
+    function SymbolTypeId(const ASymbolId: LongInt): LongInt;
     function TypeCount: LongInt;
     function TypedHirNodeCount: LongInt;
     function TypedHirNodeAt(const AIndex: LongInt): TTypedHirNode;
@@ -123,7 +131,9 @@ end;
 function TSemanticModel.AddSymbol(
   const AName: string;
   const AKind: string;
-  const AOwnerUnitId: string
+  const AOwnerUnitId: string;
+  const ATypeId: LongInt;
+  const AByteOffset: LongInt
 ): LongInt;
 var
   NextIndex: SizeInt;
@@ -134,6 +144,8 @@ begin
   FSymbols[NextIndex].Name := AName;
   FSymbols[NextIndex].Kind := AKind;
   FSymbols[NextIndex].OwnerUnitId := AOwnerUnitId;
+  FSymbols[NextIndex].TypeId := ATypeId;
+  FSymbols[NextIndex].ByteOffset := AByteOffset;
   Result := FSymbols[NextIndex].SymbolId;
 end;
 
@@ -230,6 +242,51 @@ end;
 function TSemanticModel.SymbolCount: LongInt;
 begin
   Result := Length(FSymbols);
+end;
+
+function TSemanticModel.SymbolAt(const AIndex: LongInt): TSemanticSymbol;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FSymbols)) then
+  begin
+    Result.SymbolId := 0;
+    Result.Name := '';
+    Result.Kind := '';
+    Result.OwnerUnitId := '';
+    Result.TypeId := 0;
+    Result.ByteOffset := 0;
+    Exit;
+  end;
+  Result := FSymbols[AIndex];
+end;
+
+function TSemanticModel.FindTypeByName(const AName: string): LongInt;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FTypes) - 1 do
+    if SameText(FTypes[Index].Name, AName) then
+      Exit(FTypes[Index].TypeId);
+  Result := 0;
+end;
+
+function TSemanticModel.FindSymbolByName(const AName: string): LongInt;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FSymbols) - 1 do
+    if SameText(FSymbols[Index].Name, AName) then
+      Exit(FSymbols[Index].SymbolId);
+  Result := 0;
+end;
+
+function TSemanticModel.SymbolTypeId(const ASymbolId: LongInt): LongInt;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FSymbols) - 1 do
+    if FSymbols[Index].SymbolId = ASymbolId then
+      Exit(FSymbols[Index].TypeId);
+  Result := 0;
 end;
 
 function TSemanticModel.TypeCount: LongInt;

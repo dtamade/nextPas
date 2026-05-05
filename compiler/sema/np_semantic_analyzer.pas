@@ -27,9 +27,24 @@ type
       const AByteOffset: LongInt
     );
     procedure SeedBuiltinTypes;
+    procedure SeedDeclarations;
+    procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
     procedure SeedForeignProcedureBindings;
     procedure SeedRuntimeContracts;
+    function ResolveTypeId(const ATypeName: string): LongInt;
+    function FindSymbolByName(const AName: string): LongInt;
+    procedure ProcessVarSection(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure ProcessConstSection(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure ProcessProcedureDecl(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure ProcessFunctionDecl(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure WalkDeclarations(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure WalkAssignmentStatements(const ANode: TGreenNode);
   public
     constructor Create(
       const ARootAst: TAstFacade;
@@ -140,6 +155,21 @@ begin
   FModel.AddType('Boolean', 'builtin');
   FModel.AddType('Integer', 'builtin');
   FModel.AddType('AnsiString', 'builtin');
+  FModel.AddType('Char', 'builtin');
+  FModel.AddType('Byte', 'builtin');
+  FModel.AddType('Word', 'builtin');
+  FModel.AddType('LongInt', 'builtin');
+  FModel.AddType('Int64', 'builtin');
+  FModel.AddType('QWord', 'builtin');
+  FModel.AddType('Single', 'builtin');
+  FModel.AddType('Double', 'builtin');
+  FModel.AddType('Pointer', 'builtin');
+  FModel.AddType('Text', 'builtin');
+  FModel.AddType('ShortString', 'builtin');
+  FModel.AddType('WideString', 'builtin');
+  FModel.AddType('UnicodeString', 'builtin');
+  FModel.AddType('Variant', 'builtin');
+  FModel.AddType('OleVariant', 'builtin');
 end;
 
 procedure TSemanticAnalyzer.SeedUnitSymbolsAndHir;
@@ -157,7 +187,9 @@ begin
     SymbolId := FModel.AddSymbol(
       ResolvedUnit.CanonicalName,
       'unit',
-      ResolvedUnit.UnitId
+      ResolvedUnit.UnitId,
+      0,
+      0
     );
     FModel.AddTypedHirNode(
       'resolved-unit',
@@ -217,7 +249,9 @@ begin
     SymbolId := FModel.AddSymbol(
       ForeignProcedureDecl.ProcedureName,
       'foreign-procedure',
-      RootOwnerUnitId
+      RootOwnerUnitId,
+      0,
+      ForeignProcedureDecl.ByteOffset
     );
     FModel.AddForeignProcedureBinding(
       ForeignProcedureDecl.ProcedureName,
@@ -262,6 +296,8 @@ begin
   end;
 
   SeedBuiltinTypes;
+  SeedDeclarations;
+  CheckAssignmentTypes;
   SeedUnitSymbolsAndHir;
   SeedForeignProcedureBindings;
   if FDiagnostics.HasErrors then
@@ -286,6 +322,205 @@ begin
     Exit('deferred');
 
   Result := FModel.Status;
+end;
+
+function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
+var
+  Normalized: string;
+begin
+  if ATypeName = '' then
+    Exit(0);
+  Normalized := ATypeName;
+  Result := FModel.FindTypeByName(Normalized);
+end;
+
+function TSemanticAnalyzer.FindSymbolByName(const AName: string): LongInt;
+begin
+  if AName = '' then
+    Exit(0);
+  Result := FModel.FindSymbolByName(AName);
+end;
+
+procedure TSemanticAnalyzer.ProcessVarSection(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  I, J: LongInt;
+  Child, TypeChild: TGreenNode;
+  TypeId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkVarDecl) then
+      Continue;
+    TypeId := 0;
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      TypeChild := Child.ChildAt(J);
+      if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
+      begin
+        TypeId := ResolveTypeId(TypeChild.Text);
+        Break;
+      end;
+    end;
+    FModel.AddSymbol(Child.Text, 'variable', AOwnerUnitId, TypeId,
+      Child.ByteOffset);
+  end;
+end;
+
+procedure TSemanticAnalyzer.ProcessConstSection(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkConstDecl) then
+      Continue;
+    FModel.AddSymbol(Child.Text, 'constant', AOwnerUnitId, 0,
+      Child.ByteOffset);
+  end;
+end;
+
+procedure TSemanticAnalyzer.ProcessProcedureDecl(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  SymbolId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  SymbolId := FModel.AddSymbol(ANode.Text, 'procedure', AOwnerUnitId, 0,
+    ANode.ByteOffset);
+  FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0);
+end;
+
+procedure TSemanticAnalyzer.ProcessFunctionDecl(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  SymbolId: LongInt;
+  TypeId: LongInt;
+  J: LongInt;
+  Child: TGreenNode;
+begin
+  if ANode = nil then
+    Exit;
+  TypeId := 0;
+  for J := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+    begin
+      TypeId := ResolveTypeId(Child.Text);
+      Break;
+    end;
+  end;
+  SymbolId := FModel.AddSymbol(ANode.Text, 'function', AOwnerUnitId, TypeId,
+    ANode.ByteOffset);
+  FModel.AddTypedHirNode('function-decl', ANode.Text, SymbolId, TypeId);
+end;
+
+procedure TSemanticAnalyzer.WalkDeclarations(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child = nil then
+      Continue;
+    case Child.NodeKind of
+      gnkVarSection:
+        ProcessVarSection(Child, AOwnerUnitId);
+      gnkConstSection:
+        ProcessConstSection(Child, AOwnerUnitId);
+      gnkProcedureDecl:
+        ProcessProcedureDecl(Child, AOwnerUnitId);
+      gnkFunctionDecl:
+        ProcessFunctionDecl(Child, AOwnerUnitId);
+      gnkInterfaceSection, gnkImplementationSection:
+        WalkDeclarations(Child, AOwnerUnitId);
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedDeclarations;
+var
+  OwnerUnitId: string;
+  RootNode: TGreenNode;
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if (FRootAst = nil) or not FRootAst.IsValid then
+    Exit;
+  OwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  WalkDeclarations(RootNode, OwnerUnitId);
+end;
+
+procedure TSemanticAnalyzer.WalkAssignmentStatements(const ANode: TGreenNode);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  LhsSymbolId, RhsSymbolId: LongInt;
+  LhsTypeId, RhsTypeId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child = nil then
+      Continue;
+    if Child.NodeKind = gnkAssignmentStatement then
+    begin
+      if Child.ChildCount < 2 then
+        Continue;
+      LhsSymbolId := FindSymbolByName(Child.ChildAt(0).Text);
+      RhsSymbolId := 0;
+      if Child.ChildAt(1).NodeKind = gnkIdentifier then
+        RhsSymbolId := FindSymbolByName(Child.ChildAt(1).Text);
+      if (LhsSymbolId > 0) and (RhsSymbolId > 0) then
+      begin
+        LhsTypeId := FModel.SymbolTypeId(LhsSymbolId);
+        RhsTypeId := FModel.SymbolTypeId(RhsSymbolId);
+        if (LhsTypeId > 0) and (RhsTypeId > 0) and
+          (LhsTypeId <> RhsTypeId) then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'type mismatch: cannot assign "' +
+              Child.ChildAt(1).Text + '" to "' +
+              Child.ChildAt(0).Text + '"',
+            Child.ByteOffset
+          );
+      end;
+    end
+    else
+      WalkAssignmentStatements(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckAssignmentTypes;
+var
+  RootNode: TGreenNode;
+begin
+  if (FRootAst = nil) or not FRootAst.IsValid then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  WalkAssignmentStatements(RootNode);
 end;
 
 end.

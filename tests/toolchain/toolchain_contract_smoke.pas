@@ -5,9 +5,12 @@ program toolchain_contract_smoke;
 {$UNITPATH ../../compiler/diagnostics}
 {$UNITPATH ../../compiler/frontend}
 {$UNITPATH ../../compiler/ir}
+{$UNITPATH ../../compiler/sema}
 {$UNITPATH ../../compiler/syntax}
 {$UNITPATH ../../compiler/toolchain}
 {$UNITPATH ../../compiler/targets}
+{$UNITPATH ../../rtl/core/base}
+{$UNITPATH ../../rtl/core/text}
 {$UNITPATH ../../tools/stage0}
 
 uses

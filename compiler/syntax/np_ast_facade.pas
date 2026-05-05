@@ -30,6 +30,8 @@ type
     function VarSectionCount: LongInt;
     function ProcedureDeclCount: LongInt;
     function FunctionDeclCount: LongInt;
+    function GetRootNode: TGreenNode;
+    property RootNode: TGreenNode read GetRootNode;
   end;
 
 implementation
@@ -175,6 +177,13 @@ begin
   if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
     Exit(0);
   Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkFunctionDecl);
+end;
+
+function TAstFacade.GetRootNode: TGreenNode;
+begin
+  if FGreenTree = nil then
+    Exit(nil);
+  Result := FGreenTree.RootNode;
 end;
 
 end.
