@@ -13,307 +13,13 @@ program nextpas;
 uses
   SysUtils, process, target_config, nextpas_json_helpers, nextpas_projection_types,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
+  nextpas_command_envelope,
   np_compilation_session, np_target_facts,
   np_package_workflow, np_toolchain_profiles, np_toolchain_runner,
   np_workspace_model;
 
-const
-  ExitSuccessCode = 0;
-  ExitFailureCode = 1;
-
 var
   State: TNextPasState;
-
-function EnvelopeCommandName: string;
-begin
-  if State.CommandName <> '' then
-    Exit(State.CommandName);
-
-  Result := 'cli';
-end;
-
-function EnvelopeSelectorName: string;
-begin
-  if State.SelectorName <> '' then
-    Exit(State.SelectorName);
-  if State.CommandName = 'build' then
-    Exit('build');
-  if State.CommandName = 'test' then
-    Exit('test');
-  if State.CommandName = 'env' then
-    Exit('env');
-  if State.CommandName = 'doctor' then
-    Exit('doctor');
-  if State.CommandName = 'query' then
-    Exit('query');
-  if State.CommandName = 'pkg' then
-    Exit('pkg');
-
-  Result := 'cli';
-end;
-
-function FailureKindFromMessage(const Message: string): string;
-var
-  SeparatorPosition: SizeInt;
-begin
-  SeparatorPosition := Pos(':', Message);
-  if SeparatorPosition > 1 then
-    Exit(Copy(Message, 1, SeparatorPosition - 1));
-
-  Result := Message;
-end;
-
-procedure WriteUsageLine(const UseStdErr: Boolean; const Value: string);
-begin
-  if UseStdErr then
-    WriteLn(ErrOutput, Value)
-  else
-    WriteLn(Value);
-end;
-
-procedure PrintBuildUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas build <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>] ' +
-    '[--unit-root <dir>]... [--out-dir <dir>]'
-  );
-end;
-
-procedure PrintTestUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas test --list-groups [--workspace <root>]'
-  );
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas test --filter <group> [--workspace <root>]'
-  );
-end;
-
-procedure PrintEnvUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
-  );
-end;
-
-procedure PrintDoctorUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas doctor --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-end;
-
-procedure PrintQueryUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas query symbols <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-end;
-
-procedure PrintPkgUsage(const UseStdErr: Boolean);
-begin
-  WriteUsageLine(UseStdErr, 'Usage:');
-  WriteUsageLine(
-    UseStdErr,
-    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>]'
-  );
-end;
-
-procedure PrintUsage;
-begin
-  if State.CommandName = 'build' then
-  begin
-    PrintBuildUsage(False);
-    Exit;
-  end;
-
-  if State.CommandName = 'test' then
-  begin
-    PrintTestUsage(False);
-    Exit;
-  end;
-
-  if State.CommandName = 'env' then
-  begin
-    PrintEnvUsage(False);
-    Exit;
-  end;
-
-  if State.CommandName = 'doctor' then
-  begin
-    PrintDoctorUsage(False);
-    Exit;
-  end;
-
-  if State.CommandName = 'query' then
-  begin
-    PrintQueryUsage(False);
-    Exit;
-  end;
-
-  if State.CommandName = 'pkg' then
-  begin
-    PrintPkgUsage(False);
-    Exit;
-  end;
-
-  WriteUsageLine(False, 'Usage:');
-  WriteUsageLine(
-    False,
-    '  nextpas build <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>] ' +
-    '[--unit-root <dir>]... [--out-dir <dir>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas test --list-groups [--workspace <root>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas test --filter <group> [--workspace <root>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas doctor --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas query symbols <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-  WriteUsageLine(
-    False,
-    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>]'
-  );
-end;
-
-procedure PrintUsageError;
-begin
-  if State.CommandName = 'build' then
-  begin
-    PrintBuildUsage(True);
-    Exit;
-  end;
-
-  if State.CommandName = 'test' then
-  begin
-    PrintTestUsage(True);
-    Exit;
-  end;
-
-  if State.CommandName = 'env' then
-  begin
-    PrintEnvUsage(True);
-    Exit;
-  end;
-
-  if State.CommandName = 'doctor' then
-  begin
-    PrintDoctorUsage(True);
-    Exit;
-  end;
-
-  if State.CommandName = 'query' then
-  begin
-    PrintQueryUsage(True);
-    Exit;
-  end;
-
-  if State.CommandName = 'pkg' then
-  begin
-    PrintPkgUsage(True);
-    Exit;
-  end;
-
-  WriteUsageLine(True, 'Usage:');
-  WriteUsageLine(
-    True,
-    '  nextpas build <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>] ' +
-    '[--unit-root <dir>]... [--out-dir <dir>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas test --list-groups [--workspace <root>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas test --filter <group> [--workspace <root>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas doctor --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas query symbols <source> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>] [--workspace <root>]'
-  );
-  WriteUsageLine(
-    True,
-    '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
-    '[--toolchain-binding <id>]'
-  );
-end;
-
-
-procedure Fail(const Message: string; ShowUsage: Boolean = False);
-var
-  FailureKind: string;
-begin
-  FailureKind := FailureKindFromMessage(Message);
-  if State.CommandName <> '' then
-    WriteLn(ErrOutput, 'command=', State.CommandName);
-  WriteLn(ErrOutput, 'selector=', EnvelopeSelectorName);
-  if State.BuildContext.TargetName <> '' then
-    WriteLn(ErrOutput, 'target=', State.BuildContext.TargetName);
-  PrintSessionProjection(True, State);
-  WriteLn(ErrOutput, 'status=failure');
-  WriteLn(ErrOutput, 'result=failure');
-  WriteLn(ErrOutput, 'failure-kind=', FailureKind);
-  WriteLn(ErrOutput, 'command-outcome=failure');
-  PrintCommandEnvelope(
-    State,
-    ExitFailureCode,
-    EnvelopeSelectorName,
-    'failure',
-    'failure',
-    FailureKind,
-    Message,
-    True
-  );
-  WriteLn(ErrOutput, 'human-summary=', Message);
-  WriteLn(ErrOutput, Message);
-  if ShowUsage then
-    PrintUsageError;
-  Halt(ExitFailureCode);
-end;
 
 procedure AppendString(var AValues: TStringArray; const AValue: string);
 var
@@ -370,7 +76,7 @@ begin
       ARawUnitRoots[Index]
     );
     if not DirectoryExists(ResolvedRoot) then
-      Fail('invalid-unit-root: ' + ARawUnitRoots[Index], True);
+      Fail(State, 'invalid-unit-root: ' + ARawUnitRoots[Index], True);
     AppendString(Result, ResolvedRoot);
   end;
 end;
@@ -382,13 +88,13 @@ procedure EnsureDirectoryExists(
 );
 begin
   if FileExists(AResolvedPath) and not DirectoryExists(AResolvedPath) then
-    Fail(AFailureKind + ': ' + ARawPath, True);
+    Fail(State, AFailureKind + ': ' + ARawPath, True);
 
   if DirectoryExists(AResolvedPath) then
     Exit;
 
   if not ForceDirectories(AResolvedPath) then
-    Fail(AFailureKind + ': ' + ARawPath, True);
+    Fail(State, AFailureKind + ': ' + ARawPath, True);
 end;
 
 function ResolveTestWorkspaceRoot(const AWorkspaceOverride: string): string;
@@ -414,8 +120,8 @@ begin
   if not DirectoryExists(WorkspaceRoot) then
   begin
     if AWorkspaceOverride <> '' then
-      Fail('invalid-workspace-root: ' + AWorkspaceOverride, True);
-    Fail('invalid-workspace-root: ' + WorkspaceRoot, True);
+      Fail(State, 'invalid-workspace-root: ' + AWorkspaceOverride, True);
+    Fail(State, 'invalid-workspace-root: ' + WorkspaceRoot, True);
   end;
 
   HarnessScriptPath := ExpandFileName(
@@ -423,7 +129,7 @@ begin
     DirectorySeparator + 'run_all_tests.sh'
   );
   if not FileExists(HarnessScriptPath) then
-    Fail('missing-harness-script: ' + HarnessScriptPath, True);
+    Fail(State, 'missing-harness-script: ' + HarnessScriptPath, True);
 
   Proc := TProcess.Create(nil);
   try
@@ -466,7 +172,7 @@ begin
     );
   except
     on E: ETargetConfigError do
-      Fail(E.Message);
+      Fail(State, E.Message);
   end;
 
   State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
@@ -520,7 +226,7 @@ begin
   begin
     WorkspaceRoot := ExpandFileName(WorkspaceOverride);
     if not DirectoryExists(WorkspaceRoot) then
-      Fail('invalid-workspace-root: ' + WorkspaceOverride, True);
+      Fail(State, 'invalid-workspace-root: ' + WorkspaceOverride, True);
     State.BuildContext.WorkspaceRootPath := WorkspaceRoot;
     State.BuildContext.WorkspaceDiscoveryKind := 'explicit-workspace-override';
   end;
@@ -533,7 +239,7 @@ begin
     );
   except
     on E: ETargetConfigError do
-      Fail(E.Message);
+      Fail(State, E.Message);
   end;
 
   State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
@@ -592,11 +298,11 @@ var
 begin
   State.BuildContext.TargetName := TargetName;
   if WorkspaceOverride = '' then
-    Fail('missing-required-option: --workspace', True);
+    Fail(State, 'missing-required-option: --workspace', True);
 
   WorkspaceRoot := ExpandFileName(WorkspaceOverride);
   if not DirectoryExists(WorkspaceRoot) then
-    Fail('invalid-workspace-root: ' + WorkspaceOverride, True);
+    Fail(State, 'invalid-workspace-root: ' + WorkspaceOverride, True);
 
   InspectionSourcePath := ResolvePackageInspectionSourcePath(WorkspaceRoot);
   WorkspaceModel := nil;
@@ -617,7 +323,7 @@ begin
       );
     except
       on E: ETargetConfigError do
-        Fail(E.Message);
+        Fail(State, E.Message);
     end;
 
     State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
@@ -718,7 +424,7 @@ begin
   Session := nil;
 
   if not FileExists(SourcePath) then
-    Fail('missing-source: ' + SourcePath);
+    Fail(State, 'missing-source: ' + SourcePath);
 
   ResolvedSourcePath := ExpandFileName(SourcePath);
   try
@@ -730,7 +436,7 @@ begin
     );
   except
     on E: Exception do
-      Fail(E.Message, True);
+      Fail(State, E.Message, True);
   end;
 
   try
@@ -745,7 +451,7 @@ begin
       );
     except
       on E: ETargetConfigError do
-        Fail(E.Message);
+        Fail(State, E.Message);
     end;
 
     State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
@@ -772,15 +478,15 @@ begin
     Session.AnalyzeSyntax;
     CaptureSessionContext(State, Session);
     if Session.HasSyntaxErrors then
-      Fail('syntax-analysis-failed');
+      Fail(State, 'syntax-analysis-failed');
     Session.ResolveUnits;
     CaptureSessionContext(State, Session);
     if Session.HasResolutionErrors then
-      Fail('unit-resolution-failed');
+      Fail(State, 'unit-resolution-failed');
     Session.AnalyzeSemantics;
     CaptureSessionContext(State, Session);
     if Session.HasSemanticErrors then
-      Fail('semantic-analysis-failed');
+      Fail(State, 'semantic-analysis-failed');
 
     State.QueryProjection.Kind := 'symbols';
     State.QueryProjection.Status := 'success';
@@ -843,7 +549,7 @@ begin
   Session := nil;
 
   if not FileExists(SourcePath) then
-    Fail('missing-source: ' + SourcePath);
+    Fail(State, 'missing-source: ' + SourcePath);
 
   ResolvedSourcePath := ExpandFileName(SourcePath);
   try
@@ -855,7 +561,7 @@ begin
     );
   except
     on E: Exception do
-      Fail(E.Message, True);
+      Fail(State, E.Message, True);
   end;
   try
     CaptureBuildCommandContext(State, SourcePath, TargetName, WorkspaceModel);
@@ -882,7 +588,7 @@ begin
       );
     except
       on E: ETargetConfigError do
-        Fail(E.Message);
+        Fail(State, E.Message);
     end;
 
     State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
@@ -907,27 +613,27 @@ begin
     Session.AnalyzeSyntax;
     CaptureSessionContext(State, Session);
     if Session.HasSyntaxErrors then
-      Fail('syntax-analysis-failed');
+      Fail(State, 'syntax-analysis-failed');
     Session.ResolveUnits;
     CaptureSessionContext(State, Session);
     if Session.HasResolutionErrors then
-      Fail('unit-resolution-failed');
+      Fail(State, 'unit-resolution-failed');
     Session.AnalyzeSemantics;
     CaptureSessionContext(State, Session);
     if Session.HasSemanticErrors then
-      Fail('semantic-analysis-failed');
+      Fail(State, 'semantic-analysis-failed');
     Session.LowerToMir;
     CaptureSessionContext(State, Session);
     if Session.HasMirErrors then
-      Fail('mir-lowering-failed');
+      Fail(State, 'mir-lowering-failed');
     Session.PlanBackend;
     CaptureSessionContext(State, Session);
     if Session.HasBackendErrors then
-      Fail('backend-planning-failed');
+      Fail(State, 'backend-planning-failed');
     Session.PlanToolchain;
     CaptureSessionContext(State, Session);
     if Session.HasToolchainErrors then
-      Fail('toolchain-planning-failed');
+      Fail(State, 'toolchain-planning-failed');
 
     State.BuildContext.CompilerName := Session.PrimaryToolLogicalExecutable;
     RunResult := Session.ExecuteToolchain(GetEnvironmentVariable('PATH'));
@@ -956,10 +662,12 @@ begin
         end;
         if Session.LastDiagnosticCode <> '' then
           Fail(
+            State,
             Session.LastDiagnosticCode + ': ' + Session.LastDiagnosticMessage
           )
         else
           Fail(
+            State,
             Session.PrimaryToolFailureMapping + ': ' + Session.LastDiagnosticMessage
           );
       end;
@@ -975,7 +683,7 @@ begin
 
     if CompilerExitCode <> 0 then
     begin
-      Fail(Session.PrimaryToolFailureMapping + ': compiler exit code ' + IntToStr(CompilerExitCode));
+      Fail(State, Session.PrimaryToolFailureMapping + ': compiler exit code ' + IntToStr(CompilerExitCode));
     end;
 
     State.BuildContext.ArtifactPath := Session.BackendPrimaryArtifactPath;
@@ -1029,11 +737,11 @@ begin
   ClearSessionContext(State);
 
   if ParamCount = 0 then
-    Fail('invalid-arguments', True);
+    Fail(State, 'invalid-arguments', True);
 
   if (ParamCount = 1) and ((ParamStr(1) = '--help') or (ParamStr(1) = '-h')) then
   begin
-    PrintUsage;
+    PrintUsage(State.CommandName);
     Halt(ExitSuccessCode);
   end;
 
@@ -1043,7 +751,7 @@ begin
   if (CommandName <> 'build') and (CommandName <> 'test') and
     (CommandName <> 'env') and (CommandName <> 'doctor') and
     (CommandName <> 'query') and (CommandName <> 'pkg') then
-    Fail('unsupported-command: ' + CommandName);
+    Fail(State, 'unsupported-command: ' + CommandName);
 
   if CommandName = 'test' then
   begin
@@ -1057,35 +765,35 @@ begin
       if OptionName = '--list-groups' then
       begin
         if ListGroups or (TestFilterName <> '') then
-          Fail('invalid-arguments', True);
+          Fail(State, 'invalid-arguments', True);
         ListGroups := True;
       end
       else if OptionName = '--filter' then
       begin
         if ListGroups or (TestFilterName <> '') then
-          Fail('invalid-arguments', True);
+          Fail(State, 'invalid-arguments', True);
         if Index = ParamCount then
-          Fail('invalid-arguments', True);
+          Fail(State, 'invalid-arguments', True);
         Inc(Index);
         TestFilterName := ParamStr(Index);
       end
       else if OptionName = '--workspace' then
       begin
         if WorkspaceOverride <> '' then
-          Fail('duplicate-option: --workspace', True);
+          Fail(State, 'duplicate-option: --workspace', True);
         if Index = ParamCount then
-          Fail('invalid-arguments', True);
+          Fail(State, 'invalid-arguments', True);
         Inc(Index);
         WorkspaceOverride := ParamStr(Index);
       end
       else
-        Fail('unknown-option: ' + OptionName, True);
+        Fail(State, 'unknown-option: ' + OptionName, True);
 
       Inc(Index);
     end;
 
     if not ListGroups and (TestFilterName = '') then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
 
     RunTest(ListGroups, TestFilterName, WorkspaceOverride);
   end;
@@ -1093,9 +801,9 @@ begin
   if CommandName = 'env' then
   begin
     if ParamCount < 3 then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
     if ParamStr(2) <> 'status' then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := 'status';
     TargetName := '';
@@ -1106,27 +814,27 @@ begin
       OptionName := ParamStr(Index);
       if (OptionName <> '--target') and
         (OptionName <> '--toolchain-binding') then
-        Fail('unknown-option: ' + OptionName, True);
+        Fail(State, 'unknown-option: ' + OptionName, True);
       if Index = ParamCount then
-        Fail('invalid-arguments', True);
+        Fail(State, 'invalid-arguments', True);
       Inc(Index);
       if OptionName = '--target' then
       begin
         if TargetName <> '' then
-          Fail('duplicate-option: --target', True);
+          Fail(State, 'duplicate-option: --target', True);
         TargetName := ParamStr(Index);
       end
       else
       begin
         if ToolchainBindingOverride <> '' then
-          Fail('duplicate-option: --toolchain-binding', True);
+          Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
       end;
       Inc(Index);
     end;
 
     if TargetName = '' then
-      Fail('missing-required-option: --target', True);
+      Fail(State, 'missing-required-option: --target', True);
 
     RunEnvStatus(TargetName, ToolchainBindingOverride);
     Halt(ExitSuccessCode);
@@ -1136,7 +844,7 @@ begin
   begin
     State.SelectorName := 'doctor';
     if ParamCount < 2 then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
 
     TargetName := '';
     ToolchainBindingOverride := '';
@@ -1148,33 +856,33 @@ begin
       if (OptionName <> '--target') and
         (OptionName <> '--toolchain-binding') and
         (OptionName <> '--workspace') then
-        Fail('unknown-option: ' + OptionName, True);
+        Fail(State, 'unknown-option: ' + OptionName, True);
       if Index = ParamCount then
-        Fail('invalid-arguments', True);
+        Fail(State, 'invalid-arguments', True);
       Inc(Index);
       if OptionName = '--target' then
       begin
         if TargetName <> '' then
-          Fail('duplicate-option: --target', True);
+          Fail(State, 'duplicate-option: --target', True);
         TargetName := ParamStr(Index);
       end
       else if OptionName = '--toolchain-binding' then
       begin
         if ToolchainBindingOverride <> '' then
-          Fail('duplicate-option: --toolchain-binding', True);
+          Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
       end
       else
       begin
         if WorkspaceOverride <> '' then
-          Fail('duplicate-option: --workspace', True);
+          Fail(State, 'duplicate-option: --workspace', True);
         WorkspaceOverride := ParamStr(Index);
       end;
       Inc(Index);
     end;
 
     if TargetName = '' then
-      Fail('missing-required-option: --target', True);
+      Fail(State, 'missing-required-option: --target', True);
 
     RunDoctor(TargetName, ToolchainBindingOverride, WorkspaceOverride);
     Halt(ExitSuccessCode);
@@ -1184,9 +892,9 @@ begin
   begin
     State.SelectorName := 'query';
     if ParamCount < 3 then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
     if ParamStr(2) <> 'symbols' then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := 'symbols';
     SourcePath := ParamStr(3);
@@ -1200,33 +908,33 @@ begin
       if (OptionName <> '--target') and
         (OptionName <> '--toolchain-binding') and
         (OptionName <> '--workspace') then
-        Fail('unknown-option: ' + OptionName, True);
+        Fail(State, 'unknown-option: ' + OptionName, True);
       if Index = ParamCount then
-        Fail('invalid-arguments', True);
+        Fail(State, 'invalid-arguments', True);
       Inc(Index);
       if OptionName = '--target' then
       begin
         if TargetName <> '' then
-          Fail('duplicate-option: --target', True);
+          Fail(State, 'duplicate-option: --target', True);
         TargetName := ParamStr(Index);
       end
       else if OptionName = '--toolchain-binding' then
       begin
         if ToolchainBindingOverride <> '' then
-          Fail('duplicate-option: --toolchain-binding', True);
+          Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
       end
       else
       begin
         if WorkspaceOverride <> '' then
-          Fail('duplicate-option: --workspace', True);
+          Fail(State, 'duplicate-option: --workspace', True);
         WorkspaceOverride := ParamStr(Index);
       end;
       Inc(Index);
     end;
 
     if TargetName = '' then
-      Fail('missing-required-option: --target', True);
+      Fail(State, 'missing-required-option: --target', True);
 
     RunQuerySymbols(
       SourcePath,
@@ -1241,9 +949,9 @@ begin
   begin
     State.SelectorName := 'pkg';
     if ParamCount < 3 then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
     if ParamStr(2) <> 'inspect' then
-      Fail('invalid-arguments', True);
+      Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := 'inspect';
     TargetName := '';
@@ -1256,40 +964,40 @@ begin
       if (OptionName <> '--target') and
         (OptionName <> '--toolchain-binding') and
         (OptionName <> '--workspace') then
-        Fail('unknown-option: ' + OptionName, True);
+        Fail(State, 'unknown-option: ' + OptionName, True);
       if Index = ParamCount then
-        Fail('invalid-arguments', True);
+        Fail(State, 'invalid-arguments', True);
       Inc(Index);
       if OptionName = '--target' then
       begin
         if TargetName <> '' then
-          Fail('duplicate-option: --target', True);
+          Fail(State, 'duplicate-option: --target', True);
         TargetName := ParamStr(Index);
       end
       else if OptionName = '--toolchain-binding' then
       begin
         if ToolchainBindingOverride <> '' then
-          Fail('duplicate-option: --toolchain-binding', True);
+          Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
       end
       else
       begin
         if WorkspaceOverride <> '' then
-          Fail('duplicate-option: --workspace', True);
+          Fail(State, 'duplicate-option: --workspace', True);
         WorkspaceOverride := ParamStr(Index);
       end;
       Inc(Index);
     end;
 
     if TargetName = '' then
-      Fail('missing-required-option: --target', True);
+      Fail(State, 'missing-required-option: --target', True);
 
     RunPkgInspect(TargetName, ToolchainBindingOverride, WorkspaceOverride);
     Halt(ExitSuccessCode);
   end;
 
   if ParamCount < 4 then
-    Fail('invalid-arguments', True);
+    Fail(State, 'invalid-arguments', True);
 
   SourcePath := ParamStr(2);
   TargetName := '';
@@ -1309,44 +1017,44 @@ begin
       (OptionName = '--out-dir') then
     begin
       if Index = ParamCount then
-        Fail('invalid-arguments', True);
+        Fail(State, 'invalid-arguments', True);
       Inc(Index);
 
       if OptionName = '--target' then
       begin
         if TargetName <> '' then
-          Fail('duplicate-option: --target', True);
+          Fail(State, 'duplicate-option: --target', True);
         TargetName := ParamStr(Index);
       end
       else if OptionName = '--toolchain-binding' then
       begin
         if ToolchainBindingOverride <> '' then
-          Fail('duplicate-option: --toolchain-binding', True);
+          Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
       end
       else if OptionName = '--workspace' then
       begin
         if WorkspaceOverride <> '' then
-          Fail('duplicate-option: --workspace', True);
+          Fail(State, 'duplicate-option: --workspace', True);
         WorkspaceOverride := ParamStr(Index);
       end
       else if OptionName = '--out-dir' then
       begin
         if OutDirOverride <> '' then
-          Fail('duplicate-option: --out-dir', True);
+          Fail(State, 'duplicate-option: --out-dir', True);
         OutDirOverride := ParamStr(Index);
       end
       else
         AppendString(UnitRootOverrides, ParamStr(Index));
     end
     else
-      Fail('unknown-option: ' + OptionName, True);
+      Fail(State, 'unknown-option: ' + OptionName, True);
 
     Inc(Index);
   end;
 
   if TargetName = '' then
-    Fail('missing-required-option: --target', True);
+    Fail(State, 'missing-required-option: --target', True);
 
   RunBuild(
     SourcePath,
