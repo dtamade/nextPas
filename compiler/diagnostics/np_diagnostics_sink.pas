@@ -6,7 +6,7 @@ unit np_diagnostics_sink;
 interface
 
 uses
-  SysUtils, np_base_types;
+  SysUtils, np_base_types, nextpas_json_helpers;
 
 type
   TDiagnosticsPolicy = record
@@ -112,43 +112,6 @@ begin
   Result := 'diag-' + NumericText;
 end;
 
-function JsonEscape(const Value: string): string;
-var
-  Index: SizeInt;
-begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
-end;
-
-function JsonString(const Value: string): string;
-begin
-  Result := '"' + JsonEscape(Value) + '"';
-end;
-
-procedure AppendJsonField(
-  var AFields: string;
-  const AName: string;
-  const AValue: string
-);
-begin
-  if AFields <> '' then
-    AFields := AFields + ',';
-  AFields := AFields + JsonString(AName) + ':' + AValue;
-end;
 
 constructor TDiagnosticsSink.CreateDefault;
 begin

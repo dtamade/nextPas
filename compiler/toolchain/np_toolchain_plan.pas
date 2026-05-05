@@ -7,7 +7,8 @@ unit np_toolchain_plan;
 interface
 
 uses
-  SysUtils, np_backend_plan, np_target_facts, np_toolchain_profiles;
+  SysUtils, np_backend_plan, np_target_facts, np_toolchain_profiles,
+  nextpas_json_helpers;
 
 type
   TToolArtifactRef = record
@@ -259,44 +260,6 @@ type
   end;
 
 implementation
-
-function JsonEscape(const Value: string): string;
-var
-  Index: SizeInt;
-begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
-end;
-
-function JsonString(const Value: string): string;
-begin
-  Result := '"' + JsonEscape(Value) + '"';
-end;
-
-procedure AppendJsonField(
-  var AFields: string;
-  const AName: string;
-  const AValue: string
-);
-begin
-  if AFields <> '' then
-    AFields := AFields + ',';
-  AFields := AFields + JsonString(AName) + ':' + AValue;
-end;
 
 function BuildStringArrayJson(const AValues: array of string): string;
 var

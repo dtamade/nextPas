@@ -17,7 +17,8 @@ uses
   np_lexer, np_mir_model, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
-  np_semantic_model, np_semantic_analyzer, np_workspace_model;
+  np_semantic_model, np_semantic_analyzer, np_workspace_model,
+  nextpas_json_helpers;
 
 type
   TBuildContext = record
@@ -307,44 +308,6 @@ implementation
 
 var
   GSessionNonce: LongInt = 0;
-
-function JsonEscape(const Value: string): string;
-var
-  Index: SizeInt;
-begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
-end;
-
-function JsonString(const Value: string): string;
-begin
-  Result := '"' + JsonEscape(Value) + '"';
-end;
-
-procedure AppendJsonField(
-  var AFields: string;
-  const AName: string;
-  const AValue: string
-);
-begin
-  if AFields <> '' then
-    AFields := AFields + ',';
-  AFields := AFields + JsonString(AName) + ':' + AValue;
-end;
 
 function BuildToolArtifactArrayJson(
   const AValues: array of TToolArtifactRef
