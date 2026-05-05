@@ -11,6 +11,7 @@ type
     hgCompilerFail,
     hgDiagnostics,
     hgLexer,
+    hgParser,
     hgRTL,
     hgCRT,
     hgRegression
@@ -29,6 +30,7 @@ const
     'compiler-fail',
     'diagnostics',
     'lexer',
+    'parser',
     'rtl',
     'crt',
     'regression'
@@ -39,6 +41,7 @@ const
     'tests/compiler/fail',
     'tests/diagnostics',
     'tests/lexer',
+    'tests/parser',
     'tests/rtl',
     'tests/crt',
     'tests/regression'
@@ -49,6 +52,7 @@ const
     'expected-compile-failure',
     'diagnostic-snapshot',
     'lexer-tokenization',
+    'parse-success',
     'rtl-smoke',
     'crt-smoke',
     'regression-guard'
@@ -501,6 +505,8 @@ begin
     hgRTL, hgCRT:
       Result := EndsWithText(FileName, '_smoke.pas');
     hgLexer:
+      Result := EndsWithText(FileName, '_pass.pas');
+    hgParser:
       Result := EndsWithText(FileName, '_pass.pas');
     hgRegression:
       Result := EndsWithText(FileName, '_regression.pas');
@@ -1136,6 +1142,83 @@ begin
         end;
 
       hgLexer:
+        begin
+          AExecution.ToolName := 'stage0-build-run';
+          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+          Params.Add('build');
+          Params.Add(AFixturePath);
+          Params.Add('--target');
+          Params.Add(BaselineTargetName);
+          Params.Add('--workspace');
+          Params.Add(WorkspaceRootPath);
+          Params.Add('--out-dir');
+          Params.Add(FixtureBinaryDirectory(AGroup, AFixturePath));
+          try
+            AExecution.ExitCode := RunProcessCapture(
+              Stage0ExecutablePath,
+              '',
+              Params,
+              BuildOutput
+            );
+          except
+            on E: Exception do
+            begin
+              BuildOutput := E.Message + LineEnding;
+              AExecution.ExitCode := ExitFailureCode;
+              AExecution.FailureKind := 'fixture-exec-failed';
+            end;
+          end;
+          WriteTextFile(AExecution.OutputPath, BuildOutput);
+          ArtifactPath := ExtractProjectionValue(BuildOutput, 'artifact=');
+          if ArtifactPath = '' then
+            ArtifactPath := FixtureBinaryPath(AGroup, AFixturePath);
+          AExecution.ArtifactPath := ArtifactPath;
+
+          if (AExecution.FailureKind = '') and (AExecution.ExitCode <> 0) then
+            AExecution.FailureKind := ExtractProjectionValue(
+              BuildOutput,
+              'failure-kind='
+            );
+          if AExecution.FailureKind = '' then
+            AExecution.FailureKind := 'unexpected-build-failure';
+
+          if AExecution.ExitCode = 0 then
+          begin
+            Params.Clear;
+            AExecution.RunOutputPath := FixtureRunOutputPath(AGroup, AFixturePath);
+            try
+              AExecution.ExitCode := RunProcessCapture(
+                ExpandFileName(ArtifactPath),
+                '',
+                Params,
+                RunOutput
+              );
+            except
+              on E: Exception do
+              begin
+                RunOutput := E.Message + LineEnding;
+                AExecution.ExitCode := ExitFailureCode;
+                AExecution.FailureKind := 'fixture-runtime-failed';
+              end;
+            end;
+            WriteTextFile(AExecution.RunOutputPath, RunOutput);
+            if AExecution.ExitCode = 0 then
+            begin
+              AExecution.ResultValue := 'pass';
+              AExecution.FailureKind := '';
+              AExecution.Passed := True;
+            end
+            else
+            begin
+              AExecution.ResultValue := 'failure';
+              if AExecution.FailureKind = '' then
+                AExecution.FailureKind := 'fixture-runtime-failed';
+            end;
+          end;
+          ClearStage0FixtureArtifacts(AGroup, AFixturePath);
+        end;
+
+      hgParser:
         begin
           AExecution.ToolName := 'stage0-build-run';
           ClearStage0FixtureArtifacts(AGroup, AFixturePath);

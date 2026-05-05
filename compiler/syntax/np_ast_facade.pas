@@ -25,6 +25,11 @@ type
     function ForeignProcedureDeclAt(
       const AIndex: LongInt
     ): TForeignProcedureDecl;
+    function RootNodeChildCount: LongInt;
+    function RootNodeChildAt(const AIndex: LongInt): TGreenNode;
+    function VarSectionCount: LongInt;
+    function ProcedureDeclCount: LongInt;
+    function FunctionDeclCount: LongInt;
   end;
 
 implementation
@@ -112,6 +117,64 @@ begin
   end;
 
   Result := FGreenTree.ForeignProcedureDeclAt(AIndex);
+end;
+
+function TAstFacade.RootNodeChildCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := FGreenTree.RootNode.ChildCount;
+end;
+
+function TAstFacade.RootNodeChildAt(const AIndex: LongInt): TGreenNode;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(nil);
+  if (AIndex < 0) or (AIndex >= FGreenTree.RootNode.ChildCount) then
+    Exit(nil);
+  Result := FGreenTree.RootNode.ChildAt(AIndex);
+end;
+
+function TAstFacade.VarSectionCount: LongInt;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  Result := 0;
+  for I := 0 to RootNodeChildCount - 1 do
+  begin
+    Child := RootNodeChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkVarSection) then
+      Inc(Result);
+  end;
+end;
+
+function TAstFacade.ProcedureDeclCount: LongInt;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  Result := 0;
+  for I := 0 to RootNodeChildCount - 1 do
+  begin
+    Child := RootNodeChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkProcedureDecl) then
+      Inc(Result);
+  end;
+end;
+
+function TAstFacade.FunctionDeclCount: LongInt;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  Result := 0;
+  for I := 0 to RootNodeChildCount - 1 do
+  begin
+    Child := RootNodeChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkFunctionDecl) then
+      Inc(Result);
+  end;
 end;
 
 end.
