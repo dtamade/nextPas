@@ -1,0 +1,6 @@
+[this is not valid toml
+package
+name = broken
+  =
+[sources
+roots = ["src"
