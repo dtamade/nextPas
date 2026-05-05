@@ -13,97 +13,13 @@ program nextpas;
 uses
   SysUtils, process, target_config, nextpas_json_helpers, nextpas_projection_types,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
-  nextpas_command_envelope,
+  nextpas_command_envelope, nextpas_command_build,
   np_compilation_session, np_target_facts,
   np_package_workflow, np_toolchain_profiles, np_toolchain_runner,
   np_workspace_model;
 
 var
   State: TNextPasState;
-
-procedure AppendString(var AValues: TStringArray; const AValue: string);
-var
-  NextIndex: SizeInt;
-begin
-  NextIndex := Length(AValues);
-  SetLength(AValues, NextIndex + 1);
-  AValues[NextIndex] := AValue;
-end;
-
-function IsAbsolutePath(const APath: string): Boolean;
-begin
-  if APath = '' then
-    Exit(False);
-
-  if APath[1] = DirectorySeparator then
-    Exit(True);
-
-  Result := (Length(APath) >= 2) and (APath[2] = ':');
-end;
-
-function ResolveCliPath(const APath: string): string;
-begin
-  Result := ExpandFileName(APath);
-end;
-
-function ResolveWorkspaceRelativePath(
-  const AWorkspaceRoot: string;
-  const APath: string
-): string;
-begin
-  if IsAbsolutePath(APath) then
-    Exit(ExpandFileName(APath));
-
-  Result := ExpandFileName(
-    IncludeTrailingPathDelimiter(AWorkspaceRoot) + APath
-  );
-end;
-
-function ResolveExplicitUnitRoots(
-  const AWorkspaceRoot: string;
-  const ARawUnitRoots: TStringArray
-): TStringArray;
-var
-  Index: LongInt;
-  ResolvedRoot: string;
-begin
-  Result := nil;
-  SetLength(Result, 0);
-  for Index := 0 to Length(ARawUnitRoots) - 1 do
-  begin
-    ResolvedRoot := ResolveWorkspaceRelativePath(
-      AWorkspaceRoot,
-      ARawUnitRoots[Index]
-    );
-    if not DirectoryExists(ResolvedRoot) then
-      Fail(State, 'invalid-unit-root: ' + ARawUnitRoots[Index], True);
-    AppendString(Result, ResolvedRoot);
-  end;
-end;
-
-procedure EnsureDirectoryExists(
-  const ARawPath: string;
-  const AResolvedPath: string;
-  const AFailureKind: string
-);
-begin
-  if FileExists(AResolvedPath) and not DirectoryExists(AResolvedPath) then
-    Fail(State, AFailureKind + ': ' + ARawPath, True);
-
-  if DirectoryExists(AResolvedPath) then
-    Exit;
-
-  if not ForceDirectories(AResolvedPath) then
-    Fail(State, AFailureKind + ': ' + ARawPath, True);
-end;
-
-function ResolveTestWorkspaceRoot(const AWorkspaceOverride: string): string;
-begin
-  if AWorkspaceOverride <> '' then
-    Exit(ExpandFileName(AWorkspaceOverride));
-
-  Result := ExpandFileName(GetCurrentDir);
-end;
 
 procedure RunTest(
   const AListGroups: Boolean;
@@ -116,7 +32,10 @@ var
   Proc: TProcess;
   WorkspaceRoot: string;
 begin
-  WorkspaceRoot := ResolveTestWorkspaceRoot(AWorkspaceOverride);
+  if AWorkspaceOverride <> '' then
+    WorkspaceRoot := ExpandFileName(AWorkspaceOverride)
+  else
+    WorkspaceRoot := ExpandFileName(GetCurrentDir);
   if not DirectoryExists(WorkspaceRoot) then
   begin
     if AWorkspaceOverride <> '' then
@@ -366,43 +285,6 @@ begin
   end;
 end;
 
-function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
-begin
-  Result := BuildTargetFactsView(
-    TargetConfig.TargetId,
-    TargetConfig.ConfigPath,
-    TargetConfig.HostId,
-    TargetConfig.HostOS,
-    TargetConfig.HostCPU,
-    TargetConfig.CompilerExecutable,
-    TargetConfig.UnitsDir,
-    TargetConfig.ObjectFormat,
-    TargetConfig.AssemblerFlavor,
-    TargetConfig.LinkerFlavor,
-    TargetConfig.RuntimeLayoutKey,
-    TargetConfig.CSymbolPrefix,
-    TargetConfig.CLibraryNaming,
-    TargetConfig.LlvmTriple,
-    TargetConfig.LlvmDataLayout,
-    TargetConfig.ToolchainBindingId,
-    TargetConfig.HostCompilerProfileId,
-    TargetConfig.BackendFamily,
-    TargetConfig.AssemblerProfileId,
-    TargetConfig.LinkerProfileId,
-    TargetConfig.ArchiverProfileId,
-    TargetConfig.ResourceToolProfileId,
-    TargetConfig.SysrootMode,
-    TargetConfig.RuntimeSdkId,
-    TargetConfig.AllowHostFallback,
-    TargetConfig.ToolRootKind,
-    TargetConfig.RuntimeRootKind,
-    TargetConfig.ResponseFilePolicy,
-    TargetConfig.LinkScriptPolicy,
-    TargetConfig.LlvmEnabled,
-    TargetConfig.LlvmExecutableSetId
-  );
-end;
-
 procedure RunQuerySymbols(
   const SourcePath: string;
   const TargetName: string;
@@ -517,201 +399,6 @@ begin
       False
     );
     WriteLn('human-summary=query symbols completed');
-  finally
-    Session.Free;
-    WorkspaceModel.Free;
-  end;
-end;
-
-procedure RunBuild(
-  const SourcePath: string;
-  const TargetName: string;
-  const ToolchainBindingOverride: string;
-  const WorkspaceOverride: string;
-  const UnitRootOverrides: TStringArray;
-  const OutDirOverride: string
-);
-var
-  CompilerExitCode: LongInt;
-  FinalToolStep: TToolchainExecutedStep;
-  Options: TCompilationOptions;
-  ResolvedSourcePath: string;
-  ResolvedUnitRoots: TStringArray;
-  RunResult: TToolchainRunResult;
-  Session: TCompilationSession;
-  TargetConfig: TTargetConfig;
-  TargetFacts: TTargetFactsView;
-  WorkspaceModel: TWorkspaceModel;
-begin
-  State.BuildContext.SourcePath := SourcePath;
-  State.BuildContext.TargetName := TargetName;
-  WorkspaceModel := nil;
-  Session := nil;
-
-  if not FileExists(SourcePath) then
-    Fail(State, 'missing-source: ' + SourcePath);
-
-  ResolvedSourcePath := ExpandFileName(SourcePath);
-  try
-    WorkspaceModel := ResolveWorkspaceModel(
-      ResolvedSourcePath,
-      WorkspaceOverride,
-      TargetName,
-      OutDirOverride
-    );
-  except
-    on E: Exception do
-      Fail(State, E.Message, True);
-  end;
-  try
-    CaptureBuildCommandContext(State, SourcePath, TargetName, WorkspaceModel);
-    ResolvedUnitRoots := ResolveExplicitUnitRoots(
-      WorkspaceModel.WorkspaceRootPath,
-      UnitRootOverrides
-    );
-    EnsureDirectoryExists(
-      WorkspaceModel.ArtifactRootPath,
-      WorkspaceModel.ArtifactRootPath,
-      'invalid-artifact-root'
-    );
-    EnsureDirectoryExists(
-      WorkspaceModel.OutputDirPath,
-      WorkspaceModel.OutputDirPath,
-      'invalid-out-dir'
-    );
-
-    try
-      TargetConfig := LoadTargetConfig(
-        TargetName,
-        ParamStr(0),
-        ToolchainBindingOverride
-      );
-    except
-      on E: ETargetConfigError do
-        Fail(State, E.Message);
-    end;
-
-    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    TargetFacts := TargetFactsFromConfig(TargetConfig);
-    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
-    Options.CommandName := 'build';
-    Options.BuildContext.RequestedSourcePath := SourcePath;
-    Options.BuildContext.ResolvedSourcePath := ResolvedSourcePath;
-    Options.BuildContext.RequestedTargetId := TargetFacts.TargetId;
-    Options.BuildContext.WorkspaceRootPath := WorkspaceModel.WorkspaceRootPath;
-    Options.BuildContext.WorkspaceDiscoveryKind := WorkspaceModel.DiscoveryKind;
-    Options.BuildContext.WorkspaceDescriptorPath :=
-      WorkspaceModel.WorkspaceDescriptorPath;
-    Options.BuildContext.PackageManifestPath := WorkspaceModel.PackageManifestPath;
-    Options.WorkspaceModel := WorkspaceModel;
-    Options.ExplicitUnitRoots := ResolvedUnitRoots;
-    Options.BuildContext.ArtifactRootPath := WorkspaceModel.ArtifactRootPath;
-    Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
-    Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);
-    WorkspaceModel := nil;
-    CaptureSessionContext(State, Session);
-    Session.AnalyzeSyntax;
-    CaptureSessionContext(State, Session);
-    if Session.HasSyntaxErrors then
-      Fail(State, 'syntax-analysis-failed');
-    Session.ResolveUnits;
-    CaptureSessionContext(State, Session);
-    if Session.HasResolutionErrors then
-      Fail(State, 'unit-resolution-failed');
-    Session.AnalyzeSemantics;
-    CaptureSessionContext(State, Session);
-    if Session.HasSemanticErrors then
-      Fail(State, 'semantic-analysis-failed');
-    Session.LowerToMir;
-    CaptureSessionContext(State, Session);
-    if Session.HasMirErrors then
-      Fail(State, 'mir-lowering-failed');
-    Session.PlanBackend;
-    CaptureSessionContext(State, Session);
-    if Session.HasBackendErrors then
-      Fail(State, 'backend-planning-failed');
-    Session.PlanToolchain;
-    CaptureSessionContext(State, Session);
-    if Session.HasToolchainErrors then
-      Fail(State, 'toolchain-planning-failed');
-
-    State.BuildContext.CompilerName := Session.PrimaryToolLogicalExecutable;
-    RunResult := Session.ExecuteToolchain(GetEnvironmentVariable('PATH'));
-    try
-      if RunResult.StepCount > 0 then
-      begin
-        FinalToolStep := RunResult.StepAt(RunResult.StepCount - 1);
-        CompilerExitCode := FinalToolStep.ExitCode;
-        State.BuildContext.CompilerExitCode := FinalToolStep.ExitCode;
-        State.BuildContext.HasCompilerExitCode := FinalToolStep.HasExitCode;
-      end
-      else
-      begin
-        CompilerExitCode := 0;
-        State.BuildContext.CompilerExitCode := 0;
-        State.BuildContext.HasCompilerExitCode := False;
-      end;
-
-      CaptureSessionContext(State, Session);
-      if RunResult.Status <> 'success' then
-      begin
-        if Session.HasLastDiagnosticExitCode then
-        begin
-          State.BuildContext.CompilerExitCode := Session.LastDiagnosticExitCode;
-          State.BuildContext.HasCompilerExitCode := True;
-        end;
-        if Session.LastDiagnosticCode <> '' then
-          Fail(
-            State,
-            Session.LastDiagnosticCode + ': ' + Session.LastDiagnosticMessage
-          )
-        else
-          Fail(
-            State,
-            Session.PrimaryToolFailureMapping + ': ' + Session.LastDiagnosticMessage
-          );
-      end;
-
-      if not State.BuildContext.HasCompilerExitCode then
-      begin
-        State.BuildContext.CompilerExitCode := CompilerExitCode;
-        State.BuildContext.HasCompilerExitCode := True;
-      end;
-    finally
-      RunResult.Free;
-    end;
-
-    if CompilerExitCode <> 0 then
-    begin
-      Fail(State, Session.PrimaryToolFailureMapping + ': compiler exit code ' + IntToStr(CompilerExitCode));
-    end;
-
-    State.BuildContext.ArtifactPath := Session.BackendPrimaryArtifactPath;
-    WriteLn('mode=build');
-    WriteLn('command=build');
-    WriteLn('selector=build');
-    WriteLn('source=', SourcePath);
-    WriteLn('target=', TargetName);
-    WriteLn('target-config=', TargetConfig.ConfigPath);
-    WriteLn('compiler=', State.BuildContext.CompilerName);
-    WriteLn('compiler-exit=', CompilerExitCode);
-    WriteLn('artifact=', State.BuildContext.ArtifactPath);
-    PrintSessionProjection(False, State);
-    WriteLn('status=success');
-    WriteLn('result=success');
-    WriteLn('command-outcome=success');
-    WriteLn('build-result=success');
-    PrintCommandEnvelope(
-      State,
-      ExitSuccessCode,
-      'build',
-      'success',
-      'success',
-      '',
-      'build succeeded',
-      False
-    );
-    WriteLn('human-summary=build succeeded');
   finally
     Session.Free;
     WorkspaceModel.Free;
@@ -1045,7 +732,10 @@ begin
         OutDirOverride := ParamStr(Index);
       end
       else
-        AppendString(UnitRootOverrides, ParamStr(Index));
+      begin
+        SetLength(UnitRootOverrides, Length(UnitRootOverrides) + 1);
+        UnitRootOverrides[Length(UnitRootOverrides) - 1] := ParamStr(Index);
+      end;
     end
     else
       Fail(State, 'unknown-option: ' + OptionName, True);
@@ -1057,6 +747,7 @@ begin
     Fail(State, 'missing-required-option: --target', True);
 
   RunBuild(
+    State,
     SourcePath,
     TargetName,
     ToolchainBindingOverride,
