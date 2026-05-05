@@ -12,16 +12,7 @@ const
   ExitSuccessCode = 0;
   ExitFailureCode = 1;
 
-function EnvelopeCommandName(const AState: TNextPasState): string;
 function EnvelopeSelectorName(const AState: TNextPasState): string;
-function FailureKindFromMessage(const Message: string): string;
-procedure WriteUsageLine(const UseStdErr: Boolean; const Value: string);
-procedure PrintBuildUsage(const UseStdErr: Boolean);
-procedure PrintTestUsage(const UseStdErr: Boolean);
-procedure PrintEnvUsage(const UseStdErr: Boolean);
-procedure PrintDoctorUsage(const UseStdErr: Boolean);
-procedure PrintQueryUsage(const UseStdErr: Boolean);
-procedure PrintPkgUsage(const UseStdErr: Boolean);
 procedure PrintUsage(const ACommandName: string);
 procedure PrintUsageError(const ACommandName: string);
 procedure Fail(
