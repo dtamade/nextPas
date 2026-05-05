@@ -14,6 +14,21 @@ type
     WarningAsError: Boolean;
   end;
 
+  TRelatedInformation = record
+    Span: TCoreSourceSpan;
+    Message: string;
+  end;
+
+  TRelatedInformationArray = array of TRelatedInformation;
+
+  TSuggestedFix = record
+    Description: string;
+    ReplacementSpan: TCoreSourceSpan;
+    ReplacementText: string;
+  end;
+
+  TSuggestedFixArray = array of TSuggestedFix;
+
   TDiagnosticRecord = record
     Id: string;
     Code: string;
@@ -21,6 +36,8 @@ type
     Severity: string;
     PrimarySpan: TCoreSourceSpan;
     MessageText: string;
+    RelatedInformation: TRelatedInformationArray;
+    SuggestedFixes: TSuggestedFixArray;
     BindingId: string;
     ProfileId: string;
     StepId: string;
@@ -383,8 +400,14 @@ end;
 function TDiagnosticsSink.DiagnosticsJson: string;
 var
   ArtifactFields: string;
+  FixArray: string;
+  FixFields: string;
+  FI: SizeInt;
   Index: SizeInt;
   DiagnosticFields: string;
+  RelatedArray: string;
+  RI: SizeInt;
+  RIFields: string;
 begin
   if Length(FDiagnostics) = 0 then
     Exit('[]');
@@ -488,6 +511,43 @@ begin
       'message',
       JsonString(FDiagnostics[Index].MessageText)
     );
+    if Length(FDiagnostics[Index].RelatedInformation) > 0 then
+    begin
+      RelatedArray := '';
+      for RI := 0 to High(FDiagnostics[Index].RelatedInformation) do
+      begin
+        if RI > 0 then
+          RelatedArray := RelatedArray + ',';
+        RIFields := '';
+        AppendJsonField(RIFields, 'message',
+          JsonString(FDiagnostics[Index].RelatedInformation[RI].Message));
+        if FDiagnostics[Index].RelatedInformation[RI].Span.FileId > 0 then
+        begin
+          AppendJsonField(RIFields, 'fileId',
+            IntToStr(FDiagnostics[Index].RelatedInformation[RI].Span.FileId));
+          AppendJsonField(RIFields, 'byteOffset',
+            IntToStr(FDiagnostics[Index].RelatedInformation[RI].Span.ByteSpan.Offset));
+        end;
+        RelatedArray := RelatedArray + '{' + RIFields + '}';
+      end;
+      AppendJsonField(DiagnosticFields, 'relatedInformation', '[' + RelatedArray + ']');
+    end;
+    if Length(FDiagnostics[Index].SuggestedFixes) > 0 then
+    begin
+      FixArray := '';
+      for FI := 0 to High(FDiagnostics[Index].SuggestedFixes) do
+      begin
+        if FI > 0 then
+          FixArray := FixArray + ',';
+        FixFields := '';
+        AppendJsonField(FixFields, 'description',
+          JsonString(FDiagnostics[Index].SuggestedFixes[FI].Description));
+        AppendJsonField(FixFields, 'replacementText',
+          JsonString(FDiagnostics[Index].SuggestedFixes[FI].ReplacementText));
+        FixArray := FixArray + '{' + FixFields + '}';
+      end;
+      AppendJsonField(DiagnosticFields, 'suggestedFixes', '[' + FixArray + ']');
+    end;
     Result := Result + '{' + DiagnosticFields + '}';
   end;
   Result := Result + ']';
