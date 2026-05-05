@@ -58,7 +58,42 @@
 
 **Verification:** `bash build/verify_local.sh` → verify-local=pass
 
-**Next:** Phase 3 (Lexer extension): expand from ~35 tokens to 130+
+**Next:** Phase 4 (GreenCST/Parser extension)
+
+## Session: 2026-05-06 (Phase 3 Lexer Extension)
+
+- **Status:** completed
+- Actions taken:
+  - **3.1a-3.1e 关键字扩展**：TTokenKind 从 ~24 扩展到 ~153 个成员，覆盖：
+    - 核心语句关键字 17 个（if/then/else/while/do/for/to/downto/repeat/until/with/case/of/goto/break/continue/exit）
+    - 声明关键字 18 个（var/const/type/function/array/set/record/string/class/object/constructor/destructor/property/initialization/finalization/exports/label/threadvar）
+    - 可见性/方法关键字 17 个（published/public/private/protected/virtual/override/abstract/reintroduce/overload/dynamic/message/static/inline/forward/deprecated/platform/experimental）
+    - 调用约定关键字 12 个（stdcall/safecall/register/pascal/far/near/cppdecl/varargs/out/absolute/asm）
+    - 表达式运算符关键字 21 个（and/or/not/xor/shl/shr/div/mod/in/is/as/nil/true/false/raise/try/except/finally/on/inherited/self）
+    - 额外 objfpc 关键字 10 个（file/resourcestring/strict/operator/generic/specialize/reference/packed/contains/requires）
+  - **3.2 运算符/标点扩展**：多字符运算符（..,<>,<=,>=,+=,-=,*=,/=）、单字符运算符（+,-,*,/,=,<,>,@,^,[,]）、赋值运算符（:=）
+  - **3.3 数字/字符字面量**：十进制/十六进制($FF)整数、实数(3.14, 1.0e-5)、字符字面量(#65, #$FF)
+  - **3.4 编译器指令**：{$...} 和 (*$...*) 作为 tkCompilerDirective 单 token，保留指令文本
+  - **Codex 审查修复**：
+    - 编译器指令 lexeme 为空 → 捕获指令文本 + 正确 ByteOffset
+    - 实数字面量拒绝无效 3. 形式 → 仅当小数点后有数字才包含点号
+    - 十六进制字面量验证 → 至少一个 hex digit
+    - 字符字面量验证 → 至少一个数字 + #$FF hex 格式支持
+    - 科学计数法指数数字验证 → e/E 后至少一个数字（含回退）
+    - TryReadParenStarDirective 边界检查修正
+    - 3.eX 边缘情况回退修正（保存点号位置）
+  - **3.5 注册 lexer 测试组**：
+    - 添加 hgLexer 组到 THarnessGroup
+    - 5 个 fixture：keywords_core, literals, operators, declarations, directives
+    - smoke-group=lexer result=pass fixtures=5 executed=5
+
+**Commits created (Phase 3):**
+- `af1f1fc` feat: expand lexer with full keyword/operator/literal support and fix review issues
+- `cd31e27` feat: add lexer test group to harness with 5 fixtures
+- `d92eb5a` fix: correct real literal rollback for 3.eX edge case
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass
+lexer token count: 从 ~35 上升到 ~153
 
 ## Session: 2026-05-02 (Critical RTL Implementation - Process Execution Works!)
 
