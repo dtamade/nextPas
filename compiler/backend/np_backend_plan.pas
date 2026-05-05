@@ -3,6 +3,7 @@ unit np_backend_plan;
 {$mode objfpc}{$H+}
 {$UNITPATH ../ir}
 {$UNITPATH ../targets}
+{$UNITPATH ../diagnostics}
 
 interface
 

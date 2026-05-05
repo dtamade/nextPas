@@ -3,6 +3,7 @@ unit np_toolchain_plan;
 {$mode objfpc}{$H+}
 {$UNITPATH ../backend}
 {$UNITPATH ../targets}
+{$UNITPATH ../diagnostics}
 
 interface
 
