@@ -135,46 +135,46 @@ begin
   Result := FGreenTree.RootNode.ChildAt(AIndex);
 end;
 
-function TAstFacade.VarSectionCount: LongInt;
+function CountNodeKindInChildren(const ANode: TGreenNode;
+  const AKind: TGreenNodeKind): LongInt;
 var
   I: LongInt;
   Child: TGreenNode;
 begin
   Result := 0;
-  for I := 0 to RootNodeChildCount - 1 do
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
   begin
-    Child := RootNodeChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkVarSection) then
-      Inc(Result);
+    Child := ANode.ChildAt(I);
+    if Child <> nil then
+    begin
+      if Child.NodeKind = AKind then
+        Inc(Result);
+      Inc(Result, CountNodeKindInChildren(Child, AKind));
+    end;
   end;
+end;
+
+function TAstFacade.VarSectionCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkVarSection);
 end;
 
 function TAstFacade.ProcedureDeclCount: LongInt;
-var
-  I: LongInt;
-  Child: TGreenNode;
 begin
-  Result := 0;
-  for I := 0 to RootNodeChildCount - 1 do
-  begin
-    Child := RootNodeChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkProcedureDecl) then
-      Inc(Result);
-  end;
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkProcedureDecl);
 end;
 
 function TAstFacade.FunctionDeclCount: LongInt;
-var
-  I: LongInt;
-  Child: TGreenNode;
 begin
-  Result := 0;
-  for I := 0 to RootNodeChildCount - 1 do
-  begin
-    Child := RootNodeChildAt(I);
-    if (Child <> nil) and (Child.NodeKind = gnkFunctionDecl) then
-      Inc(Result);
-  end;
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkFunctionDecl);
 end;
 
 end.
