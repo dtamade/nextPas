@@ -20,22 +20,22 @@ procedure AppendSessionProjectionJsonFields(
 procedure AppendSyntaxProjectionJsonFields(
   var AFields: string;
   const AContext: TSyntaxProjectionContext;
-  const AHas: Boolean
+  const AHasSyntax: Boolean
 );
 procedure AppendResolutionProjectionJsonFields(
   var AFields: string;
   const AContext: TResolutionProjectionContext;
-  const AHas: Boolean
+  const AHasResolution: Boolean
 );
 procedure AppendSemanticProjectionJsonFields(
   var AFields: string;
   const AContext: TSemanticProjectionContext;
-  const AHas: Boolean
+  const AHasSemantic: Boolean
 );
 procedure AppendMirProjectionJsonFields(
   var AFields: string;
   const AContext: TMirProjectionContext;
-  const AHas: Boolean
+  const AHasMir: Boolean
 );
 procedure AppendBackendProjectionJsonFields(
   var AFields: string;
@@ -181,7 +181,7 @@ end;
 procedure AppendSyntaxProjectionJsonFields(
   var AFields: string;
   const AContext: TSyntaxProjectionContext;
-  const AHas: Boolean
+  const AHasSyntax: Boolean
 );
 begin
   AppendJsonStringField(AFields, 'syntaxStatus', AContext.Status);
@@ -189,13 +189,13 @@ begin
     AFields,
     'lexerTokenCount',
     AContext.LexerTokenCount,
-    AHas
+    AHasSyntax
   );
   AppendJsonIntegerField(
     AFields,
     'greenNodeCount',
     AContext.GreenNodeCount,
-    AHas
+    AHasSyntax
   );
   AppendJsonStringField(AFields, 'astRootKind', AContext.AstRootKind);
   AppendJsonStringField(AFields, 'astDeclaredName', AContext.AstDeclaredName);
@@ -204,7 +204,7 @@ end;
 procedure AppendResolutionProjectionJsonFields(
   var AFields: string;
   const AContext: TResolutionProjectionContext;
-  const AHas: Boolean
+  const AHasResolution: Boolean
 );
 begin
   AppendJsonStringField(AFields, 'resolutionStatus', AContext.Status);
@@ -213,20 +213,20 @@ begin
     AFields,
     'searchPathCount',
     AContext.SearchPathCount,
-    AHas
+    AHasResolution
   );
   AppendJsonStringField(AFields, 'searchIndexStatus', AContext.SearchIndexStatus);
   AppendJsonIntegerField(
     AFields,
     'indexedSearchRootCount',
     AContext.IndexedSearchRootCount,
-    AHas
+    AHasResolution
   );
   AppendJsonIntegerField(
     AFields,
     'searchIndexScanCount',
     AContext.SearchIndexScanCount,
-    AHas
+    AHasResolution
   );
   if AContext.SearchPathJson <> '' then
     AppendJsonField(AFields, 'searchPaths', AContext.SearchPathJson);
@@ -234,13 +234,13 @@ begin
     AFields,
     'resolvedUnitCount',
     AContext.ResolvedUnitCount,
-    AHas
+    AHasResolution
   );
   AppendJsonIntegerField(
     AFields,
     'unitGraphEdgeCount',
     AContext.UnitGraphEdgeCount,
-    AHas
+    AHasResolution
   );
   AppendJsonStringField(AFields, 'unitGraphRootName', AContext.UnitGraphRootName);
 end;
@@ -248,26 +248,26 @@ end;
 procedure AppendSemanticProjectionJsonFields(
   var AFields: string;
   const AContext: TSemanticProjectionContext;
-  const AHas: Boolean
+  const AHasSemantic: Boolean
 );
 begin
   AppendJsonStringField(AFields, 'semanticStatus', AContext.Status);
   AppendJsonStringField(AFields, 'symbolGraphStatus', AContext.SymbolGraphStatus);
   AppendJsonStringField(AFields, 'typeGraphStatus', AContext.TypeGraphStatus);
   AppendJsonStringField(AFields, 'typedHirStatus', AContext.TypedHirStatus);
-  AppendJsonIntegerField(AFields, 'symbolCount', AContext.SymbolCount, AHas);
-  AppendJsonIntegerField(AFields, 'typeCount', AContext.TypeCount, AHas);
+  AppendJsonIntegerField(AFields, 'symbolCount', AContext.SymbolCount, AHasSemantic);
+  AppendJsonIntegerField(AFields, 'typeCount', AContext.TypeCount, AHasSemantic);
   AppendJsonIntegerField(
     AFields,
     'typedHirNodeCount',
     AContext.TypedHirNodeCount,
-    AHas
+    AHasSemantic
   );
   AppendJsonIntegerField(
     AFields,
     'runtimeContractCount',
     AContext.RuntimeContractCount,
-    AHas
+    AHasSemantic
   );
   AppendJsonStringField(AFields, 'typedHirRootName', AContext.TypedHirRootName);
 end;
@@ -275,16 +275,16 @@ end;
 procedure AppendMirProjectionJsonFields(
   var AFields: string;
   const AContext: TMirProjectionContext;
-  const AHas: Boolean
+  const AHasMir: Boolean
 );
 begin
   AppendJsonStringField(AFields, 'mirStatus', AContext.Status);
-  AppendJsonIntegerField(AFields, 'mirBlockCount', AContext.BlockCount, AHas);
+  AppendJsonIntegerField(AFields, 'mirBlockCount', AContext.BlockCount, AHasMir);
   AppendJsonIntegerField(
     AFields,
     'mirOperationCount',
     AContext.OperationCount,
-    AHas
+    AHasMir
   );
   AppendJsonStringField(AFields, 'mirEntryBlock', AContext.EntryBlock);
   AppendJsonStringField(AFields, 'mirRootName', AContext.RootName);
@@ -742,7 +742,10 @@ begin
   );
   AppendJsonStringField(ResultFields, 'buildResult', ABuildResult);
 
-  AppendJsonField(EnvelopeFields, 'command', JsonString(AState.CommandName));
+  if AState.CommandName <> '' then
+    AppendJsonField(EnvelopeFields, 'command', JsonString(AState.CommandName))
+  else
+    AppendJsonField(EnvelopeFields, 'command', JsonString('cli'));
   AppendJsonField(EnvelopeFields, 'exitCode', IntToStr(AExitCode));
   if ResultFields <> '' then
     AppendJsonField(EnvelopeFields, 'result', '{' + ResultFields + '}');
