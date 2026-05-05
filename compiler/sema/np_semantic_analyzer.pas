@@ -325,13 +325,10 @@ begin
 end;
 
 function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
-var
-  Normalized: string;
 begin
   if ATypeName = '' then
     Exit(0);
-  Normalized := ATypeName;
-  Result := FModel.FindTypeByName(Normalized);
+  Result := FModel.FindTypeByName(ATypeName);
 end;
 
 function TSemanticAnalyzer.FindSymbolByName(const AName: string): LongInt;
@@ -457,8 +454,6 @@ procedure TSemanticAnalyzer.SeedDeclarations;
 var
   OwnerUnitId: string;
   RootNode: TGreenNode;
-  I: LongInt;
-  Child: TGreenNode;
 begin
   if (FRootAst = nil) or not FRootAst.IsValid then
     Exit;
@@ -485,25 +480,28 @@ begin
       Continue;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
-      if Child.ChildCount < 2 then
+      LhsSymbolId := FindSymbolByName(Child.Text);
+      if LhsSymbolId = 0 then
         Continue;
-      LhsSymbolId := FindSymbolByName(Child.ChildAt(0).Text);
-      RhsSymbolId := 0;
-      if Child.ChildAt(1).NodeKind = gnkIdentifier then
-        RhsSymbolId := FindSymbolByName(Child.ChildAt(1).Text);
-      if (LhsSymbolId > 0) and (RhsSymbolId > 0) then
+      LhsTypeId := FModel.SymbolTypeId(LhsSymbolId);
+      if LhsTypeId = 0 then
+        Continue;
+      if (Child.ChildCount >= 1) and
+        (Child.ChildAt(0).NodeKind = gnkIdentifier) then
       begin
-        LhsTypeId := FModel.SymbolTypeId(LhsSymbolId);
-        RhsTypeId := FModel.SymbolTypeId(RhsSymbolId);
-        if (LhsTypeId > 0) and (RhsTypeId > 0) and
-          (LhsTypeId <> RhsTypeId) then
-          EmitSemaError(
-            'sema.type-mismatch',
-            'type mismatch: cannot assign "' +
-              Child.ChildAt(1).Text + '" to "' +
-              Child.ChildAt(0).Text + '"',
-            Child.ByteOffset
-          );
+        RhsSymbolId := FindSymbolByName(Child.ChildAt(0).Text);
+        if RhsSymbolId > 0 then
+        begin
+          RhsTypeId := FModel.SymbolTypeId(RhsSymbolId);
+          if (RhsTypeId > 0) and (LhsTypeId <> RhsTypeId) then
+            EmitSemaError(
+              'sema.type-mismatch',
+              'type mismatch: cannot assign "' +
+                Child.ChildAt(0).Text + '" to "' +
+                Child.Text + '"',
+              Child.ByteOffset
+            );
+        end;
       end;
     end
     else
