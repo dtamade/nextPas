@@ -12,6 +12,7 @@ program nextpas;
 
 uses
   SysUtils, process, target_config, nextpas_json_helpers, nextpas_projection_types,
+  nextpas_projection_json,
   np_compilation_session, np_target_facts,
   np_package_workflow, np_toolchain_profiles, np_toolchain_runner,
   np_workspace_model;
@@ -21,45 +22,31 @@ const
   ExitFailureCode = 1;
 
 var
-  ActiveCommand: string;
-  ActiveSelector: string;
-  ActiveBuildContext: TBuildCommandContext;
-  ActiveSessionProjection: TSessionProjectionContext;
-  ActiveDiagnosticsProjection: TDiagnosticProjectionContext;
-  ActiveSyntaxProjection: TSyntaxProjectionContext;
-  ActiveResolutionProjection: TResolutionProjectionContext;
-  ActiveSemanticProjection: TSemanticProjectionContext;
-  ActiveMirProjection: TMirProjectionContext;
-  ActiveBackendProjection: TBackendProjectionContext;
-  ActiveToolchainProjection: TToolchainProjectionContext;
-  ActiveEnvironmentProjection: TEnvironmentProjectionContext;
-  ActiveDoctorProjection: TDoctorProjectionContext;
-  ActiveQueryProjection: TQueryProjectionContext;
-  ActivePackageProjection: TPackageProjectionContext;
+  State: TNextPasState;
 
 function EnvelopeCommandName: string;
 begin
-  if ActiveCommand <> '' then
-    Exit(ActiveCommand);
+  if State.CommandName <> '' then
+    Exit(State.CommandName);
 
   Result := 'cli';
 end;
 
 function EnvelopeSelectorName: string;
 begin
-  if ActiveSelector <> '' then
-    Exit(ActiveSelector);
-  if ActiveCommand = 'build' then
+  if State.SelectorName <> '' then
+    Exit(State.SelectorName);
+  if State.CommandName = 'build' then
     Exit('build');
-  if ActiveCommand = 'test' then
+  if State.CommandName = 'test' then
     Exit('test');
-  if ActiveCommand = 'env' then
+  if State.CommandName = 'env' then
     Exit('env');
-  if ActiveCommand = 'doctor' then
+  if State.CommandName = 'doctor' then
     Exit('doctor');
-  if ActiveCommand = 'query' then
+  if State.CommandName = 'query' then
     Exit('query');
-  if ActiveCommand = 'pkg' then
+  if State.CommandName = 'pkg' then
     Exit('pkg');
 
   Result := 'cli';
@@ -149,37 +136,37 @@ end;
 
 procedure PrintUsage;
 begin
-  if ActiveCommand = 'build' then
+  if State.CommandName = 'build' then
   begin
     PrintBuildUsage(False);
     Exit;
   end;
 
-  if ActiveCommand = 'test' then
+  if State.CommandName = 'test' then
   begin
     PrintTestUsage(False);
     Exit;
   end;
 
-  if ActiveCommand = 'env' then
+  if State.CommandName = 'env' then
   begin
     PrintEnvUsage(False);
     Exit;
   end;
 
-  if ActiveCommand = 'doctor' then
+  if State.CommandName = 'doctor' then
   begin
     PrintDoctorUsage(False);
     Exit;
   end;
 
-  if ActiveCommand = 'query' then
+  if State.CommandName = 'query' then
   begin
     PrintQueryUsage(False);
     Exit;
   end;
 
-  if ActiveCommand = 'pkg' then
+  if State.CommandName = 'pkg' then
   begin
     PrintPkgUsage(False);
     Exit;
@@ -223,37 +210,37 @@ end;
 
 procedure PrintUsageError;
 begin
-  if ActiveCommand = 'build' then
+  if State.CommandName = 'build' then
   begin
     PrintBuildUsage(True);
     Exit;
   end;
 
-  if ActiveCommand = 'test' then
+  if State.CommandName = 'test' then
   begin
     PrintTestUsage(True);
     Exit;
   end;
 
-  if ActiveCommand = 'env' then
+  if State.CommandName = 'env' then
   begin
     PrintEnvUsage(True);
     Exit;
   end;
 
-  if ActiveCommand = 'doctor' then
+  if State.CommandName = 'doctor' then
   begin
     PrintDoctorUsage(True);
     Exit;
   end;
 
-  if ActiveCommand = 'query' then
+  if State.CommandName = 'query' then
   begin
     PrintQueryUsage(True);
     Exit;
   end;
 
-  if ActiveCommand = 'pkg' then
+  if State.CommandName = 'pkg' then
   begin
     PrintPkgUsage(True);
     Exit;
@@ -293,862 +280,6 @@ begin
     '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
-end;
-
-procedure AppendBuildContextProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(AFields, 'source', ActiveBuildContext.SourcePath);
-  AppendJsonStringField(AFields, 'target', ActiveBuildContext.TargetName);
-  AppendJsonStringField(
-    AFields,
-    'workspaceRoot',
-    ActiveBuildContext.WorkspaceRootPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'workspaceDiscoveryKind',
-    ActiveBuildContext.WorkspaceDiscoveryKind
-  );
-  AppendJsonStringField(
-    AFields,
-    'workspaceDescriptorPath',
-    ActiveBuildContext.WorkspaceDescriptorPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageManifestPath',
-    ActiveBuildContext.PackageManifestPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'artifactRoot',
-    ActiveBuildContext.ArtifactRootPath
-  );
-  AppendJsonStringField(AFields, 'outputDir', ActiveBuildContext.OutputDirPath);
-  AppendJsonStringField(
-    AFields,
-    'targetConfig',
-    ActiveBuildContext.TargetConfigPath
-  );
-  AppendJsonStringField(AFields, 'compiler', ActiveBuildContext.CompilerName);
-  AppendJsonIntegerField(
-    AFields,
-    'compilerExit',
-    ActiveBuildContext.CompilerExitCode,
-    ActiveBuildContext.HasCompilerExitCode
-  );
-  AppendJsonStringField(AFields, 'artifact', ActiveBuildContext.ArtifactPath);
-end;
-
-procedure AppendSessionProjectionJsonFields(
-  var AFields: string;
-  const AHasSessionProjection: Boolean
-);
-begin
-  AppendJsonStringField(AFields, 'sessionId', ActiveSessionProjection.SessionId);
-  AppendJsonIntegerField(
-    AFields,
-    'rootFileId',
-    ActiveSessionProjection.RootFileId,
-    ActiveSessionProjection.RootFileId > 0
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'sourceFileCount',
-    ActiveSessionProjection.SourceFileCount,
-    ActiveSessionProjection.SourceFileCount > 0
-  );
-  AppendJsonStringField(
-    AFields,
-    'sourceLineIndexState',
-    ActiveSessionProjection.SourceLineIndexState
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'unitStateCount',
-    ActiveSessionProjection.UnitStateCount,
-    ActiveSessionProjection.UnitStateCount > 0
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'diagnosticCount',
-    ActiveDiagnosticsProjection.Count,
-    AHasSessionProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'diagnosticErrorCount',
-    ActiveDiagnosticsProjection.ErrorCount,
-    AHasSessionProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'diagnosticWarningCount',
-    ActiveDiagnosticsProjection.WarningCount,
-    AHasSessionProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'diagnosticsPolicy',
-    ActiveDiagnosticsProjection.Policy
-  );
-  AppendJsonStringField(
-    AFields,
-    'sessionLifetime',
-    ActiveSessionProjection.SessionLifetime
-  );
-  AppendJsonStringField(
-    AFields,
-    'unitLifetime',
-    ActiveSessionProjection.UnitLifetime
-  );
-  AppendJsonStringField(
-    AFields,
-    'stageLifetime',
-    ActiveSessionProjection.StageLifetime
-  );
-end;
-
-procedure AppendSyntaxProjectionJsonFields(
-  var AFields: string;
-  const AHasSyntaxProjection: Boolean
-);
-begin
-  AppendJsonStringField(AFields, 'syntaxStatus', ActiveSyntaxProjection.Status);
-  AppendJsonIntegerField(
-    AFields,
-    'lexerTokenCount',
-    ActiveSyntaxProjection.LexerTokenCount,
-    AHasSyntaxProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'greenNodeCount',
-    ActiveSyntaxProjection.GreenNodeCount,
-    AHasSyntaxProjection
-  );
-  AppendJsonStringField(AFields, 'astRootKind', ActiveSyntaxProjection.AstRootKind);
-  AppendJsonStringField(
-    AFields,
-    'astDeclaredName',
-    ActiveSyntaxProjection.AstDeclaredName
-  );
-end;
-
-procedure AppendResolutionProjectionJsonFields(
-  var AFields: string;
-  const AHasResolutionProjection: Boolean
-);
-begin
-  AppendJsonStringField(
-    AFields,
-    'resolutionStatus',
-    ActiveResolutionProjection.Status
-  );
-  AppendJsonStringField(
-    AFields,
-    'unitGraphStatus',
-    ActiveResolutionProjection.UnitGraphStatus
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'searchPathCount',
-    ActiveResolutionProjection.SearchPathCount,
-    AHasResolutionProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'searchIndexStatus',
-    ActiveResolutionProjection.SearchIndexStatus
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'indexedSearchRootCount',
-    ActiveResolutionProjection.IndexedSearchRootCount,
-    AHasResolutionProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'searchIndexScanCount',
-    ActiveResolutionProjection.SearchIndexScanCount,
-    AHasResolutionProjection
-  );
-  if ActiveResolutionProjection.SearchPathJson <> '' then
-    AppendJsonField(
-      AFields,
-      'searchPaths',
-      ActiveResolutionProjection.SearchPathJson
-    );
-  AppendJsonIntegerField(
-    AFields,
-    'resolvedUnitCount',
-    ActiveResolutionProjection.ResolvedUnitCount,
-    AHasResolutionProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'unitGraphEdgeCount',
-    ActiveResolutionProjection.UnitGraphEdgeCount,
-    AHasResolutionProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'unitGraphRootName',
-    ActiveResolutionProjection.UnitGraphRootName
-  );
-end;
-
-procedure AppendSemanticProjectionJsonFields(
-  var AFields: string;
-  const AHasSemanticProjection: Boolean
-);
-begin
-  AppendJsonStringField(AFields, 'semanticStatus', ActiveSemanticProjection.Status);
-  AppendJsonStringField(
-    AFields,
-    'symbolGraphStatus',
-    ActiveSemanticProjection.SymbolGraphStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'typeGraphStatus',
-    ActiveSemanticProjection.TypeGraphStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'typedHirStatus',
-    ActiveSemanticProjection.TypedHirStatus
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'symbolCount',
-    ActiveSemanticProjection.SymbolCount,
-    AHasSemanticProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'typeCount',
-    ActiveSemanticProjection.TypeCount,
-    AHasSemanticProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'typedHirNodeCount',
-    ActiveSemanticProjection.TypedHirNodeCount,
-    AHasSemanticProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'runtimeContractCount',
-    ActiveSemanticProjection.RuntimeContractCount,
-    AHasSemanticProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'typedHirRootName',
-    ActiveSemanticProjection.TypedHirRootName
-  );
-end;
-
-procedure AppendMirProjectionJsonFields(
-  var AFields: string;
-  const AHasMirProjection: Boolean
-);
-begin
-  AppendJsonStringField(AFields, 'mirStatus', ActiveMirProjection.Status);
-  AppendJsonIntegerField(
-    AFields,
-    'mirBlockCount',
-    ActiveMirProjection.BlockCount,
-    AHasMirProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'mirOperationCount',
-    ActiveMirProjection.OperationCount,
-    AHasMirProjection
-  );
-  AppendJsonStringField(AFields, 'mirEntryBlock', ActiveMirProjection.EntryBlock);
-  AppendJsonStringField(AFields, 'mirRootName', ActiveMirProjection.RootName);
-end;
-
-procedure AppendBackendProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(
-    AFields,
-    'backendPlanStatus',
-    ActiveBackendProjection.PlanStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'backendOutputKind',
-    ActiveBackendProjection.OutputKind
-  );
-  AppendJsonStringField(
-    AFields,
-    'backendPrimaryArtifactKind',
-    ActiveBackendProjection.PrimaryArtifactKind
-  );
-  AppendJsonStringField(
-    AFields,
-    'backendPrimaryArtifactPath',
-    ActiveBackendProjection.PrimaryArtifactPath
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'backendArtifactCount',
-    ActiveBackendProjection.ArtifactCount,
-    ActiveBackendProjection.ArtifactCount > 0
-  );
-  if ActiveBackendProjection.ArtifactsJson <> '' then
-    AppendJsonField(
-      AFields,
-      'backendArtifacts',
-      ActiveBackendProjection.ArtifactsJson
-    );
-end;
-
-procedure AppendToolchainProjectionJsonFields(
-  var AFields: string;
-  const AHasSessionProjection: Boolean;
-  const AHasBackendProjection: Boolean
-);
-begin
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'hostId',
-    ActiveToolchainProjection.HostId,
-    AHasSessionProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'toolchainBindingId',
-    ActiveToolchainProjection.ToolchainBindingId
-  );
-  AppendJsonStringField(
-    AFields,
-    'backendFamily',
-    ActiveToolchainProjection.BackendFamily
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'assemblerProfileId',
-    ActiveToolchainProjection.AssemblerProfileId,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'linkerProfileId',
-    ActiveToolchainProjection.LinkerProfileId,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'archiverProfileId',
-    ActiveToolchainProjection.ArchiverProfileId,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'resourceToolProfileId',
-    ActiveToolchainProjection.ResourceToolProfileId,
-    AHasSessionProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'targetObjectFormat',
-    ActiveToolchainProjection.TargetObjectFormat
-  );
-  AppendJsonStringField(
-    AFields,
-    'targetAssemblerFlavor',
-    ActiveToolchainProjection.TargetAssemblerFlavor
-  );
-  AppendJsonStringField(
-    AFields,
-    'targetLinkerFlavor',
-    ActiveToolchainProjection.TargetLinkerFlavor
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'targetRuntimeLayoutKey',
-    ActiveToolchainProjection.TargetRuntimeLayoutKey,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'targetCSymbolPrefix',
-    ActiveToolchainProjection.TargetCSymbolPrefix,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'targetCLibraryNaming',
-    ActiveToolchainProjection.TargetCLibraryNaming,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'targetLlvmTriple',
-    ActiveToolchainProjection.TargetLlvmTriple,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'targetLlvmDataLayout',
-    ActiveToolchainProjection.TargetLlvmDataLayout,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'sysrootMode',
-    ActiveToolchainProjection.SysrootMode,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'runtimeSdkId',
-    ActiveToolchainProjection.RuntimeSdkId,
-    AHasSessionProjection
-  );
-  AppendJsonBooleanField(
-    AFields,
-    'allowHostFallback',
-    ActiveToolchainProjection.AllowHostFallback,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'toolRootKind',
-    ActiveToolchainProjection.ToolRootKind,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'runtimeRootKind',
-    ActiveToolchainProjection.RuntimeRootKind,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'responseFilePolicy',
-    ActiveToolchainProjection.ResponseFilePolicy,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'linkScriptPolicy',
-    ActiveToolchainProjection.LinkScriptPolicy,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'toolchainPlanStatus',
-    ActiveToolchainProjection.ToolchainPlanStatus,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'toolchainPlanFamily',
-    ActiveToolchainProjection.ToolchainPlanFamily,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'toolProfileRoot',
-    ActiveToolchainProjection.ToolProfileRoot,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'logicalLinkRequestStatus',
-    ActiveToolchainProjection.LogicalLinkRequestStatus,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'logicalLinkRequestOutputKind',
-    ActiveToolchainProjection.LogicalLinkRequestOutputKind,
-    AHasSessionProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'logicalLibraryRequestCount',
-    ActiveToolchainProjection.LogicalLibraryRequestCount,
-    AHasSessionProjection
-  );
-  if ActiveToolchainProjection.LogicalLinkRequestJson <> '' then
-    AppendJsonField(
-      AFields,
-      'logicalLinkRequest',
-      ActiveToolchainProjection.LogicalLinkRequestJson
-    );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'llvmToolchainStatus',
-    ActiveToolchainProjection.LlvmToolchainStatus,
-    AHasSessionProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'llvmExecutableSetId',
-    ActiveToolchainProjection.LlvmExecutableSetId,
-    AHasSessionProjection
-  );
-  if ActiveToolchainProjection.LlvmExecutableSetJson <> '' then
-    AppendJsonField(
-      AFields,
-      'llvmExecutableSet',
-      ActiveToolchainProjection.LlvmExecutableSetJson
-    );
-  AppendJsonIntegerField(
-    AFields,
-    'toolInvocationCount',
-    ActiveToolchainProjection.ToolInvocationCount,
-    AHasBackendProjection
-  );
-  AppendJsonStringField(
-    AFields,
-    'toolRunStatus',
-    ActiveToolchainProjection.ToolRunStatus
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'toolRunStepCount',
-    ActiveToolchainProjection.ToolRunStepCount,
-    ActiveToolchainProjection.ToolRunStepCount > 0
-  );
-  AppendJsonStringField(
-    AFields,
-    'primaryToolRunStatus',
-    ActiveToolchainProjection.PrimaryToolRunStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'primaryToolRole',
-    ActiveToolchainProjection.PrimaryToolRole
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'primaryToolProfileId',
-    ActiveToolchainProjection.PrimaryToolProfileId,
-    AHasBackendProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'primaryToolStepId',
-    ActiveToolchainProjection.PrimaryToolStepId,
-    AHasBackendProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'primaryToolLogicalExecutable',
-    ActiveToolchainProjection.PrimaryToolLogicalExecutable,
-    AHasBackendProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'primaryToolSysrootRef',
-    ActiveToolchainProjection.PrimaryToolSysrootRef,
-    AHasBackendProjection
-  );
-  AppendJsonStringFieldWhenEnabled(
-    AFields,
-    'primaryToolFailureMapping',
-    ActiveToolchainProjection.PrimaryToolFailureMapping,
-    AHasBackendProjection
-  );
-end;
-
-procedure AppendEnvironmentProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(
-    AFields,
-    'toolchainBindingPath',
-    ActiveEnvironmentProjection.ToolchainBindingPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'distributionBinDir',
-    ActiveEnvironmentProjection.DistributionBinDir
-  );
-  AppendJsonStringField(
-    AFields,
-    'distributionLibDir',
-    ActiveEnvironmentProjection.DistributionLibDir
-  );
-  AppendJsonStringField(
-    AFields,
-    'distributionShareDir',
-    ActiveEnvironmentProjection.DistributionShareDir
-  );
-  AppendJsonStringField(
-    AFields,
-    'runtimeRoot',
-    ActiveEnvironmentProjection.RuntimeRootPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'runtimeLibc',
-    ActiveEnvironmentProjection.RuntimeLibcPath
-  );
-  AppendJsonBooleanField(
-    AFields,
-    'runtimeLibcPresent',
-    ActiveEnvironmentProjection.RuntimeLibcPresent,
-    ActiveEnvironmentProjection.HasRuntimeLibcPresent
-  );
-  AppendJsonStringField(
-    AFields,
-    'environmentReadiness',
-    ActiveEnvironmentProjection.EnvironmentReadiness
-  );
-  AppendJsonStringField(
-    AFields,
-    'environmentStatus',
-    ActiveEnvironmentProjection.EnvironmentStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'runtimeSdkStatus',
-    ActiveEnvironmentProjection.RuntimeSdkStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'toolchainBindingStatus',
-    ActiveEnvironmentProjection.ToolchainBindingStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'distributionStatus',
-    ActiveEnvironmentProjection.DistributionStatus
-  );
-end;
-
-procedure AppendDoctorProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(
-    AFields,
-    'doctorWorkspaceStatus',
-    ActiveDoctorProjection.WorkspaceStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'doctorToolchainBindingStatus',
-    ActiveDoctorProjection.ToolchainBindingStatus
-  );
-  AppendJsonStringField(AFields, 'doctorStatus', ActiveDoctorProjection.Status);
-  AppendJsonIntegerField(
-    AFields,
-    'doctorCheckCount',
-    ActiveDoctorProjection.CheckCount,
-    ActiveDoctorProjection.CheckCount > 0
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'doctorFindingCount',
-    ActiveDoctorProjection.FindingCount,
-    ActiveDoctorProjection.CheckCount > 0
-  );
-  if ActiveDoctorProjection.FindingsJson <> '' then
-    AppendJsonField(
-      AFields,
-      'doctorFindings',
-      ActiveDoctorProjection.FindingsJson
-    );
-end;
-
-procedure AppendQueryProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(AFields, 'queryKind', ActiveQueryProjection.Kind);
-  AppendJsonStringField(AFields, 'queryStatus', ActiveQueryProjection.Status);
-  AppendJsonStringField(
-    AFields,
-    'analysisSource',
-    ActiveQueryProjection.AnalysisSource
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'queryResultCount',
-    ActiveQueryProjection.ResultCount,
-    ActiveQueryProjection.HasResultCount
-  );
-end;
-
-procedure AppendPackageProjectionJsonFields(var AFields: string);
-begin
-  AppendJsonStringField(
-    AFields,
-    'packageWorkflowStatus',
-    ActivePackageProjection.WorkflowStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageManifestStatus',
-    ActivePackageProjection.ManifestStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageLockStatus',
-    ActivePackageProjection.LockStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageInstallPlanStatus',
-    ActivePackageProjection.InstallPlanStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageRootPath',
-    ActivePackageProjection.PackageRootPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageName',
-    ActivePackageProjection.PackageName
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageLockfilePath',
-    ActivePackageProjection.LockfilePath
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'packageSourceRootCount',
-    ActivePackageProjection.SourceRootCount,
-    ActivePackageProjection.HasSourceRootCount
-  );
-end;
-
-function BuildCommandEnvelopeJson(
-  const AExitCode: LongInt;
-  const ASelector: string;
-  const AStatusValue: string;
-  const ABuildResult: string;
-  const AFailureKind: string;
-  const AHumanSummary: string
-): string;
-var
-  EnvelopeFields: string;
-  HasCommandToolchainProjection: Boolean;
-  HasBackendProjection: Boolean;
-  HasMirProjection: Boolean;
-  HasResolutionProjection: Boolean;
-  HasSemanticProjection: Boolean;
-  HasSessionProjection: Boolean;
-  HasSyntaxProjection: Boolean;
-  ResultFields: string;
-begin
-  EnvelopeFields := '';
-  ResultFields := '';
-  HasSessionProjection := ActiveSessionProjection.SessionId <> '';
-  HasSyntaxProjection := ActiveSyntaxProjection.Status <> '';
-  HasResolutionProjection := ActiveResolutionProjection.Status <> '';
-  HasSemanticProjection := ActiveSemanticProjection.Status <> '';
-  HasMirProjection := ActiveMirProjection.Status <> '';
-  HasBackendProjection := ActiveBackendProjection.PlanStatus <> '';
-  HasCommandToolchainProjection := HasSessionProjection or
-    (ActiveToolchainProjection.HostId <> '') or
-    (ActiveToolchainProjection.ToolchainBindingId <> '');
-  AppendJsonStringField(ResultFields, 'selector', ASelector);
-  AppendJsonStringField(ResultFields, 'status', AStatusValue);
-  AppendJsonStringField(ResultFields, 'result', ABuildResult);
-  AppendJsonStringField(ResultFields, 'failureKind', AFailureKind);
-  AppendBuildContextProjectionJsonFields(ResultFields);
-  AppendSessionProjectionJsonFields(ResultFields, HasSessionProjection);
-  AppendSyntaxProjectionJsonFields(ResultFields, HasSyntaxProjection);
-  AppendResolutionProjectionJsonFields(ResultFields, HasResolutionProjection);
-  AppendSemanticProjectionJsonFields(ResultFields, HasSemanticProjection);
-  AppendMirProjectionJsonFields(ResultFields, HasMirProjection);
-  AppendBackendProjectionJsonFields(ResultFields);
-  AppendToolchainProjectionJsonFields(
-    ResultFields,
-    HasCommandToolchainProjection,
-    HasBackendProjection
-  );
-  AppendEnvironmentProjectionJsonFields(ResultFields);
-  AppendDoctorProjectionJsonFields(ResultFields);
-  AppendQueryProjectionJsonFields(ResultFields);
-  AppendPackageProjectionJsonFields(ResultFields);
-  AppendJsonStringField(
-    ResultFields,
-    'diagnosticsSummary',
-    ActiveDiagnosticsProjection.Summary
-  );
-  AppendJsonStringField(ResultFields, 'buildResult', ABuildResult);
-
-  AppendJsonField(EnvelopeFields, 'command', JsonString(EnvelopeCommandName));
-  AppendJsonField(EnvelopeFields, 'exitCode', IntToStr(AExitCode));
-  if ResultFields <> '' then
-    AppendJsonField(EnvelopeFields, 'result', '{' + ResultFields + '}');
-  if ActiveDiagnosticsProjection.Json <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'diagnostics',
-      ActiveDiagnosticsProjection.Json
-    )
-  else
-    AppendJsonField(EnvelopeFields, 'diagnostics', '[]');
-  if ActiveToolchainProjection.BuildTraceRef <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'buildTraceRef',
-      JsonString(ActiveToolchainProjection.BuildTraceRef)
-    )
-  else
-    AppendJsonField(EnvelopeFields, 'buildTraceRef', 'null');
-  if ActiveToolchainProjection.BuildTraceJson <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'buildTrace',
-      ActiveToolchainProjection.BuildTraceJson
-    );
-  if ActiveToolchainProjection.ToolInvocationPlanRef <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'toolInvocationPlanRef',
-      JsonString(ActiveToolchainProjection.ToolInvocationPlanRef)
-    );
-  if ActiveToolchainProjection.ToolInvocationPlanJson <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'toolInvocationPlan',
-      ActiveToolchainProjection.ToolInvocationPlanJson
-    );
-  if ActiveToolchainProjection.ToolStatusEventsJson <> '' then
-    AppendJsonField(
-      EnvelopeFields,
-      'toolStatusEvents',
-      ActiveToolchainProjection.ToolStatusEventsJson
-    );
-  AppendJsonField(EnvelopeFields, 'humanSummary', JsonString(AHumanSummary));
-  Result := '{' + EnvelopeFields + '}';
-end;
-
-procedure PrintCommandEnvelope(
-  const AExitCode: LongInt;
-  const ASelector: string;
-  const AStatusValue: string;
-  const ABuildResult: string;
-  const AFailureKind: string;
-  const AHumanSummary: string;
-  const AUseStdErr: Boolean
-);
-var
-  EnvelopeJson: string;
-begin
-  EnvelopeJson := BuildCommandEnvelopeJson(
-    AExitCode,
-    ASelector,
-    AStatusValue,
-    ABuildResult,
-    AFailureKind,
-    AHumanSummary
-  );
-  if AUseStdErr then
-    WriteLn(ErrOutput, 'command-envelope=', EnvelopeJson)
-  else
-    WriteLn('command-envelope=', EnvelopeJson);
 end;
 
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
@@ -1819,23 +950,23 @@ end;
 
 procedure ClearBuildCommandContext;
 begin
-  ClearBuildCommandContextValue(ActiveBuildContext);
+  ClearBuildCommandContextValue(State.BuildContext);
 end;
 
 procedure ClearSessionContext;
 begin
-  ClearSessionProjectionContextValue(ActiveSessionProjection);
-  ClearDiagnosticProjectionContextValue(ActiveDiagnosticsProjection);
-  ClearSyntaxProjectionContextValue(ActiveSyntaxProjection);
-  ClearResolutionProjectionContextValue(ActiveResolutionProjection);
-  ClearSemanticProjectionContextValue(ActiveSemanticProjection);
-  ClearMirProjectionContextValue(ActiveMirProjection);
-  ClearBackendProjectionContextValue(ActiveBackendProjection);
-  ClearToolchainProjectionContextValue(ActiveToolchainProjection);
-  ClearEnvironmentProjectionContextValue(ActiveEnvironmentProjection);
-  ClearDoctorProjectionContextValue(ActiveDoctorProjection);
-  ClearQueryProjectionContextValue(ActiveQueryProjection);
-  ClearPackageProjectionContextValue(ActivePackageProjection);
+  ClearSessionProjectionContextValue(State.SessionProjection);
+  ClearDiagnosticProjectionContextValue(State.DiagnosticsProjection);
+  ClearSyntaxProjectionContextValue(State.SyntaxProjection);
+  ClearResolutionProjectionContextValue(State.ResolutionProjection);
+  ClearSemanticProjectionContextValue(State.SemanticProjection);
+  ClearMirProjectionContextValue(State.MirProjection);
+  ClearBackendProjectionContextValue(State.BackendProjection);
+  ClearToolchainProjectionContextValue(State.ToolchainProjection);
+  ClearEnvironmentProjectionContextValue(State.EnvironmentProjection);
+  ClearDoctorProjectionContextValue(State.DoctorProjection);
+  ClearQueryProjectionContextValue(State.QueryProjection);
+  ClearPackageProjectionContextValue(State.PackageProjection);
 end;
 
 procedure CaptureBuildCommandContext(
@@ -1845,7 +976,7 @@ procedure CaptureBuildCommandContext(
 );
 begin
   CaptureBuildCommandContextValue(
-    ActiveBuildContext,
+    State.BuildContext,
     ASourcePath,
     ATargetName,
     AWorkspaceModel
@@ -1854,15 +985,15 @@ end;
 
 procedure CaptureSessionContext(const Session: TCompilationSession);
 begin
-  CaptureBuildContextFromSession(ActiveBuildContext, Session);
-  CaptureSessionProjectionContextValue(ActiveSessionProjection, Session);
-  CaptureDiagnosticProjectionContextValue(ActiveDiagnosticsProjection, Session);
-  CaptureSyntaxProjectionContextValue(ActiveSyntaxProjection, Session);
-  CaptureResolutionProjectionContextValue(ActiveResolutionProjection, Session);
-  CaptureSemanticProjectionContextValue(ActiveSemanticProjection, Session);
-  CaptureMirProjectionContextValue(ActiveMirProjection, Session);
-  CaptureBackendProjectionContextValue(ActiveBackendProjection, Session);
-  CaptureToolchainProjectionContextValue(ActiveToolchainProjection, Session);
+  CaptureBuildContextFromSession(State.BuildContext, Session);
+  CaptureSessionProjectionContextValue(State.SessionProjection, Session);
+  CaptureDiagnosticProjectionContextValue(State.DiagnosticsProjection, Session);
+  CaptureSyntaxProjectionContextValue(State.SyntaxProjection, Session);
+  CaptureResolutionProjectionContextValue(State.ResolutionProjection, Session);
+  CaptureSemanticProjectionContextValue(State.SemanticProjection, Session);
+  CaptureMirProjectionContextValue(State.MirProjection, Session);
+  CaptureBackendProjectionContextValue(State.BackendProjection, Session);
+  CaptureToolchainProjectionContextValue(State.ToolchainProjection, Session);
 end;
 
 procedure WriteProjectionLine(
@@ -1939,32 +1070,32 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'workspace-root',
-    ActiveBuildContext.WorkspaceRootPath
+    State.BuildContext.WorkspaceRootPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'workspace-discovery-kind',
-    ActiveBuildContext.WorkspaceDiscoveryKind
+    State.BuildContext.WorkspaceDiscoveryKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'workspace-descriptor-path',
-    ActiveBuildContext.WorkspaceDescriptorPath
+    State.BuildContext.WorkspaceDescriptorPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-manifest-path',
-    ActiveBuildContext.PackageManifestPath
+    State.BuildContext.PackageManifestPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'artifact-root',
-    ActiveBuildContext.ArtifactRootPath
+    State.BuildContext.ArtifactRootPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'output-dir',
-    ActiveBuildContext.OutputDirPath
+    State.BuildContext.OutputDirPath
   );
 end;
 
@@ -1973,27 +1104,27 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'session-id',
-    ActiveSessionProjection.SessionId
+    State.SessionProjection.SessionId
   );
   WriteProjectionInteger(
     UseStdErr,
     'root-file-id',
-    ActiveSessionProjection.RootFileId
+    State.SessionProjection.RootFileId
   );
   WriteProjectionInteger(
     UseStdErr,
     'source-db-file-count',
-    ActiveSessionProjection.SourceFileCount
+    State.SessionProjection.SourceFileCount
   );
   WriteProjectionLine(
     UseStdErr,
     'source-db-line-index',
-    ActiveSessionProjection.SourceLineIndexState
+    State.SessionProjection.SourceLineIndexState
   );
   WriteProjectionInteger(
     UseStdErr,
     'unit-state-count',
-    ActiveSessionProjection.UnitStateCount
+    State.SessionProjection.UnitStateCount
   );
 end;
 
@@ -2002,47 +1133,47 @@ begin
   WriteProjectionInteger(
     UseStdErr,
     'diagnostics-count',
-    ActiveDiagnosticsProjection.Count
+    State.DiagnosticsProjection.Count
   );
   WriteProjectionInteger(
     UseStdErr,
     'diagnostics-error-count',
-    ActiveDiagnosticsProjection.ErrorCount
+    State.DiagnosticsProjection.ErrorCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'diagnostics-warning-count',
-    ActiveDiagnosticsProjection.WarningCount
+    State.DiagnosticsProjection.WarningCount
   );
   WriteProjectionLine(
     UseStdErr,
     'diagnostics-policy',
-    ActiveDiagnosticsProjection.Policy
+    State.DiagnosticsProjection.Policy
   );
 end;
 
 procedure PrintSyntaxProjectionFields(const UseStdErr: Boolean);
 begin
-  WriteProjectionLine(UseStdErr, 'syntax-status', ActiveSyntaxProjection.Status);
+  WriteProjectionLine(UseStdErr, 'syntax-status', State.SyntaxProjection.Status);
   WriteProjectionInteger(
     UseStdErr,
     'lexer-token-count',
-    ActiveSyntaxProjection.LexerTokenCount
+    State.SyntaxProjection.LexerTokenCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'green-node-count',
-    ActiveSyntaxProjection.GreenNodeCount
+    State.SyntaxProjection.GreenNodeCount
   );
   WriteProjectionLine(
     UseStdErr,
     'ast-root-kind',
-    ActiveSyntaxProjection.AstRootKind
+    State.SyntaxProjection.AstRootKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'ast-declared-name',
-    ActiveSyntaxProjection.AstDeclaredName
+    State.SyntaxProjection.AstDeclaredName
   );
 end;
 
@@ -2051,52 +1182,52 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'resolution-status',
-    ActiveResolutionProjection.Status
+    State.ResolutionProjection.Status
   );
   WriteProjectionLine(
     UseStdErr,
     'unit-graph-status',
-    ActiveResolutionProjection.UnitGraphStatus
+    State.ResolutionProjection.UnitGraphStatus
   );
   WriteProjectionInteger(
     UseStdErr,
     'search-path-count',
-    ActiveResolutionProjection.SearchPathCount
+    State.ResolutionProjection.SearchPathCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'search-index-status',
-    ActiveResolutionProjection.SearchIndexStatus
+    State.ResolutionProjection.SearchIndexStatus
   );
   WriteProjectionInteger(
     UseStdErr,
     'indexed-search-root-count',
-    ActiveResolutionProjection.IndexedSearchRootCount
+    State.ResolutionProjection.IndexedSearchRootCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'search-index-scan-count',
-    ActiveResolutionProjection.SearchIndexScanCount
+    State.ResolutionProjection.SearchIndexScanCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'search-path-json',
-    ActiveResolutionProjection.SearchPathJson
+    State.ResolutionProjection.SearchPathJson
   );
   WriteProjectionInteger(
     UseStdErr,
     'resolved-unit-count',
-    ActiveResolutionProjection.ResolvedUnitCount
+    State.ResolutionProjection.ResolvedUnitCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'unit-graph-edge-count',
-    ActiveResolutionProjection.UnitGraphEdgeCount
+    State.ResolutionProjection.UnitGraphEdgeCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'unit-graph-root-name',
-    ActiveResolutionProjection.UnitGraphRootName
+    State.ResolutionProjection.UnitGraphRootName
   );
 end;
 
@@ -2105,72 +1236,72 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'semantic-status',
-    ActiveSemanticProjection.Status
+    State.SemanticProjection.Status
   );
   WriteProjectionLine(
     UseStdErr,
     'symbol-graph-status',
-    ActiveSemanticProjection.SymbolGraphStatus
+    State.SemanticProjection.SymbolGraphStatus
   );
   WriteProjectionLine(
     UseStdErr,
     'type-graph-status',
-    ActiveSemanticProjection.TypeGraphStatus
+    State.SemanticProjection.TypeGraphStatus
   );
   WriteProjectionLine(
     UseStdErr,
     'typed-hir-status',
-    ActiveSemanticProjection.TypedHirStatus
+    State.SemanticProjection.TypedHirStatus
   );
   WriteProjectionInteger(
     UseStdErr,
     'symbol-count',
-    ActiveSemanticProjection.SymbolCount
+    State.SemanticProjection.SymbolCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'type-count',
-    ActiveSemanticProjection.TypeCount
+    State.SemanticProjection.TypeCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'typed-hir-node-count',
-    ActiveSemanticProjection.TypedHirNodeCount
+    State.SemanticProjection.TypedHirNodeCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'runtime-contract-count',
-    ActiveSemanticProjection.RuntimeContractCount
+    State.SemanticProjection.RuntimeContractCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'typed-hir-root-name',
-    ActiveSemanticProjection.TypedHirRootName
+    State.SemanticProjection.TypedHirRootName
   );
 end;
 
 procedure PrintMirProjectionFields(const UseStdErr: Boolean);
 begin
-  WriteProjectionLine(UseStdErr, 'mir-status', ActiveMirProjection.Status);
+  WriteProjectionLine(UseStdErr, 'mir-status', State.MirProjection.Status);
   WriteProjectionInteger(
     UseStdErr,
     'mir-block-count',
-    ActiveMirProjection.BlockCount
+    State.MirProjection.BlockCount
   );
   WriteProjectionInteger(
     UseStdErr,
     'mir-operation-count',
-    ActiveMirProjection.OperationCount
+    State.MirProjection.OperationCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'mir-entry-block',
-    ActiveMirProjection.EntryBlock
+    State.MirProjection.EntryBlock
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'mir-root-name',
-    ActiveMirProjection.RootName
+    State.MirProjection.RootName
   );
 end;
 
@@ -2179,33 +1310,33 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'backend-plan-status',
-    ActiveBackendProjection.PlanStatus
+    State.BackendProjection.PlanStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'backend-output-kind',
-    ActiveBackendProjection.OutputKind
+    State.BackendProjection.OutputKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'backend-primary-artifact-kind',
-    ActiveBackendProjection.PrimaryArtifactKind
+    State.BackendProjection.PrimaryArtifactKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'backend-primary-artifact-path',
-    ActiveBackendProjection.PrimaryArtifactPath
+    State.BackendProjection.PrimaryArtifactPath
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'backend-artifact-count',
-    ActiveBackendProjection.ArtifactCount,
-    ActiveBackendProjection.ArtifactCount > 0
+    State.BackendProjection.ArtifactCount,
+    State.BackendProjection.ArtifactCount > 0
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'backend-artifacts',
-    ActiveBackendProjection.ArtifactsJson
+    State.BackendProjection.ArtifactsJson
   );
 end;
 
@@ -2214,236 +1345,236 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'host-id',
-    ActiveToolchainProjection.HostId
+    State.ToolchainProjection.HostId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'toolchain-binding-id',
-    ActiveToolchainProjection.ToolchainBindingId
+    State.ToolchainProjection.ToolchainBindingId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'backend-family',
-    ActiveToolchainProjection.BackendFamily
+    State.ToolchainProjection.BackendFamily
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'assembler-profile-id',
-    ActiveToolchainProjection.AssemblerProfileId
+    State.ToolchainProjection.AssemblerProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'linker-profile-id',
-    ActiveToolchainProjection.LinkerProfileId
+    State.ToolchainProjection.LinkerProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'archiver-profile-id',
-    ActiveToolchainProjection.ArchiverProfileId
+    State.ToolchainProjection.ArchiverProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'resource-tool-profile-id',
-    ActiveToolchainProjection.ResourceToolProfileId
+    State.ToolchainProjection.ResourceToolProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-object-format',
-    ActiveToolchainProjection.TargetObjectFormat
+    State.ToolchainProjection.TargetObjectFormat
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-assembler-flavor',
-    ActiveToolchainProjection.TargetAssemblerFlavor
+    State.ToolchainProjection.TargetAssemblerFlavor
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-linker-flavor',
-    ActiveToolchainProjection.TargetLinkerFlavor
+    State.ToolchainProjection.TargetLinkerFlavor
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-runtime-layout-key',
-    ActiveToolchainProjection.TargetRuntimeLayoutKey
+    State.ToolchainProjection.TargetRuntimeLayoutKey
   );
   WriteProjectionTextWhenEnabled(
     UseStdErr,
     'target-c-symbol-prefix',
-    ActiveToolchainProjection.TargetCSymbolPrefix,
-    ActiveToolchainProjection.HostId <> ''
+    State.ToolchainProjection.TargetCSymbolPrefix,
+    State.ToolchainProjection.HostId <> ''
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-c-library-naming',
-    ActiveToolchainProjection.TargetCLibraryNaming
+    State.ToolchainProjection.TargetCLibraryNaming
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-llvm-triple',
-    ActiveToolchainProjection.TargetLlvmTriple
+    State.ToolchainProjection.TargetLlvmTriple
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'target-llvm-data-layout',
-    ActiveToolchainProjection.TargetLlvmDataLayout
+    State.ToolchainProjection.TargetLlvmDataLayout
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'sysroot-mode',
-    ActiveToolchainProjection.SysrootMode
+    State.ToolchainProjection.SysrootMode
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'runtime-sdk-id',
-    ActiveToolchainProjection.RuntimeSdkId
+    State.ToolchainProjection.RuntimeSdkId
   );
   WriteProjectionBooleanWhenEnabled(
     UseStdErr,
     'allow-host-fallback',
-    ActiveToolchainProjection.AllowHostFallback,
-    ActiveToolchainProjection.HostId <> ''
+    State.ToolchainProjection.AllowHostFallback,
+    State.ToolchainProjection.HostId <> ''
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-root-kind',
-    ActiveToolchainProjection.ToolRootKind
+    State.ToolchainProjection.ToolRootKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'runtime-root-kind',
-    ActiveToolchainProjection.RuntimeRootKind
+    State.ToolchainProjection.RuntimeRootKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'response-file-policy',
-    ActiveToolchainProjection.ResponseFilePolicy
+    State.ToolchainProjection.ResponseFilePolicy
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'link-script-policy',
-    ActiveToolchainProjection.LinkScriptPolicy
+    State.ToolchainProjection.LinkScriptPolicy
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'toolchain-plan-status',
-    ActiveToolchainProjection.ToolchainPlanStatus
+    State.ToolchainProjection.ToolchainPlanStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'toolchain-plan-family',
-    ActiveToolchainProjection.ToolchainPlanFamily
+    State.ToolchainProjection.ToolchainPlanFamily
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-profile-root',
-    ActiveToolchainProjection.ToolProfileRoot
+    State.ToolchainProjection.ToolProfileRoot
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'logical-link-request-status',
-    ActiveToolchainProjection.LogicalLinkRequestStatus
+    State.ToolchainProjection.LogicalLinkRequestStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'logical-link-request-output-kind',
-    ActiveToolchainProjection.LogicalLinkRequestOutputKind
+    State.ToolchainProjection.LogicalLinkRequestOutputKind
   );
   WriteProjectionInteger(
     UseStdErr,
     'logical-link-request-library-count',
-    ActiveToolchainProjection.LogicalLibraryRequestCount
+    State.ToolchainProjection.LogicalLibraryRequestCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'logical-link-request',
-    ActiveToolchainProjection.LogicalLinkRequestJson
+    State.ToolchainProjection.LogicalLinkRequestJson
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'llvm-toolchain-status',
-    ActiveToolchainProjection.LlvmToolchainStatus
+    State.ToolchainProjection.LlvmToolchainStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'llvm-executable-set-id',
-    ActiveToolchainProjection.LlvmExecutableSetId
+    State.ToolchainProjection.LlvmExecutableSetId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'llvm-executable-set',
-    ActiveToolchainProjection.LlvmExecutableSetJson
+    State.ToolchainProjection.LlvmExecutableSetJson
   );
   WriteProjectionInteger(
     UseStdErr,
     'tool-invocation-count',
-    ActiveToolchainProjection.ToolInvocationCount
+    State.ToolchainProjection.ToolInvocationCount
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-run-status',
-    ActiveToolchainProjection.ToolRunStatus
+    State.ToolchainProjection.ToolRunStatus
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'tool-run-step-count',
-    ActiveToolchainProjection.ToolRunStepCount,
-    ActiveToolchainProjection.ToolRunStepCount > 0
+    State.ToolchainProjection.ToolRunStepCount,
+    State.ToolchainProjection.ToolRunStepCount > 0
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-run-status',
-    ActiveToolchainProjection.PrimaryToolRunStatus
+    State.ToolchainProjection.PrimaryToolRunStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-role',
-    ActiveToolchainProjection.PrimaryToolRole
+    State.ToolchainProjection.PrimaryToolRole
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-profile-id',
-    ActiveToolchainProjection.PrimaryToolProfileId
+    State.ToolchainProjection.PrimaryToolProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-step-id',
-    ActiveToolchainProjection.PrimaryToolStepId
+    State.ToolchainProjection.PrimaryToolStepId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-logical-executable',
-    ActiveToolchainProjection.PrimaryToolLogicalExecutable
+    State.ToolchainProjection.PrimaryToolLogicalExecutable
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-sysroot-ref',
-    ActiveToolchainProjection.PrimaryToolSysrootRef
+    State.ToolchainProjection.PrimaryToolSysrootRef
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'primary-tool-failure-mapping',
-    ActiveToolchainProjection.PrimaryToolFailureMapping
+    State.ToolchainProjection.PrimaryToolFailureMapping
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-invocation-plan-ref',
-    ActiveToolchainProjection.ToolInvocationPlanRef
+    State.ToolchainProjection.ToolInvocationPlanRef
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-invocation-plan',
-    ActiveToolchainProjection.ToolInvocationPlanJson
+    State.ToolchainProjection.ToolInvocationPlanJson
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'tool-status-event-count',
-    ActiveToolchainProjection.ToolStatusEventCount,
-    ActiveToolchainProjection.ToolStatusEventCount > 0
+    State.ToolchainProjection.ToolStatusEventCount,
+    State.ToolchainProjection.ToolStatusEventCount > 0
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'tool-status-events',
-    ActiveToolchainProjection.ToolStatusEventsJson
+    State.ToolchainProjection.ToolStatusEventsJson
   );
 end;
 
@@ -2452,63 +1583,63 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'toolchain-binding-path',
-    ActiveEnvironmentProjection.ToolchainBindingPath
+    State.EnvironmentProjection.ToolchainBindingPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'distribution-bin-dir',
-    ActiveEnvironmentProjection.DistributionBinDir
+    State.EnvironmentProjection.DistributionBinDir
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'distribution-lib-dir',
-    ActiveEnvironmentProjection.DistributionLibDir
+    State.EnvironmentProjection.DistributionLibDir
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'distribution-share-dir',
-    ActiveEnvironmentProjection.DistributionShareDir
+    State.EnvironmentProjection.DistributionShareDir
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'runtime-root',
-    ActiveEnvironmentProjection.RuntimeRootPath
+    State.EnvironmentProjection.RuntimeRootPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'runtime-libc',
-    ActiveEnvironmentProjection.RuntimeLibcPath
+    State.EnvironmentProjection.RuntimeLibcPath
   );
   WriteProjectionBooleanWhenEnabled(
     UseStdErr,
     'runtime-libc-present',
-    ActiveEnvironmentProjection.RuntimeLibcPresent,
-    ActiveEnvironmentProjection.HasRuntimeLibcPresent
+    State.EnvironmentProjection.RuntimeLibcPresent,
+    State.EnvironmentProjection.HasRuntimeLibcPresent
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'environment-readiness',
-    ActiveEnvironmentProjection.EnvironmentReadiness
+    State.EnvironmentProjection.EnvironmentReadiness
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'environment-status',
-    ActiveEnvironmentProjection.EnvironmentStatus
+    State.EnvironmentProjection.EnvironmentStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'runtime-sdk-status',
-    ActiveEnvironmentProjection.RuntimeSdkStatus
+    State.EnvironmentProjection.RuntimeSdkStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'toolchain-binding-status',
-    ActiveEnvironmentProjection.ToolchainBindingStatus
+    State.EnvironmentProjection.ToolchainBindingStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'distribution-status',
-    ActiveEnvironmentProjection.DistributionStatus
+    State.EnvironmentProjection.DistributionStatus
   );
 end;
 
@@ -2517,54 +1648,54 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-workspace-status',
-    ActiveDoctorProjection.WorkspaceStatus
+    State.DoctorProjection.WorkspaceStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-toolchain-binding-status',
-    ActiveDoctorProjection.ToolchainBindingStatus
+    State.DoctorProjection.ToolchainBindingStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-status',
-    ActiveDoctorProjection.Status
+    State.DoctorProjection.Status
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'doctor-check-count',
-    ActiveDoctorProjection.CheckCount,
-    ActiveDoctorProjection.CheckCount > 0
+    State.DoctorProjection.CheckCount,
+    State.DoctorProjection.CheckCount > 0
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'doctor-finding-count',
-    ActiveDoctorProjection.FindingCount,
-    ActiveDoctorProjection.CheckCount > 0
+    State.DoctorProjection.FindingCount,
+    State.DoctorProjection.CheckCount > 0
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-finding-code',
-    ActiveDoctorProjection.FirstFinding.Code
+    State.DoctorProjection.FirstFinding.Code
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-finding-severity',
-    ActiveDoctorProjection.FirstFinding.Severity
+    State.DoctorProjection.FirstFinding.Severity
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-finding-subject',
-    ActiveDoctorProjection.FirstFinding.Subject
+    State.DoctorProjection.FirstFinding.Subject
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-finding-summary',
-    ActiveDoctorProjection.FirstFinding.Summary
+    State.DoctorProjection.FirstFinding.Summary
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'doctor-finding-suggested-action',
-    ActiveDoctorProjection.FirstFinding.SuggestedAction
+    State.DoctorProjection.FirstFinding.SuggestedAction
   );
 end;
 
@@ -2573,23 +1704,23 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'query-kind',
-    ActiveQueryProjection.Kind
+    State.QueryProjection.Kind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'query-status',
-    ActiveQueryProjection.Status
+    State.QueryProjection.Status
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'analysis-source',
-    ActiveQueryProjection.AnalysisSource
+    State.QueryProjection.AnalysisSource
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'query-result-count',
-    ActiveQueryProjection.ResultCount,
-    ActiveQueryProjection.HasResultCount
+    State.QueryProjection.ResultCount,
+    State.QueryProjection.HasResultCount
   );
 end;
 
@@ -2598,43 +1729,43 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-workflow-status',
-    ActivePackageProjection.WorkflowStatus
+    State.PackageProjection.WorkflowStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-manifest-status',
-    ActivePackageProjection.ManifestStatus
+    State.PackageProjection.ManifestStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-lock-status',
-    ActivePackageProjection.LockStatus
+    State.PackageProjection.LockStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-install-plan-status',
-    ActivePackageProjection.InstallPlanStatus
+    State.PackageProjection.InstallPlanStatus
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-root-path',
-    ActivePackageProjection.PackageRootPath
+    State.PackageProjection.PackageRootPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-name',
-    ActivePackageProjection.PackageName
+    State.PackageProjection.PackageName
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-lockfile-path',
-    ActivePackageProjection.LockfilePath
+    State.PackageProjection.LockfilePath
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'package-source-root-count',
-    ActivePackageProjection.SourceRootCount,
-    ActivePackageProjection.HasSourceRootCount
+    State.PackageProjection.SourceRootCount,
+    State.PackageProjection.HasSourceRootCount
   );
 end;
 
@@ -2643,73 +1774,73 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'diagnostics-summary',
-    ActiveDiagnosticsProjection.Summary
+    State.DiagnosticsProjection.Summary
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-id',
-    ActiveDiagnosticsProjection.Id
+    State.DiagnosticsProjection.Id
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-code',
-    ActiveDiagnosticsProjection.Code
+    State.DiagnosticsProjection.Code
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-phase',
-    ActiveDiagnosticsProjection.Phase
+    State.DiagnosticsProjection.Phase
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-message',
-    ActiveDiagnosticsProjection.Message
+    State.DiagnosticsProjection.Message
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-binding-id',
-    ActiveDiagnosticsProjection.BindingId
+    State.DiagnosticsProjection.BindingId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-profile-id',
-    ActiveDiagnosticsProjection.ProfileId
+    State.DiagnosticsProjection.ProfileId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-step-id',
-    ActiveDiagnosticsProjection.StepId
+    State.DiagnosticsProjection.StepId
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-logical-executable',
-    ActiveDiagnosticsProjection.LogicalExecutable
+    State.DiagnosticsProjection.LogicalExecutable
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-sysroot-ref',
-    ActiveDiagnosticsProjection.SysrootRef
+    State.DiagnosticsProjection.SysrootRef
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-resolved-path',
-    ActiveDiagnosticsProjection.ResolvedPath
+    State.DiagnosticsProjection.ResolvedPath
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-primary-artifact-kind',
-    ActiveDiagnosticsProjection.PrimaryArtifactKind
+    State.DiagnosticsProjection.PrimaryArtifactKind
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'diagnostic-primary-artifact-path',
-    ActiveDiagnosticsProjection.PrimaryArtifactPath
+    State.DiagnosticsProjection.PrimaryArtifactPath
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
     'diagnostic-exit-code',
-    ActiveDiagnosticsProjection.ExitCode,
-    ActiveDiagnosticsProjection.HasExitCode
+    State.DiagnosticsProjection.ExitCode,
+    State.DiagnosticsProjection.HasExitCode
   );
 end;
 
@@ -2718,12 +1849,12 @@ begin
   WriteProjectionTextIfPresent(
     UseStdErr,
     'build-trace-ref',
-    ActiveToolchainProjection.BuildTraceRef
+    State.ToolchainProjection.BuildTraceRef
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'build-trace',
-    ActiveToolchainProjection.BuildTraceJson
+    State.ToolchainProjection.BuildTraceJson
   );
 end;
 
@@ -2732,24 +1863,24 @@ begin
   WriteProjectionLine(
     UseStdErr,
     'lifecycle-session',
-    ActiveSessionProjection.SessionLifetime
+    State.SessionProjection.SessionLifetime
   );
   WriteProjectionLine(
     UseStdErr,
     'lifecycle-unit',
-    ActiveSessionProjection.UnitLifetime
+    State.SessionProjection.UnitLifetime
   );
   WriteProjectionLine(
     UseStdErr,
     'lifecycle-stage',
-    ActiveSessionProjection.StageLifetime
+    State.SessionProjection.StageLifetime
   );
 end;
 
 procedure PrintSessionProjection(const UseStdErr: Boolean);
 begin
   PrintBuildContextProjection(UseStdErr);
-  if ActiveSessionProjection.SessionId = '' then
+  if State.SessionProjection.SessionId = '' then
     Exit;
 
   PrintSessionIdentityProjection(UseStdErr);
@@ -2770,17 +1901,18 @@ var
   FailureKind: string;
 begin
   FailureKind := FailureKindFromMessage(Message);
-  if ActiveCommand <> '' then
-    WriteLn(ErrOutput, 'command=', ActiveCommand);
+  if State.CommandName <> '' then
+    WriteLn(ErrOutput, 'command=', State.CommandName);
   WriteLn(ErrOutput, 'selector=', EnvelopeSelectorName);
-  if ActiveBuildContext.TargetName <> '' then
-    WriteLn(ErrOutput, 'target=', ActiveBuildContext.TargetName);
+  if State.BuildContext.TargetName <> '' then
+    WriteLn(ErrOutput, 'target=', State.BuildContext.TargetName);
   PrintSessionProjection(True);
   WriteLn(ErrOutput, 'status=failure');
   WriteLn(ErrOutput, 'result=failure');
   WriteLn(ErrOutput, 'failure-kind=', FailureKind);
   WriteLn(ErrOutput, 'command-outcome=failure');
   PrintCommandEnvelope(
+    State,
     ExitFailureCode,
     EnvelopeSelectorName,
     'failure',
@@ -2938,7 +2070,7 @@ procedure RunEnvStatus(
 var
   TargetConfig: TTargetConfig;
 begin
-  ActiveBuildContext.TargetName := TargetName;
+  State.BuildContext.TargetName := TargetName;
   try
     TargetConfig := LoadTargetConfig(
       TargetName,
@@ -2950,14 +2082,14 @@ begin
       Fail(E.Message);
   end;
 
-  ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-  ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+  State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+  State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
   CaptureToolchainProjectionFromTargetConfig(
-    ActiveToolchainProjection,
+    State.ToolchainProjection,
     TargetConfig
   );
   CaptureEnvironmentProjectionFromTargetConfig(
-    ActiveEnvironmentProjection,
+    State.EnvironmentProjection,
     TargetConfig
   );
 
@@ -2974,6 +2106,7 @@ begin
   WriteLn('result=success');
   WriteLn('command-outcome=success');
   PrintCommandEnvelope(
+    State,
     ExitSuccessCode,
     'status',
     'success',
@@ -2994,15 +2127,15 @@ var
   TargetConfig: TTargetConfig;
   WorkspaceRoot: string;
 begin
-  ActiveBuildContext.TargetName := TargetName;
+  State.BuildContext.TargetName := TargetName;
   WorkspaceRoot := '';
   if WorkspaceOverride <> '' then
   begin
     WorkspaceRoot := ExpandFileName(WorkspaceOverride);
     if not DirectoryExists(WorkspaceRoot) then
       Fail('invalid-workspace-root: ' + WorkspaceOverride, True);
-    ActiveBuildContext.WorkspaceRootPath := WorkspaceRoot;
-    ActiveBuildContext.WorkspaceDiscoveryKind := 'explicit-workspace-override';
+    State.BuildContext.WorkspaceRootPath := WorkspaceRoot;
+    State.BuildContext.WorkspaceDiscoveryKind := 'explicit-workspace-override';
   end;
 
   try
@@ -3016,19 +2149,19 @@ begin
       Fail(E.Message);
   end;
 
-  ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-  ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+  State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+  State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
   CaptureToolchainProjectionFromTargetConfig(
-    ActiveToolchainProjection,
+    State.ToolchainProjection,
     TargetConfig
   );
   CaptureEnvironmentProjectionFromTargetConfig(
-    ActiveEnvironmentProjection,
+    State.EnvironmentProjection,
     TargetConfig
   );
   CaptureDoctorProjectionFromEnvironment(
-    ActiveDoctorProjection,
-    ActiveEnvironmentProjection,
+    State.DoctorProjection,
+    State.EnvironmentProjection,
     WorkspaceRoot
   );
 
@@ -3046,6 +2179,7 @@ begin
   WriteLn('result=success');
   WriteLn('command-outcome=success');
   PrintCommandEnvelope(
+    State,
     ExitSuccessCode,
     'doctor',
     'success',
@@ -3069,7 +2203,7 @@ var
   WorkspaceModel: TWorkspaceModel;
   WorkspaceRoot: string;
 begin
-  ActiveBuildContext.TargetName := TargetName;
+  State.BuildContext.TargetName := TargetName;
   if WorkspaceOverride = '' then
     Fail('missing-required-option: --workspace', True);
 
@@ -3099,15 +2233,15 @@ begin
         Fail(E.Message);
     end;
 
-    ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
     CaptureToolchainProjectionFromTargetConfig(
-      ActiveToolchainProjection,
+      State.ToolchainProjection,
       TargetConfig
     );
     WorkflowTruth := BuildPackageWorkflowTruthFromWorkspaceModel(WorkspaceModel);
     CapturePackageProjectionFromWorkflowTruth(
-      ActivePackageProjection,
+      State.PackageProjection,
       WorkflowTruth
     );
 
@@ -3124,6 +2258,7 @@ begin
     WriteLn('result=success');
     WriteLn('command-outcome=success');
     PrintCommandEnvelope(
+      State,
       ExitSuccessCode,
       'inspect',
       'success',
@@ -3190,8 +2325,8 @@ var
   TargetFacts: TTargetFactsView;
   WorkspaceModel: TWorkspaceModel;
 begin
-  ActiveBuildContext.SourcePath := SourcePath;
-  ActiveBuildContext.TargetName := TargetName;
+  State.BuildContext.SourcePath := SourcePath;
+  State.BuildContext.TargetName := TargetName;
   WorkspaceModel := nil;
   Session := nil;
 
@@ -3226,8 +2361,8 @@ begin
         Fail(E.Message);
     end;
 
-    ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
     TargetFacts := TargetFactsFromConfig(TargetConfig);
 
     Options.CommandName := 'query';
@@ -3260,11 +2395,11 @@ begin
     if Session.HasSemanticErrors then
       Fail('semantic-analysis-failed');
 
-    ActiveQueryProjection.Kind := 'symbols';
-    ActiveQueryProjection.Status := 'success';
-    ActiveQueryProjection.AnalysisSource := 'compilation-session';
-    ActiveQueryProjection.ResultCount := Session.SymbolCount;
-    ActiveQueryProjection.HasResultCount := True;
+    State.QueryProjection.Kind := 'symbols';
+    State.QueryProjection.Status := 'success';
+    State.QueryProjection.AnalysisSource := 'compilation-session';
+    State.QueryProjection.ResultCount := Session.SymbolCount;
+    State.QueryProjection.HasResultCount := True;
 
     WriteLn('mode=query');
     WriteLn('command=query');
@@ -3279,6 +2414,7 @@ begin
     WriteLn('result=success');
     WriteLn('command-outcome=success');
     PrintCommandEnvelope(
+      State,
       ExitSuccessCode,
       'symbols',
       'success',
@@ -3314,8 +2450,8 @@ var
   TargetFacts: TTargetFactsView;
   WorkspaceModel: TWorkspaceModel;
 begin
-  ActiveBuildContext.SourcePath := SourcePath;
-  ActiveBuildContext.TargetName := TargetName;
+  State.BuildContext.SourcePath := SourcePath;
+  State.BuildContext.TargetName := TargetName;
   WorkspaceModel := nil;
   Session := nil;
 
@@ -3362,9 +2498,9 @@ begin
         Fail(E.Message);
     end;
 
-    ActiveBuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
     TargetFacts := TargetFactsFromConfig(TargetConfig);
-    ActiveBuildContext.CompilerName := TargetConfig.CompilerExecutable;
+    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
     Options.CommandName := 'build';
     Options.BuildContext.RequestedSourcePath := SourcePath;
     Options.BuildContext.ResolvedSourcePath := ResolvedSourcePath;
@@ -3406,21 +2542,21 @@ begin
     if Session.HasToolchainErrors then
       Fail('toolchain-planning-failed');
 
-    ActiveBuildContext.CompilerName := Session.PrimaryToolLogicalExecutable;
+    State.BuildContext.CompilerName := Session.PrimaryToolLogicalExecutable;
     RunResult := Session.ExecuteToolchain(GetEnvironmentVariable('PATH'));
     try
       if RunResult.StepCount > 0 then
       begin
         FinalToolStep := RunResult.StepAt(RunResult.StepCount - 1);
         CompilerExitCode := FinalToolStep.ExitCode;
-        ActiveBuildContext.CompilerExitCode := FinalToolStep.ExitCode;
-        ActiveBuildContext.HasCompilerExitCode := FinalToolStep.HasExitCode;
+        State.BuildContext.CompilerExitCode := FinalToolStep.ExitCode;
+        State.BuildContext.HasCompilerExitCode := FinalToolStep.HasExitCode;
       end
       else
       begin
         CompilerExitCode := 0;
-        ActiveBuildContext.CompilerExitCode := 0;
-        ActiveBuildContext.HasCompilerExitCode := False;
+        State.BuildContext.CompilerExitCode := 0;
+        State.BuildContext.HasCompilerExitCode := False;
       end;
 
       CaptureSessionContext(Session);
@@ -3428,8 +2564,8 @@ begin
       begin
         if Session.HasLastDiagnosticExitCode then
         begin
-          ActiveBuildContext.CompilerExitCode := Session.LastDiagnosticExitCode;
-          ActiveBuildContext.HasCompilerExitCode := True;
+          State.BuildContext.CompilerExitCode := Session.LastDiagnosticExitCode;
+          State.BuildContext.HasCompilerExitCode := True;
         end;
         if Session.LastDiagnosticCode <> '' then
           Fail(
@@ -3441,10 +2577,10 @@ begin
           );
       end;
 
-      if not ActiveBuildContext.HasCompilerExitCode then
+      if not State.BuildContext.HasCompilerExitCode then
       begin
-        ActiveBuildContext.CompilerExitCode := CompilerExitCode;
-        ActiveBuildContext.HasCompilerExitCode := True;
+        State.BuildContext.CompilerExitCode := CompilerExitCode;
+        State.BuildContext.HasCompilerExitCode := True;
       end;
     finally
       RunResult.Free;
@@ -3455,22 +2591,23 @@ begin
       Fail(Session.PrimaryToolFailureMapping + ': compiler exit code ' + IntToStr(CompilerExitCode));
     end;
 
-    ActiveBuildContext.ArtifactPath := Session.BackendPrimaryArtifactPath;
+    State.BuildContext.ArtifactPath := Session.BackendPrimaryArtifactPath;
     WriteLn('mode=build');
     WriteLn('command=build');
     WriteLn('selector=build');
     WriteLn('source=', SourcePath);
     WriteLn('target=', TargetName);
     WriteLn('target-config=', TargetConfig.ConfigPath);
-    WriteLn('compiler=', ActiveBuildContext.CompilerName);
+    WriteLn('compiler=', State.BuildContext.CompilerName);
     WriteLn('compiler-exit=', CompilerExitCode);
-    WriteLn('artifact=', ActiveBuildContext.ArtifactPath);
+    WriteLn('artifact=', State.BuildContext.ArtifactPath);
     PrintSessionProjection(False);
     WriteLn('status=success');
     WriteLn('result=success');
     WriteLn('command-outcome=success');
     WriteLn('build-result=success');
     PrintCommandEnvelope(
+      State,
       ExitSuccessCode,
       'build',
       'success',
@@ -3499,8 +2636,8 @@ var
   OutDirOverride: string;
   OptionName: string;
 begin
-  ActiveCommand := '';
-  ActiveSelector := '';
+  State.CommandName := '';
+  State.SelectorName := '';
   ClearBuildCommandContext;
   ClearSessionContext;
 
@@ -3514,7 +2651,7 @@ begin
   end;
 
   CommandName := ParamStr(1);
-  ActiveCommand := CommandName;
+  State.CommandName := CommandName;
 
   if (CommandName <> 'build') and (CommandName <> 'test') and
     (CommandName <> 'env') and (CommandName <> 'doctor') and
@@ -3573,7 +2710,7 @@ begin
     if ParamStr(2) <> 'status' then
       Fail('invalid-arguments', True);
 
-    ActiveSelector := 'status';
+    State.SelectorName := 'status';
     TargetName := '';
     ToolchainBindingOverride := '';
     Index := 3;
@@ -3610,7 +2747,7 @@ begin
 
   if CommandName = 'doctor' then
   begin
-    ActiveSelector := 'doctor';
+    State.SelectorName := 'doctor';
     if ParamCount < 2 then
       Fail('invalid-arguments', True);
 
@@ -3658,13 +2795,13 @@ begin
 
   if CommandName = 'query' then
   begin
-    ActiveSelector := 'query';
+    State.SelectorName := 'query';
     if ParamCount < 3 then
       Fail('invalid-arguments', True);
     if ParamStr(2) <> 'symbols' then
       Fail('invalid-arguments', True);
 
-    ActiveSelector := 'symbols';
+    State.SelectorName := 'symbols';
     SourcePath := ParamStr(3);
     TargetName := '';
     ToolchainBindingOverride := '';
@@ -3715,13 +2852,13 @@ begin
 
   if CommandName = 'pkg' then
   begin
-    ActiveSelector := 'pkg';
+    State.SelectorName := 'pkg';
     if ParamCount < 3 then
       Fail('invalid-arguments', True);
     if ParamStr(2) <> 'inspect' then
       Fail('invalid-arguments', True);
 
-    ActiveSelector := 'inspect';
+    State.SelectorName := 'inspect';
     TargetName := '';
     ToolchainBindingOverride := '';
     WorkspaceOverride := '';

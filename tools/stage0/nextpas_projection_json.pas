@@ -5,7 +5,7 @@ unit nextpas_projection_json;
 interface
 
 uses
-  SysUtils, nextpas_json_helpers, nextpas_projection_types;
+  SysUtils, nextpas_projection_types, nextpas_json_helpers;
 
 procedure AppendBuildContextProjectionJsonFields(
   var AFields: string;
@@ -15,98 +15,74 @@ procedure AppendSessionProjectionJsonFields(
   var AFields: string;
   const ASession: TSessionProjectionContext;
   const ADiagnostics: TDiagnosticProjectionContext;
-  const AHasSessionProjection: Boolean
+  const AHasSession: Boolean
 );
 procedure AppendSyntaxProjectionJsonFields(
   var AFields: string;
-  const ASyntax: TSyntaxProjectionContext;
-  const AHasSyntaxProjection: Boolean
+  const AContext: TSyntaxProjectionContext;
+  const AHas: Boolean
 );
 procedure AppendResolutionProjectionJsonFields(
   var AFields: string;
-  const AResolution: TResolutionProjectionContext;
-  const AHasResolutionProjection: Boolean
+  const AContext: TResolutionProjectionContext;
+  const AHas: Boolean
 );
 procedure AppendSemanticProjectionJsonFields(
   var AFields: string;
-  const ASemantic: TSemanticProjectionContext;
-  const AHasSemanticProjection: Boolean
+  const AContext: TSemanticProjectionContext;
+  const AHas: Boolean
 );
 procedure AppendMirProjectionJsonFields(
   var AFields: string;
-  const AMir: TMirProjectionContext;
-  const AHasMirProjection: Boolean
+  const AContext: TMirProjectionContext;
+  const AHas: Boolean
 );
 procedure AppendBackendProjectionJsonFields(
   var AFields: string;
-  const ABackend: TBackendProjectionContext
+  const AContext: TBackendProjectionContext
 );
 procedure AppendToolchainProjectionJsonFields(
   var AFields: string;
-  const AToolchain: TToolchainProjectionContext;
-  const AHasSessionProjection: Boolean;
-  const AHasBackendProjection: Boolean
+  const AContext: TToolchainProjectionContext;
+  const AHasSession: Boolean;
+  const AHasBackend: Boolean
 );
 procedure AppendEnvironmentProjectionJsonFields(
   var AFields: string;
-  const AEnvironment: TEnvironmentProjectionContext
+  const AContext: TEnvironmentProjectionContext
 );
 procedure AppendDoctorProjectionJsonFields(
   var AFields: string;
-  const ADoctor: TDoctorProjectionContext
+  const AContext: TDoctorProjectionContext
 );
 procedure AppendQueryProjectionJsonFields(
   var AFields: string;
-  const AQuery: TQueryProjectionContext
+  const AContext: TQueryProjectionContext
 );
 procedure AppendPackageProjectionJsonFields(
   var AFields: string;
-  const APackage: TPackageProjectionContext
+  const AContext: TPackageProjectionContext
 );
+
 function BuildCommandEnvelopeJson(
+  const AState: TNextPasState;
   const AExitCode: LongInt;
   const ASelector: string;
   const AStatusValue: string;
   const ABuildResult: string;
   const AFailureKind: string;
-  const AHumanSummary: string;
-  const ACommandName: string;
-  const ABuildContext: TBuildCommandContext;
-  const ASessionProjection: TSessionProjectionContext;
-  const ADiagnosticsProjection: TDiagnosticProjectionContext;
-  const ASyntaxProjection: TSyntaxProjectionContext;
-  const AResolutionProjection: TResolutionProjectionContext;
-  const ASemanticProjection: TSemanticProjectionContext;
-  const AMirProjection: TMirProjectionContext;
-  const ABackendProjection: TBackendProjectionContext;
-  const AToolchainProjection: TToolchainProjectionContext;
-  const AEnvironmentProjection: TEnvironmentProjectionContext;
-  const ADoctorProjection: TDoctorProjectionContext;
-  const AQueryProjection: TQueryProjectionContext;
-  const APackageProjection: TPackageProjectionContext
+  const AHumanSummary: string
 ): string;
+
 procedure PrintCommandEnvelope(
+  const AState: TNextPasState;
   const AExitCode: LongInt;
   const ASelector: string;
   const AStatusValue: string;
   const ABuildResult: string;
   const AFailureKind: string;
   const AHumanSummary: string;
-  const AUseStdErr: Boolean;
-  const ACommandName: string;
-  const ABuildContext: TBuildCommandContext;
-  const ASessionProjection: TSessionProjectionContext;
-  const ADiagnosticsProjection: TDiagnosticProjectionContext;
-  const ASyntaxProjection: TSyntaxProjectionContext;
-  const AResolutionProjection: TResolutionProjectionContext;
-  const ASemanticProjection: TSemanticProjectionContext;
-  const AMirProjection: TMirProjectionContext;
-  const ABackendProjection: TBackendProjectionContext;
-  const AToolchainProjection: TToolchainProjectionContext;
-  const AEnvironmentProjection: TEnvironmentProjectionContext;
-  const ADoctorProjection: TDoctorProjectionContext;
-  const AQueryProjection: TQueryProjectionContext;
-  const APackageProjection: TPackageProjectionContext
+  const AUseStdErr: Boolean
 );
 
 implementation
@@ -118,11 +94,7 @@ procedure AppendBuildContextProjectionJsonFields(
 begin
   AppendJsonStringField(AFields, 'source', AContext.SourcePath);
   AppendJsonStringField(AFields, 'target', AContext.TargetName);
-  AppendJsonStringField(
-    AFields,
-    'workspaceRoot',
-    AContext.WorkspaceRootPath
-  );
+  AppendJsonStringField(AFields, 'workspaceRoot', AContext.WorkspaceRootPath);
   AppendJsonStringField(
     AFields,
     'workspaceDiscoveryKind',
@@ -138,17 +110,9 @@ begin
     'packageManifestPath',
     AContext.PackageManifestPath
   );
-  AppendJsonStringField(
-    AFields,
-    'artifactRoot',
-    AContext.ArtifactRootPath
-  );
+  AppendJsonStringField(AFields, 'artifactRoot', AContext.ArtifactRootPath);
   AppendJsonStringField(AFields, 'outputDir', AContext.OutputDirPath);
-  AppendJsonStringField(
-    AFields,
-    'targetConfig',
-    AContext.TargetConfigPath
-  );
+  AppendJsonStringField(AFields, 'targetConfig', AContext.TargetConfigPath);
   AppendJsonStringField(AFields, 'compiler', AContext.CompilerName);
   AppendJsonIntegerField(
     AFields,
@@ -163,7 +127,7 @@ procedure AppendSessionProjectionJsonFields(
   var AFields: string;
   const ASession: TSessionProjectionContext;
   const ADiagnostics: TDiagnosticProjectionContext;
-  const AHasSessionProjection: Boolean
+  const AHasSession: Boolean
 );
 begin
   AppendJsonStringField(AFields, 'sessionId', ASession.SessionId);
@@ -194,694 +158,522 @@ begin
     AFields,
     'diagnosticCount',
     ADiagnostics.Count,
-    AHasSessionProjection
+    AHasSession
   );
   AppendJsonIntegerField(
     AFields,
     'diagnosticErrorCount',
     ADiagnostics.ErrorCount,
-    AHasSessionProjection
+    AHasSession
   );
   AppendJsonIntegerField(
     AFields,
     'diagnosticWarningCount',
     ADiagnostics.WarningCount,
-    AHasSessionProjection
+    AHasSession
   );
-  AppendJsonStringField(
-    AFields,
-    'diagnosticsPolicy',
-    ADiagnostics.Policy
-  );
-  AppendJsonStringField(
-    AFields,
-    'sessionLifetime',
-    ASession.SessionLifetime
-  );
-  AppendJsonStringField(
-    AFields,
-    'unitLifetime',
-    ASession.UnitLifetime
-  );
-  AppendJsonStringField(
-    AFields,
-    'stageLifetime',
-    ASession.StageLifetime
-  );
+  AppendJsonStringField(AFields, 'diagnosticsPolicy', ADiagnostics.Policy);
+  AppendJsonStringField(AFields, 'sessionLifetime', ASession.SessionLifetime);
+  AppendJsonStringField(AFields, 'unitLifetime', ASession.UnitLifetime);
+  AppendJsonStringField(AFields, 'stageLifetime', ASession.StageLifetime);
 end;
 
 procedure AppendSyntaxProjectionJsonFields(
   var AFields: string;
-  const ASyntax: TSyntaxProjectionContext;
-  const AHasSyntaxProjection: Boolean
+  const AContext: TSyntaxProjectionContext;
+  const AHas: Boolean
 );
 begin
-  AppendJsonStringField(AFields, 'syntaxStatus', ASyntax.Status);
+  AppendJsonStringField(AFields, 'syntaxStatus', AContext.Status);
   AppendJsonIntegerField(
     AFields,
     'lexerTokenCount',
-    ASyntax.LexerTokenCount,
-    AHasSyntaxProjection
+    AContext.LexerTokenCount,
+    AHas
   );
   AppendJsonIntegerField(
     AFields,
     'greenNodeCount',
-    ASyntax.GreenNodeCount,
-    AHasSyntaxProjection
+    AContext.GreenNodeCount,
+    AHas
   );
-  AppendJsonStringField(AFields, 'astRootKind', ASyntax.AstRootKind);
-  AppendJsonStringField(
-    AFields,
-    'astDeclaredName',
-    ASyntax.AstDeclaredName
-  );
+  AppendJsonStringField(AFields, 'astRootKind', AContext.AstRootKind);
+  AppendJsonStringField(AFields, 'astDeclaredName', AContext.AstDeclaredName);
 end;
 
 procedure AppendResolutionProjectionJsonFields(
   var AFields: string;
-  const AResolution: TResolutionProjectionContext;
-  const AHasResolutionProjection: Boolean
+  const AContext: TResolutionProjectionContext;
+  const AHas: Boolean
 );
 begin
-  AppendJsonStringField(
-    AFields,
-    'resolutionStatus',
-    AResolution.Status
-  );
-  AppendJsonStringField(
-    AFields,
-    'unitGraphStatus',
-    AResolution.UnitGraphStatus
-  );
+  AppendJsonStringField(AFields, 'resolutionStatus', AContext.Status);
+  AppendJsonStringField(AFields, 'unitGraphStatus', AContext.UnitGraphStatus);
   AppendJsonIntegerField(
     AFields,
     'searchPathCount',
-    AResolution.SearchPathCount,
-    AHasResolutionProjection
+    AContext.SearchPathCount,
+    AHas
   );
-  AppendJsonStringField(
-    AFields,
-    'searchIndexStatus',
-    AResolution.SearchIndexStatus
-  );
+  AppendJsonStringField(AFields, 'searchIndexStatus', AContext.SearchIndexStatus);
   AppendJsonIntegerField(
     AFields,
     'indexedSearchRootCount',
-    AResolution.IndexedSearchRootCount,
-    AHasResolutionProjection
+    AContext.IndexedSearchRootCount,
+    AHas
   );
   AppendJsonIntegerField(
     AFields,
     'searchIndexScanCount',
-    AResolution.SearchIndexScanCount,
-    AHasResolutionProjection
+    AContext.SearchIndexScanCount,
+    AHas
   );
-  if AResolution.SearchPathJson <> '' then
-    AppendJsonField(
-      AFields,
-      'searchPaths',
-      AResolution.SearchPathJson
-    );
+  if AContext.SearchPathJson <> '' then
+    AppendJsonField(AFields, 'searchPaths', AContext.SearchPathJson);
   AppendJsonIntegerField(
     AFields,
     'resolvedUnitCount',
-    AResolution.ResolvedUnitCount,
-    AHasResolutionProjection
+    AContext.ResolvedUnitCount,
+    AHas
   );
   AppendJsonIntegerField(
     AFields,
     'unitGraphEdgeCount',
-    AResolution.UnitGraphEdgeCount,
-    AHasResolutionProjection
+    AContext.UnitGraphEdgeCount,
+    AHas
   );
-  AppendJsonStringField(
-    AFields,
-    'unitGraphRootName',
-    AResolution.UnitGraphRootName
-  );
+  AppendJsonStringField(AFields, 'unitGraphRootName', AContext.UnitGraphRootName);
 end;
 
 procedure AppendSemanticProjectionJsonFields(
   var AFields: string;
-  const ASemantic: TSemanticProjectionContext;
-  const AHasSemanticProjection: Boolean
+  const AContext: TSemanticProjectionContext;
+  const AHas: Boolean
 );
 begin
-  AppendJsonStringField(AFields, 'semanticStatus', ASemantic.Status);
-  AppendJsonStringField(
-    AFields,
-    'symbolGraphStatus',
-    ASemantic.SymbolGraphStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'typeGraphStatus',
-    ASemantic.TypeGraphStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'typedHirStatus',
-    ASemantic.TypedHirStatus
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'symbolCount',
-    ASemantic.SymbolCount,
-    AHasSemanticProjection
-  );
-  AppendJsonIntegerField(
-    AFields,
-    'typeCount',
-    ASemantic.TypeCount,
-    AHasSemanticProjection
-  );
+  AppendJsonStringField(AFields, 'semanticStatus', AContext.Status);
+  AppendJsonStringField(AFields, 'symbolGraphStatus', AContext.SymbolGraphStatus);
+  AppendJsonStringField(AFields, 'typeGraphStatus', AContext.TypeGraphStatus);
+  AppendJsonStringField(AFields, 'typedHirStatus', AContext.TypedHirStatus);
+  AppendJsonIntegerField(AFields, 'symbolCount', AContext.SymbolCount, AHas);
+  AppendJsonIntegerField(AFields, 'typeCount', AContext.TypeCount, AHas);
   AppendJsonIntegerField(
     AFields,
     'typedHirNodeCount',
-    ASemantic.TypedHirNodeCount,
-    AHasSemanticProjection
+    AContext.TypedHirNodeCount,
+    AHas
   );
   AppendJsonIntegerField(
     AFields,
     'runtimeContractCount',
-    ASemantic.RuntimeContractCount,
-    AHasSemanticProjection
+    AContext.RuntimeContractCount,
+    AHas
   );
-  AppendJsonStringField(
-    AFields,
-    'typedHirRootName',
-    ASemantic.TypedHirRootName
-  );
+  AppendJsonStringField(AFields, 'typedHirRootName', AContext.TypedHirRootName);
 end;
 
 procedure AppendMirProjectionJsonFields(
   var AFields: string;
-  const AMir: TMirProjectionContext;
-  const AHasMirProjection: Boolean
+  const AContext: TMirProjectionContext;
+  const AHas: Boolean
 );
 begin
-  AppendJsonStringField(AFields, 'mirStatus', AMir.Status);
-  AppendJsonIntegerField(
-    AFields,
-    'mirBlockCount',
-    AMir.BlockCount,
-    AHasMirProjection
-  );
+  AppendJsonStringField(AFields, 'mirStatus', AContext.Status);
+  AppendJsonIntegerField(AFields, 'mirBlockCount', AContext.BlockCount, AHas);
   AppendJsonIntegerField(
     AFields,
     'mirOperationCount',
-    AMir.OperationCount,
-    AHasMirProjection
+    AContext.OperationCount,
+    AHas
   );
-  AppendJsonStringField(AFields, 'mirEntryBlock', AMir.EntryBlock);
-  AppendJsonStringField(AFields, 'mirRootName', AMir.RootName);
+  AppendJsonStringField(AFields, 'mirEntryBlock', AContext.EntryBlock);
+  AppendJsonStringField(AFields, 'mirRootName', AContext.RootName);
 end;
 
 procedure AppendBackendProjectionJsonFields(
   var AFields: string;
-  const ABackend: TBackendProjectionContext
+  const AContext: TBackendProjectionContext
 );
 begin
-  AppendJsonStringField(
-    AFields,
-    'backendPlanStatus',
-    ABackend.PlanStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'backendOutputKind',
-    ABackend.OutputKind
-  );
+  AppendJsonStringField(AFields, 'backendPlanStatus', AContext.PlanStatus);
+  AppendJsonStringField(AFields, 'backendOutputKind', AContext.OutputKind);
   AppendJsonStringField(
     AFields,
     'backendPrimaryArtifactKind',
-    ABackend.PrimaryArtifactKind
+    AContext.PrimaryArtifactKind
   );
   AppendJsonStringField(
     AFields,
     'backendPrimaryArtifactPath',
-    ABackend.PrimaryArtifactPath
+    AContext.PrimaryArtifactPath
   );
   AppendJsonIntegerField(
     AFields,
     'backendArtifactCount',
-    ABackend.ArtifactCount,
-    ABackend.ArtifactCount > 0
+    AContext.ArtifactCount,
+    AContext.ArtifactCount > 0
   );
-  if ABackend.ArtifactsJson <> '' then
-    AppendJsonField(
-      AFields,
-      'backendArtifacts',
-      ABackend.ArtifactsJson
-    );
+  if AContext.ArtifactsJson <> '' then
+    AppendJsonField(AFields, 'backendArtifacts', AContext.ArtifactsJson);
 end;
 
 procedure AppendToolchainProjectionJsonFields(
   var AFields: string;
-  const AToolchain: TToolchainProjectionContext;
-  const AHasSessionProjection: Boolean;
-  const AHasBackendProjection: Boolean
+  const AContext: TToolchainProjectionContext;
+  const AHasSession: Boolean;
+  const AHasBackend: Boolean
 );
 begin
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'hostId',
-    AToolchain.HostId,
-    AHasSessionProjection
+    AContext.HostId,
+    AHasSession
   );
   AppendJsonStringField(
     AFields,
     'toolchainBindingId',
-    AToolchain.ToolchainBindingId
+    AContext.ToolchainBindingId
   );
-  AppendJsonStringField(
-    AFields,
-    'backendFamily',
-    AToolchain.BackendFamily
-  );
+  AppendJsonStringField(AFields, 'backendFamily', AContext.BackendFamily);
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'assemblerProfileId',
-    AToolchain.AssemblerProfileId,
-    AHasSessionProjection
+    AContext.AssemblerProfileId,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'linkerProfileId',
-    AToolchain.LinkerProfileId,
-    AHasSessionProjection
+    AContext.LinkerProfileId,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'archiverProfileId',
-    AToolchain.ArchiverProfileId,
-    AHasSessionProjection
+    AContext.ArchiverProfileId,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'resourceToolProfileId',
-    AToolchain.ResourceToolProfileId,
-    AHasSessionProjection
+    AContext.ResourceToolProfileId,
+    AHasSession
   );
-  AppendJsonStringField(
-    AFields,
-    'targetObjectFormat',
-    AToolchain.TargetObjectFormat
-  );
+  AppendJsonStringField(AFields, 'targetObjectFormat', AContext.TargetObjectFormat);
   AppendJsonStringField(
     AFields,
     'targetAssemblerFlavor',
-    AToolchain.TargetAssemblerFlavor
+    AContext.TargetAssemblerFlavor
   );
   AppendJsonStringField(
     AFields,
     'targetLinkerFlavor',
-    AToolchain.TargetLinkerFlavor
+    AContext.TargetLinkerFlavor
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'targetRuntimeLayoutKey',
-    AToolchain.TargetRuntimeLayoutKey,
-    AHasSessionProjection
+    AContext.TargetRuntimeLayoutKey,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'targetCSymbolPrefix',
-    AToolchain.TargetCSymbolPrefix,
-    AHasSessionProjection
+    AContext.TargetCSymbolPrefix,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'targetCLibraryNaming',
-    AToolchain.TargetCLibraryNaming,
-    AHasSessionProjection
+    AContext.TargetCLibraryNaming,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'targetLlvmTriple',
-    AToolchain.TargetLlvmTriple,
-    AHasSessionProjection
+    AContext.TargetLlvmTriple,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'targetLlvmDataLayout',
-    AToolchain.TargetLlvmDataLayout,
-    AHasSessionProjection
+    AContext.TargetLlvmDataLayout,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'sysrootMode',
-    AToolchain.SysrootMode,
-    AHasSessionProjection
+    AContext.SysrootMode,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'runtimeSdkId',
-    AToolchain.RuntimeSdkId,
-    AHasSessionProjection
+    AContext.RuntimeSdkId,
+    AHasSession
   );
   AppendJsonBooleanField(
     AFields,
     'allowHostFallback',
-    AToolchain.AllowHostFallback,
-    AHasSessionProjection
+    AContext.AllowHostFallback,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'toolRootKind',
-    AToolchain.ToolRootKind,
-    AHasSessionProjection
+    AContext.ToolRootKind,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'runtimeRootKind',
-    AToolchain.RuntimeRootKind,
-    AHasSessionProjection
+    AContext.RuntimeRootKind,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'responseFilePolicy',
-    AToolchain.ResponseFilePolicy,
-    AHasSessionProjection
+    AContext.ResponseFilePolicy,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'linkScriptPolicy',
-    AToolchain.LinkScriptPolicy,
-    AHasSessionProjection
+    AContext.LinkScriptPolicy,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'toolchainPlanStatus',
-    AToolchain.ToolchainPlanStatus,
-    AHasSessionProjection
+    AContext.ToolchainPlanStatus,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'toolchainPlanFamily',
-    AToolchain.ToolchainPlanFamily,
-    AHasSessionProjection
+    AContext.ToolchainPlanFamily,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'toolProfileRoot',
-    AToolchain.ToolProfileRoot,
-    AHasSessionProjection
+    AContext.ToolProfileRoot,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'logicalLinkRequestStatus',
-    AToolchain.LogicalLinkRequestStatus,
-    AHasSessionProjection
+    AContext.LogicalLinkRequestStatus,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'logicalLinkRequestOutputKind',
-    AToolchain.LogicalLinkRequestOutputKind,
-    AHasSessionProjection
+    AContext.LogicalLinkRequestOutputKind,
+    AHasSession
   );
   AppendJsonIntegerField(
     AFields,
     'logicalLibraryRequestCount',
-    AToolchain.LogicalLibraryRequestCount,
-    AHasSessionProjection
+    AContext.LogicalLibraryRequestCount,
+    AHasSession
   );
-  if AToolchain.LogicalLinkRequestJson <> '' then
-    AppendJsonField(
-      AFields,
-      'logicalLinkRequest',
-      AToolchain.LogicalLinkRequestJson
-    );
+  if AContext.LogicalLinkRequestJson <> '' then
+    AppendJsonField(AFields, 'logicalLinkRequest', AContext.LogicalLinkRequestJson);
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'llvmToolchainStatus',
-    AToolchain.LlvmToolchainStatus,
-    AHasSessionProjection
+    AContext.LlvmToolchainStatus,
+    AHasSession
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'llvmExecutableSetId',
-    AToolchain.LlvmExecutableSetId,
-    AHasSessionProjection
+    AContext.LlvmExecutableSetId,
+    AHasSession
   );
-  if AToolchain.LlvmExecutableSetJson <> '' then
-    AppendJsonField(
-      AFields,
-      'llvmExecutableSet',
-      AToolchain.LlvmExecutableSetJson
-    );
+  if AContext.LlvmExecutableSetJson <> '' then
+    AppendJsonField(AFields, 'llvmExecutableSet', AContext.LlvmExecutableSetJson);
   AppendJsonIntegerField(
     AFields,
     'toolInvocationCount',
-    AToolchain.ToolInvocationCount,
-    AHasBackendProjection
+    AContext.ToolInvocationCount,
+    AHasBackend
   );
-  AppendJsonStringField(
-    AFields,
-    'toolRunStatus',
-    AToolchain.ToolRunStatus
-  );
+  AppendJsonStringField(AFields, 'toolRunStatus', AContext.ToolRunStatus);
   AppendJsonIntegerField(
     AFields,
     'toolRunStepCount',
-    AToolchain.ToolRunStepCount,
-    AToolchain.ToolRunStepCount > 0
+    AContext.ToolRunStepCount,
+    AContext.ToolRunStepCount > 0
   );
   AppendJsonStringField(
     AFields,
     'primaryToolRunStatus',
-    AToolchain.PrimaryToolRunStatus
+    AContext.PrimaryToolRunStatus
   );
-  AppendJsonStringField(
-    AFields,
-    'primaryToolRole',
-    AToolchain.PrimaryToolRole
-  );
+  AppendJsonStringField(AFields, 'primaryToolRole', AContext.PrimaryToolRole);
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'primaryToolProfileId',
-    AToolchain.PrimaryToolProfileId,
-    AHasBackendProjection
+    AContext.PrimaryToolProfileId,
+    AHasBackend
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'primaryToolStepId',
-    AToolchain.PrimaryToolStepId,
-    AHasBackendProjection
+    AContext.PrimaryToolStepId,
+    AHasBackend
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'primaryToolLogicalExecutable',
-    AToolchain.PrimaryToolLogicalExecutable,
-    AHasBackendProjection
+    AContext.PrimaryToolLogicalExecutable,
+    AHasBackend
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'primaryToolSysrootRef',
-    AToolchain.PrimaryToolSysrootRef,
-    AHasBackendProjection
+    AContext.PrimaryToolSysrootRef,
+    AHasBackend
   );
   AppendJsonStringFieldWhenEnabled(
     AFields,
     'primaryToolFailureMapping',
-    AToolchain.PrimaryToolFailureMapping,
-    AHasBackendProjection
+    AContext.PrimaryToolFailureMapping,
+    AHasBackend
   );
 end;
 
 procedure AppendEnvironmentProjectionJsonFields(
   var AFields: string;
-  const AEnvironment: TEnvironmentProjectionContext
+  const AContext: TEnvironmentProjectionContext
 );
 begin
   AppendJsonStringField(
     AFields,
     'toolchainBindingPath',
-    AEnvironment.ToolchainBindingPath
+    AContext.ToolchainBindingPath
   );
-  AppendJsonStringField(
-    AFields,
-    'distributionBinDir',
-    AEnvironment.DistributionBinDir
-  );
-  AppendJsonStringField(
-    AFields,
-    'distributionLibDir',
-    AEnvironment.DistributionLibDir
-  );
+  AppendJsonStringField(AFields, 'distributionBinDir', AContext.DistributionBinDir);
+  AppendJsonStringField(AFields, 'distributionLibDir', AContext.DistributionLibDir);
   AppendJsonStringField(
     AFields,
     'distributionShareDir',
-    AEnvironment.DistributionShareDir
+    AContext.DistributionShareDir
   );
-  AppendJsonStringField(
-    AFields,
-    'runtimeRoot',
-    AEnvironment.RuntimeRootPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'runtimeLibc',
-    AEnvironment.RuntimeLibcPath
-  );
+  AppendJsonStringField(AFields, 'runtimeRoot', AContext.RuntimeRootPath);
+  AppendJsonStringField(AFields, 'runtimeLibc', AContext.RuntimeLibcPath);
   AppendJsonBooleanField(
     AFields,
     'runtimeLibcPresent',
-    AEnvironment.RuntimeLibcPresent,
-    AEnvironment.HasRuntimeLibcPresent
+    AContext.RuntimeLibcPresent,
+    AContext.HasRuntimeLibcPresent
   );
   AppendJsonStringField(
     AFields,
     'environmentReadiness',
-    AEnvironment.EnvironmentReadiness
+    AContext.EnvironmentReadiness
   );
-  AppendJsonStringField(
-    AFields,
-    'environmentStatus',
-    AEnvironment.EnvironmentStatus
-  );
-  AppendJsonStringField(
-    AFields,
-    'runtimeSdkStatus',
-    AEnvironment.RuntimeSdkStatus
-  );
+  AppendJsonStringField(AFields, 'environmentStatus', AContext.EnvironmentStatus);
+  AppendJsonStringField(AFields, 'runtimeSdkStatus', AContext.RuntimeSdkStatus);
   AppendJsonStringField(
     AFields,
     'toolchainBindingStatus',
-    AEnvironment.ToolchainBindingStatus
+    AContext.ToolchainBindingStatus
   );
-  AppendJsonStringField(
-    AFields,
-    'distributionStatus',
-    AEnvironment.DistributionStatus
-  );
+  AppendJsonStringField(AFields, 'distributionStatus', AContext.DistributionStatus);
 end;
 
 procedure AppendDoctorProjectionJsonFields(
   var AFields: string;
-  const ADoctor: TDoctorProjectionContext
+  const AContext: TDoctorProjectionContext
 );
 begin
   AppendJsonStringField(
     AFields,
     'doctorWorkspaceStatus',
-    ADoctor.WorkspaceStatus
+    AContext.WorkspaceStatus
   );
   AppendJsonStringField(
     AFields,
     'doctorToolchainBindingStatus',
-    ADoctor.ToolchainBindingStatus
+    AContext.ToolchainBindingStatus
   );
-  AppendJsonStringField(AFields, 'doctorStatus', ADoctor.Status);
+  AppendJsonStringField(AFields, 'doctorStatus', AContext.Status);
   AppendJsonIntegerField(
     AFields,
     'doctorCheckCount',
-    ADoctor.CheckCount,
-    ADoctor.CheckCount > 0
+    AContext.CheckCount,
+    AContext.CheckCount > 0
   );
   AppendJsonIntegerField(
     AFields,
     'doctorFindingCount',
-    ADoctor.FindingCount,
-    ADoctor.CheckCount > 0
+    AContext.FindingCount,
+    AContext.CheckCount > 0
   );
-  if ADoctor.FindingsJson <> '' then
-    AppendJsonField(
-      AFields,
-      'doctorFindings',
-      ADoctor.FindingsJson
-    );
+  if AContext.FindingsJson <> '' then
+    AppendJsonField(AFields, 'doctorFindings', AContext.FindingsJson);
 end;
 
 procedure AppendQueryProjectionJsonFields(
   var AFields: string;
-  const AQuery: TQueryProjectionContext
+  const AContext: TQueryProjectionContext
 );
 begin
-  AppendJsonStringField(AFields, 'queryKind', AQuery.Kind);
-  AppendJsonStringField(AFields, 'queryStatus', AQuery.Status);
-  AppendJsonStringField(
-    AFields,
-    'analysisSource',
-    AQuery.AnalysisSource
-  );
+  AppendJsonStringField(AFields, 'queryKind', AContext.Kind);
+  AppendJsonStringField(AFields, 'queryStatus', AContext.Status);
+  AppendJsonStringField(AFields, 'analysisSource', AContext.AnalysisSource);
   AppendJsonIntegerField(
     AFields,
     'queryResultCount',
-    AQuery.ResultCount,
-    AQuery.HasResultCount
+    AContext.ResultCount,
+    AContext.HasResultCount
   );
 end;
 
 procedure AppendPackageProjectionJsonFields(
   var AFields: string;
-  const APackage: TPackageProjectionContext
+  const AContext: TPackageProjectionContext
 );
 begin
   AppendJsonStringField(
     AFields,
     'packageWorkflowStatus',
-    APackage.WorkflowStatus
+    AContext.WorkflowStatus
   );
   AppendJsonStringField(
     AFields,
     'packageManifestStatus',
-    APackage.ManifestStatus
+    AContext.ManifestStatus
   );
-  AppendJsonStringField(
-    AFields,
-    'packageLockStatus',
-    APackage.LockStatus
-  );
+  AppendJsonStringField(AFields, 'packageLockStatus', AContext.LockStatus);
   AppendJsonStringField(
     AFields,
     'packageInstallPlanStatus',
-    APackage.InstallPlanStatus
+    AContext.InstallPlanStatus
   );
-  AppendJsonStringField(
-    AFields,
-    'packageRootPath',
-    APackage.PackageRootPath
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageName',
-    APackage.PackageName
-  );
-  AppendJsonStringField(
-    AFields,
-    'packageLockfilePath',
-    APackage.LockfilePath
-  );
+  AppendJsonStringField(AFields, 'packageRootPath', AContext.PackageRootPath);
+  AppendJsonStringField(AFields, 'packageName', AContext.PackageName);
+  AppendJsonStringField(AFields, 'packageLockfilePath', AContext.LockfilePath);
   AppendJsonIntegerField(
     AFields,
     'packageSourceRootCount',
-    APackage.SourceRootCount,
-    APackage.HasSourceRootCount
+    AContext.SourceRootCount,
+    AContext.HasSourceRootCount
   );
 end;
 
 function BuildCommandEnvelopeJson(
+  const AState: TNextPasState;
   const AExitCode: LongInt;
   const ASelector: string;
   const AStatusValue: string;
   const ABuildResult: string;
   const AFailureKind: string;
-  const AHumanSummary: string;
-  const ACommandName: string;
-  const ABuildContext: TBuildCommandContext;
-  const ASessionProjection: TSessionProjectionContext;
-  const ADiagnosticsProjection: TDiagnosticProjectionContext;
-  const ASyntaxProjection: TSyntaxProjectionContext;
-  const AResolutionProjection: TResolutionProjectionContext;
-  const ASemanticProjection: TSemanticProjectionContext;
-  const AMirProjection: TMirProjectionContext;
-  const ABackendProjection: TBackendProjectionContext;
-  const AToolchainProjection: TToolchainProjectionContext;
-  const AEnvironmentProjection: TEnvironmentProjectionContext;
-  const ADoctorProjection: TDoctorProjectionContext;
-  const AQueryProjection: TQueryProjectionContext;
-  const APackageProjection: TPackageProjectionContext
+  const AHumanSummary: string
 ): string;
 var
   EnvelopeFields: string;
@@ -896,151 +688,129 @@ var
 begin
   EnvelopeFields := '';
   ResultFields := '';
-  HasSessionProjection := ASessionProjection.SessionId <> '';
-  HasSyntaxProjection := ASyntaxProjection.Status <> '';
-  HasResolutionProjection := AResolutionProjection.Status <> '';
-  HasSemanticProjection := ASemanticProjection.Status <> '';
-  HasMirProjection := AMirProjection.Status <> '';
-  HasBackendProjection := ABackendProjection.PlanStatus <> '';
+  HasSessionProjection := AState.SessionProjection.SessionId <> '';
+  HasSyntaxProjection := AState.SyntaxProjection.Status <> '';
+  HasResolutionProjection := AState.ResolutionProjection.Status <> '';
+  HasSemanticProjection := AState.SemanticProjection.Status <> '';
+  HasMirProjection := AState.MirProjection.Status <> '';
+  HasBackendProjection := AState.BackendProjection.PlanStatus <> '';
   HasCommandToolchainProjection := HasSessionProjection or
-    (AToolchainProjection.HostId <> '') or
-    (AToolchainProjection.ToolchainBindingId <> '');
+    (AState.ToolchainProjection.HostId <> '') or
+    (AState.ToolchainProjection.ToolchainBindingId <> '');
   AppendJsonStringField(ResultFields, 'selector', ASelector);
   AppendJsonStringField(ResultFields, 'status', AStatusValue);
   AppendJsonStringField(ResultFields, 'result', ABuildResult);
   AppendJsonStringField(ResultFields, 'failureKind', AFailureKind);
-  AppendBuildContextProjectionJsonFields(ResultFields, ABuildContext);
+  AppendBuildContextProjectionJsonFields(ResultFields, AState.BuildContext);
   AppendSessionProjectionJsonFields(
     ResultFields,
-    ASessionProjection,
-    ADiagnosticsProjection,
+    AState.SessionProjection,
+    AState.DiagnosticsProjection,
     HasSessionProjection
   );
-  AppendSyntaxProjectionJsonFields(ResultFields, ASyntaxProjection, HasSyntaxProjection);
+  AppendSyntaxProjectionJsonFields(
+    ResultFields,
+    AState.SyntaxProjection,
+    HasSyntaxProjection
+  );
   AppendResolutionProjectionJsonFields(
     ResultFields,
-    AResolutionProjection,
+    AState.ResolutionProjection,
     HasResolutionProjection
   );
   AppendSemanticProjectionJsonFields(
     ResultFields,
-    ASemanticProjection,
+    AState.SemanticProjection,
     HasSemanticProjection
   );
-  AppendMirProjectionJsonFields(ResultFields, AMirProjection, HasMirProjection);
-  AppendBackendProjectionJsonFields(ResultFields, ABackendProjection);
+  AppendMirProjectionJsonFields(ResultFields, AState.MirProjection, HasMirProjection);
+  AppendBackendProjectionJsonFields(ResultFields, AState.BackendProjection);
   AppendToolchainProjectionJsonFields(
     ResultFields,
-    AToolchainProjection,
+    AState.ToolchainProjection,
     HasCommandToolchainProjection,
     HasBackendProjection
   );
-  AppendEnvironmentProjectionJsonFields(ResultFields, AEnvironmentProjection);
-  AppendDoctorProjectionJsonFields(ResultFields, ADoctorProjection);
-  AppendQueryProjectionJsonFields(ResultFields, AQueryProjection);
-  AppendPackageProjectionJsonFields(ResultFields, APackageProjection);
+  AppendEnvironmentProjectionJsonFields(ResultFields, AState.EnvironmentProjection);
+  AppendDoctorProjectionJsonFields(ResultFields, AState.DoctorProjection);
+  AppendQueryProjectionJsonFields(ResultFields, AState.QueryProjection);
+  AppendPackageProjectionJsonFields(ResultFields, AState.PackageProjection);
   AppendJsonStringField(
     ResultFields,
     'diagnosticsSummary',
-    ADiagnosticsProjection.Summary
+    AState.DiagnosticsProjection.Summary
   );
   AppendJsonStringField(ResultFields, 'buildResult', ABuildResult);
 
-  AppendJsonField(EnvelopeFields, 'command', JsonString(ACommandName));
+  AppendJsonField(EnvelopeFields, 'command', JsonString(AState.CommandName));
   AppendJsonField(EnvelopeFields, 'exitCode', IntToStr(AExitCode));
   if ResultFields <> '' then
     AppendJsonField(EnvelopeFields, 'result', '{' + ResultFields + '}');
-  if ADiagnosticsProjection.Json <> '' then
+  if AState.DiagnosticsProjection.Json <> '' then
     AppendJsonField(
       EnvelopeFields,
       'diagnostics',
-      ADiagnosticsProjection.Json
+      AState.DiagnosticsProjection.Json
     )
   else
     AppendJsonField(EnvelopeFields, 'diagnostics', '[]');
-  if AToolchainProjection.BuildTraceRef <> '' then
+  if AState.ToolchainProjection.BuildTraceRef <> '' then
     AppendJsonField(
       EnvelopeFields,
       'buildTraceRef',
-      JsonString(AToolchainProjection.BuildTraceRef)
+      JsonString(AState.ToolchainProjection.BuildTraceRef)
     )
   else
     AppendJsonField(EnvelopeFields, 'buildTraceRef', 'null');
-  if AToolchainProjection.BuildTraceJson <> '' then
+  if AState.ToolchainProjection.BuildTraceJson <> '' then
     AppendJsonField(
       EnvelopeFields,
       'buildTrace',
-      AToolchainProjection.BuildTraceJson
+      AState.ToolchainProjection.BuildTraceJson
     );
-  if AToolchainProjection.ToolInvocationPlanRef <> '' then
+  if AState.ToolchainProjection.ToolInvocationPlanRef <> '' then
     AppendJsonField(
       EnvelopeFields,
       'toolInvocationPlanRef',
-      JsonString(AToolchainProjection.ToolInvocationPlanRef)
+      JsonString(AState.ToolchainProjection.ToolInvocationPlanRef)
     );
-  if AToolchainProjection.ToolInvocationPlanJson <> '' then
+  if AState.ToolchainProjection.ToolInvocationPlanJson <> '' then
     AppendJsonField(
       EnvelopeFields,
       'toolInvocationPlan',
-      AToolchainProjection.ToolInvocationPlanJson
+      AState.ToolchainProjection.ToolInvocationPlanJson
     );
-  if AToolchainProjection.ToolStatusEventsJson <> '' then
+  if AState.ToolchainProjection.ToolStatusEventsJson <> '' then
     AppendJsonField(
       EnvelopeFields,
       'toolStatusEvents',
-      AToolchainProjection.ToolStatusEventsJson
+      AState.ToolchainProjection.ToolStatusEventsJson
     );
   AppendJsonField(EnvelopeFields, 'humanSummary', JsonString(AHumanSummary));
   Result := '{' + EnvelopeFields + '}';
 end;
 
 procedure PrintCommandEnvelope(
+  const AState: TNextPasState;
   const AExitCode: LongInt;
   const ASelector: string;
   const AStatusValue: string;
   const ABuildResult: string;
   const AFailureKind: string;
   const AHumanSummary: string;
-  const AUseStdErr: Boolean;
-  const ACommandName: string;
-  const ABuildContext: TBuildCommandContext;
-  const ASessionProjection: TSessionProjectionContext;
-  const ADiagnosticsProjection: TDiagnosticProjectionContext;
-  const ASyntaxProjection: TSyntaxProjectionContext;
-  const AResolutionProjection: TResolutionProjectionContext;
-  const ASemanticProjection: TSemanticProjectionContext;
-  const AMirProjection: TMirProjectionContext;
-  const ABackendProjection: TBackendProjectionContext;
-  const AToolchainProjection: TToolchainProjectionContext;
-  const AEnvironmentProjection: TEnvironmentProjectionContext;
-  const ADoctorProjection: TDoctorProjectionContext;
-  const AQueryProjection: TQueryProjectionContext;
-  const APackageProjection: TPackageProjectionContext
+  const AUseStdErr: Boolean
 );
 var
   EnvelopeJson: string;
 begin
   EnvelopeJson := BuildCommandEnvelopeJson(
+    AState,
     AExitCode,
     ASelector,
     AStatusValue,
     ABuildResult,
     AFailureKind,
-    AHumanSummary,
-    ACommandName,
-    ABuildContext,
-    ASessionProjection,
-    ADiagnosticsProjection,
-    ASyntaxProjection,
-    AResolutionProjection,
-    ASemanticProjection,
-    AMirProjection,
-    ABackendProjection,
-    AToolchainProjection,
-    AEnvironmentProjection,
-    ADoctorProjection,
-    AQueryProjection,
-    APackageProjection
+    AHumanSummary
   );
   if AUseStdErr then
     WriteLn(ErrOutput, 'command-envelope=', EnvelopeJson)
