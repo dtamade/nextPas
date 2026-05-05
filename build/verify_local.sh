@@ -1217,7 +1217,7 @@ if ! "$RTL_SYSUTILS_BIN" >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
   fail 'rtl-sysutils-run-failed'
 fi
 cat "$RTL_SYSUTILS_OUTPUT"
-require_output_pattern '^Tests passed: 54$' "$RTL_SYSUTILS_OUTPUT" 'missing-rtl-sysutils-pass-count'
+require_output_pattern '^Tests passed: 64$' "$RTL_SYSUTILS_OUTPUT" 'missing-rtl-sysutils-pass-count'
 require_output_pattern '^Tests failed: 0$' "$RTL_SYSUTILS_OUTPUT" 'missing-rtl-sysutils-zero-failures'
 printf 'rtl-sysutils-check=pass\n'
 

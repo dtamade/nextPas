@@ -193,10 +193,57 @@ begin
   if Res = 0 then
   begin
     AssertTrue(Length(SR.Name) > 0, 'FindFirst found a file');
+    AssertTrue(SR.Size >= 0, 'FindFirst Size is non-negative');
     FindClose(SR);
   end
   else
     AssertTrue(True, 'FindFirst no conf files (acceptable)');
+end;
+
+procedure TestFindNext;
+var
+  SR: TSearchRec;
+  Res: LongInt;
+  Count: Integer;
+begin
+  Res := FindFirst('/etc/*.conf', faAnyFile, SR);
+  if Res <> 0 then
+  begin
+    AssertTrue(True, 'FindNext skipped - no conf files');
+    Exit;
+  end;
+  Count := 1;
+  AssertTrue(Length(SR.Name) > 0, 'FindNext first file name non-empty');
+  Res := FindNext(SR);
+  if Res = 0 then
+  begin
+    AssertTrue(Length(SR.Name) > 0, 'FindNext second file name non-empty');
+    AssertTrue(SR.Size >= 0, 'FindNext second file Size non-negative');
+    Inc(Count);
+    while FindNext(SR) = 0 do
+      Inc(Count);
+    AssertTrue(Count > 1, 'FindNext found multiple files');
+  end
+  else
+    AssertTrue(True, 'FindNext only one conf file');
+  FindClose(SR);
+end;
+
+procedure TestFindFirstNotFound;
+var
+  SR: TSearchRec;
+  Res: LongInt;
+begin
+  Res := FindFirst('/tmp/*.nonexistent_xyz_123', faAnyFile, SR);
+  AssertTrue(Res <> 0, 'FindFirst returns error for no matches');
+end;
+
+procedure TestExtractFileDirRoot;
+begin
+  AssertEqual('/', ExtractFileDir('/home'), 'ExtractFileDir single-level path');
+  AssertEqual('/', ExtractFileDir('/'), 'ExtractFileDir root');
+  AssertEqual('', ExtractFileDir(''), 'ExtractFileDir empty');
+  AssertEqual('', ExtractFileDir('test.pas'), 'ExtractFileDir no slash');
 end;
 
 begin
@@ -221,6 +268,9 @@ begin
   TestChangeFileExt;
   TestNow;
   TestFindFirst;
+  TestFindNext;
+  TestFindFirstNotFound;
+  TestExtractFileDirRoot;
 
   WriteLn;
   WriteLn('Tests passed: ', TestsPassed);

@@ -22,6 +22,8 @@ type
     Size: Int64;
     Time: LongInt;
     FindHandle: Pointer;
+    FilterPattern: string;
+    SearchDir: string;
   end;
 
   Exception = class
@@ -289,8 +291,10 @@ begin
   while (I > 0) and (FileName[I] <> '/') do
     Dec(I);
 
-  if I <= 1 then
+  if I <= 0 then
     Exit('');
+  if I = 1 then
+    Exit('/');
 
   Result := Copy(FileName, 1, I - 1);
 end;
@@ -342,6 +346,11 @@ var
   PI, NI: Integer;
   StarPI, StarNI: Integer;
 begin
+  if (Pattern = '') and (Name = '') then
+    Exit(True);
+  if Pattern = '*' then
+    Exit(True);
+
   PI := 1;
   NI := 1;
   StarPI := 0;
@@ -384,18 +393,26 @@ var
   DirPath, Pattern: string;
   DirPtr: pDir;
   Entry: pDirEnt;
+  Info: BaseUnix.Stat;
+  FullPath: string;
 begin
   F.Name := '';
   F.Attr := 0;
   F.Size := 0;
   F.Time := 0;
   F.FindHandle := nil;
+  F.FilterPattern := '';
+  F.SearchDir := '';
 
   DirPath := ExtractFileDir(Path);
   if DirPath = '' then
     DirPath := '.';
 
   Pattern := ExtractFileName(Path);
+  if Pattern = '' then
+    Pattern := '*';
+  F.FilterPattern := Pattern;
+  F.SearchDir := DirPath;
 
   DirPtr := FpOpenDir(DirPath);
   if DirPtr = nil then
@@ -410,6 +427,16 @@ begin
       begin
         F.Name := Entry^.d_name;
         F.FindHandle := DirPtr;
+        FullPath := IncludeTrailingPathDelimiter(DirPath) + F.Name;
+        if FpStat(FullPath, Info) = 0 then
+        begin
+          if (Info.st_mode and S_IFMT) = S_IFDIR then
+            F.Attr := faDirectory
+          else
+            F.Attr := 0;
+          F.Size := Info.st_size;
+          F.Time := Info.st_ctime;
+        end;
         Exit(0);
       end;
     end;
@@ -424,6 +451,8 @@ function FindNext(var F: TSearchRec): LongInt;
 var
   DirPtr: pDir;
   Entry: pDirEnt;
+  Info: BaseUnix.Stat;
+  FullPath: string;
 begin
   DirPtr := pDir(F.FindHandle);
   if DirPtr = nil then
@@ -434,8 +463,25 @@ begin
   begin
     if (Entry^.d_name <> '.') and (Entry^.d_name <> '..') then
     begin
-      F.Name := Entry^.d_name;
-      Exit(0);
+      if GlobMatch(F.FilterPattern, Entry^.d_name) then
+      begin
+        F.Name := Entry^.d_name;
+        F.Attr := 0;
+        F.Size := 0;
+        F.Time := 0;
+        if F.SearchDir <> '' then
+        begin
+          FullPath := IncludeTrailingPathDelimiter(F.SearchDir) + F.Name;
+          if FpStat(FullPath, Info) = 0 then
+          begin
+            if (Info.st_mode and S_IFMT) = S_IFDIR then
+              F.Attr := faDirectory;
+            F.Size := Info.st_size;
+            F.Time := Info.st_ctime;
+          end;
+        end;
+        Exit(0);
+      end;
     end;
     Entry := FpReadDir(DirPtr^);
   end;
