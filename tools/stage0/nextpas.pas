@@ -11,401 +11,13 @@ program nextpas;
 {$UNITPATH ../../compiler/targets}
 
 uses
-  SysUtils, process, target_config, nextpas_json_helpers, nextpas_projection_types,
-  nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
-  nextpas_command_envelope, nextpas_command_build,
-  np_compilation_session, np_target_facts,
-  np_package_workflow, np_toolchain_profiles, np_toolchain_runner,
-  np_workspace_model;
+  SysUtils, nextpas_projection_types, nextpas_command_envelope,
+  nextpas_command_build, nextpas_command_test, nextpas_command_env,
+  nextpas_command_doctor, nextpas_command_query, nextpas_command_pkg,
+  nextpas_projection_context;
 
 var
   State: TNextPasState;
-
-procedure RunTest(
-  const AListGroups: Boolean;
-  const AFilterName: string;
-  const AWorkspaceOverride: string
-);
-var
-  ExitCode: LongInt;
-  HarnessScriptPath: string;
-  Proc: TProcess;
-  WorkspaceRoot: string;
-begin
-  if AWorkspaceOverride <> '' then
-    WorkspaceRoot := ExpandFileName(AWorkspaceOverride)
-  else
-    WorkspaceRoot := ExpandFileName(GetCurrentDir);
-  if not DirectoryExists(WorkspaceRoot) then
-  begin
-    if AWorkspaceOverride <> '' then
-      Fail(State, 'invalid-workspace-root: ' + AWorkspaceOverride, True);
-    Fail(State, 'invalid-workspace-root: ' + WorkspaceRoot, True);
-  end;
-
-  HarnessScriptPath := ExpandFileName(
-    IncludeTrailingPathDelimiter(WorkspaceRoot) + 'tests' +
-    DirectorySeparator + 'run_all_tests.sh'
-  );
-  if not FileExists(HarnessScriptPath) then
-    Fail(State, 'missing-harness-script: ' + HarnessScriptPath, True);
-
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := '/usr/bin/env';
-    Proc.CurrentDirectory := WorkspaceRoot;
-    Proc.Options := [poWaitOnExit];
-    Proc.Parameters.Add('NEXTPAS_STAGE0=' + ExpandFileName(ParamStr(0)));
-    Proc.Parameters.Add('NEXTPAS_WORKSPACE_ROOT=' + WorkspaceRoot);
-    Proc.Parameters.Add('NEXTPAS_REPO_ROOT=' + WorkspaceRoot);
-    Proc.Parameters.Add(HarnessScriptPath);
-    if AListGroups then
-      Proc.Parameters.Add('--list-groups')
-    else
-    begin
-      Proc.Parameters.Add('--filter');
-      Proc.Parameters.Add(AFilterName);
-    end;
-    Proc.Execute;
-    ExitCode := Proc.ExitStatus;
-  finally
-    Proc.Free;
-  end;
-
-  Halt(ExitCode);
-end;
-
-procedure RunEnvStatus(
-  const TargetName: string;
-  const ToolchainBindingOverride: string
-);
-var
-  TargetConfig: TTargetConfig;
-begin
-  State.BuildContext.TargetName := TargetName;
-  try
-    TargetConfig := LoadTargetConfig(
-      TargetName,
-      ParamStr(0),
-      ToolchainBindingOverride
-    );
-  except
-    on E: ETargetConfigError do
-      Fail(State, E.Message);
-  end;
-
-  State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-  State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
-  CaptureToolchainProjectionFromTargetConfig(
-    State.ToolchainProjection,
-    TargetConfig
-  );
-  CaptureEnvironmentProjectionFromTargetConfig(
-    State.EnvironmentProjection,
-    TargetConfig
-  );
-
-  WriteLn('mode=env');
-  WriteLn('command=env');
-  WriteLn('selector=status');
-  WriteLn('target=', TargetName);
-  WriteLn('target-config=', TargetConfig.ConfigPath);
-  WriteLn('compiler=', TargetConfig.CompilerExecutable);
-  PrintBuildContextProjection(False, State.BuildContext);
-  PrintToolchainProjectionFields(False, State.ToolchainProjection);
-  PrintEnvironmentProjectionFields(False, State.EnvironmentProjection);
-  WriteLn('status=success');
-  WriteLn('result=success');
-  WriteLn('command-outcome=success');
-  PrintCommandEnvelope(
-    State,
-    ExitSuccessCode,
-    'status',
-    'success',
-    'success',
-    '',
-    'environment status captured',
-    False
-  );
-  WriteLn('human-summary=environment status captured');
-end;
-
-procedure RunDoctor(
-  const TargetName: string;
-  const ToolchainBindingOverride: string;
-  const WorkspaceOverride: string
-);
-var
-  TargetConfig: TTargetConfig;
-  WorkspaceRoot: string;
-begin
-  State.BuildContext.TargetName := TargetName;
-  WorkspaceRoot := '';
-  if WorkspaceOverride <> '' then
-  begin
-    WorkspaceRoot := ExpandFileName(WorkspaceOverride);
-    if not DirectoryExists(WorkspaceRoot) then
-      Fail(State, 'invalid-workspace-root: ' + WorkspaceOverride, True);
-    State.BuildContext.WorkspaceRootPath := WorkspaceRoot;
-    State.BuildContext.WorkspaceDiscoveryKind := 'explicit-workspace-override';
-  end;
-
-  try
-    TargetConfig := LoadTargetConfig(
-      TargetName,
-      ParamStr(0),
-      ToolchainBindingOverride
-    );
-  except
-    on E: ETargetConfigError do
-      Fail(State, E.Message);
-  end;
-
-  State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-  State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
-  CaptureToolchainProjectionFromTargetConfig(
-    State.ToolchainProjection,
-    TargetConfig
-  );
-  CaptureEnvironmentProjectionFromTargetConfig(
-    State.EnvironmentProjection,
-    TargetConfig
-  );
-  CaptureDoctorProjectionFromEnvironment(
-    State.DoctorProjection,
-    State.EnvironmentProjection,
-    WorkspaceRoot
-  );
-
-  WriteLn('mode=doctor');
-  WriteLn('command=doctor');
-  WriteLn('selector=doctor');
-  WriteLn('target=', TargetName);
-  WriteLn('target-config=', TargetConfig.ConfigPath);
-  WriteLn('compiler=', TargetConfig.CompilerExecutable);
-  PrintBuildContextProjection(False, State.BuildContext);
-  PrintToolchainProjectionFields(False, State.ToolchainProjection);
-  PrintEnvironmentProjectionFields(False, State.EnvironmentProjection);
-  PrintDoctorProjectionFields(False, State.DoctorProjection);
-  WriteLn('status=success');
-  WriteLn('result=success');
-  WriteLn('command-outcome=success');
-  PrintCommandEnvelope(
-    State,
-    ExitSuccessCode,
-    'doctor',
-    'success',
-    'success',
-    '',
-    'doctor inspection completed',
-    False
-  );
-  WriteLn('human-summary=doctor inspection completed');
-end;
-
-procedure RunPkgInspect(
-  const TargetName: string;
-  const ToolchainBindingOverride: string;
-  const WorkspaceOverride: string
-);
-var
-  InspectionSourcePath: string;
-  TargetConfig: TTargetConfig;
-  WorkflowTruth: TPackageWorkflowTruth;
-  WorkspaceModel: TWorkspaceModel;
-  WorkspaceRoot: string;
-begin
-  State.BuildContext.TargetName := TargetName;
-  if WorkspaceOverride = '' then
-    Fail(State, 'missing-required-option: --workspace', True);
-
-  WorkspaceRoot := ExpandFileName(WorkspaceOverride);
-  if not DirectoryExists(WorkspaceRoot) then
-    Fail(State, 'invalid-workspace-root: ' + WorkspaceOverride, True);
-
-  InspectionSourcePath := ResolvePackageInspectionSourcePath(WorkspaceRoot);
-  WorkspaceModel := nil;
-  try
-    WorkspaceModel := ResolveWorkspaceModel(
-      InspectionSourcePath,
-      WorkspaceRoot,
-      TargetName,
-      ''
-    );
-    CaptureBuildCommandContext(State, '', TargetName, WorkspaceModel);
-
-    try
-      TargetConfig := LoadTargetConfig(
-        TargetName,
-        ParamStr(0),
-        ToolchainBindingOverride
-      );
-    except
-      on E: ETargetConfigError do
-        Fail(State, E.Message);
-    end;
-
-    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
-    CaptureToolchainProjectionFromTargetConfig(
-      State.ToolchainProjection,
-      TargetConfig
-    );
-    WorkflowTruth := BuildPackageWorkflowTruthFromWorkspaceModel(WorkspaceModel);
-    CapturePackageProjectionFromWorkflowTruth(
-      State.PackageProjection,
-      WorkflowTruth
-    );
-
-    WriteLn('mode=pkg');
-    WriteLn('command=pkg');
-    WriteLn('selector=inspect');
-    WriteLn('target=', TargetName);
-    WriteLn('target-config=', TargetConfig.ConfigPath);
-    WriteLn('compiler=', TargetConfig.CompilerExecutable);
-    PrintBuildContextProjection(False, State.BuildContext);
-    PrintToolchainProjectionFields(False, State.ToolchainProjection);
-    PrintPackageProjectionFields(False, State.PackageProjection);
-    WriteLn('status=success');
-    WriteLn('result=success');
-    WriteLn('command-outcome=success');
-    PrintCommandEnvelope(
-      State,
-      ExitSuccessCode,
-      'inspect',
-      'success',
-      'success',
-      '',
-      'package inspection completed',
-      False
-    );
-    WriteLn('human-summary=package inspection completed');
-  finally
-    WorkspaceModel.Free;
-  end;
-end;
-
-procedure RunQuerySymbols(
-  const SourcePath: string;
-  const TargetName: string;
-  const ToolchainBindingOverride: string;
-  const WorkspaceOverride: string
-);
-var
-  Options: TCompilationOptions;
-  ResolvedSourcePath: string;
-  ResolvedUnitRoots: TStringArray;
-  Session: TCompilationSession;
-  TargetConfig: TTargetConfig;
-  TargetFacts: TTargetFactsView;
-  WorkspaceModel: TWorkspaceModel;
-begin
-  State.BuildContext.SourcePath := SourcePath;
-  State.BuildContext.TargetName := TargetName;
-  WorkspaceModel := nil;
-  Session := nil;
-
-  if not FileExists(SourcePath) then
-    Fail(State, 'missing-source: ' + SourcePath);
-
-  ResolvedSourcePath := ExpandFileName(SourcePath);
-  try
-    WorkspaceModel := ResolveWorkspaceModel(
-      ResolvedSourcePath,
-      WorkspaceOverride,
-      TargetName,
-      ''
-    );
-  except
-    on E: Exception do
-      Fail(State, E.Message, True);
-  end;
-
-  try
-    CaptureBuildCommandContext(State, SourcePath, TargetName, WorkspaceModel);
-    SetLength(ResolvedUnitRoots, 0);
-
-    try
-      TargetConfig := LoadTargetConfig(
-        TargetName,
-        ParamStr(0),
-        ToolchainBindingOverride
-      );
-    except
-      on E: ETargetConfigError do
-        Fail(State, E.Message);
-    end;
-
-    State.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
-    State.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
-    TargetFacts := TargetFactsFromConfig(TargetConfig);
-
-    Options.CommandName := 'query';
-    Options.BuildContext.RequestedSourcePath := SourcePath;
-    Options.BuildContext.ResolvedSourcePath := ResolvedSourcePath;
-    Options.BuildContext.RequestedTargetId := TargetFacts.TargetId;
-    Options.BuildContext.WorkspaceRootPath := WorkspaceModel.WorkspaceRootPath;
-    Options.BuildContext.WorkspaceDiscoveryKind := WorkspaceModel.DiscoveryKind;
-    Options.BuildContext.WorkspaceDescriptorPath :=
-      WorkspaceModel.WorkspaceDescriptorPath;
-    Options.BuildContext.PackageManifestPath := WorkspaceModel.PackageManifestPath;
-    Options.BuildContext.ArtifactRootPath := WorkspaceModel.ArtifactRootPath;
-    Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
-    Options.WorkspaceModel := WorkspaceModel;
-    Options.ExplicitUnitRoots := ResolvedUnitRoots;
-
-    Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);
-    WorkspaceModel := nil;
-    CaptureSessionContext(State, Session);
-    Session.AnalyzeSyntax;
-    CaptureSessionContext(State, Session);
-    if Session.HasSyntaxErrors then
-      Fail(State, 'syntax-analysis-failed');
-    Session.ResolveUnits;
-    CaptureSessionContext(State, Session);
-    if Session.HasResolutionErrors then
-      Fail(State, 'unit-resolution-failed');
-    Session.AnalyzeSemantics;
-    CaptureSessionContext(State, Session);
-    if Session.HasSemanticErrors then
-      Fail(State, 'semantic-analysis-failed');
-
-    State.QueryProjection.Kind := 'symbols';
-    State.QueryProjection.Status := 'success';
-    State.QueryProjection.AnalysisSource := 'compilation-session';
-    State.QueryProjection.ResultCount := Session.SymbolCount;
-    State.QueryProjection.HasResultCount := True;
-
-    WriteLn('mode=query');
-    WriteLn('command=query');
-    WriteLn('selector=symbols');
-    WriteLn('source=', SourcePath);
-    WriteLn('target=', TargetName);
-    WriteLn('target-config=', TargetConfig.ConfigPath);
-    WriteLn('compiler=', TargetConfig.CompilerExecutable);
-    PrintSessionProjection(False, State);
-    PrintQueryProjectionFields(False, State.QueryProjection);
-    WriteLn('status=success');
-    WriteLn('result=success');
-    WriteLn('command-outcome=success');
-    PrintCommandEnvelope(
-      State,
-      ExitSuccessCode,
-      'symbols',
-      'success',
-      'success',
-      '',
-      'query symbols completed',
-      False
-    );
-    WriteLn('human-summary=query symbols completed');
-  finally
-    Session.Free;
-    WorkspaceModel.Free;
-  end;
-end;
-
-var
   CommandName: string;
   Index: LongInt;
   ListGroups: Boolean;
@@ -417,6 +29,7 @@ var
   WorkspaceOverride: string;
   OutDirOverride: string;
   OptionName: string;
+
 begin
   State.CommandName := '';
   State.SelectorName := '';
@@ -482,7 +95,7 @@ begin
     if not ListGroups and (TestFilterName = '') then
       Fail(State, 'invalid-arguments', True);
 
-    RunTest(ListGroups, TestFilterName, WorkspaceOverride);
+    RunTest(State, ListGroups, TestFilterName, WorkspaceOverride);
   end;
 
   if CommandName = 'env' then
@@ -523,7 +136,7 @@ begin
     if TargetName = '' then
       Fail(State, 'missing-required-option: --target', True);
 
-    RunEnvStatus(TargetName, ToolchainBindingOverride);
+    RunEnvStatus(State, TargetName, ToolchainBindingOverride);
     Halt(ExitSuccessCode);
   end;
 
@@ -571,7 +184,7 @@ begin
     if TargetName = '' then
       Fail(State, 'missing-required-option: --target', True);
 
-    RunDoctor(TargetName, ToolchainBindingOverride, WorkspaceOverride);
+    RunDoctor(State, TargetName, ToolchainBindingOverride, WorkspaceOverride);
     Halt(ExitSuccessCode);
   end;
 
@@ -624,6 +237,7 @@ begin
       Fail(State, 'missing-required-option: --target', True);
 
     RunQuerySymbols(
+      State,
       SourcePath,
       TargetName,
       ToolchainBindingOverride,
@@ -679,7 +293,7 @@ begin
     if TargetName = '' then
       Fail(State, 'missing-required-option: --target', True);
 
-    RunPkgInspect(TargetName, ToolchainBindingOverride, WorkspaceOverride);
+    RunPkgInspect(State, TargetName, ToolchainBindingOverride, WorkspaceOverride);
     Halt(ExitSuccessCode);
   end;
 
