@@ -15,6 +15,61 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 Repo Hygiene + Classes RTL Source-of-truth Convergence
+
+### Goal
+
+把这次会话前发现的两类工作树级问题一次收口，并把下一批次入口明确转向 RTL Classes 实现，
+而不是继续在 verify gate 上叠 addendum：
+
+- 工作树污染：`core.997688`（22MB FPC core dump）、四个空 `crash_*.txt`、`ppas.sh`、
+  `tools/stage0/nextpas_*.s`（5 个 ~250KB 残留汇编中间产物）必须从 untracked 状态清掉，
+  并在 `.gitignore` 中通过 `core.*` / `crash_*.txt` / `ppas.sh` / `tools/stage0/*.s`
+  正式 ignore，避免下一次崩溃或中断重新污染
+- RTL Classes 必须收敛到与 SysUtils 一致的 source-of-truth 模式：
+  `rtl/core/classes/np_classes.pas` 是唯一源，checked-in `Classes.pas` / `Classes.o` /
+  `Classes.ppu` 一律由 build 派生并通过 `.gitignore` 排除；删掉之前与 `np_classes.pas`
+  字节级一致的 `Classes.pas` 重复源
+- 这一批不引入新代码、不改公开 line-based output / `command-envelope=<json>` 契约；
+  fresh `bash build/verify_local.sh` 必须继续全绿
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 删除工作树污染文件：`core.997688`、`crash_err.txt`、`crash_out.txt`、
+      `crash_output.txt`、`crash_stdout.txt`、`ppas.sh`、
+      `tools/stage0/nextpas_command_envelope.s`、`tools/stage0/nextpas_json_helpers.s`、
+      `tools/stage0/nextpas_projection_json.s`、`tools/stage0/nextpas_projection_text.s`、
+      `tools/stage0/nextpas_projection_types.s`
+- [x] 删除 `rtl/core/classes/Classes.pas`（与 `np_classes.pas` 字节级一致的重复源），
+      并清理其残留 `Classes.o` / `Classes.ppu`
+- [x] 扩展 `.gitignore`，新增
+      `rtl/core/classes/Classes.pas`、`rtl/core/classes/Classes.o`、
+      `rtl/core/classes/Classes.ppu`、`core.*`、`crash_*.txt`、`ppas.sh`、
+      `tools/stage0/*.s`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision                                                                        | Rationale                                                                                                |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Classes 收敛到 `np_classes.pas` 唯一源 + ignore 派生 `Classes.{pas,o,ppu}`      | 与 `rtl/core/sysutils/` 已建立的模式一致；checked-in 重复源会让 source-of-truth 漂移并误导下游 contributor |
+| 工作树污染统一通过 `.gitignore` 模式封堵，不靠每次手动清理                      | FPC 崩溃 core dump、`ppas.sh` 中断脚本、`tools/stage0/*.s` 汇编中间产物都是已知会复现的工件             |
+| 这一批不动 `np_classes.pas` 内容，也不实现 Classes 容器                         | 先把 source-of-truth 边界定清楚，再进入 RTL Classes 实现批次；避免一次混入两个方向                       |
+
+### Notes
+
+- 下一批次入口正式转向 RTL Classes 实现：`np_classes.pas` 当前只暴露最小 `TFileStream`
+  shape，离 compiler module 真正能 `uses Classes` 还差容器类（`TStringList`、`TList`）；
+  这与 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 列出的 Stage2 阻塞项一致
+- 这一批不替换历史 addendum，也不改架构规范；`docs/plans/2026-05-02-rtl-implementation-plan.md`
+  仍然是 RTL 推进的 owning plan，本 addendum 只负责把仓库卫生与 source-of-truth 模式
+  同步到 task_plan 顶层，避免下一轮恢复时再被这批工件分散注意力
+
 ## Addendum: 2026-04-29 Package Workflow Truth Skeleton
 
 ### Goal
