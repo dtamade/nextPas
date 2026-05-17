@@ -38,6 +38,7 @@ type
     BuildContext: TBuildContext;
     WorkspaceModel: TWorkspaceModel;
     ExplicitUnitRoots: TStringArray;
+    NoFold: Boolean;
   end;
 
   TToolStatusEventRecord = record
@@ -828,7 +829,8 @@ begin
     FAstFacade,
     FUnitGraph,
     FDiagnosticsSink,
-    FRootFileId
+    FRootFileId,
+    FOptions.NoFold
   );
   try
     Analyzer.Analyze;

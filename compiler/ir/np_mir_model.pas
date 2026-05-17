@@ -110,7 +110,16 @@ type
   private
     FSemanticModel: TSemanticModel;
     FModel: TMirModel;
+    FEntryBlockId: LongInt;
     function MirKindForTypedHirNode(const ANode: TTypedHirNode): string;
+    function LowerVarLoadRuntime(
+      const AName: string;
+      const ABlockId: LongInt
+    ): TMirValueId;
+    function LowerHaltRuntimeBlob(
+      const ABlob: string;
+      const ABlockId: LongInt
+    ): TMirValueId;
   public
     constructor Create(const ASemanticModel: TSemanticModel);
     destructor Destroy; override;
@@ -458,6 +467,7 @@ begin
   inherited Create;
   FSemanticModel := ASemanticModel;
   FModel := TMirModel.Create;
+  FEntryBlockId := 0;
 end;
 
 destructor TMirLowerer.Destroy;
@@ -466,11 +476,171 @@ begin
   inherited Destroy;
 end;
 
+function TMirLowerer.LowerVarLoadRuntime(
+  const AName: string;
+  const ABlockId: LongInt
+): TMirValueId;
+var
+  AllocaResult, LoadResult: TMirValueId;
+  AllocaOpId: LongInt;
+  ConstValue: Int64;
+  Operands: TMirOperandRefs;
+  ConstValueId: TMirValueId;
+  StoreOperands: TMirOperandRefs;
+begin
+  AllocaResult := FModel.AddValue(mtkPtr, 0, AName);
+  AllocaOpId := FModel.AddOperationWithResult(
+    'alloca', ABlockId, AName, AName, AllocaResult, nil
+  );
+  if (FSemanticModel <> nil) and
+    FSemanticModel.LookupVarInitValue(AName, ConstValue) then
+  begin
+    ConstValueId := FModel.AddConstIntValue(ConstValue);
+    SetLength(StoreOperands, 2);
+    StoreOperands[0] := MakeValueOperand(ConstValueId);
+    StoreOperands[1] := MakeValueOperand(AllocaResult);
+    FModel.AddOperationWithResult(
+      'store', ABlockId, AName, IntToStr(ConstValue), 0, StoreOperands
+    );
+  end;
+  LoadResult := FModel.AddValue(mtkI64, 0, AName);
+  SetLength(Operands, 1);
+  Operands[0] := MakeValueOperand(AllocaResult);
+  FModel.AddOperationWithResult(
+    'load', ABlockId, AName, AName, LoadResult, Operands
+  );
+  Result := LoadResult;
+  if AllocaOpId = 0 then
+    Result := 0;
+end;
+
+function TMirLowerer.LowerHaltRuntimeBlob(
+  const ABlob: string;
+  const ABlockId: LongInt
+): TMirValueId;
+var
+  Stack: array of TMirValueId;
+  StackLen: SizeInt;
+  Cursor, BlobLen: SizeInt;
+  Token, Arg: string;
+  Parsed: Int64;
+  ParseCode: Word;
+  Lhs, Rhs, Res: TMirValueId;
+  Operands: TMirOperandRefs;
+
+  procedure StackPush(const AId: TMirValueId);
+  begin
+    StackLen := Length(Stack);
+    SetLength(Stack, StackLen + 1);
+    Stack[StackLen] := AId;
+  end;
+
+  function StackPop: TMirValueId;
+  begin
+    StackLen := Length(Stack) - 1;
+    if StackLen < 0 then
+      Exit(0);
+    Result := Stack[StackLen];
+    SetLength(Stack, StackLen);
+  end;
+
+  function ReadLineToken(out AOp: string; out AArg: string): Boolean;
+  var
+    LineEnd, SpacePos: SizeInt;
+    Line: string;
+  begin
+    AOp := '';
+    AArg := '';
+    if Cursor > BlobLen then
+      Exit(False);
+    LineEnd := Cursor;
+    while (LineEnd <= BlobLen) and (ABlob[LineEnd] <> #10) do
+      Inc(LineEnd);
+    Line := Copy(ABlob, Cursor, LineEnd - Cursor);
+    Cursor := LineEnd + 1;
+    if Line = '' then
+    begin
+      Result := False;
+      Exit;
+    end;
+    SpacePos := Pos(' ', Line);
+    if SpacePos = 0 then
+    begin
+      AOp := Line;
+      AArg := '';
+    end
+    else
+    begin
+      AOp := Copy(Line, 1, SpacePos - 1);
+      AArg := Copy(Line, SpacePos + 1, Length(Line) - SpacePos);
+    end;
+    Result := True;
+  end;
+
+begin
+  SetLength(Stack, 0);
+  Cursor := 1;
+  BlobLen := Length(ABlob);
+  while ReadLineToken(Token, Arg) do
+  begin
+    if Token = 'int' then
+    begin
+      Val(Arg, Parsed, ParseCode);
+      if ParseCode <> 0 then
+        Exit(0);
+      StackPush(FModel.AddConstIntValue(Parsed));
+    end
+    else if Token = 'var' then
+    begin
+      Res := LowerVarLoadRuntime(Arg, ABlockId);
+      if Res = 0 then
+        Exit(0);
+      StackPush(Res);
+    end
+    else if (Token = 'add') or (Token = 'sub') or (Token = 'mul') then
+    begin
+      Rhs := StackPop;
+      Lhs := StackPop;
+      if (Lhs = 0) or (Rhs = 0) then
+        Exit(0);
+      Res := FModel.AddValue(mtkI64, 0, Token);
+      SetLength(Operands, 2);
+      Operands[0] := MakeValueOperand(Lhs);
+      Operands[1] := MakeValueOperand(Rhs);
+      FModel.AddOperationWithResult(
+        Token, ABlockId, Token, '', Res, Operands
+      );
+      StackPush(Res);
+    end
+    else if Token = 'neg' then
+    begin
+      Rhs := StackPop;
+      if Rhs = 0 then
+        Exit(0);
+      Lhs := FModel.AddConstIntValue(0);
+      Res := FModel.AddValue(mtkI64, 0, Token);
+      SetLength(Operands, 2);
+      Operands[0] := MakeValueOperand(Lhs);
+      Operands[1] := MakeValueOperand(Rhs);
+      FModel.AddOperationWithResult(
+        'sub', ABlockId, Token, '', Res, Operands
+      );
+      StackPush(Res);
+    end
+    else
+      Exit(0);
+  end;
+  if Length(Stack) <> 1 then
+    Exit(0);
+  Result := Stack[0];
+end;
+
 procedure TMirLowerer.Lower;
 var
-  BlockId: LongInt;
   Index: LongInt;
   Node: TTypedHirNode;
+  ExitValue: TMirValueId;
+  Operands: TMirOperandRefs;
 begin
   if (FSemanticModel = nil) or (FSemanticModel.Status <> 'ready') then
   begin
@@ -479,20 +649,35 @@ begin
   end;
 
   FModel.SetRootName(FSemanticModel.RootName);
-  BlockId := FModel.AddBlock('entry');
+  FEntryBlockId := FModel.AddBlock('entry');
 
   for Index := 0 to FSemanticModel.TypedHirNodeCount - 1 do
   begin
     Node := FSemanticModel.TypedHirNodeAt(Index);
+    if Node.Kind = 'halt-call-runtime' then
+    begin
+      ExitValue := LowerHaltRuntimeBlob(Node.Operand, FEntryBlockId);
+      if ExitValue = 0 then
+      begin
+        FModel.MarkFailure;
+        Exit;
+      end;
+      SetLength(Operands, 1);
+      Operands[0] := MakeValueOperand(ExitValue);
+      FModel.AddOperationWithResult(
+        'runtime-halt', FEntryBlockId, 'Halt', '', 0, Operands
+      );
+      Continue;
+    end;
     FModel.AddOperation(
       MirKindForTypedHirNode(Node),
-      BlockId,
+      FEntryBlockId,
       Node.DisplayName,
       Node.Operand
     );
   end;
 
-  FModel.AddOperation('return', BlockId, FSemanticModel.RootName, '');
+  FModel.AddOperation('return', FEntryBlockId, FSemanticModel.RootName, '');
   FModel.MarkReady;
 end;
 

@@ -177,15 +177,97 @@ begin
 end;
 
 procedure TLlvmEmitter.EmitRuntimeMain(var AIrFile: Text);
+var
+  Index, OpIdx: LongInt;
+  Op: TMirOperation;
+  WriteLines: TLLvmStringArray;
+  ResultName, OpcodeName: string;
+  ExitText: string;
+
+  function ValueLabel(const AValueId: TMirValueId): string;
+  var
+    V: TMirValue;
+  begin
+    V := FMirModel.GetValue(AValueId);
+    if V.ConstHasValue then
+      Result := IntToStr(V.ConstInt)
+    else
+      Result := '%v' + IntToStr(AValueId);
+  end;
+
+  function OperandText(const ARef: TMirOperandRef): string;
+  begin
+    case ARef.Kind of
+      morkValue: Result := ValueLabel(ARef.ValueId);
+      morkLiteralInt: Result := IntToStr(ARef.LiteralInt);
+      morkBlockLabel: Result := 'label %b' + IntToStr(ARef.BlockId);
+      morkGlobal: Result := '@' + ARef.GlobalSymbol;
+    else
+      Result := '';
+    end;
+  end;
+
 begin
+  WriteLines := CollectWriteLines;
   EmitTargetHeader(AIrFile);
-  WriteLn(AIrFile, '; nextpas runtime emitter stub - Batch B');
-  WriteLn(AIrFile, '; runtime ops not yet implemented in this batch');
+  EmitGlobalConstStrings(AIrFile, WriteLines);
+
   WriteLn(AIrFile);
   WriteLn(AIrFile, 'define void @_start() noreturn {');
   WriteLn(AIrFile, 'entry:');
+
+  ExitText := '0';
+  for OpIdx := 0 to FMirModel.OperationCount - 1 do
+  begin
+    Op := FMirModel.OperationAt(OpIdx);
+    if Op.Kind = 'alloca' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      WriteLn(AIrFile, '  ', ResultName, ' = alloca i64');
+    end
+    else if Op.Kind = 'store' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+        WriteLn(AIrFile, '  store i64 ',
+          OperandText(Op.OperandRefs[0]), ', ptr ',
+          OperandText(Op.OperandRefs[1]));
+    end
+    else if Op.Kind = 'load' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Length(Op.OperandRefs) >= 1 then
+        WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
+          OperandText(Op.OperandRefs[0]));
+    end
+    else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Op.Kind = 'add' then
+        OpcodeName := 'add'
+      else if Op.Kind = 'sub' then
+        OpcodeName := 'sub'
+      else
+        OpcodeName := 'mul';
+      if Length(Op.OperandRefs) >= 2 then
+        WriteLn(AIrFile, '  ', ResultName, ' = ', OpcodeName, ' i64 ',
+          OperandText(Op.OperandRefs[0]), ', ',
+          OperandText(Op.OperandRefs[1]));
+    end
+    else if Op.Kind = 'runtime-halt' then
+    begin
+      if Length(Op.OperandRefs) >= 1 then
+        ExitText := OperandText(Op.OperandRefs[0]);
+    end;
+  end;
+
+  for Index := 0 to High(WriteLines) do
+    WriteLn(AIrFile,
+      '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
+      Index, ', i64 ', Length(WriteLines[Index]), ')');
+
   WriteLn(AIrFile,
-    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 0)');
+    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
+    ExitText, ')');
   WriteLn(AIrFile, '  unreachable');
   WriteLn(AIrFile, '}');
 end;

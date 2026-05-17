@@ -29,6 +29,7 @@ var
   WorkspaceOverride: string;
   OutDirOverride: string;
   OptionName: string;
+  NoFold: Boolean;
 
 begin
   State.CommandName := '';
@@ -305,13 +306,20 @@ begin
   ToolchainBindingOverride := '';
   WorkspaceOverride := '';
   OutDirOverride := '';
+  NoFold := False;
   SetLength(UnitRootOverrides, 0);
 
   Index := 3;
   while Index <= ParamCount do
   begin
     OptionName := ParamStr(Index);
-    if (OptionName = '--target') or
+    if OptionName = '--no-fold' then
+    begin
+      if NoFold then
+        Fail(State, 'duplicate-option: --no-fold', True);
+      NoFold := True;
+    end
+    else if (OptionName = '--target') or
       (OptionName = '--toolchain-binding') or
       (OptionName = '--workspace') or
       (OptionName = '--unit-root') or
@@ -367,6 +375,7 @@ begin
     ToolchainBindingOverride,
     WorkspaceOverride,
     UnitRootOverrides,
-    OutDirOverride
+    OutDirOverride,
+    NoFold
   );
 end.

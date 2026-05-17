@@ -18,7 +18,8 @@ procedure RunBuild(
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string;
   const UnitRootOverrides: TStringArray;
-  const OutDirOverride: string
+  const OutDirOverride: string;
+  const NoFold: Boolean
 );
 
 implementation
@@ -70,7 +71,8 @@ procedure RunBuild(
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string;
   const UnitRootOverrides: TStringArray;
-  const OutDirOverride: string
+  const OutDirOverride: string;
+  const NoFold: Boolean
 );
 var
   CompilerExitCode: LongInt;
@@ -218,6 +220,7 @@ begin
     Options.BuildContext.PackageManifestPath := WorkspaceModel.PackageManifestPath;
     Options.WorkspaceModel := WorkspaceModel;
     Options.ExplicitUnitRoots := ResolvedUnitRoots;
+    Options.NoFold := NoFold;
     Options.BuildContext.ArtifactRootPath := WorkspaceModel.ArtifactRootPath;
     Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
     Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);

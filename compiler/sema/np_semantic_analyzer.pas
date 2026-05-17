@@ -32,6 +32,7 @@ type
     FUnitGraph: TUnitGraph;
     FDiagnostics: TDiagnosticsSink;
     FRootFileId: TSourceFileId;
+    FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
     FInliningStack: array of string;
@@ -88,7 +89,8 @@ type
       const ARootAst: TAstFacade;
       const AUnitGraph: TUnitGraph;
       const ADiagnostics: TDiagnosticsSink;
-      const ARootFileId: TSourceFileId
+      const ARootFileId: TSourceFileId;
+      const ANoFold: Boolean
     );
     destructor Destroy; override;
     procedure Analyze;
@@ -131,7 +133,8 @@ constructor TSemanticAnalyzer.Create(
   const ARootAst: TAstFacade;
   const AUnitGraph: TUnitGraph;
   const ADiagnostics: TDiagnosticsSink;
-  const ARootFileId: TSourceFileId
+  const ARootFileId: TSourceFileId;
+  const ANoFold: Boolean
 );
 begin
   inherited Create;
@@ -139,6 +142,7 @@ begin
   FUnitGraph := AUnitGraph;
   FDiagnostics := ADiagnostics;
   FRootFileId := ARootFileId;
+  FNoFold := ANoFold;
   FModel := TSemanticModel.Create;
 end;
 
@@ -301,6 +305,75 @@ begin
   Last := Length(FInliningStack) - 1;
   if Last >= 0 then
     SetLength(FInliningStack, Last);
+end;
+
+function EncodeRuntimeIntExpr(const ANode: TGreenNode;
+  out ABlob: string): Boolean;
+var
+  LeftBlob, RightBlob, Op: string;
+  Parsed: Int64;
+  ParseCode: Word;
+begin
+  ABlob := '';
+  if ANode = nil then
+    Exit(False);
+  case ANode.NodeKind of
+    gnkIntegerLiteral:
+      begin
+        Val(ANode.Text, Parsed, ParseCode);
+        if ParseCode <> 0 then
+          Exit(False);
+        ABlob := 'int ' + IntToStr(Parsed) + #10;
+        Exit(True);
+      end;
+    gnkIdentifier:
+      begin
+        if ANode.Text = '' then
+          Exit(False);
+        ABlob := 'var ' + ANode.Text + #10;
+        Exit(True);
+      end;
+    gnkUnaryExpression:
+      begin
+        if ANode.ChildCount < 1 then
+          Exit(False);
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob) then
+          Exit(False);
+        Op := ANode.Text;
+        if Op = '-' then
+        begin
+          ABlob := LeftBlob + 'neg' + #10;
+          Exit(True);
+        end
+        else if Op = '+' then
+        begin
+          ABlob := LeftBlob;
+          Exit(True);
+        end
+        else
+          Exit(False);
+      end;
+    gnkBinaryExpression:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob) then
+          Exit(False);
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), RightBlob) then
+          Exit(False);
+        Op := ANode.Text;
+        if Op = '+' then
+          ABlob := LeftBlob + RightBlob + 'add' + #10
+        else if Op = '-' then
+          ABlob := LeftBlob + RightBlob + 'sub' + #10
+        else if Op = '*' then
+          ABlob := LeftBlob + RightBlob + 'mul' + #10
+        else
+          Exit(False);
+        Exit(True);
+      end;
+  end;
+  Result := False;
 end;
 
 procedure TSemanticAnalyzer.EmitSemaError(
@@ -1153,6 +1226,15 @@ begin
       if SameText(Child.Text, 'Halt') then
       begin
         Operand := '0';
+        if FNoFold and (Child.ChildCount >= 1) then
+        begin
+          Arg := Child.ChildAt(0);
+          if EncodeRuntimeIntExpr(Arg, Operand) then
+          begin
+            FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, Operand);
+            Continue;
+          end;
+        end;
         if Child.ChildCount >= 1 then
         begin
           Arg := Child.ChildAt(0);
