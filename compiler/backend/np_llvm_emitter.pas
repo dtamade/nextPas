@@ -178,11 +178,11 @@ end;
 
 procedure TLlvmEmitter.EmitRuntimeMain(var AIrFile: Text);
 var
-  Index, OpIdx: LongInt;
+  Index, BlockIdx, OpIdx: LongInt;
   Op: TMirOperation;
+  Block: TMirBlock;
   WriteLines: TLLvmStringArray;
-  ResultName, OpcodeName: string;
-  ExitText: string;
+  ResultName, OpcodeName, CmpPred: string;
 
   function ValueLabel(const AValueId: TMirValueId): string;
   var
@@ -200,7 +200,7 @@ var
     case ARef.Kind of
       morkValue: Result := ValueLabel(ARef.ValueId);
       morkLiteralInt: Result := IntToStr(ARef.LiteralInt);
-      morkBlockLabel: Result := 'label %b' + IntToStr(ARef.BlockId);
+      morkBlockLabel: Result := '%' + FMirModel.BlockById(ARef.BlockId).LabelName;
       morkGlobal: Result := '@' + ARef.GlobalSymbol;
     else
       Result := '';
@@ -214,61 +214,100 @@ begin
 
   WriteLn(AIrFile);
   WriteLn(AIrFile, 'define void @_start() noreturn {');
-  WriteLn(AIrFile, 'entry:');
 
-  ExitText := '0';
-  for OpIdx := 0 to FMirModel.OperationCount - 1 do
+  for BlockIdx := 0 to FMirModel.BlockCount - 1 do
   begin
-    Op := FMirModel.OperationAt(OpIdx);
-    if Op.Kind = 'alloca' then
+    Block := FMirModel.BlockAt(BlockIdx);
+    WriteLn(AIrFile, Block.LabelName, ':');
+    for OpIdx := 0 to FMirModel.OperationCount - 1 do
     begin
-      ResultName := ValueLabel(Op.ResultValueId);
-      WriteLn(AIrFile, '  ', ResultName, ' = alloca i64');
-    end
-    else if Op.Kind = 'store' then
-    begin
-      if Length(Op.OperandRefs) >= 2 then
-        WriteLn(AIrFile, '  store i64 ',
-          OperandText(Op.OperandRefs[0]), ', ptr ',
-          OperandText(Op.OperandRefs[1]));
-    end
-    else if Op.Kind = 'load' then
-    begin
-      ResultName := ValueLabel(Op.ResultValueId);
-      if Length(Op.OperandRefs) >= 1 then
-        WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
-          OperandText(Op.OperandRefs[0]));
-    end
-    else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') then
-    begin
-      ResultName := ValueLabel(Op.ResultValueId);
-      if Op.Kind = 'add' then
-        OpcodeName := 'add'
-      else if Op.Kind = 'sub' then
-        OpcodeName := 'sub'
-      else
-        OpcodeName := 'mul';
-      if Length(Op.OperandRefs) >= 2 then
-        WriteLn(AIrFile, '  ', ResultName, ' = ', OpcodeName, ' i64 ',
-          OperandText(Op.OperandRefs[0]), ', ',
-          OperandText(Op.OperandRefs[1]));
-    end
-    else if Op.Kind = 'runtime-halt' then
-    begin
-      if Length(Op.OperandRefs) >= 1 then
-        ExitText := OperandText(Op.OperandRefs[0]);
+      Op := FMirModel.OperationAt(OpIdx);
+      if Op.BlockId <> Block.BlockId then
+        Continue;
+      if Op.Kind = 'alloca' then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        WriteLn(AIrFile, '  ', ResultName, ' = alloca i64');
+      end
+      else if Op.Kind = 'store' then
+      begin
+        if Length(Op.OperandRefs) >= 2 then
+          WriteLn(AIrFile, '  store i64 ',
+            OperandText(Op.OperandRefs[0]), ', ptr ',
+            OperandText(Op.OperandRefs[1]));
+      end
+      else if Op.Kind = 'load' then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        if Length(Op.OperandRefs) >= 1 then
+          WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
+            OperandText(Op.OperandRefs[0]));
+      end
+      else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        if Op.Kind = 'add' then
+          OpcodeName := 'add'
+        else if Op.Kind = 'sub' then
+          OpcodeName := 'sub'
+        else
+          OpcodeName := 'mul';
+        if Length(Op.OperandRefs) >= 2 then
+          WriteLn(AIrFile, '  ', ResultName, ' = ', OpcodeName, ' i64 ',
+            OperandText(Op.OperandRefs[0]), ', ',
+            OperandText(Op.OperandRefs[1]));
+      end
+      else if (Op.Kind = 'icmp-eq') or (Op.Kind = 'icmp-ne') or
+        (Op.Kind = 'icmp-slt') or (Op.Kind = 'icmp-sle') or
+        (Op.Kind = 'icmp-sgt') or (Op.Kind = 'icmp-sge') then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        if Op.Kind = 'icmp-eq' then CmpPred := 'eq'
+        else if Op.Kind = 'icmp-ne' then CmpPred := 'ne'
+        else if Op.Kind = 'icmp-slt' then CmpPred := 'slt'
+        else if Op.Kind = 'icmp-sle' then CmpPred := 'sle'
+        else if Op.Kind = 'icmp-sgt' then CmpPred := 'sgt'
+        else CmpPred := 'sge';
+        if Length(Op.OperandRefs) >= 2 then
+          WriteLn(AIrFile, '  ', ResultName, ' = icmp ', CmpPred, ' i64 ',
+            OperandText(Op.OperandRefs[0]), ', ',
+            OperandText(Op.OperandRefs[1]));
+      end
+      else if Op.Kind = 'br' then
+      begin
+        if Length(Op.OperandRefs) >= 1 then
+          WriteLn(AIrFile, '  br label ',
+            OperandText(Op.OperandRefs[0]));
+      end
+      else if Op.Kind = 'cond-br' then
+      begin
+        if Length(Op.OperandRefs) >= 3 then
+          WriteLn(AIrFile, '  br i1 ',
+            OperandText(Op.OperandRefs[0]), ', label ',
+            OperandText(Op.OperandRefs[1]), ', label ',
+            OperandText(Op.OperandRefs[2]));
+      end
+      else if Op.Kind = 'write-line' then
+      begin
+        for Index := 0 to High(WriteLines) do
+          if WriteLines[Index] = Op.Operand then
+          begin
+            WriteLn(AIrFile,
+              '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
+              Index, ', i64 ', Length(WriteLines[Index]), ')');
+            Break;
+          end;
+      end
+      else if Op.Kind = 'runtime-halt' then
+      begin
+        if Length(Op.OperandRefs) >= 1 then
+          WriteLn(AIrFile,
+            '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
+            OperandText(Op.OperandRefs[0]), ')');
+        WriteLn(AIrFile, '  unreachable');
+      end;
     end;
   end;
-
-  for Index := 0 to High(WriteLines) do
-    WriteLn(AIrFile,
-      '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
-      Index, ', i64 ', Length(WriteLines[Index]), ')');
-
-  WriteLn(AIrFile,
-    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
-    ExitText, ')');
-  WriteLn(AIrFile, '  unreachable');
   WriteLn(AIrFile, '}');
 end;
 

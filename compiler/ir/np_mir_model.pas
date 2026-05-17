@@ -95,6 +95,7 @@ type
     function ValueCount: LongInt;
     function BlockCount: LongInt;
     function BlockAt(const AIndex: LongInt): TMirBlock;
+    function BlockById(const ABlockId: LongInt): TMirBlock;
     function OperationCount: LongInt;
     function OperationAt(const AIndex: LongInt): TMirOperation;
     function EntryBlockLabel: string;
@@ -111,24 +112,33 @@ type
     AllocaValueId: TMirValueId;
   end;
 
+  TMirBlockEntry = record
+    Name: string;
+    BlockId: LongInt;
+  end;
+
   TMirLowerer = class
   private
     FSemanticModel: TSemanticModel;
     FModel: TMirModel;
     FEntryBlockId: LongInt;
+    FCurrentBlockId: LongInt;
     FAllocaTable: array of TMirAllocaEntry;
+    FBlockTable: array of TMirBlockEntry;
     function MirKindForTypedHirNode(const ANode: TTypedHirNode): string;
     function EnsureAlloca(
       const AName: string;
       const ABlockId: LongInt
     ): TMirValueId;
+    function EnsureBlock(const AName: string): LongInt;
     function LowerVarLoadRuntime(
       const AName: string;
       const ABlockId: LongInt
     ): TMirValueId;
     function LowerRuntimeIntBlob(
       const ABlob: string;
-      const ABlockId: LongInt
+      const ABlockId: LongInt;
+      out AThenLabel, AElseLabel: string
     ): TMirValueId;
     function LowerHaltRuntimeBlob(
       const ABlob: string;
@@ -138,6 +148,7 @@ type
       const AOperand: string;
       const ABlockId: LongInt
     );
+    procedure LowerCondBrRuntime(const AOperand: string);
   public
     constructor Create(const ASemanticModel: TSemanticModel);
     destructor Destroy; override;
@@ -377,6 +388,23 @@ begin
   Result := FBlocks[AIndex];
 end;
 
+function TMirModel.BlockById(const ABlockId: LongInt): TMirBlock;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FBlocks) - 1 do
+    if FBlocks[Index].BlockId = ABlockId then
+    begin
+      Result := FBlocks[Index];
+      Exit;
+    end;
+  Result.BlockId := 0;
+  Result.LabelName := '';
+  SetLength(Result.PredIds, 0);
+  SetLength(Result.SuccIds, 0);
+  Result.TerminatorOpId := 0;
+end;
+
 function TMirModel.OperationCount: LongInt;
 begin
   Result := Length(FOperations);
@@ -537,12 +565,13 @@ end;
 
 function TMirLowerer.LowerRuntimeIntBlob(
   const ABlob: string;
-  const ABlockId: LongInt
+  const ABlockId: LongInt;
+  out AThenLabel, AElseLabel: string
 ): TMirValueId;
 var
   Stack: array of TMirValueId;
   StackLen: SizeInt;
-  Cursor, BlobLen: SizeInt;
+  Cursor, BlobLen, TabIdx: SizeInt;
   Token, Arg: string;
   Parsed: Int64;
   ParseCode: Word;
@@ -599,6 +628,8 @@ var
   end;
 
 begin
+  AThenLabel := '';
+  AElseLabel := '';
   SetLength(Stack, 0);
   Cursor := 1;
   BlobLen := Length(ABlob);
@@ -648,6 +679,29 @@ begin
       );
       StackPush(Res);
     end
+    else if Token = 'cmp' then
+    begin
+      Rhs := StackPop;
+      Lhs := StackPop;
+      if (Lhs = 0) or (Rhs = 0) then
+        Exit(0);
+      Res := FModel.AddValue(mtkI1, 0, 'cmp-' + Arg);
+      SetLength(Operands, 2);
+      Operands[0] := MakeValueOperand(Lhs);
+      Operands[1] := MakeValueOperand(Rhs);
+      FModel.AddOperationWithResult(
+        'icmp-' + Arg, ABlockId, 'cmp', '', Res, Operands
+      );
+      StackPush(Res);
+    end
+    else if Token = 'labels' then
+    begin
+      TabIdx := Pos(#9, Arg);
+      if TabIdx <= 0 then
+        Exit(0);
+      AThenLabel := Copy(Arg, 1, TabIdx - 1);
+      AElseLabel := Copy(Arg, TabIdx + 1, Length(Arg) - TabIdx);
+    end
     else
       Exit(0);
   end;
@@ -660,8 +714,10 @@ function TMirLowerer.LowerHaltRuntimeBlob(
   const ABlob: string;
   const ABlockId: LongInt
 ): TMirValueId;
+var
+  ThenLabel, ElseLabel: string;
 begin
-  Result := LowerRuntimeIntBlob(ABlob, ABlockId);
+  Result := LowerRuntimeIntBlob(ABlob, ABlockId, ThenLabel, ElseLabel);
 end;
 
 procedure TMirLowerer.LowerAssignRuntime(
@@ -670,7 +726,7 @@ procedure TMirLowerer.LowerAssignRuntime(
 );
 var
   TabPos: SizeInt;
-  Name, Blob: string;
+  Name, Blob, ThenLabel, ElseLabel: string;
   RhsValue, AllocaResult: TMirValueId;
   StoreOperands: TMirOperandRefs;
 begin
@@ -682,7 +738,7 @@ begin
   if Name = '' then
     Exit;
   AllocaResult := EnsureAlloca(Name, ABlockId);
-  RhsValue := LowerRuntimeIntBlob(Blob, ABlockId);
+  RhsValue := LowerRuntimeIntBlob(Blob, ABlockId, ThenLabel, ElseLabel);
   if RhsValue = 0 then
     Exit;
   SetLength(StoreOperands, 2);
@@ -690,6 +746,44 @@ begin
   StoreOperands[1] := MakeValueOperand(AllocaResult);
   FModel.AddOperationWithResult(
     'store', ABlockId, Name, '', 0, StoreOperands
+  );
+end;
+
+function TMirLowerer.EnsureBlock(const AName: string): LongInt;
+var
+  Index: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FBlockTable) - 1 do
+    if FBlockTable[Index].Name = AName then
+      Exit(FBlockTable[Index].BlockId);
+  Result := FModel.AddBlock(AName);
+  NextIndex := Length(FBlockTable);
+  SetLength(FBlockTable, NextIndex + 1);
+  FBlockTable[NextIndex].Name := AName;
+  FBlockTable[NextIndex].BlockId := Result;
+end;
+
+procedure TMirLowerer.LowerCondBrRuntime(const AOperand: string);
+var
+  CondValue: TMirValueId;
+  ThenLabel, ElseLabel: string;
+  ThenBlockId, ElseBlockId: LongInt;
+  Operands: TMirOperandRefs;
+begin
+  CondValue := LowerRuntimeIntBlob(
+    AOperand, FCurrentBlockId, ThenLabel, ElseLabel
+  );
+  if (CondValue = 0) or (ThenLabel = '') or (ElseLabel = '') then
+    Exit;
+  ThenBlockId := EnsureBlock(ThenLabel);
+  ElseBlockId := EnsureBlock(ElseLabel);
+  SetLength(Operands, 3);
+  Operands[0] := MakeValueOperand(CondValue);
+  Operands[1] := MakeBlockLabelOperand(ThenBlockId);
+  Operands[2] := MakeBlockLabelOperand(ElseBlockId);
+  FModel.AddOperationWithResult(
+    'cond-br', FCurrentBlockId, 'cond-br', '', 0, Operands
   );
 end;
 
@@ -708,6 +802,10 @@ begin
 
   FModel.SetRootName(FSemanticModel.RootName);
   FEntryBlockId := FModel.AddBlock('entry');
+  FCurrentBlockId := FEntryBlockId;
+  SetLength(FBlockTable, 1);
+  FBlockTable[0].Name := 'entry';
+  FBlockTable[0].BlockId := FEntryBlockId;
 
   for Index := 0 to FSemanticModel.TypedHirNodeCount - 1 do
   begin
@@ -719,12 +817,31 @@ begin
     end;
     if Node.Kind = 'assign-runtime' then
     begin
-      LowerAssignRuntime(Node.Operand, FEntryBlockId);
+      LowerAssignRuntime(Node.Operand, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'cond-br-runtime' then
+    begin
+      LowerCondBrRuntime(Node.Operand);
+      Continue;
+    end;
+    if Node.Kind = 'br-runtime' then
+    begin
+      SetLength(Operands, 1);
+      Operands[0] := MakeBlockLabelOperand(EnsureBlock(Node.Operand));
+      FModel.AddOperationWithResult(
+        'br', FCurrentBlockId, 'br', '', 0, Operands
+      );
+      Continue;
+    end;
+    if Node.Kind = 'block-label-runtime' then
+    begin
+      FCurrentBlockId := EnsureBlock(Node.Operand);
       Continue;
     end;
     if Node.Kind = 'halt-call-runtime' then
     begin
-      ExitValue := LowerHaltRuntimeBlob(Node.Operand, FEntryBlockId);
+      ExitValue := LowerHaltRuntimeBlob(Node.Operand, FCurrentBlockId);
       if ExitValue = 0 then
       begin
         FModel.MarkFailure;
@@ -733,7 +850,7 @@ begin
       SetLength(Operands, 1);
       Operands[0] := MakeValueOperand(ExitValue);
       FModel.AddOperationWithResult(
-        'runtime-halt', FEntryBlockId, 'Halt', '', 0, Operands
+        'runtime-halt', FCurrentBlockId, 'Halt', '', 0, Operands
       );
       Continue;
     end;
