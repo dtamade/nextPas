@@ -106,20 +106,38 @@ type
     function Status: string;
   end;
 
+  TMirAllocaEntry = record
+    Name: string;
+    AllocaValueId: TMirValueId;
+  end;
+
   TMirLowerer = class
   private
     FSemanticModel: TSemanticModel;
     FModel: TMirModel;
     FEntryBlockId: LongInt;
+    FAllocaTable: array of TMirAllocaEntry;
     function MirKindForTypedHirNode(const ANode: TTypedHirNode): string;
+    function EnsureAlloca(
+      const AName: string;
+      const ABlockId: LongInt
+    ): TMirValueId;
     function LowerVarLoadRuntime(
       const AName: string;
+      const ABlockId: LongInt
+    ): TMirValueId;
+    function LowerRuntimeIntBlob(
+      const ABlob: string;
       const ABlockId: LongInt
     ): TMirValueId;
     function LowerHaltRuntimeBlob(
       const ABlob: string;
       const ABlockId: LongInt
     ): TMirValueId;
+    procedure LowerAssignRuntime(
+      const AOperand: string;
+      const ABlockId: LongInt
+    );
   public
     constructor Create(const ASemanticModel: TSemanticModel);
     destructor Destroy; override;
@@ -476,33 +494,38 @@ begin
   inherited Destroy;
 end;
 
+function TMirLowerer.EnsureAlloca(
+  const AName: string;
+  const ABlockId: LongInt
+): TMirValueId;
+var
+  Index: LongInt;
+  AllocaResult: TMirValueId;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FAllocaTable) - 1 do
+    if FAllocaTable[Index].Name = AName then
+      Exit(FAllocaTable[Index].AllocaValueId);
+  AllocaResult := FModel.AddValue(mtkPtr, 0, AName);
+  FModel.AddOperationWithResult(
+    'alloca', ABlockId, AName, AName, AllocaResult, nil
+  );
+  NextIndex := Length(FAllocaTable);
+  SetLength(FAllocaTable, NextIndex + 1);
+  FAllocaTable[NextIndex].Name := AName;
+  FAllocaTable[NextIndex].AllocaValueId := AllocaResult;
+  Result := AllocaResult;
+end;
+
 function TMirLowerer.LowerVarLoadRuntime(
   const AName: string;
   const ABlockId: LongInt
 ): TMirValueId;
 var
   AllocaResult, LoadResult: TMirValueId;
-  AllocaOpId: LongInt;
-  ConstValue: Int64;
   Operands: TMirOperandRefs;
-  ConstValueId: TMirValueId;
-  StoreOperands: TMirOperandRefs;
 begin
-  AllocaResult := FModel.AddValue(mtkPtr, 0, AName);
-  AllocaOpId := FModel.AddOperationWithResult(
-    'alloca', ABlockId, AName, AName, AllocaResult, nil
-  );
-  if (FSemanticModel <> nil) and
-    FSemanticModel.LookupVarInitValue(AName, ConstValue) then
-  begin
-    ConstValueId := FModel.AddConstIntValue(ConstValue);
-    SetLength(StoreOperands, 2);
-    StoreOperands[0] := MakeValueOperand(ConstValueId);
-    StoreOperands[1] := MakeValueOperand(AllocaResult);
-    FModel.AddOperationWithResult(
-      'store', ABlockId, AName, IntToStr(ConstValue), 0, StoreOperands
-    );
-  end;
+  AllocaResult := EnsureAlloca(AName, ABlockId);
   LoadResult := FModel.AddValue(mtkI64, 0, AName);
   SetLength(Operands, 1);
   Operands[0] := MakeValueOperand(AllocaResult);
@@ -510,11 +533,9 @@ begin
     'load', ABlockId, AName, AName, LoadResult, Operands
   );
   Result := LoadResult;
-  if AllocaOpId = 0 then
-    Result := 0;
 end;
 
-function TMirLowerer.LowerHaltRuntimeBlob(
+function TMirLowerer.LowerRuntimeIntBlob(
   const ABlob: string;
   const ABlockId: LongInt
 ): TMirValueId;
@@ -635,6 +656,43 @@ begin
   Result := Stack[0];
 end;
 
+function TMirLowerer.LowerHaltRuntimeBlob(
+  const ABlob: string;
+  const ABlockId: LongInt
+): TMirValueId;
+begin
+  Result := LowerRuntimeIntBlob(ABlob, ABlockId);
+end;
+
+procedure TMirLowerer.LowerAssignRuntime(
+  const AOperand: string;
+  const ABlockId: LongInt
+);
+var
+  TabPos: SizeInt;
+  Name, Blob: string;
+  RhsValue, AllocaResult: TMirValueId;
+  StoreOperands: TMirOperandRefs;
+begin
+  TabPos := Pos(#9, AOperand);
+  if TabPos <= 0 then
+    Exit;
+  Name := Copy(AOperand, 1, TabPos - 1);
+  Blob := Copy(AOperand, TabPos + 1, Length(AOperand) - TabPos);
+  if Name = '' then
+    Exit;
+  AllocaResult := EnsureAlloca(Name, ABlockId);
+  RhsValue := LowerRuntimeIntBlob(Blob, ABlockId);
+  if RhsValue = 0 then
+    Exit;
+  SetLength(StoreOperands, 2);
+  StoreOperands[0] := MakeValueOperand(RhsValue);
+  StoreOperands[1] := MakeValueOperand(AllocaResult);
+  FModel.AddOperationWithResult(
+    'store', ABlockId, Name, '', 0, StoreOperands
+  );
+end;
+
 procedure TMirLowerer.Lower;
 var
   Index: LongInt;
@@ -654,6 +712,16 @@ begin
   for Index := 0 to FSemanticModel.TypedHirNodeCount - 1 do
   begin
     Node := FSemanticModel.TypedHirNodeAt(Index);
+    if Node.Kind = 'var-decl-runtime' then
+    begin
+      EnsureAlloca(Node.Operand, FEntryBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'assign-runtime' then
+    begin
+      LowerAssignRuntime(Node.Operand, FEntryBlockId);
+      Continue;
+    end;
     if Node.Kind = 'halt-call-runtime' then
     begin
       ExitValue := LowerHaltRuntimeBlob(Node.Operand, FEntryBlockId);

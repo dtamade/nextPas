@@ -83,6 +83,8 @@ type
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
     procedure UnrollHaltRepeatLoop(const ANode: TGreenNode);
+    procedure SeedRuntimeVarDecls;
+    procedure WalkRuntimeVarDecls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
   public
     constructor Create(
@@ -541,6 +543,7 @@ begin
   if FDiagnostics.HasErrors then
     Exit;
   SeedRuntimeContracts;
+  SeedRuntimeVarDecls;
   SeedHaltCalls;
 
   if FDiagnostics.HasErrors then
@@ -1214,6 +1217,14 @@ begin
     begin
       if Child.ChildCount >= 1 then
       begin
+        if FNoFold then
+        begin
+          if EncodeRuntimeIntExpr(Child.ChildAt(0), Operand) then
+            FModel.AddTypedHirNode(
+              'assign-runtime', Child.Text, 0, 0,
+              Child.Text + #9 + Operand
+            );
+        end;
         if EvaluateIntegerConstant(Child.ChildAt(0), Value) then
           FModel.AddVarInitValue(Child.Text, Value)
         else
@@ -1374,6 +1385,57 @@ begin
     if CondValue <> 0 then
       Exit;
   end;
+end;
+
+procedure TSemanticAnalyzer.WalkRuntimeVarDecls(const ANode: TGreenNode);
+var
+  I, J: LongInt;
+  Child, Decl: TGreenNode;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child = nil then
+      Continue;
+    if (Child.NodeKind = gnkProcedureDecl) or
+      (Child.NodeKind = gnkFunctionDecl) then
+      Continue;
+    if Child.NodeKind = gnkVarSection then
+    begin
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        Decl := Child.ChildAt(J);
+        if (Decl <> nil) and
+          (Decl.NodeKind = gnkVarDecl) and
+          (Decl.Text <> '') then
+          FModel.AddTypedHirNode(
+            'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+      end;
+      Continue;
+    end;
+    WalkRuntimeVarDecls(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedRuntimeVarDecls;
+var
+  RootNode: TGreenNode;
+begin
+  if not FNoFold then
+    Exit;
+  if (FRootAst = nil) or not FRootAst.IsValid then
+    Exit;
+  if (FRootAst.RootKindName <> 'program') and
+    (FRootAst.RootKindName <> 'library') and
+    (FRootAst.RootKindName <> 'package') then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  WalkRuntimeVarDecls(RootNode);
 end;
 
 procedure TSemanticAnalyzer.SeedHaltCalls;
