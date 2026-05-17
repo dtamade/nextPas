@@ -30,6 +30,8 @@ var
   OutDirOverride: string;
   OptionName: string;
   NoFold: Boolean;
+  FoldSeen: Boolean;
+  NoFoldSeen: Boolean;
 
 begin
   State.CommandName := '';
@@ -306,7 +308,9 @@ begin
   ToolchainBindingOverride := '';
   WorkspaceOverride := '';
   OutDirOverride := '';
-  NoFold := False;
+  NoFold := True;
+  FoldSeen := False;
+  NoFoldSeen := False;
   SetLength(UnitRootOverrides, 0);
 
   Index := 3;
@@ -315,9 +319,21 @@ begin
     OptionName := ParamStr(Index);
     if OptionName = '--no-fold' then
     begin
-      if NoFold then
+      if NoFoldSeen then
         Fail(State, 'duplicate-option: --no-fold', True);
+      if FoldSeen then
+        Fail(State, 'conflicting-option: --no-fold after --fold', True);
+      NoFoldSeen := True;
       NoFold := True;
+    end
+    else if OptionName = '--fold' then
+    begin
+      if FoldSeen then
+        Fail(State, 'duplicate-option: --fold', True);
+      if NoFoldSeen then
+        Fail(State, 'conflicting-option: --fold after --no-fold', True);
+      FoldSeen := True;
+      NoFold := False;
     end
     else if (OptionName = '--target') or
       (OptionName = '--toolchain-binding') or

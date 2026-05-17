@@ -130,6 +130,7 @@ type
     procedure RemoveVarInitValue(const AName: string);
     function LookupVarInitValue(const AName: string;
       out AValue: Int64): Boolean;
+    function HasVarInitValue(const AName: string): Boolean;
     procedure AddStringConstValue(const AName: string; const AValue: string);
     function LookupStringConstValue(const AName: string;
       out AValue: string): Boolean;
@@ -474,6 +475,16 @@ begin
       AValue := FVarInitValues[Index].Value;
       Exit(True);
     end;
+  Result := False;
+end;
+
+function TSemanticModel.HasVarInitValue(const AName: string): Boolean;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FVarInitValues) - 1 do
+    if SameText(FVarInitValues[Index].Name, AName) then
+      Exit(True);
   Result := False;
 end;
 

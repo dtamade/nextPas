@@ -486,7 +486,7 @@ run_stage0_build_capture() {
   shift
 
   NEXTPAS_REPO_ROOT="$REPO_ROOT" \
-    "$STAGE0_BINARY" build "$@" --target "$TARGET_ID" --workspace "$REPO_ROOT" \
+    "$STAGE0_BINARY" build "$@" --fold --target "$TARGET_ID" --workspace "$REPO_ROOT" \
     >"$output_file" 2>&1
 }
 
@@ -852,8 +852,8 @@ done
 printf "fake-linked\n" > "$out"
 EOF
 chmod +x "$LLVM_BINDING_SMOKE_BIN_DIR/ld"
-printf 'llvm-binding-smoke-command=PATH=%s %s build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s\n' "$LLVM_BINDING_SMOKE_BIN_DIR" "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
-if ! PATH="$LLVM_BINDING_SMOKE_BIN_DIR" NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$LLVM_BINDING_SMOKE_OUTPUT" 2>&1; then
+printf 'llvm-binding-smoke-command=PATH=%s %s build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s\n' "$LLVM_BINDING_SMOKE_BIN_DIR" "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! PATH="$LLVM_BINDING_SMOKE_BIN_DIR" NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$LLVM_BINDING_SMOKE_OUTPUT" 2>&1; then
   cat "$LLVM_BINDING_SMOKE_OUTPUT"
   fail 'llvm-binding-smoke-build-failed'
 fi
@@ -882,8 +882,8 @@ require_output_pattern '^human-summary=build succeeded$' "$LLVM_BINDING_SMOKE_OU
 printf 'llvm-binding-smoke=pass\n'
 
 printf 'llvm-empty-program=running\n'
-printf 'llvm-empty-program-command=%s build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_EMPTY_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EMPTY_PROGRAM_OUT_DIR" >"$LLVM_EMPTY_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-empty-program-command=%s build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_EMPTY_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EMPTY_PROGRAM_OUT_DIR" >"$LLVM_EMPTY_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_EMPTY_PROGRAM_OUTPUT"
   fail 'llvm-empty-program-build-failed'
 fi
@@ -913,8 +913,8 @@ printf 'llvm-empty-program-exit=0\n'
 printf 'llvm-empty-program=pass\n'
 
 printf 'llvm-halt-program=running\n'
-printf 'llvm-halt-program-command=%s build examples/smoke/halt_42.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/halt_42.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_PROGRAM_OUT_DIR" >"$LLVM_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-halt-program-command=%s build examples/smoke/halt_42.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/halt_42.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_PROGRAM_OUT_DIR" >"$LLVM_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_HALT_PROGRAM_OUTPUT"
   fail 'llvm-halt-program-build-failed'
 fi
@@ -949,8 +949,8 @@ printf 'llvm-halt-program-exit=42\n'
 printf 'llvm-halt-program=pass\n'
 
 printf 'llvm-halt-expr-program=running\n'
-printf 'llvm-halt-expr-program-command=%s build examples/smoke/halt_expr.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/halt_expr.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR" >"$LLVM_HALT_EXPR_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-halt-expr-program-command=%s build examples/smoke/halt_expr.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/halt_expr.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR" >"$LLVM_HALT_EXPR_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_HALT_EXPR_PROGRAM_OUTPUT"
   fail 'llvm-halt-expr-program-build-failed'
 fi
@@ -985,8 +985,8 @@ printf 'llvm-halt-expr-program-exit=42\n'
 printf 'llvm-halt-expr-program=pass\n'
 
 printf 'llvm-halt-const-program=running\n'
-printf 'llvm-halt-const-program-command=%s build examples/smoke/halt_const.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_CONST_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/halt_const.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_CONST_PROGRAM_OUT_DIR" >"$LLVM_HALT_CONST_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-halt-const-program-command=%s build examples/smoke/halt_const.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_CONST_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/halt_const.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_CONST_PROGRAM_OUT_DIR" >"$LLVM_HALT_CONST_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_HALT_CONST_PROGRAM_OUTPUT"
   fail 'llvm-halt-const-program-build-failed'
 fi
@@ -1021,8 +1021,8 @@ printf 'llvm-halt-const-program-exit=42\n'
 printf 'llvm-halt-const-program=pass\n'
 
 printf 'llvm-writeln-program=running\n'
-printf 'llvm-writeln-program-command=%s build examples/smoke/writeln_hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/writeln_hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-writeln-program-command=%s build examples/smoke/writeln_hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_hello.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WRITELN_PROGRAM_OUTPUT"
   fail 'llvm-writeln-program-build-failed'
 fi
@@ -1067,8 +1067,8 @@ printf 'llvm-writeln-program-stdout=hello from nextpas llvm\n'
 printf 'llvm-writeln-program=pass\n'
 
 printf 'llvm-writeln-int-program=running\n'
-printf 'llvm-writeln-int-program-command=%s build examples/smoke/writeln_int.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/writeln_int.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_INT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-writeln-int-program-command=%s build examples/smoke/writeln_int.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_int.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_INT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WRITELN_INT_PROGRAM_OUTPUT"
   fail 'llvm-writeln-int-program-build-failed'
 fi
@@ -1095,8 +1095,8 @@ printf 'llvm-writeln-int-program-stdout=42\n'
 printf 'llvm-writeln-int-program=pass\n'
 
 printf 'llvm-writeln-multi-program=running\n'
-printf 'llvm-writeln-multi-program-command=%s build examples/smoke/writeln_multi.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/writeln_multi.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-writeln-multi-program-command=%s build examples/smoke/writeln_multi.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_multi.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT"
   fail 'llvm-writeln-multi-program-build-failed'
 fi
@@ -1123,8 +1123,8 @@ printf 'llvm-writeln-multi-program-stdout=hello world\n'
 printf 'llvm-writeln-multi-program=pass\n'
 
 printf 'llvm-writeln-mixed-program=running\n'
-printf 'llvm-writeln-mixed-program-command=%s build examples/smoke/writeln_mixed.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/writeln_mixed.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-writeln-mixed-program-command=%s build examples/smoke/writeln_mixed.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_mixed.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT"
   fail 'llvm-writeln-mixed-program-build-failed'
 fi
@@ -1151,8 +1151,8 @@ printf 'llvm-writeln-mixed-program-stdout=answer: 42\n'
 printf 'llvm-writeln-mixed-program=pass\n'
 
 printf 'llvm-hello-then-halt-program=running\n'
-printf 'llvm-hello-then-halt-program-command=%s build examples/smoke/hello_then_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/hello_then_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR" >"$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-hello-then-halt-program-command=%s build examples/smoke/hello_then_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/hello_then_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR" >"$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT"
   fail 'llvm-hello-then-halt-program-build-failed'
 fi
@@ -1192,8 +1192,8 @@ printf 'llvm-hello-then-halt-program-exit=7\n'
 printf 'llvm-hello-then-halt-program=pass\n'
 
 printf 'llvm-var-halt-program=running\n'
-printf 'llvm-var-halt-program-command=%s build examples/smoke/var_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/var_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_HALT_PROGRAM_OUT_DIR" >"$LLVM_VAR_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-var-halt-program-command=%s build examples/smoke/var_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/var_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_HALT_PROGRAM_OUT_DIR" >"$LLVM_VAR_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_VAR_HALT_PROGRAM_OUTPUT"
   fail 'llvm-var-halt-program-build-failed'
 fi
@@ -1416,8 +1416,8 @@ run_no_fold_program_with_stdout for_downto "$LLVM_NO_FOLD_COUNT_DOWN" "$LLVM_NO_
 run_no_fold_program_with_stdout repeat_count "$LLVM_NO_FOLD_COUNT_UP" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUT_DIR" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_RUN_OUTPUT"
 
 printf 'llvm-var-writeln-program=running\n'
-printf 'llvm-var-writeln-program-command=%s build examples/smoke/var_writeln.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/var_writeln.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_VAR_WRITELN_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-var-writeln-program-command=%s build examples/smoke/var_writeln.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/var_writeln.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_VAR_WRITELN_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_VAR_WRITELN_PROGRAM_OUTPUT"
   fail 'llvm-var-writeln-program-build-failed'
 fi
@@ -1444,8 +1444,8 @@ printf 'llvm-var-writeln-program-stdout=7\n'
 printf 'llvm-var-writeln-program=pass\n'
 
 printf 'llvm-var-chain-program=running\n'
-printf 'llvm-var-chain-program-command=%s build examples/smoke/var_chain.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_CHAIN_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/var_chain.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_CHAIN_PROGRAM_OUT_DIR" >"$LLVM_VAR_CHAIN_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-var-chain-program-command=%s build examples/smoke/var_chain.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_CHAIN_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/var_chain.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_CHAIN_PROGRAM_OUT_DIR" >"$LLVM_VAR_CHAIN_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_VAR_CHAIN_PROGRAM_OUTPUT"
   fail 'llvm-var-chain-program-build-failed'
 fi
@@ -1472,8 +1472,8 @@ printf 'llvm-var-chain-program-exit=15\n'
 printf 'llvm-var-chain-program=pass\n'
 
 printf 'llvm-if-halt-program=running\n'
-printf 'llvm-if-halt-program-command=%s build examples/smoke/if_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/if_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-if-halt-program-command=%s build examples/smoke/if_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_IF_HALT_PROGRAM_OUTPUT"
   fail 'llvm-if-halt-program-build-failed'
 fi
@@ -1495,8 +1495,8 @@ printf 'llvm-if-halt-program-exit=11\n'
 printf 'llvm-if-halt-program=pass\n'
 
 printf 'llvm-if-else-halt-program=running\n'
-printf 'llvm-if-else-halt-program-command=%s build examples/smoke/if_else_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/if_else_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-if-else-halt-program-command=%s build examples/smoke/if_else_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_else_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT"
   fail 'llvm-if-else-halt-program-build-failed'
 fi
@@ -1518,8 +1518,8 @@ printf 'llvm-if-else-halt-program-exit=22\n'
 printf 'llvm-if-else-halt-program=pass\n'
 
 printf 'llvm-if-var-program=running\n'
-printf 'llvm-if-var-program-command=%s build examples/smoke/if_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_VAR_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/if_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_VAR_PROGRAM_OUT_DIR" >"$LLVM_IF_VAR_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-if-var-program-command=%s build examples/smoke/if_var.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_VAR_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_var.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_VAR_PROGRAM_OUT_DIR" >"$LLVM_IF_VAR_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_IF_VAR_PROGRAM_OUTPUT"
   fail 'llvm-if-var-program-build-failed'
 fi
@@ -1541,8 +1541,8 @@ printf 'llvm-if-var-program-exit=7\n'
 printf 'llvm-if-var-program=pass\n'
 
 printf 'llvm-for-writeln-program=running\n'
-printf 'llvm-for-writeln-program-command=%s build examples/smoke/for_writeln.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_WRITELN_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/for_writeln.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_FOR_WRITELN_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-for-writeln-program-command=%s build examples/smoke/for_writeln.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_WRITELN_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/for_writeln.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_WRITELN_PROGRAM_OUT_DIR" >"$LLVM_FOR_WRITELN_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FOR_WRITELN_PROGRAM_OUTPUT"
   fail 'llvm-for-writeln-program-build-failed'
 fi
@@ -1572,8 +1572,8 @@ printf 'llvm-for-writeln-program-stdout=1,2,3\n'
 printf 'llvm-for-writeln-program=pass\n'
 
 printf 'llvm-for-sum-halt-program=running\n'
-printf 'llvm-for-sum-halt-program-command=%s build examples/smoke/for_sum_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_SUM_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/for_sum_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_SUM_HALT_PROGRAM_OUT_DIR" >"$LLVM_FOR_SUM_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-for-sum-halt-program-command=%s build examples/smoke/for_sum_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_SUM_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/for_sum_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_SUM_HALT_PROGRAM_OUT_DIR" >"$LLVM_FOR_SUM_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FOR_SUM_HALT_PROGRAM_OUTPUT"
   fail 'llvm-for-sum-halt-program-build-failed'
 fi
@@ -1600,8 +1600,8 @@ printf 'llvm-for-sum-halt-program-exit=15\n'
 printf 'llvm-for-sum-halt-program=pass\n'
 
 printf 'llvm-for-downto-program=running\n'
-printf 'llvm-for-downto-program-command=%s build examples/smoke/for_downto.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_DOWNTO_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/for_downto.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_DOWNTO_PROGRAM_OUT_DIR" >"$LLVM_FOR_DOWNTO_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-for-downto-program-command=%s build examples/smoke/for_downto.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FOR_DOWNTO_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/for_downto.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FOR_DOWNTO_PROGRAM_OUT_DIR" >"$LLVM_FOR_DOWNTO_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FOR_DOWNTO_PROGRAM_OUTPUT"
   fail 'llvm-for-downto-program-build-failed'
 fi
@@ -1631,8 +1631,8 @@ printf 'llvm-for-downto-program-stdout=3,2,1\n'
 printf 'llvm-for-downto-program=pass\n'
 
 printf 'llvm-if-not-program=running\n'
-printf 'llvm-if-not-program-command=%s build examples/smoke/if_not.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_NOT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/if_not.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_NOT_PROGRAM_OUT_DIR" >"$LLVM_IF_NOT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-if-not-program-command=%s build examples/smoke/if_not.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_NOT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_not.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_NOT_PROGRAM_OUT_DIR" >"$LLVM_IF_NOT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_IF_NOT_PROGRAM_OUTPUT"
   fail 'llvm-if-not-program-build-failed'
 fi
@@ -1654,8 +1654,8 @@ printf 'llvm-if-not-program-exit=11\n'
 printf 'llvm-if-not-program=pass\n'
 
 printf 'llvm-if-true-program=running\n'
-printf 'llvm-if-true-program-command=%s build examples/smoke/if_true.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_TRUE_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/if_true.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_TRUE_PROGRAM_OUT_DIR" >"$LLVM_IF_TRUE_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-if-true-program-command=%s build examples/smoke/if_true.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_TRUE_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_true.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_TRUE_PROGRAM_OUT_DIR" >"$LLVM_IF_TRUE_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_IF_TRUE_PROGRAM_OUTPUT"
   fail 'llvm-if-true-program-build-failed'
 fi
@@ -1677,8 +1677,8 @@ printf 'llvm-if-true-program-exit=22\n'
 printf 'llvm-if-true-program=pass\n'
 
 printf 'llvm-while-count-program=running\n'
-printf 'llvm-while-count-program-command=%s build examples/smoke/while_count.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WHILE_COUNT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/while_count.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WHILE_COUNT_PROGRAM_OUT_DIR" >"$LLVM_WHILE_COUNT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-while-count-program-command=%s build examples/smoke/while_count.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WHILE_COUNT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/while_count.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WHILE_COUNT_PROGRAM_OUT_DIR" >"$LLVM_WHILE_COUNT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WHILE_COUNT_PROGRAM_OUTPUT"
   fail 'llvm-while-count-program-build-failed'
 fi
@@ -1708,8 +1708,8 @@ printf 'llvm-while-count-program-stdout=3,2,1\n'
 printf 'llvm-while-count-program=pass\n'
 
 printf 'llvm-while-sum-program=running\n'
-printf 'llvm-while-sum-program-command=%s build examples/smoke/while_sum.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WHILE_SUM_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/while_sum.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WHILE_SUM_PROGRAM_OUT_DIR" >"$LLVM_WHILE_SUM_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-while-sum-program-command=%s build examples/smoke/while_sum.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WHILE_SUM_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/while_sum.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WHILE_SUM_PROGRAM_OUT_DIR" >"$LLVM_WHILE_SUM_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_WHILE_SUM_PROGRAM_OUTPUT"
   fail 'llvm-while-sum-program-build-failed'
 fi
@@ -1736,8 +1736,8 @@ printf 'llvm-while-sum-program-exit=15\n'
 printf 'llvm-while-sum-program=pass\n'
 
 printf 'llvm-repeat-count-program=running\n'
-printf 'llvm-repeat-count-program-command=%s build examples/smoke/repeat_count.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_REPEAT_COUNT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/repeat_count.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_REPEAT_COUNT_PROGRAM_OUT_DIR" >"$LLVM_REPEAT_COUNT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-repeat-count-program-command=%s build examples/smoke/repeat_count.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_REPEAT_COUNT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/repeat_count.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_REPEAT_COUNT_PROGRAM_OUT_DIR" >"$LLVM_REPEAT_COUNT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_REPEAT_COUNT_PROGRAM_OUTPUT"
   fail 'llvm-repeat-count-program-build-failed'
 fi
@@ -1767,8 +1767,8 @@ printf 'llvm-repeat-count-program-stdout=1,2,3\n'
 printf 'llvm-repeat-count-program=pass\n'
 
 printf 'llvm-repeat-halt-program=running\n'
-printf 'llvm-repeat-halt-program-command=%s build examples/smoke/repeat_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_REPEAT_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/repeat_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_REPEAT_HALT_PROGRAM_OUT_DIR" >"$LLVM_REPEAT_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-repeat-halt-program-command=%s build examples/smoke/repeat_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_REPEAT_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/repeat_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_REPEAT_HALT_PROGRAM_OUT_DIR" >"$LLVM_REPEAT_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_REPEAT_HALT_PROGRAM_OUTPUT"
   fail 'llvm-repeat-halt-program-build-failed'
 fi
@@ -1795,8 +1795,8 @@ printf 'llvm-repeat-halt-program-exit=20\n'
 printf 'llvm-repeat-halt-program=pass\n'
 
 printf 'llvm-const-string-program=running\n'
-printf 'llvm-const-string-program-command=%s build examples/smoke/const_string.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_CONST_STRING_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/const_string.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CONST_STRING_PROGRAM_OUT_DIR" >"$LLVM_CONST_STRING_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-const-string-program-command=%s build examples/smoke/const_string.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_CONST_STRING_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/const_string.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CONST_STRING_PROGRAM_OUT_DIR" >"$LLVM_CONST_STRING_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_CONST_STRING_PROGRAM_OUTPUT"
   fail 'llvm-const-string-program-build-failed'
 fi
@@ -1823,8 +1823,8 @@ printf 'llvm-const-string-program-stdout=hello\n'
 printf 'llvm-const-string-program=pass\n'
 
 printf 'llvm-string-concat-program=running\n'
-printf 'llvm-string-concat-program-command=%s build examples/smoke/string_concat.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_STRING_CONCAT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/string_concat.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STRING_CONCAT_PROGRAM_OUT_DIR" >"$LLVM_STRING_CONCAT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-string-concat-program-command=%s build examples/smoke/string_concat.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_STRING_CONCAT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/string_concat.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STRING_CONCAT_PROGRAM_OUT_DIR" >"$LLVM_STRING_CONCAT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_STRING_CONCAT_PROGRAM_OUTPUT"
   fail 'llvm-string-concat-program-build-failed'
 fi
@@ -1851,8 +1851,8 @@ printf 'llvm-string-concat-program-stdout=hello, world\n'
 printf 'llvm-string-concat-program=pass\n'
 
 printf 'llvm-proc-greet-program=running\n'
-printf 'llvm-proc-greet-program-command=%s build examples/smoke/proc_greet.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_GREET_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/proc_greet.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_GREET_PROGRAM_OUT_DIR" >"$LLVM_PROC_GREET_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-proc-greet-program-command=%s build examples/smoke/proc_greet.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_GREET_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/proc_greet.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_GREET_PROGRAM_OUT_DIR" >"$LLVM_PROC_GREET_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_PROC_GREET_PROGRAM_OUTPUT"
   fail 'llvm-proc-greet-program-build-failed'
 fi
@@ -1879,8 +1879,8 @@ printf 'llvm-proc-greet-program-stdout=hi\n'
 printf 'llvm-proc-greet-program=pass\n'
 
 printf 'llvm-proc-two-program=running\n'
-printf 'llvm-proc-two-program-command=%s build examples/smoke/proc_two.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_TWO_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/proc_two.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_TWO_PROGRAM_OUT_DIR" >"$LLVM_PROC_TWO_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-proc-two-program-command=%s build examples/smoke/proc_two.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_TWO_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/proc_two.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_TWO_PROGRAM_OUT_DIR" >"$LLVM_PROC_TWO_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_PROC_TWO_PROGRAM_OUTPUT"
   fail 'llvm-proc-two-program-build-failed'
 fi
@@ -1909,8 +1909,8 @@ printf 'llvm-proc-two-program-stdout=a,b\n'
 printf 'llvm-proc-two-program=pass\n'
 
 printf 'llvm-fn-const-halt-program=running\n'
-printf 'llvm-fn-const-halt-program-command=%s build examples/smoke/fn_const_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CONST_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/fn_const_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CONST_HALT_PROGRAM_OUT_DIR" >"$LLVM_FN_CONST_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-fn-const-halt-program-command=%s build examples/smoke/fn_const_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CONST_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/fn_const_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CONST_HALT_PROGRAM_OUT_DIR" >"$LLVM_FN_CONST_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FN_CONST_HALT_PROGRAM_OUTPUT"
   fail 'llvm-fn-const-halt-program-build-failed'
 fi
@@ -1937,8 +1937,8 @@ printf 'llvm-fn-const-halt-program-exit=42\n'
 printf 'llvm-fn-const-halt-program=pass\n'
 
 printf 'llvm-fn-compose-program=running\n'
-printf 'llvm-fn-compose-program-command=%s build examples/smoke/fn_compose.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_COMPOSE_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/fn_compose.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_COMPOSE_PROGRAM_OUT_DIR" >"$LLVM_FN_COMPOSE_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-fn-compose-program-command=%s build examples/smoke/fn_compose.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_COMPOSE_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/fn_compose.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_COMPOSE_PROGRAM_OUT_DIR" >"$LLVM_FN_COMPOSE_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FN_COMPOSE_PROGRAM_OUTPUT"
   fail 'llvm-fn-compose-program-build-failed'
 fi
@@ -1965,8 +1965,8 @@ printf 'llvm-fn-compose-program-exit=14\n'
 printf 'llvm-fn-compose-program=pass\n'
 
 printf 'llvm-fn-call-halt-program=running\n'
-printf 'llvm-fn-call-halt-program-command=%s build examples/smoke/fn_call_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CALL_HALT_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/fn_call_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CALL_HALT_PROGRAM_OUT_DIR" >"$LLVM_FN_CALL_HALT_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-fn-call-halt-program-command=%s build examples/smoke/fn_call_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CALL_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/fn_call_halt.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CALL_HALT_PROGRAM_OUT_DIR" >"$LLVM_FN_CALL_HALT_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FN_CALL_HALT_PROGRAM_OUTPUT"
   fail 'llvm-fn-call-halt-program-build-failed'
 fi
@@ -1993,8 +1993,8 @@ printf 'llvm-fn-call-halt-program-exit=42\n'
 printf 'llvm-fn-call-halt-program=pass\n'
 
 printf 'llvm-fn-call-chain-program=running\n'
-printf 'llvm-fn-call-chain-program-command=%s build examples/smoke/fn_call_chain.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CALL_CHAIN_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/fn_call_chain.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CALL_CHAIN_PROGRAM_OUT_DIR" >"$LLVM_FN_CALL_CHAIN_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-fn-call-chain-program-command=%s build examples/smoke/fn_call_chain.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_CALL_CHAIN_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/fn_call_chain.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_CALL_CHAIN_PROGRAM_OUT_DIR" >"$LLVM_FN_CALL_CHAIN_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FN_CALL_CHAIN_PROGRAM_OUTPUT"
   fail 'llvm-fn-call-chain-program-build-failed'
 fi
@@ -2021,8 +2021,8 @@ printf 'llvm-fn-call-chain-program-exit=15\n'
 printf 'llvm-fn-call-chain-program=pass\n'
 
 printf 'llvm-proc-arg-program=running\n'
-printf 'llvm-proc-arg-program-command=%s build examples/smoke/proc_arg.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_ARG_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/proc_arg.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_ARG_PROGRAM_OUT_DIR" >"$LLVM_PROC_ARG_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-proc-arg-program-command=%s build examples/smoke/proc_arg.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_PROC_ARG_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/proc_arg.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROC_ARG_PROGRAM_OUT_DIR" >"$LLVM_PROC_ARG_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_PROC_ARG_PROGRAM_OUTPUT"
   fail 'llvm-proc-arg-program-build-failed'
 fi
@@ -2049,8 +2049,8 @@ printf 'llvm-proc-arg-program-stdout=42\n'
 printf 'llvm-proc-arg-program=pass\n'
 
 printf 'llvm-fn-square-program=running\n'
-printf 'llvm-fn-square-program-command=%s build examples/smoke/fn_square.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_SQUARE_PROGRAM_OUT_DIR"
-if ! "$STAGE0_BINARY" build examples/smoke/fn_square.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_SQUARE_PROGRAM_OUT_DIR" >"$LLVM_FN_SQUARE_PROGRAM_OUTPUT" 2>&1; then
+printf 'llvm-fn-square-program-command=%s build examples/smoke/fn_square.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_FN_SQUARE_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/fn_square.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FN_SQUARE_PROGRAM_OUT_DIR" >"$LLVM_FN_SQUARE_PROGRAM_OUTPUT" 2>&1; then
   cat "$LLVM_FN_SQUARE_PROGRAM_OUTPUT"
   fail 'llvm-fn-square-program-build-failed'
 fi
