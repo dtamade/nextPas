@@ -55,6 +55,11 @@ type
     Value: Int64;
   end;
 
+  TSemanticVarInitValue = record
+    Name: string;
+    Value: Int64;
+  end;
+
   TSemanticModel = class
   private
     FSymbols: array of TSemanticSymbol;
@@ -64,6 +69,7 @@ type
     FForeignProcedureBindings: array of TSemanticForeignProcedureBinding;
     FLibraryRequests: array of TSemanticLibraryRequest;
     FConstValues: array of TSemanticConstValue;
+    FVarInitValues: array of TSemanticVarInitValue;
     FRootName: string;
     FStatus: string;
   public
@@ -114,6 +120,10 @@ type
     procedure AddConstValue(const AName: string; const AValue: Int64);
     function LookupConstValue(const AName: string;
       out AValue: Int64): Boolean;
+    procedure AddVarInitValue(const AName: string; const AValue: Int64);
+    procedure RemoveVarInitValue(const AName: string);
+    function LookupVarInitValue(const AName: string;
+      out AValue: Int64): Boolean;
     procedure SetRootName(const AName: string);
     function RootName: string;
     procedure MarkReady;
@@ -136,6 +146,7 @@ begin
   SetLength(FForeignProcedureBindings, 0);
   SetLength(FLibraryRequests, 0);
   SetLength(FConstValues, 0);
+  SetLength(FVarInitValues, 0);
   FRootName := '';
   FStatus := 'deferred';
 end;
@@ -404,6 +415,53 @@ begin
     if SameText(FConstValues[Index].Name, AName) then
     begin
       AValue := FConstValues[Index].Value;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TSemanticModel.AddVarInitValue(const AName: string; const AValue: Int64);
+var
+  Index: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FVarInitValues) - 1 do
+    if SameText(FVarInitValues[Index].Name, AName) then
+    begin
+      FVarInitValues[Index].Value := AValue;
+      Exit;
+    end;
+  NextIndex := Length(FVarInitValues);
+  SetLength(FVarInitValues, NextIndex + 1);
+  FVarInitValues[NextIndex].Name := AName;
+  FVarInitValues[NextIndex].Value := AValue;
+end;
+
+procedure TSemanticModel.RemoveVarInitValue(const AName: string);
+var
+  Index, Last: LongInt;
+begin
+  Last := Length(FVarInitValues) - 1;
+  for Index := 0 to Last do
+    if SameText(FVarInitValues[Index].Name, AName) then
+    begin
+      if Index < Last then
+        FVarInitValues[Index] := FVarInitValues[Last];
+      SetLength(FVarInitValues, Last);
+      Exit;
+    end;
+end;
+
+function TSemanticModel.LookupVarInitValue(const AName: string;
+  out AValue: Int64): Boolean;
+var
+  Index: LongInt;
+begin
+  AValue := 0;
+  for Index := 0 to Length(FVarInitValues) - 1 do
+    if SameText(FVarInitValues[Index].Name, AName) then
+    begin
+      AValue := FVarInitValues[Index].Value;
       Exit(True);
     end;
   Result := False;

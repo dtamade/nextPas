@@ -484,9 +484,10 @@ end;
 procedure TSemanticAnalyzer.WalkAssignmentStatements(const ANode: TGreenNode);
 var
   I: LongInt;
-  Child: TGreenNode;
+  Child, RhsNode: TGreenNode;
   LhsSymbolId, RhsSymbolId: LongInt;
   LhsTypeId, RhsTypeId: LongInt;
+  Value: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -519,6 +520,14 @@ begin
               Child.ByteOffset
             );
         end;
+      end;
+      if Child.ChildCount >= 1 then
+      begin
+        RhsNode := Child.ChildAt(0);
+        if EvaluateIntegerConstant(RhsNode, Value) then
+          FModel.AddVarInitValue(Child.Text, Value)
+        else
+          FModel.RemoveVarInitValue(Child.Text);
       end;
     end
     else
@@ -560,10 +569,17 @@ begin
       end;
     gnkIdentifier:
       begin
-        if not FModel.LookupConstValue(ANode.Text, Parsed) then
-          Exit(False);
-        AValue := Parsed;
-        Exit(True);
+        if FModel.LookupConstValue(ANode.Text, Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
+        if FModel.LookupVarInitValue(ANode.Text, Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
+        Exit(False);
       end;
     gnkUnaryExpression:
       begin
