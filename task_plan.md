@@ -15,6 +15,77 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 LLVM Backend First Codegen — Empty Program End-to-end
+
+### Goal
+
+把 nextPas 从“所有编译成功都是宿主 FPC 干的”推进到“nextPas 自己拥有 codegen ownership 的最小真实链路”。
+之前 `compiler/ir/np_mir_model.pas` 是字符串占位符、`compiler/backend/np_backend_plan.pas` 90% 在算路径
+0% 生成代码，所有 `.s` 都来自 `host-fpc-emit-asm`。这一批让 nextPas 自己写出 `.ll` 文件并由 LLVM
+工具链产出真实可执行：
+
+- 新增 `compiler/backend/np_llvm_emitter.pas`：从 `TMirModel` + `TTargetFactsView` 发射文本 LLVM IR
+  到磁盘；当前批次只发射最小 empty-program shell（`define void @_start` + inline syscall exit(0)），
+  绕开缺失的 distribution runtime libc，让 nextPas 真正拥有 entry point
+- 让 `TBackendPlanner.Plan` 在 `BackendFamily='llvm'` 时调用 emitter 真实写 `.ll`，
+  而不是只注册 artifact 路径
+- 把 `compiler/toolchain/np_toolchain_plan.pas` 的 `PlanLlvmIrOptObjectLink` link step 从硬编码的
+  `ExecutableSet.Lld` 切到 `LinkerProfile.DriverCandidates`，使 LLVM binding 复用 linker profile
+- 把 `build/toolchains/linux-x86_64-to-linux-x86_64-llvm.toml` 的 linker 从 `lld-elf` 切到 `gnu-ld`，
+  不引入新依赖（系统未安装 `ld.lld`，但 `ld` 与 native binding 已在用）
+- 默认 backend 不变（`bootstrap-native-assemble-link`），LLVM 路径通过
+  `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 摸清现有 LLVM skeleton：`PlanLlvmIrOptObjectLink`、`PrepareLlvmContract`、`TBackendPlan`
+      LLVM 字段已就位；缺口是 (a) 没有 IR emitter，(b) link step 写死 `ld.lld`，(c) binding 配置
+      指向未安装的 `ld.lld`
+- [x] 手工验证最小 LLVM 链路（`opt → llc → ld` + 自写 `_start` syscall exit(0)）能产出 exit 0
+      可执行，确认 IR 模板可行
+- [x] 新增 `compiler/backend/np_llvm_emitter.pas`，提供 `TLlvmEmitter.EmitToFile`，按
+      target triple/data layout 发射 IR header，再发射 empty-program shell
+- [x] 修改 `compiler/backend/np_backend_plan.pas`：在 `BackendFamily='llvm'` 分支调用
+      `Emitter.EmitToFile`，`ForceDirectories` 后再发射；失败时 `MarkFailure`
+- [x] 修改 `compiler/toolchain/np_toolchain_plan.pas:1394` link step：从 `ExecutableSet.Lld`
+      改为 `FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld')`
+- [x] 修改 `build/toolchains/linux-x86_64-to-linux-x86_64-llvm.toml`：linker 从 `lld-elf`
+      切到 `gnu-ld`
+- [x] 修改 `build/verify_local.sh` 的现有 `llvm-binding-smoke` gate：fake stub 从 `ld.lld`
+      改名为 `ld`，`linker-profile-id` 断言从 `lld-elf` 改为 `gnu-ld`
+- [x] 在 `build/verify_local.sh` 新增 `llvm-empty-program` gate：用真 `opt`/`llc`/`ld` 编译
+      `examples/smoke/hello.pas`，断言 `toolchain-plan-family=llvm-ir-opt-llc-link`、
+      `backend-artifact-count=4`、`.ll` 文件存在并含 `@_start`、可执行 exit 0
+- [x] 把 `llvmBindingSmoke`/`llvmEmptyProgram` 加进 verify-local success envelope
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| LLVM linker 切到系统 `ld`（gnu-ld），不装 `ld.lld` | 与 native binding 对称、零新依赖；后续如果引入 `ld.lld` 可独立切回 |
+| Empty program 自写 `_start` + inline syscall exit(0)，不依赖 libc/_start | 当前 distribution runtime SDK 缺 `lib/nextpas/runtime/linux-x86_64/libc.so`；自写 `_start` 顺带让 nextPas 拥有 entry point ownership，与"独立 RTL"长期方向一致 |
+| 默认 backend 保持 `bootstrap-native-assemble-link`，LLVM 通过 `--toolchain-binding` 显式选择 | 现有 40+ verify gate 全围绕 native 默认路径；一次性切默认会大面积翻车，不该和 codegen 引入混在一批 |
+| 这一批 emitter 只发射 empty-program shell，不消费 MIR operations | 当前 MIR 是字符串占位符（`Kind: string` + `DisplayName`），还没有 value semantics；先把"自有 codegen 链路"打通，再分批扩 IR 表达力 |
+
+### Notes
+
+- 这是 nextPas 第一次真实生成代码：之前任何 `.s` 都来自 `host-fpc-emit-asm`，现在 `.ll` 由
+  `TLlvmEmitter` 自己写
+- 当前 LLVM 路径的真实功能只覆盖 `program X; begin end.` 这一种程序：任何带 `WriteLn`、表达式、
+  类型、调用的程序都会发射同样的 empty shell（IR 中只有 `_start`+syscall），运行时仍 exit 0
+  但实际语义被丢失。下一批次需要在 emitter 中开始消费 MIR operation
+- LLVM 路径仍不能 self-host：MIR 还没有 value/type/control-flow，所以 nextPas 自己的 compiler module
+  不能用 LLVM backend 编译；这与 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 的判断一致
+- `compiler-roadmap.md` 第 5 段 “Target / Cross / LLVM / C Interop” 的 LLVM 部分从“skeleton 已就位”
+  正式进入“最小真实闭环已就位”
+- 这一批不替换历史 addendum，也不动 `bootstrap-native-assemble-link` 路径
+
 ## Addendum: 2026-05-17 Repo Hygiene + Classes RTL Source-of-truth Convergence
 
 ### Goal

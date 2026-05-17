@@ -27,6 +27,8 @@ WORKSPACE_MEMBER_ARTIFACT_ROOT="$WORKSPACE_MEMBER_FIXTURE_ROOT/.nextpas"
 STAGE0_SMOKE_OUTPUT=$(mktemp)
 STAGE0_SMOKE_REPEAT_OUTPUT=$(mktemp)
 LLVM_BINDING_SMOKE_OUTPUT=$(mktemp)
+LLVM_EMPTY_PROGRAM_OUTPUT=$(mktemp)
+LLVM_EMPTY_PROGRAM_OUT_DIR=$(mktemp -d)
 SEMANTIC_SMOKE_OUTPUT=$(mktemp)
 FOREIGN_CDECL_SMOKE_OUTPUT=$(mktemp)
 HARNESS_SMOKE_OUTPUT=$(mktemp)
@@ -97,6 +99,8 @@ cleanup() {
   rm -f "$STAGE0_SMOKE_OUTPUT"
   rm -f "$STAGE0_SMOKE_REPEAT_OUTPUT"
   rm -f "$LLVM_BINDING_SMOKE_OUTPUT"
+  rm -f "$LLVM_EMPTY_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_EMPTY_PROGRAM_OUT_DIR"
   rm -f "$SEMANTIC_SMOKE_OUTPUT"
   rm -f "$FOREIGN_CDECL_SMOKE_OUTPUT"
   rm -f "$HARNESS_SMOKE_OUTPUT"
@@ -594,7 +598,7 @@ done
 printf "fake-object\n" > "$out"
 EOF
 chmod +x "$LLVM_BINDING_SMOKE_BIN_DIR/llc"
-cat >"$LLVM_BINDING_SMOKE_BIN_DIR/ld.lld" <<'EOF'
+cat >"$LLVM_BINDING_SMOKE_BIN_DIR/ld" <<'EOF'
 #!/bin/sh
 out=""
 while [ "$#" -gt 0 ]; do
@@ -607,7 +611,7 @@ while [ "$#" -gt 0 ]; do
 done
 printf "fake-linked\n" > "$out"
 EOF
-chmod +x "$LLVM_BINDING_SMOKE_BIN_DIR/ld.lld"
+chmod +x "$LLVM_BINDING_SMOKE_BIN_DIR/ld"
 printf 'llvm-binding-smoke-command=PATH=%s %s build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s\n' "$LLVM_BINDING_SMOKE_BIN_DIR" "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
 if ! PATH="$LLVM_BINDING_SMOKE_BIN_DIR" NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$LLVM_BINDING_SMOKE_OUTPUT" 2>&1; then
   cat "$LLVM_BINDING_SMOKE_OUTPUT"
@@ -619,7 +623,7 @@ require_output_pattern '^result=success$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-
 require_output_pattern '^compiler=opt$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-smoke-compiler'
 require_output_pattern '^toolchain-binding-id=linux-x86_64-to-linux-x86_64-llvm$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-id'
 require_output_pattern '^backend-family=llvm$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-backend-family'
-require_output_pattern '^linker-profile-id=lld-elf$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-linker-profile'
+require_output_pattern '^linker-profile-id=gnu-ld$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-linker-profile'
 require_output_pattern '^backend-artifact-count=4$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-backend-artifact-count'
 require_output_pattern '^backend-artifacts=.*"kind":"llvm-ir".*"kind":"llvm-bitcode".*"kind":"object-file".*"kind":"executable"' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-backend-artifacts'
 require_output_pattern '^toolchain-plan-family=llvm-ir-opt-llc-link$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-plan-family'
@@ -636,6 +640,37 @@ require_output_pattern '^logical-link-request=.*"objectInputs":\[\{"kind":"objec
 require_output_pattern '^build-trace=.*"steps":\[\{"stepId":"llvm-opt-bitcode".*"status":"success".*\{"stepId":"llvm-llc-object".*"status":"success".*\{"stepId":"llvm-link".*"status":"success"' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-build-trace-steps'
 require_output_pattern '^human-summary=build succeeded$' "$LLVM_BINDING_SMOKE_OUTPUT" 'missing-llvm-binding-human-summary'
 printf 'llvm-binding-smoke=pass\n'
+
+printf 'llvm-empty-program=running\n'
+printf 'llvm-empty-program-command=%s build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_EMPTY_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/hello.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EMPTY_PROGRAM_OUT_DIR" >"$LLVM_EMPTY_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_EMPTY_PROGRAM_OUTPUT"
+  fail 'llvm-empty-program-build-failed'
+fi
+cat "$LLVM_EMPTY_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_EMPTY_PROGRAM_OUTPUT" 'missing-llvm-empty-program-success-status'
+require_output_pattern '^toolchain-plan-family=llvm-ir-opt-llc-link$' "$LLVM_EMPTY_PROGRAM_OUTPUT" 'missing-llvm-empty-program-plan-family'
+require_output_pattern '^backend-artifact-count=4$' "$LLVM_EMPTY_PROGRAM_OUTPUT" 'missing-llvm-empty-program-backend-artifact-count'
+LLVM_EMPTY_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/hello.ll"
+if [ ! -f "$LLVM_EMPTY_PROGRAM_IR_PATH" ]; then
+  fail 'missing-llvm-empty-program-ir-artifact'
+fi
+if ! grep -q '@_start' "$LLVM_EMPTY_PROGRAM_IR_PATH"; then
+  cat "$LLVM_EMPTY_PROGRAM_IR_PATH"
+  fail 'missing-llvm-empty-program-ir-start-symbol'
+fi
+LLVM_EMPTY_PROGRAM_BIN="$LLVM_EMPTY_PROGRAM_OUT_DIR/hello"
+if [ ! -x "$LLVM_EMPTY_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-empty-program-executable'
+fi
+"$LLVM_EMPTY_PROGRAM_BIN"
+LLVM_EMPTY_PROGRAM_EXIT=$?
+if [ "$LLVM_EMPTY_PROGRAM_EXIT" -ne 0 ]; then
+  printf 'llvm-empty-program-exit=%s\n' "$LLVM_EMPTY_PROGRAM_EXIT"
+  fail 'llvm-empty-program-nonzero-exit'
+fi
+printf 'llvm-empty-program-exit=0\n'
+printf 'llvm-empty-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -2076,6 +2111,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

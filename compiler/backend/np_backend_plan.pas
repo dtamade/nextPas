@@ -8,7 +8,7 @@ unit np_backend_plan;
 interface
 
 uses
-  SysUtils, np_mir_model, np_target_facts, nextpas_json_helpers;
+  SysUtils, np_mir_model, np_target_facts, np_llvm_emitter, nextpas_json_helpers;
 
 type
   TBackendArtifact = record
@@ -531,6 +531,7 @@ var
   AssemblyArtifactPath: string;
   BaseName: string;
   BitcodeArtifactPath: string;
+  Emitter: TLlvmEmitter;
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
@@ -571,6 +572,23 @@ begin
     );
     FPlan.AddArtifact('llvm-ir', LlvmIrArtifactPath);
     FPlan.AddArtifact('llvm-bitcode', BitcodeArtifactPath);
+
+    if not ForceDirectories(IntermediateRoot) then
+    begin
+      FPlan.MarkFailure;
+      Exit;
+    end;
+
+    Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
+    try
+      if not Emitter.EmitToFile(LlvmIrArtifactPath) then
+      begin
+        FPlan.MarkFailure;
+        Exit;
+      end;
+    finally
+      Emitter.Free;
+    end;
   end
   else
     FPlan.AddArtifact('assembly-text', AssemblyArtifactPath);

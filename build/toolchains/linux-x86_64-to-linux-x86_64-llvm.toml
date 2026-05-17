@@ -11,7 +11,7 @@ host_compiler_profile = "fpc-stage0-host"
 
 [profiles]
 assembler = "gnu-as"
-linker = "lld-elf"
+linker = "gnu-ld"
 archiver = "gnu-ar"
 resource = "none"
 

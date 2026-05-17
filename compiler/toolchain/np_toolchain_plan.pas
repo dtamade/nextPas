@@ -1393,8 +1393,8 @@ begin
 
   LinkStep := FPlan.AddStep(
     'llvm-link',
-    ExecutableSet.Lld,
-    ExecutableSet.Lld,
+    FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld'),
+    FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld'),
     ExtractFileDir(ExpandFileName(ArtifactPath)),
     'toolchain.linker-exec-failed'
   );

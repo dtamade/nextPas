@@ -146,6 +146,13 @@ Compiler execution spine:
 - calling convention、external symbol、library binding 与 link ordering 属于统一 foreign contract。
 - native backend 与 LLVM backend 消费同一套 `MIR` 和 target facts。
 
+当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到最小真实闭环。`compiler/backend/np_llvm_emitter.pas`
+为 empty program 发射真实 `.ll`（自有 `_start` + inline syscall exit(0)），`opt → llc → ld` 真实执行
+并产出 exit 0 可执行；`build/verify_local.sh` 的 `llvmEmptyProgram` gate 已纳入 promotion path。
+默认 binding 仍是 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
+`--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 还不消费 MIR
+operations，扩展 IR 表达力（value/type/control-flow）属于下一批次。
+
 进入下一段前，这一段的 promotion gate 至少包括：
 
 - cross target、LLVM target 与 C interop 不再各维护一套名字系统。
