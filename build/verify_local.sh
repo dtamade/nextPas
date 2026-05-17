@@ -1301,7 +1301,9 @@ if [ "$LLVM_FOR_WRITELN_PROGRAM_EXIT" -ne 0 ]; then
   cat "$LLVM_FOR_WRITELN_PROGRAM_RUN_OUTPUT"
   fail 'llvm-for-writeln-program-unexpected-exit'
 fi
-LLVM_FOR_WRITELN_EXPECTED=$'1\n2\n3'
+LLVM_FOR_WRITELN_EXPECTED='1
+2
+3'
 if [ "$(cat "$LLVM_FOR_WRITELN_PROGRAM_RUN_OUTPUT")" != "$LLVM_FOR_WRITELN_EXPECTED" ]; then
   cat "$LLVM_FOR_WRITELN_PROGRAM_RUN_OUTPUT"
   fail 'llvm-for-writeln-program-missing-stdout'
@@ -1358,7 +1360,9 @@ if [ "$LLVM_FOR_DOWNTO_PROGRAM_EXIT" -ne 0 ]; then
   cat "$LLVM_FOR_DOWNTO_PROGRAM_RUN_OUTPUT"
   fail 'llvm-for-downto-program-unexpected-exit'
 fi
-LLVM_FOR_DOWNTO_EXPECTED=$'3\n2\n1'
+LLVM_FOR_DOWNTO_EXPECTED='3
+2
+1'
 if [ "$(cat "$LLVM_FOR_DOWNTO_PROGRAM_RUN_OUTPUT")" != "$LLVM_FOR_DOWNTO_EXPECTED" ]; then
   cat "$LLVM_FOR_DOWNTO_PROGRAM_RUN_OUTPUT"
   fail 'llvm-for-downto-program-missing-stdout'
@@ -1433,7 +1437,9 @@ if [ "$LLVM_WHILE_COUNT_PROGRAM_EXIT" -ne 0 ]; then
   cat "$LLVM_WHILE_COUNT_PROGRAM_RUN_OUTPUT"
   fail 'llvm-while-count-program-unexpected-exit'
 fi
-LLVM_WHILE_COUNT_EXPECTED=$'3\n2\n1'
+LLVM_WHILE_COUNT_EXPECTED='3
+2
+1'
 if [ "$(cat "$LLVM_WHILE_COUNT_PROGRAM_RUN_OUTPUT")" != "$LLVM_WHILE_COUNT_EXPECTED" ]; then
   cat "$LLVM_WHILE_COUNT_PROGRAM_RUN_OUTPUT"
   fail 'llvm-while-count-program-missing-stdout'
@@ -1490,7 +1496,9 @@ if [ "$LLVM_REPEAT_COUNT_PROGRAM_EXIT" -ne 0 ]; then
   cat "$LLVM_REPEAT_COUNT_PROGRAM_RUN_OUTPUT"
   fail 'llvm-repeat-count-program-unexpected-exit'
 fi
-LLVM_REPEAT_COUNT_EXPECTED=$'1\n2\n3'
+LLVM_REPEAT_COUNT_EXPECTED='1
+2
+3'
 if [ "$(cat "$LLVM_REPEAT_COUNT_PROGRAM_RUN_OUTPUT")" != "$LLVM_REPEAT_COUNT_EXPECTED" ]; then
   cat "$LLVM_REPEAT_COUNT_PROGRAM_RUN_OUTPUT"
   fail 'llvm-repeat-count-program-missing-stdout'
@@ -1631,7 +1639,8 @@ if [ "$LLVM_PROC_TWO_PROGRAM_EXIT" -ne 0 ]; then
   cat "$LLVM_PROC_TWO_PROGRAM_RUN_OUTPUT"
   fail 'llvm-proc-two-program-unexpected-exit'
 fi
-LLVM_PROC_TWO_EXPECTED=$'a\nb'
+LLVM_PROC_TWO_EXPECTED='a
+b'
 if [ "$(cat "$LLVM_PROC_TWO_PROGRAM_RUN_OUTPUT")" != "$LLVM_PROC_TWO_EXPECTED" ]; then
   cat "$LLVM_PROC_TWO_PROGRAM_RUN_OUTPUT"
   fail 'llvm-proc-two-program-missing-stdout'
