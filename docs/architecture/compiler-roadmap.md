@@ -185,7 +185,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram`、
 `llvmWhileCountProgram`、`llvmWhileSumProgram`、
 `llvmRepeatCountProgram`、`llvmRepeatHaltProgram`、
-`llvmConstStringProgram`、`llvmStringConcatProgram` gate 都已纳入 promotion path。
+`llvmConstStringProgram`、`llvmStringConcatProgram`、
+`llvmProcGreetProgram`、`llvmProcTwoProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -237,6 +238,17 @@ sema 还具备编译期字符串常量折叠：`TSemanticModel` 增加并列的�
 与 `WriteLn(MyStringConst + ', world')` 在编译期得到拼好的字符串。验证：
 `const Greeting = 'hello'; WriteLn(Greeting)` → stdout "hello\n"；
 `const Greeting = 'hello'; WriteLn(Greeting + ', world')` → stdout "hello, world\n"。
+
+sema 还具备零参数过程的编译期内联：`TSemanticAnalyzer` 维护 `FProcedureBodies`
+表（procedure 名 → gnkBeginBlock 节点引用）与 `FInliningStack`（防止递归展开）；
+`ProcessProcedureDecl` 在登记 procedure 符号时一并定位 body 节点并调用
+`RegisterProcedureBody`；`WalkHaltCalls` 跳过顶层的 `gnkProcedureDecl` /
+`gnkFunctionDecl` 子节点（避免把声明体当作普通语句重复展开），遇到
+`gnkProcedureCallStatement` 时若名字匹配已注册的 procedure 体且不在内联栈中，
+就把 body 当成内联序列递归 walk，使 caller 处直接得到等价的 typed-HIR 序列。
+验证：`procedure Greet; begin WriteLn('hi') end; begin Greet end.` → stdout "hi\n"；
+`procedure A; begin WriteLn('a') end; procedure B; begin WriteLn('b') end;
+begin A; B end.` → stdout "a\nb\n"。
 
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`

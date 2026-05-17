@@ -13,6 +13,11 @@ uses
   np_semantic_model, np_green_tree;
 
 type
+  TProcedureBodyEntry = record
+    Name: string;
+    Body: TGreenNode;
+  end;
+
   TSemanticAnalyzer = class
   private
     FRootAst: TAstFacade;
@@ -20,6 +25,14 @@ type
     FDiagnostics: TDiagnosticsSink;
     FRootFileId: TSourceFileId;
     FModel: TSemanticModel;
+    FProcedureBodies: array of TProcedureBodyEntry;
+    FInliningStack: array of string;
+    procedure RegisterProcedureBody(const AName: string; const ABody: TGreenNode);
+    function LookupProcedureBody(const AName: string;
+      out ABody: TGreenNode): Boolean;
+    function IsCurrentlyInlining(const AName: string): Boolean;
+    procedure PushInlining(const AName: string);
+    procedure PopInlining;
     function DuplicateImportName: string;
     procedure EmitSemaError(
       const ACode: string;
@@ -150,6 +163,67 @@ begin
   end;
 
   Result := '';
+end;
+
+procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
+  const ABody: TGreenNode);
+var
+  Index: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, AName) then
+    begin
+      FProcedureBodies[Index].Body := ABody;
+      Exit;
+    end;
+  NextIndex := Length(FProcedureBodies);
+  SetLength(FProcedureBodies, NextIndex + 1);
+  FProcedureBodies[NextIndex].Name := AName;
+  FProcedureBodies[NextIndex].Body := ABody;
+end;
+
+function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
+  out ABody: TGreenNode): Boolean;
+var
+  Index: LongInt;
+begin
+  ABody := nil;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, AName) then
+    begin
+      ABody := FProcedureBodies[Index].Body;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to Length(FInliningStack) - 1 do
+    if SameText(FInliningStack[Index], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TSemanticAnalyzer.PushInlining(const AName: string);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FInliningStack);
+  SetLength(FInliningStack, NextIndex + 1);
+  FInliningStack[NextIndex] := AName;
+end;
+
+procedure TSemanticAnalyzer.PopInlining;
+var
+  Last: LongInt;
+begin
+  Last := Length(FInliningStack) - 1;
+  if Last >= 0 then
+    SetLength(FInliningStack, Last);
 end;
 
 procedure TSemanticAnalyzer.EmitSemaError(
@@ -420,12 +494,23 @@ procedure TSemanticAnalyzer.ProcessProcedureDecl(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
   SymbolId: LongInt;
+  Index: LongInt;
+  Child: TGreenNode;
 begin
   if ANode = nil then
     Exit;
   SymbolId := FModel.AddSymbol(ANode.Text, 'procedure', AOwnerUnitId, 0,
     ANode.ByteOffset);
   FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0, '');
+  for Index := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(Index);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    begin
+      RegisterProcedureBody(ANode.Text, Child);
+      Break;
+    end;
+  end;
 end;
 
 procedure TSemanticAnalyzer.ProcessFunctionDecl(const ANode: TGreenNode;
@@ -509,6 +594,9 @@ begin
   begin
     Child := ANode.ChildAt(I);
     if Child = nil then
+      Continue;
+    if (Child.NodeKind = gnkProcedureDecl) or
+      (Child.NodeKind = gnkFunctionDecl) then
       Continue;
     if Child.NodeKind = gnkIfStatement then
     begin
@@ -884,6 +972,9 @@ begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if (Child.NodeKind = gnkProcedureDecl) or
+      (Child.NodeKind = gnkFunctionDecl) then
+      Continue;
     if Child.NodeKind = gnkIfStatement then
     begin
       if (Child.ChildCount >= 2) and
@@ -960,6 +1051,18 @@ begin
         if SameText(Child.Text, 'WriteLn') then
           Decoded := Decoded + #10;
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
+        Continue;
+      end;
+      if LookupProcedureBody(Child.Text, BranchNode) and
+        (BranchNode <> nil) and
+        not IsCurrentlyInlining(Child.Text) then
+      begin
+        PushInlining(Child.Text);
+        try
+          WalkHaltCalls(BranchNode);
+        finally
+          PopInlining;
+        end;
         Continue;
       end;
     end;
