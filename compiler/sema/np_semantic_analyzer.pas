@@ -615,12 +615,40 @@ begin
   Result := False;
 end;
 
+function DecodePascalStringLiteral(const AText: string): string;
+var
+  Raw: string;
+  Index: SizeInt;
+begin
+  Result := '';
+  if Length(AText) < 2 then
+    Exit;
+  if (AText[1] <> '''') or (AText[Length(AText)] <> '''') then
+    Exit;
+  Raw := Copy(AText, 2, Length(AText) - 2);
+  Index := 1;
+  while Index <= Length(Raw) do
+  begin
+    if (Raw[Index] = '''') and (Index < Length(Raw)) and (Raw[Index + 1] = '''') then
+    begin
+      Result := Result + '''';
+      Inc(Index, 2);
+    end
+    else
+    begin
+      Result := Result + Raw[Index];
+      Inc(Index);
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
   I: LongInt;
   Child, Arg: TGreenNode;
   Operand: string;
   Value: Int64;
+  Decoded: string;
 begin
   if ANode = nil then
     Exit;
@@ -629,20 +657,37 @@ begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
-    if (Child.NodeKind = gnkProcedureCallStatement) and
-      SameText(Child.Text, 'Halt') then
+    if Child.NodeKind = gnkProcedureCallStatement then
     begin
-      Operand := '0';
-      if Child.ChildCount >= 1 then
+      if SameText(Child.Text, 'Halt') then
       begin
-        Arg := Child.ChildAt(0);
-        if EvaluateIntegerConstant(Arg, Value) then
-          Operand := IntToStr(Value);
+        Operand := '0';
+        if Child.ChildCount >= 1 then
+        begin
+          Arg := Child.ChildAt(0);
+          if EvaluateIntegerConstant(Arg, Value) then
+            Operand := IntToStr(Value);
+        end;
+        FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
+        Continue;
       end;
-      FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
-    end
-    else
-      WalkHaltCalls(Child);
+      if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
+      begin
+        if Child.ChildCount >= 1 then
+        begin
+          Arg := Child.ChildAt(0);
+          if (Arg <> nil) and (Arg.NodeKind = gnkStringLiteral) then
+          begin
+            Decoded := DecodePascalStringLiteral(Arg.Text);
+            if SameText(Child.Text, 'WriteLn') then
+              Decoded := Decoded + #10;
+            FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
+          end;
+        end;
+        Continue;
+      end;
+    end;
+    WalkHaltCalls(Child);
   end;
 end;
 

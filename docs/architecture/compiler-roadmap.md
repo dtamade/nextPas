@@ -147,20 +147,26 @@ Compiler execution spine:
 - native backend 与 LLVM backend 消费同一套 `MIR` 和 target facts。
 
 当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到 MIR-driven 最小闭环，
-sema 已具备整数常量表达式编译期折叠与 const 标识符引用解析能力。
-`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，并通过扫描 MIR 中的 `halt`
-operation 提取 operand 决定 syscall exit 值；`compiler/sema/np_semantic_analyzer.pas` 的
-`EvaluateIntegerConstant` 在 sema 层折叠 `gnkIntegerLiteral` / `gnkIdentifier`(查 const 表) /
-`gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；`ProcessConstSection`
-为每个 `gnkConstDecl` 尝试折叠值并注册到 model 的 const 表；
-`opt → llc → ld` 真实执行并产出退出码由源代码决定的可执行（`Halt(42)` → exit 42、
-`Halt(40 + 2)` → exit 42、`const FortyTwo = 42; Halt(FortyTwo)` → exit 42）。
+sema 已具备整数常量表达式编译期折叠、const 标识符引用解析与 string-literal `WriteLn`
+捕获能力。`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，扫描 MIR 中的
+`halt` 与 `write-line` operation：`halt` 决定 `_start` 末尾 `syscall(60, exit_code)`；
+`write-line` 在入口处发射 `@.str.N = private constant` 字符串常量并通过
+`syscall(1, 1, ptr @.str.N, len)` 写入 stdout（sys_write）。`compiler/sema/np_semantic_analyzer.pas`
+的 `EvaluateIntegerConstant` 在 sema 层折叠 `gnkIntegerLiteral` / `gnkIdentifier`(查
+const 表) / `gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；
+`ProcessConstSection` 为每个 `gnkConstDecl` 尝试折叠值并注册到 model 的 const 表；
+`WalkHaltCalls` 还捕获 `WriteLn(string-literal)` / `Write(string-literal)` 并经
+`DecodePascalStringLiteral` 解码 Pascal 单引号字面量（`''` → `'`）后挂入 typed HIR。
+MIR lowerer 把 `write-call` HIR 映射为 `write-line` MIR op。`opt → llc → ld` 真实执行
+并产出可执行：`Halt(42)` → exit 42、`Halt(40 + 2)` → exit 42、
+`const FortyTwo = 42; Halt(FortyTwo)` → exit 42、
+`WriteLn('hello from nextpas llvm')` → 真实写出该字符串 + 换行至 stdout 后 exit 0。
 `build/verify_local.sh` 的 `llvmEmptyProgram`、`llvmHaltProgram`、`llvmHaltExprProgram`、
-`llvmHaltConstProgram` gate 都已纳入 promotion path。默认 binding 仍是
-`linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
+`llvmHaltConstProgram`、`llvmWritelnProgram` gate 都已纳入 promotion path。默认 binding
+仍是 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
 `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 仍只生成
-单 `_start` + 单条 syscall；扩展 IR 表达力（多语句 / 非常量表达式 / 控制流 / 函数调用）
-属于下一批次。
+单 `_start` + 顺序 syscall 序列；扩展 IR 表达力（多语句变量赋值 / 非常量表达式 / 控制流
+/ 函数调用 / `Write(integer)` 等数值格式化）属于下一批次。
 
 进入下一段前，这一段的 promotion gate 至少包括：
 

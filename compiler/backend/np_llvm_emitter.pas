@@ -10,11 +10,15 @@ uses
   SysUtils, np_mir_model, np_target_facts;
 
 type
+  TLLvmStringArray = array of string;
+
   TLlvmEmitter = class
   private
     FMirModel: TMirModel;
     FTargetFacts: TTargetFactsView;
     function ResolveExitCode: LongInt;
+    function CollectWriteLines: TLLvmStringArray;
+    function EscapeLLVMString(const AValue: string): string;
   public
     constructor Create(
       const AMirModel: TMirModel;
@@ -59,10 +63,55 @@ begin
   end;
 end;
 
+function TLlvmEmitter.CollectWriteLines: TLLvmStringArray;
+var
+  Index: LongInt;
+  Op: TMirOperation;
+begin
+  Result := nil;
+  if FMirModel = nil then
+    Exit;
+  for Index := 0 to FMirModel.OperationCount - 1 do
+  begin
+    Op := FMirModel.OperationAt(Index);
+    if Op.Kind = 'write-line' then
+    begin
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := Op.Operand;
+    end;
+  end;
+end;
+
+function TLlvmEmitter.EscapeLLVMString(const AValue: string): string;
+var
+  Index: SizeInt;
+begin
+  Result := '';
+  for Index := 1 to Length(AValue) do
+  begin
+    case AValue[Index] of
+      '\': Result := Result + '\\';
+      '"': Result := Result + '\"';
+      #10: Result := Result + '\0A';
+      #13: Result := Result + '\0D';
+      #9: Result := Result + '\09';
+      #0: Result := Result + '\00';
+    else
+      if Ord(AValue[Index]) < 32 then
+        Result := Result + '\0' + LowerCase(IntToHex(Ord(AValue[Index]), 1))
+      else
+        Result := Result + AValue[Index];
+    end;
+  end;
+end;
+
 function TLlvmEmitter.EmitToFile(const APath: string): Boolean;
 var
   IrFile: Text;
   ExitCode: LongInt;
+  WriteLines: TLLvmStringArray;
+  Index: LongInt;
+  StrLen: LongInt;
 begin
   Assign(IrFile, APath);
   {$I-}
@@ -72,6 +121,7 @@ begin
     Exit(False);
 
   ExitCode := ResolveExitCode;
+  WriteLines := CollectWriteLines;
 
   try
     if FTargetFacts.LlvmTriple <> '' then
@@ -79,17 +129,30 @@ begin
     if FTargetFacts.LlvmDataLayout <> '' then
       WriteLn(IrFile, 'target datalayout = "', FTargetFacts.LlvmDataLayout, '"');
     WriteLn(IrFile);
-    WriteLn(IrFile, '; nextPas LLVM emitter: program shell driven by MIR halt');
-    if (FMirModel <> nil) and (FMirModel.RootName <> '') then
-      WriteLn(IrFile, '; root: ', FMirModel.RootName);
-    WriteLn(IrFile, '; exit-code: ', ExitCode);
+
+    for Index := 0 to High(WriteLines) do
+    begin
+      StrLen := Length(WriteLines[Index]);
+      WriteLn(IrFile, '@.str.', Index, ' = private constant [',
+        StrLen + 1, ' x i8] c"', EscapeLLVMString(WriteLines[Index]),
+        '\00"');
+    end;
+
     WriteLn(IrFile);
     WriteLn(IrFile, 'define void @_start() noreturn {');
     WriteLn(IrFile, 'entry:');
+
+    for Index := 0 to High(WriteLines) do
+    begin
+      StrLen := Length(WriteLines[Index]);
+      WriteLn(IrFile,
+        '  call void asm sideeffect "syscall", "{rax},{rdi},{rsi},{rdx},~{rcx},~{r11},~{memory}"(i64 1, i64 1, ptr @.str.',
+        Index, ', i64 ', StrLen, ')');
+    end;
+
     WriteLn(IrFile,
-      '  call void asm sideeffect "movq $$60, %rax; movl $$',
-      ExitCode,
-      ', %edi; syscall", "~{rax},~{rdi}"()');
+      '  call void asm sideeffect "syscall", "{rax},{rdi},~{rcx},~{r11}"(i64 60, i64 ',
+      ExitCode, ')');
     WriteLn(IrFile, '  unreachable');
     WriteLn(IrFile, '}');
   finally

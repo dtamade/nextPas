@@ -168,6 +168,8 @@ begin
     Exit('runtime-contract-call');
   if ANode.Kind = 'halt-call' then
     Exit('halt');
+  if ANode.Kind = 'write-call' then
+    Exit('write-line');
 
   Result := 'typed-hir-node';
 end;
