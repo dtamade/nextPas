@@ -181,7 +181,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmWritelnIntProgram`、`llvmWritelnMultiProgram`、`llvmWritelnMixedProgram`、
 `llvmHelloThenHaltProgram`、`llvmVarHaltProgram`、`llvmVarWritelnProgram`、
 `llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
-`llvmIfVarProgram` gate 都已纳入 promotion path。
+`llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
+`llvmForDowntoProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -191,6 +192,15 @@ sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 否则降级递归整个 if 子树。验证：`if 1 < 2 then Halt(11); Halt(99)` → exit 11；
 `if 5 = 4 then Halt(1) else Halt(22)` → exit 22；
 `var n; n := 7; if n >= 5 then Halt(n)` → exit 7（条件由 var-init 折叠后选 then）。
+
+sema 还具备编译期可展开的 `for` 循环：当 start/end 表达式皆可折叠且方向已知
+（`to`/`downto`）时，`UnrollAssignmentForLoop` 与 `UnrollHaltForLoop` 把循环体在
+sema 层迭代 N 次（每轮把 `i` 按当前值写入 var-init 表后递归 walk 循环体），让
+循环体中的赋值与 `Halt`/`WriteLn` 都能在编译期被折叠。MaxIterations 上限 1024
+以防意外失控。验证：`for i := 1 to 3 do WriteLn(i)` → stdout "1\n2\n3\n"；
+`sum := 0; for i := 1 to 5 do sum := sum + i; Halt(sum)` → exit 15（每次迭代
+sum 都通过 var-init 链式折叠重新计算）；`for i := 3 downto 1 do WriteLn(i)`
+→ stdout "3\n2\n1\n"。
 
 默认 binding 仍是
 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过

@@ -45,9 +45,11 @@ type
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
+    procedure UnrollAssignmentForLoop(const ANode: TGreenNode);
     function EvaluateIntegerConstant(const ANode: TGreenNode;
       out AValue: Int64): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
+    procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure SeedHaltCalls;
   public
     constructor Create(
@@ -514,6 +516,11 @@ begin
         WalkAssignmentStatements(Child);
       Continue;
     end;
+    if Child.NodeKind = gnkForStatement then
+    begin
+      UnrollAssignmentForLoop(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       LhsSymbolId := FindSymbolByName(Child.Text);
@@ -550,6 +557,51 @@ begin
     end
     else
       WalkAssignmentStatements(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.UnrollAssignmentForLoop(const ANode: TGreenNode);
+const
+  MaxIterations = 1024;
+var
+  LoopVar: string;
+  StartValue, EndValue, IterValue: Int64;
+  Direction: string;
+  BodyNode: TGreenNode;
+  IterCount: LongInt;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 4) then
+    Exit;
+  if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+    Exit;
+  LoopVar := ANode.ChildAt(0).Text;
+  if not EvaluateIntegerConstant(ANode.ChildAt(1), StartValue) then
+    Exit;
+  if not EvaluateIntegerConstant(ANode.ChildAt(2), EndValue) then
+    Exit;
+  Direction := ANode.Text;
+  BodyNode := ANode.ChildAt(3);
+  IterCount := 0;
+  IterValue := StartValue;
+  if SameText(Direction, 'to') then
+  begin
+    while (IterValue <= EndValue) and (IterCount < MaxIterations) do
+    begin
+      FModel.AddVarInitValue(LoopVar, IterValue);
+      WalkAssignmentStatements(BodyNode);
+      Inc(IterValue);
+      Inc(IterCount);
+    end;
+  end
+  else if SameText(Direction, 'downto') then
+  begin
+    while (IterValue >= EndValue) and (IterCount < MaxIterations) do
+    begin
+      FModel.AddVarInitValue(LoopVar, IterValue);
+      WalkAssignmentStatements(BodyNode);
+      Dec(IterValue);
+      Inc(IterCount);
+    end;
   end;
 end;
 
@@ -725,6 +777,11 @@ begin
         WalkHaltCalls(Child);
       Continue;
     end;
+    if Child.NodeKind = gnkForStatement then
+    begin
+      UnrollHaltForLoop(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkProcedureCallStatement then
     begin
       if SameText(Child.Text, 'Halt') then
@@ -759,6 +816,51 @@ begin
       end;
     end;
     WalkHaltCalls(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.UnrollHaltForLoop(const ANode: TGreenNode);
+const
+  MaxIterations = 1024;
+var
+  LoopVar: string;
+  StartValue, EndValue, IterValue: Int64;
+  Direction: string;
+  BodyNode: TGreenNode;
+  IterCount: LongInt;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 4) then
+    Exit;
+  if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+    Exit;
+  LoopVar := ANode.ChildAt(0).Text;
+  if not EvaluateIntegerConstant(ANode.ChildAt(1), StartValue) then
+    Exit;
+  if not EvaluateIntegerConstant(ANode.ChildAt(2), EndValue) then
+    Exit;
+  Direction := ANode.Text;
+  BodyNode := ANode.ChildAt(3);
+  IterCount := 0;
+  IterValue := StartValue;
+  if SameText(Direction, 'to') then
+  begin
+    while (IterValue <= EndValue) and (IterCount < MaxIterations) do
+    begin
+      FModel.AddVarInitValue(LoopVar, IterValue);
+      WalkHaltCalls(BodyNode);
+      Inc(IterValue);
+      Inc(IterCount);
+    end;
+  end
+  else if SameText(Direction, 'downto') then
+  begin
+    while (IterValue >= EndValue) and (IterCount < MaxIterations) do
+    begin
+      FModel.AddVarInitValue(LoopVar, IterValue);
+      WalkHaltCalls(BodyNode);
+      Dec(IterValue);
+      Inc(IterCount);
+    end;
   end;
 end;
 
