@@ -644,7 +644,7 @@ end;
 
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
-  I: LongInt;
+  I, ArgIndex: LongInt;
   Child, Arg: TGreenNode;
   Operand: string;
   Value: Int64;
@@ -673,17 +673,20 @@ begin
       end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
       begin
-        if Child.ChildCount >= 1 then
+        Decoded := '';
+        for ArgIndex := 0 to Child.ChildCount - 1 do
         begin
-          Arg := Child.ChildAt(0);
-          if (Arg <> nil) and (Arg.NodeKind = gnkStringLiteral) then
-          begin
-            Decoded := DecodePascalStringLiteral(Arg.Text);
-            if SameText(Child.Text, 'WriteLn') then
-              Decoded := Decoded + #10;
-            FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
-          end;
+          Arg := Child.ChildAt(ArgIndex);
+          if Arg = nil then
+            Continue;
+          if Arg.NodeKind = gnkStringLiteral then
+            Decoded := Decoded + DecodePascalStringLiteral(Arg.Text)
+          else if EvaluateIntegerConstant(Arg, Value) then
+            Decoded := Decoded + IntToStr(Value);
         end;
+        if SameText(Child.Text, 'WriteLn') then
+          Decoded := Decoded + #10;
+        FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
         Continue;
       end;
     end;

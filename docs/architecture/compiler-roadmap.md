@@ -146,27 +146,36 @@ Compiler execution spine:
 - calling convention、external symbol、library binding 与 link ordering 属于统一 foreign contract。
 - native backend 与 LLVM backend 消费同一套 `MIR` 和 target facts。
 
-当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到 MIR-driven 最小闭环，
-sema 已具备整数常量表达式编译期折叠、const 标识符引用解析与 string-literal `WriteLn`
-捕获能力。`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，扫描 MIR 中的
-`halt` 与 `write-line` operation：`halt` 决定 `_start` 末尾 `syscall(60, exit_code)`；
-`write-line` 在入口处发射 `@.str.N = private constant` 字符串常量并通过
-`syscall(1, 1, ptr @.str.N, len)` 写入 stdout（sys_write）。`compiler/sema/np_semantic_analyzer.pas`
-的 `EvaluateIntegerConstant` 在 sema 层折叠 `gnkIntegerLiteral` / `gnkIdentifier`(查
-const 表) / `gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；
-`ProcessConstSection` 为每个 `gnkConstDecl` 尝试折叠值并注册到 model 的 const 表；
-`WalkHaltCalls` 还捕获 `WriteLn(string-literal)` / `Write(string-literal)` 并经
-`DecodePascalStringLiteral` 解码 Pascal 单引号字面量（`''` → `'`）后挂入 typed HIR。
-MIR lowerer 把 `write-call` HIR 映射为 `write-line` MIR op。`opt → llc → ld` 真实执行
-并产出可执行：`Halt(42)` → exit 42、`Halt(40 + 2)` → exit 42、
-`const FortyTwo = 42; Halt(FortyTwo)` → exit 42、
-`WriteLn('hello from nextpas llvm')` → 真实写出该字符串 + 换行至 stdout 后 exit 0。
-`build/verify_local.sh` 的 `llvmEmptyProgram`、`llvmHaltProgram`、`llvmHaltExprProgram`、
-`llvmHaltConstProgram`、`llvmWritelnProgram` gate 都已纳入 promotion path。默认 binding
-仍是 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
+当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到 MIR-driven 闭环，
+sema 已具备整数常量表达式编译期折叠、const 标识符引用解析、多参数 string-literal
+`WriteLn` 捕获与 `WriteLn(int-const)` 编译期格式化能力。`compiler/syntax/np_green_tree.pas`
+的 procedure-call 解析器已支持逗号分隔多参数列表。`compiler/sema/np_semantic_analyzer.pas`
+的 `WalkHaltCalls` 在遇到 `WriteLn`/`Write` 时迭代所有参数：`gnkStringLiteral` 经
+`DecodePascalStringLiteral` 解码（`''` → `'`）后追加；可被 `EvaluateIntegerConstant`
+折叠的整数表达式经 `IntToStr` 追加；`WriteLn` 在尾部追加 `\n`，最终拼成单个
+`'write-call'` HIR 节点。`EvaluateIntegerConstant` 在 sema 层折叠 `gnkIntegerLiteral`
+/ `gnkIdentifier`(查 const 表) / `gnkUnaryExpression`(+/-) / `gnkBinaryExpression`
+(+/-/*/div/mod)；`ProcessConstSection` 为每个 `gnkConstDecl` 折叠并注册到 const 表。
+MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-line` MIR op。
+`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，扫描 MIR 中的 `halt` 与
+`write-line` operation：`write-line` 在入口处发射 `@.str.N = private constant` 字符串
+常量并通过 `movq $$1, %rax; syscall` (sys_write to stdout) 写入；`halt` 在末尾发射
+`movq $$60, %rax; syscall` (sys_exit)。每条 syscall 把 syscall number 烘焙进 inline asm
+字符串并 clobber `~{rax}`，以保证 LLVM 在多 syscall 序列里为每条调用重新加载 rax
+（先前 `{rax}` 输入约束在多写场景下会让第二次 syscall 拿到上一次的返回值，导致只发
+首条 sys_write 然后误执行 `mmap`）。`opt → llc → ld` 真实执行并产出可执行：
+`Halt(42)` → exit 42；`Halt(40 + 2)` → exit 42；`const FortyTwo = 42; Halt(FortyTwo)`
+→ exit 42；`WriteLn('hello from nextpas llvm')` → stdout 输出该行 + exit 0；
+`WriteLn(42)` → stdout 输出 "42\n"；`WriteLn('hello', ' ', 'world')` → "hello world\n"；
+`WriteLn('answer: ', 42)` → "answer: 42\n"；`WriteLn('starting'); WriteLn('done'); Halt(7)`
+→ stdout 输出两行后 exit 7。`build/verify_local.sh` 的 `llvmEmptyProgram`、
+`llvmHaltProgram`、`llvmHaltExprProgram`、`llvmHaltConstProgram`、`llvmWritelnProgram`、
+`llvmWritelnIntProgram`、`llvmWritelnMultiProgram`、`llvmWritelnMixedProgram`、
+`llvmHelloThenHaltProgram` gate 都已纳入 promotion path。默认 binding 仍是
+`linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
 `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 仍只生成
-单 `_start` + 顺序 syscall 序列；扩展 IR 表达力（多语句变量赋值 / 非常量表达式 / 控制流
-/ 函数调用 / `Write(integer)` 等数值格式化）属于下一批次。
+单 `_start` + 顺序 syscall 序列；扩展 IR 表达力（变量赋值 / 运行期表达式 / 控制流 /
+函数调用 / `Write(integer)` 在运行期数值格式化）属于下一批次。
 
 进入下一段前，这一段的 promotion gate 至少包括：
 

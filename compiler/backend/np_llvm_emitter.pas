@@ -146,12 +146,12 @@ begin
     begin
       StrLen := Length(WriteLines[Index]);
       WriteLn(IrFile,
-        '  call void asm sideeffect "syscall", "{rax},{rdi},{rsi},{rdx},~{rcx},~{r11},~{memory}"(i64 1, i64 1, ptr @.str.',
+        '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
         Index, ', i64 ', StrLen, ')');
     end;
 
     WriteLn(IrFile,
-      '  call void asm sideeffect "syscall", "{rax},{rdi},~{rcx},~{r11}"(i64 60, i64 ',
+      '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
       ExitCode, ')');
     WriteLn(IrFile, '  unreachable');
     WriteLn(IrFile, '}');

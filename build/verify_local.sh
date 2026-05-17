@@ -38,6 +38,18 @@ LLVM_HALT_CONST_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_WRITELN_PROGRAM_OUTPUT=$(mktemp)
 LLVM_WRITELN_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_WRITELN_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_WRITELN_INT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_WRITELN_INT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_WRITELN_MULTI_PROGRAM_OUTPUT=$(mktemp)
+LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_WRITELN_MIXED_PROGRAM_OUTPUT=$(mktemp)
+LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT=$(mktemp)
 SEMANTIC_SMOKE_OUTPUT=$(mktemp)
 FOREIGN_CDECL_SMOKE_OUTPUT=$(mktemp)
 HARNESS_SMOKE_OUTPUT=$(mktemp)
@@ -119,6 +131,18 @@ cleanup() {
   rm -f "$LLVM_WRITELN_PROGRAM_OUTPUT"
   rm -rf "$LLVM_WRITELN_PROGRAM_OUT_DIR"
   rm -f "$LLVM_WRITELN_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_WRITELN_INT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"
   rm -f "$SEMANTIC_SMOKE_OUTPUT"
   rm -f "$FOREIGN_CDECL_SMOKE_OUTPUT"
   rm -f "$HARNESS_SMOKE_OUTPUT"
@@ -703,9 +727,13 @@ LLVM_HALT_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/hal
 if [ ! -f "$LLVM_HALT_PROGRAM_IR_PATH" ]; then
   fail 'missing-llvm-halt-program-ir-artifact'
 fi
-if ! grep -q 'i64 60, i64 42' "$LLVM_HALT_PROGRAM_IR_PATH"; then
+if ! grep -q 'movq \$\$60, %rax; syscall' "$LLVM_HALT_PROGRAM_IR_PATH"; then
   cat "$LLVM_HALT_PROGRAM_IR_PATH"
-  fail 'missing-llvm-halt-program-ir-exit-syscall'
+  fail 'missing-llvm-halt-program-ir-exit-syscall-shape'
+fi
+if ! grep -q '(i64 42)' "$LLVM_HALT_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HALT_PROGRAM_IR_PATH"
+  fail 'missing-llvm-halt-program-ir-exit-code-arg'
 fi
 LLVM_HALT_PROGRAM_BIN="$LLVM_HALT_PROGRAM_OUT_DIR/halt_42"
 if [ ! -x "$LLVM_HALT_PROGRAM_BIN" ]; then
@@ -735,9 +763,13 @@ LLVM_HALT_EXPR_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_I
 if [ ! -f "$LLVM_HALT_EXPR_PROGRAM_IR_PATH" ]; then
   fail 'missing-llvm-halt-expr-program-ir-artifact'
 fi
-if ! grep -q 'i64 60, i64 42' "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"; then
+if ! grep -q 'movq \$\$60, %rax; syscall' "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"; then
   cat "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"
-  fail 'missing-llvm-halt-expr-program-ir-folded-exit-syscall'
+  fail 'missing-llvm-halt-expr-program-ir-exit-syscall-shape'
+fi
+if ! grep -q '(i64 42)' "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"
+  fail 'missing-llvm-halt-expr-program-ir-folded-exit-arg'
 fi
 LLVM_HALT_EXPR_PROGRAM_BIN="$LLVM_HALT_EXPR_PROGRAM_OUT_DIR/halt_expr"
 if [ ! -x "$LLVM_HALT_EXPR_PROGRAM_BIN" ]; then
@@ -767,9 +799,13 @@ LLVM_HALT_CONST_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_
 if [ ! -f "$LLVM_HALT_CONST_PROGRAM_IR_PATH" ]; then
   fail 'missing-llvm-halt-const-program-ir-artifact'
 fi
-if ! grep -q 'i64 60, i64 42' "$LLVM_HALT_CONST_PROGRAM_IR_PATH"; then
+if ! grep -q 'movq \$\$60, %rax; syscall' "$LLVM_HALT_CONST_PROGRAM_IR_PATH"; then
   cat "$LLVM_HALT_CONST_PROGRAM_IR_PATH"
-  fail 'missing-llvm-halt-const-program-ir-folded-exit-syscall'
+  fail 'missing-llvm-halt-const-program-ir-exit-syscall-shape'
+fi
+if ! grep -q '(i64 42)' "$LLVM_HALT_CONST_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HALT_CONST_PROGRAM_IR_PATH"
+  fail 'missing-llvm-halt-const-program-ir-folded-exit-arg'
 fi
 LLVM_HALT_CONST_PROGRAM_BIN="$LLVM_HALT_CONST_PROGRAM_OUT_DIR/halt_const"
 if [ ! -x "$LLVM_HALT_CONST_PROGRAM_BIN" ]; then
@@ -803,9 +839,13 @@ if ! grep -q '@\.str\.0 = private constant' "$LLVM_WRITELN_PROGRAM_IR_PATH"; the
   cat "$LLVM_WRITELN_PROGRAM_IR_PATH"
   fail 'missing-llvm-writeln-program-ir-string-constant'
 fi
-if ! grep -q 'i64 1, i64 1, ptr @\.str\.0' "$LLVM_WRITELN_PROGRAM_IR_PATH"; then
+if ! grep -q 'movq \$\$1, %rax; syscall' "$LLVM_WRITELN_PROGRAM_IR_PATH"; then
   cat "$LLVM_WRITELN_PROGRAM_IR_PATH"
-  fail 'missing-llvm-writeln-program-ir-write-syscall'
+  fail 'missing-llvm-writeln-program-ir-write-syscall-shape'
+fi
+if ! grep -q 'ptr @\.str\.0' "$LLVM_WRITELN_PROGRAM_IR_PATH"; then
+  cat "$LLVM_WRITELN_PROGRAM_IR_PATH"
+  fail 'missing-llvm-writeln-program-ir-write-syscall-arg'
 fi
 LLVM_WRITELN_PROGRAM_BIN="$LLVM_WRITELN_PROGRAM_OUT_DIR/writeln_hello"
 if [ ! -x "$LLVM_WRITELN_PROGRAM_BIN" ]; then
@@ -827,6 +867,131 @@ fi
 printf 'llvm-writeln-program-exit=0\n'
 printf 'llvm-writeln-program-stdout=hello from nextpas llvm\n'
 printf 'llvm-writeln-program=pass\n'
+
+printf 'llvm-writeln-int-program=running\n'
+printf 'llvm-writeln-int-program-command=%s build examples/smoke/writeln_int.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_int.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_INT_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_INT_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_WRITELN_INT_PROGRAM_OUTPUT"
+  fail 'llvm-writeln-int-program-build-failed'
+fi
+cat "$LLVM_WRITELN_INT_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_WRITELN_INT_PROGRAM_OUTPUT" 'missing-llvm-writeln-int-program-success-status'
+LLVM_WRITELN_INT_PROGRAM_BIN="$LLVM_WRITELN_INT_PROGRAM_OUT_DIR/writeln_int"
+if [ ! -x "$LLVM_WRITELN_INT_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-writeln-int-program-executable'
+fi
+set +e
+"$LLVM_WRITELN_INT_PROGRAM_BIN" >"$LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT" 2>&1
+LLVM_WRITELN_INT_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_WRITELN_INT_PROGRAM_EXIT" -ne 0 ]; then
+  printf 'llvm-writeln-int-program-exit=%s\n' "$LLVM_WRITELN_INT_PROGRAM_EXIT"
+  cat "$LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-int-program-unexpected-exit'
+fi
+if ! grep -q '^42$' "$LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT"; then
+  cat "$LLVM_WRITELN_INT_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-int-program-missing-stdout'
+fi
+printf 'llvm-writeln-int-program-stdout=42\n'
+printf 'llvm-writeln-int-program=pass\n'
+
+printf 'llvm-writeln-multi-program=running\n'
+printf 'llvm-writeln-multi-program-command=%s build examples/smoke/writeln_multi.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_multi.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT"
+  fail 'llvm-writeln-multi-program-build-failed'
+fi
+cat "$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_WRITELN_MULTI_PROGRAM_OUTPUT" 'missing-llvm-writeln-multi-program-success-status'
+LLVM_WRITELN_MULTI_PROGRAM_BIN="$LLVM_WRITELN_MULTI_PROGRAM_OUT_DIR/writeln_multi"
+if [ ! -x "$LLVM_WRITELN_MULTI_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-writeln-multi-program-executable'
+fi
+set +e
+"$LLVM_WRITELN_MULTI_PROGRAM_BIN" >"$LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT" 2>&1
+LLVM_WRITELN_MULTI_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_WRITELN_MULTI_PROGRAM_EXIT" -ne 0 ]; then
+  printf 'llvm-writeln-multi-program-exit=%s\n' "$LLVM_WRITELN_MULTI_PROGRAM_EXIT"
+  cat "$LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-multi-program-unexpected-exit'
+fi
+if ! grep -q '^hello world$' "$LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT"; then
+  cat "$LLVM_WRITELN_MULTI_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-multi-program-missing-stdout'
+fi
+printf 'llvm-writeln-multi-program-stdout=hello world\n'
+printf 'llvm-writeln-multi-program=pass\n'
+
+printf 'llvm-writeln-mixed-program=running\n'
+printf 'llvm-writeln-mixed-program-command=%s build examples/smoke/writeln_mixed.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/writeln_mixed.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR" >"$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT"
+  fail 'llvm-writeln-mixed-program-build-failed'
+fi
+cat "$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_WRITELN_MIXED_PROGRAM_OUTPUT" 'missing-llvm-writeln-mixed-program-success-status'
+LLVM_WRITELN_MIXED_PROGRAM_BIN="$LLVM_WRITELN_MIXED_PROGRAM_OUT_DIR/writeln_mixed"
+if [ ! -x "$LLVM_WRITELN_MIXED_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-writeln-mixed-program-executable'
+fi
+set +e
+"$LLVM_WRITELN_MIXED_PROGRAM_BIN" >"$LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT" 2>&1
+LLVM_WRITELN_MIXED_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_WRITELN_MIXED_PROGRAM_EXIT" -ne 0 ]; then
+  printf 'llvm-writeln-mixed-program-exit=%s\n' "$LLVM_WRITELN_MIXED_PROGRAM_EXIT"
+  cat "$LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-mixed-program-unexpected-exit'
+fi
+if ! grep -q '^answer: 42$' "$LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT"; then
+  cat "$LLVM_WRITELN_MIXED_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-writeln-mixed-program-missing-stdout'
+fi
+printf 'llvm-writeln-mixed-program-stdout=answer: 42\n'
+printf 'llvm-writeln-mixed-program=pass\n'
+
+printf 'llvm-hello-then-halt-program=running\n'
+printf 'llvm-hello-then-halt-program-command=%s build examples/smoke/hello_then_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/hello_then_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR" >"$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT"
+  fail 'llvm-hello-then-halt-program-build-failed'
+fi
+cat "$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_HELLO_THEN_HALT_PROGRAM_OUTPUT" 'missing-llvm-hello-then-halt-program-success-status'
+LLVM_HELLO_THEN_HALT_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/hello_then_halt.ll"
+if ! grep -q '@\.str\.0 = private constant' "$LLVM_HELLO_THEN_HALT_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_IR_PATH"
+  fail 'missing-llvm-hello-then-halt-program-ir-string-zero'
+fi
+if ! grep -q '@\.str\.1 = private constant' "$LLVM_HELLO_THEN_HALT_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_IR_PATH"
+  fail 'missing-llvm-hello-then-halt-program-ir-string-one'
+fi
+LLVM_HELLO_THEN_HALT_PROGRAM_BIN="$LLVM_HELLO_THEN_HALT_PROGRAM_OUT_DIR/hello_then_halt"
+if [ ! -x "$LLVM_HELLO_THEN_HALT_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-hello-then-halt-program-executable'
+fi
+set +e
+"$LLVM_HELLO_THEN_HALT_PROGRAM_BIN" >"$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT" 2>&1
+LLVM_HELLO_THEN_HALT_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_HELLO_THEN_HALT_PROGRAM_EXIT" -ne 7 ]; then
+  printf 'llvm-hello-then-halt-program-exit=%s\n' "$LLVM_HELLO_THEN_HALT_PROGRAM_EXIT"
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-hello-then-halt-program-unexpected-exit'
+fi
+if ! grep -q '^starting$' "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"; then
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-hello-then-halt-program-missing-first-stdout'
+fi
+if ! grep -q '^done$' "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"; then
+  cat "$LLVM_HELLO_THEN_HALT_PROGRAM_RUN_OUTPUT"
+  fail 'llvm-hello-then-halt-program-missing-second-stdout'
+fi
+printf 'llvm-hello-then-halt-program-exit=7\n'
+printf 'llvm-hello-then-halt-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -2267,6 +2432,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

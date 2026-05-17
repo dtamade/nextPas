@@ -1001,9 +1001,21 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
     begin
       Inc(ACursor);
-      RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
-      if RHS <> nil then
-        Node.AppendChild(RHS);
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkRParen) then
+      begin
+        RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+        if RHS <> nil then
+          Node.AppendChild(RHS);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+        begin
+          Inc(ACursor);
+          RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if RHS <> nil then
+            Node.AppendChild(RHS);
+        end;
+      end;
       MatchTokenSilent(ALexer, ACursor, tkRParen);
     end;
   end;
