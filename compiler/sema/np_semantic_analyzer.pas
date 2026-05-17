@@ -16,7 +16,15 @@ type
   TProcedureBodyEntry = record
     Name: string;
     Body: TGreenNode;
+    Decl: TGreenNode;
   end;
+
+  TParamSnapshot = record
+    Name: string;
+    HadValue: Boolean;
+    PriorValue: Int64;
+  end;
+  TParamSnapshots = array of TParamSnapshot;
 
   TSemanticAnalyzer = class
   private
@@ -27,12 +35,17 @@ type
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
     FInliningStack: array of string;
-    procedure RegisterProcedureBody(const AName: string; const ABody: TGreenNode);
+    procedure RegisterProcedureBody(const AName: string;
+      const ABody: TGreenNode; const ADecl: TGreenNode);
     function LookupProcedureBody(const AName: string;
-      out ABody: TGreenNode): Boolean;
+      out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
+    function BindCallArgs(const ADecl: TGreenNode;
+      const ACallNode: TGreenNode;
+      const ANameSkip: LongInt): TParamSnapshots;
+    procedure RestoreCallArgs(const ASnapshots: TParamSnapshots);
     function DuplicateImportName: string;
     procedure EmitSemaError(
       const ACode: string;
@@ -166,7 +179,7 @@ begin
 end;
 
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
-  const ABody: TGreenNode);
+  const ABody: TGreenNode; const ADecl: TGreenNode);
 var
   Index: LongInt;
   NextIndex: SizeInt;
@@ -175,27 +188,91 @@ begin
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
       FProcedureBodies[Index].Body := ABody;
+      FProcedureBodies[Index].Decl := ADecl;
       Exit;
     end;
   NextIndex := Length(FProcedureBodies);
   SetLength(FProcedureBodies, NextIndex + 1);
   FProcedureBodies[NextIndex].Name := AName;
   FProcedureBodies[NextIndex].Body := ABody;
+  FProcedureBodies[NextIndex].Decl := ADecl;
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
-  out ABody: TGreenNode): Boolean;
+  out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
 var
   Index: LongInt;
 begin
   ABody := nil;
+  ADecl := nil;
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
       ABody := FProcedureBodies[Index].Body;
+      ADecl := FProcedureBodies[Index].Decl;
       Exit(True);
     end;
   Result := False;
+end;
+
+function TSemanticAnalyzer.BindCallArgs(const ADecl: TGreenNode;
+  const ACallNode: TGreenNode;
+  const ANameSkip: LongInt): TParamSnapshots;
+var
+  ParamList: TGreenNode;
+  ParamDecl, ArgNode: TGreenNode;
+  Index, ParamIndex, ArgIndex: LongInt;
+  Value, Prior: Int64;
+  Snap: TParamSnapshot;
+begin
+  Result := nil;
+  if (ADecl = nil) or (ACallNode = nil) then
+    Exit;
+  ParamList := nil;
+  for Index := 0 to ADecl.ChildCount - 1 do
+    if (ADecl.ChildAt(Index) <> nil) and
+      (ADecl.ChildAt(Index).NodeKind = gnkParameterList) then
+    begin
+      ParamList := ADecl.ChildAt(Index);
+      Break;
+    end;
+  if ParamList = nil then
+    Exit;
+  ParamIndex := 0;
+  for Index := 0 to ParamList.ChildCount - 1 do
+  begin
+    ParamDecl := ParamList.ChildAt(Index);
+    if (ParamDecl = nil) or (ParamDecl.NodeKind <> gnkParameterDecl) then
+      Continue;
+    ArgIndex := ANameSkip + ParamIndex;
+    if ArgIndex >= ACallNode.ChildCount then
+      Break;
+    ArgNode := ACallNode.ChildAt(ArgIndex);
+    if (ArgNode <> nil) and EvaluateIntegerConstant(ArgNode, Value) then
+    begin
+      Snap.Name := ParamDecl.Text;
+      Snap.HadValue := FModel.LookupVarInitValue(ParamDecl.Text, Prior);
+      Snap.PriorValue := Prior;
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := Snap;
+      FModel.AddVarInitValue(ParamDecl.Text, Value);
+    end;
+    Inc(ParamIndex);
+  end;
+end;
+
+procedure TSemanticAnalyzer.RestoreCallArgs(const ASnapshots: TParamSnapshots);
+var
+  Index: LongInt;
+begin
+  for Index := High(ASnapshots) downto 0 do
+  begin
+    if ASnapshots[Index].HadValue then
+      FModel.AddVarInitValue(ASnapshots[Index].Name,
+        ASnapshots[Index].PriorValue)
+    else
+      FModel.RemoveVarInitValue(ASnapshots[Index].Name);
+  end;
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
@@ -507,7 +584,7 @@ begin
     Child := ANode.ChildAt(Index);
     if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
     begin
-      RegisterProcedureBody(ANode.Text, Child);
+      RegisterProcedureBody(ANode.Text, Child, ANode);
       Break;
     end;
   end;
@@ -541,7 +618,7 @@ begin
     Child := ANode.ChildAt(J);
     if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
     begin
-      RegisterProcedureBody(ANode.Text, Child);
+      RegisterProcedureBody(ANode.Text, Child, ANode);
       Break;
     end;
   end;
@@ -791,7 +868,8 @@ var
   ParseCode: Word;
   Left, Right: Int64;
   Op: string;
-  BodyNode: TGreenNode;
+  BodyNode, DeclNode: TGreenNode;
+  ParamSnaps: TParamSnapshots;
 begin
   AValue := 0;
   if ANode = nil then
@@ -827,15 +905,17 @@ begin
           AValue := Parsed;
           Exit(True);
         end;
-        if LookupProcedureBody(ANode.Text, BodyNode) and
+        if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
           (BodyNode <> nil) and
           not IsCurrentlyInlining(ANode.Text) then
         begin
           PushInlining(ANode.Text);
+          ParamSnaps := nil;
           try
             WalkAssignmentStatements(BodyNode);
           finally
             PopInlining;
+            RestoreCallArgs(ParamSnaps);
           end;
           if FModel.LookupVarInitValue(ANode.Text, Parsed) then
           begin
@@ -847,17 +927,17 @@ begin
       end;
     gnkFunctionCall:
       begin
-        if ANode.ChildCount > 1 then
-          Exit(False);
-        if LookupProcedureBody(ANode.Text, BodyNode) and
+        if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
           (BodyNode <> nil) and
           not IsCurrentlyInlining(ANode.Text) then
         begin
           PushInlining(ANode.Text);
+          ParamSnaps := BindCallArgs(DeclNode, ANode, 1);
           try
             WalkAssignmentStatements(BodyNode);
           finally
             PopInlining;
+            RestoreCallArgs(ParamSnaps);
           end;
           if FModel.LookupVarInitValue(ANode.Text, Parsed) then
           begin
@@ -1008,10 +1088,11 @@ end;
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
   I, ArgIndex: LongInt;
-  Child, Arg, BranchNode: TGreenNode;
+  Child, Arg, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
   Decoded, StringValue: string;
+  ParamSnaps: TParamSnapshots;
 begin
   if ANode = nil then
     Exit;
@@ -1101,15 +1182,17 @@ begin
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
         Continue;
       end;
-      if LookupProcedureBody(Child.Text, BranchNode) and
+      if LookupProcedureBody(Child.Text, BranchNode, DeclNode) and
         (BranchNode <> nil) and
         not IsCurrentlyInlining(Child.Text) then
       begin
         PushInlining(Child.Text);
+        ParamSnaps := BindCallArgs(DeclNode, Child, 0);
         try
           WalkHaltCalls(BranchNode);
         finally
           PopInlining;
+          RestoreCallArgs(ParamSnaps);
         end;
         Continue;
       end;

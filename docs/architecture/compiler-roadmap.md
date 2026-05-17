@@ -187,7 +187,9 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmRepeatCountProgram`、`llvmRepeatHaltProgram`、
 `llvmConstStringProgram`、`llvmStringConcatProgram`、
 `llvmProcGreetProgram`、`llvmProcTwoProgram`、
-`llvmFnConstHaltProgram`、`llvmFnComposeProgram` gate 都已纳入 promotion path。
+`llvmFnConstHaltProgram`、`llvmFnComposeProgram`、`llvmFnCallHaltProgram`、
+`llvmFnCallChainProgram`、`llvmProcArgProgram`、`llvmFnSquareProgram`
+gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -267,12 +269,22 @@ begin Doubled := Base * 2 end; Halt(Doubled)` → exit 14（内联栈阻止递�
 `EvaluateIntegerConstant` 同时支持显式 `gnkFunctionCall`（即带括号的 `f()`
 调用形式）：当节点的 `ChildCount = 1`（仅函数名子节点）时，按 `gnkIdentifier`
 路径走同样的 `FProcedureBodies` 内联流程，让 `Halt(GetVal())` 与 bare
-`Halt(GetVal)` 等价。带参数的 `f(x, y)` 调用暂未折叠（为下批参数化函数留口）。
+`Halt(GetVal)` 等价。
 验证：`function GetVal: Integer; begin GetVal := 42 end; Halt(GetVal())`
 → exit 42；`function Base: Integer; ... ; function Doubled: Integer;
 begin Doubled := Base() * 2 end; function Tripled: Integer;
 begin Tripled := Doubled() + Base() end; Halt(Tripled())` → exit 15
 （嵌套带括号调用通过同一内联栈和 var-init 链式折叠）。
+
+参数化过程/函数：`TProcedureBodyEntry` 同时存 body 和 decl 节点，让
+内联点能拿到 `gnkParameterList`。新增 `BindCallArgs` 在内联前折叠每个实参
+表达式并把值写入 var-init 表（保留 prior snapshot），`RestoreCallArgs`
+在内联后逆序还原；`gnkFunctionCall`（child[1..]） / `gnkIdentifier`（无 args）
+/ `gnkProcedureCallStatement`（child[0..]）三个内联点共享这套机制。
+验证：`procedure ShowVal(n: Integer); begin WriteLn(n) end; ShowVal(42)`
+→ stdout "42\n"；`function Square(x: Integer): Integer;
+begin Square := x * x end; Halt(Square(7))` → exit 49（参数 x 在内联期间
+被绑定为 7，函数体内 `x * x` 通过 var-init 折叠为 49 并写回 Square）。
 
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
