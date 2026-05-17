@@ -536,6 +536,15 @@ begin
   SymbolId := FModel.AddSymbol(ANode.Text, 'function', AOwnerUnitId, TypeId,
     ANode.ByteOffset);
   FModel.AddTypedHirNode('function-decl', ANode.Text, SymbolId, TypeId, '');
+  for J := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    begin
+      RegisterProcedureBody(ANode.Text, Child);
+      Break;
+    end;
+  end;
 end;
 
 procedure TSemanticAnalyzer.WalkDeclarations(const ANode: TGreenNode;
@@ -782,6 +791,7 @@ var
   ParseCode: Word;
   Left, Right: Int64;
   Op: string;
+  BodyNode: TGreenNode;
 begin
   AValue := 0;
   if ANode = nil then
@@ -816,6 +826,22 @@ begin
         begin
           AValue := Parsed;
           Exit(True);
+        end;
+        if LookupProcedureBody(ANode.Text, BodyNode) and
+          (BodyNode <> nil) and
+          not IsCurrentlyInlining(ANode.Text) then
+        begin
+          PushInlining(ANode.Text);
+          try
+            WalkAssignmentStatements(BodyNode);
+          finally
+            PopInlining;
+          end;
+          if FModel.LookupVarInitValue(ANode.Text, Parsed) then
+          begin
+            AValue := Parsed;
+            Exit(True);
+          end;
         end;
         Exit(False);
       end;

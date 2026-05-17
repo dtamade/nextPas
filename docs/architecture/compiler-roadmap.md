@@ -186,7 +186,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmWhileCountProgram`、`llvmWhileSumProgram`、
 `llvmRepeatCountProgram`、`llvmRepeatHaltProgram`、
 `llvmConstStringProgram`、`llvmStringConcatProgram`、
-`llvmProcGreetProgram`、`llvmProcTwoProgram` gate 都已纳入 promotion path。
+`llvmProcGreetProgram`、`llvmProcTwoProgram`、
+`llvmFnConstHaltProgram`、`llvmFnComposeProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -249,6 +250,19 @@ sema 还具备零参数过程的编译期内联：`TSemanticAnalyzer` 维护 `FP
 验证：`procedure Greet; begin WriteLn('hi') end; begin Greet end.` → stdout "hi\n"；
 `procedure A; begin WriteLn('a') end; procedure B; begin WriteLn('b') end;
 begin A; B end.` → stdout "a\nb\n"。
+
+sema 进一步把零参数函数（带返回值）也纳入同一个 `FProcedureBodies` 表：
+`ProcessFunctionDecl` 在登记 function 符号后同样定位 `gnkBeginBlock` 并调用
+`RegisterProcedureBody`。`EvaluateIntegerConstant` 的 `gnkIdentifier` 分支在
+const/var-init 表都未命中时会查 `FProcedureBodies`，命中且不在内联栈中就
+`PushInlining`、`WalkAssignmentStatements(body)`（让函数体内部 `name := expr`
+形式的赋值通过现有 var-init 机制把折叠后的返回值落到 `name` 槽位）、
+重新 `LookupVarInitValue(name)` 拿到结果、`PopInlining`，由此让 `Halt(GetVal)`
+等表达式在 sema 层得到函数返回值。验证：
+`function GetVal: Integer; begin GetVal := 42 end; Halt(GetVal)` → exit 42；
+`function Base: Integer; begin Base := 7 end; function Doubled: Integer;
+begin Doubled := Base * 2 end; Halt(Doubled)` → exit 14（内联栈阻止递归，
+且嵌套函数调用通过 var-init 链式折叠）。
 
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
