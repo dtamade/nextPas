@@ -264,6 +264,16 @@ const/var-init 表都未命中时会查 `FProcedureBodies`，命中且不在内�
 begin Doubled := Base * 2 end; Halt(Doubled)` → exit 14（内联栈阻止递归，
 且嵌套函数调用通过 var-init 链式折叠）。
 
+`EvaluateIntegerConstant` 同时支持显式 `gnkFunctionCall`（即带括号的 `f()`
+调用形式）：当节点的 `ChildCount = 1`（仅函数名子节点）时，按 `gnkIdentifier`
+路径走同样的 `FProcedureBodies` 内联流程，让 `Halt(GetVal())` 与 bare
+`Halt(GetVal)` 等价。带参数的 `f(x, y)` 调用暂未折叠（为下批参数化函数留口）。
+验证：`function GetVal: Integer; begin GetVal := 42 end; Halt(GetVal())`
+→ exit 42；`function Base: Integer; ... ; function Doubled: Integer;
+begin Doubled := Base() * 2 end; function Tripled: Integer;
+begin Tripled := Doubled() + Base() end; Halt(Tripled())` → exit 15
+（嵌套带括号调用通过同一内联栈和 var-init 链式折叠）。
+
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
 的 body 真正在 `;` 处停止，避免后继语句被贪婪并入 body 而引发错误。

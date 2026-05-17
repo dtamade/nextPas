@@ -845,6 +845,28 @@ begin
         end;
         Exit(False);
       end;
+    gnkFunctionCall:
+      begin
+        if ANode.ChildCount > 1 then
+          Exit(False);
+        if LookupProcedureBody(ANode.Text, BodyNode) and
+          (BodyNode <> nil) and
+          not IsCurrentlyInlining(ANode.Text) then
+        begin
+          PushInlining(ANode.Text);
+          try
+            WalkAssignmentStatements(BodyNode);
+          finally
+            PopInlining;
+          end;
+          if FModel.LookupVarInitValue(ANode.Text, Parsed) then
+          begin
+            AValue := Parsed;
+            Exit(True);
+          end;
+        end;
+        Exit(False);
+      end;
     gnkUnaryExpression:
       begin
         if ANode.ChildCount < 1 then
