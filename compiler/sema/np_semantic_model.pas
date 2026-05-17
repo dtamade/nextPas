@@ -26,6 +26,7 @@ type
     DisplayName: string;
     SymbolId: LongInt;
     TypeId: LongInt;
+    Operand: string;
   end;
 
   TRuntimeContract = record
@@ -73,7 +74,8 @@ type
       const AKind: string;
       const ADisplayName: string;
       const ASymbolId: LongInt;
-      const ATypeId: LongInt
+      const ATypeId: LongInt;
+      const AOperand: string
     ): LongInt;
     function AddRuntimeContract(const AName: string): LongInt;
     function AddForeignProcedureBinding(
@@ -168,7 +170,8 @@ function TSemanticModel.AddTypedHirNode(
   const AKind: string;
   const ADisplayName: string;
   const ASymbolId: LongInt;
-  const ATypeId: LongInt
+  const ATypeId: LongInt;
+  const AOperand: string
 ): LongInt;
 var
   NextIndex: SizeInt;
@@ -180,6 +183,7 @@ begin
   FTypedHirNodes[NextIndex].DisplayName := ADisplayName;
   FTypedHirNodes[NextIndex].SymbolId := ASymbolId;
   FTypedHirNodes[NextIndex].TypeId := ATypeId;
+  FTypedHirNodes[NextIndex].Operand := AOperand;
   Result := FTypedHirNodes[NextIndex].HirNodeId;
 end;
 

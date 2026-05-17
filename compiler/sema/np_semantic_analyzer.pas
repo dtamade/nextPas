@@ -45,6 +45,8 @@ type
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
+    procedure WalkHaltCalls(const ANode: TGreenNode);
+    procedure SeedHaltCalls;
   public
     constructor Create(
       const ARootAst: TAstFacade;
@@ -179,7 +181,7 @@ var
   SymbolId: LongInt;
 begin
   FModel.SetRootName(FUnitGraph.RootName);
-  FModel.AddTypedHirNode('compilation-root', FUnitGraph.RootName, 0, 0);
+  FModel.AddTypedHirNode('compilation-root', FUnitGraph.RootName, 0, 0, '');
 
   for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
   begin
@@ -195,7 +197,8 @@ begin
       'resolved-unit',
       ResolvedUnit.CanonicalName,
       SymbolId,
-      0
+      0,
+      ''
     );
   end;
 end;
@@ -217,7 +220,7 @@ begin
   for Index := Low(RuntimeContracts) to High(RuntimeContracts) do
   begin
     FModel.AddRuntimeContract(RuntimeContracts[Index]);
-    FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0);
+    FModel.AddTypedHirNode('runtime-contract', RuntimeContracts[Index], 0, 0, '');
   end;
 end;
 
@@ -264,7 +267,8 @@ begin
       'foreign-procedure-binding',
       ForeignProcedureDecl.ProcedureName,
       SymbolId,
-      0
+      0,
+      ''
     );
     FModel.AddLibraryRequest(
       ForeignProcedureDecl.LibraryId,
@@ -303,6 +307,7 @@ begin
   if FDiagnostics.HasErrors then
     Exit;
   SeedRuntimeContracts;
+  SeedHaltCalls;
 
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
@@ -394,7 +399,7 @@ begin
     Exit;
   SymbolId := FModel.AddSymbol(ANode.Text, 'procedure', AOwnerUnitId, 0,
     ANode.ByteOffset);
-  FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0);
+  FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0, '');
 end;
 
 procedure TSemanticAnalyzer.ProcessFunctionDecl(const ANode: TGreenNode;
@@ -419,7 +424,7 @@ begin
   end;
   SymbolId := FModel.AddSymbol(ANode.Text, 'function', AOwnerUnitId, TypeId,
     ANode.ByteOffset);
-  FModel.AddTypedHirNode('function-decl', ANode.Text, SymbolId, TypeId);
+  FModel.AddTypedHirNode('function-decl', ANode.Text, SymbolId, TypeId, '');
 end;
 
 procedure TSemanticAnalyzer.WalkDeclarations(const ANode: TGreenNode;
@@ -519,6 +524,52 @@ begin
   if RootNode = nil then
     Exit;
   WalkAssignmentStatements(RootNode);
+end;
+
+procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
+var
+  I: LongInt;
+  Child, Arg: TGreenNode;
+  Operand: string;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child = nil then
+      Continue;
+    if (Child.NodeKind = gnkProcedureCallStatement) and
+      SameText(Child.Text, 'Halt') then
+    begin
+      Operand := '0';
+      if Child.ChildCount >= 1 then
+      begin
+        Arg := Child.ChildAt(0);
+        if (Arg <> nil) and (Arg.NodeKind = gnkIntegerLiteral) then
+          Operand := Arg.Text;
+      end;
+      FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
+    end
+    else
+      WalkHaltCalls(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedHaltCalls;
+var
+  RootNode: TGreenNode;
+begin
+  if (FRootAst = nil) or not FRootAst.IsValid then
+    Exit;
+  if (FRootAst.RootKindName <> 'program') and
+    (FRootAst.RootKindName <> 'library') and
+    (FRootAst.RootKindName <> 'package') then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  WalkHaltCalls(RootNode);
 end;
 
 end.

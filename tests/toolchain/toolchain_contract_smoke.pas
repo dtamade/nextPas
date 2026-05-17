@@ -533,7 +533,7 @@ begin
   MirModel := TMirModel.Create;
   MirModel.SetRootName('hello');
   MirModel.AddBlock('entry');
-  MirModel.AddOperation('return', 1, 'hello');
+  MirModel.AddOperation('return', 1, 'hello', '');
   MirModel.MarkReady;
 
   BackendPlanner := TBackendPlanner.Create(

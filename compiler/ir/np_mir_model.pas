@@ -19,6 +19,7 @@ type
     Kind: string;
     BlockId: LongInt;
     DisplayName: string;
+    Operand: string;
   end;
 
   TMirModel = class
@@ -33,10 +34,12 @@ type
     function AddOperation(
       const AKind: string;
       const ABlockId: LongInt;
-      const ADisplayName: string
+      const ADisplayName: string;
+      const AOperand: string
     ): LongInt;
     function BlockCount: LongInt;
     function OperationCount: LongInt;
+    function OperationAt(const AIndex: LongInt): TMirOperation;
     function EntryBlockLabel: string;
     procedure SetRootName(const AName: string);
     function RootName: string;
@@ -82,7 +85,8 @@ end;
 function TMirModel.AddOperation(
   const AKind: string;
   const ABlockId: LongInt;
-  const ADisplayName: string
+  const ADisplayName: string;
+  const AOperand: string
 ): LongInt;
 var
   NextIndex: SizeInt;
@@ -93,6 +97,7 @@ begin
   FOperations[NextIndex].Kind := AKind;
   FOperations[NextIndex].BlockId := ABlockId;
   FOperations[NextIndex].DisplayName := ADisplayName;
+  FOperations[NextIndex].Operand := AOperand;
   Result := FOperations[NextIndex].OperationId;
 end;
 
@@ -104,6 +109,20 @@ end;
 function TMirModel.OperationCount: LongInt;
 begin
   Result := Length(FOperations);
+end;
+
+function TMirModel.OperationAt(const AIndex: LongInt): TMirOperation;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FOperations)) then
+  begin
+    Result.OperationId := 0;
+    Result.Kind := '';
+    Result.BlockId := 0;
+    Result.DisplayName := '';
+    Result.Operand := '';
+    Exit;
+  end;
+  Result := FOperations[AIndex];
 end;
 
 function TMirModel.EntryBlockLabel: string;
@@ -147,6 +166,8 @@ begin
     Exit('unit-ref');
   if ANode.Kind = 'runtime-contract' then
     Exit('runtime-contract-call');
+  if ANode.Kind = 'halt-call' then
+    Exit('halt');
 
   Result := 'typed-hir-node';
 end;
@@ -185,11 +206,12 @@ begin
     FModel.AddOperation(
       MirKindForTypedHirNode(Node),
       BlockId,
-      Node.DisplayName
+      Node.DisplayName,
+      Node.Operand
     );
   end;
 
-  FModel.AddOperation('return', BlockId, FSemanticModel.RootName);
+  FModel.AddOperation('return', BlockId, FSemanticModel.RootName, '');
   FModel.MarkReady;
 end;
 

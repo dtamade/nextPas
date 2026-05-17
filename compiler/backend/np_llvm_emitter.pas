@@ -14,6 +14,7 @@ type
   private
     FMirModel: TMirModel;
     FTargetFacts: TTargetFactsView;
+    function ResolveExitCode: LongInt;
   public
     constructor Create(
       const AMirModel: TMirModel;
@@ -34,9 +35,34 @@ begin
   FTargetFacts := ATargetFacts;
 end;
 
+function TLlvmEmitter.ResolveExitCode: LongInt;
+var
+  Index: LongInt;
+  Op: TMirOperation;
+  Parsed: LongInt;
+  ParseCode: Word;
+begin
+  Result := 0;
+  if FMirModel = nil then
+    Exit;
+  for Index := 0 to FMirModel.OperationCount - 1 do
+  begin
+    Op := FMirModel.OperationAt(Index);
+    if Op.Kind <> 'halt' then
+      Continue;
+    if Trim(Op.Operand) = '' then
+      Exit(0);
+    Val(Op.Operand, Parsed, ParseCode);
+    if ParseCode = 0 then
+      Exit(Parsed);
+    Exit(0);
+  end;
+end;
+
 function TLlvmEmitter.EmitToFile(const APath: string): Boolean;
 var
   IrFile: Text;
+  ExitCode: LongInt;
 begin
   Assign(IrFile, APath);
   {$I-}
@@ -45,20 +71,25 @@ begin
   if IOResult <> 0 then
     Exit(False);
 
+  ExitCode := ResolveExitCode;
+
   try
     if FTargetFacts.LlvmTriple <> '' then
       WriteLn(IrFile, 'target triple = "', FTargetFacts.LlvmTriple, '"');
     if FTargetFacts.LlvmDataLayout <> '' then
       WriteLn(IrFile, 'target datalayout = "', FTargetFacts.LlvmDataLayout, '"');
     WriteLn(IrFile);
-    WriteLn(IrFile, '; nextPas LLVM emitter: empty-program shell');
+    WriteLn(IrFile, '; nextPas LLVM emitter: program shell driven by MIR halt');
     if (FMirModel <> nil) and (FMirModel.RootName <> '') then
       WriteLn(IrFile, '; root: ', FMirModel.RootName);
+    WriteLn(IrFile, '; exit-code: ', ExitCode);
     WriteLn(IrFile);
     WriteLn(IrFile, 'define void @_start() noreturn {');
     WriteLn(IrFile, 'entry:');
     WriteLn(IrFile,
-      '  call void asm sideeffect "movq $$60, %rax; xorl %edi, %edi; syscall", "~{rax},~{rdi}"()');
+      '  call void asm sideeffect "movq $$60, %rax; movl $$',
+      ExitCode,
+      ', %edi; syscall", "~{rax},~{rdi}"()');
     WriteLn(IrFile, '  unreachable');
     WriteLn(IrFile, '}');
   finally
@@ -66,9 +97,6 @@ begin
   end;
 
   Result := IOResult = 0;
-  if not Result then
-    Exit;
-  Result := True;
 end;
 
 end.

@@ -15,6 +15,73 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 MIR-driven LLVM Codegen — Halt(N) → exit(N)
+
+### Goal
+
+把 nextPas 的 LLVM 路径从"无论源代码写什么都 exit 0"推进到"程序退出码由源代码决定"。
+这是首个 **MIR 真实决定运行时行为** 的批次：MIR operand 不再恒为空字符串，
+LLVM emitter 不再发射固定 empty shell。
+
+- 扩展 `compiler/ir/np_mir_model.pas` 的 `TMirOperation` 加 `Operand: string` 字段，
+  `AddOperation` 多一个 operand 参数，新增 `OperationAt(Index)` 让 emitter 能读取 ops
+- 扩展 `compiler/sema/np_semantic_model.pas` 的 `TTypedHirNode` 同样加 `Operand: string`
+  字段，`AddTypedHirNode` 多一个 operand 参数
+- 扩展 `compiler/sema/np_semantic_analyzer.pas` 新增 `WalkHaltCalls` + `SeedHaltCalls`：
+  遍历 program body 找 `gnkProcedureCallStatement` 文本为 `Halt`，捕获第一个
+  `gnkIntegerLiteral` 子节点作为 operand，发射 `halt-call` HIR 节点
+- 扩展 `TMirLowerer.MirKindForTypedHirNode` 把 `halt-call` HIR 翻译为 `halt` MIR op，
+  operand 透传
+- 扩展 `compiler/backend/np_llvm_emitter.pas`：扫 MIR ops 找 `halt` 提取 operand（默认 0），
+  发射 `_start` 时把 syscall arg 写为该 operand 值；emitter 不再写死 `xorl %edi, %edi`
+- 新增 `examples/smoke/halt_42.pas` fixture：`program HaltFortyTwo; begin Halt(42); end.`
+- 修复 `tests/toolchain/toolchain_contract_smoke.pas` 的 `MirModel.AddOperation` 调用
+  对齐新签名
+- 新增 `build/verify_local.sh` 的 `llvm-halt-program` gate：用真 opt/llc/ld 编译
+  halt_42.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] `TMirOperation` + `AddOperation` 加 Operand 字段，新增 `OperationAt(Index)` accessor
+- [x] `TTypedHirNode` + `AddTypedHirNode` 加 Operand 字段；6 处现有调用点全部跟进
+- [x] `TSemanticAnalyzer` 新增 `WalkHaltCalls` + `SeedHaltCalls`，挂进 `Analyze`
+      末尾在 `SeedRuntimeContracts` 之后
+- [x] `TMirLowerer.MirKindForTypedHirNode` 加 `halt-call -> halt` 分支；
+      lowerer 主循环把 HIR operand 透传给 MIR `AddOperation`
+- [x] `TLlvmEmitter.ResolveExitCode` 扫 MIR ops 找 `halt`，从 operand 解析整数
+      （Val 解析失败默认 0）；`EmitToFile` 发射 syscall arg 为该值
+- [x] 新增 `examples/smoke/halt_42.pas`
+- [x] 修复 `tests/toolchain/toolchain_contract_smoke.pas:536` 的 `AddOperation` 4 参签名
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_PROGRAM_OUTPUT` / `LLVM_HALT_PROGRAM_OUT_DIR`
+      临时文件，新增 `llvm-halt-program` gate（IR 含 marker、可执行 exit 42），
+      success envelope 加 `llvmHaltProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| 用 `string` 字段载 operand，而不是引入 typed `TMirValue` 联合体 | 当前只需透传字面量给 emitter；引入 value system 会牵动 MIR/HIR/sema/emitter 四层，扩展面太大；string 可后续被 typed value 替换而不破坏调用接口 |
+| `halt-call` HIR 节点直接挂在 typed-hir 序列尾部，不进 block-structured CFG | 当前 MIR 仍是平铺 op 序列、单 entry block；引入 control-flow 应单独批次 |
+| emitter `ResolveExitCode` 解析失败默认 0，不报 diagnostic | sema 已经只在捕获到 `gnkIntegerLiteral` 时才发 operand，emitter 收到非数字 operand 是内部 bug 不是用户错误；先静默 fallback，等 typed value 再加诊断 |
+| `WalkHaltCalls` 做大小写不敏感比对（`SameText`） | Pascal 标识符传统大小写不敏感；与 `gnkProcedureCallStatement.Text` 保留原 lexeme 一致 |
+
+### Notes
+
+- 这是 MIR 第一次真实决定运行时行为：之前 MIR 即使存在也只是路径占位符，
+  `verify-local` 里 empty-program 和 halt-program 现在是两条**结果不同**的真实测试
+- 当前 emitter 仍只生成 `_start` + 单条 syscall；多条 `Halt(N)` 会让最后一条赢，
+  control-flow / function call / multiple statements 仍属下一批次
+- `halt_42.pas` 通过 LLVM binding 编译运行 exit 42，但默认 binding (gnu) 走宿主 FPC，
+  那条路径仍由宿主决定行为；这是预期的，因为只有 LLVM 路径走 nextPas 自有 codegen
+- 这一批不替换历史 addendum；下一批次自然入口是把 MIR 操作扩到包含
+  整数 const / 二元运算 / 简单条件，让 `Halt(2 + 3)` 类表达式也能正确 lower
+
 ## Addendum: 2026-05-17 LLVM Backend First Codegen — Empty Program End-to-end
 
 ### Goal
