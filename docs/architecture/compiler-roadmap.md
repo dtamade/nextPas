@@ -184,7 +184,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
 `llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram`、
 `llvmWhileCountProgram`、`llvmWhileSumProgram`、
-`llvmRepeatCountProgram`、`llvmRepeatHaltProgram` gate 都已纳入 promotion path。
+`llvmRepeatCountProgram`、`llvmRepeatHaltProgram`、
+`llvmConstStringProgram`、`llvmStringConcatProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -225,6 +226,17 @@ sema 还具备编译期可展开的 `repeat-until` 循环：与 `while` 对称�
 否则继续迭代直到 MaxIterations=1024。验证：
 `var i; i := 1; repeat WriteLn(i); i := i + 1; until i > 3` → stdout "1\n2\n3\n"；
 `var x; x := 0; repeat x := x + 5; until x >= 20; Halt(x)` → exit 20。
+
+sema 还具备编译期字符串常量折叠：`TSemanticModel` 增加并列的字符串常量表
+（`AddStringConstValue` / `LookupStringConstValue`），新增 `EvaluateStringConstant`
+递归折叠 `gnkStringLiteral`（经 `DecodePascalStringLiteral` 解码）/ `gnkIdentifier`
+（查字符串常量表）/ `gnkBinaryExpression` with op `+`（拼接两个折叠结果）。
+`ProcessConstSection` 对每个 `gnkConstDecl` 先尝试整数折叠，失败再尝试字符串折叠
+并写入字符串常量表。`WalkHaltCalls` 的 WriteLn 参数循环在 `gnkStringLiteral` 直
+解码之后、整数折叠之前先尝试 `EvaluateStringConstant`，让 `WriteLn(MyStringConst)`
+与 `WriteLn(MyStringConst + ', world')` 在编译期得到拼好的字符串。验证：
+`const Greeting = 'hello'; WriteLn(Greeting)` → stdout "hello\n"；
+`const Greeting = 'hello'; WriteLn(Greeting + ', world')` → stdout "hello, world\n"。
 
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`

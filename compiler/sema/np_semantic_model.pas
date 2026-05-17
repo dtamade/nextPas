@@ -60,6 +60,11 @@ type
     Value: Int64;
   end;
 
+  TSemanticStringConstValue = record
+    Name: string;
+    Value: string;
+  end;
+
   TSemanticModel = class
   private
     FSymbols: array of TSemanticSymbol;
@@ -70,6 +75,7 @@ type
     FLibraryRequests: array of TSemanticLibraryRequest;
     FConstValues: array of TSemanticConstValue;
     FVarInitValues: array of TSemanticVarInitValue;
+    FStringConstValues: array of TSemanticStringConstValue;
     FRootName: string;
     FStatus: string;
   public
@@ -124,6 +130,9 @@ type
     procedure RemoveVarInitValue(const AName: string);
     function LookupVarInitValue(const AName: string;
       out AValue: Int64): Boolean;
+    procedure AddStringConstValue(const AName: string; const AValue: string);
+    function LookupStringConstValue(const AName: string;
+      out AValue: string): Boolean;
     procedure SetRootName(const AName: string);
     function RootName: string;
     procedure MarkReady;
@@ -147,6 +156,7 @@ begin
   SetLength(FLibraryRequests, 0);
   SetLength(FConstValues, 0);
   SetLength(FVarInitValues, 0);
+  SetLength(FStringConstValues, 0);
   FRootName := '';
   FStatus := 'deferred';
 end;
@@ -462,6 +472,38 @@ begin
     if SameText(FVarInitValues[Index].Name, AName) then
     begin
       AValue := FVarInitValues[Index].Value;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TSemanticModel.AddStringConstValue(const AName: string; const AValue: string);
+var
+  Index: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FStringConstValues) - 1 do
+    if SameText(FStringConstValues[Index].Name, AName) then
+    begin
+      FStringConstValues[Index].Value := AValue;
+      Exit;
+    end;
+  NextIndex := Length(FStringConstValues);
+  SetLength(FStringConstValues, NextIndex + 1);
+  FStringConstValues[NextIndex].Name := AName;
+  FStringConstValues[NextIndex].Value := AValue;
+end;
+
+function TSemanticModel.LookupStringConstValue(const AName: string;
+  out AValue: string): Boolean;
+var
+  Index: LongInt;
+begin
+  AValue := '';
+  for Index := 0 to Length(FStringConstValues) - 1 do
+    if SameText(FStringConstValues[Index].Name, AName) then
+    begin
+      AValue := FStringConstValues[Index].Value;
       Exit(True);
     end;
   Result := False;

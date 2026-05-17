@@ -50,6 +50,8 @@ type
     procedure UnrollAssignmentRepeatLoop(const ANode: TGreenNode);
     function EvaluateIntegerConstant(const ANode: TGreenNode;
       out AValue: Int64): Boolean;
+    function EvaluateStringConstant(const ANode: TGreenNode;
+      out AValue: string): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
@@ -386,6 +388,7 @@ var
   I, J: LongInt;
   Child, ValueChild: TGreenNode;
   Value: Int64;
+  StringValue: string;
 begin
   if ANode = nil then
     Exit;
@@ -402,6 +405,11 @@ begin
       if EvaluateIntegerConstant(ValueChild, Value) then
       begin
         FModel.AddConstValue(Child.Text, Value);
+        Break;
+      end;
+      if EvaluateStringConstant(ValueChild, StringValue) then
+      begin
+        FModel.AddStringConstValue(Child.Text, StringValue);
         Break;
       end;
     end;
@@ -791,6 +799,49 @@ begin
   Result := False;
 end;
 
+function DecodePascalStringLiteral(const AText: string): string; forward;
+
+function TSemanticAnalyzer.EvaluateStringConstant(const ANode: TGreenNode;
+  out AValue: string): Boolean;
+var
+  Op, Left, Right: string;
+begin
+  AValue := '';
+  if ANode = nil then
+    Exit(False);
+  case ANode.NodeKind of
+    gnkStringLiteral:
+      begin
+        AValue := DecodePascalStringLiteral(ANode.Text);
+        Exit(True);
+      end;
+    gnkIdentifier:
+      begin
+        if FModel.LookupStringConstValue(ANode.Text, Left) then
+        begin
+          AValue := Left;
+          Exit(True);
+        end;
+        Exit(False);
+      end;
+    gnkBinaryExpression:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        Op := ANode.Text;
+        if Op <> '+' then
+          Exit(False);
+        if not EvaluateStringConstant(ANode.ChildAt(0), Left) then
+          Exit(False);
+        if not EvaluateStringConstant(ANode.ChildAt(1), Right) then
+          Exit(False);
+        AValue := Left + Right;
+        Exit(True);
+      end;
+  end;
+  Result := False;
+end;
+
 function DecodePascalStringLiteral(const AText: string): string;
 var
   Raw: string;
@@ -824,7 +875,7 @@ var
   Child, Arg, BranchNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
-  Decoded: string;
+  Decoded, StringValue: string;
 begin
   if ANode = nil then
     Exit;
@@ -901,6 +952,8 @@ begin
             Continue;
           if Arg.NodeKind = gnkStringLiteral then
             Decoded := Decoded + DecodePascalStringLiteral(Arg.Text)
+          else if EvaluateStringConstant(Arg, StringValue) then
+            Decoded := Decoded + StringValue
           else if EvaluateIntegerConstant(Arg, Value) then
             Decoded := Decoded + IntToStr(Value);
         end;
