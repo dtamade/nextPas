@@ -45,6 +45,8 @@ type
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
+    function EvaluateIntegerConstant(const ANode: TGreenNode;
+      out AValue: Int64): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
   public
@@ -526,11 +528,82 @@ begin
   WalkAssignmentStatements(RootNode);
 end;
 
+function TSemanticAnalyzer.EvaluateIntegerConstant(const ANode: TGreenNode;
+  out AValue: Int64): Boolean;
+var
+  Parsed: Int64;
+  ParseCode: Word;
+  Left, Right: Int64;
+  Op: string;
+begin
+  AValue := 0;
+  if ANode = nil then
+    Exit(False);
+  case ANode.NodeKind of
+    gnkIntegerLiteral:
+      begin
+        Val(ANode.Text, Parsed, ParseCode);
+        if ParseCode <> 0 then
+          Exit(False);
+        AValue := Parsed;
+        Exit(True);
+      end;
+    gnkUnaryExpression:
+      begin
+        if ANode.ChildCount < 1 then
+          Exit(False);
+        if not EvaluateIntegerConstant(ANode.ChildAt(0), Parsed) then
+          Exit(False);
+        Op := ANode.Text;
+        if Op = '-' then
+          AValue := -Parsed
+        else if Op = '+' then
+          AValue := Parsed
+        else
+          Exit(False);
+        Exit(True);
+      end;
+    gnkBinaryExpression:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if not EvaluateIntegerConstant(ANode.ChildAt(0), Left) then
+          Exit(False);
+        if not EvaluateIntegerConstant(ANode.ChildAt(1), Right) then
+          Exit(False);
+        Op := ANode.Text;
+        if Op = '+' then
+          AValue := Left + Right
+        else if Op = '-' then
+          AValue := Left - Right
+        else if Op = '*' then
+          AValue := Left * Right
+        else if SameText(Op, 'div') then
+        begin
+          if Right = 0 then
+            Exit(False);
+          AValue := Left div Right;
+        end
+        else if SameText(Op, 'mod') then
+        begin
+          if Right = 0 then
+            Exit(False);
+          AValue := Left mod Right;
+        end
+        else
+          Exit(False);
+        Exit(True);
+      end;
+  end;
+  Result := False;
+end;
+
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
   I: LongInt;
   Child, Arg: TGreenNode;
   Operand: string;
+  Value: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -546,8 +619,8 @@ begin
       if Child.ChildCount >= 1 then
       begin
         Arg := Child.ChildAt(0);
-        if (Arg <> nil) and (Arg.NodeKind = gnkIntegerLiteral) then
-          Operand := Arg.Text;
+        if EvaluateIntegerConstant(Arg, Value) then
+          Operand := IntToStr(Value);
       end;
       FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
     end

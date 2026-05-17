@@ -31,6 +31,8 @@ LLVM_EMPTY_PROGRAM_OUTPUT=$(mktemp)
 LLVM_EMPTY_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_HALT_PROGRAM_OUTPUT=$(mktemp)
 LLVM_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_HALT_EXPR_PROGRAM_OUTPUT=$(mktemp)
+LLVM_HALT_EXPR_PROGRAM_OUT_DIR=$(mktemp -d)
 SEMANTIC_SMOKE_OUTPUT=$(mktemp)
 FOREIGN_CDECL_SMOKE_OUTPUT=$(mktemp)
 HARNESS_SMOKE_OUTPUT=$(mktemp)
@@ -105,6 +107,8 @@ cleanup() {
   rm -rf "$LLVM_EMPTY_PROGRAM_OUT_DIR"
   rm -f "$LLVM_HALT_PROGRAM_OUTPUT"
   rm -rf "$LLVM_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_HALT_EXPR_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR"
   rm -f "$SEMANTIC_SMOKE_OUTPUT"
   rm -f "$FOREIGN_CDECL_SMOKE_OUTPUT"
   rm -f "$HARNESS_SMOKE_OUTPUT"
@@ -711,6 +715,42 @@ if [ "$LLVM_HALT_PROGRAM_EXIT" -ne 42 ]; then
 fi
 printf 'llvm-halt-program-exit=42\n'
 printf 'llvm-halt-program=pass\n'
+
+printf 'llvm-halt-expr-program=running\n'
+printf 'llvm-halt-expr-program-command=%s build examples/smoke/halt_expr.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/halt_expr.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_HALT_EXPR_PROGRAM_OUT_DIR" >"$LLVM_HALT_EXPR_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_HALT_EXPR_PROGRAM_OUTPUT"
+  fail 'llvm-halt-expr-program-build-failed'
+fi
+cat "$LLVM_HALT_EXPR_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_HALT_EXPR_PROGRAM_OUTPUT" 'missing-llvm-halt-expr-program-success-status'
+require_output_pattern '^toolchain-plan-family=llvm-ir-opt-llc-link$' "$LLVM_HALT_EXPR_PROGRAM_OUTPUT" 'missing-llvm-halt-expr-program-plan-family'
+LLVM_HALT_EXPR_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/halt_expr.ll"
+if [ ! -f "$LLVM_HALT_EXPR_PROGRAM_IR_PATH" ]; then
+  fail 'missing-llvm-halt-expr-program-ir-artifact'
+fi
+if ! grep -q 'exit-code: 42' "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"
+  fail 'missing-llvm-halt-expr-program-ir-folded-exit-code'
+fi
+if ! grep -q 'movl \$\$42, %edi' "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"; then
+  cat "$LLVM_HALT_EXPR_PROGRAM_IR_PATH"
+  fail 'missing-llvm-halt-expr-program-ir-folded-syscall-arg'
+fi
+LLVM_HALT_EXPR_PROGRAM_BIN="$LLVM_HALT_EXPR_PROGRAM_OUT_DIR/halt_expr"
+if [ ! -x "$LLVM_HALT_EXPR_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-halt-expr-program-executable'
+fi
+set +e
+"$LLVM_HALT_EXPR_PROGRAM_BIN"
+LLVM_HALT_EXPR_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_HALT_EXPR_PROGRAM_EXIT" -ne 42 ]; then
+  printf 'llvm-halt-expr-program-exit=%s\n' "$LLVM_HALT_EXPR_PROGRAM_EXIT"
+  fail 'llvm-halt-expr-program-unexpected-exit'
+fi
+printf 'llvm-halt-expr-program-exit=42\n'
+printf 'llvm-halt-expr-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -2151,6 +2191,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

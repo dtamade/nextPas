@@ -15,6 +15,56 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 Sema Integer Constant Folding — Halt(40 + 2) → exit(42)
+
+### Goal
+
+把 nextPas 的 sema 从"只接受 Halt 直接字面量参数"推进到"折叠任意整数常量表达式"。
+上一批次 `Halt(N)` 走 LLVM 退出 N，但 `Halt(40 + 2)` 会因 sema 仅匹配 `gnkIntegerLiteral`
+直接子节点而退化到默认 0。这一批让 sema 在编译期完成整数常量折叠，
+让 `Halt(N op M)` / `Halt(-N)` 等表达式也能正确决定退出码。
+
+- 扩展 `compiler/sema/np_semantic_analyzer.pas` 新增 `EvaluateIntegerConstant(Node, out Value)`：
+  递归折叠 `gnkIntegerLiteral` / `gnkUnaryExpression`(+/-) /
+  `gnkBinaryExpression`(+/-/*/div/mod)；除零返回 false；非整数节点或未识别 op 返回 false
+- 改造 `WalkHaltCalls`：把"只匹配 `gnkIntegerLiteral`"换成 `EvaluateIntegerConstant`，
+  折叠成功才发射 `halt-call` HIR 节点；失败时 operand 默认 `0`
+- 新增 `examples/smoke/halt_expr.pas`：`program HaltExpr; begin Halt(40 + 2); end.`
+- 新增 `build/verify_local.sh` 的 `llvm-halt-expr-program` gate：用真 opt/llc/ld 编译
+  halt_expr.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] sema 加 `EvaluateIntegerConstant` 折叠器（unary +/-、binary +/-/*/div/mod、字面量）
+- [x] `WalkHaltCalls` 改用 `EvaluateIntegerConstant` 替代直接 `gnkIntegerLiteral` 匹配
+- [x] 新增 `examples/smoke/halt_expr.pas` fixture
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_EXPR_PROGRAM_OUTPUT` /
+      `LLVM_HALT_EXPR_PROGRAM_OUT_DIR` 临时文件，新增 `llvm-halt-expr-program` gate，
+      success envelope 加 `llvmHaltExprProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| 折叠器在 sema 层而非 MIR lowerer | 折叠产生的整数常量需要进 HIR 的 `Operand` 字段以传给 MIR；MIR lowerer 只读 HIR 操作数；当前没有 typed value system，sema 是唯一能消费 AST 表达式形态的层 |
+| 用 `Int64` 内部计算 | 避免 Pascal 整数子集分歧；Halt 退出码最终被截到 8 位（POSIX `_exit` 语义），但中间表达式可以触及 64 位范围 |
+| 折叠失败默认 0，不发诊断 | 当前批次专注 Halt 表达式折叠路径；非常量表达式（变量、未支持运算）应进入下一批的真实 codegen，不该在此批次假装"已支持但 silently 错"。先静默 fallback、保留 0 行为，等 typed expression codegen 落地再加诊断 |
+| 折叠器涵盖 +/-/*/div/mod 而非仅 +/- | 这五个 op 是 Pascal 整数常量表达式核心子集；新增成本 ~每 op 5 行，但避免下次再来一批 "MUL 折叠" |
+
+### Notes
+
+- 这是 sema 第一次具备**编译期求值**能力。不是完整 const-eval 系统，但已经能把
+  `Halt(40 + 2)` 这类整数常量表达式正确折叠到运行时退出码
+- 当前 emitter 仍只看 MIR `halt` op 的 operand 字段；变量、函数返回值、
+  字符串等非常量参数仍属下一批次（需要真实 LLVM 表达式 codegen）
+- `verify-local` 现在含三条 LLVM 端到端 gate：`llvmEmptyProgram`（exit 0）、
+  `llvmHaltProgram`（exit 42 from literal）、`llvmHaltExprProgram`（exit 42 from 40+2）
+
 ## Addendum: 2026-05-17 MIR-driven LLVM Codegen — Halt(N) → exit(N)
 
 ### Goal
