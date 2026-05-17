@@ -19,11 +19,13 @@ type
     function ResolveExitCode: LongInt;
     function CollectWriteLines: TLLvmStringArray;
     function EscapeLLVMString(const AValue: string): string;
+    function NeedsItoaHelper: Boolean;
     procedure EmitTargetHeader(var AIrFile: Text);
     procedure EmitGlobalConstStrings(
       var AIrFile: Text;
       const AWriteLines: TLLvmStringArray
     );
+    procedure EmitItoaHelper(var AIrFile: Text);
     procedure EmitLegacyMain(var AIrFile: Text);
     procedure EmitRuntimeMain(var AIrFile: Text);
   public
@@ -78,8 +80,9 @@ end;
 
 function TLlvmEmitter.CollectWriteLines: TLLvmStringArray;
 var
-  Index: LongInt;
+  Index, J: LongInt;
   Op: TMirOperation;
+  Seen: Boolean;
 begin
   Result := nil;
   if FMirModel = nil then
@@ -87,11 +90,19 @@ begin
   for Index := 0 to FMirModel.OperationCount - 1 do
   begin
     Op := FMirModel.OperationAt(Index);
-    if Op.Kind = 'write-line' then
-    begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Op.Operand;
-    end;
+    if Op.Kind <> 'write-line' then
+      Continue;
+    Seen := False;
+    for J := 0 to High(Result) do
+      if Result[J] = Op.Operand then
+      begin
+        Seen := True;
+        Break;
+      end;
+    if Seen then
+      Continue;
+    SetLength(Result, Length(Result) + 1);
+    Result[High(Result)] := Op.Operand;
   end;
 end;
 
@@ -142,6 +153,58 @@ begin
       StrLen + 1, ' x i8] c"', EscapeLLVMString(AWriteLines[Index]),
       '\00"');
   end;
+end;
+
+function TLlvmEmitter.NeedsItoaHelper: Boolean;
+var
+  Index: LongInt;
+begin
+  if FMirModel = nil then
+    Exit(False);
+  for Index := 0 to FMirModel.OperationCount - 1 do
+    if FMirModel.OperationAt(Index).Kind = 'write-int' then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TLlvmEmitter.EmitItoaHelper(var AIrFile: Text);
+begin
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define internal void @write_i64_decimal(i64 %v) {');
+  WriteLn(AIrFile, 'entry:');
+  WriteLn(AIrFile, '  %buf = alloca [24 x i8]');
+  WriteLn(AIrFile, '  %is_neg = icmp slt i64 %v, 0');
+  WriteLn(AIrFile, '  %neg_v = sub i64 0, %v');
+  WriteLn(AIrFile, '  %abs_v = select i1 %is_neg, i64 %neg_v, i64 %v');
+  WriteLn(AIrFile, '  %end_ptr = getelementptr [24 x i8], ptr %buf, i64 0, i64 24');
+  WriteLn(AIrFile, '  %first_ptr = getelementptr [24 x i8], ptr %buf, i64 0, i64 23');
+  WriteLn(AIrFile, '  br label %loop');
+  WriteLn(AIrFile, 'loop:');
+  WriteLn(AIrFile, '  %cur = phi i64 [ %abs_v, %entry ], [ %nxt, %loop ]');
+  WriteLn(AIrFile, '  %ptr = phi ptr [ %first_ptr, %entry ], [ %ptr_prev, %loop ]');
+  WriteLn(AIrFile, '  %digit = urem i64 %cur, 10');
+  WriteLn(AIrFile, '  %digit_i8 = trunc i64 %digit to i8');
+  WriteLn(AIrFile, '  %digit_ascii = add i8 %digit_i8, 48');
+  WriteLn(AIrFile, '  store i8 %digit_ascii, ptr %ptr');
+  WriteLn(AIrFile, '  %nxt = udiv i64 %cur, 10');
+  WriteLn(AIrFile, '  %ptr_prev = getelementptr i8, ptr %ptr, i64 -1');
+  WriteLn(AIrFile, '  %done = icmp eq i64 %nxt, 0');
+  WriteLn(AIrFile, '  br i1 %done, label %neg_check, label %loop');
+  WriteLn(AIrFile, 'neg_check:');
+  WriteLn(AIrFile, '  br i1 %is_neg, label %put_minus, label %finish');
+  WriteLn(AIrFile, 'put_minus:');
+  WriteLn(AIrFile, '  store i8 45, ptr %ptr_prev');
+  WriteLn(AIrFile, '  %ptr_minus_prev = getelementptr i8, ptr %ptr_prev, i64 -1');
+  WriteLn(AIrFile, '  br label %finish');
+  WriteLn(AIrFile, 'finish:');
+  WriteLn(AIrFile, '  %start_ptr = phi ptr [ %ptr_prev, %neg_check ], [ %ptr_minus_prev, %put_minus ]');
+  WriteLn(AIrFile, '  %first_byte = getelementptr i8, ptr %start_ptr, i64 1');
+  WriteLn(AIrFile, '  %end_addr = ptrtoint ptr %end_ptr to i64');
+  WriteLn(AIrFile, '  %first_addr = ptrtoint ptr %first_byte to i64');
+  WriteLn(AIrFile, '  %nbytes = sub i64 %end_addr, %first_addr');
+  WriteLn(AIrFile, '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %first_byte, i64 %nbytes)');
+  WriteLn(AIrFile, '  ret void');
+  WriteLn(AIrFile, '}');
 end;
 
 procedure TLlvmEmitter.EmitLegacyMain(var AIrFile: Text);
@@ -211,6 +274,8 @@ begin
   WriteLines := CollectWriteLines;
   EmitTargetHeader(AIrFile);
   EmitGlobalConstStrings(AIrFile, WriteLines);
+  if NeedsItoaHelper then
+    EmitItoaHelper(AIrFile);
 
   WriteLn(AIrFile);
   WriteLn(AIrFile, 'define void @_start() noreturn {');
@@ -297,6 +362,12 @@ begin
               Index, ', i64 ', Length(WriteLines[Index]), ')');
             Break;
           end;
+      end
+      else if Op.Kind = 'write-int' then
+      begin
+        if Length(Op.OperandRefs) >= 1 then
+          WriteLn(AIrFile, '  call void @write_i64_decimal(i64 ',
+            OperandText(Op.OperandRefs[0]), ')');
       end
       else if Op.Kind = 'runtime-halt' then
       begin

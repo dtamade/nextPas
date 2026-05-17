@@ -87,6 +87,9 @@ type
     procedure WalkHaltCalls(const ANode: TGreenNode);
     procedure LowerRuntimeIfStatement(
       const AIfNode: TGreenNode; const ACondBlob: string);
+    procedure LowerRuntimeWhileStatement(const ANode: TGreenNode);
+    procedure LowerRuntimeForStatement(const ANode: TGreenNode);
+    procedure LowerRuntimeRepeatStatement(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
     procedure UnrollHaltRepeatLoop(const ANode: TGreenNode);
@@ -1267,17 +1270,26 @@ begin
     end;
     if Child.NodeKind = gnkForStatement then
     begin
-      UnrollHaltForLoop(Child);
+      if FNoFold then
+        LowerRuntimeForStatement(Child)
+      else
+        UnrollHaltForLoop(Child);
       Continue;
     end;
     if Child.NodeKind = gnkWhileStatement then
     begin
-      UnrollHaltWhileLoop(Child);
+      if FNoFold then
+        LowerRuntimeWhileStatement(Child)
+      else
+        UnrollHaltWhileLoop(Child);
       Continue;
     end;
     if Child.NodeKind = gnkRepeatStatement then
     begin
-      UnrollHaltRepeatLoop(Child);
+      if FNoFold then
+        LowerRuntimeRepeatStatement(Child)
+      else
+        UnrollHaltRepeatLoop(Child);
       Continue;
     end;
     if Child.NodeKind = gnkAssignmentStatement then
@@ -1325,6 +1337,33 @@ begin
       end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
       begin
+        if FNoFold then
+        begin
+          for ArgIndex := 0 to Child.ChildCount - 1 do
+          begin
+            Arg := Child.ChildAt(ArgIndex);
+            if Arg = nil then
+              Continue;
+            if Arg.NodeKind = gnkStringLiteral then
+              FModel.AddTypedHirNode(
+                'write-string-runtime', 'Write', 0, 0,
+                DecodePascalStringLiteral(Arg.Text)
+              )
+            else if EvaluateStringConstant(Arg, StringValue) then
+              FModel.AddTypedHirNode(
+                'write-string-runtime', 'Write', 0, 0, StringValue
+              )
+            else if EncodeRuntimeIntExpr(Arg, Operand) then
+              FModel.AddTypedHirNode(
+                'write-int-runtime', 'Write', 0, 0, Operand
+              );
+          end;
+          if SameText(Child.Text, 'WriteLn') then
+            FModel.AddTypedHirNode(
+              'write-string-runtime', 'Write', 0, 0, #10
+            );
+          Continue;
+        end;
         Decoded := '';
         for ArgIndex := 0 to Child.ChildCount - 1 do
         begin
@@ -1392,6 +1431,121 @@ begin
     EmitGotoLabel(EndLabel);
   end;
   EmitBlockLabel(EndLabel);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeWhileStatement(const ANode: TGreenNode);
+var
+  CondNode, BodyNode: TGreenNode;
+  CondBlob, CondLabel, BodyLabel, ExitLabel: string;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then
+    Exit;
+  CondNode := ANode.ChildAt(0);
+  BodyNode := ANode.ChildAt(1);
+  if not EncodeRuntimeBoolExpr(CondNode, CondBlob) then
+    Exit;
+  CondLabel := NewBlockLabel('while-cond');
+  BodyLabel := NewBlockLabel('while-body');
+  ExitLabel := NewBlockLabel('while-end');
+  EmitGotoLabel(CondLabel);
+  EmitBlockLabel(CondLabel);
+  FModel.AddTypedHirNode(
+    'cond-br-runtime', 'while', 0, 0,
+    CondBlob + 'labels ' + BodyLabel + #9 + ExitLabel + #10
+  );
+  FCurrentBlockTerminated := True;
+  EmitBlockLabel(BodyLabel);
+  WalkHaltCalls(BodyNode);
+  EmitGotoLabel(CondLabel);
+  EmitBlockLabel(ExitLabel);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeRepeatStatement(const ANode: TGreenNode);
+var
+  CondNode, BodyNode: TGreenNode;
+  CondBlob, BodyLabel, CondLabel, ExitLabel: string;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then
+    Exit;
+  BodyNode := ANode.ChildAt(0);
+  CondNode := ANode.ChildAt(1);
+  if not EncodeRuntimeBoolExpr(CondNode, CondBlob) then
+    Exit;
+  BodyLabel := NewBlockLabel('repeat-body');
+  CondLabel := NewBlockLabel('repeat-cond');
+  ExitLabel := NewBlockLabel('repeat-end');
+  EmitGotoLabel(BodyLabel);
+  EmitBlockLabel(BodyLabel);
+  WalkHaltCalls(BodyNode);
+  EmitGotoLabel(CondLabel);
+  EmitBlockLabel(CondLabel);
+  FModel.AddTypedHirNode(
+    'cond-br-runtime', 'until', 0, 0,
+    CondBlob + 'labels ' + ExitLabel + #9 + BodyLabel + #10
+  );
+  FCurrentBlockTerminated := True;
+  EmitBlockLabel(ExitLabel);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeForStatement(const ANode: TGreenNode);
+var
+  LoopVar, Direction: string;
+  StartNode, EndNode, BodyNode: TGreenNode;
+  StartBlob, EndBlob, CondBlob: string;
+  CondLabel, BodyLabel, StepLabel, ExitLabel: string;
+  Pred, Op: string;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 4) then
+    Exit;
+  if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+    Exit;
+  LoopVar := ANode.ChildAt(0).Text;
+  StartNode := ANode.ChildAt(1);
+  EndNode := ANode.ChildAt(2);
+  BodyNode := ANode.ChildAt(3);
+  Direction := ANode.Text;
+  if not EncodeRuntimeIntExpr(StartNode, StartBlob) then
+    Exit;
+  if not EncodeRuntimeIntExpr(EndNode, EndBlob) then
+    Exit;
+  if SameText(Direction, 'to') then
+  begin
+    Pred := 'sle';
+    Op := 'add';
+  end
+  else if SameText(Direction, 'downto') then
+  begin
+    Pred := 'sge';
+    Op := 'sub';
+  end
+  else
+    Exit;
+  FModel.AddTypedHirNode(
+    'assign-runtime', LoopVar, 0, 0,
+    LoopVar + #9 + StartBlob
+  );
+  CondLabel := NewBlockLabel('for-cond');
+  BodyLabel := NewBlockLabel('for-body');
+  StepLabel := NewBlockLabel('for-step');
+  ExitLabel := NewBlockLabel('for-end');
+  EmitGotoLabel(CondLabel);
+  EmitBlockLabel(CondLabel);
+  CondBlob := 'var ' + LoopVar + #10 + EndBlob + 'cmp ' + Pred + #10;
+  FModel.AddTypedHirNode(
+    'cond-br-runtime', 'for', 0, 0,
+    CondBlob + 'labels ' + BodyLabel + #9 + ExitLabel + #10
+  );
+  FCurrentBlockTerminated := True;
+  EmitBlockLabel(BodyLabel);
+  WalkHaltCalls(BodyNode);
+  EmitGotoLabel(StepLabel);
+  EmitBlockLabel(StepLabel);
+  FModel.AddTypedHirNode(
+    'assign-runtime', LoopVar, 0, 0,
+    LoopVar + #9 + 'var ' + LoopVar + #10 + 'int 1' + #10 + Op + #10
+  );
+  EmitGotoLabel(CondLabel);
+  EmitBlockLabel(ExitLabel);
 end;
 
 procedure TSemanticAnalyzer.UnrollHaltForLoop(const ANode: TGreenNode);

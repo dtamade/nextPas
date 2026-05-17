@@ -67,6 +67,24 @@ LLVM_NO_FOLD_IF_ELSE_HALT_PROGRAM_OUTPUT=$(mktemp)
 LLVM_NO_FOLD_IF_ELSE_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_NO_FOLD_IF_VAR_PROGRAM_OUTPUT=$(mktemp)
 LLVM_NO_FOLD_IF_VAR_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_RUN_OUTPUT=$(mktemp)
 LLVM_VAR_WRITELN_PROGRAM_OUTPUT=$(mktemp)
 LLVM_VAR_WRITELN_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_VAR_WRITELN_PROGRAM_RUN_OUTPUT=$(mktemp)
@@ -241,6 +259,24 @@ cleanup() {
   rm -rf "$LLVM_NO_FOLD_IF_ELSE_HALT_PROGRAM_OUT_DIR"
   rm -f "$LLVM_NO_FOLD_IF_VAR_PROGRAM_OUTPUT"
   rm -rf "$LLVM_NO_FOLD_IF_VAR_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_RUN_OUTPUT"
   rm -f "$LLVM_VAR_WRITELN_PROGRAM_OUTPUT"
   rm -rf "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR"
   rm -f "$LLVM_VAR_WRITELN_PROGRAM_RUN_OUTPUT"
@@ -1326,6 +1362,58 @@ run_no_fold_program() {
 run_no_fold_program if_halt 11 "$LLVM_NO_FOLD_IF_HALT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_IF_HALT_PROGRAM_OUT_DIR"
 run_no_fold_program if_else_halt 22 "$LLVM_NO_FOLD_IF_ELSE_HALT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_IF_ELSE_HALT_PROGRAM_OUT_DIR"
 run_no_fold_program if_var 7 "$LLVM_NO_FOLD_IF_VAR_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_IF_VAR_PROGRAM_OUT_DIR"
+run_no_fold_program repeat_halt 20 "$LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_REPEAT_HALT_PROGRAM_OUT_DIR"
+run_no_fold_program while_sum 15 "$LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_WHILE_SUM_PROGRAM_OUT_DIR"
+run_no_fold_program for_sum_halt 15 "$LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_FOR_SUM_HALT_PROGRAM_OUT_DIR"
+
+run_no_fold_program_with_stdout() {
+  PROG_NAME="$1"
+  EXPECTED_STDOUT="$2"
+  OUT_FILE="$3"
+  OUT_DIR="$4"
+  RUN_FILE="$5"
+  rm -rf "$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/${PROG_NAME}.ll"
+  printf 'llvm-no-fold-%s-program=running\n' "$PROG_NAME"
+  if ! "$STAGE0_BINARY" build "examples/smoke/${PROG_NAME}.pas" --no-fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$OUT_DIR" >"$OUT_FILE" 2>&1; then
+    cat "$OUT_FILE"
+    fail "llvm-no-fold-${PROG_NAME}-program-build-failed"
+  fi
+  require_output_pattern '^status=success$' "$OUT_FILE" "missing-llvm-no-fold-${PROG_NAME}-program-success-status"
+  IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/${PROG_NAME}.ll"
+  if ! grep -q '@write_i64_decimal' "$IR_PATH"; then
+    cat "$IR_PATH"
+    fail "missing-llvm-no-fold-${PROG_NAME}-program-ir-itoa-helper"
+  fi
+  BIN="$OUT_DIR/${PROG_NAME}"
+  if [ ! -x "$BIN" ]; then
+    fail "missing-llvm-no-fold-${PROG_NAME}-program-executable"
+  fi
+  set +e
+  "$BIN" >"$RUN_FILE" 2>&1
+  EXIT=$?
+  set -e
+  if [ "$EXIT" -ne 0 ]; then
+    printf 'llvm-no-fold-%s-program-exit=%s\n' "$PROG_NAME" "$EXIT"
+    cat "$RUN_FILE"
+    fail "llvm-no-fold-${PROG_NAME}-program-unexpected-exit"
+  fi
+  if [ "$(cat "$RUN_FILE")" != "$EXPECTED_STDOUT" ]; then
+    cat "$RUN_FILE"
+    fail "llvm-no-fold-${PROG_NAME}-program-missing-stdout"
+  fi
+  printf 'llvm-no-fold-%s-program=pass\n' "$PROG_NAME"
+}
+
+LLVM_NO_FOLD_COUNT_UP='1
+2
+3'
+LLVM_NO_FOLD_COUNT_DOWN='3
+2
+1'
+run_no_fold_program_with_stdout for_writeln "$LLVM_NO_FOLD_COUNT_UP" "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_OUT_DIR" "$LLVM_NO_FOLD_FOR_WRITELN_PROGRAM_RUN_OUTPUT"
+run_no_fold_program_with_stdout while_count "$LLVM_NO_FOLD_COUNT_DOWN" "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_OUT_DIR" "$LLVM_NO_FOLD_WHILE_COUNT_PROGRAM_RUN_OUTPUT"
+run_no_fold_program_with_stdout for_downto "$LLVM_NO_FOLD_COUNT_DOWN" "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_OUT_DIR" "$LLVM_NO_FOLD_FOR_DOWNTO_PROGRAM_RUN_OUTPUT"
+run_no_fold_program_with_stdout repeat_count "$LLVM_NO_FOLD_COUNT_UP" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUTPUT" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_OUT_DIR" "$LLVM_NO_FOLD_REPEAT_COUNT_PROGRAM_RUN_OUTPUT"
 
 printf 'llvm-var-writeln-program=running\n'
 printf 'llvm-var-writeln-program-command=%s build examples/smoke/var_writeln.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_VAR_WRITELN_PROGRAM_OUT_DIR"
@@ -3427,6 +3515,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

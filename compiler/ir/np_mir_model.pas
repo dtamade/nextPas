@@ -461,7 +461,8 @@ begin
       (Kind = 'cond-br') or
       (Kind = 'argc-load') or
       (Kind = 'runtime-halt') or
-      (Kind = 'runtime-return') then
+      (Kind = 'runtime-return') or
+      (Kind = 'write-int') then
       Exit(True);
   end;
   Result := False;
@@ -837,6 +838,28 @@ begin
     if Node.Kind = 'block-label-runtime' then
     begin
       FCurrentBlockId := EnsureBlock(Node.Operand);
+      Continue;
+    end;
+    if Node.Kind = 'write-string-runtime' then
+    begin
+      FModel.AddOperation(
+        'write-line', FCurrentBlockId, Node.DisplayName, Node.Operand
+      );
+      Continue;
+    end;
+    if Node.Kind = 'write-int-runtime' then
+    begin
+      ExitValue := LowerHaltRuntimeBlob(Node.Operand, FCurrentBlockId);
+      if ExitValue = 0 then
+      begin
+        FModel.MarkFailure;
+        Exit;
+      end;
+      SetLength(Operands, 1);
+      Operands[0] := MakeValueOperand(ExitValue);
+      FModel.AddOperationWithResult(
+        'write-int', FCurrentBlockId, 'WriteInt', '', 0, Operands
+      );
       Continue;
     end;
     if Node.Kind = 'halt-call-runtime' then
