@@ -19,6 +19,13 @@ type
     function ResolveExitCode: LongInt;
     function CollectWriteLines: TLLvmStringArray;
     function EscapeLLVMString(const AValue: string): string;
+    procedure EmitTargetHeader(var AIrFile: Text);
+    procedure EmitGlobalConstStrings(
+      var AIrFile: Text;
+      const AWriteLines: TLLvmStringArray
+    );
+    procedure EmitLegacyMain(var AIrFile: Text);
+    procedure EmitRuntimeMain(var AIrFile: Text);
   public
     constructor Create(
       const AMirModel: TMirModel;
@@ -28,6 +35,12 @@ type
   end;
 
 implementation
+
+const
+  LegacyExitAsmFmt =
+    '  call void asm sideeffect "movq $$60, %%rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 %d)';
+  LegacyWriteAsmFmt =
+    '  call void asm sideeffect "movq $$1, %%rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.%d, i64 %d)';
 
 constructor TLlvmEmitter.Create(
   const AMirModel: TMirModel;
@@ -105,13 +118,81 @@ begin
   end;
 end;
 
-function TLlvmEmitter.EmitToFile(const APath: string): Boolean;
+procedure TLlvmEmitter.EmitTargetHeader(var AIrFile: Text);
+begin
+  if FTargetFacts.LlvmTriple <> '' then
+    WriteLn(AIrFile, 'target triple = "', FTargetFacts.LlvmTriple, '"');
+  if FTargetFacts.LlvmDataLayout <> '' then
+    WriteLn(AIrFile, 'target datalayout = "', FTargetFacts.LlvmDataLayout, '"');
+  WriteLn(AIrFile);
+end;
+
+procedure TLlvmEmitter.EmitGlobalConstStrings(
+  var AIrFile: Text;
+  const AWriteLines: TLLvmStringArray
+);
 var
-  IrFile: Text;
+  Index: LongInt;
+  StrLen: LongInt;
+begin
+  for Index := 0 to High(AWriteLines) do
+  begin
+    StrLen := Length(AWriteLines[Index]);
+    WriteLn(AIrFile, '@.str.', Index, ' = private constant [',
+      StrLen + 1, ' x i8] c"', EscapeLLVMString(AWriteLines[Index]),
+      '\00"');
+  end;
+end;
+
+procedure TLlvmEmitter.EmitLegacyMain(var AIrFile: Text);
+var
   ExitCode: LongInt;
   WriteLines: TLLvmStringArray;
   Index: LongInt;
   StrLen: LongInt;
+begin
+  ExitCode := ResolveExitCode;
+  WriteLines := CollectWriteLines;
+
+  EmitTargetHeader(AIrFile);
+  EmitGlobalConstStrings(AIrFile, WriteLines);
+
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define void @_start() noreturn {');
+  WriteLn(AIrFile, 'entry:');
+
+  for Index := 0 to High(WriteLines) do
+  begin
+    StrLen := Length(WriteLines[Index]);
+    WriteLn(AIrFile,
+      '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
+      Index, ', i64 ', StrLen, ')');
+  end;
+
+  WriteLn(AIrFile,
+    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
+    ExitCode, ')');
+  WriteLn(AIrFile, '  unreachable');
+  WriteLn(AIrFile, '}');
+end;
+
+procedure TLlvmEmitter.EmitRuntimeMain(var AIrFile: Text);
+begin
+  EmitTargetHeader(AIrFile);
+  WriteLn(AIrFile, '; nextpas runtime emitter stub - Batch B');
+  WriteLn(AIrFile, '; runtime ops not yet implemented in this batch');
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define void @_start() noreturn {');
+  WriteLn(AIrFile, 'entry:');
+  WriteLn(AIrFile,
+    '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 0)');
+  WriteLn(AIrFile, '  unreachable');
+  WriteLn(AIrFile, '}');
+end;
+
+function TLlvmEmitter.EmitToFile(const APath: string): Boolean;
+var
+  IrFile: Text;
 begin
   Assign(IrFile, APath);
   {$I-}
@@ -120,41 +201,11 @@ begin
   if IOResult <> 0 then
     Exit(False);
 
-  ExitCode := ResolveExitCode;
-  WriteLines := CollectWriteLines;
-
   try
-    if FTargetFacts.LlvmTriple <> '' then
-      WriteLn(IrFile, 'target triple = "', FTargetFacts.LlvmTriple, '"');
-    if FTargetFacts.LlvmDataLayout <> '' then
-      WriteLn(IrFile, 'target datalayout = "', FTargetFacts.LlvmDataLayout, '"');
-    WriteLn(IrFile);
-
-    for Index := 0 to High(WriteLines) do
-    begin
-      StrLen := Length(WriteLines[Index]);
-      WriteLn(IrFile, '@.str.', Index, ' = private constant [',
-        StrLen + 1, ' x i8] c"', EscapeLLVMString(WriteLines[Index]),
-        '\00"');
-    end;
-
-    WriteLn(IrFile);
-    WriteLn(IrFile, 'define void @_start() noreturn {');
-    WriteLn(IrFile, 'entry:');
-
-    for Index := 0 to High(WriteLines) do
-    begin
-      StrLen := Length(WriteLines[Index]);
-      WriteLn(IrFile,
-        '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
-        Index, ', i64 ', StrLen, ')');
-    end;
-
-    WriteLn(IrFile,
-      '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
-      ExitCode, ')');
-    WriteLn(IrFile, '  unreachable');
-    WriteLn(IrFile, '}');
+    if (FMirModel <> nil) and FMirModel.HasRuntimeKinds then
+      EmitRuntimeMain(IrFile)
+    else
+      EmitLegacyMain(IrFile);
   finally
     Close(IrFile);
   end;
