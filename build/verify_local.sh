@@ -16,7 +16,10 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 TARGET_ID="linux-x86_64"
 VERIFY_SELECTOR="verify-local"
 STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text"
+LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Furtl/core/base -Furtl/core/text"
 STAGE0_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/stage0-bootstrap"
+LEX_SNAPSHOT_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/lex_snapshot"
+LEX_SNAPSHOT_BINARY="$LEX_SNAPSHOT_BUILD_DIR/lex_snapshot"
 STAGE0_BINARY="$STAGE0_BUILD_DIR/nextpas"
 WORKSPACE_ARTIFACT_ROOT="$REPO_ROOT/.nextpas"
 HOST_FPC_CACHE_ROOT="$WORKSPACE_ARTIFACT_ROOT/cache/host-fpc/$TARGET_ID"
@@ -409,6 +412,7 @@ cleanup() {
   rm -rf "$PACKAGE_MANIFEST_ARTIFACT_ROOT"
   rm -rf "$WORKSPACE_MEMBER_ARTIFACT_ROOT"
   rm -rf "$STAGE0_BUILD_DIR"
+  rm -rf "$LEX_SNAPSHOT_BUILD_DIR"
 }
 
 trap cleanup EXIT HUP INT TERM
@@ -612,6 +616,50 @@ mkdir -p "$STAGE0_BUILD_DIR"
 printf 'stage0-command=fpc %s -FE%s -FU%s tools/stage0/nextpas.pas\n' "$STAGE0_FPC_FLAGS" "$STAGE0_BUILD_DIR" "$STAGE0_BUILD_DIR"
 fpc $STAGE0_FPC_FLAGS -FE"$STAGE0_BUILD_DIR" -FU"$STAGE0_BUILD_DIR" tools/stage0/nextpas.pas
 printf 'stage0-build=pass\n'
+
+printf 'lexer-conformance=running\n'
+mkdir -p "$LEX_SNAPSHOT_BUILD_DIR"
+printf 'lex-snapshot-command=fpc %s -FE%s -FU%s tools/lexer_snapshot/lex_snapshot.pas\n' "$LEX_SNAPSHOT_FPC_FLAGS" "$LEX_SNAPSHOT_BUILD_DIR" "$LEX_SNAPSHOT_BUILD_DIR"
+if ! fpc $LEX_SNAPSHOT_FPC_FLAGS -FE"$LEX_SNAPSHOT_BUILD_DIR" -FU"$LEX_SNAPSHOT_BUILD_DIR" tools/lexer_snapshot/lex_snapshot.pas >/dev/null 2>&1; then
+  fpc $LEX_SNAPSHOT_FPC_FLAGS -FE"$LEX_SNAPSHOT_BUILD_DIR" -FU"$LEX_SNAPSHOT_BUILD_DIR" tools/lexer_snapshot/lex_snapshot.pas
+  fail 'lexer-snapshot-build-failed'
+fi
+if [ ! -x "$LEX_SNAPSHOT_BINARY" ]; then
+  fail 'missing-lexer-snapshot-binary'
+fi
+LEX_FIXTURES_PASS=0
+LEX_FIXTURES_FAIL=0
+for fixture in tests/lexer/*.pas; do
+  golden="${fixture%.pas}.tokens"
+  if [ ! -f "$golden" ]; then
+    printf 'lexer-conformance-missing-golden=%s\n' "$golden"
+    LEX_FIXTURES_FAIL=$((LEX_FIXTURES_FAIL + 1))
+    continue
+  fi
+  actual=$(mktemp)
+  if ! "$LEX_SNAPSHOT_BINARY" "$fixture" >"$actual" 2>&1; then
+    cat "$actual"
+    rm -f "$actual"
+    printf 'lexer-conformance-snapshot-failed=%s\n' "$fixture"
+    LEX_FIXTURES_FAIL=$((LEX_FIXTURES_FAIL + 1))
+    continue
+  fi
+  if ! diff -u "$golden" "$actual" >/dev/null 2>&1; then
+    printf 'lexer-conformance-diff=%s\n' "$fixture"
+    diff -u "$golden" "$actual" || true
+    rm -f "$actual"
+    LEX_FIXTURES_FAIL=$((LEX_FIXTURES_FAIL + 1))
+    continue
+  fi
+  rm -f "$actual"
+  LEX_FIXTURES_PASS=$((LEX_FIXTURES_PASS + 1))
+done
+printf 'lexer-conformance-fixtures-pass=%s\n' "$LEX_FIXTURES_PASS"
+printf 'lexer-conformance-fixtures-fail=%s\n' "$LEX_FIXTURES_FAIL"
+if [ "$LEX_FIXTURES_FAIL" -ne 0 ]; then
+  fail 'lexer-conformance-fixtures-failed'
+fi
+printf 'lexer-conformance=pass\n'
 
 printf 'stage0-smoke=running\n'
 printf 'stage0-smoke-command=%s build examples/smoke/hello.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -3515,6 +3563,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'
