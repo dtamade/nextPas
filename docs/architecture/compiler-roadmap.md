@@ -180,12 +180,25 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmHaltExprProgram`、`llvmHaltConstProgram`、`llvmWritelnProgram`、
 `llvmWritelnIntProgram`、`llvmWritelnMultiProgram`、`llvmWritelnMixedProgram`、
 `llvmHelloThenHaltProgram`、`llvmVarHaltProgram`、`llvmVarWritelnProgram`、
-`llvmVarChainProgram` gate 都已纳入 promotion path。默认 binding 仍是
+`llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
+`llvmIfVarProgram` gate 都已纳入 promotion path。
+
+sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
+`EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
+(=/<>/</>/<=/>=) 与逻辑 (and/or)，结果以 0/1 形式返回；`WalkAssignmentStatements`
+与 `WalkHaltCalls` 在遇到 `gnkIfStatement` 子节点时，若条件可被 `EvaluateIntegerConstant`
+折叠则只递归进入选中分支（true → then，false → else，无 else 时跳过整个 if），
+否则降级递归整个 if 子树。验证：`if 1 < 2 then Halt(11); Halt(99)` → exit 11；
+`if 5 = 4 then Halt(1) else Halt(22)` → exit 22；
+`var n; n := 7; if n >= 5 then Halt(n)` → exit 7（条件由 var-init 折叠后选 then）。
+
+默认 binding 仍是
 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
 `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 仍只生成
 单 `_start` + 顺序 syscall 序列；变量目前只在编译期 const-propagated（所有可见赋值
-都必须可折叠为常量），扩展 IR 表达力（运行期变量 alloca/store/load / 控制流 /
-函数调用 / `Write(integer)` 在运行期数值格式化）属于下一批次。
+都必须可折叠为常量），if/else 的分支选择也只在条件可折叠时奏效，扩展 IR 表达力
+（运行期变量 alloca/store/load / 运行期控制流 / 函数调用 / `Write(integer)`
+在运行期数值格式化）属于下一批次。
 
 进入下一段前，这一段的 promotion gate 至少包括：
 

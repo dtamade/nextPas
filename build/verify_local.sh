@@ -59,6 +59,15 @@ LLVM_VAR_WRITELN_PROGRAM_RUN_OUTPUT=$(mktemp)
 LLVM_VAR_CHAIN_PROGRAM_OUTPUT=$(mktemp)
 LLVM_VAR_CHAIN_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_VAR_CHAIN_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_IF_HALT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_IF_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_IF_HALT_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT=$(mktemp)
+LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_IF_ELSE_HALT_PROGRAM_RUN_OUTPUT=$(mktemp)
+LLVM_IF_VAR_PROGRAM_OUTPUT=$(mktemp)
+LLVM_IF_VAR_PROGRAM_OUT_DIR=$(mktemp -d)
+LLVM_IF_VAR_PROGRAM_RUN_OUTPUT=$(mktemp)
 SEMANTIC_SMOKE_OUTPUT=$(mktemp)
 FOREIGN_CDECL_SMOKE_OUTPUT=$(mktemp)
 HARNESS_SMOKE_OUTPUT=$(mktemp)
@@ -161,6 +170,15 @@ cleanup() {
   rm -f "$LLVM_VAR_CHAIN_PROGRAM_OUTPUT"
   rm -rf "$LLVM_VAR_CHAIN_PROGRAM_OUT_DIR"
   rm -f "$LLVM_VAR_CHAIN_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_IF_HALT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_IF_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_IF_HALT_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_IF_ELSE_HALT_PROGRAM_RUN_OUTPUT"
+  rm -f "$LLVM_IF_VAR_PROGRAM_OUTPUT"
+  rm -rf "$LLVM_IF_VAR_PROGRAM_OUT_DIR"
+  rm -f "$LLVM_IF_VAR_PROGRAM_RUN_OUTPUT"
   rm -f "$SEMANTIC_SMOKE_OUTPUT"
   rm -f "$FOREIGN_CDECL_SMOKE_OUTPUT"
   rm -f "$HARNESS_SMOKE_OUTPUT"
@@ -1094,6 +1112,75 @@ if [ "$LLVM_VAR_CHAIN_PROGRAM_EXIT" -ne 15 ]; then
 fi
 printf 'llvm-var-chain-program-exit=15\n'
 printf 'llvm-var-chain-program=pass\n'
+
+printf 'llvm-if-halt-program=running\n'
+printf 'llvm-if-halt-program-command=%s build examples/smoke/if_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_HALT_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_IF_HALT_PROGRAM_OUTPUT"
+  fail 'llvm-if-halt-program-build-failed'
+fi
+cat "$LLVM_IF_HALT_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_IF_HALT_PROGRAM_OUTPUT" 'missing-llvm-if-halt-program-success-status'
+LLVM_IF_HALT_PROGRAM_BIN="$LLVM_IF_HALT_PROGRAM_OUT_DIR/if_halt"
+if [ ! -x "$LLVM_IF_HALT_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-if-halt-program-executable'
+fi
+set +e
+"$LLVM_IF_HALT_PROGRAM_BIN"
+LLVM_IF_HALT_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_IF_HALT_PROGRAM_EXIT" -ne 11 ]; then
+  printf 'llvm-if-halt-program-exit=%s\n' "$LLVM_IF_HALT_PROGRAM_EXIT"
+  fail 'llvm-if-halt-program-unexpected-exit'
+fi
+printf 'llvm-if-halt-program-exit=11\n'
+printf 'llvm-if-halt-program=pass\n'
+
+printf 'llvm-if-else-halt-program=running\n'
+printf 'llvm-if-else-halt-program-command=%s build examples/smoke/if_else_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_else_halt.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR" >"$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT"
+  fail 'llvm-if-else-halt-program-build-failed'
+fi
+cat "$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_IF_ELSE_HALT_PROGRAM_OUTPUT" 'missing-llvm-if-else-halt-program-success-status'
+LLVM_IF_ELSE_HALT_PROGRAM_BIN="$LLVM_IF_ELSE_HALT_PROGRAM_OUT_DIR/if_else_halt"
+if [ ! -x "$LLVM_IF_ELSE_HALT_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-if-else-halt-program-executable'
+fi
+set +e
+"$LLVM_IF_ELSE_HALT_PROGRAM_BIN"
+LLVM_IF_ELSE_HALT_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_IF_ELSE_HALT_PROGRAM_EXIT" -ne 22 ]; then
+  printf 'llvm-if-else-halt-program-exit=%s\n' "$LLVM_IF_ELSE_HALT_PROGRAM_EXIT"
+  fail 'llvm-if-else-halt-program-unexpected-exit'
+fi
+printf 'llvm-if-else-halt-program-exit=22\n'
+printf 'llvm-if-else-halt-program=pass\n'
+
+printf 'llvm-if-var-program=running\n'
+printf 'llvm-if-var-program-command=%s build examples/smoke/if_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target %s --workspace %s --out-dir %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT" "$LLVM_IF_VAR_PROGRAM_OUT_DIR"
+if ! "$STAGE0_BINARY" build examples/smoke/if_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IF_VAR_PROGRAM_OUT_DIR" >"$LLVM_IF_VAR_PROGRAM_OUTPUT" 2>&1; then
+  cat "$LLVM_IF_VAR_PROGRAM_OUTPUT"
+  fail 'llvm-if-var-program-build-failed'
+fi
+cat "$LLVM_IF_VAR_PROGRAM_OUTPUT"
+require_output_pattern '^status=success$' "$LLVM_IF_VAR_PROGRAM_OUTPUT" 'missing-llvm-if-var-program-success-status'
+LLVM_IF_VAR_PROGRAM_BIN="$LLVM_IF_VAR_PROGRAM_OUT_DIR/if_var"
+if [ ! -x "$LLVM_IF_VAR_PROGRAM_BIN" ]; then
+  fail 'missing-llvm-if-var-program-executable'
+fi
+set +e
+"$LLVM_IF_VAR_PROGRAM_BIN"
+LLVM_IF_VAR_PROGRAM_EXIT=$?
+set -e
+if [ "$LLVM_IF_VAR_PROGRAM_EXIT" -ne 7 ]; then
+  printf 'llvm-if-var-program-exit=%s\n' "$LLVM_IF_VAR_PROGRAM_EXIT"
+  fail 'llvm-if-var-program-unexpected-exit'
+fi
+printf 'llvm-if-var-program-exit=7\n'
+printf 'llvm-if-var-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -2534,6 +2621,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

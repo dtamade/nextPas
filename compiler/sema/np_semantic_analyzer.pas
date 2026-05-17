@@ -484,10 +484,10 @@ end;
 procedure TSemanticAnalyzer.WalkAssignmentStatements(const ANode: TGreenNode);
 var
   I: LongInt;
-  Child, RhsNode: TGreenNode;
+  Child, RhsNode, BranchNode: TGreenNode;
   LhsSymbolId, RhsSymbolId: LongInt;
   LhsTypeId, RhsTypeId: LongInt;
-  Value: Int64;
+  Value, CondValue: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -496,6 +496,24 @@ begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if Child.NodeKind = gnkIfStatement then
+    begin
+      if (Child.ChildCount >= 2) and
+        EvaluateIntegerConstant(Child.ChildAt(0), CondValue) then
+      begin
+        if CondValue <> 0 then
+          BranchNode := Child.ChildAt(1)
+        else if Child.ChildCount >= 3 then
+          BranchNode := Child.ChildAt(2)
+        else
+          BranchNode := nil;
+        if BranchNode <> nil then
+          WalkAssignmentStatements(BranchNode);
+      end
+      else
+        WalkAssignmentStatements(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       LhsSymbolId := FindSymbolByName(Child.Text);
@@ -623,6 +641,22 @@ begin
             Exit(False);
           AValue := Left mod Right;
         end
+        else if Op = '=' then
+          AValue := Ord(Left = Right)
+        else if Op = '<>' then
+          AValue := Ord(Left <> Right)
+        else if Op = '<' then
+          AValue := Ord(Left < Right)
+        else if Op = '>' then
+          AValue := Ord(Left > Right)
+        else if Op = '<=' then
+          AValue := Ord(Left <= Right)
+        else if Op = '>=' then
+          AValue := Ord(Left >= Right)
+        else if SameText(Op, 'and') then
+          AValue := Ord((Left <> 0) and (Right <> 0))
+        else if SameText(Op, 'or') then
+          AValue := Ord((Left <> 0) or (Right <> 0))
         else
           Exit(False);
         Exit(True);
@@ -661,9 +695,9 @@ end;
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
   I, ArgIndex: LongInt;
-  Child, Arg: TGreenNode;
+  Child, Arg, BranchNode: TGreenNode;
   Operand: string;
-  Value: Int64;
+  Value, CondValue: Int64;
   Decoded: string;
 begin
   if ANode = nil then
@@ -673,6 +707,24 @@ begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if Child.NodeKind = gnkIfStatement then
+    begin
+      if (Child.ChildCount >= 2) and
+        EvaluateIntegerConstant(Child.ChildAt(0), CondValue) then
+      begin
+        if CondValue <> 0 then
+          BranchNode := Child.ChildAt(1)
+        else if Child.ChildCount >= 3 then
+          BranchNode := Child.ChildAt(2)
+        else
+          BranchNode := nil;
+        if BranchNode <> nil then
+          WalkHaltCalls(BranchNode);
+      end
+      else
+        WalkHaltCalls(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkProcedureCallStatement then
     begin
       if SameText(Child.Text, 'Halt') then
