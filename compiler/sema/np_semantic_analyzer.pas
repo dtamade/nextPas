@@ -47,11 +47,13 @@ type
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
     procedure UnrollAssignmentForLoop(const ANode: TGreenNode);
     procedure UnrollAssignmentWhileLoop(const ANode: TGreenNode);
+    procedure UnrollAssignmentRepeatLoop(const ANode: TGreenNode);
     function EvaluateIntegerConstant(const ANode: TGreenNode;
       out AValue: Int64): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
+    procedure UnrollHaltRepeatLoop(const ANode: TGreenNode);
     procedure SeedHaltCalls;
   public
     constructor Create(
@@ -528,6 +530,11 @@ begin
       UnrollAssignmentWhileLoop(Child);
       Continue;
     end;
+    if Child.NodeKind = gnkRepeatStatement then
+    begin
+      UnrollAssignmentRepeatLoop(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       LhsSymbolId := FindSymbolByName(Child.Text);
@@ -633,6 +640,30 @@ begin
       Exit;
     WalkAssignmentStatements(BodyNode);
     Inc(IterCount);
+  end;
+end;
+
+procedure TSemanticAnalyzer.UnrollAssignmentRepeatLoop(const ANode: TGreenNode);
+const
+  MaxIterations = 1024;
+var
+  BodyNode, CondNode: TGreenNode;
+  CondValue: Int64;
+  IterCount: LongInt;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then
+    Exit;
+  BodyNode := ANode.ChildAt(0);
+  CondNode := ANode.ChildAt(1);
+  IterCount := 0;
+  while IterCount < MaxIterations do
+  begin
+    WalkAssignmentStatements(BodyNode);
+    Inc(IterCount);
+    if not EvaluateIntegerConstant(CondNode, CondValue) then
+      Exit;
+    if CondValue <> 0 then
+      Exit;
   end;
 end;
 
@@ -830,6 +861,11 @@ begin
       UnrollHaltWhileLoop(Child);
       Continue;
     end;
+    if Child.NodeKind = gnkRepeatStatement then
+    begin
+      UnrollHaltRepeatLoop(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       if Child.ChildCount >= 1 then
@@ -944,6 +980,30 @@ begin
       Exit;
     WalkHaltCalls(BodyNode);
     Inc(IterCount);
+  end;
+end;
+
+procedure TSemanticAnalyzer.UnrollHaltRepeatLoop(const ANode: TGreenNode);
+const
+  MaxIterations = 1024;
+var
+  BodyNode, CondNode: TGreenNode;
+  CondValue: Int64;
+  IterCount: LongInt;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then
+    Exit;
+  BodyNode := ANode.ChildAt(0);
+  CondNode := ANode.ChildAt(1);
+  IterCount := 0;
+  while IterCount < MaxIterations do
+  begin
+    WalkHaltCalls(BodyNode);
+    Inc(IterCount);
+    if not EvaluateIntegerConstant(CondNode, CondValue) then
+      Exit;
+    if CondValue <> 0 then
+      Exit;
   end;
 end;
 

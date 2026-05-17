@@ -183,7 +183,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
 `llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
 `llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram`、
-`llvmWhileCountProgram`、`llvmWhileSumProgram` gate 都已纳入 promotion path。
+`llvmWhileCountProgram`、`llvmWhileSumProgram`、
+`llvmRepeatCountProgram`、`llvmRepeatHaltProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -217,6 +218,13 @@ sema 还具备编译期可展开的 `while` 循环：当条件表达式可被
 WriteLn(i); i := i - 1 end` → stdout "3\n2\n1\n"；`var i, sum; sum := 0;
 i := 1; while i <= 5 do begin sum := sum + i; i := i + 1 end; Halt(sum)`
 → exit 15。
+
+sema 还具备编译期可展开的 `repeat-until` 循环：与 `while` 对称，但执行顺序
+反过来 —— `UnrollAssignmentRepeatLoop` 与 `UnrollHaltRepeatLoop` 在 sema 层
+先 walk body，再求值终止条件，循环条件折叠为非 0（true）时退出，
+否则继续迭代直到 MaxIterations=1024。验证：
+`var i; i := 1; repeat WriteLn(i); i := i + 1; until i > 3` → stdout "1\n2\n3\n"；
+`var x; x := 0; repeat x := x + 5; until x >= 20; Halt(x)` → exit 20。
 
 附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
 吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
