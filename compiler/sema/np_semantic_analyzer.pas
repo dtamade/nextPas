@@ -639,6 +639,16 @@ begin
       end;
     gnkIdentifier:
       begin
+        if SameText(ANode.Text, 'true') then
+        begin
+          AValue := 1;
+          Exit(True);
+        end;
+        if SameText(ANode.Text, 'false') then
+        begin
+          AValue := 0;
+          Exit(True);
+        end;
         if FModel.LookupConstValue(ANode.Text, Parsed) then
         begin
           AValue := Parsed;
@@ -662,6 +672,8 @@ begin
           AValue := -Parsed
         else if Op = '+' then
           AValue := Parsed
+        else if SameText(Op, 'not') then
+          AValue := Ord(Parsed = 0)
         else
           Exit(False);
         Exit(True);

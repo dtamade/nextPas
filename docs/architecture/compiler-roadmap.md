@@ -182,16 +182,22 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmHelloThenHaltProgram`、`llvmVarHaltProgram`、`llvmVarWritelnProgram`、
 `llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
 `llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
-`llvmForDowntoProgram` gate 都已纳入 promotion path。
+`llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram` gate
+都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
-(=/<>/</>/<=/>=) 与逻辑 (and/or)，结果以 0/1 形式返回；`WalkAssignmentStatements`
-与 `WalkHaltCalls` 在遇到 `gnkIfStatement` 子节点时，若条件可被 `EvaluateIntegerConstant`
-折叠则只递归进入选中分支（true → then，false → else，无 else 时跳过整个 if），
-否则降级递归整个 if 子树。验证：`if 1 < 2 then Halt(11); Halt(99)` → exit 11；
+(=/<>/</>/<=/>=) 与逻辑 (and/or)，结果以 0/1 形式返回；`gnkUnaryExpression`
+分支同时支持 `not` 一元运算（`Ord(Parsed = 0)`）；`gnkIdentifier` 分支识别
+`true`/`false` (case-insensitive) 字面量并优先于 const/var-init 表查询。
+`WalkAssignmentStatements` 与 `WalkHaltCalls` 在遇到 `gnkIfStatement` 子节点时，
+若条件可被 `EvaluateIntegerConstant` 折叠则只递归进入选中分支
+（true → then，false → else，无 else 时跳过整个 if），否则降级递归整个
+if 子树。验证：`if 1 < 2 then Halt(11); Halt(99)` → exit 11；
 `if 5 = 4 then Halt(1) else Halt(22)` → exit 22；
-`var n; n := 7; if n >= 5 then Halt(n)` → exit 7（条件由 var-init 折叠后选 then）。
+`var n; n := 7; if n >= 5 then Halt(n)` → exit 7（条件由 var-init 折叠后选 then）；
+`if not (1 > 5) then Halt(11); Halt(99)` → exit 11（not 折叠 (1>5)=0 → 1）；
+`if true then Halt(22); Halt(99)` → exit 22（true 字面量直接折叠为 1）。
 
 sema 还具备编译期可展开的 `for` 循环：当 start/end 表达式皆可折叠且方向已知
 （`to`/`downto`）时，`UnrollAssignmentForLoop` 与 `UnrollHaltForLoop` 把循环体在
