@@ -182,8 +182,8 @@ MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-lin
 `llvmHelloThenHaltProgram`、`llvmVarHaltProgram`、`llvmVarWritelnProgram`、
 `llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
 `llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
-`llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram` gate
-都已纳入 promotion path。
+`llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram`、
+`llvmWhileCountProgram`、`llvmWhileSumProgram` gate 都已纳入 promotion path。
 
 sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
 `EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
@@ -207,6 +207,23 @@ sema 层迭代 N 次（每轮把 `i` 按当前值写入 var-init 表后递归 wa
 `sum := 0; for i := 1 to 5 do sum := sum + i; Halt(sum)` → exit 15（每次迭代
 sum 都通过 var-init 链式折叠重新计算）；`for i := 3 downto 1 do WriteLn(i)`
 → stdout "3\n2\n1\n"。
+
+sema 还具备编译期可展开的 `while` 循环：当条件表达式可被
+`EvaluateIntegerConstant` 折叠时，`UnrollAssignmentWhileLoop` 与
+`UnrollHaltWhileLoop` 在 sema 层反复求值条件 + walk body，直到条件折叠为 0
+或达到 MaxIterations=1024。`WalkHaltCalls` 镜像 `WalkAssignmentStatements`
+的 `gnkAssignmentStatement` 处理：把可折叠 RHS 写入 var-init 表，让循环体
+里的赋值在两次 walk 间保持同步。验证：`var i; i := 3; while i > 0 do begin
+WriteLn(i); i := i - 1 end` → stdout "3\n2\n1\n"；`var i, sum; sum := 0;
+i := 1; while i <= 5 do begin sum := sum + i; i := i + 1 end; Halt(sum)`
+→ exit 15。
+
+附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
+吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
+的 body 真正在 `;` 处停止，避免后继语句被贪婪并入 body 而引发错误。
+`ParseAssignmentOrCall` 同时增加复合赋值脱糖：`x += y` / `x -= y` /
+`x *= y` / `x /= y` 在 green tree 里直接展开为 `x := x op y`，与之前的
+平铺 `x := x + 1` 行为等价。
 
 默认 binding 仍是
 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过

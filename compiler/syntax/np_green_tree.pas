@@ -971,9 +971,11 @@ function ParseAssignmentOrCall(
   const ARootFileId: TSourceFileId
 ): Boolean;
 var
-  Node: TGreenNode;
+  Node, BinaryNode, LhsRef: TGreenNode;
   NameToken: TToken;
   RHS: TGreenNode;
+  CompoundOp: string;
+  CompoundKind: TTokenKind;
 begin
   NameToken := CurrentToken(ALexer, ACursor);
   Inc(ACursor);
@@ -987,6 +989,32 @@ begin
       NameToken.Lexeme);
     if RHS <> nil then
       Node.AppendChild(RHS);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+  end
+  else if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind in
+      [tkPlusAssign, tkMinusAssign, tkStarAssign, tkSlashAssign]) then
+  begin
+    CompoundKind := CurrentToken(ALexer, ACursor).Kind;
+    case CompoundKind of
+      tkPlusAssign: CompoundOp := '+';
+      tkMinusAssign: CompoundOp := '-';
+      tkStarAssign: CompoundOp := '*';
+      tkSlashAssign: CompoundOp := '/';
+    end;
+    Inc(ACursor);
+    RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+    Node := TGreenNode.Create(gnkAssignmentStatement, NameToken.ByteOffset, 0,
+      NameToken.Lexeme);
+    LhsRef := TGreenNode.Create(gnkIdentifier, NameToken.ByteOffset,
+      Length(NameToken.Lexeme), NameToken.Lexeme);
+    BinaryNode := TGreenNode.Create(gnkBinaryExpression, NameToken.ByteOffset,
+      0, CompoundOp);
+    BinaryNode.AppendChild(LhsRef);
+    if RHS <> nil then
+      BinaryNode.AppendChild(RHS);
+    Node.AppendChild(BinaryNode);
     AParent.AppendChild(Node);
     Inc(ATree.FNodeCount);
   end
@@ -1948,7 +1976,8 @@ begin
     end;
 
     if (ACursor < ALexer.TokenCount) and
-      (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+      (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) and
+      not (tkSemicolon in ATerminatorSet) then
       Inc(ACursor);
   end;
 end;
