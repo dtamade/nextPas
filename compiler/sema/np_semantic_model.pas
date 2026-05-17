@@ -50,6 +50,11 @@ type
     Strength: string;
   end;
 
+  TSemanticConstValue = record
+    Name: string;
+    Value: Int64;
+  end;
+
   TSemanticModel = class
   private
     FSymbols: array of TSemanticSymbol;
@@ -58,6 +63,7 @@ type
     FRuntimeContracts: array of TRuntimeContract;
     FForeignProcedureBindings: array of TSemanticForeignProcedureBinding;
     FLibraryRequests: array of TSemanticLibraryRequest;
+    FConstValues: array of TSemanticConstValue;
     FRootName: string;
     FStatus: string;
   public
@@ -105,6 +111,9 @@ type
     ): TSemanticForeignProcedureBinding;
     function LibraryRequestCount: LongInt;
     function LibraryRequestAt(const AIndex: LongInt): TSemanticLibraryRequest;
+    procedure AddConstValue(const AName: string; const AValue: Int64);
+    function LookupConstValue(const AName: string;
+      out AValue: Int64): Boolean;
     procedure SetRootName(const AName: string);
     function RootName: string;
     procedure MarkReady;
@@ -126,6 +135,7 @@ begin
   SetLength(FRuntimeContracts, 0);
   SetLength(FForeignProcedureBindings, 0);
   SetLength(FLibraryRequests, 0);
+  SetLength(FConstValues, 0);
   FRootName := '';
   FStatus := 'deferred';
 end;
@@ -365,6 +375,38 @@ begin
   end;
 
   Result := FLibraryRequests[AIndex];
+end;
+
+procedure TSemanticModel.AddConstValue(const AName: string; const AValue: Int64);
+var
+  Index: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FConstValues) - 1 do
+    if SameText(FConstValues[Index].Name, AName) then
+    begin
+      FConstValues[Index].Value := AValue;
+      Exit;
+    end;
+  NextIndex := Length(FConstValues);
+  SetLength(FConstValues, NextIndex + 1);
+  FConstValues[NextIndex].Name := AName;
+  FConstValues[NextIndex].Value := AValue;
+end;
+
+function TSemanticModel.LookupConstValue(const AName: string;
+  out AValue: Int64): Boolean;
+var
+  Index: LongInt;
+begin
+  AValue := 0;
+  for Index := 0 to Length(FConstValues) - 1 do
+    if SameText(FConstValues[Index].Name, AName) then
+    begin
+      AValue := FConstValues[Index].Value;
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 procedure TSemanticModel.SetRootName(const AName: string);

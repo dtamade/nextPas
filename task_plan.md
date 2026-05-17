@@ -15,6 +15,58 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 Sema Const Identifier Resolution — Halt(MyConst) → exit(42)
+
+### Goal
+
+把 sema 折叠器从"只折常量字面量表达式"推进到"能解析 const 声明的标识符引用"。
+上一批次让 `Halt(40 + 2)` 折叠为 42；这一批让 `const FortyTwo = 42; begin Halt(FortyTwo); end.`
+也能正确退出 42。
+
+- 扩展 `compiler/sema/np_semantic_model.pas` 加 `TSemanticConstValue` record 与
+  `FConstValues: array of TSemanticConstValue`；新增 `AddConstValue(name, value)` 与
+  `LookupConstValue(name, out value): Boolean`
+- 扩展 `EvaluateIntegerConstant` 加 `gnkIdentifier` 分支：从 `FModel.LookupConstValue`
+  查表，命中即返回常量值
+- 改造 `ProcessConstSection`：每个 `gnkConstDecl` 子节点尝试 `EvaluateIntegerConstant`
+  折叠值，命中即 `AddConstValue(name, value)` 注册到表
+- 新增 `examples/smoke/halt_const.pas`：`program HaltConst; const FortyTwo = 42; begin Halt(FortyTwo); end.`
+- 新增 `build/verify_local.sh` 的 `llvm-halt-const-program` gate：用真 opt/llc/ld 编译
+  halt_const.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] sema model 加 `TSemanticConstValue` 与 `FConstValues` 数组，constructor 初始化
+- [x] sema model 加 `AddConstValue` / `LookupConstValue`（大小写不敏感名称比对，重复 name 覆盖旧值）
+- [x] `EvaluateIntegerConstant` 新增 `gnkIdentifier` case，从 `LookupConstValue` 查表
+- [x] `ProcessConstSection` 遍历每个 `gnkConstDecl` 子节点尝试折叠并 `AddConstValue` 注册
+- [x] 新增 `examples/smoke/halt_const.pas` fixture
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_CONST_PROGRAM_OUTPUT` /
+      `LLVM_HALT_CONST_PROGRAM_OUT_DIR` 临时文件，新增 `llvm-halt-const-program` gate，
+      success envelope 加 `llvmHaltConstProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| const 表用大小写不敏感名称比对 | Pascal 标识符传统大小写不敏感；与 `WalkHaltCalls` 的 `SameText('Halt')` 一致 |
+| ProcessConstSection 折叠失败时只跳过 AddConstValue，不报诊断 | const 声明可能是非整数（字符串、记录），折叠失败不代表错；当前批次只关心整数常量；非整数 const 引用在 EvaluateIntegerConstant 自动失败回到 fallback |
+| const 表挂在 `TSemanticModel` 而不是 `TSemanticAnalyzer` | 与现有 `FSymbols` / `FTypes` 等 model-owned 数据保持一致；分析器只负责填充，model 持有真实数据 |
+| 重复名称覆盖而不是报错 | 当前 sema 还没有完整 redeclaration 检查；先静默覆盖避免假诊断，等真正的 symbol-redecl 检查批次再加 |
+
+### Notes
+
+- 这是 sema 第一次跨节点引用解析：表达式折叠器从纯 AST-recursive 升级到 model-aware
+- 当前 const 表只支持整数类型；string / 浮点 / 数组 const 值仍属未来批次
+- `verify-local` 现在含四条 LLVM 端到端 gate：`llvmEmptyProgram`（exit 0）、
+  `llvmHaltProgram`（exit 42 from literal）、`llvmHaltExprProgram`（exit 42 from 40+2）、
+  `llvmHaltConstProgram`（exit 42 from const FortyTwo = 42）
+
 ## Addendum: 2026-05-17 Sema Integer Constant Folding — Halt(40 + 2) → exit(42)
 
 ### Goal

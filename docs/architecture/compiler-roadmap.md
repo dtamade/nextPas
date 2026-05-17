@@ -147,13 +147,16 @@ Compiler execution spine:
 - native backend 与 LLVM backend 消费同一套 `MIR` 和 target facts。
 
 当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到 MIR-driven 最小闭环，
-sema 已具备整数常量表达式编译期折叠能力。`compiler/backend/np_llvm_emitter.pas` 为程序
-发射真实 `.ll`，并通过扫描 MIR 中的 `halt` operation 提取 operand 决定 syscall exit 值；
-`compiler/sema/np_semantic_analyzer.pas` 的 `EvaluateIntegerConstant` 在 sema 层折叠
-`gnkIntegerLiteral` / `gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；
+sema 已具备整数常量表达式编译期折叠与 const 标识符引用解析能力。
+`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，并通过扫描 MIR 中的 `halt`
+operation 提取 operand 决定 syscall exit 值；`compiler/sema/np_semantic_analyzer.pas` 的
+`EvaluateIntegerConstant` 在 sema 层折叠 `gnkIntegerLiteral` / `gnkIdentifier`(查 const 表) /
+`gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；`ProcessConstSection`
+为每个 `gnkConstDecl` 尝试折叠值并注册到 model 的 const 表；
 `opt → llc → ld` 真实执行并产出退出码由源代码决定的可执行（`Halt(42)` → exit 42、
-`Halt(40 + 2)` → exit 42）。`build/verify_local.sh` 的 `llvmEmptyProgram`、
-`llvmHaltProgram`、`llvmHaltExprProgram` gate 都已纳入 promotion path。默认 binding 仍是
+`Halt(40 + 2)` → exit 42、`const FortyTwo = 42; Halt(FortyTwo)` → exit 42）。
+`build/verify_local.sh` 的 `llvmEmptyProgram`、`llvmHaltProgram`、`llvmHaltExprProgram`、
+`llvmHaltConstProgram` gate 都已纳入 promotion path。默认 binding 仍是
 `linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
 `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 仍只生成
 单 `_start` + 单条 syscall；扩展 IR 表达力（多语句 / 非常量表达式 / 控制流 / 函数调用）

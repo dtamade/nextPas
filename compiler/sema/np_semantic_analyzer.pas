@@ -377,8 +377,9 @@ end;
 procedure TSemanticAnalyzer.ProcessConstSection(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
-  I: LongInt;
-  Child: TGreenNode;
+  I, J: LongInt;
+  Child, ValueChild: TGreenNode;
+  Value: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -389,6 +390,15 @@ begin
       Continue;
     FModel.AddSymbol(Child.Text, 'constant', AOwnerUnitId, 0,
       Child.ByteOffset);
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      ValueChild := Child.ChildAt(J);
+      if EvaluateIntegerConstant(ValueChild, Value) then
+      begin
+        FModel.AddConstValue(Child.Text, Value);
+        Break;
+      end;
+    end;
   end;
 end;
 
@@ -544,6 +554,13 @@ begin
       begin
         Val(ANode.Text, Parsed, ParseCode);
         if ParseCode <> 0 then
+          Exit(False);
+        AValue := Parsed;
+        Exit(True);
+      end;
+    gnkIdentifier:
+      begin
+        if not FModel.LookupConstValue(ANode.Text, Parsed) then
           Exit(False);
         AValue := Parsed;
         Exit(True);
