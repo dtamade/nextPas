@@ -156,15 +156,50 @@ type
     Kind: TTokenKind;
     Lexeme: string;
     ByteOffset: LongInt;
+    Line: LongInt;
+    Column: LongInt;
   end;
 
   TLexerResult = class
   private
     FTokens: array of TToken;
+    FCurrentLine: LongInt;
+    FLineStartByte: LongInt;
+    procedure AdvanceNewline(
+      const ASourceText: string;
+      var AIndex: SizeInt
+    );
+    function CurrentColumn(const AIndex: SizeInt): LongInt;
+    procedure SkipBraceCommentTracking(
+      const ASourceText: string;
+      var AIndex: SizeInt
+    );
+    procedure SkipParenStarCommentTracking(
+      const ASourceText: string;
+      var AIndex: SizeInt
+    );
+    function TryReadCompilerDirectiveTracking(
+      const ASourceText: string;
+      var AIndex: SizeInt;
+      out ALexeme: string
+    ): Boolean;
+    function TryReadParenStarDirectiveTracking(
+      const ASourceText: string;
+      var AIndex: SizeInt;
+      out ALexeme: string
+    ): Boolean;
     procedure AddToken(
       const AKind: TTokenKind;
       const ALexeme: string;
-      const AByteOffset: LongInt
+      const AByteOffset: LongInt;
+      const ALine: LongInt;
+      const AColumn: LongInt
+    );
+    procedure AddTokenAt(
+      const AKind: TTokenKind;
+      const ALexeme: string;
+      const AStartIndex: SizeInt;
+      const ALine: LongInt
     );
     procedure LexSource(const ASourceText: string);
   public
@@ -487,13 +522,17 @@ constructor TLexerResult.Create(const ASourceText: string);
 begin
   inherited Create;
   SetLength(FTokens, 0);
+  FCurrentLine := 1;
+  FLineStartByte := 0;
   LexSource(ASourceText);
 end;
 
 procedure TLexerResult.AddToken(
   const AKind: TTokenKind;
   const ALexeme: string;
-  const AByteOffset: LongInt
+  const AByteOffset: LongInt;
+  const ALine: LongInt;
+  const AColumn: LongInt
 );
 var
   NextIndex: SizeInt;
@@ -503,6 +542,167 @@ begin
   FTokens[NextIndex].Kind := AKind;
   FTokens[NextIndex].Lexeme := ALexeme;
   FTokens[NextIndex].ByteOffset := AByteOffset;
+  FTokens[NextIndex].Line := ALine;
+  FTokens[NextIndex].Column := AColumn;
+end;
+
+procedure TLexerResult.AdvanceNewline(
+  const ASourceText: string;
+  var AIndex: SizeInt
+);
+var
+  Ch: Char;
+begin
+  Ch := ASourceText[AIndex];
+  if Ch = #13 then
+  begin
+    Inc(AIndex);
+    if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = #10) then
+      Inc(AIndex);
+  end
+  else
+    Inc(AIndex);
+  Inc(FCurrentLine);
+  FLineStartByte := AIndex - 1;
+end;
+
+function TLexerResult.CurrentColumn(const AIndex: SizeInt): LongInt;
+begin
+  Result := (AIndex - 1) - FLineStartByte + 1;
+end;
+
+procedure TLexerResult.SkipBraceCommentTracking(
+  const ASourceText: string;
+  var AIndex: SizeInt
+);
+var
+  Ch: Char;
+begin
+  Inc(AIndex);
+  while AIndex <= Length(ASourceText) do
+  begin
+    Ch := ASourceText[AIndex];
+    if Ch = '}' then
+    begin
+      Inc(AIndex);
+      Exit;
+    end;
+    if (Ch = #13) or (Ch = #10) then
+      AdvanceNewline(ASourceText, AIndex)
+    else
+      Inc(AIndex);
+  end;
+end;
+
+procedure TLexerResult.SkipParenStarCommentTracking(
+  const ASourceText: string;
+  var AIndex: SizeInt
+);
+var
+  Ch: Char;
+begin
+  Inc(AIndex, 2);
+  while AIndex <= Length(ASourceText) - 1 do
+  begin
+    Ch := ASourceText[AIndex];
+    if (Ch = '*') and (ASourceText[AIndex + 1] = ')') then
+    begin
+      Inc(AIndex, 2);
+      Exit;
+    end;
+    if (Ch = #13) or (Ch = #10) then
+      AdvanceNewline(ASourceText, AIndex)
+    else
+      Inc(AIndex);
+  end;
+  if AIndex <= Length(ASourceText) then
+    Inc(AIndex);
+end;
+
+function TLexerResult.TryReadCompilerDirectiveTracking(
+  const ASourceText: string;
+  var AIndex: SizeInt;
+  out ALexeme: string
+): Boolean;
+var
+  StartIndex: SizeInt;
+  Ch: Char;
+begin
+  if (AIndex > Length(ASourceText)) or (ASourceText[AIndex] <> '{') then
+    Exit(False);
+  if (AIndex >= Length(ASourceText)) or (ASourceText[AIndex + 1] <> '$') then
+    Exit(False);
+
+  StartIndex := AIndex;
+  Inc(AIndex, 2);
+  while AIndex <= Length(ASourceText) do
+  begin
+    Ch := ASourceText[AIndex];
+    if Ch = '}' then
+    begin
+      Inc(AIndex);
+      Break;
+    end;
+    if (Ch = #13) or (Ch = #10) then
+      AdvanceNewline(ASourceText, AIndex)
+    else
+      Inc(AIndex);
+  end;
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Exit(True);
+end;
+
+function TLexerResult.TryReadParenStarDirectiveTracking(
+  const ASourceText: string;
+  var AIndex: SizeInt;
+  out ALexeme: string
+): Boolean;
+var
+  StartIndex: SizeInt;
+  Ch: Char;
+begin
+  if (AIndex + 2 > Length(ASourceText)) then
+    Exit(False);
+  if (ASourceText[AIndex] <> '(') or (ASourceText[AIndex + 1] <> '*') then
+    Exit(False);
+  if (AIndex + 2 > Length(ASourceText)) or (ASourceText[AIndex + 2] <> '$') then
+    Exit(False);
+
+  StartIndex := AIndex;
+  Inc(AIndex, 3);
+  while AIndex <= Length(ASourceText) - 1 do
+  begin
+    Ch := ASourceText[AIndex];
+    if (Ch = '*') and (ASourceText[AIndex + 1] = ')') then
+    begin
+      Inc(AIndex, 2);
+      ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+      Exit(True);
+    end;
+    if (Ch = #13) or (Ch = #10) then
+      AdvanceNewline(ASourceText, AIndex)
+    else
+      Inc(AIndex);
+  end;
+  if AIndex <= Length(ASourceText) then
+    Inc(AIndex);
+  ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
+  Exit(True);
+end;
+
+procedure TLexerResult.AddTokenAt(
+  const AKind: TTokenKind;
+  const ALexeme: string;
+  const AStartIndex: SizeInt;
+  const ALine: LongInt
+);
+var
+  Column: LongInt;
+begin
+  Column := AStartIndex - FLineStartByte;
+  if Column < 1 then
+    Column := 1;
+  AddToken(AKind, ALexeme, AStartIndex - 1, ALine, Column);
 end;
 
 procedure TLexerResult.LexSource(const ASourceText: string);
@@ -515,11 +715,18 @@ var
   NumberStartIndex: SizeInt;
   SaveIndex: SizeInt;
   StartIndex: SizeInt;
+  TokenLine: LongInt;
 begin
   StartIndex := 1;
   while StartIndex <= Length(ASourceText) do
   begin
     CurrentChar := ASourceText[StartIndex];
+
+    if (CurrentChar = #13) or (CurrentChar = #10) then
+    begin
+      AdvanceNewline(ASourceText, StartIndex);
+      Continue;
+    end;
 
     if CurrentChar in [#0..#32] then
     begin
@@ -527,15 +734,17 @@ begin
       Continue;
     end;
 
+    TokenLine := FCurrentLine;
+
     if CurrentChar = '{' then
     begin
       SaveIndex := StartIndex;
-      if TryReadCompilerDirective(ASourceText, StartIndex, Lexeme) then
+      if TryReadCompilerDirectiveTracking(ASourceText, StartIndex, Lexeme) then
       begin
-        AddToken(tkCompilerDirective, Lexeme, SaveIndex - 1);
+        AddTokenAt(tkCompilerDirective, Lexeme, SaveIndex, TokenLine);
         Continue;
       end;
-      SkipBraceComment(ASourceText, StartIndex);
+      SkipBraceCommentTracking(ASourceText, StartIndex);
       Continue;
     end;
 
@@ -544,12 +753,12 @@ begin
       (ASourceText[StartIndex + 1] = '*') then
     begin
       SaveIndex := StartIndex;
-      if TryReadParenStarDirective(ASourceText, StartIndex, Lexeme) then
+      if TryReadParenStarDirectiveTracking(ASourceText, StartIndex, Lexeme) then
       begin
-        AddToken(tkCompilerDirective, Lexeme, SaveIndex - 1);
+        AddTokenAt(tkCompilerDirective, Lexeme, SaveIndex, TokenLine);
         Continue;
       end;
-      SkipParenStarComment(ASourceText, StartIndex);
+      SkipParenStarCommentTracking(ASourceText, StartIndex);
       Continue;
     end;
 
@@ -565,9 +774,9 @@ begin
     begin
       SaveIndex := StartIndex;
       if ReadCharLiteral(ASourceText, StartIndex, Lexeme) then
-        AddToken(tkCharLiteral, Lexeme, SaveIndex - 1)
+        AddTokenAt(tkCharLiteral, Lexeme, SaveIndex, TokenLine)
       else
-        AddToken(tkUnknown, '#', SaveIndex - 1);
+        AddTokenAt(tkUnknown, '#', SaveIndex, TokenLine);
       Continue;
     end;
 
@@ -576,7 +785,7 @@ begin
       SaveIndex := StartIndex;
       if not ReadIntegerLiteral(ASourceText, StartIndex, IntegerLexeme) then
       begin
-        AddToken(tkUnknown, '$', SaveIndex - 1);
+        AddTokenAt(tkUnknown, '$', SaveIndex, TokenLine);
         Continue;
       end;
       NumberStartIndex := SaveIndex;
@@ -673,14 +882,15 @@ begin
           StartIndex := ExponentSaveIndex;
       end;
       if IsReal then
-        AddToken(tkRealLiteral, IntegerLexeme, NumberStartIndex - 1)
+        AddTokenAt(tkRealLiteral, IntegerLexeme, NumberStartIndex, TokenLine)
       else
-        AddToken(tkIntegerLiteral, IntegerLexeme, NumberStartIndex - 1);
+        AddTokenAt(tkIntegerLiteral, IntegerLexeme, NumberStartIndex, TokenLine);
       Continue;
     end;
 
     if IsIdentifierStart(CurrentChar) then
     begin
+      SaveIndex := StartIndex;
       Lexeme := CurrentChar;
       Inc(StartIndex);
       while (StartIndex <= Length(ASourceText)) and
@@ -689,7 +899,7 @@ begin
         Lexeme := Lexeme + ASourceText[StartIndex];
         Inc(StartIndex);
       end;
-      AddToken(ResolveIdentifierKind(Lexeme), Lexeme, StartIndex - Length(Lexeme) - 1);
+      AddTokenAt(ResolveIdentifierKind(Lexeme), Lexeme, SaveIndex, TokenLine);
       Continue;
     end;
 
@@ -697,131 +907,135 @@ begin
     begin
       SaveIndex := StartIndex;
       Lexeme := ReadStringLiteral(ASourceText, StartIndex);
-      AddToken(tkStringLiteral, Lexeme, SaveIndex - 1);
+      AddTokenAt(tkStringLiteral, Lexeme, SaveIndex, TokenLine);
       Continue;
     end;
 
     case CurrentChar of
       ';':
-        AddToken(tkSemicolon, ';', StartIndex - 1);
+        AddTokenAt(tkSemicolon, ';', StartIndex, TokenLine);
       '.':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '.') then
           begin
-            AddToken(tkDotDot, '..', StartIndex - 1);
+            AddTokenAt(tkDotDot, '..', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkDot, '.', StartIndex - 1);
+            AddTokenAt(tkDot, '.', StartIndex, TokenLine);
         end;
       ',':
-        AddToken(tkComma, ',', StartIndex - 1);
+        AddTokenAt(tkComma, ',', StartIndex, TokenLine);
       ':':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkAssign, ':=', StartIndex - 1);
+            AddTokenAt(tkAssign, ':=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkColon, ':', StartIndex - 1);
+            AddTokenAt(tkColon, ':', StartIndex, TokenLine);
         end;
       '+':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkPlusAssign, '+=', StartIndex - 1);
+            AddTokenAt(tkPlusAssign, '+=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkPlus, '+', StartIndex - 1);
+            AddTokenAt(tkPlus, '+', StartIndex, TokenLine);
         end;
       '-':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkMinusAssign, '-=', StartIndex - 1);
+            AddTokenAt(tkMinusAssign, '-=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkMinus, '-', StartIndex - 1);
+            AddTokenAt(tkMinus, '-', StartIndex, TokenLine);
         end;
       '*':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkStarAssign, '*=', StartIndex - 1);
+            AddTokenAt(tkStarAssign, '*=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkStar, '*', StartIndex - 1);
+            AddTokenAt(tkStar, '*', StartIndex, TokenLine);
         end;
       '/':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkSlashAssign, '/=', StartIndex - 1);
+            AddTokenAt(tkSlashAssign, '/=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkSlash, '/', StartIndex - 1);
+            AddTokenAt(tkSlash, '/', StartIndex, TokenLine);
         end;
       '=':
-        AddToken(tkEquals, '=', StartIndex - 1);
+        AddTokenAt(tkEquals, '=', StartIndex, TokenLine);
       '<':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '>') then
           begin
-            AddToken(tkNotEquals, '<>', StartIndex - 1);
+            AddTokenAt(tkNotEquals, '<>', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkLessEqual, '<=', StartIndex - 1);
+            AddTokenAt(tkLessEqual, '<=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkLessThan, '<', StartIndex - 1);
+            AddTokenAt(tkLessThan, '<', StartIndex, TokenLine);
         end;
       '>':
         begin
           if (StartIndex < Length(ASourceText)) and
             (ASourceText[StartIndex + 1] = '=') then
           begin
-            AddToken(tkGreaterEqual, '>=', StartIndex - 1);
+            AddTokenAt(tkGreaterEqual, '>=', StartIndex, TokenLine);
             Inc(StartIndex);
           end
           else
-            AddToken(tkGreaterThan, '>', StartIndex - 1);
+            AddTokenAt(tkGreaterThan, '>', StartIndex, TokenLine);
         end;
       '(':
-        AddToken(tkLParen, '(', StartIndex - 1);
+        AddTokenAt(tkLParen, '(', StartIndex, TokenLine);
       ')':
-        AddToken(tkRParen, ')', StartIndex - 1);
+        AddTokenAt(tkRParen, ')', StartIndex, TokenLine);
       '[':
-        AddToken(tkLBracket, '[', StartIndex - 1);
+        AddTokenAt(tkLBracket, '[', StartIndex, TokenLine);
       ']':
-        AddToken(tkRBracket, ']', StartIndex - 1);
+        AddTokenAt(tkRBracket, ']', StartIndex, TokenLine);
       '@':
-        AddToken(tkAt, '@', StartIndex - 1);
+        AddTokenAt(tkAt, '@', StartIndex, TokenLine);
       '^':
-        AddToken(tkCaret, '^', StartIndex - 1);
+        AddTokenAt(tkCaret, '^', StartIndex, TokenLine);
     else
-      AddToken(tkUnknown, CurrentChar, StartIndex - 1);
+      AddTokenAt(tkUnknown, CurrentChar, StartIndex, TokenLine);
     end;
 
     Inc(StartIndex);
   end;
 
-  AddToken(tkEOF, '', Length(ASourceText));
+  AddToken(
+    tkEOF, '', Length(ASourceText),
+    FCurrentLine,
+    Length(ASourceText) - FLineStartByte + 1
+  );
 end;
 
 function TLexerResult.TokenCount: LongInt;

@@ -5,17 +5,20 @@
     lex_snapshot <path-to-source.pas>
 
   Output (stdout, one line per token):
-    <offset>\t<length>\t<kind-name>\t<lexeme-escaped>
+    <offset>:<line>:<col>\t<length>\t<kind-name>\t<lexeme-escaped>
 
   Where:
     offset      0-based byte offset of the token's first byte
+    line        1-based source line of the first byte
+    col         1-based byte-column of the first byte (column 1 =
+                first byte after the most recent line terminator,
+                or first byte of file)
     length      byte length of the token's lexeme
     kind-name   stable kind label from TokenKindName
     lexeme      Pascal-escaped lexeme (single-line, ASCII-safe)
 
-  This tool intentionally emits the EOF token as well. Trivia
-  (whitespace, comments) are NOT emitted today — that gap is one
-  of the things the lexer-spec work will address.
+  Trivia (whitespace, comments) are NOT emitted today — that gap
+  is one of the things the lexer-spec work will address.
 }
 program lex_snapshot;
 
@@ -91,7 +94,9 @@ begin
       Tok := Lex.TokenAt(I);
       Length_ := System.Length(Tok.Lexeme);
       Writeln(
-        Tok.ByteOffset, #9,
+        Tok.ByteOffset, ':',
+        Tok.Line, ':',
+        Tok.Column, #9,
         Length_, #9,
         TokenKindName(Tok.Kind), #9,
         EscapeLexeme(Tok.Lexeme)
