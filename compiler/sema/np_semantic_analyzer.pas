@@ -2184,7 +2184,7 @@ end;
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
   I, ArgIndex: LongInt;
-  Child, Arg, BranchNode, DeclNode: TGreenNode;
+  Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
   Decoded, StringValue: string;
@@ -2309,23 +2309,30 @@ begin
       end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
       begin
+        Arg := nil;
+        if (Child.ChildCount >= 1) and
+          (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+          Arg := Child.ChildAt(0)
+        else
+          Arg := Child;
         if FNoFold then
         begin
-          for ArgIndex := 0 to Child.ChildCount - 1 do
+          for ArgIndex := 1 to Arg.ChildCount - 1 do
           begin
-            Arg := Child.ChildAt(ArgIndex);
-            if Arg = nil then
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if RhsNode = nil then
               Continue;
-            if Arg.NodeKind = gnkStringLiteral then
+            if RhsNode.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
                 'write-string-runtime', 'Write', 0, 0,
-                DecodePascalStringLiteral(Arg.Text)
+                DecodePascalStringLiteral(RhsNode.Text)
               )
-            else if EvaluateStringConstant(Arg, StringValue) then
+            else if EvaluateStringConstant(RhsNode, StringValue) then
               FModel.AddTypedHirNode(
                 'write-string-runtime', 'Write', 0, 0, StringValue
               )
-            else if EncodeRuntimeIntExprFold(Arg, Operand) then
+            else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
               FModel.AddTypedHirNode(
                 'write-int-runtime', 'Write', 0, 0, Operand
               );
@@ -2337,16 +2344,16 @@ begin
           Continue;
         end;
         Decoded := '';
-        for ArgIndex := 0 to Child.ChildCount - 1 do
+        for ArgIndex := 1 to Arg.ChildCount - 1 do
         begin
-          Arg := Child.ChildAt(ArgIndex);
-          if Arg = nil then
+          RhsNode := Arg.ChildAt(ArgIndex);
+          if RhsNode = nil then
             Continue;
-          if Arg.NodeKind = gnkStringLiteral then
-            Decoded := Decoded + DecodePascalStringLiteral(Arg.Text)
-          else if EvaluateStringConstant(Arg, StringValue) then
+          if RhsNode.NodeKind = gnkStringLiteral then
+            Decoded := Decoded + DecodePascalStringLiteral(RhsNode.Text)
+          else if EvaluateStringConstant(RhsNode, StringValue) then
             Decoded := Decoded + StringValue
-          else if EvaluateIntegerConstant(Arg, Value) then
+          else if EvaluateIntegerConstant(RhsNode, Value) then
             Decoded := Decoded + IntToStr(Value);
         end;
         if SameText(Child.Text, 'WriteLn') then
