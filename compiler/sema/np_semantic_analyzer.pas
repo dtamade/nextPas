@@ -83,6 +83,8 @@ type
     procedure CheckUnreachableCode;
     procedure CheckUnreachableInNode(const ANode: TGreenNode;
       var ATerminated: Boolean);
+    procedure CheckDuplicateCaseLabels;
+    procedure CheckCaseLabelsInNode(const ANode: TGreenNode);
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -1110,6 +1112,83 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.CheckCaseLabelsInNode(const ANode: TGreenNode);
+var
+  I, J, K: LongInt;
+  Child, Selector, Label1, Label2: TGreenNode;
+  Val1, Val2: Int64;
+  SeenValues: array of Int64;
+  SeenCount: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  if ANode.NodeKind = gnkCaseStatement then
+  begin
+    SeenCount := 0;
+    SetLength(SeenValues, 0);
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Selector := ANode.ChildAt(I);
+      if (Selector = nil) or (Selector.NodeKind <> gnkCaseSelector) then
+        Continue;
+      for J := 0 to Selector.ChildCount - 1 do
+      begin
+        Label1 := Selector.ChildAt(J);
+        if (Label1 = nil) or (Label1.NodeKind <> gnkCaseLabel) then
+          Continue;
+        if (Label1.ChildCount > 0) and
+          EvaluateIntegerConstant(Label1.ChildAt(0), Val1) then
+        begin
+          for K := 0 to SeenCount - 1 do
+          begin
+            if SeenValues[K] = Val1 then
+            begin
+              FDiagnostics.EmitWarning(
+                'sema.duplicate-case-label',
+                'sema',
+                FRootFileId,
+                Label1.ByteOffset,
+                'duplicate case label value ' + IntToStr(Val1)
+              );
+              Break;
+            end;
+          end;
+          Inc(SeenCount);
+          SetLength(SeenValues, SeenCount);
+          SeenValues[SeenCount - 1] := Val1;
+        end;
+      end;
+    end;
+  end
+  else
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child <> nil then
+        CheckCaseLabelsInNode(Child);
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckDuplicateCaseLabels;
+var
+  RootNode, Child: TGreenNode;
+  I: LongInt;
+begin
+  if FRootAst = nil then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  for I := 0 to RootNode.ChildCount - 1 do
+  begin
+    Child := RootNode.ChildAt(I);
+    if Child <> nil then
+      CheckCaseLabelsInNode(Child);
+  end;
+end;
+
 procedure TSemanticAnalyzer.SeedUnitSymbolsAndHir;
 var
   Index: LongInt;
@@ -1253,6 +1332,7 @@ begin
   SeedHaltCalls;
   CheckUnusedSymbols;
   CheckUnreachableCode;
+  CheckDuplicateCaseLabels;
 
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
