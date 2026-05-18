@@ -71,6 +71,7 @@ type
     ): LongInt;
     function IsBuiltinProcedure(const AName: string): Boolean;
     function InferExpressionType(const ANode: TGreenNode): LongInt;
+    function AreTypesCompatible(const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
     procedure SeedBuiltinTypes;
     procedure AssignScopesToSymbols;
     procedure CheckDuplicateDeclarations;
@@ -643,6 +644,73 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.AreTypesCompatible(
+  const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
+var
+  IntIds: array[0..7] of LongInt;
+  StrIds: array[0..3] of LongInt;
+  I: LongInt;
+  LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
+  LhsType, RhsType: TSemanticType;
+begin
+  if ALhsTypeId = ARhsTypeId then
+    Exit(True);
+  if (ALhsTypeId = 0) or (ARhsTypeId = 0) then
+    Exit(True);
+
+  LhsType := FModel.TypeAt(ALhsTypeId - 1);
+  RhsType := FModel.TypeAt(ARhsTypeId - 1);
+  if (LhsType.Kind = 'declared') or (RhsType.Kind = 'declared') then
+    Exit(True);
+
+  IntIds[0] := FModel.FindTypeByName('Byte');
+  IntIds[1] := FModel.FindTypeByName('Word');
+  IntIds[2] := FModel.FindTypeByName('LongInt');
+  IntIds[3] := FModel.FindTypeByName('Integer');
+  IntIds[4] := FModel.FindTypeByName('Int64');
+  IntIds[5] := FModel.FindTypeByName('QWord');
+  IntIds[6] := FModel.FindTypeByName('LongWord');
+  IntIds[7] := FModel.FindTypeByName('Single');
+
+  LhsIsInt := False;
+  RhsIsInt := False;
+  for I := 0 to 7 do
+  begin
+    if ALhsTypeId = IntIds[I] then LhsIsInt := True;
+    if ARhsTypeId = IntIds[I] then RhsIsInt := True;
+  end;
+  if LhsIsInt and RhsIsInt then
+    Exit(True);
+
+  StrIds[0] := FModel.FindTypeByName('AnsiString');
+  StrIds[1] := FModel.FindTypeByName('ShortString');
+  StrIds[2] := FModel.FindTypeByName('WideString');
+  StrIds[3] := FModel.FindTypeByName('UnicodeString');
+
+  LhsIsStr := False;
+  RhsIsStr := False;
+  for I := 0 to 3 do
+  begin
+    if ALhsTypeId = StrIds[I] then LhsIsStr := True;
+    if ARhsTypeId = StrIds[I] then RhsIsStr := True;
+  end;
+  if LhsIsStr and RhsIsStr then
+    Exit(True);
+
+  if ALhsTypeId = FModel.FindTypeByName('Boolean') then
+    Exit(ARhsTypeId = FModel.FindTypeByName('Boolean'));
+
+  if LhsIsStr and (ARhsTypeId = FModel.FindTypeByName('Char')) then
+    Exit(True);
+  if (ALhsTypeId = FModel.FindTypeByName('Char')) and RhsIsStr then
+    Exit(True);
+  if (ALhsTypeId = FModel.FindTypeByName('Char')) and
+    (ARhsTypeId = FModel.FindTypeByName('Char')) then
+    Exit(True);
+
+  Result := False;
+end;
+
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
 begin
   FModel.AddType('Boolean', 'builtin');
@@ -777,14 +845,9 @@ var
   LhsSymId: LongInt;
   LhsSym: TSemanticSymbol;
   LhsTypeId, RhsTypeId: LongInt;
-  IntTypeId, StrTypeId, BoolTypeId, CharTypeId: LongInt;
 begin
   if ANode = nil then
     Exit;
-  IntTypeId := FModel.FindTypeByName('Integer');
-  StrTypeId := FModel.FindTypeByName('AnsiString');
-  BoolTypeId := FModel.FindTypeByName('Boolean');
-  CharTypeId := FModel.FindTypeByName('Char');
 
   case ANode.NodeKind of
     gnkAssignmentStatement:
@@ -816,24 +879,13 @@ begin
         RhsTypeId := InferExpressionType(RhsChild);
         if RhsTypeId = 0 then
           Exit;
-        if LhsTypeId = RhsTypeId then
+        if AreTypesCompatible(LhsTypeId, RhsTypeId) then
           Exit;
-        if (LhsTypeId = IntTypeId) and (RhsTypeId = StrTypeId) then
-          EmitSemaError(
-            'sema.type-mismatch',
-            'cannot assign string to integer variable "' + LhsName + '"',
-            ANode.ByteOffset
-          )
-        else if (LhsTypeId = StrTypeId) and (RhsTypeId = IntTypeId) then
-          EmitSemaError(
-            'sema.type-mismatch',
-            'cannot assign integer to string variable "' + LhsName + '"',
-            ANode.ByteOffset
-          )
-        else if (LhsTypeId = BoolTypeId) and (RhsTypeId = IntTypeId) then
-          Exit
-        else if (LhsTypeId = IntTypeId) and (RhsTypeId = BoolTypeId) then
-          Exit;
+        EmitSemaError(
+          'sema.type-mismatch',
+          'incompatible types: cannot assign to "' + LhsName + '"',
+          ANode.ByteOffset
+        );
       end;
     gnkStatementList, gnkBeginBlock, gnkIfStatement,
     gnkWhileStatement, gnkForStatement, gnkForInStatement,

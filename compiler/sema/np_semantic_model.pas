@@ -143,6 +143,7 @@ type
     function FindSymbolByName(const AName: string): LongInt;
     function SymbolTypeId(const ASymbolId: LongInt): LongInt;
     function TypeCount: LongInt;
+    function TypeAt(const AIndex: LongInt): TSemanticType;
     function TypedHirNodeCount: LongInt;
     function TypedHirNodeAt(const AIndex: LongInt): TTypedHirNode;
     function RuntimeContractCount: LongInt;
@@ -438,6 +439,18 @@ end;
 function TSemanticModel.TypeCount: LongInt;
 begin
   Result := Length(FTypes);
+end;
+
+function TSemanticModel.TypeAt(const AIndex: LongInt): TSemanticType;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FTypes)) then
+    Result := FTypes[AIndex]
+  else
+  begin
+    Result.TypeId := 0;
+    Result.Name := '';
+    Result.Kind := '';
+  end;
 end;
 
 function TSemanticModel.TypedHirNodeCount: LongInt;
