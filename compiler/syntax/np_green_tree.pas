@@ -1114,7 +1114,7 @@ begin
   while (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind in [tkEquals, tkNotEquals,
       tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
-      tkInKeyword, tkIsKeyword]) do
+      tkInKeyword, tkIsKeyword, tkAsKeyword]) do
   begin
     OpToken := CurrentToken(ALexer, ACursor);
     Inc(ACursor);
@@ -2735,6 +2735,15 @@ var
           StmtNode := TGreenNode.Create(gnkExitStatement, Token.ByteOffset, 0, '');
           List.AppendChild(StmtNode);
           Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+          begin
+            Inc(ACursor);
+            RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if RHS <> nil then
+              StmtNode.AppendChild(RHS);
+            MatchTokenSilent(ALexer, ACursor, tkRParen);
+          end;
           Inc(ATree.FNodeCount);
           Result := True;
         end;
