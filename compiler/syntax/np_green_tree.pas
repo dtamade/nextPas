@@ -1364,6 +1364,29 @@ begin
           Length(Token.Lexeme), Token.Lexeme);
         Inc(ACursor);
       end;
+    tkArrayKeyword:
+      begin
+        Result := TGreenNode.Create(gnkArrayType, Token.ByteOffset, 0, '');
+        Inc(ACursor);
+        if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
+        begin
+          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if ArgNode <> nil then
+            Result.AppendChild(ArgNode);
+          MatchTokenSilent(ALexer, ACursor, tkRBracket);
+        end;
+        if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
+        begin
+          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if ArgNode <> nil then
+            Result.AppendChild(ArgNode);
+        end;
+      end;
+    tkCaret:
+      begin
+        Inc(ACursor);
+        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+      end;
   else
     Exit(nil);
   end;
