@@ -1794,6 +1794,18 @@ begin
       tkTypeKeyword:
         Result := ParseTypeSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
+      tkLabelKeyword:
+        begin
+          AParent.AppendChild(TGreenNode.Create(gnkLabelSection,
+            CurrentToken(ALexer, ACursor).ByteOffset, 0, ''));
+          Inc(ATree.FNodeCount);
+          Inc(ACursor);
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            Inc(ACursor);
+          MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+        end;
       tkProcedureKeyword:
         if not TryParseForeignProcedureDecl(ALexer, ACursor, ATree, AParent) then
           Result := ParseProcedureDecl(ALexer, ACursor, AParent, ATree,
@@ -2424,6 +2436,13 @@ var
           StmtNode := TGreenNode.Create(gnkGotoStatement, Token.ByteOffset, 0, '');
           List.AppendChild(StmtNode);
           Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind in
+              [tkIdentifier, tkIntegerLiteral]) then
+          begin
+            StmtNode.FText := CurrentToken(ALexer, ACursor).Lexeme;
+            Inc(ACursor);
+          end;
           Inc(ATree.FNodeCount);
           Result := True;
         end;
@@ -2443,8 +2462,28 @@ var
           Result := True;
         end;
       tkIdentifier:
-        Result := ParseAssignmentOrCall(ALexer, ACursor, List, ATree,
-          ADiagnostics, ARootFileId);
+        begin
+          if (ACursor + 1 < ALexer.TokenCount) and
+            (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
+          begin
+            Inc(ACursor, 2);
+            Result := True;
+          end
+          else
+            Result := ParseAssignmentOrCall(ALexer, ACursor, List, ATree,
+              ADiagnostics, ARootFileId);
+        end;
+      tkIntegerLiteral:
+        begin
+          if (ACursor + 1 < ALexer.TokenCount) and
+            (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
+          begin
+            Inc(ACursor, 2);
+            Result := True;
+          end
+          else
+            Result := False;
+        end;
     else
       Result := False;
     end;
@@ -2461,6 +2500,12 @@ begin
   begin
     if not ParseStatement then
     begin
+      List.AppendChild(TGreenNode.Create(gnkError,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0,
+        CurrentToken(ALexer, ACursor).Lexeme));
+      Inc(ATree.FNodeCount);
+      EmitSyntaxError(ADiagnostics, ARootFileId,
+        CurrentToken(ALexer, ACursor), 'statement');
       SkipToSyncSet(ALexer, ACursor,
         ATerminatorSet + [tkSemicolon]);
       if (ACursor < ALexer.TokenCount) and
