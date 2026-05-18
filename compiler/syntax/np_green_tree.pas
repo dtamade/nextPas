@@ -932,6 +932,7 @@ begin
             if (ACursor < ALexer.TokenCount) and
               ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
                (CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+               (CurrentToken(ALexer, ACursor).Kind = tkMessageKeyword) or
                (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword) or
                (CurrentToken(ALexer, ACursor).Kind = tkFileKeyword)) then
             begin
@@ -1175,6 +1176,7 @@ begin
           if (ACursor < ALexer.TokenCount) and
             ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
              (CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
+             (CurrentToken(ALexer, ACursor).Kind = tkMessageKeyword) or
              (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword) or
              (CurrentToken(ALexer, ACursor).Kind = tkFileKeyword)) then
           begin
