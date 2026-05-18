@@ -1473,6 +1473,13 @@ begin
     end;
 
     if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
+    begin
+      Inc(ACursor);
+      ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+    end;
+
+    if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
       Inc(ACursor);
   end;
