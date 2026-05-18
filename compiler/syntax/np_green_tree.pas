@@ -1618,11 +1618,36 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
     begin
       Inc(ACursor);
-      ValueExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
-      if ValueExpr <> nil then
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
       begin
-        Decl.AppendChild(ValueExpr);
-        Inc(ATree.FNodeCount);
+        Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        begin
+          if CurrentToken(ALexer, ACursor).Kind = tkLParen then
+          begin
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+            MatchTokenSilent(ALexer, ACursor, tkRParen);
+          end
+          else
+            Inc(ACursor);
+        end;
+        MatchTokenSilent(ALexer, ACursor, tkRParen);
+      end
+      else
+      begin
+        ValueExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+        if ValueExpr <> nil then
+        begin
+          Decl.AppendChild(ValueExpr);
+          Inc(ATree.FNodeCount);
+        end;
       end;
     end;
 
