@@ -2318,11 +2318,18 @@ begin
           Arg := Child;
         if FNoFold then
         begin
-          for ArgIndex := 1 to Arg.ChildCount - 1 do
+          if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) then
+            ArgIndex := 1
+          else
+            ArgIndex := 0;
+          while ArgIndex < Arg.ChildCount do
           begin
             RhsNode := Arg.ChildAt(ArgIndex);
             if RhsNode = nil then
+            begin
+              Inc(ArgIndex);
               Continue;
+            end;
             if RhsNode.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
                 'write-string-runtime', 'Write', 0, 0,
@@ -2336,6 +2343,7 @@ begin
               FModel.AddTypedHirNode(
                 'write-int-runtime', 'Write', 0, 0, Operand
               );
+            Inc(ArgIndex);
           end;
           if SameText(Child.Text, 'WriteLn') then
             FModel.AddTypedHirNode(
@@ -2344,17 +2352,25 @@ begin
           Continue;
         end;
         Decoded := '';
-        for ArgIndex := 1 to Arg.ChildCount - 1 do
+        if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) then
+          ArgIndex := 1
+        else
+          ArgIndex := 0;
+        while ArgIndex < Arg.ChildCount do
         begin
           RhsNode := Arg.ChildAt(ArgIndex);
           if RhsNode = nil then
+          begin
+            Inc(ArgIndex);
             Continue;
+          end;
           if RhsNode.NodeKind = gnkStringLiteral then
             Decoded := Decoded + DecodePascalStringLiteral(RhsNode.Text)
           else if EvaluateStringConstant(RhsNode, StringValue) then
             Decoded := Decoded + StringValue
           else if EvaluateIntegerConstant(RhsNode, Value) then
             Decoded := Decoded + IntToStr(Value);
+          Inc(ArgIndex);
         end;
         if SameText(Child.Text, 'WriteLn') then
           Decoded := Decoded + #10;
