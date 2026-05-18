@@ -80,6 +80,9 @@ type
     procedure CheckTypeMismatches;
     procedure CheckTypeMismatchesInNode(const ANode: TGreenNode);
     procedure CheckUnusedSymbols;
+    procedure CheckUnreachableCode;
+    procedure CheckUnreachableInNode(const ANode: TGreenNode;
+      var ATerminated: Boolean);
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -1022,6 +1025,91 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.CheckUnreachableInNode(const ANode: TGreenNode;
+  var ATerminated: Boolean);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  ChildTerminated: Boolean;
+begin
+  if ANode = nil then
+    Exit;
+  ATerminated := False;
+
+  if ANode.NodeKind = gnkStatementList then
+  begin
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child = nil then
+        Continue;
+      if ATerminated then
+      begin
+        if (Child.NodeKind <> gnkError) then
+          FDiagnostics.EmitWarning(
+            'sema.unreachable-code',
+            'sema',
+            FRootFileId,
+            Child.ByteOffset,
+            'unreachable code after unconditional exit'
+          );
+        Exit;
+      end;
+      ChildTerminated := False;
+      CheckUnreachableInNode(Child, ChildTerminated);
+      if ChildTerminated then
+        ATerminated := True;
+    end;
+  end
+  else
+  begin
+    case ANode.NodeKind of
+      gnkExitStatement:
+        ATerminated := True;
+      gnkBreakStatement:
+        ATerminated := True;
+      gnkContinueStatement:
+        ATerminated := True;
+      gnkProcedureCallStatement:
+        if SameText(ANode.Text, 'Halt') then
+          ATerminated := True;
+      gnkBeginBlock, gnkIfStatement, gnkWhileStatement,
+      gnkForStatement, gnkRepeatStatement, gnkCaseStatement,
+      gnkTryExceptStatement, gnkTryFinallyStatement:
+        begin
+          for I := 0 to ANode.ChildCount - 1 do
+          begin
+            Child := ANode.ChildAt(I);
+            if Child <> nil then
+              CheckUnreachableInNode(Child, ChildTerminated);
+          end;
+        end;
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckUnreachableCode;
+var
+  RootNode, Child: TGreenNode;
+  I: LongInt;
+  Terminated: Boolean;
+begin
+  if FRootAst = nil then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  for I := 0 to RootNode.ChildCount - 1 do
+  begin
+    Child := RootNode.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    begin
+      Terminated := False;
+      CheckUnreachableInNode(Child, Terminated);
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.SeedUnitSymbolsAndHir;
 var
   Index: LongInt;
@@ -1164,6 +1252,7 @@ begin
   SeedRuntimeVarDecls;
   SeedHaltCalls;
   CheckUnusedSymbols;
+  CheckUnreachableCode;
 
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
