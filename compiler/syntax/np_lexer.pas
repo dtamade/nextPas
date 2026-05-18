@@ -153,12 +153,30 @@ type
     tkEOF
   );
 
+  TTriviaKind = (
+    tvkWhitespace,
+    tvkLineTerminator,
+    tvkLineComment,
+    tvkBraceComment,
+    tvkParenStarComment
+  );
+
+  TTriviaPiece = record
+    Kind: TTriviaKind;
+    ByteOffset: LongInt;
+    Length: LongInt;
+  end;
+
+  TTriviaPieces = array of TTriviaPiece;
+
   TToken = record
     Kind: TTokenKind;
     Lexeme: string;
     ByteOffset: LongInt;
     Line: LongInt;
     Column: LongInt;
+    LeadingTrivia: TTriviaPieces;
+    TrailingTrivia: TTriviaPieces;
   end;
 
   TLexerResult = class
@@ -168,11 +186,18 @@ type
     FLineStartByte: LongInt;
     FDiagnostics: TDiagnosticsSink;
     FFileId: TCoreId;
+    FPendingTrivia: TTriviaPieces;
     procedure ReportError(
       const ACode: string;
       const AByteOffset: LongInt;
       const AMessageText: string
     );
+    procedure CapturePendingTrivia(
+      const AKind: TTriviaKind;
+      const AByteOffset: LongInt;
+      const ALength: LongInt
+    );
+    procedure FlushPendingTriviaToToken(const ATokenIndex: SizeInt);
     procedure AdvanceNewline(
       const ASourceText: string;
       var AIndex: SizeInt
@@ -678,6 +703,7 @@ begin
   FLineStartByte := 0;
   FDiagnostics := ADiagnostics;
   FFileId := AFileId;
+  SetLength(FPendingTrivia, 0);
   LexSource(ASourceText);
 end;
 
@@ -690,6 +716,77 @@ begin
   if FDiagnostics = nil then
     Exit;
   FDiagnostics.EmitError(ACode, 'lexer', FFileId, AByteOffset, AMessageText);
+end;
+
+procedure TLexerResult.CapturePendingTrivia(
+  const AKind: TTriviaKind;
+  const AByteOffset: LongInt;
+  const ALength: LongInt
+);
+var
+  NextIndex: SizeInt;
+begin
+  if ALength <= 0 then
+    Exit;
+  NextIndex := System.Length(FPendingTrivia);
+  SetLength(FPendingTrivia, NextIndex + 1);
+  FPendingTrivia[NextIndex].Kind := AKind;
+  FPendingTrivia[NextIndex].ByteOffset := AByteOffset;
+  FPendingTrivia[NextIndex].Length := ALength;
+end;
+
+procedure TLexerResult.FlushPendingTriviaToToken(const ATokenIndex: SizeInt);
+var
+  TerminatorIndex, I, LeadingCount, TrailingCount: SizeInt;
+  PrevTokenIndex: SizeInt;
+begin
+  if System.Length(FPendingTrivia) = 0 then
+    Exit;
+
+  { Per spec §"Trivia 处理":
+    - Trivia between two tokens that does NOT cross a line
+      terminator belongs to the previous token's TrailingTrivia.
+    - Trivia from the first line terminator onward belongs to
+      the next token's LeadingTrivia.
+    - If there is no previous token (this is the first token in
+      the stream), all trivia goes into LeadingTrivia. }
+  TerminatorIndex := -1;
+  for I := 0 to System.Length(FPendingTrivia) - 1 do
+    if FPendingTrivia[I].Kind = tvkLineTerminator then
+    begin
+      TerminatorIndex := I;
+      Break;
+    end;
+
+  PrevTokenIndex := ATokenIndex - 1;
+
+  if PrevTokenIndex < 0 then
+  begin
+    LeadingCount := System.Length(FPendingTrivia);
+    SetLength(FTokens[ATokenIndex].LeadingTrivia, LeadingCount);
+    for I := 0 to LeadingCount - 1 do
+      FTokens[ATokenIndex].LeadingTrivia[I] := FPendingTrivia[I];
+  end
+  else if TerminatorIndex < 0 then
+  begin
+    TrailingCount := System.Length(FPendingTrivia);
+    SetLength(FTokens[PrevTokenIndex].TrailingTrivia, TrailingCount);
+    for I := 0 to TrailingCount - 1 do
+      FTokens[PrevTokenIndex].TrailingTrivia[I] := FPendingTrivia[I];
+  end
+  else
+  begin
+    TrailingCount := TerminatorIndex;
+    LeadingCount := System.Length(FPendingTrivia) - TerminatorIndex;
+    SetLength(FTokens[PrevTokenIndex].TrailingTrivia, TrailingCount);
+    for I := 0 to TrailingCount - 1 do
+      FTokens[PrevTokenIndex].TrailingTrivia[I] := FPendingTrivia[I];
+    SetLength(FTokens[ATokenIndex].LeadingTrivia, LeadingCount);
+    for I := 0 to LeadingCount - 1 do
+      FTokens[ATokenIndex].LeadingTrivia[I] := FPendingTrivia[TerminatorIndex + I];
+  end;
+
+  SetLength(FPendingTrivia, 0);
 end;
 
 procedure TLexerResult.AddToken(
@@ -709,6 +806,9 @@ begin
   FTokens[NextIndex].ByteOffset := AByteOffset;
   FTokens[NextIndex].Line := ALine;
   FTokens[NextIndex].Column := AColumn;
+  SetLength(FTokens[NextIndex].LeadingTrivia, 0);
+  SetLength(FTokens[NextIndex].TrailingTrivia, 0);
+  FlushPendingTriviaToToken(NextIndex);
 end;
 
 procedure TLexerResult.AdvanceNewline(
@@ -938,13 +1038,23 @@ begin
 
     if (CurrentChar = #13) or (CurrentChar = #10) then
     begin
+      SaveIndex := StartIndex;
       AdvanceNewline(ASourceText, StartIndex);
+      CapturePendingTrivia(tvkLineTerminator,
+        SaveIndex - 1, StartIndex - SaveIndex);
       Continue;
     end;
 
     if CurrentChar in [#0..#32] then
     begin
-      Inc(StartIndex);
+      SaveIndex := StartIndex;
+      while (StartIndex <= Length(ASourceText)) and
+        (ASourceText[StartIndex] in [#0..#32]) and
+        (ASourceText[StartIndex] <> #10) and
+        (ASourceText[StartIndex] <> #13) do
+        Inc(StartIndex);
+      CapturePendingTrivia(tvkWhitespace,
+        SaveIndex - 1, StartIndex - SaveIndex);
       Continue;
     end;
 
@@ -968,7 +1078,10 @@ begin
         Continue;
       end;
       SkipBraceCommentTracking(ASourceText, StartIndex, ClosedFlag);
-      if not ClosedFlag then
+      if ClosedFlag then
+        CapturePendingTrivia(tvkBraceComment,
+          SaveIndex - 1, StartIndex - SaveIndex)
+      else
       begin
         AddTokenAtPos(tkError, '{', SaveIndex, TokenLine, TokenColumn);
         ReportError(
@@ -997,7 +1110,10 @@ begin
         Continue;
       end;
       SkipParenStarCommentTracking(ASourceText, StartIndex, ClosedFlag);
-      if not ClosedFlag then
+      if ClosedFlag then
+        CapturePendingTrivia(tvkParenStarComment,
+          SaveIndex - 1, StartIndex - SaveIndex)
+      else
       begin
         AddTokenAtPos(tkError, '(*', SaveIndex, TokenLine, TokenColumn);
         ReportError(
@@ -1013,7 +1129,10 @@ begin
       (StartIndex < Length(ASourceText)) and
       (ASourceText[StartIndex + 1] = '/') then
     begin
+      SaveIndex := StartIndex;
       SkipLineComment(ASourceText, StartIndex);
+      CapturePendingTrivia(tvkLineComment,
+        SaveIndex - 1, StartIndex - SaveIndex);
       Continue;
     end;
 

@@ -2,23 +2,25 @@
   lex_snapshot — golden-file snapshot tool for the nextPas lexer.
 
   Usage:
-    lex_snapshot <path-to-source.pas>
+    lex_snapshot [--trivia] <path-to-source.pas>
 
-  Output (stdout, one line per token):
+  Default output (stdout, one line per non-trivia token):
     <offset>:<line>:<col>\t<length>\t<kind-name>\t<lexeme-escaped>
 
-  Where:
-    offset      0-based byte offset of the token's first byte
-    line        1-based source line of the first byte
-    col         1-based byte-column of the first byte (column 1 =
-                first byte after the most recent line terminator,
-                or first byte of file)
-    length      byte length of the token's lexeme
-    kind-name   stable kind label from TokenKindName
-    lexeme      Pascal-escaped lexeme (single-line, ASCII-safe)
+  With --trivia, each non-trivia token line is preceded by zero
+  or more leading-trivia lines (prefixed with "L ") and followed
+  by zero or more trailing-trivia lines (prefixed with "T "):
+    L <offset>\t<length>\t<trivia-kind>
+    <token line as above>
+    T <offset>\t<length>\t<trivia-kind>
 
-  Trivia (whitespace, comments) are NOT emitted today — that gap
-  is one of the things the lexer-spec work will address.
+  Where trivia-kind is one of:
+    whitespace | line-terminator | line-comment |
+    brace-comment | paren-star-comment
+
+  Lexeme is double-quoted with \", \\, \t, \n, \r, and \xNN
+  escapes so the output is single-line and ASCII-stable. The EOF
+  token is emitted explicitly (offset = file length, len 0).
 }
 program lex_snapshot;
 
@@ -78,11 +80,32 @@ begin
   Result := Result + '"';
 end;
 
-procedure SnapshotFile(const APath: string);
+function TriviaKindName(const AKind: TTriviaKind): string;
+begin
+  case AKind of
+    tvkWhitespace: Result := 'whitespace';
+    tvkLineTerminator: Result := 'line-terminator';
+    tvkLineComment: Result := 'line-comment';
+    tvkBraceComment: Result := 'brace-comment';
+    tvkParenStarComment: Result := 'paren-star-comment';
+  else
+    Result := 'unknown-trivia';
+  end;
+end;
+
+procedure WriteTrivia(const APrefix: string; const APiece: TTriviaPiece);
+begin
+  Writeln(APrefix, ' ',
+    APiece.ByteOffset, #9,
+    APiece.Length, #9,
+    TriviaKindName(APiece.Kind));
+end;
+
+procedure SnapshotFile(const APath: string; const AIncludeTrivia: Boolean);
 var
   Source: string;
   Lex: TLexerResult;
-  I: LongInt;
+  I, J: LongInt;
   Tok: TToken;
   Length_: LongInt;
 begin
@@ -92,6 +115,9 @@ begin
     for I := 0 to Lex.TokenCount - 1 do
     begin
       Tok := Lex.TokenAt(I);
+      if AIncludeTrivia then
+        for J := 0 to System.Length(Tok.LeadingTrivia) - 1 do
+          WriteTrivia('L', Tok.LeadingTrivia[J]);
       Length_ := System.Length(Tok.Lexeme);
       Writeln(
         Tok.ByteOffset, ':',
@@ -101,19 +127,34 @@ begin
         TokenKindName(Tok.Kind), #9,
         EscapeLexeme(Tok.Lexeme)
       );
+      if AIncludeTrivia then
+        for J := 0 to System.Length(Tok.TrailingTrivia) - 1 do
+          WriteTrivia('T', Tok.TrailingTrivia[J]);
     end;
   finally
     Lex.Free;
   end;
 end;
 
+var
+  IncludeTrivia: Boolean;
+  PathArg: string;
 begin
-  if ParamCount <> 1 then
-    Die('usage: lex_snapshot <path-to-source.pas>', 2);
-  if not FileExists(ParamStr(1)) then
-    Die('file not found: ' + ParamStr(1), 2);
+  IncludeTrivia := False;
+  PathArg := '';
+  if ParamCount = 1 then
+    PathArg := ParamStr(1)
+  else if (ParamCount = 2) and (ParamStr(1) = '--trivia') then
+  begin
+    IncludeTrivia := True;
+    PathArg := ParamStr(2);
+  end
+  else
+    Die('usage: lex_snapshot [--trivia] <path-to-source.pas>', 2);
+  if not FileExists(PathArg) then
+    Die('file not found: ' + PathArg, 2);
   try
-    SnapshotFile(ParamStr(1));
+    SnapshotFile(PathArg, IncludeTrivia);
   except
     on E: Exception do
       Die(E.ClassName + ': ' + E.Message, 1);

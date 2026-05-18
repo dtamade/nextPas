@@ -653,6 +653,25 @@ for fixture in tests/lexer/*.pas; do
     continue
   fi
   rm -f "$actual"
+  trivia_golden="${fixture%.pas}.tokens.trivia"
+  if [ -f "$trivia_golden" ]; then
+    actual_trivia=$(mktemp)
+    if ! "$LEX_SNAPSHOT_BINARY" --trivia "$fixture" >"$actual_trivia" 2>&1; then
+      cat "$actual_trivia"
+      rm -f "$actual_trivia"
+      printf 'lexer-conformance-trivia-snapshot-failed=%s\n' "$fixture"
+      LEX_FIXTURES_FAIL=$((LEX_FIXTURES_FAIL + 1))
+      continue
+    fi
+    if ! diff -u "$trivia_golden" "$actual_trivia" >/dev/null 2>&1; then
+      printf 'lexer-conformance-trivia-diff=%s\n' "$fixture"
+      diff -u "$trivia_golden" "$actual_trivia" || true
+      rm -f "$actual_trivia"
+      LEX_FIXTURES_FAIL=$((LEX_FIXTURES_FAIL + 1))
+      continue
+    fi
+    rm -f "$actual_trivia"
+  fi
   LEX_FIXTURES_PASS=$((LEX_FIXTURES_PASS + 1))
 done
 printf 'lexer-conformance-fixtures-pass=%s\n' "$LEX_FIXTURES_PASS"
