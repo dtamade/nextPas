@@ -890,6 +890,35 @@ begin
           ANode.ByteOffset
         );
       end;
+    gnkProcedureCallStatement:
+      begin
+        LhsName := ANode.Text;
+        if LhsName <> '' then
+        begin
+          LhsSymId := FModel.LookupSymbol(LhsName, FCurrentScopeId);
+          if LhsSymId > 0 then
+          begin
+            LhsSym := FModel.SymbolAt(LhsSymId - 1);
+            if (LhsSym.ParamCount >= 0) and
+              ((LhsSym.Kind = 'procedure') or (LhsSym.Kind = 'function')) then
+            begin
+              RhsChild := ANode.ChildAt(0);
+              if (RhsChild <> nil) and (RhsChild.NodeKind = gnkFunctionCall) then
+                LhsTypeId := RhsChild.ChildCount - 1
+              else
+                LhsTypeId := ANode.ChildCount;
+              if LhsTypeId > LhsSym.ParamCount then
+                EmitSemaError(
+                  'sema.wrong-argument-count',
+                  'too many arguments for "' + LhsName + '" (expected ' +
+                    IntToStr(LhsSym.ParamCount) + ', got ' +
+                    IntToStr(LhsTypeId) + ')',
+                  ANode.ByteOffset
+                );
+            end;
+          end;
+        end;
+      end;
     gnkStatementList, gnkBeginBlock, gnkIfStatement,
     gnkWhileStatement, gnkForStatement, gnkForInStatement,
     gnkRepeatStatement, gnkCaseStatement, gnkCaseSelector,
@@ -1178,6 +1207,7 @@ var
   Index, J: LongInt;
   Child, ParamChild: TGreenNode;
   CallableScopeId, SavedScopeId: LongInt;
+  ParamCount: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -1188,6 +1218,7 @@ begin
   CallableScopeId := FModel.AddScope(skCallable, ANode.Text, FCurrentScopeId);
   SavedScopeId := FCurrentScopeId;
   FCurrentScopeId := CallableScopeId;
+  ParamCount := 0;
 
   for Index := 0 to ANode.ChildCount - 1 do
   begin
@@ -1204,6 +1235,7 @@ begin
           FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
             ParamChild.ByteOffset);
           FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+          Inc(ParamCount);
         end;
       end;
     end
@@ -1214,6 +1246,7 @@ begin
     end;
   end;
 
+  FModel.SetSymbolParamCount(SymbolId, ParamCount);
   FCurrentScopeId := SavedScopeId;
 end;
 
@@ -1225,6 +1258,7 @@ var
   J: LongInt;
   Child, ParamChild: TGreenNode;
   CallableScopeId, SavedScopeId: LongInt;
+  ParamCount: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -1245,6 +1279,7 @@ begin
   CallableScopeId := FModel.AddScope(skCallable, ANode.Text, FCurrentScopeId);
   SavedScopeId := FCurrentScopeId;
   FCurrentScopeId := CallableScopeId;
+  ParamCount := 0;
 
   for J := 0 to ANode.ChildCount - 1 do
   begin
@@ -1261,6 +1296,7 @@ begin
           FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
             ParamChild.ByteOffset);
           FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+          Inc(ParamCount);
         end;
       end;
     end
@@ -1271,6 +1307,7 @@ begin
     end;
   end;
 
+  FModel.SetSymbolParamCount(SymbolId, ParamCount);
   FCurrentScopeId := SavedScopeId;
 end;
 
