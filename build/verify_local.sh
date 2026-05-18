@@ -2212,6 +2212,21 @@ fi
 printf 'llvm-fn-square-program-exit=49\n'
 printf 'llvm-fn-square-program=pass\n'
 
+printf 'llvm-fibonacci-program=running\n'
+LLVM_FIBONACCI_OUT_DIR=$(mktemp -d)
+LLVM_FIBONACCI_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_fibonacci.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FIBONACCI_OUT_DIR" >"$LLVM_FIBONACCI_OUTPUT" 2>&1; then
+  cat "$LLVM_FIBONACCI_OUTPUT"
+  fail 'llvm-fibonacci-program-build-failed'
+fi
+LLVM_FIBONACCI_RUN_OUTPUT=$("$LLVM_FIBONACCI_OUT_DIR/llvm_fibonacci" 2>&1 || true)
+LLVM_FIBONACCI_EXIT=$?
+if [ "$LLVM_FIBONACCI_EXIT" -ne 55 ]; then
+  printf 'llvm-fibonacci-expected-exit=55 actual-exit=%d output=%s\n' "$LLVM_FIBONACCI_EXIT" "$LLVM_FIBONACCI_RUN_OUTPUT"
+  fail 'llvm-fibonacci-program-wrong-exit-code'
+fi
+printf 'llvm-fibonacci-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
