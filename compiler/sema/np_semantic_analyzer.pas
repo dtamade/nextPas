@@ -38,6 +38,7 @@ type
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
+    FCurrentScopeId: LongInt;
     FRuntimeVarNames: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     function IsRuntimeVar(const AName: string): Boolean;
@@ -61,7 +62,16 @@ type
       const AMessage: string;
       const AByteOffset: LongInt
     );
+    function RegisterSymbol(
+      const AName: string;
+      const AKind: string;
+      const AOwnerUnitId: string;
+      const ATypeId: LongInt;
+      const AByteOffset: LongInt
+    ): LongInt;
     procedure SeedBuiltinTypes;
+    procedure AssignScopesToSymbols;
+    procedure CheckDuplicateDeclarations;
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -168,6 +178,7 @@ begin
   FNoFold := ANoFold;
   FModel := TSemanticModel.Create;
   FBlockLabelCounter := 0;
+  FCurrentScopeId := 0;
 end;
 
 function TSemanticAnalyzer.NewBlockLabel(const APrefix: string): string;
@@ -485,6 +496,33 @@ begin
   FModel.MarkFailure;
 end;
 
+function TSemanticAnalyzer.RegisterSymbol(
+  const AName: string;
+  const AKind: string;
+  const AOwnerUnitId: string;
+  const ATypeId: LongInt;
+  const AByteOffset: LongInt
+): LongInt;
+var
+  Existing: LongInt;
+begin
+  if (FCurrentScopeId > 0) and (AName <> '') then
+  begin
+    Existing := FModel.FindSymbolInScope(AName, FCurrentScopeId);
+    if Existing > 0 then
+    begin
+      EmitSemaError(
+        'sema.duplicate-declaration',
+        'duplicate identifier "' + AName + '"',
+        AByteOffset
+      );
+    end;
+  end;
+  Result := FModel.AddSymbol(AName, AKind, AOwnerUnitId, ATypeId, AByteOffset);
+  if FCurrentScopeId > 0 then
+    FModel.SetSymbolScope(Result, FCurrentScopeId);
+end;
+
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
 begin
   FModel.AddType('Boolean', 'builtin');
@@ -505,6 +543,49 @@ begin
   FModel.AddType('UnicodeString', 'builtin');
   FModel.AddType('Variant', 'builtin');
   FModel.AddType('OleVariant', 'builtin');
+end;
+
+procedure TSemanticAnalyzer.AssignScopesToSymbols;
+var
+  I: LongInt;
+  Sym: TSemanticSymbol;
+begin
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Sym := FModel.SymbolAt(I);
+    if Sym.ScopeId = 0 then
+      FModel.SetSymbolScope(Sym.SymbolId, FCurrentScopeId);
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckDuplicateDeclarations;
+var
+  I, J: LongInt;
+  SymI, SymJ: TSemanticSymbol;
+begin
+  for I := 0 to FModel.SymbolCount - 2 do
+  begin
+    SymI := FModel.SymbolAt(I);
+    if SymI.Kind = 'unit' then
+      Continue;
+    for J := I + 1 to FModel.SymbolCount - 1 do
+    begin
+      SymJ := FModel.SymbolAt(J);
+      if SymJ.Kind = 'unit' then
+        Continue;
+      if (SymI.ScopeId = SymJ.ScopeId) and SameText(SymI.Name, SymJ.Name) and
+        (SymI.Kind <> 'parameter') and (SymJ.Kind <> 'parameter') and
+        (SymI.Kind <> 'enum-value') and (SymJ.Kind <> 'enum-value') then
+      begin
+        EmitSemaError(
+          'sema.duplicate-declaration',
+          'duplicate identifier "' + SymJ.Name + '"',
+          SymJ.ByteOffset
+        );
+        Exit;
+      end;
+    end;
+  end;
 end;
 
 procedure TSemanticAnalyzer.SeedUnitSymbolsAndHir;
@@ -634,8 +715,10 @@ begin
 
   SeedBuiltinTypes;
   FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
-  FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
+  FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedDeclarations;
+  AssignScopesToSymbols;
+  CheckDuplicateDeclarations;
   CheckAssignmentTypes;
   SeedUnitSymbolsAndHir;
   SeedForeignProcedureBindings;
