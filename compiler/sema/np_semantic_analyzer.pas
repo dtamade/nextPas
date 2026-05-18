@@ -1116,12 +1116,18 @@ var
   SymbolId: LongInt;
   Index, J: LongInt;
   Child, ParamChild: TGreenNode;
+  CallableScopeId, SavedScopeId: LongInt;
 begin
   if ANode = nil then
     Exit;
   SymbolId := FModel.AddSymbol(ANode.Text, 'procedure', AOwnerUnitId, 0,
     ANode.ByteOffset);
   FModel.AddTypedHirNode('procedure-decl', ANode.Text, SymbolId, 0, '');
+
+  CallableScopeId := FModel.AddScope(skCallable, ANode.Text, FCurrentScopeId);
+  SavedScopeId := FCurrentScopeId;
+  FCurrentScopeId := CallableScopeId;
+
   for Index := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(Index);
@@ -1133,8 +1139,11 @@ begin
       begin
         ParamChild := Child.ChildAt(J);
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+        begin
           FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
             ParamChild.ByteOffset);
+          FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+        end;
       end;
     end
     else if Child.NodeKind = gnkBeginBlock then
@@ -1143,6 +1152,8 @@ begin
       Break;
     end;
   end;
+
+  FCurrentScopeId := SavedScopeId;
 end;
 
 procedure TSemanticAnalyzer.ProcessFunctionDecl(const ANode: TGreenNode;
@@ -1152,6 +1163,7 @@ var
   TypeId: LongInt;
   J: LongInt;
   Child, ParamChild: TGreenNode;
+  CallableScopeId, SavedScopeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -1168,6 +1180,11 @@ begin
   SymbolId := FModel.AddSymbol(ANode.Text, 'function', AOwnerUnitId, TypeId,
     ANode.ByteOffset);
   FModel.AddTypedHirNode('function-decl', ANode.Text, SymbolId, TypeId, '');
+
+  CallableScopeId := FModel.AddScope(skCallable, ANode.Text, FCurrentScopeId);
+  SavedScopeId := FCurrentScopeId;
+  FCurrentScopeId := CallableScopeId;
+
   for J := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(J);
@@ -1179,8 +1196,11 @@ begin
       begin
         ParamChild := Child.ChildAt(TypeId);
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+        begin
           FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
             ParamChild.ByteOffset);
+          FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
+        end;
       end;
     end
     else if Child.NodeKind = gnkBeginBlock then
@@ -1189,6 +1209,8 @@ begin
       Break;
     end;
   end;
+
+  FCurrentScopeId := SavedScopeId;
 end;
 
 procedure TSemanticAnalyzer.ProcessEnumType(const ANode: TGreenNode;
