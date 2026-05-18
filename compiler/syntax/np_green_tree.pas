@@ -41,7 +41,7 @@ type
     gnkLabelSection,
     gnkVarDecl, gnkConstDecl, gnkTypeDecl,
     gnkProcedureDecl, gnkFunctionDecl,
-    gnkRecordType, gnkArrayType, gnkClassType,
+    gnkRecordType, gnkArrayType, gnkClassType, gnkEnumType,
     gnkIdentifier, gnkStringLiteral, gnkIntegerLiteral,
     gnkRealLiteral, gnkCharLiteral,
     gnkBinaryExpression, gnkUnaryExpression,
@@ -441,6 +441,7 @@ begin
     gnkRecordType: Result := 'record-type';
     gnkArrayType: Result := 'array-type';
     gnkClassType: Result := 'class-type';
+    gnkEnumType: Result := 'enum-type';
     gnkIdentifier: Result := 'identifier';
     gnkStringLiteral: Result := 'string-literal';
     gnkIntegerLiteral: Result := 'integer-literal';
@@ -1814,6 +1815,59 @@ begin
                 Inc(ACursor);
             end;
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+          end;
+        tkLParen:
+          begin
+            TypeNode := TGreenNode.Create(gnkEnumType,
+              CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+            Decl.AppendChild(TypeNode);
+            Inc(ATree.FNodeCount);
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            begin
+              if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+              begin
+                TypeNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                  CurrentToken(ALexer, ACursor).ByteOffset,
+                  Length(CurrentToken(ALexer, ACursor).Lexeme),
+                  CurrentToken(ALexer, ACursor).Lexeme));
+                Inc(ATree.FNodeCount);
+                Inc(ACursor);
+              end;
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
+              begin
+                Inc(ACursor);
+                ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+              end;
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+                Inc(ACursor);
+            end;
+            MatchTokenSilent(ALexer, ACursor, tkRParen);
+          end;
+        tkSetKeyword:
+          begin
+            Inc(ACursor);
+            MatchTokenSilent(ALexer, ACursor, tkOfKeyword);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if TypeNode <> nil then
+            begin
+              Decl.AppendChild(TypeNode);
+              Inc(ATree.FNodeCount);
+            end;
+          end;
+        tkCaret:
+          begin
+            Inc(ACursor);
+            TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if TypeNode <> nil then
+            begin
+              Decl.AppendChild(TypeNode);
+              Inc(ATree.FNodeCount);
+            end;
           end;
       else
         TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
