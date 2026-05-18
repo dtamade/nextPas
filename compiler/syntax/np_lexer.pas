@@ -743,19 +743,30 @@ procedure TLexerResult.SkipBraceCommentTracking(
 );
 var
   Ch: Char;
+  Depth: LongInt;
 begin
   AClosed := False;
+  Depth := 1;
   Inc(AIndex);
   while AIndex <= Length(ASourceText) do
   begin
     Ch := ASourceText[AIndex];
-    if Ch = '}' then
+    if Ch = '{' then
+    begin
+      Inc(Depth);
+      Inc(AIndex);
+    end
+    else if Ch = '}' then
     begin
       Inc(AIndex);
-      AClosed := True;
-      Exit;
-    end;
-    if (Ch = #13) or (Ch = #10) then
+      Dec(Depth);
+      if Depth = 0 then
+      begin
+        AClosed := True;
+        Exit;
+      end;
+    end
+    else if (Ch = #13) or (Ch = #10) then
       AdvanceNewline(ASourceText, AIndex)
     else
       Inc(AIndex);
