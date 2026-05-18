@@ -805,6 +805,18 @@ var
   ClosedFlag: Boolean;
 begin
   StartIndex := 1;
+  { Skip UTF-8 BOM (EF BB BF) at the start of the source so the
+    first real token still reports line=1, column=1. The 3 BOM
+    bytes are simply not part of the token stream; their byte
+    positions remain real (next token's ByteOffset = 3). }
+  if (Length(ASourceText) >= 3) and
+    (ASourceText[1] = #$EF) and
+    (ASourceText[2] = #$BB) and
+    (ASourceText[3] = #$BF) then
+  begin
+    StartIndex := 4;
+    FLineStartByte := 3;
+  end;
   while StartIndex <= Length(ASourceText) do
   begin
     CurrentChar := ASourceText[StartIndex];

@@ -1,0 +1,3 @@
+﻿program BomPass;
+begin
+end.
