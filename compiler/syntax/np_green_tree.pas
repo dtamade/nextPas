@@ -29,11 +29,16 @@ type
     gnkBeginBlock, gnkEndBlock,
     gnkStatementList,
     gnkIfStatement, gnkWhileStatement, gnkForStatement,
+    gnkForInStatement,
     gnkRepeatStatement, gnkWithStatement, gnkCaseStatement,
+    gnkCaseSelector, gnkCaseLabel,
     gnkAssignmentStatement, gnkProcedureCallStatement,
     gnkGotoStatement, gnkBreakStatement, gnkContinueStatement,
     gnkExitStatement,
+    gnkTryExceptStatement, gnkTryFinallyStatement,
+    gnkExceptionHandler, gnkRaiseStatement,
     gnkVarSection, gnkConstSection, gnkTypeSection,
+    gnkLabelSection,
     gnkVarDecl, gnkConstDecl, gnkTypeDecl,
     gnkProcedureDecl, gnkFunctionDecl,
     gnkRecordType, gnkArrayType,
@@ -42,6 +47,7 @@ type
     gnkBinaryExpression, gnkUnaryExpression,
     gnkDotAccess, gnkArrayAccess, gnkFunctionCall,
     gnkDereference, gnkAddressOf,
+    gnkSetConstructor, gnkRangeExpression,
     gnkParameterList, gnkParameterDecl,
     gnkFieldList,
     gnkError
@@ -210,6 +216,24 @@ function ParseRepeatStatement(
 ): Boolean; forward;
 
 function ParseWithStatement(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const AParent: TGreenNode;
+  const ATree: TGreenTree;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): Boolean; forward;
+
+function ParseCaseStatement(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const AParent: TGreenNode;
+  const ATree: TGreenTree;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): Boolean; forward;
+
+function ParseTryStatement(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const AParent: TGreenNode;
@@ -389,18 +413,26 @@ begin
     gnkIfStatement: Result := 'if-statement';
     gnkWhileStatement: Result := 'while-statement';
     gnkForStatement: Result := 'for-statement';
+    gnkForInStatement: Result := 'for-in-statement';
     gnkRepeatStatement: Result := 'repeat-statement';
     gnkWithStatement: Result := 'with-statement';
     gnkCaseStatement: Result := 'case-statement';
+    gnkCaseSelector: Result := 'case-selector';
+    gnkCaseLabel: Result := 'case-label';
     gnkAssignmentStatement: Result := 'assignment-statement';
     gnkProcedureCallStatement: Result := 'procedure-call-statement';
     gnkGotoStatement: Result := 'goto-statement';
     gnkBreakStatement: Result := 'break-statement';
     gnkContinueStatement: Result := 'continue-statement';
     gnkExitStatement: Result := 'exit-statement';
+    gnkTryExceptStatement: Result := 'try-except-statement';
+    gnkTryFinallyStatement: Result := 'try-finally-statement';
+    gnkExceptionHandler: Result := 'exception-handler';
+    gnkRaiseStatement: Result := 'raise-statement';
     gnkVarSection: Result := 'var-section';
     gnkConstSection: Result := 'const-section';
     gnkTypeSection: Result := 'type-section';
+    gnkLabelSection: Result := 'label-section';
     gnkVarDecl: Result := 'var-decl';
     gnkConstDecl: Result := 'const-decl';
     gnkTypeDecl: Result := 'type-decl';
@@ -420,6 +452,8 @@ begin
     gnkFunctionCall: Result := 'function-call';
     gnkDereference: Result := 'dereference';
     gnkAddressOf: Result := 'address-of';
+    gnkSetConstructor: Result := 'set-constructor';
+    gnkRangeExpression: Result := 'range-expression';
     gnkParameterList: Result := 'parameter-list';
     gnkParameterDecl: Result := 'parameter-decl';
     gnkFieldList: Result := 'field-list';
@@ -736,7 +770,7 @@ function ParsePrimaryExpression(
 ): TGreenNode;
 var
   Token: TToken;
-  RHS: TGreenNode;
+  RHS, RangeNode: TGreenNode;
 begin
   if ACursor >= ALexer.TokenCount then
     Exit(nil);
@@ -813,8 +847,115 @@ begin
           Exit(nil);
         end;
       end;
+    tkLBracket:
+      begin
+        Inc(ACursor);
+        Result := TGreenNode.Create(gnkSetConstructor, Token.ByteOffset, 0, '');
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) then
+        begin
+          RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if RHS <> nil then
+          begin
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkDotDot) then
+            begin
+              Inc(ACursor);
+              RangeNode := TGreenNode.Create(gnkRangeExpression,
+                RHS.ByteOffset, 0, '');
+              RangeNode.AppendChild(RHS);
+              RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+              if RHS <> nil then
+                RangeNode.AppendChild(RHS);
+              Result.AppendChild(RangeNode);
+            end
+            else
+              Result.AppendChild(RHS);
+          end;
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+          begin
+            Inc(ACursor);
+            RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if RHS <> nil then
+            begin
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkDotDot) then
+              begin
+                Inc(ACursor);
+                RangeNode := TGreenNode.Create(gnkRangeExpression,
+                  RHS.ByteOffset, 0, '');
+                RangeNode.AppendChild(RHS);
+                RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+                if RHS <> nil then
+                  RangeNode.AppendChild(RHS);
+                Result.AppendChild(RangeNode);
+              end
+              else
+                Result.AppendChild(RHS);
+            end;
+          end;
+        end;
+        MatchTokenSilent(ALexer, ACursor, tkRBracket);
+      end;
   else
     Result := nil;
+  end;
+
+  if Result <> nil then
+  begin
+    while ACursor < ALexer.TokenCount do
+    begin
+      case CurrentToken(ALexer, ACursor).Kind of
+        tkDot:
+          begin
+            Inc(ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+            begin
+              Token := CurrentToken(ALexer, ACursor);
+              RHS := TGreenNode.Create(gnkDotAccess, Result.ByteOffset, 0,
+                Token.Lexeme);
+              RHS.AppendChild(Result);
+              RHS.AppendChild(TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+                Length(Token.Lexeme), Token.Lexeme));
+              Result := RHS;
+              Inc(ACursor);
+            end
+            else
+              Break;
+          end;
+        tkLBracket:
+          begin
+            Inc(ACursor);
+            RHS := TGreenNode.Create(gnkArrayAccess, Result.ByteOffset, 0, '');
+            RHS.AppendChild(Result);
+            Result := RHS;
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) do
+            begin
+              RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+              if RHS <> nil then
+                Result.AppendChild(RHS);
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+                Inc(ACursor)
+              else
+                Break;
+            end;
+            MatchTokenSilent(ALexer, ACursor, tkRBracket);
+          end;
+        tkCaret:
+          begin
+            RHS := TGreenNode.Create(gnkDereference, Result.ByteOffset, 0, '');
+            RHS.AppendChild(Result);
+            Result := RHS;
+            Inc(ACursor);
+          end;
+      else
+        Break;
+      end;
+    end;
   end;
 end;
 
@@ -965,7 +1106,7 @@ function ParseAssignmentOrCall(
   const ARootFileId: TSourceFileId
 ): Boolean;
 var
-  Node, BinaryNode, LhsRef: TGreenNode;
+  Node, BinaryNode, LhsNode: TGreenNode;
   NameToken: TToken;
   RHS: TGreenNode;
   CompoundOp: string;
@@ -974,6 +1115,63 @@ begin
   NameToken := CurrentToken(ALexer, ACursor);
   Inc(ACursor);
 
+  LhsNode := TGreenNode.Create(gnkIdentifier, NameToken.ByteOffset,
+    Length(NameToken.Lexeme), NameToken.Lexeme);
+
+  while ACursor < ALexer.TokenCount do
+  begin
+    case CurrentToken(ALexer, ACursor).Kind of
+      tkDot:
+        begin
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+          begin
+            RHS := TGreenNode.Create(gnkDotAccess, LhsNode.ByteOffset, 0,
+              CurrentToken(ALexer, ACursor).Lexeme);
+            RHS.AppendChild(LhsNode);
+            RHS.AppendChild(TGreenNode.Create(gnkIdentifier,
+              CurrentToken(ALexer, ACursor).ByteOffset,
+              Length(CurrentToken(ALexer, ACursor).Lexeme),
+              CurrentToken(ALexer, ACursor).Lexeme));
+            LhsNode := RHS;
+            Inc(ACursor);
+          end
+          else
+            Break;
+        end;
+      tkLBracket:
+        begin
+          Inc(ACursor);
+          RHS := TGreenNode.Create(gnkArrayAccess, LhsNode.ByteOffset, 0, '');
+          RHS.AppendChild(LhsNode);
+          LhsNode := RHS;
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) do
+          begin
+            RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if RHS <> nil then
+              LhsNode.AppendChild(RHS);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+              Inc(ACursor)
+            else
+              Break;
+          end;
+          MatchTokenSilent(ALexer, ACursor, tkRBracket);
+        end;
+      tkCaret:
+        begin
+          RHS := TGreenNode.Create(gnkDereference, LhsNode.ByteOffset, 0, '');
+          RHS.AppendChild(LhsNode);
+          LhsNode := RHS;
+          Inc(ACursor);
+        end;
+    else
+      Break;
+    end;
+  end;
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
   begin
@@ -981,6 +1179,7 @@ begin
     RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
     Node := TGreenNode.Create(gnkAssignmentStatement, NameToken.ByteOffset, 0,
       NameToken.Lexeme);
+    Node.AppendChild(LhsNode);
     if RHS <> nil then
       Node.AppendChild(RHS);
     AParent.AppendChild(Node);
@@ -1001,11 +1200,9 @@ begin
     RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
     Node := TGreenNode.Create(gnkAssignmentStatement, NameToken.ByteOffset, 0,
       NameToken.Lexeme);
-    LhsRef := TGreenNode.Create(gnkIdentifier, NameToken.ByteOffset,
-      Length(NameToken.Lexeme), NameToken.Lexeme);
     BinaryNode := TGreenNode.Create(gnkBinaryExpression, NameToken.ByteOffset,
       0, CompoundOp);
-    BinaryNode.AppendChild(LhsRef);
+    BinaryNode.AppendChild(LhsNode);
     if RHS <> nil then
       BinaryNode.AppendChild(RHS);
     Node.AppendChild(BinaryNode);
@@ -1014,15 +1211,13 @@ begin
   end
   else
   begin
-    Node := TGreenNode.Create(gnkProcedureCallStatement, NameToken.ByteOffset, 0,
-      NameToken.Lexeme);
-    AParent.AppendChild(Node);
-    Inc(ATree.FNodeCount);
-
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
     begin
       Inc(ACursor);
+      Node := TGreenNode.Create(gnkProcedureCallStatement, NameToken.ByteOffset, 0,
+        NameToken.Lexeme);
+      LhsNode.Free;
       if (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkRParen) then
       begin
@@ -1039,6 +1234,16 @@ begin
         end;
       end;
       MatchTokenSilent(ALexer, ACursor, tkRParen);
+      AParent.AppendChild(Node);
+      Inc(ATree.FNodeCount);
+    end
+    else
+    begin
+      Node := TGreenNode.Create(gnkProcedureCallStatement, NameToken.ByteOffset, 0,
+        NameToken.Lexeme);
+      LhsNode.Free;
+      AParent.AppendChild(Node);
+      Inc(ATree.FNodeCount);
     end;
   end;
 
@@ -1727,22 +1932,52 @@ var
   VarToken: TToken;
   Direction: string;
   RHS: TGreenNode;
+  ForOffset: LongInt;
 begin
-  Node := TGreenNode.Create(gnkForStatement,
-    CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+  ForOffset := CurrentToken(ALexer, ACursor).ByteOffset;
   Inc(ACursor);
 
   if CurrentToken(ALexer, ACursor).Kind <> tkIdentifier then
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
       CurrentToken(ALexer, ACursor), 'identifier');
-    Node.Free;
     Exit(False);
   end;
   VarToken := CurrentToken(ALexer, ACursor);
+  Inc(ACursor);
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkInKeyword) then
+  begin
+    Node := TGreenNode.Create(gnkForInStatement, ForOffset, 0, '');
+    Node.AppendChild(TGreenNode.Create(gnkIdentifier, VarToken.ByteOffset,
+      Length(VarToken.Lexeme), VarToken.Lexeme));
+    Inc(ACursor);
+    RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+    if RHS <> nil then
+      Node.AppendChild(RHS);
+
+    if not MatchTokenSilent(ALexer, ACursor, tkDoKeyword) then
+    begin
+      EmitSyntaxError(ADiagnostics, ARootFileId,
+        CurrentToken(ALexer, ACursor), 'DO');
+      Node.Free;
+      Exit(False);
+    end;
+
+    ParseStatementList(ALexer, ACursor, Node,
+      [tkEndKeyword, tkSemicolon, tkEOF],
+      ATree, ADiagnostics, ARootFileId);
+
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
+  end;
+
+  Node := TGreenNode.Create(gnkForStatement, ForOffset, 0, '');
   Node.AppendChild(TGreenNode.Create(gnkIdentifier, VarToken.ByteOffset,
     Length(VarToken.Lexeme), VarToken.Lexeme));
-  Inc(ACursor);
 
   if not MatchTokenSilent(ALexer, ACursor, tkAssign) then
   begin
@@ -1864,6 +2099,250 @@ begin
   Result := True;
 end;
 
+function ParseCaseStatement(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const AParent: TGreenNode;
+  const ATree: TGreenTree;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): Boolean;
+var
+  Node, SelectorNode, LabelNode: TGreenNode;
+  SelectorExpr, LabelExpr, HighExpr: TGreenNode;
+  RangeNode: TGreenNode;
+begin
+  Node := TGreenNode.Create(gnkCaseStatement,
+    CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+  Inc(ACursor);
+
+  SelectorExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+  if SelectorExpr <> nil then
+    Node.AppendChild(SelectorExpr);
+
+  if not MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
+  begin
+    EmitSyntaxError(ADiagnostics, ARootFileId,
+      CurrentToken(ALexer, ACursor), 'OF');
+    Node.Free;
+    Exit(False);
+  end;
+
+  while (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+    (CurrentToken(ALexer, ACursor).Kind <> tkElseKeyword) and
+    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+  begin
+    SelectorNode := TGreenNode.Create(gnkCaseSelector,
+      CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+
+    repeat
+      LabelExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+      if LabelExpr = nil then
+        Break;
+
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkDotDot) then
+      begin
+        Inc(ACursor);
+        HighExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+        RangeNode := TGreenNode.Create(gnkRangeExpression,
+          LabelExpr.ByteOffset, 0, '');
+        RangeNode.AppendChild(LabelExpr);
+        if HighExpr <> nil then
+          RangeNode.AppendChild(HighExpr);
+        LabelNode := TGreenNode.Create(gnkCaseLabel,
+          RangeNode.ByteOffset, 0, '');
+        LabelNode.AppendChild(RangeNode);
+      end
+      else
+      begin
+        LabelNode := TGreenNode.Create(gnkCaseLabel,
+          LabelExpr.ByteOffset, 0, '');
+        LabelNode.AppendChild(LabelExpr);
+      end;
+      SelectorNode.AppendChild(LabelNode);
+      Inc(ATree.FNodeCount);
+
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+        Inc(ACursor)
+      else
+        Break;
+    until False;
+
+    if not MatchTokenSilent(ALexer, ACursor, tkColon) then
+    begin
+      EmitSyntaxError(ADiagnostics, ARootFileId,
+        CurrentToken(ALexer, ACursor), ':');
+      SelectorNode.Free;
+      SkipToSyncSet(ALexer, ACursor, [tkSemicolon, tkEndKeyword, tkElseKeyword, tkEOF]);
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+        Inc(ACursor);
+      Continue;
+    end;
+
+    ParseStatementList(ALexer, ACursor, SelectorNode,
+      [tkSemicolon, tkEndKeyword, tkElseKeyword, tkEOF],
+      ATree, ADiagnostics, ARootFileId);
+
+    Node.AppendChild(SelectorNode);
+    Inc(ATree.FNodeCount);
+
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+      Inc(ACursor);
+  end;
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkElseKeyword) then
+  begin
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, Node,
+      [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+      Inc(ACursor);
+  end;
+
+  if not MatchTokenSilent(ALexer, ACursor, tkEndKeyword) then
+  begin
+    EmitSyntaxError(ADiagnostics, ARootFileId,
+      CurrentToken(ALexer, ACursor), 'END');
+    Node.Free;
+    Exit(False);
+  end;
+
+  AParent.AppendChild(Node);
+  Inc(ATree.FNodeCount);
+  Result := True;
+end;
+
+function ParseTryStatement(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const AParent: TGreenNode;
+  const ATree: TGreenTree;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): Boolean;
+var
+  Node, HandlerNode: TGreenNode;
+  TryOffset: LongInt;
+  HandlerToken: TToken;
+begin
+  TryOffset := CurrentToken(ALexer, ACursor).ByteOffset;
+  Inc(ACursor);
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkFinallyKeyword) then
+  begin
+    Node := TGreenNode.Create(gnkTryFinallyStatement, TryOffset, 0, '');
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, Node,
+      [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+    MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+    Exit;
+  end;
+
+  Node := TGreenNode.Create(gnkTryFinallyStatement, TryOffset, 0, '');
+
+  ParseStatementList(ALexer, ACursor, Node,
+    [tkExceptKeyword, tkFinallyKeyword, tkEOF],
+    ATree, ADiagnostics, ARootFileId);
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkFinallyKeyword) then
+  begin
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, Node,
+      [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+    MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+  end
+  else if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkExceptKeyword) then
+  begin
+    Node.Free;
+    Node := TGreenNode.Create(gnkTryExceptStatement, TryOffset, 0, '');
+
+    ParseStatementList(ALexer, ACursor, Node,
+      [tkExceptKeyword, tkEOF],
+      ATree, ADiagnostics, ARootFileId);
+
+    Inc(ACursor);
+
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkOnKeyword) then
+    begin
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkOnKeyword) do
+      begin
+        HandlerToken := CurrentToken(ALexer, ACursor);
+        Inc(ACursor);
+        HandlerNode := TGreenNode.Create(gnkExceptionHandler,
+          HandlerToken.ByteOffset, 0, '');
+
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+        begin
+          HandlerNode.FText := CurrentToken(ALexer, ACursor).Lexeme;
+          Inc(ACursor);
+          if MatchTokenSilent(ALexer, ACursor, tkColon) then
+          begin
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+            begin
+              HandlerNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                CurrentToken(ALexer, ACursor).ByteOffset,
+                Length(CurrentToken(ALexer, ACursor).Lexeme),
+                CurrentToken(ALexer, ACursor).Lexeme));
+              Inc(ACursor);
+            end;
+          end;
+        end;
+
+        if MatchTokenSilent(ALexer, ACursor, tkDoKeyword) then
+        begin
+          ParseStatementList(ALexer, ACursor, HandlerNode,
+            [tkSemicolon, tkOnKeyword, tkEndKeyword, tkElseKeyword, tkEOF],
+            ATree, ADiagnostics, ARootFileId);
+        end;
+
+        Node.AppendChild(HandlerNode);
+        Inc(ATree.FNodeCount);
+
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+          Inc(ACursor);
+      end;
+    end
+    else
+    begin
+      ParseStatementList(ALexer, ACursor, Node,
+        [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+    end;
+
+    MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+    AParent.AppendChild(Node);
+    Inc(ATree.FNodeCount);
+    Result := True;
+  end
+  else
+  begin
+    EmitSyntaxError(ADiagnostics, ARootFileId,
+      CurrentToken(ALexer, ACursor), 'EXCEPT/FINALLY');
+    Node.Free;
+    Result := False;
+  end;
+end;
+
 function ParseStatementList(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
@@ -1880,6 +2359,7 @@ var
   function ParseStatement: Boolean;
   var
     StmtNode: TGreenNode;
+    RHS: TGreenNode;
     Token: TToken;
   begin
     if (ACursor >= ALexer.TokenCount) or
@@ -1902,6 +2382,12 @@ var
           ADiagnostics, ARootFileId);
       tkWithKeyword:
         Result := ParseWithStatement(ALexer, ACursor, List, ATree,
+          ADiagnostics, ARootFileId);
+      tkCaseKeyword:
+        Result := ParseCaseStatement(ALexer, ACursor, List, ATree,
+          ADiagnostics, ARootFileId);
+      tkTryKeyword:
+        Result := ParseTryStatement(ALexer, ACursor, List, ATree,
           ADiagnostics, ARootFileId);
       tkBeginKeyword:
         begin
@@ -1938,6 +2424,21 @@ var
           StmtNode := TGreenNode.Create(gnkGotoStatement, Token.ByteOffset, 0, '');
           List.AppendChild(StmtNode);
           Inc(ACursor);
+          Inc(ATree.FNodeCount);
+          Result := True;
+        end;
+      tkRaiseKeyword:
+        begin
+          StmtNode := TGreenNode.Create(gnkRaiseStatement, Token.ByteOffset, 0, '');
+          List.AppendChild(StmtNode);
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+          begin
+            RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if RHS <> nil then
+              StmtNode.AppendChild(RHS);
+          end;
           Inc(ATree.FNodeCount);
           Result := True;
         end;
