@@ -2389,6 +2389,10 @@ begin
   ForOffset := CurrentToken(ALexer, ACursor).ByteOffset;
   Inc(ACursor);
 
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkVarKeyword) then
+    Inc(ACursor);
+
   if CurrentToken(ALexer, ACursor).Kind <> tkIdentifier then
   begin
     EmitSyntaxError(ADiagnostics, ARootFileId,
@@ -2960,6 +2964,34 @@ var
           else
             Result := ParseAssignmentOrCall(ALexer, ACursor, List, ATree,
               ADiagnostics, ARootFileId);
+        end;
+      tkVarKeyword:
+        begin
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+          begin
+            StmtNode := TGreenNode.Create(gnkVarDecl,
+              Token.ByteOffset, 0, CurrentToken(ALexer, ACursor).Lexeme);
+            List.AppendChild(StmtNode);
+            Inc(ATree.FNodeCount);
+            Inc(ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+            begin
+              Inc(ACursor);
+              ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+            end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
+            begin
+              Inc(ACursor);
+              RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+              if RHS <> nil then
+                StmtNode.AppendChild(RHS);
+            end;
+          end;
+          Result := True;
         end;
       tkIntegerLiteral:
         begin
