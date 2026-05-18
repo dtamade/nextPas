@@ -1395,6 +1395,21 @@ begin
         Inc(ACursor);
         Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
       end;
+    tkSpecializeKeyword:
+      begin
+        Inc(ACursor);
+        Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+        begin
+          Inc(ACursor);
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            Inc(ACursor);
+          MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
+        end;
+      end;
   else
     Exit(nil);
   end;
@@ -1680,14 +1695,31 @@ begin
   Inc(ACursor);
 
   while (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) do
+    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
+     (CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword)) do
   begin
+    if CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword then
+      Inc(ACursor);
+    if (ACursor >= ALexer.TokenCount) or
+      (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
+      Break;
     NameToken := CurrentToken(ALexer, ACursor);
     Decl := TGreenNode.Create(gnkTypeDecl, NameToken.ByteOffset, 0,
       NameToken.Lexeme);
     Section.AppendChild(Decl);
     Inc(ATree.FNodeCount);
     Inc(ACursor);
+
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
+    end;
 
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
