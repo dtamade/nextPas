@@ -1,15 +1,18 @@
 unit np_lexer;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../diagnostics}
+{$UNITPATH ../../rtl/core/base}
 
 interface
 
 uses
-  SysUtils;
+  SysUtils, np_base_types, np_diagnostics_sink;
 
 type
   TTokenKind = (
     tkUnknown,
+    tkError,
     tkProgramKeyword,
     tkUnitKeyword,
     tkLibraryKeyword,
@@ -163,6 +166,13 @@ type
     FTokens: array of TToken;
     FCurrentLine: LongInt;
     FLineStartByte: LongInt;
+    FDiagnostics: TDiagnosticsSink;
+    FFileId: TCoreId;
+    procedure ReportError(
+      const ACode: string;
+      const AByteOffset: LongInt;
+      const AMessageText: string
+    );
     procedure AdvanceNewline(
       const ASourceText: string;
       var AIndex: SizeInt
@@ -170,21 +180,25 @@ type
     function CurrentColumn(const AIndex: SizeInt): LongInt;
     procedure SkipBraceCommentTracking(
       const ASourceText: string;
-      var AIndex: SizeInt
+      var AIndex: SizeInt;
+      out AClosed: Boolean
     );
     procedure SkipParenStarCommentTracking(
       const ASourceText: string;
-      var AIndex: SizeInt
+      var AIndex: SizeInt;
+      out AClosed: Boolean
     );
     function TryReadCompilerDirectiveTracking(
       const ASourceText: string;
       var AIndex: SizeInt;
-      out ALexeme: string
+      out ALexeme: string;
+      out AClosed: Boolean
     ): Boolean;
     function TryReadParenStarDirectiveTracking(
       const ASourceText: string;
       var AIndex: SizeInt;
-      out ALexeme: string
+      out ALexeme: string;
+      out AClosed: Boolean
     ): Boolean;
     procedure AddToken(
       const AKind: TTokenKind;
@@ -199,9 +213,21 @@ type
       const AStartIndex: SizeInt;
       const ALine: LongInt
     );
+    procedure AddTokenAtPos(
+      const AKind: TTokenKind;
+      const ALexeme: string;
+      const AStartIndex: SizeInt;
+      const ALine: LongInt;
+      const AColumn: LongInt
+    );
     procedure LexSource(const ASourceText: string);
   public
-    constructor Create(const ASourceText: string);
+    constructor Create(const ASourceText: string); overload;
+    constructor Create(
+      const ASourceText: string;
+      const ADiagnostics: TDiagnosticsSink;
+      const AFileId: TCoreId
+    ); overload;
     function TokenCount: LongInt;
     function TokenAt(const AIndex: LongInt): TToken;
   end;
@@ -369,22 +395,40 @@ begin
     Inc(AIndex);
 end;
 
-function ReadStringLiteral(const ASourceText: string; var AIndex: SizeInt): string;
+function ReadStringLiteral(
+  const ASourceText: string;
+  var AIndex: SizeInt;
+  out AClosed: Boolean
+): string;
 var
   StartIndex: SizeInt;
+  Ch: Char;
 begin
   StartIndex := AIndex;
+  AClosed := False;
   Inc(AIndex);
 
   while AIndex <= Length(ASourceText) do
   begin
-    if ASourceText[AIndex] = '''' then
+    Ch := ASourceText[AIndex];
+    if (Ch = #13) or (Ch = #10) then
+    begin
+      { Pascal string literals must not span newlines. Stop here so
+        the next iteration of the main scan loop can resume on a
+        clean line; the caller is responsible for emitting the
+        diagnostic. }
+      Break;
+    end;
+    if Ch = '''' then
     begin
       Inc(AIndex);
       if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '''') then
         Inc(AIndex)
       else
+      begin
+        AClosed := True;
         Break;
+      end;
     end
     else
       Inc(AIndex);
@@ -516,11 +560,33 @@ end;
 
 constructor TLexerResult.Create(const ASourceText: string);
 begin
+  Create(ASourceText, nil, 0);
+end;
+
+constructor TLexerResult.Create(
+  const ASourceText: string;
+  const ADiagnostics: TDiagnosticsSink;
+  const AFileId: TCoreId
+);
+begin
   inherited Create;
   SetLength(FTokens, 0);
   FCurrentLine := 1;
   FLineStartByte := 0;
+  FDiagnostics := ADiagnostics;
+  FFileId := AFileId;
   LexSource(ASourceText);
+end;
+
+procedure TLexerResult.ReportError(
+  const ACode: string;
+  const AByteOffset: LongInt;
+  const AMessageText: string
+);
+begin
+  if FDiagnostics = nil then
+    Exit;
+  FDiagnostics.EmitError(ACode, 'lexer', FFileId, AByteOffset, AMessageText);
 end;
 
 procedure TLexerResult.AddToken(
@@ -569,11 +635,13 @@ end;
 
 procedure TLexerResult.SkipBraceCommentTracking(
   const ASourceText: string;
-  var AIndex: SizeInt
+  var AIndex: SizeInt;
+  out AClosed: Boolean
 );
 var
   Ch: Char;
 begin
+  AClosed := False;
   Inc(AIndex);
   while AIndex <= Length(ASourceText) do
   begin
@@ -581,6 +649,7 @@ begin
     if Ch = '}' then
     begin
       Inc(AIndex);
+      AClosed := True;
       Exit;
     end;
     if (Ch = #13) or (Ch = #10) then
@@ -592,11 +661,13 @@ end;
 
 procedure TLexerResult.SkipParenStarCommentTracking(
   const ASourceText: string;
-  var AIndex: SizeInt
+  var AIndex: SizeInt;
+  out AClosed: Boolean
 );
 var
   Ch: Char;
 begin
+  AClosed := False;
   Inc(AIndex, 2);
   while AIndex <= Length(ASourceText) - 1 do
   begin
@@ -604,6 +675,7 @@ begin
     if (Ch = '*') and (ASourceText[AIndex + 1] = ')') then
     begin
       Inc(AIndex, 2);
+      AClosed := True;
       Exit;
     end;
     if (Ch = #13) or (Ch = #10) then
@@ -618,12 +690,14 @@ end;
 function TLexerResult.TryReadCompilerDirectiveTracking(
   const ASourceText: string;
   var AIndex: SizeInt;
-  out ALexeme: string
+  out ALexeme: string;
+  out AClosed: Boolean
 ): Boolean;
 var
   StartIndex: SizeInt;
   Ch: Char;
 begin
+  AClosed := False;
   if (AIndex > Length(ASourceText)) or (ASourceText[AIndex] <> '{') then
     Exit(False);
   if (AIndex >= Length(ASourceText)) or (ASourceText[AIndex + 1] <> '$') then
@@ -637,6 +711,7 @@ begin
     if Ch = '}' then
     begin
       Inc(AIndex);
+      AClosed := True;
       Break;
     end;
     if (Ch = #13) or (Ch = #10) then
@@ -651,12 +726,14 @@ end;
 function TLexerResult.TryReadParenStarDirectiveTracking(
   const ASourceText: string;
   var AIndex: SizeInt;
-  out ALexeme: string
+  out ALexeme: string;
+  out AClosed: Boolean
 ): Boolean;
 var
   StartIndex: SizeInt;
   Ch: Char;
 begin
+  AClosed := False;
   if (AIndex + 2 > Length(ASourceText)) then
     Exit(False);
   if (ASourceText[AIndex] <> '(') or (ASourceText[AIndex + 1] <> '*') then
@@ -672,6 +749,7 @@ begin
     if (Ch = '*') and (ASourceText[AIndex + 1] = ')') then
     begin
       Inc(AIndex, 2);
+      AClosed := True;
       ALexeme := Copy(ASourceText, StartIndex, AIndex - StartIndex);
       Exit(True);
     end;
@@ -701,6 +779,17 @@ begin
   AddToken(AKind, ALexeme, AStartIndex - 1, ALine, Column);
 end;
 
+procedure TLexerResult.AddTokenAtPos(
+  const AKind: TTokenKind;
+  const ALexeme: string;
+  const AStartIndex: SizeInt;
+  const ALine: LongInt;
+  const AColumn: LongInt
+);
+begin
+  AddToken(AKind, ALexeme, AStartIndex - 1, ALine, AColumn);
+end;
+
 procedure TLexerResult.LexSource(const ASourceText: string);
 var
   CurrentChar: Char;
@@ -712,6 +801,8 @@ var
   SaveIndex: SizeInt;
   StartIndex: SizeInt;
   TokenLine: LongInt;
+  TokenColumn: LongInt;
+  ClosedFlag: Boolean;
 begin
   StartIndex := 1;
   while StartIndex <= Length(ASourceText) do
@@ -731,16 +822,34 @@ begin
     end;
 
     TokenLine := FCurrentLine;
+    TokenColumn := StartIndex - FLineStartByte;
+    if TokenColumn < 1 then
+      TokenColumn := 1;
 
     if CurrentChar = '{' then
     begin
       SaveIndex := StartIndex;
-      if TryReadCompilerDirectiveTracking(ASourceText, StartIndex, Lexeme) then
+      if TryReadCompilerDirectiveTracking(ASourceText, StartIndex, Lexeme, ClosedFlag) then
       begin
         AddTokenAt(tkCompilerDirective, Lexeme, SaveIndex, TokenLine);
+        if not ClosedFlag then
+          ReportError(
+            'lexer.unterminated-compiler-directive',
+            SaveIndex - 1,
+            'compiler directive started with "{$" reached end-of-file without "}"'
+          );
         Continue;
       end;
-      SkipBraceCommentTracking(ASourceText, StartIndex);
+      SkipBraceCommentTracking(ASourceText, StartIndex, ClosedFlag);
+      if not ClosedFlag then
+      begin
+        AddTokenAtPos(tkError, '{', SaveIndex, TokenLine, TokenColumn);
+        ReportError(
+          'lexer.unterminated-brace-comment',
+          SaveIndex - 1,
+          'brace comment started with "{" reached end-of-file without "}"'
+        );
+      end;
       Continue;
     end;
 
@@ -749,12 +858,27 @@ begin
       (ASourceText[StartIndex + 1] = '*') then
     begin
       SaveIndex := StartIndex;
-      if TryReadParenStarDirectiveTracking(ASourceText, StartIndex, Lexeme) then
+      if TryReadParenStarDirectiveTracking(ASourceText, StartIndex, Lexeme, ClosedFlag) then
       begin
         AddTokenAt(tkCompilerDirective, Lexeme, SaveIndex, TokenLine);
+        if not ClosedFlag then
+          ReportError(
+            'lexer.unterminated-compiler-directive',
+            SaveIndex - 1,
+            'compiler directive started with "(*$" reached end-of-file without "*)"'
+          );
         Continue;
       end;
-      SkipParenStarCommentTracking(ASourceText, StartIndex);
+      SkipParenStarCommentTracking(ASourceText, StartIndex, ClosedFlag);
+      if not ClosedFlag then
+      begin
+        AddTokenAtPos(tkError, '(*', SaveIndex, TokenLine, TokenColumn);
+        ReportError(
+          'lexer.unterminated-paren-star-comment',
+          SaveIndex - 1,
+          'paren-star comment started with "(*" reached end-of-file without "*)"'
+        );
+      end;
       Continue;
     end;
 
@@ -772,7 +896,14 @@ begin
       if ReadCharLiteral(ASourceText, StartIndex, Lexeme) then
         AddTokenAt(tkCharLiteral, Lexeme, SaveIndex, TokenLine)
       else
-        AddTokenAt(tkUnknown, '#', SaveIndex, TokenLine);
+      begin
+        AddTokenAt(tkError, '#', SaveIndex, TokenLine);
+        ReportError(
+          'lexer.invalid-char-code',
+          SaveIndex - 1,
+          'expected decimal digits or "$" after "#" in character code'
+        );
+      end;
       Continue;
     end;
 
@@ -781,7 +912,13 @@ begin
       SaveIndex := StartIndex;
       if not ReadIntegerLiteral(ASourceText, StartIndex, IntegerLexeme) then
       begin
-        AddTokenAt(tkUnknown, '$', SaveIndex, TokenLine);
+        AddTokenAt(tkError, '$', SaveIndex, TokenLine);
+        ReportError(
+          'lexer.invalid-numeric-literal',
+          SaveIndex - 1,
+          'expected hexadecimal digits after "$"'
+        );
+        Inc(StartIndex);
         Continue;
       end;
       NumberStartIndex := SaveIndex;
@@ -902,8 +1039,15 @@ begin
     if CurrentChar = '''' then
     begin
       SaveIndex := StartIndex;
-      Lexeme := ReadStringLiteral(ASourceText, StartIndex);
+      Lexeme := ReadStringLiteral(ASourceText, StartIndex, ClosedFlag);
       AddTokenAt(tkStringLiteral, Lexeme, SaveIndex, TokenLine);
+      if not ClosedFlag then
+        ReportError(
+          'lexer.unterminated-string-literal',
+          SaveIndex - 1,
+          'string literal started at byte ' + IntToStr(SaveIndex - 1) +
+            ' was not terminated before end-of-line or end-of-file'
+        );
       Continue;
     end;
 
@@ -1021,7 +1165,15 @@ begin
       '^':
         AddTokenAt(tkCaret, '^', StartIndex, TokenLine);
     else
-      AddTokenAt(tkUnknown, CurrentChar, StartIndex, TokenLine);
+      begin
+        AddTokenAt(tkError, CurrentChar, StartIndex, TokenLine);
+        ReportError(
+          'lexer.illegal-character',
+          StartIndex - 1,
+          'illegal character "' + CurrentChar + '" (byte $' +
+            IntToHex(Ord(CurrentChar), 2) + ') in source'
+        );
+      end;
     end;
 
     Inc(StartIndex);
@@ -1193,6 +1345,7 @@ begin
     tkAt: Result := '@';
     tkCaret: Result := '^';
     tkEOF: Result := 'end-of-file';
+    tkError: Result := 'error';
   else
     Result := 'unknown';
   end;
