@@ -1256,6 +1256,8 @@ begin
       tkMinusAssign: CompoundOp := '-';
       tkStarAssign: CompoundOp := '*';
       tkSlashAssign: CompoundOp := '/';
+    else
+      CompoundOp := '+';
     end;
     Inc(ACursor);
     RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
@@ -1469,7 +1471,6 @@ var
   Decl: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
-  RHS: TGreenNode;
   I: LongInt;
   Child: TGreenNode;
 begin

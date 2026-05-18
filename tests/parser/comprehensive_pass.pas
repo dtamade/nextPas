@@ -83,6 +83,13 @@ begin
     if dirNorth in Dirs then
       I := I + 1;
 
+    case I of
+      0..99: P.X := 0;
+      100..199: P.X := 1;
+    else
+      P.X := 2;
+    end;
+
     Arr[1] := 10;
     Arr[2] := 20;
     for I := 1 to 5 do

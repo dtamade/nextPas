@@ -705,6 +705,28 @@ if [ "$LEX_BENCH_EXIT" -ne 0 ]; then
 fi
 printf 'lexer-bench=pass\n'
 
+printf 'parser-bench=running\n'
+PARSER_BENCH_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/parser_bench"
+PARSER_BENCH_BINARY="$PARSER_BENCH_BUILD_DIR/parser_bench"
+PARSER_BENCH_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -O2"
+PARSER_BENCH_MIN_MB_PER_SEC=2
+mkdir -p "$PARSER_BENCH_BUILD_DIR"
+if ! fpc $PARSER_BENCH_FPC_FLAGS -FE"$PARSER_BENCH_BUILD_DIR" -FU"$PARSER_BENCH_BUILD_DIR" tools/parser_bench/parser_bench.pas >/dev/null 2>&1; then
+  fpc $PARSER_BENCH_FPC_FLAGS -FE"$PARSER_BENCH_BUILD_DIR" -FU"$PARSER_BENCH_BUILD_DIR" tools/parser_bench/parser_bench.pas
+  fail 'parser-bench-build-failed'
+fi
+if [ ! -x "$PARSER_BENCH_BINARY" ]; then
+  fail 'missing-parser-bench-binary'
+fi
+set +e
+"$PARSER_BENCH_BINARY" tests/parser/comprehensive_pass.pas "$PARSER_BENCH_MIN_MB_PER_SEC"
+PARSER_BENCH_EXIT=$?
+set -e
+if [ "$PARSER_BENCH_EXIT" -ne 0 ]; then
+  fail 'parser-bench-throughput-below-minimum'
+fi
+printf 'parser-bench=pass\n'
+
 printf 'stage0-smoke=running\n'
 printf 'stage0-smoke-command=%s build examples/smoke/hello.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$STAGE0_SMOKE_OUTPUT" examples/smoke/hello.pas; then
