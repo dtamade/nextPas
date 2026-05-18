@@ -528,6 +528,7 @@ for path in \
   docs/architecture/bootstrap-roadmap.md \
   docs/architecture/compiler-specification.md \
   docs/architecture/compiler-pipeline-specification.md \
+  docs/architecture/lexer-specification.md \
   docs/architecture/diagnostics-specification.md \
   docs/architecture/fpc-source-grounding-specification.md \
   docs/architecture/test-harness-specification.md \

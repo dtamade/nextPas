@@ -33,6 +33,7 @@
 - `packages-specification.md`：nextPas packages 规范
 - `compiler-specification.md`：nextPas 编译器规范
 - `compiler-pipeline-specification.md`：nextPas 编译器流水线规范
+- `lexer-specification.md`：nextPas Lexer 规范
 - `semantic-model-specification.md`：nextPas 语义模型规范
 - `diagnostics-specification.md`：nextPas 诊断规范
 - `unit-resolution-specification.md`：nextPas unit 解析规范
