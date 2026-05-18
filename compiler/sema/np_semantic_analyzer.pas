@@ -1749,28 +1749,16 @@ begin
       if LhsSymbolId = 0 then
         Continue;
       LhsTypeId := FModel.SymbolTypeId(LhsSymbolId);
-      if LhsTypeId = 0 then
-        Continue;
-      if (Child.ChildCount >= 1) and
-        (Child.ChildAt(0).NodeKind = gnkIdentifier) then
-      begin
-        RhsSymbolId := FindSymbolByName(Child.ChildAt(0).Text);
-        if RhsSymbolId > 0 then
-        begin
-          RhsTypeId := FModel.SymbolTypeId(RhsSymbolId);
-          if (RhsTypeId > 0) and (LhsTypeId <> RhsTypeId) then
-            EmitSemaError(
-              'sema.type-mismatch',
-              'type mismatch: cannot assign "' +
-                Child.ChildAt(0).Text + '" to "' +
-                Child.Text + '"',
-              Child.ByteOffset
-            );
-        end;
-      end;
-      if Child.ChildCount >= 1 then
-      begin
+      RhsNode := nil;
+      if Child.ChildCount >= 2 then
+        RhsNode := Child.ChildAt(1)
+      else if (Child.ChildCount = 1) and
+        (Child.ChildAt(0).NodeKind <> gnkIdentifier) and
+        (Child.ChildAt(0).NodeKind <> gnkDotAccess) and
+        (Child.ChildAt(0).NodeKind <> gnkArrayAccess) then
         RhsNode := Child.ChildAt(0);
+      if RhsNode <> nil then
+      begin
         if EvaluateIntegerConstant(RhsNode, Value) then
           FModel.AddVarInitValue(Child.Text, Value)
         else
@@ -2263,17 +2251,25 @@ begin
     end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
-      if Child.ChildCount >= 1 then
+      Arg := nil;
+      if Child.ChildCount >= 2 then
+        Arg := Child.ChildAt(1)
+      else if (Child.ChildCount = 1) and
+        (Child.ChildAt(0).NodeKind <> gnkIdentifier) and
+        (Child.ChildAt(0).NodeKind <> gnkDotAccess) and
+        (Child.ChildAt(0).NodeKind <> gnkArrayAccess) then
+        Arg := Child.ChildAt(0);
+      if Arg <> nil then
       begin
         if FNoFold then
         begin
-          if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+          if EncodeRuntimeIntExprFold(Arg, Operand) then
             FModel.AddTypedHirNode(
               'assign-runtime', Child.Text, 0, 0,
               Child.Text + #9 + Operand
             );
         end
-        else if EvaluateIntegerConstant(Child.ChildAt(0), Value) then
+        else if EvaluateIntegerConstant(Arg, Value) then
           FModel.AddVarInitValue(Child.Text, Value)
         else
           FModel.RemoveVarInitValue(Child.Text);
@@ -2285,9 +2281,16 @@ begin
       if SameText(Child.Text, 'Halt') then
       begin
         Operand := '0';
-        if FNoFold and (Child.ChildCount >= 1) then
+        Arg := nil;
+        if Child.ChildCount >= 1 then
         begin
           Arg := Child.ChildAt(0);
+          if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
+            (Arg.ChildCount >= 2) then
+            Arg := Arg.ChildAt(1);
+        end;
+        if FNoFold and (Arg <> nil) then
+        begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
             FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, Operand);
@@ -2295,13 +2298,13 @@ begin
             Continue;
           end;
         end;
-        if Child.ChildCount >= 1 then
+        if Arg <> nil then
         begin
-          Arg := Child.ChildAt(0);
           if EvaluateIntegerConstant(Arg, Value) then
             Operand := IntToStr(Value);
         end;
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
+        FCurrentBlockTerminated := True;
         Continue;
       end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
