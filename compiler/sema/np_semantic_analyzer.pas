@@ -633,6 +633,8 @@ begin
   end;
 
   SeedBuiltinTypes;
+  FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
+  FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedDeclarations;
   CheckAssignmentTypes;
   SeedUnitSymbolsAndHir;

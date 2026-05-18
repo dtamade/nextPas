@@ -65,10 +65,29 @@ type
     Value: string;
   end;
 
+  TScopeKind = (
+    skCompilation,
+    skUnit,
+    skInterface,
+    skImplementation,
+    skCallable,
+    skRecord,
+    skClass,
+    skBlock
+  );
+
+  TSemanticScope = record
+    ScopeId: LongInt;
+    Kind: TScopeKind;
+    Name: string;
+    ParentScopeId: LongInt;
+  end;
+
   TSemanticModel = class
   private
     FSymbols: array of TSemanticSymbol;
     FTypes: array of TSemanticType;
+    FScopes: array of TSemanticScope;
     FTypedHirNodes: array of TTypedHirNode;
     FRuntimeContracts: array of TRuntimeContract;
     FForeignProcedureBindings: array of TSemanticForeignProcedureBinding;
@@ -88,6 +107,10 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
+    function AddScope(const AKind: TScopeKind; const AName: string;
+      const AParentScopeId: LongInt): LongInt;
+    function ScopeCount: LongInt;
+    function ScopeAt(const AIndex: LongInt): TSemanticScope;
     function AddTypedHirNode(
       const AKind: string;
       const ADisplayName: string;
@@ -151,6 +174,7 @@ begin
   inherited Create;
   SetLength(FSymbols, 0);
   SetLength(FTypes, 0);
+  SetLength(FScopes, 0);
   SetLength(FTypedHirNodes, 0);
   SetLength(FRuntimeContracts, 0);
   SetLength(FForeignProcedureBindings, 0);
@@ -196,6 +220,38 @@ begin
   FTypes[NextIndex].Name := AName;
   FTypes[NextIndex].Kind := AKind;
   Result := FTypes[NextIndex].TypeId;
+end;
+
+function TSemanticModel.AddScope(const AKind: TScopeKind;
+  const AName: string; const AParentScopeId: LongInt): LongInt;
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FScopes);
+  SetLength(FScopes, NextIndex + 1);
+  FScopes[NextIndex].ScopeId := NextIndex + 1;
+  FScopes[NextIndex].Kind := AKind;
+  FScopes[NextIndex].Name := AName;
+  FScopes[NextIndex].ParentScopeId := AParentScopeId;
+  Result := FScopes[NextIndex].ScopeId;
+end;
+
+function TSemanticModel.ScopeCount: LongInt;
+begin
+  Result := Length(FScopes);
+end;
+
+function TSemanticModel.ScopeAt(const AIndex: LongInt): TSemanticScope;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FScopes)) then
+    Result := FScopes[AIndex]
+  else
+  begin
+    Result.ScopeId := 0;
+    Result.Kind := skCompilation;
+    Result.Name := '';
+    Result.ParentScopeId := 0;
+  end;
 end;
 
 function TSemanticModel.AddTypedHirNode(
