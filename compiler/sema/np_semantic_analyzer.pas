@@ -69,9 +69,12 @@ type
       const ATypeId: LongInt;
       const AByteOffset: LongInt
     ): LongInt;
+    function IsBuiltinProcedure(const AName: string): Boolean;
     procedure SeedBuiltinTypes;
     procedure AssignScopesToSymbols;
     procedure CheckDuplicateDeclarations;
+    procedure CheckUndeclaredIdentifiers;
+    procedure CheckIdentifiersInNode(const ANode: TGreenNode);
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -523,6 +526,35 @@ begin
     FModel.SetSymbolScope(Result, FCurrentScopeId);
 end;
 
+function TSemanticAnalyzer.IsBuiltinProcedure(const AName: string): Boolean;
+begin
+  Result := SameText(AName, 'WriteLn') or SameText(AName, 'Write') or
+    SameText(AName, 'ReadLn') or SameText(AName, 'Read') or
+    SameText(AName, 'Inc') or SameText(AName, 'Dec') or
+    SameText(AName, 'SetLength') or SameText(AName, 'Length') or
+    SameText(AName, 'High') or SameText(AName, 'Low') or
+    SameText(AName, 'Ord') or SameText(AName, 'Chr') or
+    SameText(AName, 'Pred') or SameText(AName, 'Succ') or
+    SameText(AName, 'Abs') or SameText(AName, 'Sqr') or
+    SameText(AName, 'Sqrt') or SameText(AName, 'Round') or
+    SameText(AName, 'Trunc') or SameText(AName, 'Halt') or
+    SameText(AName, 'Exit') or SameText(AName, 'Break') or
+    SameText(AName, 'Continue') or SameText(AName, 'Assigned') or
+    SameText(AName, 'New') or SameText(AName, 'Dispose') or
+    SameText(AName, 'SizeOf') or SameText(AName, 'TypeOf') or
+    SameText(AName, 'Str') or SameText(AName, 'Val') or
+    SameText(AName, 'Copy') or SameText(AName, 'Concat') or
+    SameText(AName, 'Pos') or SameText(AName, 'Delete') or
+    SameText(AName, 'Insert') or SameText(AName, 'IntToStr') or
+    SameText(AName, 'StrToInt') or SameText(AName, 'Addr') or
+    SameText(AName, 'FillChar') or SameText(AName, 'Move') or
+    SameText(AName, 'Exclude') or SameText(AName, 'Include') or
+    SameText(AName, 'Assert') or SameText(AName, 'Swap') or
+    SameText(AName, 'Lo') or SameText(AName, 'Hi') or
+    SameText(AName, 'Odd') or SameText(AName, 'Char') or
+    SameText(AName, 'Free');
+end;
+
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
 begin
   FModel.AddType('Boolean', 'builtin');
@@ -585,6 +617,65 @@ begin
         Exit;
       end;
     end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckIdentifiersInNode(const ANode: TGreenNode);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  SymId: LongInt;
+  Name: string;
+begin
+  if ANode = nil then
+    Exit;
+  case ANode.NodeKind of
+    gnkAssignmentStatement:
+      begin
+        Name := ANode.Text;
+        if (Name <> '') and (Name <> 'Result') then
+        begin
+          SymId := FModel.LookupSymbol(Name, FCurrentScopeId);
+          if (SymId = 0) and (FModel.FindTypeByName(Name) = 0) and
+            not IsBuiltinProcedure(Name) then
+            EmitSemaError(
+              'sema.undeclared-identifier',
+              'identifier not found "' + Name + '"',
+              ANode.ByteOffset
+            );
+        end;
+      end;
+    gnkStatementList, gnkBeginBlock, gnkIfStatement,
+    gnkWhileStatement, gnkForStatement, gnkForInStatement,
+    gnkRepeatStatement, gnkCaseStatement, gnkCaseSelector,
+    gnkTryExceptStatement, gnkTryFinallyStatement:
+      begin
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if Child <> nil then
+            CheckIdentifiersInNode(Child);
+        end;
+      end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckUndeclaredIdentifiers;
+var
+  RootNode: TGreenNode;
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if FRootAst = nil then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  for I := 0 to RootNode.ChildCount - 1 do
+  begin
+    Child := RootNode.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+      CheckIdentifiersInNode(Child);
   end;
 end;
 
@@ -719,6 +810,7 @@ begin
   SeedDeclarations;
   AssignScopesToSymbols;
   CheckDuplicateDeclarations;
+  CheckUndeclaredIdentifiers;
   CheckAssignmentTypes;
   SeedUnitSymbolsAndHir;
   SeedForeignProcedureBindings;

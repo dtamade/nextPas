@@ -113,6 +113,8 @@ type
     procedure SetSymbolScope(const ASymbolId: LongInt; const AScopeId: LongInt);
     function FindSymbolInScope(const AName: string;
       const AScopeId: LongInt): LongInt;
+    function LookupSymbol(const AName: string;
+      const AStartScopeId: LongInt): LongInt;
     function ScopeCount: LongInt;
     function ScopeAt(const AIndex: LongInt): TSemanticScope;
     function AddTypedHirNode(
@@ -265,6 +267,31 @@ begin
     if (FSymbols[I].ScopeId = AScopeId) and
       SameText(FSymbols[I].Name, AName) then
       Exit(FSymbols[I].SymbolId);
+  Result := 0;
+end;
+
+function TSemanticModel.LookupSymbol(const AName: string;
+  const AStartScopeId: LongInt): LongInt;
+var
+  CurrentScope: LongInt;
+  Idx: LongInt;
+begin
+  CurrentScope := AStartScopeId;
+  while CurrentScope > 0 do
+  begin
+    Result := FindSymbolInScope(AName, CurrentScope);
+    if Result > 0 then
+      Exit;
+    Idx := CurrentScope - 1;
+    if (Idx >= 0) and (Idx < Length(FScopes)) then
+      CurrentScope := FScopes[Idx].ParentScopeId
+    else
+      CurrentScope := 0;
+  end;
+  for Idx := 0 to Length(FSymbols) - 1 do
+    if (FSymbols[Idx].ScopeId = 0) and
+      SameText(FSymbols[Idx].Name, AName) then
+      Exit(FSymbols[Idx].SymbolId);
   Result := 0;
 end;
 

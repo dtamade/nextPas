@@ -1386,9 +1386,10 @@ begin
         Inc(ACursor);
         if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
         begin
-          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
-          if ArgNode <> nil then
-            Result.AppendChild(ArgNode);
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            Inc(ACursor);
           MatchTokenSilent(ALexer, ACursor, tkRBracket);
         end;
         if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
@@ -1397,6 +1398,17 @@ begin
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
         end;
+      end;
+    tkSetKeyword:
+      begin
+        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset, 0, 'set');
+        Inc(ACursor);
+        MatchTokenSilent(ALexer, ACursor, tkOfKeyword);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
       end;
     tkCaret:
       begin
@@ -1587,6 +1599,16 @@ begin
         Section.AppendChild(TypeNode);
         Inc(ATree.FNodeCount);
       end;
+    end;
+
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
     end;
 
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
