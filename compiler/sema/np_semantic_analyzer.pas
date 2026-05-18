@@ -76,6 +76,8 @@ type
     procedure CheckDuplicateDeclarations;
     procedure CheckUndeclaredIdentifiers;
     procedure CheckIdentifiersInNode(const ANode: TGreenNode);
+    procedure CheckTypeMismatches;
+    procedure CheckTypeMismatchesInNode(const ANode: TGreenNode);
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -659,6 +661,8 @@ begin
   FModel.AddType('UnicodeString', 'builtin');
   FModel.AddType('Variant', 'builtin');
   FModel.AddType('OleVariant', 'builtin');
+  FModel.AddType('String', 'alias');
+  FModel.AddType('Cardinal', 'alias');
 end;
 
 procedure TSemanticAnalyzer.AssignScopesToSymbols;
@@ -760,6 +764,106 @@ begin
     Child := RootNode.ChildAt(I);
     if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
       CheckIdentifiersInNode(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckTypeMismatchesInNode(const ANode: TGreenNode);
+var
+  I: LongInt;
+  Child, RhsChild: TGreenNode;
+  LhsName: string;
+  LhsSymId: LongInt;
+  LhsSym: TSemanticSymbol;
+  LhsTypeId, RhsTypeId: LongInt;
+  IntTypeId, StrTypeId, BoolTypeId, CharTypeId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  IntTypeId := FModel.FindTypeByName('Integer');
+  StrTypeId := FModel.FindTypeByName('AnsiString');
+  BoolTypeId := FModel.FindTypeByName('Boolean');
+  CharTypeId := FModel.FindTypeByName('Char');
+
+  case ANode.NodeKind of
+    gnkAssignmentStatement:
+      begin
+        LhsName := ANode.Text;
+        if LhsName = '' then
+          Exit;
+        LhsSymId := FModel.LookupSymbol(LhsName, FCurrentScopeId);
+        if LhsSymId = 0 then
+          Exit;
+        LhsSym := FModel.SymbolAt(LhsSymId - 1);
+        LhsTypeId := LhsSym.TypeId;
+        if LhsTypeId = 0 then
+          Exit;
+        RhsChild := nil;
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if (Child <> nil) and (Child.NodeKind <> gnkDotAccess) and
+            (Child.NodeKind <> gnkArrayAccess) and
+            (Child.NodeKind <> gnkIdentifier) then
+          begin
+            RhsChild := Child;
+            Break;
+          end;
+        end;
+        if RhsChild = nil then
+          Exit;
+        RhsTypeId := InferExpressionType(RhsChild);
+        if RhsTypeId = 0 then
+          Exit;
+        if LhsTypeId = RhsTypeId then
+          Exit;
+        if (LhsTypeId = IntTypeId) and (RhsTypeId = StrTypeId) then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'cannot assign string to integer variable "' + LhsName + '"',
+            ANode.ByteOffset
+          )
+        else if (LhsTypeId = StrTypeId) and (RhsTypeId = IntTypeId) then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'cannot assign integer to string variable "' + LhsName + '"',
+            ANode.ByteOffset
+          )
+        else if (LhsTypeId = BoolTypeId) and (RhsTypeId = IntTypeId) then
+          Exit
+        else if (LhsTypeId = IntTypeId) and (RhsTypeId = BoolTypeId) then
+          Exit;
+      end;
+    gnkStatementList, gnkBeginBlock, gnkIfStatement,
+    gnkWhileStatement, gnkForStatement, gnkForInStatement,
+    gnkRepeatStatement, gnkCaseStatement, gnkCaseSelector,
+    gnkTryExceptStatement, gnkTryFinallyStatement:
+      begin
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if Child <> nil then
+            CheckTypeMismatchesInNode(Child);
+        end;
+      end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.CheckTypeMismatches;
+var
+  RootNode: TGreenNode;
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if FRootAst = nil then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+  for I := 0 to RootNode.ChildCount - 1 do
+  begin
+    Child := RootNode.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+      CheckTypeMismatchesInNode(Child);
   end;
 end;
 
@@ -895,6 +999,7 @@ begin
   AssignScopesToSymbols;
   CheckDuplicateDeclarations;
   CheckUndeclaredIdentifiers;
+  CheckTypeMismatches;
   CheckAssignmentTypes;
   SeedUnitSymbolsAndHir;
   SeedForeignProcedureBindings;
@@ -928,6 +1033,10 @@ function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
 begin
   if ATypeName = '' then
     Exit(0);
+  if SameText(ATypeName, 'String') then
+    Exit(FModel.FindTypeByName('AnsiString'));
+  if SameText(ATypeName, 'Cardinal') then
+    Exit(FModel.FindTypeByName('LongWord'));
   Result := FModel.FindTypeByName(ATypeName);
 end;
 
