@@ -647,7 +647,7 @@ end;
 function TSemanticAnalyzer.AreTypesCompatible(
   const ALhsTypeId, ARhsTypeId: LongInt): Boolean;
 var
-  IntIds: array[0..7] of LongInt;
+  IntIds: array[0..9] of LongInt;
   StrIds: array[0..3] of LongInt;
   I: LongInt;
   LhsIsInt, RhsIsInt, LhsIsStr, RhsIsStr: Boolean;
@@ -660,7 +660,8 @@ begin
 
   LhsType := FModel.TypeAt(ALhsTypeId - 1);
   RhsType := FModel.TypeAt(ARhsTypeId - 1);
-  if (LhsType.Kind = 'declared') or (RhsType.Kind = 'declared') then
+  if (LhsType.Kind = 'declared') or (RhsType.Kind = 'declared') or
+    (LhsType.Kind = 'alias') or (RhsType.Kind = 'alias') then
     Exit(True);
 
   IntIds[0] := FModel.FindTypeByName('Byte');
@@ -671,10 +672,12 @@ begin
   IntIds[5] := FModel.FindTypeByName('QWord');
   IntIds[6] := FModel.FindTypeByName('LongWord');
   IntIds[7] := FModel.FindTypeByName('Single');
+  IntIds[8] := FModel.FindTypeByName('Double');
+  IntIds[9] := FModel.FindTypeByName('Pointer');
 
   LhsIsInt := False;
   RhsIsInt := False;
-  for I := 0 to 7 do
+  for I := 0 to 9 do
   begin
     if ALhsTypeId = IntIds[I] then LhsIsInt := True;
     if ARhsTypeId = IntIds[I] then RhsIsInt := True;
@@ -1091,6 +1094,10 @@ begin
     Exit(FModel.FindTypeByName('AnsiString'));
   if SameText(ATypeName, 'Cardinal') then
     Exit(FModel.FindTypeByName('LongWord'));
+  if SameText(ATypeName, 'Real') then
+    Exit(FModel.FindTypeByName('Double'));
+  if SameText(ATypeName, 'Extended') then
+    Exit(FModel.FindTypeByName('Double'));
   Result := FModel.FindTypeByName(ATypeName);
 end;
 

@@ -727,6 +727,28 @@ if [ "$PARSER_BENCH_EXIT" -ne 0 ]; then
 fi
 printf 'parser-bench=pass\n'
 
+printf 'sema-bench=running\n'
+SEMA_BENCH_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/sema_bench"
+SEMA_BENCH_BINARY="$SEMA_BENCH_BUILD_DIR/sema_bench"
+SEMA_BENCH_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -O2"
+SEMA_BENCH_MIN_MB_PER_SEC=1
+mkdir -p "$SEMA_BENCH_BUILD_DIR"
+if ! fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas >/dev/null 2>&1; then
+  fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas
+  fail 'sema-bench-build-failed'
+fi
+if [ ! -x "$SEMA_BENCH_BINARY" ]; then
+  fail 'missing-sema-bench-binary'
+fi
+set +e
+"$SEMA_BENCH_BINARY" tests/semantic/sema_stress_pass.pas "$SEMA_BENCH_MIN_MB_PER_SEC"
+SEMA_BENCH_EXIT=$?
+set -e
+if [ "$SEMA_BENCH_EXIT" -ne 0 ]; then
+  fail 'sema-bench-throughput-below-minimum'
+fi
+printf 'sema-bench=pass\n'
+
 printf 'stage0-smoke=running\n'
 printf 'stage0-smoke-command=%s build examples/smoke/hello.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$STAGE0_SMOKE_OUTPUT" examples/smoke/hello.pas; then
