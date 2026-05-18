@@ -398,40 +398,99 @@ end;
 function ReadStringLiteral(
   const ASourceText: string;
   var AIndex: SizeInt;
-  out AClosed: Boolean
+  out AClosed: Boolean;
+  out ASawQuoted: Boolean
+): string; forward;
+function IsControlCharLetter(const AChar: Char): Boolean; forward;
+function IsHexDigit(const AChar: Char): Boolean; forward;
+function IsDigit(const AChar: Char): Boolean; forward;
+
+function ReadStringLiteral(
+  const ASourceText: string;
+  var AIndex: SizeInt;
+  out AClosed: Boolean;
+  out ASawQuoted: Boolean
 ): string;
 var
   StartIndex: SizeInt;
   Ch: Char;
+  SegmentClosed: Boolean;
+
+  procedure ScanQuotedSegment;
+  begin
+    SegmentClosed := False;
+    Inc(AIndex);
+    while AIndex <= Length(ASourceText) do
+    begin
+      Ch := ASourceText[AIndex];
+      if (Ch = #13) or (Ch = #10) then
+        Exit;
+      if Ch = '''' then
+      begin
+        Inc(AIndex);
+        if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '''') then
+          Inc(AIndex)
+        else
+        begin
+          SegmentClosed := True;
+          Exit;
+        end;
+      end
+      else
+        Inc(AIndex);
+    end;
+  end;
+
+  procedure ScanCharCodeSegment;
+  begin
+    Inc(AIndex);
+    if AIndex > Length(ASourceText) then
+      Exit;
+    if ASourceText[AIndex] = '$' then
+    begin
+      Inc(AIndex);
+      while (AIndex <= Length(ASourceText)) and IsHexDigit(ASourceText[AIndex]) do
+        Inc(AIndex);
+    end
+    else if IsDigit(ASourceText[AIndex]) then
+    begin
+      while (AIndex <= Length(ASourceText)) and IsDigit(ASourceText[AIndex]) do
+        Inc(AIndex);
+    end;
+  end;
+
+  procedure ScanCaretSegment;
+  begin
+    Inc(AIndex);
+    if (AIndex <= Length(ASourceText)) and IsControlCharLetter(ASourceText[AIndex]) then
+      Inc(AIndex);
+  end;
+
 begin
   StartIndex := AIndex;
-  AClosed := False;
-  Inc(AIndex);
+  AClosed := True;
+  ASawQuoted := False;
 
   while AIndex <= Length(ASourceText) do
   begin
     Ch := ASourceText[AIndex];
-    if (Ch = #13) or (Ch = #10) then
-    begin
-      { Pascal string literals must not span newlines. Stop here so
-        the next iteration of the main scan loop can resume on a
-        clean line; the caller is responsible for emitting the
-        diagnostic. }
-      Break;
-    end;
     if Ch = '''' then
     begin
-      Inc(AIndex);
-      if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '''') then
-        Inc(AIndex)
-      else
+      ASawQuoted := True;
+      ScanQuotedSegment;
+      if not SegmentClosed then
       begin
-        AClosed := True;
+        AClosed := False;
         Break;
       end;
     end
+    else if Ch = '#' then
+      ScanCharCodeSegment
+    else if (Ch = '^') and (AIndex < Length(ASourceText)) and
+            IsControlCharLetter(ASourceText[AIndex + 1]) then
+      ScanCaretSegment
     else
-      Inc(AIndex);
+      Break;
   end;
 
   Result := Copy(ASourceText, StartIndex, AIndex - StartIndex);
@@ -445,6 +504,26 @@ end;
 function IsHexDigit(const AChar: Char): Boolean;
 begin
   Result := (AChar in ['0'..'9']) or (AChar in ['A'..'F']) or (AChar in ['a'..'f']);
+end;
+
+function IsOctalDigit(const AChar: Char): Boolean;
+begin
+  Result := AChar in ['0'..'7'];
+end;
+
+function IsBinaryDigit(const AChar: Char): Boolean;
+begin
+  Result := (AChar = '0') or (AChar = '1');
+end;
+
+function IsControlCharLetter(const AChar: Char): Boolean;
+begin
+  { Pascal "^X" control-character notation: X must be one of
+    @, A-Z, [, \, ], ^, _ (mapping to control bytes #0..#31).
+    Lowercase letters are also accepted by FPC for ergonomics. }
+  Result := (AChar in ['A'..'Z']) or (AChar in ['a'..'z']) or
+            (AChar = '@') or (AChar = '[') or (AChar = '\') or
+            (AChar = ']') or (AChar = '^') or (AChar = '_');
 end;
 
 function ReadIntegerLiteral(const ASourceText: string;
@@ -463,6 +542,30 @@ begin
       Exit(False);
     end;
     while (AIndex <= Length(ASourceText)) and IsHexDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end
+  else if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '&') then
+  begin
+    Inc(AIndex);
+    if (AIndex > Length(ASourceText)) or not IsOctalDigit(ASourceText[AIndex]) then
+    begin
+      AIndex := StartIndex;
+      ALexeme := '';
+      Exit(False);
+    end;
+    while (AIndex <= Length(ASourceText)) and IsOctalDigit(ASourceText[AIndex]) do
+      Inc(AIndex);
+  end
+  else if (AIndex <= Length(ASourceText)) and (ASourceText[AIndex] = '%') then
+  begin
+    Inc(AIndex);
+    if (AIndex > Length(ASourceText)) or not IsBinaryDigit(ASourceText[AIndex]) then
+    begin
+      AIndex := StartIndex;
+      ALexeme := '';
+      Exit(False);
+    end;
+    while (AIndex <= Length(ASourceText)) and IsBinaryDigit(ASourceText[AIndex]) do
       Inc(AIndex);
   end
   else
@@ -803,6 +906,7 @@ var
   TokenLine: LongInt;
   TokenColumn: LongInt;
   ClosedFlag: Boolean;
+  SawQuoted: Boolean;
 begin
   StartIndex := 1;
   { Skip UTF-8 BOM (EF BB BF) at the start of the source so the
@@ -902,40 +1006,80 @@ begin
       Continue;
     end;
 
-    if CurrentChar = '#' then
+    if (CurrentChar = '''') or (CurrentChar = '#') or
+       ((CurrentChar = '^') and (StartIndex < Length(ASourceText)) and
+        IsControlCharLetter(ASourceText[StartIndex + 1])) then
     begin
       SaveIndex := StartIndex;
-      if ReadCharLiteral(ASourceText, StartIndex, Lexeme) then
-        AddTokenAt(tkCharLiteral, Lexeme, SaveIndex, TokenLine)
-      else
+      Lexeme := ReadStringLiteral(ASourceText, StartIndex, ClosedFlag, SawQuoted);
+      if Length(Lexeme) = 0 then
       begin
-        AddTokenAt(tkError, '#', SaveIndex, TokenLine);
+        { Defensive: char-code prefix without any valid digits. }
+        AddTokenAt(tkError, CurrentChar, SaveIndex, TokenLine);
         ReportError(
           'lexer.invalid-char-code',
           SaveIndex - 1,
-          'expected decimal digits or "$" after "#" in character code'
+          'expected decimal digits, "$", or quoted string after "' +
+            CurrentChar + '"'
         );
+        Inc(StartIndex);
+        Continue;
       end;
+      if SawQuoted then
+        AddTokenAt(tkStringLiteral, Lexeme, SaveIndex, TokenLine)
+      else
+        AddTokenAt(tkCharLiteral, Lexeme, SaveIndex, TokenLine);
+      if not ClosedFlag then
+        ReportError(
+          'lexer.unterminated-string-literal',
+          SaveIndex - 1,
+          'string literal started at byte ' + IntToStr(SaveIndex - 1) +
+            ' was not terminated before end-of-line or end-of-file'
+        );
       Continue;
     end;
 
-    if (CurrentChar = '$') or IsDigit(CurrentChar) then
+    if CurrentChar = '^' then
+    begin
+      AddTokenAt(tkCaret, '^', StartIndex, TokenLine);
+      Inc(StartIndex);
+      Continue;
+    end;
+
+    if (CurrentChar = '$') or (CurrentChar = '&') or
+       (CurrentChar = '%') or IsDigit(CurrentChar) then
     begin
       SaveIndex := StartIndex;
       if not ReadIntegerLiteral(ASourceText, StartIndex, IntegerLexeme) then
       begin
-        AddTokenAt(tkError, '$', SaveIndex, TokenLine);
-        ReportError(
-          'lexer.invalid-numeric-literal',
-          SaveIndex - 1,
-          'expected hexadecimal digits after "$"'
-        );
+        AddTokenAt(tkError, CurrentChar, SaveIndex, TokenLine);
+        case CurrentChar of
+          '$':
+            ReportError(
+              'lexer.invalid-numeric-literal',
+              SaveIndex - 1,
+              'expected hexadecimal digits after "$"'
+            );
+          '&':
+            ReportError(
+              'lexer.invalid-numeric-literal',
+              SaveIndex - 1,
+              'expected octal digits (0-7) after "&"'
+            );
+          '%':
+            ReportError(
+              'lexer.invalid-numeric-literal',
+              SaveIndex - 1,
+              'expected binary digits (0 or 1) after "%"'
+            );
+        end;
         Inc(StartIndex);
         Continue;
       end;
       NumberStartIndex := SaveIndex;
       IsReal := False;
-      if (CurrentChar <> '$') and
+      if (CurrentChar <> '$') and (CurrentChar <> '&') and
+         (CurrentChar <> '%') and
         (StartIndex <= Length(ASourceText)) and (ASourceText[StartIndex] = '.') and
         ((StartIndex >= Length(ASourceText)) or (ASourceText[StartIndex + 1] <> '.')) then
       begin
@@ -1001,7 +1145,8 @@ begin
             StartIndex := ExponentSaveIndex;
         end;
       end
-      else if (CurrentChar <> '$') and (StartIndex <= Length(ASourceText)) and
+      else if (CurrentChar <> '$') and (CurrentChar <> '&') and
+        (CurrentChar <> '%') and (StartIndex <= Length(ASourceText)) and
         ((ASourceText[StartIndex] = 'e') or (ASourceText[StartIndex] = 'E')) then
       begin
         ExponentSaveIndex := StartIndex;
@@ -1045,21 +1190,6 @@ begin
         Inc(StartIndex);
       end;
       AddTokenAt(ResolveIdentifierKind(Lexeme), Lexeme, SaveIndex, TokenLine);
-      Continue;
-    end;
-
-    if CurrentChar = '''' then
-    begin
-      SaveIndex := StartIndex;
-      Lexeme := ReadStringLiteral(ASourceText, StartIndex, ClosedFlag);
-      AddTokenAt(tkStringLiteral, Lexeme, SaveIndex, TokenLine);
-      if not ClosedFlag then
-        ReportError(
-          'lexer.unterminated-string-literal',
-          SaveIndex - 1,
-          'string literal started at byte ' + IntToStr(SaveIndex - 1) +
-            ' was not terminated before end-of-line or end-of-file'
-        );
       Continue;
     end;
 
@@ -1174,8 +1304,6 @@ begin
         AddTokenAt(tkRBracket, ']', StartIndex, TokenLine);
       '@':
         AddTokenAt(tkAt, '@', StartIndex, TokenLine);
-      '^':
-        AddTokenAt(tkCaret, '^', StartIndex, TokenLine);
     else
       begin
         AddTokenAt(tkError, CurrentChar, StartIndex, TokenLine);
