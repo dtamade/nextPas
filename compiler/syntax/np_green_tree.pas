@@ -522,6 +522,13 @@ begin
   Inc(ACursor);
 end;
 
+procedure SkipDirectives(const ALexer: TLexerResult; var ACursor: LongInt);
+begin
+  while (ACursor < ALexer.TokenCount) and
+    (ALexer.TokenAt(ACursor).Kind = tkCompilerDirective) do
+    Inc(ACursor);
+end;
+
 function CurrentToken(const ALexer: TLexerResult; const ACursor: LongInt): TToken;
 begin
   Result := ALexer.TokenAt(ACursor);
@@ -547,6 +554,7 @@ function MatchToken(
   const AExpectedLabel: string
 ): Boolean;
 begin
+  SkipDirectives(ALexer, ACursor);
   if ACursor >= ALexer.TokenCount then
   begin
     Result := False;
@@ -573,6 +581,7 @@ function MatchTokenSilent(
   const AExpected: TTokenKind
 ): Boolean;
 begin
+  SkipDirectives(ALexer, ACursor);
   if ACursor >= ALexer.TokenCount then
     Exit(False);
   Result := CurrentToken(ALexer, ACursor).Kind = AExpected;
@@ -1951,9 +1960,12 @@ begin
     tkFinalizationKeyword, tkEOF];
 
   Result := True;
-  while (ACursor < ALexer.TokenCount) and
-    not (CurrentToken(ALexer, ACursor).Kind in DeclTerminatorSet) do
+  while True do
   begin
+    SkipDirectives(ALexer, ACursor);
+    if (ACursor >= ALexer.TokenCount) or
+      (CurrentToken(ALexer, ACursor).Kind in DeclTerminatorSet) then
+      Break;
     case CurrentToken(ALexer, ACursor).Kind of
       tkVarKeyword:
         Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
@@ -2707,9 +2719,12 @@ begin
   Inc(ATree.FNodeCount);
 
   Result := True;
-  while (ACursor < ALexer.TokenCount) and
-    not (CurrentToken(ALexer, ACursor).Kind in ATerminatorSet) do
+  while True do
   begin
+    SkipDirectives(ALexer, ACursor);
+    if (ACursor >= ALexer.TokenCount) or
+      (CurrentToken(ALexer, ACursor).Kind in ATerminatorSet) then
+      Break;
     if not ParseStatement then
     begin
       List.AppendChild(TGreenNode.Create(gnkError,
@@ -2854,6 +2869,23 @@ begin
 
   Result := ParseBlockDeclarations(
     ALexer, ACursor, ImplementationNode, ATree, ADiagnostics, ARootFileId);
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkInitializationKeyword) then
+  begin
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, ImplementationNode,
+      [tkFinalizationKeyword, tkEndKeyword, tkEOF],
+      ATree, ADiagnostics, ARootFileId);
+  end;
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkFinalizationKeyword) then
+  begin
+    Inc(ACursor);
+    ParseStatementList(ALexer, ACursor, ImplementationNode,
+      [tkEndKeyword, tkEOF], ATree, ADiagnostics, ARootFileId);
+  end;
 
   Result := MatchToken(
     ALexer,
@@ -3006,6 +3038,7 @@ var
 begin
   Result := TGreenTree.Create;
   Cursor := 0;
+  SkipDirectives(ALexer, Cursor);
   Current := CurrentToken(ALexer, Cursor);
 
   Result.FRootKind := RootKindFromToken(Current.Kind);
