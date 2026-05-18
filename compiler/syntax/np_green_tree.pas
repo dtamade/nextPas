@@ -845,6 +845,12 @@ begin
         Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
           Length(Token.Lexeme), 'nil');
       end;
+    tkSelfKeyword:
+      begin
+        Inc(ACursor);
+        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+          Length(Token.Lexeme), 'Self');
+      end;
     tkLParen:
       begin
         Inc(ACursor);
@@ -1989,6 +1995,14 @@ begin
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
               Inc(ACursor);
           end;
+        tkTypeKeyword:
+          begin
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+            MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+          end;
       else
         TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
         if TypeNode <> nil then
@@ -2935,7 +2949,7 @@ var
           end;
           Result := True;
         end;
-      tkIdentifier:
+      tkIdentifier, tkSelfKeyword:
         begin
           if (ACursor + 1 < ALexer.TokenCount) and
             (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
