@@ -77,6 +77,10 @@ type
       const AOwnerUnitId: string);
     procedure ProcessFunctionDecl(const ANode: TGreenNode;
       const AOwnerUnitId: string);
+    procedure ProcessTypeSection(const ANode: TGreenNode;
+      const AOwnerUnitId: string);
+    procedure ProcessEnumType(const ANode: TGreenNode;
+      const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -740,8 +744,8 @@ procedure TSemanticAnalyzer.ProcessProcedureDecl(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
   SymbolId: LongInt;
-  Index: LongInt;
-  Child: TGreenNode;
+  Index, J: LongInt;
+  Child, ParamChild: TGreenNode;
 begin
   if ANode = nil then
     Exit;
@@ -751,7 +755,19 @@ begin
   for Index := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(Index);
-    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    if Child = nil then
+      Continue;
+    if Child.NodeKind = gnkParameterList then
+    begin
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(J);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
+            ParamChild.ByteOffset);
+      end;
+    end
+    else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode);
       Break;
@@ -765,7 +781,7 @@ var
   SymbolId: LongInt;
   TypeId: LongInt;
   J: LongInt;
-  Child: TGreenNode;
+  Child, ParamChild: TGreenNode;
 begin
   if ANode = nil then
     Exit;
@@ -785,10 +801,67 @@ begin
   for J := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(J);
-    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    if Child = nil then
+      Continue;
+    if Child.NodeKind = gnkParameterList then
+    begin
+      for TypeId := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(TypeId);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
+            ParamChild.ByteOffset);
+      end;
+    end
+    else if Child.NodeKind = gnkBeginBlock then
     begin
       RegisterProcedureBody(ANode.Text, Child, ANode);
       Break;
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.ProcessEnumType(const ANode: TGreenNode;
+  const AOwnerUnitId: string; const ATypeId: LongInt);
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+      FModel.AddSymbol(Child.Text, 'enum-value', AOwnerUnitId, ATypeId,
+        Child.ByteOffset);
+  end;
+end;
+
+procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
+  const AOwnerUnitId: string);
+var
+  I, J: LongInt;
+  Child, TypeChild: TGreenNode;
+  TypeId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkTypeDecl) then
+      Continue;
+    if Child.Text = '' then
+      Continue;
+    TypeId := FModel.AddType(Child.Text, 'declared');
+    FModel.AddSymbol(Child.Text, 'type', AOwnerUnitId, TypeId,
+      Child.ByteOffset);
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      TypeChild := Child.ChildAt(J);
+      if (TypeChild <> nil) and (TypeChild.NodeKind = gnkEnumType) then
+        ProcessEnumType(TypeChild, AOwnerUnitId, TypeId);
     end;
   end;
 end;
@@ -811,6 +884,8 @@ begin
         ProcessVarSection(Child, AOwnerUnitId);
       gnkConstSection:
         ProcessConstSection(Child, AOwnerUnitId);
+      gnkTypeSection:
+        ProcessTypeSection(Child, AOwnerUnitId);
       gnkProcedureDecl:
         ProcessProcedureDecl(Child, AOwnerUnitId);
       gnkFunctionDecl:
