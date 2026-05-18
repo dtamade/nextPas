@@ -668,7 +668,13 @@ begin
   RhsType := FModel.TypeAt(ARhsTypeId - 1);
   if (LhsType.Kind = 'declared') or (RhsType.Kind = 'declared') or
     (LhsType.Kind = 'alias') or (RhsType.Kind = 'alias') then
+  begin
+    if FModel.IsTypeDescendantOf(ARhsTypeId, ALhsTypeId) then
+      Exit(True);
+    if FModel.IsTypeDescendantOf(ALhsTypeId, ARhsTypeId) then
+      Exit(True);
     Exit(True);
+  end;
 
   IntIds[0] := FModel.FindTypeByName('Byte');
   IntIds[1] := FModel.FindTypeByName('Word');
@@ -1628,7 +1634,16 @@ begin
       if TypeChild.NodeKind = gnkEnumType then
         ProcessEnumType(TypeChild, AOwnerUnitId, TypeId)
       else if TypeChild.NodeKind = gnkRecordType then
-        ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId);
+        ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId)
+      else if TypeChild.NodeKind = gnkClassType then
+      begin
+        if TypeChild.ChildCount > 0 then
+        begin
+          if TypeChild.ChildAt(0).NodeKind = gnkIdentifier then
+            FModel.SetTypeParent(TypeId,
+              FModel.FindTypeByName(TypeChild.ChildAt(0).Text));
+        end;
+      end;
     end;
   end;
 end;

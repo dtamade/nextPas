@@ -20,6 +20,7 @@ type
     TypeId: LongInt;
     Name: string;
     Kind: string;
+    ParentTypeId: LongInt;
   end;
 
   TTypedHirNode = record
@@ -109,6 +110,9 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
+    procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
+    function IsTypeDescendantOf(const ATypeId: LongInt;
+      const AAncestorTypeId: LongInt): Boolean;
     function AddScope(const AKind: TScopeKind; const AName: string;
       const AParentScopeId: LongInt): LongInt;
     procedure SetSymbolScope(const ASymbolId: LongInt; const AScopeId: LongInt);
@@ -230,7 +234,41 @@ begin
   FTypes[NextIndex].TypeId := NextIndex + 1;
   FTypes[NextIndex].Name := AName;
   FTypes[NextIndex].Kind := AKind;
+  FTypes[NextIndex].ParentTypeId := 0;
   Result := FTypes[NextIndex].TypeId;
+end;
+
+procedure TSemanticModel.SetTypeParent(const ATypeId: LongInt;
+  const AParentTypeId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx >= 0) and (Idx < Length(FTypes)) then
+    FTypes[Idx].ParentTypeId := AParentTypeId;
+end;
+
+function TSemanticModel.IsTypeDescendantOf(const ATypeId: LongInt;
+  const AAncestorTypeId: LongInt): Boolean;
+var
+  Current, Idx: LongInt;
+  Depth: LongInt;
+begin
+  if ATypeId = AAncestorTypeId then
+    Exit(True);
+  Current := ATypeId;
+  Depth := 0;
+  while (Current > 0) and (Depth < 32) do
+  begin
+    Idx := Current - 1;
+    if (Idx < 0) or (Idx >= Length(FTypes)) then
+      Exit(False);
+    Current := FTypes[Idx].ParentTypeId;
+    if Current = AAncestorTypeId then
+      Exit(True);
+    Inc(Depth);
+  end;
+  Result := False;
 end;
 
 function TSemanticModel.AddScope(const AKind: TScopeKind;
