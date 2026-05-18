@@ -79,6 +79,7 @@ type
     procedure CheckIdentifiersInNode(const ANode: TGreenNode);
     procedure CheckTypeMismatches;
     procedure CheckTypeMismatchesInNode(const ANode: TGreenNode);
+    procedure CheckUnusedSymbols;
     procedure SeedDeclarations;
     procedure CheckAssignmentTypes;
     procedure SeedUnitSymbolsAndHir;
@@ -953,6 +954,74 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.CheckUnusedSymbols;
+
+  function IsNameUsedInNode(const ANode: TGreenNode; const AName: string): Boolean;
+  var
+    I: LongInt;
+    Child: TGreenNode;
+  begin
+    if ANode = nil then
+      Exit(False);
+    if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, AName) then
+      Exit(True);
+    if (ANode.NodeKind = gnkAssignmentStatement) and SameText(ANode.Text, AName) then
+      Exit(True);
+    if (ANode.NodeKind = gnkProcedureCallStatement) and SameText(ANode.Text, AName) then
+      Exit(True);
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if IsNameUsedInNode(Child, AName) then
+        Exit(True);
+    end;
+    Result := False;
+  end;
+
+var
+  I: LongInt;
+  Sym: TSemanticSymbol;
+  RootNode, Child: TGreenNode;
+  BeginBlock: TGreenNode;
+  J: LongInt;
+begin
+  if FRootAst = nil then
+    Exit;
+  RootNode := FRootAst.RootNode;
+  if RootNode = nil then
+    Exit;
+
+  BeginBlock := nil;
+  for J := 0 to RootNode.ChildCount - 1 do
+  begin
+    Child := RootNode.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkBeginBlock) then
+    begin
+      BeginBlock := Child;
+      Break;
+    end;
+  end;
+  if BeginBlock = nil then
+    Exit;
+
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Sym := FModel.SymbolAt(I);
+    if Sym.Kind <> 'variable' then
+      Continue;
+    if Sym.ScopeId <> FCurrentScopeId then
+      Continue;
+    if not IsNameUsedInNode(BeginBlock, Sym.Name) then
+      FDiagnostics.EmitWarning(
+        'sema.unused-variable',
+        'sema',
+        FRootFileId,
+        Sym.ByteOffset,
+        'variable "' + Sym.Name + '" is declared but never used'
+      );
+  end;
+end;
+
 procedure TSemanticAnalyzer.SeedUnitSymbolsAndHir;
 var
   Index: LongInt;
@@ -1094,6 +1163,7 @@ begin
   SeedRuntimeContracts;
   SeedRuntimeVarDecls;
   SeedHaltCalls;
+  CheckUnusedSymbols;
 
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
@@ -1754,13 +1824,27 @@ begin
         else if SameText(Op, 'div') then
         begin
           if Right = 0 then
+          begin
+            EmitSemaError(
+              'sema.division-by-zero',
+              'division by zero in constant expression',
+              ANode.ByteOffset
+            );
             Exit(False);
+          end;
           AValue := Left div Right;
         end
         else if SameText(Op, 'mod') then
         begin
           if Right = 0 then
+          begin
+            EmitSemaError(
+              'sema.division-by-zero',
+              'division by zero in constant expression',
+              ANode.ByteOffset
+            );
             Exit(False);
+          end;
           AValue := Left mod Right;
         end
         else if Op = '=' then
