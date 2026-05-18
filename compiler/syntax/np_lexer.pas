@@ -1158,7 +1158,9 @@ begin
 
     if (CurrentChar = '''') or (CurrentChar = '#') or
        ((CurrentChar = '^') and (StartIndex < Length(ASourceText)) and
-        IsControlCharLetter(ASourceText[StartIndex + 1])) then
+        IsControlCharLetter(ASourceText[StartIndex + 1]) and
+        ((StartIndex + 1 >= Length(ASourceText)) or
+         not (ASourceText[StartIndex + 2] in ['A'..'Z', 'a'..'z', '0'..'9', '_']))) then
     begin
       SaveIndex := StartIndex;
       Lexeme := ReadStringLiteral(ASourceText, StartIndex, ClosedFlag, SawQuoted);
