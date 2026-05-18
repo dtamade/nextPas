@@ -97,6 +97,8 @@ type
       const AOwnerUnitId: string);
     procedure ProcessEnumType(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
+    procedure ProcessRecordFields(const ANode: TGreenNode;
+      const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -1230,6 +1232,40 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.ProcessRecordFields(const ANode: TGreenNode;
+  const AOwnerUnitId: string; const ATypeId: LongInt);
+var
+  I: LongInt;
+  Child: TGreenNode;
+  RecordScopeId: LongInt;
+  FieldTypeId: LongInt;
+  TypeChild: TGreenNode;
+  J: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  RecordScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkVarDecl) then
+      Continue;
+    FieldTypeId := 0;
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      TypeChild := Child.ChildAt(J);
+      if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
+      begin
+        FieldTypeId := ResolveTypeId(TypeChild.Text);
+        Break;
+      end;
+    end;
+    FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
+      Child.ByteOffset);
+    FModel.SetSymbolScope(FModel.SymbolCount, RecordScopeId);
+  end;
+end;
+
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
@@ -1252,8 +1288,12 @@ begin
     for J := 0 to Child.ChildCount - 1 do
     begin
       TypeChild := Child.ChildAt(J);
-      if (TypeChild <> nil) and (TypeChild.NodeKind = gnkEnumType) then
-        ProcessEnumType(TypeChild, AOwnerUnitId, TypeId);
+      if TypeChild = nil then
+        Continue;
+      if TypeChild.NodeKind = gnkEnumType then
+        ProcessEnumType(TypeChild, AOwnerUnitId, TypeId)
+      else if TypeChild.NodeKind = gnkRecordType then
+        ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId);
     end;
   end;
 end;

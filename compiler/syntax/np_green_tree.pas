@@ -1765,7 +1765,62 @@ begin
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
             Inc(ACursor);
-            SkipToSyncSet(ALexer, ACursor, [tkEndKeyword, tkEOF]);
+            SkipDirectives(ALexer, ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            begin
+              if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+              begin
+                IndexNode := TGreenNode.Create(gnkVarDecl,
+                  CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                  CurrentToken(ALexer, ACursor).Lexeme);
+                TypeNode.AppendChild(IndexNode);
+                Inc(ATree.FNodeCount);
+                Inc(ACursor);
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+                begin
+                  Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                  begin
+                    IndexNode := TGreenNode.Create(gnkVarDecl,
+                      CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                      CurrentToken(ALexer, ACursor).Lexeme);
+                    TypeNode.AppendChild(IndexNode);
+                    Inc(ATree.FNodeCount);
+                    Inc(ACursor);
+                  end;
+                end;
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                begin
+                  Inc(ACursor);
+                  ElementNode := ParseTypeReference(ALexer, ACursor,
+                    ADiagnostics, ARootFileId);
+                  if ElementNode <> nil then
+                  begin
+                    IndexNode.AppendChild(ElementNode);
+                    Inc(ATree.FNodeCount);
+                  end;
+                end;
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+              end
+              else if CurrentToken(ALexer, ACursor).Kind in
+                [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
+                 tkPublishedKeyword] then
+                Inc(ACursor)
+              else if CurrentToken(ALexer, ACursor).Kind = tkCaseKeyword then
+              begin
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                  Inc(ACursor);
+              end
+              else
+                Inc(ACursor);
+            end;
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
           end;
         tkArrayKeyword:
