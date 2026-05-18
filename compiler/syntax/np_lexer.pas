@@ -182,6 +182,7 @@ type
   TLexerResult = class
   private
     FTokens: array of TToken;
+    FTokenCount: SizeInt;
     FCurrentLine: LongInt;
     FLineStartByte: LongInt;
     FDiagnostics: TDiagnosticsSink;
@@ -696,15 +697,26 @@ constructor TLexerResult.Create(
   const ADiagnostics: TDiagnosticsSink;
   const AFileId: TCoreId
 );
+var
+  EstimatedCapacity: SizeInt;
 begin
   inherited Create;
-  SetLength(FTokens, 0);
+  FTokenCount := 0;
+  { Pre-grow to a sensible initial capacity so the first ~256
+    tokens never trigger a copy. For larger files we still
+    double on demand inside AddToken. }
+  EstimatedCapacity := Length(ASourceText) div 4 + 16;
+  if EstimatedCapacity < 64 then
+    EstimatedCapacity := 64;
+  SetLength(FTokens, EstimatedCapacity);
   FCurrentLine := 1;
   FLineStartByte := 0;
   FDiagnostics := ADiagnostics;
   FFileId := AFileId;
   SetLength(FPendingTrivia, 0);
   LexSource(ASourceText);
+  { Trim to actual length so callers iterate the right range. }
+  SetLength(FTokens, FTokenCount);
 end;
 
 procedure TLexerResult.ReportError(
@@ -798,9 +810,16 @@ procedure TLexerResult.AddToken(
 );
 var
   NextIndex: SizeInt;
+  NewCapacity: SizeInt;
 begin
-  NextIndex := Length(FTokens);
-  SetLength(FTokens, NextIndex + 1);
+  NextIndex := FTokenCount;
+  if NextIndex >= Length(FTokens) then
+  begin
+    NewCapacity := Length(FTokens) * 2;
+    if NewCapacity < NextIndex + 16 then
+      NewCapacity := NextIndex + 16;
+    SetLength(FTokens, NewCapacity);
+  end;
   FTokens[NextIndex].Kind := AKind;
   FTokens[NextIndex].Lexeme := ALexeme;
   FTokens[NextIndex].ByteOffset := AByteOffset;
@@ -808,6 +827,7 @@ begin
   FTokens[NextIndex].Column := AColumn;
   SetLength(FTokens[NextIndex].LeadingTrivia, 0);
   SetLength(FTokens[NextIndex].TrailingTrivia, 0);
+  Inc(FTokenCount);
   FlushPendingTriviaToToken(NextIndex);
 end;
 
@@ -1215,35 +1235,21 @@ begin
       begin
         if (StartIndex + 1 <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex + 1]) then
         begin
-          IntegerLexeme := IntegerLexeme + '.';
           Inc(StartIndex);
           while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
-          begin
-            IntegerLexeme := IntegerLexeme + ASourceText[StartIndex];
             Inc(StartIndex);
-          end;
           IsReal := True;
           if (StartIndex <= Length(ASourceText)) and
             ((ASourceText[StartIndex] = 'e') or (ASourceText[StartIndex] = 'E')) then
           begin
             ExponentSaveIndex := StartIndex;
-            Lexeme := IntegerLexeme + ASourceText[StartIndex];
             Inc(StartIndex);
             if (StartIndex <= Length(ASourceText)) and
               ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
-            begin
-              Lexeme := Lexeme + ASourceText[StartIndex];
               Inc(StartIndex);
-            end;
             if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
-            begin
               while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
-              begin
-                Lexeme := Lexeme + ASourceText[StartIndex];
-                Inc(StartIndex);
-              end;
-              IntegerLexeme := Lexeme;
-            end
+                Inc(StartIndex)
             else
               StartIndex := ExponentSaveIndex;
           end;
@@ -1252,23 +1258,14 @@ begin
           ((ASourceText[StartIndex + 1] = 'e') or (ASourceText[StartIndex + 1] = 'E')) then
         begin
           ExponentSaveIndex := StartIndex;
-          Inc(StartIndex);
-          Lexeme := IntegerLexeme + '.' + ASourceText[StartIndex];
-          Inc(StartIndex);
+          Inc(StartIndex, 2);
           if (StartIndex <= Length(ASourceText)) and
             ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
-          begin
-            Lexeme := Lexeme + ASourceText[StartIndex];
             Inc(StartIndex);
-          end;
           if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
           begin
             while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
-            begin
-              Lexeme := Lexeme + ASourceText[StartIndex];
               Inc(StartIndex);
-            end;
-            IntegerLexeme := Lexeme;
             IsReal := True;
           end
           else
@@ -1280,27 +1277,21 @@ begin
         ((ASourceText[StartIndex] = 'e') or (ASourceText[StartIndex] = 'E')) then
       begin
         ExponentSaveIndex := StartIndex;
-        Lexeme := IntegerLexeme + ASourceText[StartIndex];
         Inc(StartIndex);
         if (StartIndex <= Length(ASourceText)) and
           ((ASourceText[StartIndex] = '+') or (ASourceText[StartIndex] = '-')) then
-        begin
-          Lexeme := Lexeme + ASourceText[StartIndex];
           Inc(StartIndex);
-        end;
         if (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) then
         begin
           while (StartIndex <= Length(ASourceText)) and IsDigit(ASourceText[StartIndex]) do
-          begin
-            Lexeme := Lexeme + ASourceText[StartIndex];
             Inc(StartIndex);
-          end;
-          IntegerLexeme := Lexeme;
           IsReal := True;
         end
         else
           StartIndex := ExponentSaveIndex;
       end;
+      IntegerLexeme := Copy(ASourceText, NumberStartIndex,
+        StartIndex - NumberStartIndex);
       if IsReal then
         AddTokenAt(tkRealLiteral, IntegerLexeme, NumberStartIndex, TokenLine)
       else
@@ -1311,14 +1302,11 @@ begin
     if IsIdentifierStart(CurrentChar) then
     begin
       SaveIndex := StartIndex;
-      Lexeme := CurrentChar;
       Inc(StartIndex);
       while (StartIndex <= Length(ASourceText)) and
         IsIdentifierContinue(ASourceText[StartIndex]) do
-      begin
-        Lexeme := Lexeme + ASourceText[StartIndex];
         Inc(StartIndex);
-      end;
+      Lexeme := Copy(ASourceText, SaveIndex, StartIndex - SaveIndex);
       AddTokenAt(ResolveIdentifierKind(Lexeme), Lexeme, SaveIndex, TokenLine);
       Continue;
     end;
@@ -1458,12 +1446,12 @@ end;
 
 function TLexerResult.TokenCount: LongInt;
 begin
-  Result := Length(FTokens);
+  Result := FTokenCount;
 end;
 
 function TLexerResult.TokenAt(const AIndex: LongInt): TToken;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FTokens)) then
+  if (AIndex < 0) or (AIndex >= FTokenCount) then
   begin
     Result.Kind := tkEOF;
     Result.Lexeme := '';
