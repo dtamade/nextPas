@@ -98,8 +98,6 @@ type
     tkIsKeyword,
     tkAsKeyword,
     tkNilKeyword,
-    tkTrueKeyword,
-    tkFalseKeyword,
     tkRaiseKeyword,
     tkTryKeyword,
     tkExceptKeyword,
@@ -316,8 +314,6 @@ begin
     'is': Exit(tkIsKeyword);
     'as': Exit(tkAsKeyword);
     'nil': Exit(tkNilKeyword);
-    'true': Exit(tkTrueKeyword);
-    'false': Exit(tkFalseKeyword);
     'raise': Exit(tkRaiseKeyword);
     'try': Exit(tkTryKeyword);
     'except': Exit(tkExceptKeyword);
@@ -1147,8 +1143,6 @@ begin
     tkIsKeyword: Result := 'is';
     tkAsKeyword: Result := 'as';
     tkNilKeyword: Result := 'nil';
-    tkTrueKeyword: Result := 'true';
-    tkFalseKeyword: Result := 'false';
     tkRaiseKeyword: Result := 'raise';
     tkTryKeyword: Result := 'try';
     tkExceptKeyword: Result := 'except';

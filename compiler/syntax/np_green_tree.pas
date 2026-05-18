@@ -800,12 +800,6 @@ begin
         Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
           Length(Token.Lexeme), 'nil');
       end;
-    tkTrueKeyword, tkFalseKeyword:
-      begin
-        Inc(ACursor);
-        Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
-          Length(Token.Lexeme), Token.Lexeme);
-      end;
     tkLParen:
       begin
         Inc(ACursor);
