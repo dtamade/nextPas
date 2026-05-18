@@ -70,6 +70,7 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function IsBuiltinProcedure(const AName: string): Boolean;
+    function InferExpressionType(const ANode: TGreenNode): LongInt;
     procedure SeedBuiltinTypes;
     procedure AssignScopesToSymbols;
     procedure CheckDuplicateDeclarations;
@@ -553,6 +554,89 @@ begin
     SameText(AName, 'Lo') or SameText(AName, 'Hi') or
     SameText(AName, 'Odd') or SameText(AName, 'Char') or
     SameText(AName, 'Free');
+end;
+
+function TSemanticAnalyzer.InferExpressionType(const ANode: TGreenNode): LongInt;
+var
+  SymId: LongInt;
+  Sym: TSemanticSymbol;
+begin
+  Result := 0;
+  if ANode = nil then
+    Exit;
+  case ANode.NodeKind of
+    gnkIntegerLiteral:
+      Result := FModel.FindTypeByName('Integer');
+    gnkRealLiteral:
+      Result := FModel.FindTypeByName('Double');
+    gnkStringLiteral:
+      Result := FModel.FindTypeByName('AnsiString');
+    gnkCharLiteral:
+      Result := FModel.FindTypeByName('Char');
+    gnkIdentifier:
+      begin
+        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if SymId > 0 then
+        begin
+          Sym := FModel.SymbolAt(SymId - 1);
+          Result := Sym.TypeId;
+        end
+        else
+          Result := FModel.FindTypeByName(ANode.Text);
+      end;
+    gnkBinaryExpression:
+      begin
+        if ANode.Text = '+' then
+        begin
+          Result := InferExpressionType(ANode.ChildAt(0));
+          if Result = FModel.FindTypeByName('AnsiString') then
+            Exit;
+          if Result = 0 then
+            Result := InferExpressionType(ANode.ChildAt(1));
+          if Result = 0 then
+            Result := FModel.FindTypeByName('Integer');
+        end
+        else if (ANode.Text = '=') or (ANode.Text = '<>') or
+          (ANode.Text = '<') or (ANode.Text = '>') or
+          (ANode.Text = '<=') or (ANode.Text = '>=') or
+          (ANode.Text = 'in') or (ANode.Text = 'is') then
+          Result := FModel.FindTypeByName('Boolean')
+        else if (ANode.Text = 'and') or (ANode.Text = 'or') or
+          (ANode.Text = 'xor') then
+        begin
+          Result := InferExpressionType(ANode.ChildAt(0));
+          if Result = FModel.FindTypeByName('Boolean') then
+            Exit;
+          Result := FModel.FindTypeByName('Integer');
+        end
+        else
+        begin
+          Result := InferExpressionType(ANode.ChildAt(0));
+          if Result = 0 then
+            Result := FModel.FindTypeByName('Integer');
+        end;
+      end;
+    gnkUnaryExpression:
+      begin
+        if ANode.Text = 'not' then
+          Result := InferExpressionType(ANode.ChildAt(0))
+        else
+          Result := InferExpressionType(ANode.ChildAt(0));
+        if Result = 0 then
+          Result := FModel.FindTypeByName('Integer');
+      end;
+    gnkFunctionCall:
+      begin
+        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if SymId > 0 then
+        begin
+          Sym := FModel.SymbolAt(SymId - 1);
+          Result := Sym.TypeId;
+        end;
+      end;
+    gnkDotAccess, gnkArrayAccess, gnkDereference:
+      Result := 0;
+  end;
 end;
 
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
