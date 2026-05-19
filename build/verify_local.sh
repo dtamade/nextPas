@@ -2242,6 +2242,36 @@ if [ "$LLVM_PRIMES_EXIT" -ne 15 ]; then
 fi
 printf 'llvm-primes-program=pass\n'
 
+printf 'llvm-gcd-program=running\n'
+LLVM_GCD_OUT_DIR=$(mktemp -d)
+LLVM_GCD_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_gcd.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_GCD_OUT_DIR" >"$LLVM_GCD_OUTPUT" 2>&1; then
+  cat "$LLVM_GCD_OUTPUT"
+  fail 'llvm-gcd-program-build-failed'
+fi
+"$LLVM_GCD_OUT_DIR/llvm_gcd" >/dev/null 2>&1 || true
+LLVM_GCD_EXIT=$?
+if [ "$LLVM_GCD_EXIT" -ne 6 ]; then
+  printf 'llvm-gcd-expected-exit=6 actual-exit=%d\n' "$LLVM_GCD_EXIT"
+  fail 'llvm-gcd-program-wrong-exit-code'
+fi
+printf 'llvm-gcd-program=pass\n'
+
+printf 'llvm-record-program=running\n'
+LLVM_RECORD_OUT_DIR=$(mktemp -d)
+LLVM_RECORD_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_record.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_RECORD_OUT_DIR" >"$LLVM_RECORD_OUTPUT" 2>&1; then
+  cat "$LLVM_RECORD_OUTPUT"
+  fail 'llvm-record-program-build-failed'
+fi
+"$LLVM_RECORD_OUT_DIR/llvm_record" >/dev/null 2>&1 || true
+LLVM_RECORD_EXIT=$?
+if [ "$LLVM_RECORD_EXIT" -ne 7 ]; then
+  printf 'llvm-record-expected-exit=7 actual-exit=%d\n' "$LLVM_RECORD_EXIT"
+  fail 'llvm-record-program-wrong-exit-code'
+fi
+printf 'llvm-record-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
