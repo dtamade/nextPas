@@ -173,6 +173,13 @@ begin
     end
     else if Op.Kind = 'ret-void' then
       WriteLn(AIrFile, '  ret void')
+    else if Op.Kind = 'zext' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Length(Op.OperandRefs) >= 1 then
+        WriteLn(AIrFile, '  ', ResultName, ' = zext i1 ',
+          OperandText(Op.OperandRefs[0]), ' to i64');
+    end
     else if Op.Kind = 'write-line' then
     begin
       for I := 0 to Length(FWriteLines) - 1 do

@@ -771,6 +771,19 @@ begin
       );
       StackPush(Res);
     end
+    else if Token = 'zext' then
+    begin
+      Lhs := StackPop;
+      if Lhs = 0 then
+        Exit(0);
+      Res := FModel.AddValue(mtkI64, 0, 'zext');
+      SetLength(Operands, 1);
+      Operands[0] := MakeValueOperand(Lhs);
+      FModel.AddOperationWithResult(
+        'zext', ABlockId, 'zext', '', Res, Operands
+      );
+      StackPush(Res);
+    end
     else if Token = 'labels' then
     begin
       TabIdx := Pos(#9, Arg);

@@ -2208,8 +2208,26 @@ begin
   else if Op = '<=' then Pred := 'sle'
   else if Op = '>' then Pred := 'sgt'
   else if Op = '>=' then Pred := 'sge'
-  else if SameText(Op, 'and') or SameText(Op, 'or') then
-    Exit(False)
+  else if SameText(Op, 'and') then
+  begin
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+      Exit(False);
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob) then
+      Exit(False);
+    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
+      'mul' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end
+  else if SameText(Op, 'or') then
+  begin
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+      Exit(False);
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(1), RightBlob) then
+      Exit(False);
+    ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
+      'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end
   else
     Exit(False);
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
