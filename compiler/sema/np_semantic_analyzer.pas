@@ -2422,7 +2422,8 @@ begin
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
         Continue;
       end;
-      if LookupProcedureBody(Child.Text, BranchNode, DeclNode) and
+      if (not FNoFold) and
+        LookupProcedureBody(Child.Text, BranchNode, DeclNode) and
         (BranchNode <> nil) and
         not IsCurrentlyInlining(Child.Text) then
       begin
