@@ -451,6 +451,8 @@ begin
       (Kind = 'add') or
       (Kind = 'sub') or
       (Kind = 'mul') or
+      (Kind = 'div') or
+      (Kind = 'mod') or
       (Kind = 'icmp-eq') or
       (Kind = 'icmp-ne') or
       (Kind = 'icmp-slt') or
@@ -650,7 +652,8 @@ begin
         Exit(0);
       StackPush(Res);
     end
-    else if (Token = 'add') or (Token = 'sub') or (Token = 'mul') then
+    else if (Token = 'add') or (Token = 'sub') or (Token = 'mul') or
+      (Token = 'div') or (Token = 'mod') then
     begin
       Rhs := StackPop;
       Lhs := StackPop;

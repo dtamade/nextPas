@@ -308,15 +308,20 @@ begin
           WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
             OperandText(Op.OperandRefs[0]));
       end
-      else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') then
+      else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') or
+        (Op.Kind = 'div') or (Op.Kind = 'mod') then
       begin
         ResultName := ValueLabel(Op.ResultValueId);
         if Op.Kind = 'add' then
           OpcodeName := 'add'
         else if Op.Kind = 'sub' then
           OpcodeName := 'sub'
+        else if Op.Kind = 'mul' then
+          OpcodeName := 'mul'
+        else if Op.Kind = 'div' then
+          OpcodeName := 'sdiv'
         else
-          OpcodeName := 'mul';
+          OpcodeName := 'srem';
         if Length(Op.OperandRefs) >= 2 then
           WriteLn(AIrFile, '  ', ResultName, ' = ', OpcodeName, ' i64 ',
             OperandText(Op.OperandRefs[0]), ', ',

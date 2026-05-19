@@ -493,6 +493,10 @@ begin
           ABlob := LeftBlob + RightBlob + 'sub' + #10
         else if Op = '*' then
           ABlob := LeftBlob + RightBlob + 'mul' + #10
+        else if SameText(Op, 'div') then
+          ABlob := LeftBlob + RightBlob + 'div' + #10
+        else if SameText(Op, 'mod') then
+          ABlob := LeftBlob + RightBlob + 'mod' + #10
         else
           Exit(False);
         Exit(True);
