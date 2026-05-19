@@ -136,6 +136,7 @@ type
     FModel: TMirModel;
     FEntryBlockId: LongInt;
     FCurrentBlockId: LongInt;
+    FCurrentFuncEntryBlockId: LongInt;
     FAllocaTable: array of TMirAllocaEntry;
     FBlockTable: array of TMirBlockEntry;
     function MirKindForTypedHirNode(const ANode: TTypedHirNode): string;
@@ -591,7 +592,7 @@ begin
       Exit(FAllocaTable[Index].AllocaValueId);
   AllocaResult := FModel.AddValue(mtkPtr, 0, AName);
   FModel.AddOperationWithResult(
-    'alloca', ABlockId, AName, AName, AllocaResult, nil
+    'alloca', FCurrentFuncEntryBlockId, AName, AName, AllocaResult, nil
   );
   NextIndex := Length(FAllocaTable);
   SetLength(FAllocaTable, NextIndex + 1);
@@ -864,7 +865,7 @@ end;
 
 procedure TMirLowerer.Lower;
 var
-  Index, TabIdx: LongInt;
+  Index, TabIdx, ValCode: LongInt;
   Node: TTypedHirNode;
   ExitValue: TMirValueId;
   Operands: TMirOperandRefs;
@@ -879,6 +880,7 @@ begin
   FModel.SetRootName(FSemanticModel.RootName);
   FEntryBlockId := FModel.AddBlock('entry');
   FCurrentBlockId := FEntryBlockId;
+  FCurrentFuncEntryBlockId := FEntryBlockId;
   SetLength(FBlockTable, 1);
   FBlockTable[0].Name := 'entry';
   FBlockTable[0].BlockId := FEntryBlockId;
@@ -995,6 +997,37 @@ begin
           0, Operands
         );
       end;
+      Continue;
+    end;
+    if Node.Kind = 'function-body-begin' then
+    begin
+      Val(Node.Operand, TabIdx, ValCode);
+      if ValCode <> 0 then
+        TabIdx := 0;
+      FCurrentBlockId := FModel.AddBlock(Node.DisplayName + '_entry');
+      FCurrentFuncEntryBlockId := FCurrentBlockId;
+      FModel.AddFunction(Node.DisplayName, TabIdx, True, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'function-body-end' then
+    begin
+      FCurrentBlockId := FEntryBlockId;
+      FCurrentFuncEntryBlockId := FEntryBlockId;
+      Continue;
+    end;
+    if Node.Kind = 'ret-runtime' then
+    begin
+      ExitValue := LowerHaltRuntimeBlob(Node.Operand, FCurrentBlockId);
+      if ExitValue > 0 then
+      begin
+        SetLength(Operands, 1);
+        Operands[0] := MakeValueOperand(ExitValue);
+        FModel.AddOperationWithResult(
+          'ret-i64', FCurrentBlockId, 'ret', '', 0, Operands
+        );
+      end
+      else
+        FModel.AddOperation('ret-void', FCurrentBlockId, 'ret', '');
       Continue;
     end;
     FModel.AddOperation(

@@ -132,6 +132,7 @@ type
     procedure SeedRuntimeVarDecls;
     procedure WalkRuntimeVarDecls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
+    procedure SeedFunctionBodies;
   public
     constructor Create(
       const ARootAst: TAstFacade;
@@ -1357,6 +1358,8 @@ begin
   SeedRuntimeContracts;
   SeedRuntimeVarDecls;
   SeedHaltCalls;
+  if FNoFold then
+    SeedFunctionBodies;
   CheckUnusedSymbols;
   CheckUnreachableCode;
   CheckDuplicateCaseLabels;
@@ -2757,6 +2760,54 @@ begin
   begin
     FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, 'int 0' + #10);
     FCurrentBlockTerminated := True;
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedFunctionBodies;
+var
+  I, J, K: LongInt;
+  Entry: TProcedureBodyEntry;
+  ParamCount: LongInt;
+  Child, ParamChild: TGreenNode;
+  SavedTerminated: Boolean;
+begin
+  for I := 0 to Length(FProcedureBodies) - 1 do
+  begin
+    Entry := FProcedureBodies[I];
+    if Entry.Body = nil then
+      Continue;
+    ParamCount := 0;
+    if Entry.Decl <> nil then
+    begin
+      for J := 0 to Entry.Decl.ChildCount - 1 do
+      begin
+        Child := Entry.Decl.ChildAt(J);
+        if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+        begin
+          for K := 0 to Child.ChildCount - 1 do
+          begin
+            ParamChild := Child.ChildAt(K);
+            if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+            begin
+              RegisterRuntimeVar(ParamChild.Text);
+              Inc(ParamCount);
+            end;
+          end;
+          Break;
+        end;
+      end;
+    end;
+    FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+      IntToStr(ParamCount));
+    RegisterRuntimeVar(Entry.Name);
+    SavedTerminated := FCurrentBlockTerminated;
+    FCurrentBlockTerminated := False;
+    WalkHaltCalls(Entry.Body);
+    if not FCurrentBlockTerminated then
+      FModel.AddTypedHirNode('ret-runtime', Entry.Name, 0, 0,
+        'var ' + Entry.Name + #10);
+    FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
+    FCurrentBlockTerminated := SavedTerminated;
   end;
 end;
 
