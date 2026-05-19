@@ -58,16 +58,29 @@ type
     OperandRefs: TMirOperandRefs;
   end;
 
+  TMirFunction = record
+    FunctionId: LongInt;
+    Name: string;
+    ParamCount: LongInt;
+    HasReturnValue: Boolean;
+    EntryBlockId: LongInt;
+  end;
+
   TMirModel = class
   private
     FBlocks: array of TMirBlock;
     FOperations: array of TMirOperation;
     FValues: array of TMirValue;
+    FFunctions: array of TMirFunction;
     FRootName: string;
     FStatus: string;
   public
     constructor Create;
     function AddBlock(const ALabelName: string): LongInt;
+    function AddFunction(const AName: string; const AParamCount: LongInt;
+      const AHasReturnValue: Boolean; const AEntryBlockId: LongInt): LongInt;
+    function FunctionCount: LongInt;
+    function FunctionAt(const AIndex: LongInt): TMirFunction;
     function AddOperation(
       const AKind: string;
       const ABlockId: LongInt;
@@ -208,6 +221,7 @@ begin
   SetLength(FBlocks, 0);
   SetLength(FOperations, 0);
   SetLength(FValues, 0);
+  SetLength(FFunctions, 0);
   FRootName := '';
   FStatus := 'deferred';
 end;
@@ -224,6 +238,41 @@ begin
   SetLength(FBlocks[NextIndex].SuccIds, 0);
   FBlocks[NextIndex].TerminatorOpId := 0;
   Result := FBlocks[NextIndex].BlockId;
+end;
+
+function TMirModel.AddFunction(const AName: string;
+  const AParamCount: LongInt; const AHasReturnValue: Boolean;
+  const AEntryBlockId: LongInt): LongInt;
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FFunctions);
+  SetLength(FFunctions, NextIndex + 1);
+  FFunctions[NextIndex].FunctionId := NextIndex + 1;
+  FFunctions[NextIndex].Name := AName;
+  FFunctions[NextIndex].ParamCount := AParamCount;
+  FFunctions[NextIndex].HasReturnValue := AHasReturnValue;
+  FFunctions[NextIndex].EntryBlockId := AEntryBlockId;
+  Result := FFunctions[NextIndex].FunctionId;
+end;
+
+function TMirModel.FunctionCount: LongInt;
+begin
+  Result := Length(FFunctions);
+end;
+
+function TMirModel.FunctionAt(const AIndex: LongInt): TMirFunction;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FFunctions)) then
+    Result := FFunctions[AIndex]
+  else
+  begin
+    Result.FunctionId := 0;
+    Result.Name := '';
+    Result.ParamCount := 0;
+    Result.HasReturnValue := False;
+    Result.EntryBlockId := 0;
+  end;
 end;
 
 function TMirModel.AddOperation(
