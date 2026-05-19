@@ -1007,6 +1007,7 @@ begin
         TabIdx := 0;
       FCurrentBlockId := FModel.AddBlock(Node.DisplayName + '_entry');
       FCurrentFuncEntryBlockId := FCurrentBlockId;
+      SetLength(FAllocaTable, 0);
       FModel.AddFunction(Node.DisplayName, TabIdx, True, FCurrentBlockId);
       Continue;
     end;
@@ -1014,6 +1015,7 @@ begin
     begin
       FCurrentBlockId := FEntryBlockId;
       FCurrentFuncEntryBlockId := FEntryBlockId;
+      SetLength(FAllocaTable, 0);
       Continue;
     end;
     if Node.Kind = 'ret-runtime' then
