@@ -45,6 +45,8 @@ type
     procedure RegisterRuntimeStrVar(const AName: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
+    function EmitStrConcatOperand(const ANode: TGreenNode;
+      const ADestVar: string): string;
     function NewBlockLabel(const APrefix: string): string;
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
@@ -181,6 +183,8 @@ begin
   AItems[NextIndex] := AValue;
 end;
 
+function DecodePascalStringLiteral(const AText: string): string; forward;
+
 constructor TSemanticAnalyzer.Create(
   const ARootAst: TAstFacade;
   const AUnitGraph: TUnitGraph;
@@ -250,6 +254,29 @@ begin
     if SameText(FRuntimeStrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
+end;
+
+function TSemanticAnalyzer.EmitStrConcatOperand(const ANode: TGreenNode;
+  const ADestVar: string): string;
+var
+  TempName, LitValue: string;
+begin
+  Result := '';
+  if ANode = nil then
+    Exit;
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
+    Exit(ANode.Text);
+  if ANode.NodeKind = gnkStringLiteral then
+    LitValue := DecodePascalStringLiteral(ANode.Text)
+  else if not EvaluateStringConstant(ANode, LitValue) then
+    Exit;
+  Inc(FBlockLabelCounter);
+  TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(TempName);
+  RegisterRuntimeStrVar(TempName);
+  FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
+  FModel.AddTypedHirNode('assign-str-runtime', LitValue, 0, 0, TempName);
+  Result := TempName;
 end;
 
 procedure TSemanticAnalyzer.EmitBlockLabel(const ALabel: string);
@@ -2114,7 +2141,6 @@ begin
   Result := False;
 end;
 
-function DecodePascalStringLiteral(const AText: string): string; forward;
 
 function TSemanticAnalyzer.EvaluateStringConstant(const ANode: TGreenNode;
   out AValue: string): Boolean;
@@ -2398,17 +2424,20 @@ begin
             )
           else if (Arg.NodeKind = gnkBinaryExpression) and
             (Arg.Text = '+') and (Arg.ChildCount >= 2) and
-            (Arg.ChildAt(0) <> nil) and
-            (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
-            IsRuntimeStrVar(Arg.ChildAt(0).Text) and
-            (Arg.ChildAt(1) <> nil) and
-            (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
-            IsRuntimeStrVar(Arg.ChildAt(1).Text) then
-            FModel.AddTypedHirNode(
-              'assign-str-concat-runtime',
-              Arg.ChildAt(0).Text + #9 + Arg.ChildAt(1).Text,
-              0, 0, Decoded
-            );
+            (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
+          begin
+            StringValue := EmitStrConcatOperand(Arg.ChildAt(0), Decoded);
+            if StringValue <> '' then
+            begin
+              Operand := EmitStrConcatOperand(Arg.ChildAt(1), Decoded);
+              if Operand <> '' then
+                FModel.AddTypedHirNode(
+                  'assign-str-concat-runtime',
+                  StringValue + #9 + Operand,
+                  0, 0, Decoded
+                );
+            end;
+          end;
         end
         else if FNoFold then
         begin
