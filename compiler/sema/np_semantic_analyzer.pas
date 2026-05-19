@@ -40,8 +40,11 @@ type
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
     FRuntimeVarNames: array of string;
+    FRuntimeStrVarNames: array of string;
     procedure RegisterRuntimeVar(const AName: string);
+    procedure RegisterRuntimeStrVar(const AName: string);
     function IsRuntimeVar(const AName: string): Boolean;
+    function IsRuntimeStrVar(const AName: string): Boolean;
     function NewBlockLabel(const APrefix: string): string;
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
@@ -222,6 +225,29 @@ var
 begin
   for Idx := 0 to Length(FRuntimeVarNames) - 1 do
     if SameText(FRuntimeVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TSemanticAnalyzer.RegisterRuntimeStrVar(const AName: string);
+var
+  Idx: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
+    if SameText(FRuntimeStrVarNames[Idx], AName) then
+      Exit;
+  NextIndex := Length(FRuntimeStrVarNames);
+  SetLength(FRuntimeStrVarNames, NextIndex + 1);
+  FRuntimeStrVarNames[NextIndex] := AName;
+end;
+
+function TSemanticAnalyzer.IsRuntimeStrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
+    if SameText(FRuntimeStrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
 end;
@@ -508,6 +534,14 @@ begin
           Exit(False);
         if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
           Exit(False);
+        if SameText(ANode.ChildAt(0).Text, 'Length') and
+          (ANode.ChildCount = 2) and
+          (ANode.ChildAt(1) <> nil) and
+          (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+        begin
+          ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
+          Exit(True);
+        end;
         ABlob := '';
         for Parsed := 1 to ANode.ChildCount - 1 do
         begin
@@ -2176,10 +2210,21 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
 
 var
   Folded: Int64;
+  FuncName, ArgName: string;
 begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    IsRuntimeStrVar(ANode.ChildAt(1).Text) then
+  begin
+    ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
+    Exit(True);
+  end;
   if (not FNoFold) and NeedsFoldFallback(ANode) then
     if EvaluateIntegerConstant(ANode, Folded) then
     begin
@@ -2333,7 +2378,25 @@ begin
         Arg := Child.ChildAt(0);
       if Arg <> nil then
       begin
-        if FNoFold then
+        if FNoFold and IsRuntimeStrVar(Decoded) then
+        begin
+          if (Arg.NodeKind = gnkStringLiteral) then
+          begin
+            StringValue := DecodePascalStringLiteral(Arg.Text);
+            FModel.AddTypedHirNode(
+              'assign-str-runtime', StringValue, 0, 0, Decoded
+            );
+          end
+          else if EvaluateStringConstant(Arg, StringValue) then
+            FModel.AddTypedHirNode(
+              'assign-str-runtime', StringValue, 0, 0, Decoded
+            )
+          else if IsRuntimeStrVar(Arg.Text) then
+            FModel.AddTypedHirNode(
+              'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
+            );
+        end
+        else if FNoFold then
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
@@ -2413,6 +2476,11 @@ begin
             else if EvaluateStringConstant(RhsNode, StringValue) then
               FModel.AddTypedHirNode(
                 'write-string-runtime', 'Write', 0, 0, StringValue
+              )
+            else if (RhsNode.NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(RhsNode.Text) then
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', 'Write', 0, 0, RhsNode.Text
               )
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
               FModel.AddTypedHirNode(
@@ -2743,7 +2811,8 @@ end;
 procedure TSemanticAnalyzer.WalkRuntimeVarDecls(const ANode: TGreenNode);
 var
   I, J: LongInt;
-  Child, Decl: TGreenNode;
+  Child, Decl, TypeChild: TGreenNode;
+  IsStr: Boolean;
 begin
   if ANode = nil then
     Exit;
@@ -2764,10 +2833,27 @@ begin
           (Decl.NodeKind = gnkVarDecl) and
           (Decl.Text <> '') then
         begin
+          IsStr := False;
+          if Decl.ChildCount > 0 then
+          begin
+            TypeChild := Decl.ChildAt(0);
+            if (TypeChild <> nil) and
+              (SameText(TypeChild.Text, 'String') or
+               SameText(TypeChild.Text, 'AnsiString')) then
+              IsStr := True;
+          end;
           RegisterRuntimeVar(Decl.Text);
-          FModel.AddTypedHirNode(
-            'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
-          );
+          if IsStr then
+          begin
+            RegisterRuntimeStrVar(Decl.Text);
+            FModel.AddTypedHirNode(
+              'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
+            );
+          end
+          else
+            FModel.AddTypedHirNode(
+              'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
+            );
         end;
       end;
       Continue;

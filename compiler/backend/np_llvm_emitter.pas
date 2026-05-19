@@ -82,10 +82,12 @@ begin
     if AAllocaOnly then
     begin
       if Op.Kind = 'alloca' then
-        WriteLn(AIrFile, '  ', ValueLabel(Op.ResultValueId), ' = alloca i64');
+        WriteLn(AIrFile, '  ', ValueLabel(Op.ResultValueId), ' = alloca i64')
+      else if Op.Kind = 'alloca-ptr' then
+        WriteLn(AIrFile, '  ', ValueLabel(Op.ResultValueId), ' = alloca ptr');
       Continue;
     end;
-    if Op.Kind = 'alloca' then
+    if (Op.Kind = 'alloca') or (Op.Kind = 'alloca-ptr') then
       Continue;
     if Op.Kind = 'store' then
     begin
@@ -93,11 +95,24 @@ begin
         WriteLn(AIrFile, '  store i64 ', OperandText(Op.OperandRefs[0]),
           ', ptr ', OperandText(Op.OperandRefs[1]));
     end
+    else if Op.Kind = 'store-ptr' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+        WriteLn(AIrFile, '  store ptr ', OperandText(Op.OperandRefs[0]),
+          ', ptr ', OperandText(Op.OperandRefs[1]));
+    end
     else if Op.Kind = 'load' then
     begin
       ResultName := ValueLabel(Op.ResultValueId);
       if Length(Op.OperandRefs) >= 1 then
         WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
+          OperandText(Op.OperandRefs[0]));
+    end
+    else if Op.Kind = 'load-ptr' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Length(Op.OperandRefs) >= 1 then
+        WriteLn(AIrFile, '  ', ResultName, ' = load ptr, ptr ',
           OperandText(Op.OperandRefs[0]));
     end
     else if (Op.Kind = 'add') or (Op.Kind = 'sub') or (Op.Kind = 'mul') or
@@ -197,6 +212,27 @@ begin
         WriteLn(AIrFile, '  call void @write_i64_decimal(i64 ',
           OperandText(Op.OperandRefs[0]), ')');
     end
+    else if Op.Kind = 'write-str-var' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+        WriteLn(AIrFile,
+          '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ',
+          OperandText(Op.OperandRefs[0]), ', i64 ',
+          OperandText(Op.OperandRefs[1]), ')');
+    end
+    else if Op.Kind = 'store-str' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+        for I := 0 to Length(FWriteLines) - 1 do
+          if FWriteLines[I] = Op.Operand then
+          begin
+            WriteLn(AIrFile, '  store ptr @.str.', I, ', ptr ',
+              OperandText(Op.OperandRefs[0]));
+            WriteLn(AIrFile, '  store i64 ', Length(Op.Operand),
+              ', ptr ', OperandText(Op.OperandRefs[1]));
+            Break;
+          end;
+    end
     else if Op.Kind = 'runtime-halt' then
     begin
       if Length(Op.OperandRefs) >= 1 then
@@ -254,7 +290,7 @@ begin
   for Index := 0 to FMirModel.OperationCount - 1 do
   begin
     Op := FMirModel.OperationAt(Index);
-    if Op.Kind <> 'write-line' then
+    if (Op.Kind <> 'write-line') and (Op.Kind <> 'store-str') then
       Continue;
     Seen := False;
     for J := 0 to High(Result) do

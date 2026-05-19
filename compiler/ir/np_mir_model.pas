@@ -144,6 +144,10 @@ type
       const AName: string;
       const ABlockId: LongInt
     ): TMirValueId;
+    function EnsureAllocaPtr(
+      const AName: string;
+      const ABlockId: LongInt
+    ): TMirValueId;
     function EnsureBlock(const AName: string): LongInt;
     function LowerVarLoadRuntime(
       const AName: string;
@@ -160,6 +164,20 @@ type
     ): TMirValueId;
     procedure LowerAssignRuntime(
       const AOperand: string;
+      const ABlockId: LongInt
+    );
+    procedure LowerAssignStr(
+      const AVarName: string;
+      const AStrContent: string;
+      const ABlockId: LongInt
+    );
+    procedure LowerAssignStrCopy(
+      const ASrcVar: string;
+      const ADestVar: string;
+      const ABlockId: LongInt
+    );
+    procedure LowerWriteStrVar(
+      const AVarName: string;
       const ABlockId: LongInt
     );
     procedure LowerCondBrRuntime(const AOperand: string);
@@ -517,6 +535,10 @@ begin
       (Kind = 'argc-load') or
       (Kind = 'runtime-halt') or
       (Kind = 'runtime-return') or
+      (Kind = 'alloca-ptr') or
+      (Kind = 'store-ptr') or
+      (Kind = 'load-ptr') or
+      (Kind = 'write-str-var') or
       (Kind = 'write-int') then
       Exit(True);
   end;
@@ -599,6 +621,110 @@ begin
   FAllocaTable[NextIndex].Name := AName;
   FAllocaTable[NextIndex].AllocaValueId := AllocaResult;
   Result := AllocaResult;
+end;
+
+function TMirLowerer.EnsureAllocaPtr(
+  const AName: string;
+  const ABlockId: LongInt
+): TMirValueId;
+var
+  Index: LongInt;
+  AllocaResult: TMirValueId;
+  NextIndex: SizeInt;
+begin
+  for Index := 0 to Length(FAllocaTable) - 1 do
+    if FAllocaTable[Index].Name = AName then
+      Exit(FAllocaTable[Index].AllocaValueId);
+  AllocaResult := FModel.AddValue(mtkPtr, 0, AName);
+  FModel.AddOperationWithResult(
+    'alloca-ptr', FCurrentFuncEntryBlockId, AName, AName, AllocaResult, nil
+  );
+  NextIndex := Length(FAllocaTable);
+  SetLength(FAllocaTable, NextIndex + 1);
+  FAllocaTable[NextIndex].Name := AName;
+  FAllocaTable[NextIndex].AllocaValueId := AllocaResult;
+  Result := AllocaResult;
+end;
+
+procedure TMirLowerer.LowerAssignStr(
+  const AVarName: string;
+  const AStrContent: string;
+  const ABlockId: LongInt
+);
+var
+  PtrAlloca, LenAlloca: TMirValueId;
+  Operands: TMirOperandRefs;
+begin
+  PtrAlloca := EnsureAllocaPtr(AVarName + '$ptr', ABlockId);
+  LenAlloca := EnsureAlloca(AVarName + '$len', ABlockId);
+  SetLength(Operands, 2);
+  Operands[0] := MakeValueOperand(PtrAlloca);
+  Operands[1] := MakeValueOperand(LenAlloca);
+  FModel.AddOperationWithResult(
+    'store-str', ABlockId, AVarName, AStrContent, 0, Operands
+  );
+end;
+
+procedure TMirLowerer.LowerAssignStrCopy(
+  const ASrcVar: string;
+  const ADestVar: string;
+  const ABlockId: LongInt
+);
+var
+  SrcPtrAlloca, SrcLenAlloca, DestPtrAlloca, DestLenAlloca: TMirValueId;
+  SrcPtrLoad, SrcLenLoad: TMirValueId;
+  LoadOps, StoreOps: TMirOperandRefs;
+begin
+  SrcPtrAlloca := EnsureAllocaPtr(ASrcVar + '$ptr', ABlockId);
+  SrcLenAlloca := EnsureAlloca(ASrcVar + '$len', ABlockId);
+  DestPtrAlloca := EnsureAllocaPtr(ADestVar + '$ptr', ABlockId);
+  DestLenAlloca := EnsureAlloca(ADestVar + '$len', ABlockId);
+  SrcPtrLoad := FModel.AddValue(mtkPtr, 0, ASrcVar + '.ptr');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(SrcPtrAlloca);
+  FModel.AddOperationWithResult('load-ptr', ABlockId, ASrcVar, '', SrcPtrLoad, LoadOps);
+  SrcLenLoad := FModel.AddValue(mtkI64, 0, ASrcVar + '.len');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(SrcLenAlloca);
+  FModel.AddOperationWithResult('load', ABlockId, ASrcVar, '', SrcLenLoad, LoadOps);
+  SetLength(StoreOps, 2);
+  StoreOps[0] := MakeValueOperand(SrcPtrLoad);
+  StoreOps[1] := MakeValueOperand(DestPtrAlloca);
+  FModel.AddOperationWithResult('store-ptr', ABlockId, ADestVar, '', 0, StoreOps);
+  SetLength(StoreOps, 2);
+  StoreOps[0] := MakeValueOperand(SrcLenLoad);
+  StoreOps[1] := MakeValueOperand(DestLenAlloca);
+  FModel.AddOperationWithResult('store', ABlockId, ADestVar, '', 0, StoreOps);
+end;
+
+procedure TMirLowerer.LowerWriteStrVar(
+  const AVarName: string;
+  const ABlockId: LongInt
+);
+var
+  PtrAlloca, LenAlloca, PtrLoad, LenLoad: TMirValueId;
+  LoadOps, WriteOps: TMirOperandRefs;
+begin
+  PtrAlloca := EnsureAllocaPtr(AVarName + '$ptr', ABlockId);
+  LenAlloca := EnsureAlloca(AVarName + '$len', ABlockId);
+  PtrLoad := FModel.AddValue(mtkPtr, 0, AVarName + '.ptr');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(PtrAlloca);
+  FModel.AddOperationWithResult(
+    'load-ptr', ABlockId, AVarName, '', PtrLoad, LoadOps
+  );
+  LenLoad := FModel.AddValue(mtkI64, 0, AVarName + '.len');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(LenAlloca);
+  FModel.AddOperationWithResult(
+    'load', ABlockId, AVarName, '', LenLoad, LoadOps
+  );
+  SetLength(WriteOps, 2);
+  WriteOps[0] := MakeValueOperand(PtrLoad);
+  WriteOps[1] := MakeValueOperand(LenLoad);
+  FModel.AddOperationWithResult(
+    'write-str-var', ABlockId, 'WriteStr', '', 0, WriteOps
+  );
 end;
 
 function TMirLowerer.LowerVarLoadRuntime(
@@ -905,6 +1031,27 @@ begin
     if Node.Kind = 'var-decl-runtime' then
     begin
       EnsureAlloca(Node.Operand, FEntryBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'var-decl-str-runtime' then
+    begin
+      EnsureAllocaPtr(Node.Operand + '$ptr', FCurrentFuncEntryBlockId);
+      EnsureAlloca(Node.Operand + '$len', FCurrentFuncEntryBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'assign-str-runtime' then
+    begin
+      LowerAssignStr(Node.Operand, Node.DisplayName, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'write-str-var-runtime' then
+    begin
+      LowerWriteStrVar(Node.Operand, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'assign-str-copy-runtime' then
+    begin
+      LowerAssignStrCopy(Node.DisplayName, Node.Operand, FCurrentBlockId);
       Continue;
     end;
     if Node.Kind = 'assign-runtime' then
