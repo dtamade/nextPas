@@ -2272,6 +2272,21 @@ if [ "$LLVM_RECORD_EXIT" -ne 7 ]; then
 fi
 printf 'llvm-record-program=pass\n'
 
+printf 'llvm-comprehensive-program=running\n'
+LLVM_COMPREHENSIVE_OUT_DIR=$(mktemp -d)
+LLVM_COMPREHENSIVE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_comprehensive.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_COMPREHENSIVE_OUT_DIR" >"$LLVM_COMPREHENSIVE_OUTPUT" 2>&1; then
+  cat "$LLVM_COMPREHENSIVE_OUTPUT"
+  fail 'llvm-comprehensive-program-build-failed'
+fi
+"$LLVM_COMPREHENSIVE_OUT_DIR/llvm_comprehensive" >/dev/null 2>&1 || true
+LLVM_COMPREHENSIVE_EXIT=$?
+if [ "$LLVM_COMPREHENSIVE_EXIT" -ne 5 ]; then
+  printf 'llvm-comprehensive-expected-exit=5 actual-exit=%d\n' "$LLVM_COMPREHENSIVE_EXIT"
+  fail 'llvm-comprehensive-program-wrong-exit-code'
+fi
+printf 'llvm-comprehensive-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
