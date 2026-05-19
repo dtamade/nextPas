@@ -501,6 +501,23 @@ begin
           Exit(False);
         Exit(True);
       end;
+    gnkFunctionCall:
+      begin
+        if ANode.ChildCount < 1 then
+          Exit(False);
+        if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+          Exit(False);
+        ABlob := '';
+        for Parsed := 1 to ANode.ChildCount - 1 do
+        begin
+          if not EncodeRuntimeIntExpr(ANode.ChildAt(Parsed), RightBlob) then
+            Exit(False);
+          ABlob := ABlob + RightBlob;
+        end;
+        ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
+          IntToStr(ANode.ChildCount - 1) + #10;
+        Exit(True);
+      end;
   end;
   Result := False;
 end;
@@ -2393,6 +2410,33 @@ begin
           PopInlining;
           RestoreCallArgs(ParamSnaps);
         end;
+        Continue;
+      end;
+      if FNoFold and LookupProcedureBody(Child.Text, BranchNode, DeclNode) then
+      begin
+        Operand := Child.Text;
+        Arg := nil;
+        if (Child.ChildCount >= 1) and
+          (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+          Arg := Child.ChildAt(0)
+        else
+          Arg := Child;
+        if Arg <> nil then
+        begin
+          if Arg.NodeKind = gnkFunctionCall then
+            ArgIndex := 1
+          else
+            ArgIndex := 0;
+          while ArgIndex < Arg.ChildCount do
+          begin
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              Operand := Operand + #9 + Decoded;
+            Inc(ArgIndex);
+          end;
+        end;
+        FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
         Continue;
       end;
     end;

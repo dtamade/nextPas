@@ -627,11 +627,12 @@ var
   Stack: array of TMirValueId;
   StackLen: SizeInt;
   Cursor, BlobLen, TabIdx: SizeInt;
-  Token, Arg: string;
+  Token, Arg, CallFuncName: string;
   Parsed: Int64;
   ParseCode: Word;
   Lhs, Rhs, Res: TMirValueId;
   Operands: TMirOperandRefs;
+  Index: LongInt;
 
   procedure StackPush(const AId: TMirValueId);
   begin
@@ -750,6 +751,24 @@ begin
       );
       StackPush(Res);
     end
+    else if Token = 'call' then
+    begin
+      TabIdx := Pos(' ', Arg);
+      if TabIdx <= 0 then
+        Exit(0);
+      CallFuncName := Copy(Arg, 1, TabIdx - 1);
+      Val(Copy(Arg, TabIdx + 1, Length(Arg) - TabIdx), TabIdx, Index);
+      if Index <> 0 then
+        TabIdx := 0;
+      SetLength(Operands, TabIdx);
+      for Index := TabIdx - 1 downto 0 do
+        Operands[Index] := MakeValueOperand(StackPop);
+      Res := FModel.AddValue(mtkI64, 0, 'call-' + CallFuncName);
+      FModel.AddOperationWithResult(
+        'call', ABlockId, CallFuncName, CallFuncName, Res, Operands
+      );
+      StackPush(Res);
+    end
     else if Token = 'labels' then
     begin
       TabIdx := Pos(#9, Arg);
@@ -845,10 +864,11 @@ end;
 
 procedure TMirLowerer.Lower;
 var
-  Index: LongInt;
+  Index, TabIdx: LongInt;
   Node: TTypedHirNode;
   ExitValue: TMirValueId;
   Operands: TMirOperandRefs;
+  CallParts, CallFuncName, ArgBlob: string;
 begin
   if (FSemanticModel = nil) or (FSemanticModel.Status <> 'ready') then
   begin
@@ -930,6 +950,51 @@ begin
       FModel.AddOperationWithResult(
         'runtime-halt', FCurrentBlockId, 'Halt', '', 0, Operands
       );
+      Continue;
+    end;
+    if Node.Kind = 'call-runtime' then
+    begin
+      CallParts := Node.Operand;
+      TabIdx := Pos(#9, CallParts);
+      if TabIdx > 0 then
+      begin
+        CallFuncName := Copy(CallParts, 1, TabIdx - 1);
+        CallParts := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+        SetLength(Operands, 0);
+        while CallParts <> '' do
+        begin
+          TabIdx := Pos(#9, CallParts);
+          if TabIdx > 0 then
+          begin
+            ArgBlob := Copy(CallParts, 1, TabIdx - 1);
+            CallParts := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+          end
+          else
+          begin
+            ArgBlob := CallParts;
+            CallParts := '';
+          end;
+          ExitValue := LowerHaltRuntimeBlob(ArgBlob, FCurrentBlockId);
+          if ExitValue > 0 then
+          begin
+            SetLength(Operands, Length(Operands) + 1);
+            Operands[Length(Operands) - 1] := MakeValueOperand(ExitValue);
+          end;
+        end;
+        ExitValue := FModel.AddValue(mtkI64, 0, CallFuncName);
+        FModel.AddOperationWithResult(
+          'call', FCurrentBlockId, CallFuncName, CallFuncName,
+          ExitValue, Operands
+        );
+      end
+      else
+      begin
+        SetLength(Operands, 0);
+        FModel.AddOperationWithResult(
+          'call', FCurrentBlockId, Node.Operand, Node.Operand,
+          0, Operands
+        );
+      end;
       Continue;
     end;
     FModel.AddOperation(
