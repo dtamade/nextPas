@@ -16,6 +16,7 @@ type
   private
     FMirModel: TMirModel;
     FTargetFacts: TTargetFactsView;
+    FWriteLines: TLLvmStringArray;
     procedure EmitBlockOps(var AIrFile: Text; const ABlockId: LongInt;
       const AAllocaOnly: Boolean);
     function ResolveExitCode: LongInt;
@@ -174,9 +175,8 @@ begin
       WriteLn(AIrFile, '  ret void')
     else if Op.Kind = 'write-line' then
     begin
-      for I := 0 to FMirModel.OperationCount - 1 do
-        if (FMirModel.OperationAt(I).Kind = 'write-line') and
-          (FMirModel.OperationAt(I).Operand = Op.Operand) then
+      for I := 0 to Length(FWriteLines) - 1 do
+        if FWriteLines[I] = Op.Operand then
         begin
           WriteLn(AIrFile,
             '  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.',
@@ -429,6 +429,7 @@ var
 
 begin
   WriteLines := CollectWriteLines;
+  FWriteLines := WriteLines;
   EmitTargetHeader(AIrFile);
   EmitGlobalConstStrings(AIrFile, WriteLines);
   if NeedsItoaHelper then
