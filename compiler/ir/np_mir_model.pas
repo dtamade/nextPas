@@ -186,6 +186,17 @@ type
       const AVarName: string;
       const ABlockId: LongInt
     );
+    procedure LowerSetLengthArr(
+      const AVarName: string;
+      const ASizeBlob: string;
+      const ABlockId: LongInt
+    );
+    procedure LowerAssignArrElem(
+      const AVarName: string;
+      const AIndexBlob: string;
+      const AValueBlob: string;
+      const ABlockId: LongInt
+    );
     procedure LowerCondBrRuntime(const AOperand: string);
   public
     constructor Create(const ASemanticModel: TSemanticModel);
@@ -549,6 +560,9 @@ begin
       (Kind = 'str-concat') or
       (Kind = 'extractvalue-ptr') or
       (Kind = 'extractvalue-i64') or
+      (Kind = 'setlength-arr') or
+      (Kind = 'arr-store') or
+      (Kind = 'arr-load') or
       (Kind = 'write-int') then
       Exit(True);
   end;
@@ -797,6 +811,62 @@ begin
   );
 end;
 
+procedure TMirLowerer.LowerSetLengthArr(
+  const AVarName: string;
+  const ASizeBlob: string;
+  const ABlockId: LongInt
+);
+var
+  SizeValue, PtrAlloca, LenAlloca: TMirValueId;
+  ThenLabel, ElseLabel: string;
+  Operands: TMirOperandRefs;
+begin
+  SizeValue := LowerRuntimeIntBlob(ASizeBlob, ABlockId, ThenLabel, ElseLabel);
+  if SizeValue = 0 then
+    Exit;
+  PtrAlloca := EnsureAllocaPtr(AVarName + '$ptr', ABlockId);
+  LenAlloca := EnsureAlloca(AVarName + '$len', ABlockId);
+  SetLength(Operands, 2);
+  Operands[0] := MakeValueOperand(PtrAlloca);
+  Operands[1] := MakeValueOperand(SizeValue);
+  FModel.AddOperationWithResult(
+    'setlength-arr', ABlockId, AVarName, AVarName, 0, Operands
+  );
+  SetLength(Operands, 2);
+  Operands[0] := MakeValueOperand(SizeValue);
+  Operands[1] := MakeValueOperand(LenAlloca);
+  FModel.AddOperationWithResult(
+    'store', ABlockId, AVarName + '$len', '', 0, Operands
+  );
+end;
+
+procedure TMirLowerer.LowerAssignArrElem(
+  const AVarName: string;
+  const AIndexBlob: string;
+  const AValueBlob: string;
+  const ABlockId: LongInt
+);
+var
+  IndexValue, ValueVal, PtrAlloca: TMirValueId;
+  ThenLabel, ElseLabel: string;
+  Operands: TMirOperandRefs;
+begin
+  IndexValue := LowerRuntimeIntBlob(AIndexBlob, ABlockId, ThenLabel, ElseLabel);
+  if IndexValue = 0 then
+    Exit;
+  ValueVal := LowerRuntimeIntBlob(AValueBlob, ABlockId, ThenLabel, ElseLabel);
+  if ValueVal = 0 then
+    Exit;
+  PtrAlloca := EnsureAllocaPtr(AVarName + '$ptr', ABlockId);
+  SetLength(Operands, 3);
+  Operands[0] := MakeValueOperand(PtrAlloca);
+  Operands[1] := MakeValueOperand(IndexValue);
+  Operands[2] := MakeValueOperand(ValueVal);
+  FModel.AddOperationWithResult(
+    'arr-store', ABlockId, AVarName, AVarName, 0, Operands
+  );
+end;
+
 function TMirLowerer.LowerVarLoadRuntime(
   const AName: string;
   const ABlockId: LongInt
@@ -988,6 +1058,21 @@ begin
       AThenLabel := Copy(Arg, 1, TabIdx - 1);
       AElseLabel := Copy(Arg, TabIdx + 1, Length(Arg) - TabIdx);
     end
+    else if Token = 'arrload' then
+    begin
+      Lhs := StackPop;
+      if Lhs = 0 then
+        Exit(0);
+      Rhs := EnsureAllocaPtr(Arg + '$ptr', FCurrentFuncEntryBlockId);
+      Res := FModel.AddValue(mtkI64, 0, 'arr-load');
+      SetLength(Operands, 2);
+      Operands[0] := MakeValueOperand(Rhs);
+      Operands[1] := MakeValueOperand(Lhs);
+      FModel.AddOperationWithResult(
+        'arr-load', ABlockId, Arg, Arg, Res, Operands
+      );
+      StackPush(Res);
+    end
     else
       Exit(0);
   end;
@@ -1132,6 +1217,41 @@ begin
           Copy(Node.DisplayName, 1, TabIdx - 1),
           Copy(Node.DisplayName, TabIdx + 1, Length(Node.DisplayName) - TabIdx),
           Node.Operand, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'var-decl-arr-runtime' then
+    begin
+      EnsureAllocaPtr(Node.Operand + '$ptr', FCurrentFuncEntryBlockId);
+      EnsureAlloca(Node.Operand + '$len', FCurrentFuncEntryBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'setlength-arr-runtime' then
+    begin
+      CallParts := Node.Operand;
+      TabIdx := Pos(#9, CallParts);
+      if TabIdx > 0 then
+        LowerSetLengthArr(
+          Copy(CallParts, 1, TabIdx - 1),
+          Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx),
+          FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'assign-arr-elem-runtime' then
+    begin
+      CallParts := Node.Operand;
+      TabIdx := Pos(#9, CallParts);
+      if TabIdx > 0 then
+      begin
+        CallFuncName := Copy(CallParts, 1, TabIdx - 1);
+        CallParts := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+        TabIdx := Pos(#9, CallParts);
+        if TabIdx > 0 then
+          LowerAssignArrElem(
+            CallFuncName,
+            Copy(CallParts, 1, TabIdx - 1),
+            Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx),
+            FCurrentBlockId);
+      end;
       Continue;
     end;
     if Node.Kind = 'assign-runtime' then

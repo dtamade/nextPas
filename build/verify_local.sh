@@ -2347,6 +2347,21 @@ if [ "$LLVM_STRING_CONCAT_EXIT" -ne 11 ]; then
 fi
 printf 'llvm-string-concat-program=pass\n'
 
+printf 'llvm-dynarray-program=running\n'
+LLVM_DYNARRAY_OUT_DIR=$(mktemp -d)
+LLVM_DYNARRAY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_dynarray.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_DYNARRAY_OUT_DIR" >"$LLVM_DYNARRAY_OUTPUT" 2>&1; then
+  cat "$LLVM_DYNARRAY_OUTPUT"
+  fail 'llvm-dynarray-program-build-failed'
+fi
+"$LLVM_DYNARRAY_OUT_DIR/llvm_dynarray" >/dev/null 2>&1 || true
+LLVM_DYNARRAY_EXIT=$?
+if [ "$LLVM_DYNARRAY_EXIT" -ne 15 ]; then
+  printf 'llvm-dynarray-expected-exit=15 actual-exit=%d\n' "$LLVM_DYNARRAY_EXIT"
+  fail 'llvm-dynarray-program-wrong-exit-code'
+fi
+printf 'llvm-dynarray-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

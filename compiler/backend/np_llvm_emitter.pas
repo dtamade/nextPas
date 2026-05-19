@@ -264,6 +264,48 @@ begin
           ' = extractvalue {ptr, i64} ',
           OperandText(Op.OperandRefs[0]), ', 1');
     end
+    else if Op.Kind = 'setlength-arr' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+      begin
+        ResultName := '%arr.alloc.' + Op.DisplayName;
+        WriteLn(AIrFile, '  ', ResultName, '.bytes = mul i64 ',
+          OperandText(Op.OperandRefs[1]), ', 8');
+        WriteLn(AIrFile, '  ', ResultName,
+          ' = call ptr @np_alloc(i64 ', ResultName, '.bytes)');
+        WriteLn(AIrFile, '  store ptr ', ResultName, ', ptr ',
+          OperandText(Op.OperandRefs[0]));
+      end;
+    end
+    else if Op.Kind = 'arr-store' then
+    begin
+      if Length(Op.OperandRefs) >= 3 then
+      begin
+        ResultName := '%arr.st.' + Op.DisplayName + '.' +
+          IntToStr(Op.OperationId);
+        WriteLn(AIrFile, '  ', ResultName, '.base = load ptr, ptr ',
+          OperandText(Op.OperandRefs[0]));
+        WriteLn(AIrFile, '  ', ResultName,
+          '.ep = getelementptr i64, ptr ', ResultName, '.base, i64 ',
+          OperandText(Op.OperandRefs[1]));
+        WriteLn(AIrFile, '  store i64 ',
+          OperandText(Op.OperandRefs[2]), ', ptr ', ResultName, '.ep');
+      end;
+    end
+    else if Op.Kind = 'arr-load' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        WriteLn(AIrFile, '  ', ResultName, '.base = load ptr, ptr ',
+          OperandText(Op.OperandRefs[0]));
+        WriteLn(AIrFile, '  ', ResultName,
+          '.ep = getelementptr i64, ptr ', ResultName, '.base, i64 ',
+          OperandText(Op.OperandRefs[1]));
+        WriteLn(AIrFile, '  ', ResultName, ' = load i64, ptr ',
+          ResultName, '.ep');
+      end;
+    end
     else if Op.Kind = 'runtime-halt' then
     begin
       if Length(Op.OperandRefs) >= 1 then
@@ -353,7 +395,7 @@ begin
       #0: Result := Result + '\00';
     else
       if Ord(AValue[Index]) < 32 then
-        Result := Result + '\0' + LowerCase(IntToHex(Ord(AValue[Index]), 1))
+        Result := Result + '\' + HexStr(Ord(AValue[Index]), 2)
       else
         Result := Result + AValue[Index];
     end;
@@ -445,7 +487,8 @@ begin
   if FMirModel = nil then
     Exit(False);
   for Index := 0 to FMirModel.OperationCount - 1 do
-    if FMirModel.OperationAt(Index).Kind = 'str-concat' then
+    if (FMirModel.OperationAt(Index).Kind = 'str-concat') or
+      (FMirModel.OperationAt(Index).Kind = 'setlength-arr') then
       Exit(True);
   Result := False;
 end;

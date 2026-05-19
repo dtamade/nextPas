@@ -41,10 +41,13 @@ type
     FCurrentScopeId: LongInt;
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
+    FRuntimeArrVarNames: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
+    procedure RegisterRuntimeArrVar(const AName: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
+    function IsRuntimeArrVar(const AName: string): Boolean;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
     function NewBlockLabel(const APrefix: string): string;
@@ -252,6 +255,29 @@ var
 begin
   for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
     if SameText(FRuntimeStrVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TSemanticAnalyzer.RegisterRuntimeArrVar(const AName: string);
+var
+  Idx: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
+    if SameText(FRuntimeArrVarNames[Idx], AName) then
+      Exit;
+  NextIndex := Length(FRuntimeArrVarNames);
+  SetLength(FRuntimeArrVarNames, NextIndex + 1);
+  FRuntimeArrVarNames[NextIndex] := AName;
+end;
+
+function TSemanticAnalyzer.IsRuntimeArrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
+    if SameText(FRuntimeArrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
 end;
@@ -590,6 +616,17 @@ begin
           Exit(False);
         ABlob := 'var ' + ANode.ChildAt(0).Text + '.' +
           ANode.ChildAt(1).Text + #10;
+        Exit(True);
+      end;
+    gnkArrayAccess:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+          Exit(False);
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), LeftBlob) then
+          Exit(False);
+        ABlob := LeftBlob + 'arrload ' + ANode.ChildAt(0).Text + #10;
         Exit(True);
       end;
   end;
@@ -2246,7 +2283,8 @@ begin
     SameText(ANode.ChildAt(0).Text, 'Length') and
     (ANode.ChildAt(1) <> nil) and
     (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-    IsRuntimeStrVar(ANode.ChildAt(1).Text) then
+    (IsRuntimeStrVar(ANode.ChildAt(1).Text) or
+     IsRuntimeArrVar(ANode.ChildAt(1).Text)) then
   begin
     ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
     Exit(True);
@@ -2394,6 +2432,26 @@ begin
         (Child.ChildAt(0).ChildCount >= 2) then
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
+      if FNoFold and (Child.ChildCount >= 1) and
+        (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+        IsRuntimeArrVar(Child.ChildAt(0).ChildAt(0).Text) then
+      begin
+        Decoded := Child.ChildAt(0).ChildAt(0).Text;
+        RhsNode := nil;
+        if Child.ChildCount >= 2 then
+          RhsNode := Child.ChildAt(1);
+        if (RhsNode <> nil) and
+          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) and
+          EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+          FModel.AddTypedHirNode(
+            'assign-arr-elem-runtime', Decoded, 0, 0,
+            Decoded + #9 + Operand + #9 + StringValue
+          );
+        Continue;
+      end;
       Arg := nil;
       if Child.ChildCount >= 2 then
         Arg := Child.ChildAt(1)
@@ -2561,6 +2619,34 @@ begin
         if SameText(Child.Text, 'WriteLn') then
           Decoded := Decoded + #10;
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
+        Continue;
+      end;
+      if FNoFold and SameText(Child.Text, 'SetLength') then
+      begin
+        Arg := nil;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and
+          (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end
+        else
+          Arg := Child;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          RhsNode := Arg.ChildAt(ArgIndex);
+          if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+            IsRuntimeArrVar(RhsNode.Text) then
+          begin
+            if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+              FModel.AddTypedHirNode(
+                'setlength-arr-runtime', RhsNode.Text, 0, 0,
+                RhsNode.Text + #9 + Operand
+              );
+          end;
+        end;
         Continue;
       end;
       if (not FNoFold) and
@@ -2853,9 +2939,9 @@ end;
 
 procedure TSemanticAnalyzer.WalkRuntimeVarDecls(const ANode: TGreenNode);
 var
-  I, J: LongInt;
-  Child, Decl, TypeChild: TGreenNode;
-  IsStr: Boolean;
+  I, J, K: LongInt;
+  Child, Decl, TypeChild, NextSibling: TGreenNode;
+  IsStr, IsArr: Boolean;
 begin
   if ANode = nil then
     Exit;
@@ -2872,32 +2958,52 @@ begin
       for J := 0 to Child.ChildCount - 1 do
       begin
         Decl := Child.ChildAt(J);
-        if (Decl <> nil) and
-          (Decl.NodeKind = gnkVarDecl) and
-          (Decl.Text <> '') then
+        if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
+          (Decl.Text = '') then
+          Continue;
+        IsStr := False;
+        IsArr := False;
+        if Decl.ChildCount > 0 then
         begin
-          IsStr := False;
-          if Decl.ChildCount > 0 then
+          TypeChild := Decl.ChildAt(0);
+          if (TypeChild <> nil) and
+            (SameText(TypeChild.Text, 'String') or
+             SameText(TypeChild.Text, 'AnsiString')) then
+            IsStr := True;
+          if (TypeChild <> nil) and (TypeChild.Text = '') then
           begin
-            TypeChild := Decl.ChildAt(0);
-            if (TypeChild <> nil) and
-              (SameText(TypeChild.Text, 'String') or
-               SameText(TypeChild.Text, 'AnsiString')) then
-              IsStr := True;
+            for K := J + 1 to Child.ChildCount - 1 do
+            begin
+              NextSibling := Child.ChildAt(K);
+              if (NextSibling <> nil) and
+                (NextSibling.NodeKind <> gnkVarDecl) then
+              begin
+                if NextSibling.NodeKind = gnkArrayType then
+                  IsArr := True;
+                Break;
+              end;
+            end;
           end;
-          RegisterRuntimeVar(Decl.Text);
-          if IsStr then
-          begin
-            RegisterRuntimeStrVar(Decl.Text);
-            FModel.AddTypedHirNode(
-              'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
-            );
-          end
-          else
-            FModel.AddTypedHirNode(
-              'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
-            );
         end;
+        RegisterRuntimeVar(Decl.Text);
+        if IsStr then
+        begin
+          RegisterRuntimeStrVar(Decl.Text);
+          FModel.AddTypedHirNode(
+            'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else if IsArr then
+        begin
+          RegisterRuntimeArrVar(Decl.Text);
+          FModel.AddTypedHirNode(
+            'var-decl-arr-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else
+          FModel.AddTypedHirNode(
+            'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
+          );
       end;
       Continue;
     end;
