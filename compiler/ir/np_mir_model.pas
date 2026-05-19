@@ -631,6 +631,7 @@ var
   Token, Arg, CallFuncName: string;
   Parsed: Int64;
   ParseCode: Word;
+  ValCode: LongInt;
   Lhs, Rhs, Res: TMirValueId;
   Operands: TMirOperandRefs;
   Index: LongInt;
@@ -758,8 +759,8 @@ begin
       if TabIdx <= 0 then
         Exit(0);
       CallFuncName := Copy(Arg, 1, TabIdx - 1);
-      Val(Copy(Arg, TabIdx + 1, Length(Arg) - TabIdx), TabIdx, Index);
-      if Index <> 0 then
+      Val(Copy(Arg, TabIdx + 1, Length(Arg) - TabIdx), TabIdx, ValCode);
+      if ValCode <> 0 then
         TabIdx := 0;
       SetLength(Operands, TabIdx);
       for Index := TabIdx - 1 downto 0 do

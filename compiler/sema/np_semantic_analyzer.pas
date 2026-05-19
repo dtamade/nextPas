@@ -519,6 +519,18 @@ begin
           IntToStr(ANode.ChildCount - 1) + #10;
         Exit(True);
       end;
+    gnkDotAccess:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
+          Exit(False);
+        if ANode.ChildAt(1).NodeKind <> gnkIdentifier then
+          Exit(False);
+        ABlob := 'var ' + ANode.ChildAt(0).Text + '.' +
+          ANode.ChildAt(1).Text + #10;
+        Exit(True);
+      end;
   end;
   Result := False;
 end;
@@ -2275,6 +2287,12 @@ begin
     end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
+      Decoded := Child.Text;
+      if (Child.ChildCount >= 1) and
+        (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) then
+        Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
+          Child.ChildAt(0).ChildAt(1).Text;
       Arg := nil;
       if Child.ChildCount >= 2 then
         Arg := Child.ChildAt(1)
@@ -2288,15 +2306,18 @@ begin
         if FNoFold then
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
+          begin
+            RegisterRuntimeVar(Decoded);
             FModel.AddTypedHirNode(
-              'assign-runtime', Child.Text, 0, 0,
-              Child.Text + #9 + Operand
+              'assign-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand
             );
+          end;
         end
         else if EvaluateIntegerConstant(Arg, Value) then
-          FModel.AddVarInitValue(Child.Text, Value)
+          FModel.AddVarInitValue(Decoded, Value)
         else
-          FModel.RemoveVarInitValue(Child.Text);
+          FModel.RemoveVarInitValue(Decoded);
       end;
       Continue;
     end;
