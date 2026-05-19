@@ -381,7 +381,42 @@ begin
             '  call void asm sideeffect "movq $$60, %rax; syscall", "{rdi},~{rax},~{rcx},~{r11}"(i64 ',
             OperandText(Op.OperandRefs[0]), ')');
         WriteLn(AIrFile, '  unreachable');
-      end;
+      end
+      else if Op.Kind = 'call' then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        if Op.ResultValueId > 0 then
+        begin
+          Write(AIrFile, '  ', ResultName, ' = call i64 @', Op.Operand, '(');
+          for Index := 0 to Length(Op.OperandRefs) - 1 do
+          begin
+            if Index > 0 then
+              Write(AIrFile, ', ');
+            Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[Index]));
+          end;
+          WriteLn(AIrFile, ')');
+        end
+        else
+        begin
+          Write(AIrFile, '  call void @', Op.Operand, '(');
+          for Index := 0 to Length(Op.OperandRefs) - 1 do
+          begin
+            if Index > 0 then
+              Write(AIrFile, ', ');
+            Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[Index]));
+          end;
+          WriteLn(AIrFile, ')');
+        end;
+      end
+      else if Op.Kind = 'ret-i64' then
+      begin
+        if Length(Op.OperandRefs) >= 1 then
+          WriteLn(AIrFile, '  ret i64 ', OperandText(Op.OperandRefs[0]))
+        else
+          WriteLn(AIrFile, '  ret i64 0');
+      end
+      else if Op.Kind = 'ret-void' then
+        WriteLn(AIrFile, '  ret void');
     end;
   end;
   WriteLn(AIrFile, '}');

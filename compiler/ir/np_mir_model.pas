@@ -453,6 +453,9 @@ begin
       (Kind = 'mul') or
       (Kind = 'div') or
       (Kind = 'mod') or
+      (Kind = 'call') or
+      (Kind = 'ret-i64') or
+      (Kind = 'ret-void') or
       (Kind = 'icmp-eq') or
       (Kind = 'icmp-ne') or
       (Kind = 'icmp-slt') or
