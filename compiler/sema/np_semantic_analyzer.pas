@@ -1955,7 +1955,8 @@ begin
           AValue := Parsed;
           Exit(True);
         end;
-        if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
+        if (not FNoFold) and
+          LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and
           (BodyNode <> nil) and
           not IsCurrentlyInlining(ANode.Text) then
         begin
@@ -2179,7 +2180,7 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
-  if NeedsFoldFallback(ANode) then
+  if (not FNoFold) and NeedsFoldFallback(ANode) then
     if EvaluateIntegerConstant(ANode, Folded) then
     begin
       ABlob := 'int ' + IntToStr(Folded) + #10;
@@ -2822,6 +2823,25 @@ begin
     FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
       IntToStr(ParamCount));
     RegisterRuntimeVar(Entry.Name);
+    if Entry.Decl <> nil then
+    begin
+      for J := 0 to Entry.Decl.ChildCount - 1 do
+      begin
+        Child := Entry.Decl.ChildAt(J);
+        if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+        begin
+          for K := 0 to Child.ChildCount - 1 do
+          begin
+            ParamChild := Child.ChildAt(K);
+            if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+              FModel.AddTypedHirNode('var-decl-runtime', ParamChild.Text, 0, 0,
+                ParamChild.Text);
+          end;
+          Break;
+        end;
+      end;
+    end;
+    FModel.AddTypedHirNode('var-decl-runtime', Entry.Name, 0, 0, Entry.Name);
     SavedTerminated := FCurrentBlockTerminated;
     FCurrentBlockTerminated := False;
     WalkHaltCalls(Entry.Body);
