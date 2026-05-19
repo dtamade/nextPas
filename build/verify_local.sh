@@ -2227,6 +2227,21 @@ if [ "$LLVM_FIBONACCI_EXIT" -ne 55 ]; then
 fi
 printf 'llvm-fibonacci-program=pass\n'
 
+printf 'llvm-primes-program=running\n'
+LLVM_PRIMES_OUT_DIR=$(mktemp -d)
+LLVM_PRIMES_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_primes.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PRIMES_OUT_DIR" >"$LLVM_PRIMES_OUTPUT" 2>&1; then
+  cat "$LLVM_PRIMES_OUTPUT"
+  fail 'llvm-primes-program-build-failed'
+fi
+"$LLVM_PRIMES_OUT_DIR/llvm_primes" >/dev/null 2>&1 || true
+LLVM_PRIMES_EXIT=$?
+if [ "$LLVM_PRIMES_EXIT" -ne 15 ]; then
+  printf 'llvm-primes-expected-exit=15 actual-exit=%d\n' "$LLVM_PRIMES_EXIT"
+  fail 'llvm-primes-program-wrong-exit-code'
+fi
+printf 'llvm-primes-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
