@@ -2147,30 +2147,46 @@ begin
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end
-  else if (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
-  begin
-    Inc(ACursor);
-    ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
-    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
-  end
   else
   begin
     while (ACursor < ALexer.TokenCount) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkConstructorKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkDestructorKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkInitializationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkFinalizationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      (CurrentToken(ALexer, ACursor).Kind in
+        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword]) do
+    begin
       Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+    end;
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
+    begin
+      Inc(ACursor);
+      ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
+    else
+    begin
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkConstructorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkDestructorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkInitializationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFinalizationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkOperatorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+    end;
   end;
 
   AParent.AppendChild(Node);
@@ -2244,30 +2260,46 @@ begin
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end
-  else if (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
-  begin
-    Inc(ACursor);
-    ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
-    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
-  end
   else
   begin
     while (ACursor < ALexer.TokenCount) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkConstructorKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkDestructorKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkInitializationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkFinalizationKeyword) and
-      (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      (CurrentToken(ALexer, ACursor).Kind in
+        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword]) do
+    begin
       Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+    end;
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
+    begin
+      Inc(ACursor);
+      ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
+    else
+    begin
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkConstructorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkDestructorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkInitializationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkFinalizationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkOperatorKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+    end;
   end;
 
   AParent.AppendChild(Node);
