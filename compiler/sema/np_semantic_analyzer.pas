@@ -2197,6 +2197,15 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
+  if (ANode.NodeKind = gnkUnaryExpression) and
+    SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
+  begin
+    if not EncodeRuntimeBoolExprFold(ANode.ChildAt(0), LeftBlob) then
+      Exit(False);
+    ABlob := 'int 1' + #10 + LeftBlob + 'zext' + #10 + 'sub' + #10 +
+      'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end;
   if ANode.NodeKind <> gnkBinaryExpression then
     Exit(False);
   if ANode.ChildCount < 2 then
