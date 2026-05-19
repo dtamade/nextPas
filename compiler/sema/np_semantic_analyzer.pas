@@ -2274,6 +2274,7 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
 var
   Folded: Int64;
   FuncName, ArgName: string;
+  StrCallIdx, StrCallArgCount: LongInt;
 begin
   ABlob := '';
   if ANode = nil then
@@ -2287,6 +2288,33 @@ begin
      IsRuntimeArrVar(ANode.ChildAt(1).Text)) then
   begin
     ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    ABlob := '';
+    StrCallArgCount := 0;
+    for StrCallIdx := 1 to ANode.ChildCount - 1 do
+    begin
+      if (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+        IsRuntimeStrVar(ANode.ChildAt(StrCallIdx).Text) then
+      begin
+        ABlob := ABlob + 'strvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
+        Inc(StrCallArgCount, 2);
+      end
+      else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
+      begin
+        ABlob := ABlob + FuncName;
+        Inc(StrCallArgCount);
+      end
+      else
+        Exit(False);
+    end;
+    ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
+      IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
   if (not FNoFold) and NeedsFoldFallback(ANode) then
@@ -2655,7 +2683,11 @@ begin
         not IsCurrentlyInlining(Child.Text) then
       begin
         PushInlining(Child.Text);
-        ParamSnaps := BindCallArgs(DeclNode, Child, 0);
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+          ParamSnaps := BindCallArgs(DeclNode, Child.ChildAt(0), 1)
+        else
+          ParamSnaps := BindCallArgs(DeclNode, Child, 0);
         try
           WalkHaltCalls(BranchNode);
         finally
@@ -2683,7 +2715,10 @@ begin
           while ArgIndex < Arg.ChildCount do
           begin
             RhsNode := Arg.ChildAt(ArgIndex);
-            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+            if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(RhsNode.Text) then
+              Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
               Operand := Operand + #9 + Decoded;
             Inc(ArgIndex);
           end;
@@ -3055,8 +3090,10 @@ var
   I, J, K: LongInt;
   Entry: TProcedureBodyEntry;
   ParamCount: LongInt;
-  Child, ParamChild: TGreenNode;
+  Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
+  ParamTypes: string;
+  IsStrParam: Boolean;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
@@ -3064,6 +3101,7 @@ begin
     if Entry.Body = nil then
       Continue;
     ParamCount := 0;
+    ParamTypes := '';
     if Entry.Decl <> nil then
     begin
       for J := 0 to Entry.Decl.ChildCount - 1 do
@@ -3077,6 +3115,22 @@ begin
             if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
             begin
               RegisterRuntimeVar(ParamChild.Text);
+              IsStrParam := False;
+              if ParamChild.ChildCount > 0 then
+              begin
+                TypeChild := ParamChild.ChildAt(0);
+                if (TypeChild <> nil) and
+                  (SameText(TypeChild.Text, 'String') or
+                   SameText(TypeChild.Text, 'AnsiString')) then
+                begin
+                  IsStrParam := True;
+                  RegisterRuntimeStrVar(ParamChild.Text);
+                end;
+              end;
+              if IsStrParam then
+                ParamTypes := ParamTypes + 's'
+              else
+                ParamTypes := ParamTypes + 'i';
               Inc(ParamCount);
             end;
           end;
@@ -3085,7 +3139,7 @@ begin
       end;
     end;
     FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
-      IntToStr(ParamCount));
+      IntToStr(ParamCount) + ':' + ParamTypes);
     RegisterRuntimeVar(Entry.Name);
     if Entry.Decl <> nil then
     begin
@@ -3098,8 +3152,14 @@ begin
           begin
             ParamChild := Child.ChildAt(K);
             if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
-              FModel.AddTypedHirNode('var-decl-runtime', ParamChild.Text, 0, 0,
-                ParamChild.Text);
+            begin
+              if IsRuntimeStrVar(ParamChild.Text) then
+                FModel.AddTypedHirNode('var-decl-str-runtime', ParamChild.Text,
+                  0, 0, ParamChild.Text)
+              else
+                FModel.AddTypedHirNode('var-decl-runtime', ParamChild.Text,
+                  0, 0, ParamChild.Text);
+            end;
           end;
           Break;
         end;

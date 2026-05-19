@@ -384,9 +384,6 @@ begin
   if TargetName = '' then
     Fail(State, 'missing-required-option: --target', True);
 
-  if Pos('llvm', ToolchainBindingOverride) > 0 then
-    NoFold := True;
-
   RunBuild(
     State,
     SourcePath,

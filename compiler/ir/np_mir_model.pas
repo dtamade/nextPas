@@ -62,6 +62,7 @@ type
     FunctionId: LongInt;
     Name: string;
     ParamCount: LongInt;
+    ParamTypes: string;
     HasReturnValue: Boolean;
     EntryBlockId: LongInt;
   end;
@@ -78,6 +79,7 @@ type
     constructor Create;
     function AddBlock(const ALabelName: string): LongInt;
     function AddFunction(const AName: string; const AParamCount: LongInt;
+      const AParamTypes: string;
       const AHasReturnValue: Boolean; const AEntryBlockId: LongInt): LongInt;
     function FunctionCount: LongInt;
     function FunctionAt(const AIndex: LongInt): TMirFunction;
@@ -277,7 +279,8 @@ begin
 end;
 
 function TMirModel.AddFunction(const AName: string;
-  const AParamCount: LongInt; const AHasReturnValue: Boolean;
+  const AParamCount: LongInt; const AParamTypes: string;
+  const AHasReturnValue: Boolean;
   const AEntryBlockId: LongInt): LongInt;
 var
   NextIndex: SizeInt;
@@ -287,6 +290,7 @@ begin
   FFunctions[NextIndex].FunctionId := NextIndex + 1;
   FFunctions[NextIndex].Name := AName;
   FFunctions[NextIndex].ParamCount := AParamCount;
+  FFunctions[NextIndex].ParamTypes := AParamTypes;
   FFunctions[NextIndex].HasReturnValue := AHasReturnValue;
   FFunctions[NextIndex].EntryBlockId := AEntryBlockId;
   Result := FFunctions[NextIndex].FunctionId;
@@ -973,6 +977,25 @@ begin
         Exit(0);
       StackPush(Res);
     end
+    else if Token = 'strvar' then
+    begin
+      Rhs := EnsureAllocaPtr(Arg + '$ptr', FCurrentFuncEntryBlockId);
+      Res := FModel.AddValue(mtkPtr, 0, Arg + '.ptr');
+      SetLength(Operands, 1);
+      Operands[0] := MakeValueOperand(Rhs);
+      FModel.AddOperationWithResult(
+        'load-ptr', ABlockId, Arg, '', Res, Operands
+      );
+      StackPush(Res);
+      Lhs := EnsureAlloca(Arg + '$len', FCurrentFuncEntryBlockId);
+      Res := FModel.AddValue(mtkI64, 0, Arg + '.len');
+      SetLength(Operands, 1);
+      Operands[0] := MakeValueOperand(Lhs);
+      FModel.AddOperationWithResult(
+        'load', ABlockId, Arg, '', Res, Operands
+      );
+      StackPush(Res);
+    end
     else if (Token = 'add') or (Token = 'sub') or (Token = 'mul') or
       (Token = 'div') or (Token = 'mod') then
     begin
@@ -1162,8 +1185,8 @@ procedure TMirLowerer.Lower;
 var
   Index, TabIdx, ValCode: LongInt;
   Node: TTypedHirNode;
-  ExitValue: TMirValueId;
-  Operands: TMirOperandRefs;
+  ExitValue, StrPtrVal, StrLenVal: TMirValueId;
+  Operands, SingleOp: TMirOperandRefs;
   CallParts, CallFuncName, ArgBlob: string;
 begin
   if (FSemanticModel = nil) or (FSemanticModel.Status <> 'ready') then
@@ -1337,11 +1360,39 @@ begin
             ArgBlob := CallParts;
             CallParts := '';
           end;
-          ExitValue := LowerHaltRuntimeBlob(ArgBlob, FCurrentBlockId);
-          if ExitValue > 0 then
+          if (Length(ArgBlob) > 7) and
+            (Copy(ArgBlob, 1, 7) = 'strvar ') then
           begin
+            ArgBlob := Copy(ArgBlob, 8, Length(ArgBlob) - 8);
+            ExitValue := EnsureAllocaPtr(ArgBlob + '$ptr',
+              FCurrentFuncEntryBlockId);
+            StrPtrVal := FModel.AddValue(mtkPtr, 0, ArgBlob + '.ptr');
+            SetLength(SingleOp, 1);
+            SingleOp[0] := MakeValueOperand(ExitValue);
+            FModel.AddOperationWithResult(
+              'load-ptr', FCurrentBlockId, ArgBlob, '', StrPtrVal, SingleOp
+            );
             SetLength(Operands, Length(Operands) + 1);
-            Operands[Length(Operands) - 1] := MakeValueOperand(ExitValue);
+            Operands[Length(Operands) - 1] := MakeValueOperand(StrPtrVal);
+            ExitValue := EnsureAlloca(ArgBlob + '$len',
+              FCurrentFuncEntryBlockId);
+            StrLenVal := FModel.AddValue(mtkI64, 0, ArgBlob + '.len');
+            SetLength(SingleOp, 1);
+            SingleOp[0] := MakeValueOperand(ExitValue);
+            FModel.AddOperationWithResult(
+              'load', FCurrentBlockId, ArgBlob, '', StrLenVal, SingleOp
+            );
+            SetLength(Operands, Length(Operands) + 1);
+            Operands[Length(Operands) - 1] := MakeValueOperand(StrLenVal);
+          end
+          else
+          begin
+            ExitValue := LowerHaltRuntimeBlob(ArgBlob, FCurrentBlockId);
+            if ExitValue > 0 then
+            begin
+              SetLength(Operands, Length(Operands) + 1);
+              Operands[Length(Operands) - 1] := MakeValueOperand(ExitValue);
+            end;
           end;
         end;
         ExitValue := FModel.AddValue(mtkI64, 0, CallFuncName);
@@ -1362,13 +1413,25 @@ begin
     end;
     if Node.Kind = 'function-body-begin' then
     begin
-      Val(Node.Operand, TabIdx, ValCode);
+      CallParts := Node.Operand;
+      TabIdx := Pos(':', CallParts);
+      if TabIdx > 0 then
+      begin
+        Val(Copy(CallParts, 1, TabIdx - 1), ExitValue, ValCode);
+        CallFuncName := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+      end
+      else
+      begin
+        Val(CallParts, ExitValue, ValCode);
+        CallFuncName := '';
+      end;
       if ValCode <> 0 then
-        TabIdx := 0;
+        ExitValue := 0;
       FCurrentBlockId := FModel.AddBlock(Node.DisplayName + '_entry');
       FCurrentFuncEntryBlockId := FCurrentBlockId;
       SetLength(FAllocaTable, 0);
-      FModel.AddFunction(Node.DisplayName, TabIdx, True, FCurrentBlockId);
+      FModel.AddFunction(Node.DisplayName, ExitValue, CallFuncName,
+        True, FCurrentBlockId);
       Continue;
     end;
     if Node.Kind = 'function-body-end' then

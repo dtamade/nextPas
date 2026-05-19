@@ -52,7 +52,7 @@ const
 procedure TLlvmEmitter.EmitBlockOps(var AIrFile: Text;
   const ABlockId: LongInt; const AAllocaOnly: Boolean);
 var
-  OpIdx, I: LongInt;
+  OpIdx, I, LlvmArgIdx: LongInt;
   Op: TMirOperation;
   ResultName, OpcodeName, CmpPred: string;
 
@@ -163,20 +163,30 @@ begin
       if Op.ResultValueId > 0 then
       begin
         Write(AIrFile, '  ', ResultName, ' = call i64 @', Op.Operand, '(');
+        LlvmArgIdx := 0;
         for I := 0 to Length(Op.OperandRefs) - 1 do
         begin
-          if I > 0 then Write(AIrFile, ', ');
-          Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[I]));
+          if LlvmArgIdx > 0 then Write(AIrFile, ', ');
+          if FMirModel.GetValue(Op.OperandRefs[I].ValueId).TypeKind = mtkPtr then
+            Write(AIrFile, 'ptr ', OperandText(Op.OperandRefs[I]))
+          else
+            Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[I]));
+          Inc(LlvmArgIdx);
         end;
         WriteLn(AIrFile, ')');
       end
       else
       begin
         Write(AIrFile, '  call void @', Op.Operand, '(');
+        LlvmArgIdx := 0;
         for I := 0 to Length(Op.OperandRefs) - 1 do
         begin
-          if I > 0 then Write(AIrFile, ', ');
-          Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[I]));
+          if LlvmArgIdx > 0 then Write(AIrFile, ', ');
+          if FMirModel.GetValue(Op.OperandRefs[I].ValueId).TypeKind = mtkPtr then
+            Write(AIrFile, 'ptr ', OperandText(Op.OperandRefs[I]))
+          else
+            Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[I]));
+          Inc(LlvmArgIdx);
         end;
         WriteLn(AIrFile, ')');
       end;
@@ -581,7 +591,7 @@ end;
 
 procedure TLlvmEmitter.EmitRuntimeMain(var AIrFile: Text);
 var
-  Index, BlockIdx, OpIdx, TabIdx: LongInt;
+  Index, BlockIdx, OpIdx, TabIdx, LlvmArgIdx: LongInt;
   Op: TMirOperation;
   Block: TMirBlock;
   WriteLines: TLLvmStringArray;
@@ -624,11 +634,22 @@ begin
   begin
     WriteLn(AIrFile);
     Write(AIrFile, 'define i64 @', FMirModel.FunctionAt(Index).Name, '(');
+    LlvmArgIdx := 0;
     for OpIdx := 0 to FMirModel.FunctionAt(Index).ParamCount - 1 do
     begin
-      if OpIdx > 0 then
+      if LlvmArgIdx > 0 then
         Write(AIrFile, ', ');
-      Write(AIrFile, 'i64 %arg', OpIdx);
+      if (OpIdx < Length(FMirModel.FunctionAt(Index).ParamTypes)) and
+        (FMirModel.FunctionAt(Index).ParamTypes[OpIdx + 1] = 's') then
+      begin
+        Write(AIrFile, 'ptr %arg', LlvmArgIdx, ', i64 %arg', LlvmArgIdx + 1);
+        Inc(LlvmArgIdx, 2);
+      end
+      else
+      begin
+        Write(AIrFile, 'i64 %arg', LlvmArgIdx);
+        Inc(LlvmArgIdx);
+      end;
     end;
     WriteLn(AIrFile, ') {');
 
@@ -645,17 +666,40 @@ begin
       begin
         EmitBlockOps(AIrFile, Block.BlockId, True);
         TabIdx := 0;
+        LlvmArgIdx := 0;
         for OpIdx := 0 to FMirModel.OperationCount - 1 do
         begin
           Op := FMirModel.OperationAt(OpIdx);
           if Op.BlockId <> Block.BlockId then
             Continue;
-          if Op.Kind <> 'alloca' then
+          if (Op.Kind <> 'alloca') and (Op.Kind <> 'alloca-ptr') then
             Continue;
-          if TabIdx < FMirModel.FunctionAt(Index).ParamCount then
-            WriteLn(AIrFile, '  store i64 %arg', TabIdx,
+          if TabIdx >= FMirModel.FunctionAt(Index).ParamCount then
+          begin
+            Inc(TabIdx);
+            Continue;
+          end;
+          if (TabIdx < Length(FMirModel.FunctionAt(Index).ParamTypes)) and
+            (FMirModel.FunctionAt(Index).ParamTypes[TabIdx + 1] = 's') then
+          begin
+            if Op.Kind = 'alloca-ptr' then
+              WriteLn(AIrFile, '  store ptr %arg', LlvmArgIdx,
+                ', ptr %v', Op.ResultValueId)
+            else
+            begin
+              WriteLn(AIrFile, '  store i64 %arg', LlvmArgIdx + 1,
+                ', ptr %v', Op.ResultValueId);
+              Inc(TabIdx);
+              Inc(LlvmArgIdx, 2);
+            end;
+          end
+          else
+          begin
+            WriteLn(AIrFile, '  store i64 %arg', LlvmArgIdx,
               ', ptr %v', Op.ResultValueId);
-          Inc(TabIdx);
+            Inc(TabIdx);
+            Inc(LlvmArgIdx);
+          end;
         end;
       end;
       EmitBlockOps(AIrFile, Block.BlockId, False);

@@ -2219,8 +2219,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_fibonacci.pas --fold --toolchain
   cat "$LLVM_FIBONACCI_OUTPUT"
   fail 'llvm-fibonacci-program-build-failed'
 fi
-LLVM_FIBONACCI_RUN_OUTPUT=$("$LLVM_FIBONACCI_OUT_DIR/llvm_fibonacci" 2>&1 || true)
+set +e
+LLVM_FIBONACCI_RUN_OUTPUT=$("$LLVM_FIBONACCI_OUT_DIR/llvm_fibonacci" 2>&1)
 LLVM_FIBONACCI_EXIT=$?
+set -e
 if [ "$LLVM_FIBONACCI_EXIT" -ne 55 ]; then
   printf 'llvm-fibonacci-expected-exit=55 actual-exit=%d output=%s\n' "$LLVM_FIBONACCI_EXIT" "$LLVM_FIBONACCI_RUN_OUTPUT"
   fail 'llvm-fibonacci-program-wrong-exit-code'
@@ -2234,8 +2236,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_primes.pas --toolchain-binding l
   cat "$LLVM_PRIMES_OUTPUT"
   fail 'llvm-primes-program-build-failed'
 fi
-"$LLVM_PRIMES_OUT_DIR/llvm_primes" >/dev/null 2>&1 || true
+set +e
+"$LLVM_PRIMES_OUT_DIR/llvm_primes" >/dev/null 2>&1
 LLVM_PRIMES_EXIT=$?
+set -e
 if [ "$LLVM_PRIMES_EXIT" -ne 15 ]; then
   printf 'llvm-primes-expected-exit=15 actual-exit=%d\n' "$LLVM_PRIMES_EXIT"
   fail 'llvm-primes-program-wrong-exit-code'
@@ -2249,8 +2253,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_gcd.pas --toolchain-binding linu
   cat "$LLVM_GCD_OUTPUT"
   fail 'llvm-gcd-program-build-failed'
 fi
-"$LLVM_GCD_OUT_DIR/llvm_gcd" >/dev/null 2>&1 || true
+set +e
+"$LLVM_GCD_OUT_DIR/llvm_gcd" >/dev/null 2>&1
 LLVM_GCD_EXIT=$?
+set -e
 if [ "$LLVM_GCD_EXIT" -ne 6 ]; then
   printf 'llvm-gcd-expected-exit=6 actual-exit=%d\n' "$LLVM_GCD_EXIT"
   fail 'llvm-gcd-program-wrong-exit-code'
@@ -2264,8 +2270,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_record.pas --toolchain-binding l
   cat "$LLVM_RECORD_OUTPUT"
   fail 'llvm-record-program-build-failed'
 fi
-"$LLVM_RECORD_OUT_DIR/llvm_record" >/dev/null 2>&1 || true
+set +e
+"$LLVM_RECORD_OUT_DIR/llvm_record" >/dev/null 2>&1
 LLVM_RECORD_EXIT=$?
+set -e
 if [ "$LLVM_RECORD_EXIT" -ne 7 ]; then
   printf 'llvm-record-expected-exit=7 actual-exit=%d\n' "$LLVM_RECORD_EXIT"
   fail 'llvm-record-program-wrong-exit-code'
@@ -2275,12 +2283,14 @@ printf 'llvm-record-program=pass\n'
 printf 'llvm-comprehensive-program=running\n'
 LLVM_COMPREHENSIVE_OUT_DIR=$(mktemp -d)
 LLVM_COMPREHENSIVE_OUTPUT=$(mktemp)
-if ! "$STAGE0_BINARY" build examples/smoke/llvm_comprehensive.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_COMPREHENSIVE_OUT_DIR" >"$LLVM_COMPREHENSIVE_OUTPUT" 2>&1; then
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_comprehensive.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_COMPREHENSIVE_OUT_DIR" >"$LLVM_COMPREHENSIVE_OUTPUT" 2>&1; then
   cat "$LLVM_COMPREHENSIVE_OUTPUT"
   fail 'llvm-comprehensive-program-build-failed'
 fi
-"$LLVM_COMPREHENSIVE_OUT_DIR/llvm_comprehensive" >/dev/null 2>&1 || true
+set +e
+"$LLVM_COMPREHENSIVE_OUT_DIR/llvm_comprehensive" >/dev/null 2>&1
 LLVM_COMPREHENSIVE_EXIT=$?
+set -e
 if [ "$LLVM_COMPREHENSIVE_EXIT" -ne 5 ]; then
   printf 'llvm-comprehensive-expected-exit=5 actual-exit=%d\n' "$LLVM_COMPREHENSIVE_EXIT"
   fail 'llvm-comprehensive-program-wrong-exit-code'
@@ -2294,8 +2304,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_charclass.pas --fold --toolchain
   cat "$LLVM_CHARCLASS_OUTPUT"
   fail 'llvm-charclass-program-build-failed'
 fi
-"$LLVM_CHARCLASS_OUT_DIR/llvm_charclass" >/dev/null 2>&1 || true
+set +e
+"$LLVM_CHARCLASS_OUT_DIR/llvm_charclass" >/dev/null 2>&1
 LLVM_CHARCLASS_EXIT=$?
+set -e
 if [ "$LLVM_CHARCLASS_EXIT" -ne 5 ]; then
   printf 'llvm-charclass-expected-exit=5 actual-exit=%d\n' "$LLVM_CHARCLASS_EXIT"
   fail 'llvm-charclass-program-wrong-exit-code'
@@ -2305,12 +2317,14 @@ printf 'llvm-charclass-program=pass\n'
 printf 'llvm-eval-program=running\n'
 LLVM_EVAL_OUT_DIR=$(mktemp -d)
 LLVM_EVAL_OUTPUT=$(mktemp)
-if ! "$STAGE0_BINARY" build examples/smoke/llvm_eval.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EVAL_OUT_DIR" >"$LLVM_EVAL_OUTPUT" 2>&1; then
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_eval.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EVAL_OUT_DIR" >"$LLVM_EVAL_OUTPUT" 2>&1; then
   cat "$LLVM_EVAL_OUTPUT"
   fail 'llvm-eval-program-build-failed'
 fi
-"$LLVM_EVAL_OUT_DIR/llvm_eval" >/dev/null 2>&1 || true
+set +e
+"$LLVM_EVAL_OUT_DIR/llvm_eval" >/dev/null 2>&1
 LLVM_EVAL_EXIT=$?
+set -e
 if [ "$LLVM_EVAL_EXIT" -ne 20 ]; then
   printf 'llvm-eval-expected-exit=20 actual-exit=%d\n' "$LLVM_EVAL_EXIT"
   fail 'llvm-eval-program-wrong-exit-code'
@@ -2324,8 +2338,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_string.pas --toolchain-binding l
   cat "$LLVM_STRING_OUTPUT"
   fail 'llvm-string-program-build-failed'
 fi
-"$LLVM_STRING_OUT_DIR/llvm_string" >/dev/null 2>&1 || true
+set +e
+"$LLVM_STRING_OUT_DIR/llvm_string" >/dev/null 2>&1
 LLVM_STRING_EXIT=$?
+set -e
 if [ "$LLVM_STRING_EXIT" -ne 10 ]; then
   printf 'llvm-string-expected-exit=10 actual-exit=%d\n' "$LLVM_STRING_EXIT"
   fail 'llvm-string-program-wrong-exit-code'
@@ -2339,8 +2355,10 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_string_concat.pas --toolchain-bi
   cat "$LLVM_STRING_CONCAT_OUTPUT"
   fail 'llvm-string-concat-program-build-failed'
 fi
-"$LLVM_STRING_CONCAT_OUT_DIR/llvm_string_concat" >/dev/null 2>&1 || true
+set +e
+"$LLVM_STRING_CONCAT_OUT_DIR/llvm_string_concat" >/dev/null 2>&1
 LLVM_STRING_CONCAT_EXIT=$?
+set -e
 if [ "$LLVM_STRING_CONCAT_EXIT" -ne 11 ]; then
   printf 'llvm-string-concat-expected-exit=11 actual-exit=%d\n' "$LLVM_STRING_CONCAT_EXIT"
   fail 'llvm-string-concat-program-wrong-exit-code'
@@ -2354,13 +2372,32 @@ if ! "$STAGE0_BINARY" build examples/smoke/llvm_dynarray.pas --toolchain-binding
   cat "$LLVM_DYNARRAY_OUTPUT"
   fail 'llvm-dynarray-program-build-failed'
 fi
-"$LLVM_DYNARRAY_OUT_DIR/llvm_dynarray" >/dev/null 2>&1 || true
+set +e
+"$LLVM_DYNARRAY_OUT_DIR/llvm_dynarray" >/dev/null 2>&1
 LLVM_DYNARRAY_EXIT=$?
+set -e
 if [ "$LLVM_DYNARRAY_EXIT" -ne 15 ]; then
   printf 'llvm-dynarray-expected-exit=15 actual-exit=%d\n' "$LLVM_DYNARRAY_EXIT"
   fail 'llvm-dynarray-program-wrong-exit-code'
 fi
 printf 'llvm-dynarray-program=pass\n'
+
+printf 'llvm-strparam-program=running\n'
+LLVM_STRPARAM_OUT_DIR=$(mktemp -d)
+LLVM_STRPARAM_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_strparam.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STRPARAM_OUT_DIR" >"$LLVM_STRPARAM_OUTPUT" 2>&1; then
+  cat "$LLVM_STRPARAM_OUTPUT"
+  fail 'llvm-strparam-program-build-failed'
+fi
+set +e
+"$LLVM_STRPARAM_OUT_DIR/llvm_strparam" >/dev/null 2>&1
+LLVM_STRPARAM_EXIT=$?
+set -e
+if [ "$LLVM_STRPARAM_EXIT" -ne 5 ]; then
+  printf 'llvm-strparam-expected-exit=5 actual-exit=%d\n' "$LLVM_STRPARAM_EXIT"
+  fail 'llvm-strparam-program-wrong-exit-code'
+fi
+printf 'llvm-strparam-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -2385,7 +2422,7 @@ require_output_pattern '^symbol-graph-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'm
 require_output_pattern '^type-graph-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-graph-status'
 require_output_pattern '^typed-hir-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-status'
 require_output_pattern '^symbol-count=4$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-symbol-count'
-require_output_pattern '^type-count=18$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-count'
+require_output_pattern '^type-count=20$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-count'
 require_output_pattern '^typed-hir-node-count=7$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-node-count'
 require_output_pattern '^runtime-contract-count=2$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-runtime-contract-count'
 require_output_pattern '^typed-hir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-root-name'
