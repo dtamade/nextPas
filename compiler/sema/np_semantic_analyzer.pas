@@ -2208,6 +2208,8 @@ begin
   else if Op = '<=' then Pred := 'sle'
   else if Op = '>' then Pred := 'sgt'
   else if Op = '>=' then Pred := 'sge'
+  else if SameText(Op, 'and') or SameText(Op, 'or') then
+    Exit(False)
   else
     Exit(False);
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
