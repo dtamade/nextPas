@@ -176,6 +176,12 @@ type
       const ADestVar: string;
       const ABlockId: LongInt
     );
+    procedure LowerAssignStrConcat(
+      const ALhsVar: string;
+      const ARhsVar: string;
+      const ADestVar: string;
+      const ABlockId: LongInt
+    );
     procedure LowerWriteStrVar(
       const AVarName: string;
       const ABlockId: LongInt
@@ -539,6 +545,10 @@ begin
       (Kind = 'store-ptr') or
       (Kind = 'load-ptr') or
       (Kind = 'write-str-var') or
+      (Kind = 'store-str') or
+      (Kind = 'str-concat') or
+      (Kind = 'extractvalue-ptr') or
+      (Kind = 'extractvalue-i64') or
       (Kind = 'write-int') then
       Exit(True);
   end;
@@ -693,6 +703,66 @@ begin
   FModel.AddOperationWithResult('store-ptr', ABlockId, ADestVar, '', 0, StoreOps);
   SetLength(StoreOps, 2);
   StoreOps[0] := MakeValueOperand(SrcLenLoad);
+  StoreOps[1] := MakeValueOperand(DestLenAlloca);
+  FModel.AddOperationWithResult('store', ABlockId, ADestVar, '', 0, StoreOps);
+end;
+
+procedure TMirLowerer.LowerAssignStrConcat(
+  const ALhsVar: string;
+  const ARhsVar: string;
+  const ADestVar: string;
+  const ABlockId: LongInt
+);
+var
+  LhsPtrAlloca, LhsLenAlloca, RhsPtrAlloca, RhsLenAlloca: TMirValueId;
+  DestPtrAlloca, DestLenAlloca: TMirValueId;
+  LhsPtrLoad, LhsLenLoad, RhsPtrLoad, RhsLenLoad: TMirValueId;
+  ConcatResult, ResPtr, ResLen: TMirValueId;
+  LoadOps, ConcatOps, StoreOps, ExtractOps: TMirOperandRefs;
+begin
+  LhsPtrAlloca := EnsureAllocaPtr(ALhsVar + '$ptr', ABlockId);
+  LhsLenAlloca := EnsureAlloca(ALhsVar + '$len', ABlockId);
+  RhsPtrAlloca := EnsureAllocaPtr(ARhsVar + '$ptr', ABlockId);
+  RhsLenAlloca := EnsureAlloca(ARhsVar + '$len', ABlockId);
+  DestPtrAlloca := EnsureAllocaPtr(ADestVar + '$ptr', ABlockId);
+  DestLenAlloca := EnsureAlloca(ADestVar + '$len', ABlockId);
+  LhsPtrLoad := FModel.AddValue(mtkPtr, 0, ALhsVar + '.ptr');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(LhsPtrAlloca);
+  FModel.AddOperationWithResult('load-ptr', ABlockId, ALhsVar, '', LhsPtrLoad, LoadOps);
+  LhsLenLoad := FModel.AddValue(mtkI64, 0, ALhsVar + '.len');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(LhsLenAlloca);
+  FModel.AddOperationWithResult('load', ABlockId, ALhsVar, '', LhsLenLoad, LoadOps);
+  RhsPtrLoad := FModel.AddValue(mtkPtr, 0, ARhsVar + '.ptr');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(RhsPtrAlloca);
+  FModel.AddOperationWithResult('load-ptr', ABlockId, ARhsVar, '', RhsPtrLoad, LoadOps);
+  RhsLenLoad := FModel.AddValue(mtkI64, 0, ARhsVar + '.len');
+  SetLength(LoadOps, 1);
+  LoadOps[0] := MakeValueOperand(RhsLenAlloca);
+  FModel.AddOperationWithResult('load', ABlockId, ARhsVar, '', RhsLenLoad, LoadOps);
+  ConcatResult := FModel.AddValue(mtkI64, 0, 'concat');
+  SetLength(ConcatOps, 4);
+  ConcatOps[0] := MakeValueOperand(LhsPtrLoad);
+  ConcatOps[1] := MakeValueOperand(LhsLenLoad);
+  ConcatOps[2] := MakeValueOperand(RhsPtrLoad);
+  ConcatOps[3] := MakeValueOperand(RhsLenLoad);
+  FModel.AddOperationWithResult('str-concat', ABlockId, 'concat', '', ConcatResult, ConcatOps);
+  ResPtr := FModel.AddValue(mtkPtr, 0, 'concat.ptr');
+  SetLength(ExtractOps, 1);
+  ExtractOps[0] := MakeValueOperand(ConcatResult);
+  FModel.AddOperationWithResult('extractvalue-ptr', ABlockId, 'ptr', '', ResPtr, ExtractOps);
+  ResLen := FModel.AddValue(mtkI64, 0, 'concat.len');
+  SetLength(ExtractOps, 1);
+  ExtractOps[0] := MakeValueOperand(ConcatResult);
+  FModel.AddOperationWithResult('extractvalue-i64', ABlockId, 'len', '', ResLen, ExtractOps);
+  SetLength(StoreOps, 2);
+  StoreOps[0] := MakeValueOperand(ResPtr);
+  StoreOps[1] := MakeValueOperand(DestPtrAlloca);
+  FModel.AddOperationWithResult('store-ptr', ABlockId, ADestVar, '', 0, StoreOps);
+  SetLength(StoreOps, 2);
+  StoreOps[0] := MakeValueOperand(ResLen);
   StoreOps[1] := MakeValueOperand(DestLenAlloca);
   FModel.AddOperationWithResult('store', ABlockId, ADestVar, '', 0, StoreOps);
 end;
@@ -1052,6 +1122,16 @@ begin
     if Node.Kind = 'assign-str-copy-runtime' then
     begin
       LowerAssignStrCopy(Node.DisplayName, Node.Operand, FCurrentBlockId);
+      Continue;
+    end;
+    if Node.Kind = 'assign-str-concat-runtime' then
+    begin
+      TabIdx := Pos(#9, Node.DisplayName);
+      if TabIdx > 0 then
+        LowerAssignStrConcat(
+          Copy(Node.DisplayName, 1, TabIdx - 1),
+          Copy(Node.DisplayName, TabIdx + 1, Length(Node.DisplayName) - TabIdx),
+          Node.Operand, FCurrentBlockId);
       Continue;
     end;
     if Node.Kind = 'assign-runtime' then

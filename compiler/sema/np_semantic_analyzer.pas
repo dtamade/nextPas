@@ -2391,9 +2391,23 @@ begin
             FModel.AddTypedHirNode(
               'assign-str-runtime', StringValue, 0, 0, Decoded
             )
-          else if IsRuntimeStrVar(Arg.Text) then
+          else if (Arg.NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Arg.Text) then
             FModel.AddTypedHirNode(
               'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
+            )
+          else if (Arg.NodeKind = gnkBinaryExpression) and
+            (Arg.Text = '+') and (Arg.ChildCount >= 2) and
+            (Arg.ChildAt(0) <> nil) and
+            (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Arg.ChildAt(0).Text) and
+            (Arg.ChildAt(1) <> nil) and
+            (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Arg.ChildAt(1).Text) then
+            FModel.AddTypedHirNode(
+              'assign-str-concat-runtime',
+              Arg.ChildAt(0).Text + #9 + Arg.ChildAt(1).Text,
+              0, 0, Decoded
             );
         end
         else if FNoFold then

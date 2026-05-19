@@ -23,12 +23,14 @@ type
     function CollectWriteLines: TLLvmStringArray;
     function EscapeLLVMString(const AValue: string): string;
     function NeedsItoaHelper: Boolean;
+    function NeedsStrConcatHelper: Boolean;
     procedure EmitTargetHeader(var AIrFile: Text);
     procedure EmitGlobalConstStrings(
       var AIrFile: Text;
       const AWriteLines: TLLvmStringArray
     );
     procedure EmitItoaHelper(var AIrFile: Text);
+    procedure EmitStrConcatHelper(var AIrFile: Text);
     procedure EmitLegacyMain(var AIrFile: Text);
     procedure EmitRuntimeMain(var AIrFile: Text);
   public
@@ -233,6 +235,35 @@ begin
             Break;
           end;
     end
+    else if Op.Kind = 'str-concat' then
+    begin
+      if Length(Op.OperandRefs) >= 4 then
+      begin
+        ResultName := ValueLabel(Op.ResultValueId);
+        WriteLn(AIrFile, '  ', ResultName,
+          ' = call {ptr, i64} @np_str_concat(ptr ',
+          OperandText(Op.OperandRefs[0]), ', i64 ',
+          OperandText(Op.OperandRefs[1]), ', ptr ',
+          OperandText(Op.OperandRefs[2]), ', i64 ',
+          OperandText(Op.OperandRefs[3]), ')');
+      end;
+    end
+    else if Op.Kind = 'extractvalue-ptr' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Length(Op.OperandRefs) >= 1 then
+        WriteLn(AIrFile, '  ', ResultName,
+          ' = extractvalue {ptr, i64} ',
+          OperandText(Op.OperandRefs[0]), ', 0');
+    end
+    else if Op.Kind = 'extractvalue-i64' then
+    begin
+      ResultName := ValueLabel(Op.ResultValueId);
+      if Length(Op.OperandRefs) >= 1 then
+        WriteLn(AIrFile, '  ', ResultName,
+          ' = extractvalue {ptr, i64} ',
+          OperandText(Op.OperandRefs[0]), ', 1');
+    end
     else if Op.Kind = 'runtime-halt' then
     begin
       if Length(Op.OperandRefs) >= 1 then
@@ -407,6 +438,72 @@ begin
   WriteLn(AIrFile, '}');
 end;
 
+function TLlvmEmitter.NeedsStrConcatHelper: Boolean;
+var
+  Index: LongInt;
+begin
+  if FMirModel = nil then
+    Exit(False);
+  for Index := 0 to FMirModel.OperationCount - 1 do
+    if FMirModel.OperationAt(Index).Kind = 'str-concat' then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TLlvmEmitter.EmitStrConcatHelper(var AIrFile: Text);
+begin
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, '@__heap_cur = internal global ptr null');
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define internal ptr @np_alloc(i64 %size) {');
+  WriteLn(AIrFile, 'entry:');
+  WriteLn(AIrFile, '  %cur = load ptr, ptr @__heap_cur');
+  WriteLn(AIrFile, '  %is_null = icmp eq ptr %cur, null');
+  WriteLn(AIrFile, '  br i1 %is_null, label %init, label %alloc');
+  WriteLn(AIrFile, 'init:');
+  WriteLn(AIrFile, '  %brk0 = call i64 asm sideeffect "movq $$12, %rax\0Axorq %rdi, %rdi\0Asyscall", "={rax},~{rcx},~{r11},~{rdi}"()');
+  WriteLn(AIrFile, '  %brk0p = inttoptr i64 %brk0 to ptr');
+  WriteLn(AIrFile, '  store ptr %brk0p, ptr @__heap_cur');
+  WriteLn(AIrFile, '  br label %alloc');
+  WriteLn(AIrFile, 'alloc:');
+  WriteLn(AIrFile, '  %base = load ptr, ptr @__heap_cur');
+  WriteLn(AIrFile, '  %next = getelementptr i8, ptr %base, i64 %size');
+  WriteLn(AIrFile, '  %nexti = ptrtoint ptr %next to i64');
+  WriteLn(AIrFile, '  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %nexti)');
+  WriteLn(AIrFile, '  store ptr %next, ptr @__heap_cur');
+  WriteLn(AIrFile, '  ret ptr %base');
+  WriteLn(AIrFile, '}');
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define internal void @np_memcpy(ptr %dst, ptr %src, i64 %n) {');
+  WriteLn(AIrFile, 'entry:');
+  WriteLn(AIrFile, '  %cmp0 = icmp eq i64 %n, 0');
+  WriteLn(AIrFile, '  br i1 %cmp0, label %done, label %loop');
+  WriteLn(AIrFile, 'loop:');
+  WriteLn(AIrFile, '  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]');
+  WriteLn(AIrFile, '  %sp = getelementptr i8, ptr %src, i64 %i');
+  WriteLn(AIrFile, '  %b = load i8, ptr %sp');
+  WriteLn(AIrFile, '  %dp = getelementptr i8, ptr %dst, i64 %i');
+  WriteLn(AIrFile, '  store i8 %b, ptr %dp');
+  WriteLn(AIrFile, '  %i_next = add i64 %i, 1');
+  WriteLn(AIrFile, '  %cond = icmp eq i64 %i_next, %n');
+  WriteLn(AIrFile, '  br i1 %cond, label %done, label %loop');
+  WriteLn(AIrFile, 'done:');
+  WriteLn(AIrFile, '  ret void');
+  WriteLn(AIrFile, '}');
+  WriteLn(AIrFile);
+  WriteLn(AIrFile, 'define internal {ptr, i64} @np_str_concat(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len) {');
+  WriteLn(AIrFile, 'entry:');
+  WriteLn(AIrFile, '  %total = add i64 %a_len, %b_len');
+  WriteLn(AIrFile, '  %buf = call ptr @np_alloc(i64 %total)');
+  WriteLn(AIrFile, '  call void @np_memcpy(ptr %buf, ptr %a_ptr, i64 %a_len)');
+  WriteLn(AIrFile, '  %dst2 = getelementptr i8, ptr %buf, i64 %a_len');
+  WriteLn(AIrFile, '  call void @np_memcpy(ptr %dst2, ptr %b_ptr, i64 %b_len)');
+  WriteLn(AIrFile, '  %r1 = insertvalue {ptr, i64} undef, ptr %buf, 0');
+  WriteLn(AIrFile, '  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
+  WriteLn(AIrFile, '  ret {ptr, i64} %r2');
+  WriteLn(AIrFile, '}');
+end;
+
 procedure TLlvmEmitter.EmitLegacyMain(var AIrFile: Text);
 var
   ExitCode: LongInt;
@@ -477,6 +574,8 @@ begin
   EmitGlobalConstStrings(AIrFile, WriteLines);
   if NeedsItoaHelper then
     EmitItoaHelper(AIrFile);
+  if NeedsStrConcatHelper then
+    EmitStrConcatHelper(AIrFile);
 
   for Index := 0 to FMirModel.FunctionCount - 1 do
   begin
