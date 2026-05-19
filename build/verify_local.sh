@@ -2287,6 +2287,21 @@ if [ "$LLVM_COMPREHENSIVE_EXIT" -ne 5 ]; then
 fi
 printf 'llvm-comprehensive-program=pass\n'
 
+printf 'llvm-charclass-program=running\n'
+LLVM_CHARCLASS_OUT_DIR=$(mktemp -d)
+LLVM_CHARCLASS_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_charclass.pas --fold --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CHARCLASS_OUT_DIR" >"$LLVM_CHARCLASS_OUTPUT" 2>&1; then
+  cat "$LLVM_CHARCLASS_OUTPUT"
+  fail 'llvm-charclass-program-build-failed'
+fi
+"$LLVM_CHARCLASS_OUT_DIR/llvm_charclass" >/dev/null 2>&1 || true
+LLVM_CHARCLASS_EXIT=$?
+if [ "$LLVM_CHARCLASS_EXIT" -ne 5 ]; then
+  printf 'llvm-charclass-expected-exit=5 actual-exit=%d\n' "$LLVM_CHARCLASS_EXIT"
+  fail 'llvm-charclass-program-wrong-exit-code'
+fi
+printf 'llvm-charclass-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
