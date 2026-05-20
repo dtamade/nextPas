@@ -140,6 +140,7 @@ type
     procedure SeedRuntimeVarDecls;
     procedure WalkRuntimeVarDecls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
+    procedure PreRegisterFunctionReturnTypes;
     procedure SeedFunctionBodies;
     procedure SeedImportedUnitBodies;
   public
@@ -1469,6 +1470,8 @@ begin
     Exit;
   SeedRuntimeContracts;
   SeedRuntimeVarDecls;
+  if FNoFold then
+    PreRegisterFunctionReturnTypes;
   SeedHaltCalls;
   if FNoFold then
     SeedFunctionBodies;
@@ -2506,9 +2509,16 @@ begin
               'assign-str-runtime', StringValue, 0, 0, Decoded
             )
           else if (Arg.NodeKind = gnkIdentifier) and
-            IsRuntimeStrVar(Arg.Text) then
+            IsRuntimeStrVar(Arg.Text) and
+            not LookupProcedureBody(Arg.Text, BranchNode, DeclNode) then
             FModel.AddTypedHirNode(
               'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
+            )
+          else if (Arg.NodeKind = gnkIdentifier) and
+            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
+            IsRuntimeStrVar(Arg.Text) then
+            FModel.AddTypedHirNode(
+              'assign-str-call-runtime', Arg.Text, 0, 0, Decoded
             )
           else if (Arg.NodeKind = gnkBinaryExpression) and
             (Arg.Text = '+') and (Arg.ChildCount >= 2) and
@@ -3087,6 +3097,34 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.PreRegisterFunctionReturnTypes;
+var
+  I, J: LongInt;
+  Entry: TProcedureBodyEntry;
+  Child: TGreenNode;
+begin
+  for I := 0 to Length(FProcedureBodies) - 1 do
+  begin
+    Entry := FProcedureBodies[I];
+    if (Entry.Decl = nil) or (Entry.Body = nil) then
+      Continue;
+    for J := 0 to Entry.Decl.ChildCount - 1 do
+    begin
+      Child := Entry.Decl.ChildAt(J);
+      if Child = nil then
+        Continue;
+      if (Child.NodeKind = gnkIdentifier) and
+        (SameText(Child.Text, 'String') or
+         SameText(Child.Text, 'AnsiString')) then
+      begin
+        RegisterRuntimeVar(Entry.Name);
+        RegisterRuntimeStrVar(Entry.Name);
+        Break;
+      end;
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.SeedFunctionBodies;
 var
   I, J, K: LongInt;
@@ -3095,7 +3133,7 @@ var
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
   ParamTypes: string;
-  IsStrParam: Boolean;
+  IsStrParam, IsStrReturn: Boolean;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
@@ -3104,12 +3142,15 @@ begin
       Continue;
     ParamCount := 0;
     ParamTypes := '';
+    IsStrReturn := False;
     if Entry.Decl <> nil then
     begin
       for J := 0 to Entry.Decl.ChildCount - 1 do
       begin
         Child := Entry.Decl.ChildAt(J);
-        if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+        if Child = nil then
+          Continue;
+        if Child.NodeKind = gnkParameterList then
         begin
           for K := 0 to Child.ChildCount - 1 do
           begin
@@ -3136,13 +3177,23 @@ begin
               Inc(ParamCount);
             end;
           end;
-          Break;
-        end;
+        end
+        else if (Child.NodeKind = gnkIdentifier) and
+          (Child.NodeKind <> gnkBeginBlock) and
+          (SameText(Child.Text, 'String') or
+           SameText(Child.Text, 'AnsiString')) then
+          IsStrReturn := True;
       end;
     end;
-    FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
-      IntToStr(ParamCount) + ':' + ParamTypes);
+    if IsStrReturn then
+      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+        IntToStr(ParamCount) + ':' + ParamTypes + ':s')
+    else
+      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+        IntToStr(ParamCount) + ':' + ParamTypes);
     RegisterRuntimeVar(Entry.Name);
+    if IsStrReturn then
+      RegisterRuntimeStrVar(Entry.Name);
     if Entry.Decl <> nil then
     begin
       for J := 0 to Entry.Decl.ChildCount - 1 do
@@ -3167,13 +3218,21 @@ begin
         end;
       end;
     end;
-    FModel.AddTypedHirNode('var-decl-runtime', Entry.Name, 0, 0, Entry.Name);
+    if IsStrReturn then
+      FModel.AddTypedHirNode('var-decl-str-runtime', Entry.Name, 0, 0, Entry.Name)
+    else
+      FModel.AddTypedHirNode('var-decl-runtime', Entry.Name, 0, 0, Entry.Name);
     SavedTerminated := FCurrentBlockTerminated;
     FCurrentBlockTerminated := False;
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
-      FModel.AddTypedHirNode('ret-runtime', Entry.Name, 0, 0,
-        'var ' + Entry.Name + #10);
+    begin
+      if IsStrReturn then
+        FModel.AddTypedHirNode('ret-str-runtime', Entry.Name, 0, 0, Entry.Name)
+      else
+        FModel.AddTypedHirNode('ret-runtime', Entry.Name, 0, 0,
+          'var ' + Entry.Name + #10);
+    end;
     FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
   end;

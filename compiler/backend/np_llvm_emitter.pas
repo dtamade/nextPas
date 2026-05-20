@@ -200,6 +200,40 @@ begin
     end
     else if Op.Kind = 'ret-void' then
       WriteLn(AIrFile, '  ret void')
+    else if Op.Kind = 'ret-str' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+      begin
+        ResultName := '%retstr.' + IntToStr(Op.OperationId);
+        WriteLn(AIrFile, '  ', ResultName, '.p = load ptr, ptr ',
+          OperandText(Op.OperandRefs[0]));
+        WriteLn(AIrFile, '  ', ResultName, '.l = load i64, ptr ',
+          OperandText(Op.OperandRefs[1]));
+        WriteLn(AIrFile, '  ', ResultName,
+          '.1 = insertvalue {ptr, i64} undef, ptr ', ResultName, '.p, 0');
+        WriteLn(AIrFile, '  ', ResultName,
+          '.2 = insertvalue {ptr, i64} ', ResultName, '.1, i64 ',
+          ResultName, '.l, 1');
+        WriteLn(AIrFile, '  ret {ptr, i64} ', ResultName, '.2');
+      end;
+    end
+    else if Op.Kind = 'call-str' then
+    begin
+      if Length(Op.OperandRefs) >= 2 then
+      begin
+        ResultName := '%callstr.' + IntToStr(Op.OperationId);
+        WriteLn(AIrFile, '  ', ResultName,
+          ' = call {ptr, i64} @', Op.Operand, '()');
+        WriteLn(AIrFile, '  ', ResultName,
+          '.p = extractvalue {ptr, i64} ', ResultName, ', 0');
+        WriteLn(AIrFile, '  ', ResultName,
+          '.l = extractvalue {ptr, i64} ', ResultName, ', 1');
+        WriteLn(AIrFile, '  store ptr ', ResultName, '.p, ptr ',
+          OperandText(Op.OperandRefs[0]));
+        WriteLn(AIrFile, '  store i64 ', ResultName, '.l, ptr ',
+          OperandText(Op.OperandRefs[1]));
+      end;
+    end
     else if Op.Kind = 'zext' then
     begin
       ResultName := ValueLabel(Op.ResultValueId);
@@ -633,7 +667,10 @@ begin
   for Index := 0 to FMirModel.FunctionCount - 1 do
   begin
     WriteLn(AIrFile);
-    Write(AIrFile, 'define i64 @', FMirModel.FunctionAt(Index).Name, '(');
+    if FMirModel.FunctionAt(Index).ReturnType = 's' then
+      Write(AIrFile, 'define {ptr, i64} @', FMirModel.FunctionAt(Index).Name, '(')
+    else
+      Write(AIrFile, 'define i64 @', FMirModel.FunctionAt(Index).Name, '(');
     LlvmArgIdx := 0;
     for OpIdx := 0 to FMirModel.FunctionAt(Index).ParamCount - 1 do
     begin

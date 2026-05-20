@@ -2416,6 +2416,23 @@ if [ "$LLVM_MULTIUNIT_EXIT" -ne 7 ]; then
 fi
 printf 'llvm-multiunit-program=pass\n'
 
+printf 'llvm-strreturn-program=running\n'
+LLVM_STRRETURN_OUT_DIR=$(mktemp -d)
+LLVM_STRRETURN_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_strreturn.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STRRETURN_OUT_DIR" >"$LLVM_STRRETURN_OUTPUT" 2>&1; then
+  cat "$LLVM_STRRETURN_OUTPUT"
+  fail 'llvm-strreturn-program-build-failed'
+fi
+set +e
+"$LLVM_STRRETURN_OUT_DIR/llvm_strreturn" >/dev/null 2>&1
+LLVM_STRRETURN_EXIT=$?
+set -e
+if [ "$LLVM_STRRETURN_EXIT" -ne 11 ]; then
+  printf 'llvm-strreturn-expected-exit=11 actual-exit=%d\n' "$LLVM_STRRETURN_EXIT"
+  fail 'llvm-strreturn-program-wrong-exit-code'
+fi
+printf 'llvm-strreturn-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

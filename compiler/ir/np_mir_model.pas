@@ -63,6 +63,7 @@ type
     Name: string;
     ParamCount: LongInt;
     ParamTypes: string;
+    ReturnType: string;
     HasReturnValue: Boolean;
     EntryBlockId: LongInt;
   end;
@@ -79,7 +80,7 @@ type
     constructor Create;
     function AddBlock(const ALabelName: string): LongInt;
     function AddFunction(const AName: string; const AParamCount: LongInt;
-      const AParamTypes: string;
+      const AParamTypes: string; const AReturnType: string;
       const AHasReturnValue: Boolean; const AEntryBlockId: LongInt): LongInt;
     function FunctionCount: LongInt;
     function FunctionAt(const AIndex: LongInt): TMirFunction;
@@ -280,6 +281,7 @@ end;
 
 function TMirModel.AddFunction(const AName: string;
   const AParamCount: LongInt; const AParamTypes: string;
+  const AReturnType: string;
   const AHasReturnValue: Boolean;
   const AEntryBlockId: LongInt): LongInt;
 var
@@ -291,6 +293,7 @@ begin
   FFunctions[NextIndex].Name := AName;
   FFunctions[NextIndex].ParamCount := AParamCount;
   FFunctions[NextIndex].ParamTypes := AParamTypes;
+  FFunctions[NextIndex].ReturnType := AReturnType;
   FFunctions[NextIndex].HasReturnValue := AHasReturnValue;
   FFunctions[NextIndex].EntryBlockId := AEntryBlockId;
   Result := FFunctions[NextIndex].FunctionId;
@@ -567,7 +570,9 @@ begin
       (Kind = 'setlength-arr') or
       (Kind = 'arr-store') or
       (Kind = 'arr-load') or
-      (Kind = 'write-int') then
+      (Kind = 'write-int') or
+      (Kind = 'ret-str') or
+      (Kind = 'call-str') then
       Exit(True);
   end;
   Result := False;
@@ -1187,7 +1192,7 @@ var
   Node: TTypedHirNode;
   ExitValue, StrPtrVal, StrLenVal: TMirValueId;
   Operands, SingleOp: TMirOperandRefs;
-  CallParts, CallFuncName, ArgBlob: string;
+  CallParts, CallFuncName, ArgBlob, RetType: string;
 begin
   if (FSemanticModel = nil) or (FSemanticModel.Status <> 'ready') then
   begin
@@ -1415,10 +1420,17 @@ begin
     begin
       CallParts := Node.Operand;
       TabIdx := Pos(':', CallParts);
+      RetType := '';
       if TabIdx > 0 then
       begin
         Val(Copy(CallParts, 1, TabIdx - 1), ExitValue, ValCode);
         CallFuncName := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+        TabIdx := Pos(':', CallFuncName);
+        if TabIdx > 0 then
+        begin
+          RetType := Copy(CallFuncName, TabIdx + 1, Length(CallFuncName) - TabIdx);
+          CallFuncName := Copy(CallFuncName, 1, TabIdx - 1);
+        end;
       end
       else
       begin
@@ -1431,7 +1443,7 @@ begin
       FCurrentFuncEntryBlockId := FCurrentBlockId;
       SetLength(FAllocaTable, 0);
       FModel.AddFunction(Node.DisplayName, ExitValue, CallFuncName,
-        True, FCurrentBlockId);
+        RetType, True, FCurrentBlockId);
       Continue;
     end;
     if Node.Kind = 'function-body-end' then
@@ -1454,6 +1466,40 @@ begin
       end
       else
         FModel.AddOperation('ret-void', FCurrentBlockId, 'ret', '');
+      Continue;
+    end;
+    if Node.Kind = 'ret-str-runtime' then
+    begin
+      StrPtrVal := EnsureAllocaPtr(Node.Operand + '$ptr', FCurrentFuncEntryBlockId);
+      StrLenVal := EnsureAlloca(Node.Operand + '$len', FCurrentFuncEntryBlockId);
+      if (StrPtrVal > 0) and (StrLenVal > 0) then
+      begin
+        SetLength(Operands, 2);
+        Operands[0] := MakeValueOperand(StrPtrVal);
+        Operands[1] := MakeValueOperand(StrLenVal);
+        FModel.AddOperationWithResult(
+          'ret-str', FCurrentBlockId, 'ret', '', 0, Operands
+        );
+      end
+      else
+        FModel.AddOperation('ret-void', FCurrentBlockId, 'ret', '');
+      Continue;
+    end;
+    if Node.Kind = 'assign-str-call-runtime' then
+    begin
+      CallFuncName := Node.DisplayName;
+      ArgBlob := Node.Operand;
+      StrPtrVal := EnsureAllocaPtr(ArgBlob + '$ptr', FCurrentBlockId);
+      StrLenVal := EnsureAlloca(ArgBlob + '$len', FCurrentBlockId);
+      if (StrPtrVal > 0) and (StrLenVal > 0) then
+      begin
+        SetLength(Operands, 2);
+        Operands[0] := MakeValueOperand(StrPtrVal);
+        Operands[1] := MakeValueOperand(StrLenVal);
+        FModel.AddOperationWithResult(
+          'call-str', FCurrentBlockId, 'call', CallFuncName, 0, Operands
+        );
+      end;
       Continue;
     end;
     FModel.AddOperation(
