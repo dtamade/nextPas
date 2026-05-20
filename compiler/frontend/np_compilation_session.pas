@@ -14,7 +14,8 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
-  np_lexer, np_mir_model, np_source_database, np_target_facts,
+  np_lexer, np_mir_model, np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
   np_semantic_model, np_semantic_analyzer, np_workspace_model,
@@ -847,6 +848,9 @@ end;
 procedure TCompilationSession.LowerToMir;
 var
   Lowerer: TMirLowerer;
+  HirBuilder: THIRBuilder;
+  HirPrinter: THIRPrinter;
+  HirPath: string;
 begin
   ResetIrState;
   if (FSemanticModel = nil) or (FSemanticStatus <> 'ready') then
@@ -865,6 +869,24 @@ begin
       FMirStatus := FMirModel.Status;
   finally
     Lowerer.Free;
+  end;
+
+  if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
+  begin
+    HirBuilder := THIRBuilder.Create(FSemanticModel);
+    try
+      HirBuilder.Build;
+      HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
+      HirPrinter := THIRPrinter.Create(HirBuilder.Module);
+      try
+        HirPrinter.Print;
+        HirPrinter.SaveToFile(HirPath);
+      finally
+        HirPrinter.Free;
+      end;
+    finally
+      HirBuilder.Free;
+    end;
   end;
 end;
 
