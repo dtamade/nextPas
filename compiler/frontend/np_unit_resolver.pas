@@ -25,6 +25,7 @@ type
     Status: string;
     Entries: array of TSearchIndexEntry;
     ScanCount: LongInt;
+    LastScanTimestamp: Int64;
   end;
 
   TUnitResolver = class
@@ -96,6 +97,7 @@ type
     function IndexedRootCount: LongInt;
     function SearchIndexScanCount: LongInt;
     function SearchIndexStatus: string;
+    function SearchIndexLastScanTimestamp: Int64;
     procedure ResolveRoot(const ARootAst: TAstFacade);
     function ResolutionStatus: string;
     function DetachSearchPaths: TSearchPathSet;
@@ -343,6 +345,7 @@ begin
     FRootIndexes[Index].Status := 'deferred';
     SetLength(FRootIndexes[Index].Entries, 0);
     FRootIndexes[Index].ScanCount := 0;
+    FRootIndexes[Index].LastScanTimestamp := 0;
   end;
 end;
 
@@ -402,6 +405,7 @@ begin
   end;
 
   FRootIndexes[ARootIndex].Status := 'ready';
+  FRootIndexes[ARootIndex].LastScanTimestamp := Round(Now * 86400);
 end;
 
 function TUnitResolver.FindCandidatePathsInRoot(
@@ -669,6 +673,16 @@ begin
     Exit('ready');
 
   Result := 'partial';
+end;
+
+function TUnitResolver.SearchIndexLastScanTimestamp: Int64;
+var
+  Index: LongInt;
+begin
+  Result := 0;
+  for Index := 0 to Length(FRootIndexes) - 1 do
+    if FRootIndexes[Index].LastScanTimestamp > Result then
+      Result := FRootIndexes[Index].LastScanTimestamp;
 end;
 
 procedure TUnitResolver.ResolveRoot(const ARootAst: TAstFacade);

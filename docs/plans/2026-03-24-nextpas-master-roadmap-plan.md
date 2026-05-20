@@ -1591,9 +1591,9 @@ structured finding surface：
 - `docs/architecture/unit-resolution-specification.md` 新增”resolver 在部分失败时继续处理
   并累积所有错误”章节，文档化错误恢复策略及其对 future language service 的意义
 - 这批故意只做 resolver error recovery，不改变 workspace discovery 或 diagnostics 结构：
-  当前 workspace model 对 malformed manifest 的处理已经足够健壮（不存在时返回空结果，
-  格式错误时立即失败），diagnostics 结构扩展（RelatedInformation、SuggestedFix）留待
-  future language service 需求明确后再统一设计
+  当前 workspace model 对 malformed manifest 的处理已在后续 glm51 分支继续加固（`TryResolveWorkspaceModel`
+  会在 manifest 格式错误时发诊断但继续 workspace-root-only 模型），diagnostics 结构扩展
+  （RelatedInformation、SuggestedFix）也已在 glm51 分支加入 `TDiagnosticRecord`
 
 在接下来的滚动周期里，已经完成的 bootstrap-native production path、later-step failure
 attribution、success-path transcript hardening、显式 LLVM binding execution path，以及
@@ -1621,3 +1621,40 @@ semantic query surface、package workflow projection 与 compiler core robustnes
 - 不允许新的批次脱离当前仓库真实实现面，重新回到空谈。
 
 这份计划真正要交付的是：一条可执行、可验证、可留证的 post-phase1 主线入口。
+
+## Batch 36: driver decomposition + compiler core hardening (glm51 branch)
+
+- 状态：完成
+- 归属路线段：Control Surface and Session Foundation / Unit Resolution and Semantic Core
+
+### 这一批要解决什么
+
+把 `tools/stage0/nextpas.pas` 从 4140 行单体驱动拆分为纯 CLI 解析 + 命令分发（372 行），
+消除所有 Active* 全局变量，统一 TNextPasState 参数传入，消除 4 处重复 JSON helper，
+并继续加固编译器核心：malformed manifest 优雅降级、诊断模型扩展、搜索索引 staleness tracking。
+
+### 这一批已经交付了什么
+
+- `tools/stage0/nextpas.pas` 从 4140 行降至 372 行，只保留 CLI 解析 + 命令分发 + 主程序体
+- 提取 13 个专注单元：projection_types, json_helpers, projection_json, projection_text,
+  projection_context, command_envelope, command_build, command_test, command_env,
+  command_doctor, command_query, command_pkg
+- 消除所有 13 个 Active* 全局变量，改为 TNextPasState record 参数传入
+- 消除 4 处重复 JsonEscape/JsonString/AppendJsonField，统一到 nextpas_json_helpers
+- `compiler/frontend/np_package_manifest.pas` 新增 `TryLoadPackageManifestInfo`，
+  manifest 解析失败时返回空 info + 错误文本
+- `compiler/frontend/np_workspace_model.pas` 新增 `TryResolveWorkspaceModel`，
+  manifest 解析失败时发诊断但继续 workspace-root-only 模型
+- `compiler/diagnostics/np_diagnostics_sink.pas` 扩展 TDiagnosticRecord：
+  添加 TRelatedInformation + TSuggestedFix record 类型和对应数组字段
+- `compiler/frontend/np_unit_resolver.pas` 添加 staleness tracking：
+  TRootSearchIndex.LastScanTimestamp + SearchIndexLastScanTimestamp accessor
+- fresh `bash build/verify_local.sh` 继续得到 verify-local=pass
+
+### Promotion gate
+
+- nextpas.pas 行数 ~300-400（仅 CLI 解析 + 命令分发）
+- 所有命令表面输出不变
+- `grep -c '^var$' nextpas.pas` 全局 var 块消失
+- `grep -rl 'function JsonEscape' compiler/ tools/` 只返回 nextpas_json_helpers
+- verify-local=pass

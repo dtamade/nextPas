@@ -29,6 +29,11 @@ type
   TProjectUnitRootInfoArray = array of TProjectUnitRootInfo;
 
 function LoadPackageManifestInfo(const AManifestPath: string): TPackageManifestInfo;
+function TryLoadPackageManifestInfo(
+  const AManifestPath: string;
+  out AInfo: TPackageManifestInfo;
+  out AErrorText: string
+): Boolean;
 function ResolveNearestPackageManifestInfo(
   const AResolvedSourcePath: string;
   const AWorkspaceRootPath: string
@@ -364,6 +369,30 @@ begin
     end;
   finally
     Lines.Free;
+  end;
+end;
+
+function TryLoadPackageManifestInfo(
+  const AManifestPath: string;
+  out AInfo: TPackageManifestInfo;
+  out AErrorText: string
+): Boolean;
+begin
+  try
+    AInfo := LoadPackageManifestInfo(AManifestPath);
+    AErrorText := '';
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AInfo.ManifestPath := ExpandFileName(AManifestPath);
+      AInfo.PackageRootPath := ExtractFileDir(ExpandFileName(AManifestPath));
+      AInfo.PackageName := '';
+      AInfo.SourceRoots := nil;
+      SetLength(AInfo.SourceRoots, 0);
+      AErrorText := E.Message;
+      Result := False;
+    end;
   end;
 end;
 

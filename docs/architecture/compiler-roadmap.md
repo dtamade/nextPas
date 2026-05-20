@@ -146,6 +146,161 @@ Compiler execution spine:
 - calling convention、external symbol、library binding 与 link ordering 属于统一 foreign contract。
 - native backend 与 LLVM backend 消费同一套 `MIR` 和 target facts。
 
+当前 reality（截至 2026-05-17）：LLVM 路径已经从 skeleton 推进到 MIR-driven 闭环，
+sema 已具备整数常量表达式编译期折叠、const 标识符引用解析、单赋值变量常量传播、
+多参数 string-literal `WriteLn` 捕获与 `WriteLn(int-const)` 编译期格式化能力。
+`compiler/syntax/np_green_tree.pas` 的 procedure-call 解析器已支持逗号分隔多参数列表。
+`compiler/sema/np_semantic_analyzer.pas` 的 `WalkHaltCalls` 在遇到 `WriteLn`/`Write`
+时迭代所有参数：`gnkStringLiteral` 经 `DecodePascalStringLiteral` 解码（`''` → `'`）
+后追加；可被 `EvaluateIntegerConstant` 折叠的整数表达式经 `IntToStr` 追加；`WriteLn`
+在尾部追加 `\n`，最终拼成单个 `'write-call'` HIR 节点。`EvaluateIntegerConstant` 在
+sema 层折叠 `gnkIntegerLiteral` / `gnkIdentifier`(先查 const 表，再 fallback 到
+var-init 表) / `gnkUnaryExpression`(+/-) / `gnkBinaryExpression`(+/-/*/div/mod)；
+`ProcessConstSection` 为每个 `gnkConstDecl` 折叠并注册到 const 表；
+`WalkAssignmentStatements` 在通过类型检查后，对 RHS 调用 `EvaluateIntegerConstant`，
+若可折叠则把 LHS 名字 + 折叠值注册到 model 的 var-init 表（重复赋值会先 Remove
+再 Add，保持表只反映最近一次成功折叠的值）。
+MIR lowerer 把 `halt-call` 映射为 `halt`、`write-call` 映射为 `write-line` MIR op。
+`compiler/backend/np_llvm_emitter.pas` 为程序发射真实 `.ll`，扫描 MIR 中的 `halt` 与
+`write-line` operation：`write-line` 在入口处发射 `@.str.N = private constant` 字符串
+常量并通过 `movq $$1, %rax; syscall` (sys_write to stdout) 写入；`halt` 在末尾发射
+`movq $$60, %rax; syscall` (sys_exit)。每条 syscall 把 syscall number 烘焙进 inline asm
+字符串并 clobber `~{rax}`，以保证 LLVM 在多 syscall 序列里为每条调用重新加载 rax
+（先前 `{rax}` 输入约束在多写场景下会让第二次 syscall 拿到上一次的返回值，导致只发
+首条 sys_write 然后误执行 `mmap`）。`opt → llc → ld` 真实执行并产出可执行：
+`Halt(42)` → exit 42；`Halt(40 + 2)` → exit 42；`const FortyTwo = 42; Halt(FortyTwo)`
+→ exit 42；`WriteLn('hello from nextpas llvm')` → stdout 输出该行 + exit 0；
+`WriteLn(42)` → stdout 输出 "42\n"；`WriteLn('hello', ' ', 'world')` → "hello world\n"；
+`WriteLn('answer: ', 42)` → "answer: 42\n"；`WriteLn('starting'); WriteLn('done'); Halt(7)`
+→ stdout 输出两行后 exit 7；`var x: Integer; x := 42; Halt(x)` → exit 42；
+`var n: Integer; n := 7; WriteLn(n)` → stdout 输出 "7\n"；
+`var a, b: Integer; a := 10; b := a + 5; Halt(b)` → exit 15（链式常量传播：a=10
+进 var-init 表后被 EvaluateIntegerConstant 折叠 a+5=15，再写回 b）。
+`build/verify_local.sh` 的 `llvmEmptyProgram`、`llvmHaltProgram`、
+`llvmHaltExprProgram`、`llvmHaltConstProgram`、`llvmWritelnProgram`、
+`llvmWritelnIntProgram`、`llvmWritelnMultiProgram`、`llvmWritelnMixedProgram`、
+`llvmHelloThenHaltProgram`、`llvmVarHaltProgram`、`llvmVarWritelnProgram`、
+`llvmVarChainProgram`、`llvmIfHaltProgram`、`llvmIfElseHaltProgram`、
+`llvmIfVarProgram`、`llvmForWritelnProgram`、`llvmForSumHaltProgram`、
+`llvmForDowntoProgram`、`llvmIfNotProgram`、`llvmIfTrueProgram`、
+`llvmWhileCountProgram`、`llvmWhileSumProgram`、
+`llvmRepeatCountProgram`、`llvmRepeatHaltProgram`、
+`llvmConstStringProgram`、`llvmStringConcatProgram`、
+`llvmProcGreetProgram`、`llvmProcTwoProgram`、
+`llvmFnConstHaltProgram`、`llvmFnComposeProgram`、`llvmFnCallHaltProgram`、
+`llvmFnCallChainProgram`、`llvmProcArgProgram`、`llvmFnSquareProgram`
+gate 都已纳入 promotion path。
+
+sema 还具备编译期可折叠条件的 `if-then-else` 分支选择能力：
+`EvaluateIntegerConstant` 的 `gnkBinaryExpression` 分支扩展支持关系运算
+(=/<>/</>/<=/>=) 与逻辑 (and/or)，结果以 0/1 形式返回；`gnkUnaryExpression`
+分支同时支持 `not` 一元运算（`Ord(Parsed = 0)`）；`gnkIdentifier` 分支识别
+`true`/`false` (case-insensitive) 字面量并优先于 const/var-init 表查询。
+`WalkAssignmentStatements` 与 `WalkHaltCalls` 在遇到 `gnkIfStatement` 子节点时，
+若条件可被 `EvaluateIntegerConstant` 折叠则只递归进入选中分支
+（true → then，false → else，无 else 时跳过整个 if），否则降级递归整个
+if 子树。验证：`if 1 < 2 then Halt(11); Halt(99)` → exit 11；
+`if 5 = 4 then Halt(1) else Halt(22)` → exit 22；
+`var n; n := 7; if n >= 5 then Halt(n)` → exit 7（条件由 var-init 折叠后选 then）；
+`if not (1 > 5) then Halt(11); Halt(99)` → exit 11（not 折叠 (1>5)=0 → 1）；
+`if true then Halt(22); Halt(99)` → exit 22（true 字面量直接折叠为 1）。
+
+sema 还具备编译期可展开的 `for` 循环：当 start/end 表达式皆可折叠且方向已知
+（`to`/`downto`）时，`UnrollAssignmentForLoop` 与 `UnrollHaltForLoop` 把循环体在
+sema 层迭代 N 次（每轮把 `i` 按当前值写入 var-init 表后递归 walk 循环体），让
+循环体中的赋值与 `Halt`/`WriteLn` 都能在编译期被折叠。MaxIterations 上限 1024
+以防意外失控。验证：`for i := 1 to 3 do WriteLn(i)` → stdout "1\n2\n3\n"；
+`sum := 0; for i := 1 to 5 do sum := sum + i; Halt(sum)` → exit 15（每次迭代
+sum 都通过 var-init 链式折叠重新计算）；`for i := 3 downto 1 do WriteLn(i)`
+→ stdout "3\n2\n1\n"。
+
+sema 还具备编译期可展开的 `while` 循环：当条件表达式可被
+`EvaluateIntegerConstant` 折叠时，`UnrollAssignmentWhileLoop` 与
+`UnrollHaltWhileLoop` 在 sema 层反复求值条件 + walk body，直到条件折叠为 0
+或达到 MaxIterations=1024。`WalkHaltCalls` 镜像 `WalkAssignmentStatements`
+的 `gnkAssignmentStatement` 处理：把可折叠 RHS 写入 var-init 表，让循环体
+里的赋值在两次 walk 间保持同步。验证：`var i; i := 3; while i > 0 do begin
+WriteLn(i); i := i - 1 end` → stdout "3\n2\n1\n"；`var i, sum; sum := 0;
+i := 1; while i <= 5 do begin sum := sum + i; i := i + 1 end; Halt(sum)`
+→ exit 15。
+
+sema 还具备编译期可展开的 `repeat-until` 循环：与 `while` 对称，但执行顺序
+反过来 —— `UnrollAssignmentRepeatLoop` 与 `UnrollHaltRepeatLoop` 在 sema 层
+先 walk body，再求值终止条件，循环条件折叠为非 0（true）时退出，
+否则继续迭代直到 MaxIterations=1024。验证：
+`var i; i := 1; repeat WriteLn(i); i := i + 1; until i > 3` → stdout "1\n2\n3\n"；
+`var x; x := 0; repeat x := x + 5; until x >= 20; Halt(x)` → exit 20。
+
+sema 还具备编译期字符串常量折叠：`TSemanticModel` 增加并列的字符串常量表
+（`AddStringConstValue` / `LookupStringConstValue`），新增 `EvaluateStringConstant`
+递归折叠 `gnkStringLiteral`（经 `DecodePascalStringLiteral` 解码）/ `gnkIdentifier`
+（查字符串常量表）/ `gnkBinaryExpression` with op `+`（拼接两个折叠结果）。
+`ProcessConstSection` 对每个 `gnkConstDecl` 先尝试整数折叠，失败再尝试字符串折叠
+并写入字符串常量表。`WalkHaltCalls` 的 WriteLn 参数循环在 `gnkStringLiteral` 直
+解码之后、整数折叠之前先尝试 `EvaluateStringConstant`，让 `WriteLn(MyStringConst)`
+与 `WriteLn(MyStringConst + ', world')` 在编译期得到拼好的字符串。验证：
+`const Greeting = 'hello'; WriteLn(Greeting)` → stdout "hello\n"；
+`const Greeting = 'hello'; WriteLn(Greeting + ', world')` → stdout "hello, world\n"。
+
+sema 还具备零参数过程的编译期内联：`TSemanticAnalyzer` 维护 `FProcedureBodies`
+表（procedure 名 → gnkBeginBlock 节点引用）与 `FInliningStack`（防止递归展开）；
+`ProcessProcedureDecl` 在登记 procedure 符号时一并定位 body 节点并调用
+`RegisterProcedureBody`；`WalkHaltCalls` 跳过顶层的 `gnkProcedureDecl` /
+`gnkFunctionDecl` 子节点（避免把声明体当作普通语句重复展开），遇到
+`gnkProcedureCallStatement` 时若名字匹配已注册的 procedure 体且不在内联栈中，
+就把 body 当成内联序列递归 walk，使 caller 处直接得到等价的 typed-HIR 序列。
+验证：`procedure Greet; begin WriteLn('hi') end; begin Greet end.` → stdout "hi\n"；
+`procedure A; begin WriteLn('a') end; procedure B; begin WriteLn('b') end;
+begin A; B end.` → stdout "a\nb\n"。
+
+sema 进一步把零参数函数（带返回值）也纳入同一个 `FProcedureBodies` 表：
+`ProcessFunctionDecl` 在登记 function 符号后同样定位 `gnkBeginBlock` 并调用
+`RegisterProcedureBody`。`EvaluateIntegerConstant` 的 `gnkIdentifier` 分支在
+const/var-init 表都未命中时会查 `FProcedureBodies`，命中且不在内联栈中就
+`PushInlining`、`WalkAssignmentStatements(body)`（让函数体内部 `name := expr`
+形式的赋值通过现有 var-init 机制把折叠后的返回值落到 `name` 槽位）、
+重新 `LookupVarInitValue(name)` 拿到结果、`PopInlining`，由此让 `Halt(GetVal)`
+等表达式在 sema 层得到函数返回值。验证：
+`function GetVal: Integer; begin GetVal := 42 end; Halt(GetVal)` → exit 42；
+`function Base: Integer; begin Base := 7 end; function Doubled: Integer;
+begin Doubled := Base * 2 end; Halt(Doubled)` → exit 14（内联栈阻止递归，
+且嵌套函数调用通过 var-init 链式折叠）。
+
+`EvaluateIntegerConstant` 同时支持显式 `gnkFunctionCall`（即带括号的 `f()`
+调用形式）：当节点的 `ChildCount = 1`（仅函数名子节点）时，按 `gnkIdentifier`
+路径走同样的 `FProcedureBodies` 内联流程，让 `Halt(GetVal())` 与 bare
+`Halt(GetVal)` 等价。
+验证：`function GetVal: Integer; begin GetVal := 42 end; Halt(GetVal())`
+→ exit 42；`function Base: Integer; ... ; function Doubled: Integer;
+begin Doubled := Base() * 2 end; function Tripled: Integer;
+begin Tripled := Doubled() + Base() end; Halt(Tripled())` → exit 15
+（嵌套带括号调用通过同一内联栈和 var-init 链式折叠）。
+
+参数化过程/函数：`TProcedureBodyEntry` 同时存 body 和 decl 节点，让
+内联点能拿到 `gnkParameterList`。新增 `BindCallArgs` 在内联前折叠每个实参
+表达式并把值写入 var-init 表（保留 prior snapshot），`RestoreCallArgs`
+在内联后逆序还原；`gnkFunctionCall`（child[1..]） / `gnkIdentifier`（无 args）
+/ `gnkProcedureCallStatement`（child[0..]）三个内联点共享这套机制。
+验证：`procedure ShowVal(n: Integer); begin WriteLn(n) end; ShowVal(42)`
+→ stdout "42\n"；`function Square(x: Integer): Integer;
+begin Square := x * x end; Halt(Square(7))` → exit 49（参数 x 在内联期间
+被绑定为 7，函数体内 `x * x` 通过 var-init 折叠为 49 并写回 Square）。
+
+附带的 parser 修复：`ParseStatementList` 在 `;` 已是 ATerminatorSet 成员时不再
+吞掉它（旧行为是无条件 `Inc(ACursor)`），让 `if/while/for body; following`
+的 body 真正在 `;` 处停止，避免后继语句被贪婪并入 body 而引发错误。
+`ParseAssignmentOrCall` 同时增加复合赋值脱糖：`x += y` / `x -= y` /
+`x *= y` / `x /= y` 在 green tree 里直接展开为 `x := x op y`，与之前的
+平铺 `x := x + 1` 行为等价。
+
+默认 binding 仍是
+`linux-x86_64-to-linux-x86_64-gnu`（`bootstrap-native-assemble-link`），LLVM 通过
+`--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择。当前 emitter 仍只生成
+单 `_start` + 顺序 syscall 序列；变量目前只在编译期 const-propagated（所有可见赋值
+都必须可折叠为常量），if/else 的分支选择也只在条件可折叠时奏效，扩展 IR 表达力
+（运行期变量 alloca/store/load / 运行期控制流 / 函数调用 / `Write(integer)`
+在运行期数值格式化）属于下一批次。
+
 进入下一段前，这一段的 promotion gate 至少包括：
 
 - cross target、LLVM target 与 C interop 不再各维护一套名字系统。

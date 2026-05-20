@@ -3,11 +3,12 @@ unit np_backend_plan;
 {$mode objfpc}{$H+}
 {$UNITPATH ../ir}
 {$UNITPATH ../targets}
+{$UNITPATH ../diagnostics}
 
 interface
 
 uses
-  SysUtils, np_mir_model, np_target_facts;
+  SysUtils, np_mir_model, np_target_facts, np_llvm_emitter, nextpas_json_helpers;
 
 type
   TBackendArtifact = record
@@ -134,44 +135,6 @@ type
   end;
 
 implementation
-
-function JsonEscape(const Value: string): string;
-var
-  Index: SizeInt;
-begin
-  Result := '';
-  for Index := 1 to Length(Value) do
-    case Value[Index] of
-      '\':
-        Result := Result + '\\';
-      '"':
-        Result := Result + '\"';
-      #10:
-        Result := Result + '\n';
-      #13:
-        Result := Result + '\r';
-      #9:
-        Result := Result + '\t';
-    else
-      Result := Result + Value[Index];
-    end;
-end;
-
-function JsonString(const Value: string): string;
-begin
-  Result := '"' + JsonEscape(Value) + '"';
-end;
-
-procedure AppendJsonField(
-  var AFields: string;
-  const AName: string;
-  const AValue: string
-);
-begin
-  if AFields <> '' then
-    AFields := AFields + ',';
-  AFields := AFields + JsonString(AName) + ':' + AValue;
-end;
 
 constructor TBackendPlan.Create;
 begin
@@ -568,6 +531,7 @@ var
   AssemblyArtifactPath: string;
   BaseName: string;
   BitcodeArtifactPath: string;
+  Emitter: TLlvmEmitter;
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
@@ -608,6 +572,23 @@ begin
     );
     FPlan.AddArtifact('llvm-ir', LlvmIrArtifactPath);
     FPlan.AddArtifact('llvm-bitcode', BitcodeArtifactPath);
+
+    if not ForceDirectories(IntermediateRoot) then
+    begin
+      FPlan.MarkFailure;
+      Exit;
+    end;
+
+    Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
+    try
+      if not Emitter.EmitToFile(LlvmIrArtifactPath) then
+      begin
+        FPlan.MarkFailure;
+        Exit;
+      end;
+    finally
+      Emitter.Free;
+    end;
   end
   else
     FPlan.AddArtifact('assembly-text', AssemblyArtifactPath);

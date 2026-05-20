@@ -66,6 +66,14 @@ function ResolveWorkspaceModel(
   const AOutDirOverride: string
 ): TWorkspaceModel;
 
+function TryResolveWorkspaceModel(
+  const AResolvedSourcePath: string;
+  const AWorkspaceOverride: string;
+  const ATargetId: string;
+  const AOutDirOverride: string;
+  out AMalformedManifestWarning: string
+): TWorkspaceModel;
+
 implementation
 
 procedure AppendUniqueString(var AValues: TStringArray; const AValue: string);
@@ -382,6 +390,78 @@ begin
       Result.FProjectUnitRoots,
       Result.FProjectUnitRootInfos[Index].RootPath
     );
+end;
+
+function TryResolveWorkspaceModel(
+  const AResolvedSourcePath: string;
+  const AWorkspaceOverride: string;
+  const ATargetId: string;
+  const AOutDirOverride: string;
+  out AMalformedManifestWarning: string
+): TWorkspaceModel;
+var
+  ManifestError: string;
+  ManifestInfo: TPackageManifestInfo;
+  ManifestPath: string;
+begin
+  AMalformedManifestWarning := '';
+  try
+    Result := ResolveWorkspaceModel(
+      AResolvedSourcePath,
+      AWorkspaceOverride,
+      ATargetId,
+      AOutDirOverride
+    );
+  except
+    on E: Exception do
+    begin
+      ManifestPath := ResolveNearestPackageManifestInfo(
+        ExpandFileName(AResolvedSourcePath),
+        ExpandFileName(AWorkspaceOverride)
+      ).ManifestPath;
+      if (ManifestPath <> '') and TryLoadPackageManifestInfo(
+        ManifestPath, ManifestInfo, ManifestError
+      ) then
+        raise
+      else if ManifestPath <> '' then
+      begin
+        AMalformedManifestWarning :=
+          'malformed-package-manifest: ' + ManifestPath + ': ' + ManifestError;
+        Result := TWorkspaceModel.Create;
+        Result.FResolvedSourcePath := ExpandFileName(AResolvedSourcePath);
+        Result.FTargetSelection.RequestedTargetId := ATargetId;
+        Result.FTargetSelection.ResolvedTargetId := ATargetId;
+        if AWorkspaceOverride <> '' then
+        begin
+          Result.FWorkspaceRootPath := ExpandFileName(AWorkspaceOverride);
+          Result.FDiscoveryKind := 'explicit-workspace-override-malformed-manifest';
+        end
+        else
+        begin
+          Result.FWorkspaceRootPath := ExtractFileDir(Result.FResolvedSourcePath);
+          Result.FDiscoveryKind := 'source-directory-fallback-malformed-manifest';
+        end;
+        Result.FWorkspaceDescriptorPath := '';
+        Result.FPackageManifestPath := ManifestPath;
+        Result.FArtifactRoots.ArtifactRootPath := BuildArtifactRootPath(
+          Result.FWorkspaceRootPath
+        );
+        Result.FArtifactRoots.OutputDirPath := BuildOutputDirPath(
+          Result.FWorkspaceRootPath,
+          Result.FArtifactRoots.ArtifactRootPath,
+          ATargetId,
+          AOutDirOverride
+        );
+        Result.FArtifactRoots.HostCompilerCacheRootPath :=
+          BuildHostCompilerCacheRootPath(
+            Result.FArtifactRoots.ArtifactRootPath,
+            ATargetId
+          );
+      end
+      else
+        raise;
+    end;
+  end;
 end;
 
 end.

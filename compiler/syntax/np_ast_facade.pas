@@ -25,6 +25,13 @@ type
     function ForeignProcedureDeclAt(
       const AIndex: LongInt
     ): TForeignProcedureDecl;
+    function RootNodeChildCount: LongInt;
+    function RootNodeChildAt(const AIndex: LongInt): TGreenNode;
+    function VarSectionCount: LongInt;
+    function ProcedureDeclCount: LongInt;
+    function FunctionDeclCount: LongInt;
+    function GetRootNode: TGreenNode;
+    property RootNode: TGreenNode read GetRootNode;
   end;
 
 implementation
@@ -112,6 +119,71 @@ begin
   end;
 
   Result := FGreenTree.ForeignProcedureDeclAt(AIndex);
+end;
+
+function TAstFacade.RootNodeChildCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := FGreenTree.RootNode.ChildCount;
+end;
+
+function TAstFacade.RootNodeChildAt(const AIndex: LongInt): TGreenNode;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(nil);
+  if (AIndex < 0) or (AIndex >= FGreenTree.RootNode.ChildCount) then
+    Exit(nil);
+  Result := FGreenTree.RootNode.ChildAt(AIndex);
+end;
+
+function CountNodeKindInChildren(const ANode: TGreenNode;
+  const AKind: TGreenNodeKind): LongInt;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  Result := 0;
+  if ANode = nil then
+    Exit;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child <> nil then
+    begin
+      if Child.NodeKind = AKind then
+        Inc(Result);
+      Inc(Result, CountNodeKindInChildren(Child, AKind));
+    end;
+  end;
+end;
+
+function TAstFacade.VarSectionCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkVarSection);
+end;
+
+function TAstFacade.ProcedureDeclCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkProcedureDecl);
+end;
+
+function TAstFacade.FunctionDeclCount: LongInt;
+begin
+  if (FGreenTree = nil) or (FGreenTree.RootNode = nil) then
+    Exit(0);
+  Result := CountNodeKindInChildren(FGreenTree.RootNode, gnkFunctionDecl);
+end;
+
+function TAstFacade.GetRootNode: TGreenNode;
+begin
+  if FGreenTree = nil then
+    Exit(nil);
+  Result := FGreenTree.RootNode;
 end;
 
 end.

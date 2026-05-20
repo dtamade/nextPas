@@ -14,3 +14,15 @@ tests/regression/*_regression
 tests/toolchain/*_smoke
 examples/smoke/hello
 examples/smoke/hello_with_units
+rtl/core/sysutils/np_sysutils_test
+rtl/core/sysutils/SysUtils.pas
+rtl/core/sysutils/SysUtils.o
+rtl/core/sysutils/SysUtils.ppu
+rtl/core/sysutils/np_sysutils_test
+rtl/core/classes/Classes.pas
+rtl/core/classes/Classes.o
+rtl/core/classes/Classes.ppu
+core.*
+crash_*.txt
+ppas.sh
+tools/stage0/*.s

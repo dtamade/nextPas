@@ -15,6 +15,301 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-17 Sema Const Identifier Resolution — Halt(MyConst) → exit(42)
+
+### Goal
+
+把 sema 折叠器从"只折常量字面量表达式"推进到"能解析 const 声明的标识符引用"。
+上一批次让 `Halt(40 + 2)` 折叠为 42；这一批让 `const FortyTwo = 42; begin Halt(FortyTwo); end.`
+也能正确退出 42。
+
+- 扩展 `compiler/sema/np_semantic_model.pas` 加 `TSemanticConstValue` record 与
+  `FConstValues: array of TSemanticConstValue`；新增 `AddConstValue(name, value)` 与
+  `LookupConstValue(name, out value): Boolean`
+- 扩展 `EvaluateIntegerConstant` 加 `gnkIdentifier` 分支：从 `FModel.LookupConstValue`
+  查表，命中即返回常量值
+- 改造 `ProcessConstSection`：每个 `gnkConstDecl` 子节点尝试 `EvaluateIntegerConstant`
+  折叠值，命中即 `AddConstValue(name, value)` 注册到表
+- 新增 `examples/smoke/halt_const.pas`：`program HaltConst; const FortyTwo = 42; begin Halt(FortyTwo); end.`
+- 新增 `build/verify_local.sh` 的 `llvm-halt-const-program` gate：用真 opt/llc/ld 编译
+  halt_const.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] sema model 加 `TSemanticConstValue` 与 `FConstValues` 数组，constructor 初始化
+- [x] sema model 加 `AddConstValue` / `LookupConstValue`（大小写不敏感名称比对，重复 name 覆盖旧值）
+- [x] `EvaluateIntegerConstant` 新增 `gnkIdentifier` case，从 `LookupConstValue` 查表
+- [x] `ProcessConstSection` 遍历每个 `gnkConstDecl` 子节点尝试折叠并 `AddConstValue` 注册
+- [x] 新增 `examples/smoke/halt_const.pas` fixture
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_CONST_PROGRAM_OUTPUT` /
+      `LLVM_HALT_CONST_PROGRAM_OUT_DIR` 临时文件，新增 `llvm-halt-const-program` gate，
+      success envelope 加 `llvmHaltConstProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| const 表用大小写不敏感名称比对 | Pascal 标识符传统大小写不敏感；与 `WalkHaltCalls` 的 `SameText('Halt')` 一致 |
+| ProcessConstSection 折叠失败时只跳过 AddConstValue，不报诊断 | const 声明可能是非整数（字符串、记录），折叠失败不代表错；当前批次只关心整数常量；非整数 const 引用在 EvaluateIntegerConstant 自动失败回到 fallback |
+| const 表挂在 `TSemanticModel` 而不是 `TSemanticAnalyzer` | 与现有 `FSymbols` / `FTypes` 等 model-owned 数据保持一致；分析器只负责填充，model 持有真实数据 |
+| 重复名称覆盖而不是报错 | 当前 sema 还没有完整 redeclaration 检查；先静默覆盖避免假诊断，等真正的 symbol-redecl 检查批次再加 |
+
+### Notes
+
+- 这是 sema 第一次跨节点引用解析：表达式折叠器从纯 AST-recursive 升级到 model-aware
+- 当前 const 表只支持整数类型；string / 浮点 / 数组 const 值仍属未来批次
+- `verify-local` 现在含四条 LLVM 端到端 gate：`llvmEmptyProgram`（exit 0）、
+  `llvmHaltProgram`（exit 42 from literal）、`llvmHaltExprProgram`（exit 42 from 40+2）、
+  `llvmHaltConstProgram`（exit 42 from const FortyTwo = 42）
+
+## Addendum: 2026-05-17 Sema Integer Constant Folding — Halt(40 + 2) → exit(42)
+
+### Goal
+
+把 nextPas 的 sema 从"只接受 Halt 直接字面量参数"推进到"折叠任意整数常量表达式"。
+上一批次 `Halt(N)` 走 LLVM 退出 N，但 `Halt(40 + 2)` 会因 sema 仅匹配 `gnkIntegerLiteral`
+直接子节点而退化到默认 0。这一批让 sema 在编译期完成整数常量折叠，
+让 `Halt(N op M)` / `Halt(-N)` 等表达式也能正确决定退出码。
+
+- 扩展 `compiler/sema/np_semantic_analyzer.pas` 新增 `EvaluateIntegerConstant(Node, out Value)`：
+  递归折叠 `gnkIntegerLiteral` / `gnkUnaryExpression`(+/-) /
+  `gnkBinaryExpression`(+/-/*/div/mod)；除零返回 false；非整数节点或未识别 op 返回 false
+- 改造 `WalkHaltCalls`：把"只匹配 `gnkIntegerLiteral`"换成 `EvaluateIntegerConstant`，
+  折叠成功才发射 `halt-call` HIR 节点；失败时 operand 默认 `0`
+- 新增 `examples/smoke/halt_expr.pas`：`program HaltExpr; begin Halt(40 + 2); end.`
+- 新增 `build/verify_local.sh` 的 `llvm-halt-expr-program` gate：用真 opt/llc/ld 编译
+  halt_expr.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] sema 加 `EvaluateIntegerConstant` 折叠器（unary +/-、binary +/-/*/div/mod、字面量）
+- [x] `WalkHaltCalls` 改用 `EvaluateIntegerConstant` 替代直接 `gnkIntegerLiteral` 匹配
+- [x] 新增 `examples/smoke/halt_expr.pas` fixture
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_EXPR_PROGRAM_OUTPUT` /
+      `LLVM_HALT_EXPR_PROGRAM_OUT_DIR` 临时文件，新增 `llvm-halt-expr-program` gate，
+      success envelope 加 `llvmHaltExprProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| 折叠器在 sema 层而非 MIR lowerer | 折叠产生的整数常量需要进 HIR 的 `Operand` 字段以传给 MIR；MIR lowerer 只读 HIR 操作数；当前没有 typed value system，sema 是唯一能消费 AST 表达式形态的层 |
+| 用 `Int64` 内部计算 | 避免 Pascal 整数子集分歧；Halt 退出码最终被截到 8 位（POSIX `_exit` 语义），但中间表达式可以触及 64 位范围 |
+| 折叠失败默认 0，不发诊断 | 当前批次专注 Halt 表达式折叠路径；非常量表达式（变量、未支持运算）应进入下一批的真实 codegen，不该在此批次假装"已支持但 silently 错"。先静默 fallback、保留 0 行为，等 typed expression codegen 落地再加诊断 |
+| 折叠器涵盖 +/-/*/div/mod 而非仅 +/- | 这五个 op 是 Pascal 整数常量表达式核心子集；新增成本 ~每 op 5 行，但避免下次再来一批 "MUL 折叠" |
+
+### Notes
+
+- 这是 sema 第一次具备**编译期求值**能力。不是完整 const-eval 系统，但已经能把
+  `Halt(40 + 2)` 这类整数常量表达式正确折叠到运行时退出码
+- 当前 emitter 仍只看 MIR `halt` op 的 operand 字段；变量、函数返回值、
+  字符串等非常量参数仍属下一批次（需要真实 LLVM 表达式 codegen）
+- `verify-local` 现在含三条 LLVM 端到端 gate：`llvmEmptyProgram`（exit 0）、
+  `llvmHaltProgram`（exit 42 from literal）、`llvmHaltExprProgram`（exit 42 from 40+2）
+
+## Addendum: 2026-05-17 MIR-driven LLVM Codegen — Halt(N) → exit(N)
+
+### Goal
+
+把 nextPas 的 LLVM 路径从"无论源代码写什么都 exit 0"推进到"程序退出码由源代码决定"。
+这是首个 **MIR 真实决定运行时行为** 的批次：MIR operand 不再恒为空字符串，
+LLVM emitter 不再发射固定 empty shell。
+
+- 扩展 `compiler/ir/np_mir_model.pas` 的 `TMirOperation` 加 `Operand: string` 字段，
+  `AddOperation` 多一个 operand 参数，新增 `OperationAt(Index)` 让 emitter 能读取 ops
+- 扩展 `compiler/sema/np_semantic_model.pas` 的 `TTypedHirNode` 同样加 `Operand: string`
+  字段，`AddTypedHirNode` 多一个 operand 参数
+- 扩展 `compiler/sema/np_semantic_analyzer.pas` 新增 `WalkHaltCalls` + `SeedHaltCalls`：
+  遍历 program body 找 `gnkProcedureCallStatement` 文本为 `Halt`，捕获第一个
+  `gnkIntegerLiteral` 子节点作为 operand，发射 `halt-call` HIR 节点
+- 扩展 `TMirLowerer.MirKindForTypedHirNode` 把 `halt-call` HIR 翻译为 `halt` MIR op，
+  operand 透传
+- 扩展 `compiler/backend/np_llvm_emitter.pas`：扫 MIR ops 找 `halt` 提取 operand（默认 0），
+  发射 `_start` 时把 syscall arg 写为该 operand 值；emitter 不再写死 `xorl %edi, %edi`
+- 新增 `examples/smoke/halt_42.pas` fixture：`program HaltFortyTwo; begin Halt(42); end.`
+- 修复 `tests/toolchain/toolchain_contract_smoke.pas` 的 `MirModel.AddOperation` 调用
+  对齐新签名
+- 新增 `build/verify_local.sh` 的 `llvm-halt-program` gate：用真 opt/llc/ld 编译
+  halt_42.pas，断言 IR 含 `exit-code: 42`、含 `movl $$42, %edi`，可执行 exit 42
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] `TMirOperation` + `AddOperation` 加 Operand 字段，新增 `OperationAt(Index)` accessor
+- [x] `TTypedHirNode` + `AddTypedHirNode` 加 Operand 字段；6 处现有调用点全部跟进
+- [x] `TSemanticAnalyzer` 新增 `WalkHaltCalls` + `SeedHaltCalls`，挂进 `Analyze`
+      末尾在 `SeedRuntimeContracts` 之后
+- [x] `TMirLowerer.MirKindForTypedHirNode` 加 `halt-call -> halt` 分支；
+      lowerer 主循环把 HIR operand 透传给 MIR `AddOperation`
+- [x] `TLlvmEmitter.ResolveExitCode` 扫 MIR ops 找 `halt`，从 operand 解析整数
+      （Val 解析失败默认 0）；`EmitToFile` 发射 syscall arg 为该值
+- [x] 新增 `examples/smoke/halt_42.pas`
+- [x] 修复 `tests/toolchain/toolchain_contract_smoke.pas:536` 的 `AddOperation` 4 参签名
+- [x] `build/verify_local.sh` 加 `LLVM_HALT_PROGRAM_OUTPUT` / `LLVM_HALT_PROGRAM_OUT_DIR`
+      临时文件，新增 `llvm-halt-program` gate（IR 含 marker、可执行 exit 42），
+      success envelope 加 `llvmHaltProgram`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| 用 `string` 字段载 operand，而不是引入 typed `TMirValue` 联合体 | 当前只需透传字面量给 emitter；引入 value system 会牵动 MIR/HIR/sema/emitter 四层，扩展面太大；string 可后续被 typed value 替换而不破坏调用接口 |
+| `halt-call` HIR 节点直接挂在 typed-hir 序列尾部，不进 block-structured CFG | 当前 MIR 仍是平铺 op 序列、单 entry block；引入 control-flow 应单独批次 |
+| emitter `ResolveExitCode` 解析失败默认 0，不报 diagnostic | sema 已经只在捕获到 `gnkIntegerLiteral` 时才发 operand，emitter 收到非数字 operand 是内部 bug 不是用户错误；先静默 fallback，等 typed value 再加诊断 |
+| `WalkHaltCalls` 做大小写不敏感比对（`SameText`） | Pascal 标识符传统大小写不敏感；与 `gnkProcedureCallStatement.Text` 保留原 lexeme 一致 |
+
+### Notes
+
+- 这是 MIR 第一次真实决定运行时行为：之前 MIR 即使存在也只是路径占位符，
+  `verify-local` 里 empty-program 和 halt-program 现在是两条**结果不同**的真实测试
+- 当前 emitter 仍只生成 `_start` + 单条 syscall；多条 `Halt(N)` 会让最后一条赢，
+  control-flow / function call / multiple statements 仍属下一批次
+- `halt_42.pas` 通过 LLVM binding 编译运行 exit 42，但默认 binding (gnu) 走宿主 FPC，
+  那条路径仍由宿主决定行为；这是预期的，因为只有 LLVM 路径走 nextPas 自有 codegen
+- 这一批不替换历史 addendum；下一批次自然入口是把 MIR 操作扩到包含
+  整数 const / 二元运算 / 简单条件，让 `Halt(2 + 3)` 类表达式也能正确 lower
+
+## Addendum: 2026-05-17 LLVM Backend First Codegen — Empty Program End-to-end
+
+### Goal
+
+把 nextPas 从“所有编译成功都是宿主 FPC 干的”推进到“nextPas 自己拥有 codegen ownership 的最小真实链路”。
+之前 `compiler/ir/np_mir_model.pas` 是字符串占位符、`compiler/backend/np_backend_plan.pas` 90% 在算路径
+0% 生成代码，所有 `.s` 都来自 `host-fpc-emit-asm`。这一批让 nextPas 自己写出 `.ll` 文件并由 LLVM
+工具链产出真实可执行：
+
+- 新增 `compiler/backend/np_llvm_emitter.pas`：从 `TMirModel` + `TTargetFactsView` 发射文本 LLVM IR
+  到磁盘；当前批次只发射最小 empty-program shell（`define void @_start` + inline syscall exit(0)），
+  绕开缺失的 distribution runtime libc，让 nextPas 真正拥有 entry point
+- 让 `TBackendPlanner.Plan` 在 `BackendFamily='llvm'` 时调用 emitter 真实写 `.ll`，
+  而不是只注册 artifact 路径
+- 把 `compiler/toolchain/np_toolchain_plan.pas` 的 `PlanLlvmIrOptObjectLink` link step 从硬编码的
+  `ExecutableSet.Lld` 切到 `LinkerProfile.DriverCandidates`，使 LLVM binding 复用 linker profile
+- 把 `build/toolchains/linux-x86_64-to-linux-x86_64-llvm.toml` 的 linker 从 `lld-elf` 切到 `gnu-ld`，
+  不引入新依赖（系统未安装 `ld.lld`，但 `ld` 与 native binding 已在用）
+- 默认 backend 不变（`bootstrap-native-assemble-link`），LLVM 路径通过
+  `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` 显式选择
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 摸清现有 LLVM skeleton：`PlanLlvmIrOptObjectLink`、`PrepareLlvmContract`、`TBackendPlan`
+      LLVM 字段已就位；缺口是 (a) 没有 IR emitter，(b) link step 写死 `ld.lld`，(c) binding 配置
+      指向未安装的 `ld.lld`
+- [x] 手工验证最小 LLVM 链路（`opt → llc → ld` + 自写 `_start` syscall exit(0)）能产出 exit 0
+      可执行，确认 IR 模板可行
+- [x] 新增 `compiler/backend/np_llvm_emitter.pas`，提供 `TLlvmEmitter.EmitToFile`，按
+      target triple/data layout 发射 IR header，再发射 empty-program shell
+- [x] 修改 `compiler/backend/np_backend_plan.pas`：在 `BackendFamily='llvm'` 分支调用
+      `Emitter.EmitToFile`，`ForceDirectories` 后再发射；失败时 `MarkFailure`
+- [x] 修改 `compiler/toolchain/np_toolchain_plan.pas:1394` link step：从 `ExecutableSet.Lld`
+      改为 `FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld')`
+- [x] 修改 `build/toolchains/linux-x86_64-to-linux-x86_64-llvm.toml`：linker 从 `lld-elf`
+      切到 `gnu-ld`
+- [x] 修改 `build/verify_local.sh` 的现有 `llvm-binding-smoke` gate：fake stub 从 `ld.lld`
+      改名为 `ld`，`linker-profile-id` 断言从 `lld-elf` 改为 `gnu-ld`
+- [x] 在 `build/verify_local.sh` 新增 `llvm-empty-program` gate：用真 `opt`/`llc`/`ld` 编译
+      `examples/smoke/hello.pas`，断言 `toolchain-plan-family=llvm-ir-opt-llc-link`、
+      `backend-artifact-count=4`、`.ll` 文件存在并含 `@_start`、可执行 exit 0
+- [x] 把 `llvmBindingSmoke`/`llvmEmptyProgram` 加进 verify-local success envelope
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision | Rationale |
+| --- | --- |
+| LLVM linker 切到系统 `ld`（gnu-ld），不装 `ld.lld` | 与 native binding 对称、零新依赖；后续如果引入 `ld.lld` 可独立切回 |
+| Empty program 自写 `_start` + inline syscall exit(0)，不依赖 libc/_start | 当前 distribution runtime SDK 缺 `lib/nextpas/runtime/linux-x86_64/libc.so`；自写 `_start` 顺带让 nextPas 拥有 entry point ownership，与"独立 RTL"长期方向一致 |
+| 默认 backend 保持 `bootstrap-native-assemble-link`，LLVM 通过 `--toolchain-binding` 显式选择 | 现有 40+ verify gate 全围绕 native 默认路径；一次性切默认会大面积翻车，不该和 codegen 引入混在一批 |
+| 这一批 emitter 只发射 empty-program shell，不消费 MIR operations | 当前 MIR 是字符串占位符（`Kind: string` + `DisplayName`），还没有 value semantics；先把"自有 codegen 链路"打通，再分批扩 IR 表达力 |
+
+### Notes
+
+- 这是 nextPas 第一次真实生成代码：之前任何 `.s` 都来自 `host-fpc-emit-asm`，现在 `.ll` 由
+  `TLlvmEmitter` 自己写
+- 当前 LLVM 路径的真实功能只覆盖 `program X; begin end.` 这一种程序：任何带 `WriteLn`、表达式、
+  类型、调用的程序都会发射同样的 empty shell（IR 中只有 `_start`+syscall），运行时仍 exit 0
+  但实际语义被丢失。下一批次需要在 emitter 中开始消费 MIR operation
+- LLVM 路径仍不能 self-host：MIR 还没有 value/type/control-flow，所以 nextPas 自己的 compiler module
+  不能用 LLVM backend 编译；这与 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 的判断一致
+- `compiler-roadmap.md` 第 5 段 “Target / Cross / LLVM / C Interop” 的 LLVM 部分从“skeleton 已就位”
+  正式进入“最小真实闭环已就位”
+- 这一批不替换历史 addendum，也不动 `bootstrap-native-assemble-link` 路径
+
+## Addendum: 2026-05-17 Repo Hygiene + Classes RTL Source-of-truth Convergence
+
+### Goal
+
+把这次会话前发现的两类工作树级问题一次收口，并把下一批次入口明确转向 RTL Classes 实现，
+而不是继续在 verify gate 上叠 addendum：
+
+- 工作树污染：`core.997688`（22MB FPC core dump）、四个空 `crash_*.txt`、`ppas.sh`、
+  `tools/stage0/nextpas_*.s`（5 个 ~250KB 残留汇编中间产物）必须从 untracked 状态清掉，
+  并在 `.gitignore` 中通过 `core.*` / `crash_*.txt` / `ppas.sh` / `tools/stage0/*.s`
+  正式 ignore，避免下一次崩溃或中断重新污染
+- RTL Classes 必须收敛到与 SysUtils 一致的 source-of-truth 模式：
+  `rtl/core/classes/np_classes.pas` 是唯一源，checked-in `Classes.pas` / `Classes.o` /
+  `Classes.ppu` 一律由 build 派生并通过 `.gitignore` 排除；删掉之前与 `np_classes.pas`
+  字节级一致的 `Classes.pas` 重复源
+- 这一批不引入新代码、不改公开 line-based output / `command-envelope=<json>` 契约；
+  fresh `bash build/verify_local.sh` 必须继续全绿
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 删除工作树污染文件：`core.997688`、`crash_err.txt`、`crash_out.txt`、
+      `crash_output.txt`、`crash_stdout.txt`、`ppas.sh`、
+      `tools/stage0/nextpas_command_envelope.s`、`tools/stage0/nextpas_json_helpers.s`、
+      `tools/stage0/nextpas_projection_json.s`、`tools/stage0/nextpas_projection_text.s`、
+      `tools/stage0/nextpas_projection_types.s`
+- [x] 删除 `rtl/core/classes/Classes.pas`（与 `np_classes.pas` 字节级一致的重复源），
+      并清理其残留 `Classes.o` / `Classes.ppu`
+- [x] 扩展 `.gitignore`，新增
+      `rtl/core/classes/Classes.pas`、`rtl/core/classes/Classes.o`、
+      `rtl/core/classes/Classes.ppu`、`core.*`、`crash_*.txt`、`ppas.sh`、
+      `tools/stage0/*.s`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass` 与
+      `human-summary=local verification passed`
+
+### Decisions Made
+
+| Decision                                                                        | Rationale                                                                                                |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Classes 收敛到 `np_classes.pas` 唯一源 + ignore 派生 `Classes.{pas,o,ppu}`      | 与 `rtl/core/sysutils/` 已建立的模式一致；checked-in 重复源会让 source-of-truth 漂移并误导下游 contributor |
+| 工作树污染统一通过 `.gitignore` 模式封堵，不靠每次手动清理                      | FPC 崩溃 core dump、`ppas.sh` 中断脚本、`tools/stage0/*.s` 汇编中间产物都是已知会复现的工件             |
+| 这一批不动 `np_classes.pas` 内容，也不实现 Classes 容器                         | 先把 source-of-truth 边界定清楚，再进入 RTL Classes 实现批次；避免一次混入两个方向                       |
+
+### Notes
+
+- 下一批次入口正式转向 RTL Classes 实现：`np_classes.pas` 当前只暴露最小 `TFileStream`
+  shape，离 compiler module 真正能 `uses Classes` 还差容器类（`TStringList`、`TList`）；
+  这与 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 列出的 Stage2 阻塞项一致
+- 这一批不替换历史 addendum，也不改架构规范；`docs/plans/2026-05-02-rtl-implementation-plan.md`
+  仍然是 RTL 推进的 owning plan，本 addendum 只负责把仓库卫生与 source-of-truth 模式
+  同步到 task_plan 顶层，避免下一轮恢复时再被这批工件分散注意力
+
 ## Addendum: 2026-04-29 Package Workflow Truth Skeleton
 
 ### Goal

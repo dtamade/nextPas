@@ -1,7 +1,238 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-02 记录为准。
+2026-05-06 记录为准。
+
+## Session: 2026-05-06 (Phase 4 GreenCST/Parser + Phase 5 Semantic Analysis Extension)
+
+### Phase 4: GreenCST/Parser Extension
+
+- **Status:** completed
+- Actions taken:
+  - **4.1 TGreenNodeKind + TGreenNode + dual-track parse**：
+    - 在 np_green_tree.pas 引入 TGreenNodeKind 枚举（47 个成员）和 TGreenNode class
+    - TGreenTree 扩展 FRootNode 字段 + RootNode/RootNodeChildCount 方法
+    - ParseGreenTree 双轨产出：旧扁平数组 + 新 TGreenNode 树同时写入
+    - 旧 API（FInterfaceUses 等扁平字段）继续工作，3 个直接消费者无改动
+  - **4.2 语句级解析 + 错误恢复**：
+    - SkipToSyncSet, MatchToken, EmitSyntaxError 错误恢复基础设施
+    - ParseStatementList, ParseStatement, ParseBeginBlock 递归下降
+    - ParseIfStatement, ParseWhileStatement, ParseForStatement,
+      ParseRepeatStatement, ParseWithStatement 语句解析器
+    - ParseAssignmentOrCall 赋值/过程调用分发
+    - 表达式优先级链：ParseExpression(比较) → ParseAddExpression(加减)
+      → ParseMulExpression(乘除) → ParseUnaryExpression(not/-/+)
+      → ParsePrimaryExpression(原子，含函数调用 gnkFunctionCall)
+  - **4.3 声明级解析**：
+    - ParseBlockDeclarations 分发 var/const/type/procedure/function
+    - ParseVarSection（含多标识符共享类型 X, Y: Integer）
+    - ParseConstSection, ParseTypeSection（record/array 类型）
+    - ParseProcedureDecl, ParseFunctionDecl（含参数列表、forward 声明、begin 块）
+    - ParseParameterList（含分组参数 A, B: Integer）
+    - ParseTypeReference（标识符类型 + string/file 内建类型 + 泛型数组）
+    - 修复 procedure/function decl else 分支 skip-set：添加
+      tkImplementationKeyword/tkInitializationKeyword/tkFinalizationKeyword/
+      tkConstructorKeyword/tkDestructorKeyword
+  - **4.4 TAstFacade 导航扩展**：
+    - RootNodeChildCount, RootNodeChildAt, GetRootNode (property)
+    - VarSectionCount, ProcedureDeclCount, FunctionDeclCount（递归搜索子树）
+    - 所有新方法 nil-safe
+  - **4.5 Parser 测试组**：
+    - hgParser 枚举 + tests/parser/ 目录
+    - 2 个 fixture：basic_statements_pass.pas, declarations_pass.pas
+  - **Codex 审查修复**：
+    - 修复 ParsePrimaryExpression gnkIdentifier 内存泄露（延迟创建 + else 分支）
+    - 修复分组参数/变量类型传播（类型附加到所有参数/变量声明，不仅是最后一个）
+    - 修复 array 类型 ParseTypeReference 返回值泄露（挂到 gnkArrayType 子节点）
+    - 修复 ParseTypeReference 不处理 string/file 内建类型
+    - 添加 ParseProcedureDecl/ParseFunctionDecl 边界检查
+    - 修复 TAstFacade 计数方法：递归搜索解决 unit 场景下返回 0 的问题
+
+**Commits created (Phase 4):**
+- `cb2794f` feat: introduce TGreenNodeKind + TGreenNode class + dual-track parse output
+- `57b37a8` feat: add statement-level parsing and error recovery to GreenCST parser
+- `1c30a96` feat: add declaration-level parsing, AST facade navigation, and parser test group
+- `941f9c5` fix: address codex review findings in GreenCST parser and AST facade
+
+### Phase 5: Semantic Analysis Extension
+
+- **Status:** completed
+- Actions taken:
+  - **5.1 扩展内置类型 seeding**：
+    - SeedBuiltinTypes 从 3 个扩展到 18 个
+    - 新增：Char, Byte, Word, LongInt, Int64, QWord, Single, Double,
+      Pointer, Text, ShortString, WideString, UnicodeString, Variant, OleVariant
+    - verify_local type-count 从 3 更新到 18
+  - **5.2 var/const 声明处理**：
+    - TSemanticSymbol 新增 TypeId + ByteOffset 字段
+    - ProcessVarSection：遍历 gnkVarDecl 子节点解析类型引用
+    - ProcessConstSection：遍历 gnkConstDecl 创建常量符号
+  - **5.3 过程/函数签名处理**：
+    - ProcessProcedureDecl：创建 procedure 符号 + HIR 节点
+    - ProcessFunctionDecl：解析返回类型，创建 function 符号 + 带 TypeId 的 HIR 节点
+    - WalkDeclarations：递归遍历 var/const/procedure/function 节点
+      + 递归进入 gnkInterfaceSection/gnkImplementationSection
+    - SeedDeclarations：从 RootNode 开始遍历声明子树
+  - **5.4 赋值语句基本类型检查**：
+    - CheckAssignmentTypes + WalkAssignmentStatements 递归遍历赋值语句
+    - LHS 取 Child.Text（变量名），RHS 取 ChildAt(0)（表达式）
+    - 当 RHS 为 gnkIdentifier 且 LHS/RHS TypeId 不同时发 sema.type-mismatch
+    - TSemanticModel 新增 FindSymbolByName, SymbolTypeId, SymbolAt, FindTypeByName
+  - **5.5 Semantic 测试组**：
+    - hgSemantic 枚举 + tests/semantic/ 目录
+    - 2 个 fixture：var_decl_pass.pas, func_decl_pass.pas
+  - **5.6 Toolchain 测试组**：
+    - hgToolchain 枚举 + toolchain_contract_smoke.pas fixture
+    - 添加所有编译器模块 UNITPATH 到 harness 执行参数
+    - 添加 sema UNITPATH 到 toolchain_contract_smoke.pas
+  - **Codex 审查修复**：
+    - 修复 WalkAssignmentStatements LHS/RHS 索引颠倒
+      (ChildAt(0) 是 RHS，Child.Text 才是 LHS)
+    - 移除 SeedDeclarations 未使用的局部变量
+    - 移除 ResolveTypeId 无意义的 Normalized 赋值
+
+**Commits created (Phase 5):**
+- `a81eaa9` feat: extend semantic analysis with declaration processing and type checking
+- `80fc0ca` fix: address codex review findings in semantic analyzer
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass
+
+**Next:** 5 Phase 全部完成（驱动拆分 → 编译器核心夯实 → Lexer 扩展 → GreenCST/Parser → 语义分析）
+
+## Session: 2026-05-06 (Phase 6 RTL SysUtils Hardening)
+
+### Phase 6: RTL SysUtils Hardening
+
+- **Status:** completed
+- Actions taken:
+  - **Fix ExpandFileName**：使用 GetDir 解析相对路径为绝对路径
+    （之前对相对路径直接返回原值，compiler modules 有 123 处调用）
+  - **Fix FileExists/DirectoryExists**：改用 BaseUnix FpStat 实现
+    （之前 FileExists 用 Reset 打开文件——无法检测文本文件；
+    DirectoryExists 用 ChDir hack——不可靠）
+  - **Fix DeleteFile**：改用 FpUnlink（之前用 Erase）
+  - **Fix ForceDirectories**：改用 FpMkdir（之前用 MkDir + IOResult hack）
+  - **Implement FindFirst/FindNext/FindClose**：使用 FpOpenDir/FpReadDir/FpCloseDir
+    + GlobMatch 通配符匹配（支持 * 和 ? 模式）
+    （之前全是 stub，始终返回 -1）
+  - **Fix GetEnvironmentVariable**：改用 FpGetEnv（之前用 C extern getenv，两者等价但 FpGetEnv 更 idiomatic）
+  - **Implement Now**：使用 C gettimeofday 系统调用
+    （之前返回固定 0.0）
+  - **Implement FormatDateTime**：使用 C localtime 系统调用
+    （之前返回固定字符串 '2026-05-02 00:00:00'）
+  - **Add minimal Format**：支持 %d 和 %s 格式化
+    （之前返回格式字符串原样）
+  - **Fix ExtractFileDir**：匹配 FPC 行为——trailing-slash 路径返回自身去掉尾部斜杠
+  - **Fix IncludeTrailingPathDelimiter**：空字符串返回 '/'（匹配 FPC 行为）
+  - **扩展测试套件**：从 38 测试扩展到 54 测试
+    （新增 FileExists, DirectoryExists, ExpandFileName, GetEnvironmentVariable,
+     ChangeFileExt, Now, FindFirst 测试）
+  - **添加 rtl-sysutils-check 门**到 verify_local.sh
+
+**关键架构决策**：
+- SysUtils 使用 BaseUnix 而非 Unix 单元（Unix 单元依赖 SysUtils，会造成循环引用）
+- 时间函数使用直接 C 库调用（gettimeofday/localtime）避免依赖 Unix 单元
+- FindFirst 使用自定义 GlobMatch 而非 FpFnMatch（后者在 Unix 单元中不可用）
+- np_sysutils.pas 文件名遵循项目 np_ 前缀约定，但需复制为 SysUtils.pas 供 FPC 查找
+
+**Commits created (Phase 6):**
+- `f124cd2` feat: harden RTL SysUtils with stat-based file ops, glob matching, and verification gate
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass (含 rtl-sysutils-check=pass)
+
+**Next:** RTL Classes 审查 → 编译器模块自编译验证 → Stage 2 self-hosting 推进
+
+## Session: 2026-05-05 (Phase 1 Driver Decomposition + Phase 2 Compiler Core Hardening)
+
+### Phase 1: Monolithic Driver Decomposition (4140 → 372 lines)
+
+- **Status:** completed
+- Actions taken:
+  - 按 `docs/plans/2026-05-02-compiler-core-hardening-plan.md` 之前的开发计划，
+    把 `tools/stage0/nextpas.pas` 从 4140 行单体驱动拆分为纯 CLI 解析 + 命令分发（372 行）。
+  - 提取 `nextpas_projection_types.pas`（237 行）：12 个投影 record 类型 + TNextPasState。
+  - 提取 `nextpas_json_helpers.pas`（142 行）：JsonEscape, JsonString, AppendJsonField 等。
+  - 提取 `nextpas_projection_json.pas`（825 行）：~20 个 Append*ProjectionJsonFields + BuildCommandEnvelopeJson。
+  - 提取 `nextpas_projection_text.pas`（999 行）：WriteProjectionLine + ~20 个 Print*Projection。
+  - 提取 `nextpas_projection_context.pas`（~796 行）：~30 个 Clear*/Capture* 过程。
+  - 提取 `nextpas_command_envelope.pas`（~321 行）：EnvelopeSelectorName, PrintUsage, Fail 等。
+  - 提取 `nextpas_command_build.pas`（~335 行）：RunBuild + TargetFactsFromConfig + 路径工具函数。
+  - 提取 `nextpas_command_test.pas`（~75 行）：RunTest。
+  - 提取 `nextpas_command_env.pas`（~79 行）：RunEnvStatus。
+  - 提取 `nextpas_command_doctor.pas`（~85 行）：RunDoctor。
+  - 提取 `nextpas_command_query.pas`（~108 行）：RunQuerySymbols。
+  - 提取 `nextpas_command_pkg.pas`（~83 行）：RunPkgInspect。
+  - 消除所有 Active* 全局变量，改为 TNextPasState 参数传入。
+  - 消除 4 处重复 JSON helper 实现（np_compilation_session, np_backend_plan,
+    np_toolchain_plan, np_diagnostics_sink），统一到 nextpas_json_helpers。
+  - 全部 verify-local=pass 通过，所有命令表面输出不变。
+
+### Phase 2: Compiler Core Hardening
+
+- **Status:** completed
+- Actions taken:
+  - **2.1 Resolver error recovery**：已在 Batch 35 完成，multiple-missing-units-check=pass。
+  - **2.2 Malformed manifest graceful degradation**：
+    新增 `TryLoadPackageManifestInfo`（np_package_manifest.pas）和
+    `TryResolveWorkspaceModel`（np_workspace_model.pas），manifest 解析失败时发诊断
+    但继续 workspace-root-only 模型；新增 tests/fixtures/malformed_manifest/ fixture。
+  - **2.3 Diagnostic model extension**：
+    在 np_diagnostics_sink.pas 添加 TRelatedInformation + TSuggestedFix record 类型和
+    对应数组字段；DiagnosticsJson 已包含这些字段；resolver 诊断增强留待后续需求明确。
+  - **2.4 Search index staleness tracking**：
+    在 np_unit_resolver.pas 的 TRootSearchIndex 添加 LastScanTimestamp: Int64，
+    EnsureRootIndex 后设置时间戳，暴露 SearchIndexLastScanTimestamp accessor。
+  - **2.5 Document synchronization**：进行中。
+
+**Commits created (Phase 1 + Phase 2):**
+- `467a960` refactor: extract command envelope + Fail into separate unit
+- `f1c24a9` refactor: reduce command_envelope interface to public API only
+- `23013f9` refactor: extract RunBuild + path utilities into command_build unit
+- `9b5f1bd` refactor: extract all command handlers into dedicated units
+- `049bfa6` refactor: eliminate duplicate JSON helpers across compiler modules
+- `af84379` fix: make nextpas_json_helpers discoverable by compiler modules
+- `306fd9c` feat: add malformed manifest graceful degradation
+- `11b6bf8` feat: extend diagnostic model with RelatedInformation + SuggestedFix
+- `becc05b` feat: add staleness tracking to unit search index
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass
+
+**Next:** Phase 4 (GreenCST/Parser extension)
+
+## Session: 2026-05-06 (Phase 3 Lexer Extension)
+
+- **Status:** completed
+- Actions taken:
+  - **3.1a-3.1e 关键字扩展**：TTokenKind 从 ~24 扩展到 ~153 个成员，覆盖：
+    - 核心语句关键字 17 个（if/then/else/while/do/for/to/downto/repeat/until/with/case/of/goto/break/continue/exit）
+    - 声明关键字 18 个（var/const/type/function/array/set/record/string/class/object/constructor/destructor/property/initialization/finalization/exports/label/threadvar）
+    - 可见性/方法关键字 17 个（published/public/private/protected/virtual/override/abstract/reintroduce/overload/dynamic/message/static/inline/forward/deprecated/platform/experimental）
+    - 调用约定关键字 12 个（stdcall/safecall/register/pascal/far/near/cppdecl/varargs/out/absolute/asm）
+    - 表达式运算符关键字 21 个（and/or/not/xor/shl/shr/div/mod/in/is/as/nil/true/false/raise/try/except/finally/on/inherited/self）
+    - 额外 objfpc 关键字 10 个（file/resourcestring/strict/operator/generic/specialize/reference/packed/contains/requires）
+  - **3.2 运算符/标点扩展**：多字符运算符（..,<>,<=,>=,+=,-=,*=,/=）、单字符运算符（+,-,*,/,=,<,>,@,^,[,]）、赋值运算符（:=）
+  - **3.3 数字/字符字面量**：十进制/十六进制($FF)整数、实数(3.14, 1.0e-5)、字符字面量(#65, #$FF)
+  - **3.4 编译器指令**：{$...} 和 (*$...*) 作为 tkCompilerDirective 单 token，保留指令文本
+  - **Codex 审查修复**：
+    - 编译器指令 lexeme 为空 → 捕获指令文本 + 正确 ByteOffset
+    - 实数字面量拒绝无效 3. 形式 → 仅当小数点后有数字才包含点号
+    - 十六进制字面量验证 → 至少一个 hex digit
+    - 字符字面量验证 → 至少一个数字 + #$FF hex 格式支持
+    - 科学计数法指数数字验证 → e/E 后至少一个数字（含回退）
+    - TryReadParenStarDirective 边界检查修正
+    - 3.eX 边缘情况回退修正（保存点号位置）
+  - **3.5 注册 lexer 测试组**：
+    - 添加 hgLexer 组到 THarnessGroup
+    - 5 个 fixture：keywords_core, literals, operators, declarations, directives
+    - smoke-group=lexer result=pass fixtures=5 executed=5
+
+**Commits created (Phase 3):**
+- `af1f1fc` feat: expand lexer with full keyword/operator/literal support and fix review issues
+- `cd31e27` feat: add lexer test group to harness with 5 fixtures
+- `d92eb5a` fix: correct real literal rollback for 3.eX edge case
+
+**Verification:** `bash build/verify_local.sh` → verify-local=pass
+lexer token count: 从 ~35 上升到 ~153
 
 ## Session: 2026-05-02 (Critical RTL Implementation - Process Execution Works!)
 
