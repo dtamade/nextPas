@@ -231,8 +231,10 @@ end;
 
 procedure THIRLlvmEmitter.EmitFunction(const AFunc: THIRFunction);
 var
-  I, J: LongInt;
+  I, J, K, MinIdx: LongInt;
   ParamStr: string;
+  Order: array of LongInt;
+  MinVal, CurVal: LongInt;
 begin
   if AFunc.IsExternal then Exit;
 
@@ -248,12 +250,42 @@ begin
   Emit('define ' + TypeToLlvm(AFunc.ReturnTypeId) + ' @' + AFunc.Name +
     '(' + ParamStr + ') {');
 
-  for I := 0 to High(AFunc.Blocks) do
+  SetLength(Order, Length(AFunc.Blocks));
+  for I := 0 to High(Order) do
+    Order[I] := I;
+  for I := 0 to High(Order) - 1 do
   begin
-    Emit('bb' + IntToStr(AFunc.Blocks[I].Id) + ':');
-    for J := 0 to High(AFunc.Blocks[I].Instrs) do
-      EmitInstr(AFunc.Blocks[I].Instrs[J]);
-    EmitTerminator(AFunc.Blocks[I].Terminator);
+    MinIdx := I;
+    if Length(AFunc.Blocks[Order[MinIdx]].Instrs) > 0 then
+      MinVal := AFunc.Blocks[Order[MinIdx]].Instrs[0].ResultId
+    else
+      MinVal := MaxInt;
+    for K := I + 1 to High(Order) do
+    begin
+      if Length(AFunc.Blocks[Order[K]].Instrs) > 0 then
+        CurVal := AFunc.Blocks[Order[K]].Instrs[0].ResultId
+      else
+        CurVal := MaxInt;
+      if CurVal < MinVal then
+      begin
+        MinVal := CurVal;
+        MinIdx := K;
+      end;
+    end;
+    if MinIdx <> I then
+    begin
+      J := Order[I];
+      Order[I] := Order[MinIdx];
+      Order[MinIdx] := J;
+    end;
+  end;
+
+  for I := 0 to High(Order) do
+  begin
+    Emit('bb' + IntToStr(AFunc.Blocks[Order[I]].Id) + ':');
+    for J := 0 to High(AFunc.Blocks[Order[I]].Instrs) do
+      EmitInstr(AFunc.Blocks[Order[I]].Instrs[J]);
+    EmitTerminator(AFunc.Blocks[Order[I]].Terminator);
   end;
 
   Emit('}');
