@@ -56,6 +56,7 @@ type
     procedure ProcessHaltCall(const ANode: TTypedHirNode);
     procedure ProcessHaltCallConst(const ANode: TTypedHirNode);
     procedure ProcessCondBr(const ANode: TTypedHirNode);
+    procedure ProcessSwitch(const ANode: TTypedHirNode);
     procedure ProcessBr(const ANode: TTypedHirNode);
     procedure ProcessBlockLabel(const ANode: TTypedHirNode);
     procedure ProcessFunctionBegin(const ANode: TTypedHirNode);
@@ -689,6 +690,66 @@ begin
   Term.Condition := V;
   Term.TrueBlock := EnsureBlock(ThenLabel);
   Term.FalseBlock := EnsureBlock(ElseLabel);
+  if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+  begin
+    FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+    FBlockTerminated := True;
+  end;
+end;
+
+procedure THIRBuilder.ProcessSwitch(const ANode: TTypedHirNode);
+var
+  Term: THIRTerminator;
+  V: THIRValueId;
+  Blob, Line, Rest, ValStr, LabelStr: string;
+  SwitchPos, NlPos, TabPos, CaseCount, I: LongInt;
+begin
+  Blob := ANode.Operand;
+  SwitchPos := Pos('switch ', Blob);
+  if SwitchPos = 0 then Exit;
+
+  V := ParseIntBlob(Copy(Blob, 1, SwitchPos - 1));
+  Rest := Copy(Blob, SwitchPos + 7, Length(Blob));
+
+  NlPos := Pos(#10, Rest);
+  if NlPos = 0 then Exit;
+  CaseCount := StrToIntDef(Copy(Rest, 1, NlPos - 1), 0);
+  Rest := Copy(Rest, NlPos + 1, Length(Rest));
+
+  FillChar(Term, SizeOf(Term), 0);
+  Term.Kind := htkSwitch;
+  Term.Condition := V;
+  SetLength(Term.SwitchCases, CaseCount);
+
+  for I := 0 to CaseCount - 1 do
+  begin
+    NlPos := Pos(#10, Rest);
+    if NlPos = 0 then
+      Line := Rest
+    else
+      Line := Copy(Rest, 1, NlPos - 1);
+    Rest := Copy(Rest, NlPos + 1, Length(Rest));
+
+    TabPos := Pos(#9, Line);
+    if TabPos = 0 then Continue;
+    ValStr := Copy(Line, 1, TabPos - 1);
+    LabelStr := Copy(Line, TabPos + 1, Length(Line));
+    Term.SwitchCases[I].Value := StrToInt64Def(ValStr, 0);
+    Term.SwitchCases[I].TargetBlock := EnsureBlock(LabelStr);
+  end;
+
+  NlPos := Pos(#10, Rest);
+  if NlPos = 0 then
+    Line := Rest
+  else
+    Line := Copy(Rest, 1, NlPos - 1);
+  TabPos := Pos(#9, Line);
+  if TabPos > 0 then
+    LabelStr := Copy(Line, TabPos + 1, Length(Line))
+  else
+    LabelStr := Line;
+  Term.DefaultBlock := EnsureBlock(LabelStr);
+
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
   begin
     FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
@@ -1381,6 +1442,8 @@ begin
     ProcessHaltCallConst(ANode)
   else if ANode.Kind = 'cond-br-runtime' then
     ProcessCondBr(ANode)
+  else if ANode.Kind = 'switch-runtime' then
+    ProcessSwitch(ANode)
   else if ANode.Kind = 'br-runtime' then
     ProcessBr(ANode)
   else if ANode.Kind = 'block-label-runtime' then

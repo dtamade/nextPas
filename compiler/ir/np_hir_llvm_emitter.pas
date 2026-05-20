@@ -315,6 +315,8 @@ begin
 end;
 
 procedure THIRLlvmEmitter.EmitTerminator(const ATerm: THIRTerminator);
+var
+  I: LongInt;
 begin
   case ATerm.Kind of
     htkReturn:
@@ -328,6 +330,15 @@ begin
       Emit('  br i1 %' + IntToStr(ATerm.Condition) +
         ', label %bb' + IntToStr(ATerm.TrueBlock) +
         ', label %bb' + IntToStr(ATerm.FalseBlock));
+    htkSwitch:
+    begin
+      Emit('  switch i64 %' + IntToStr(ATerm.Condition) +
+        ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
+      for I := 0 to High(ATerm.SwitchCases) do
+        Emit('    i64 ' + IntToStr(ATerm.SwitchCases[I].Value) +
+          ', label %bb' + IntToStr(ATerm.SwitchCases[I].TargetBlock));
+      Emit('  ]');
+    end;
     htkUnreachable:
       Emit('  unreachable');
   end;

@@ -136,6 +136,7 @@ type
     procedure LowerRuntimeWhileStatement(const ANode: TGreenNode);
     procedure LowerRuntimeForStatement(const ANode: TGreenNode);
     procedure LowerRuntimeRepeatStatement(const ANode: TGreenNode);
+    procedure LowerRuntimeCaseStatement(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
     procedure UnrollHaltRepeatLoop(const ANode: TGreenNode);
@@ -2519,6 +2520,14 @@ begin
         UnrollHaltRepeatLoop(Child);
       Continue;
     end;
+    if Child.NodeKind = gnkCaseStatement then
+    begin
+      if FNoFold then
+        LowerRuntimeCaseStatement(Child)
+      else
+        WalkHaltCalls(Child);
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       Decoded := Child.Text;
@@ -2915,6 +2924,111 @@ begin
     CondBlob + 'labels ' + ExitLabel + #9 + BodyLabel + #10
   );
   FCurrentBlockTerminated := True;
+  EmitBlockLabel(ExitLabel);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeCaseStatement(const ANode: TGreenNode);
+var
+  SelectorNode, SelectorChild, LabelNode, LabelExpr: TGreenNode;
+  SelectorBlob, SwitchBlob, ExitLabel, BodyLabel, DefaultLabel: string;
+  BodyLabels: array of string;
+  I, J, K, CaseCount, SelectorCount: LongInt;
+  Val, LoVal, HiVal: Int64;
+  HasElse: Boolean;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then
+    Exit;
+  if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), SelectorBlob) then
+    Exit;
+
+  SelectorCount := 0;
+  HasElse := False;
+  for I := 1 to ANode.ChildCount - 1 do
+  begin
+    SelectorChild := ANode.ChildAt(I);
+    if (SelectorChild <> nil) and (SelectorChild.NodeKind = gnkCaseSelector) then
+      Inc(SelectorCount)
+    else
+      HasElse := True;
+  end;
+
+  ExitLabel := NewBlockLabel('case-end');
+  DefaultLabel := NewBlockLabel('case-default');
+  SetLength(BodyLabels, SelectorCount);
+  for I := 0 to SelectorCount - 1 do
+    BodyLabels[I] := NewBlockLabel('case-body');
+
+  CaseCount := 0;
+  SwitchBlob := '';
+  K := 0;
+  for I := 1 to ANode.ChildCount - 1 do
+  begin
+    SelectorChild := ANode.ChildAt(I);
+    if (SelectorChild = nil) or (SelectorChild.NodeKind <> gnkCaseSelector) then
+      Continue;
+    for J := 0 to SelectorChild.ChildCount - 1 do
+    begin
+      LabelNode := SelectorChild.ChildAt(J);
+      if (LabelNode = nil) or (LabelNode.NodeKind <> gnkCaseLabel) then
+        Continue;
+      if LabelNode.ChildCount < 1 then
+        Continue;
+      LabelExpr := LabelNode.ChildAt(0);
+      if (LabelExpr <> nil) and (LabelExpr.NodeKind = gnkRangeExpression) and
+        (LabelExpr.ChildCount >= 2) then
+      begin
+        if EvaluateIntegerConstant(LabelExpr.ChildAt(0), LoVal) and
+          EvaluateIntegerConstant(LabelExpr.ChildAt(1), HiVal) then
+          for Val := LoVal to HiVal do
+          begin
+            SwitchBlob := SwitchBlob + IntToStr(Val) + #9 + BodyLabels[K] + #10;
+            Inc(CaseCount);
+          end;
+      end
+      else if EvaluateIntegerConstant(LabelExpr, Val) then
+      begin
+        SwitchBlob := SwitchBlob + IntToStr(Val) + #9 + BodyLabels[K] + #10;
+        Inc(CaseCount);
+      end;
+    end;
+    Inc(K);
+  end;
+
+  FModel.AddTypedHirNode(
+    'switch-runtime', 'case', 0, 0,
+    SelectorBlob + 'switch ' + IntToStr(CaseCount) + #10 +
+    SwitchBlob + 'default' + #9 + DefaultLabel + #10
+  );
+  FCurrentBlockTerminated := True;
+
+  K := 0;
+  for I := 1 to ANode.ChildCount - 1 do
+  begin
+    SelectorChild := ANode.ChildAt(I);
+    if (SelectorChild = nil) or (SelectorChild.NodeKind <> gnkCaseSelector) then
+      Continue;
+    EmitBlockLabel(BodyLabels[K]);
+    for J := 0 to SelectorChild.ChildCount - 1 do
+    begin
+      LabelNode := SelectorChild.ChildAt(J);
+      if (LabelNode <> nil) and (LabelNode.NodeKind <> gnkCaseLabel) then
+        WalkHaltCalls(LabelNode);
+    end;
+    EmitGotoLabel(ExitLabel);
+    Inc(K);
+  end;
+
+  EmitBlockLabel(DefaultLabel);
+  if HasElse then
+  begin
+    for I := 1 to ANode.ChildCount - 1 do
+    begin
+      SelectorChild := ANode.ChildAt(I);
+      if (SelectorChild <> nil) and (SelectorChild.NodeKind <> gnkCaseSelector) then
+        WalkHaltCalls(SelectorChild);
+    end;
+  end;
+  EmitGotoLabel(ExitLabel);
   EmitBlockLabel(ExitLabel);
 end;
 
