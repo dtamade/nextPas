@@ -14,7 +14,6 @@ type
     FLines: array of string;
     FLineCount: LongInt;
     FNeedsWriteInt: Boolean;
-    FNeedsNewline: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     procedure Emit(const S: string);
@@ -44,7 +43,6 @@ begin
   FModule := AModule;
   FLineCount := 0;
   FNeedsWriteInt := False;
-  FNeedsNewline := False;
   SetLength(FLines, 0);
 end;
 
@@ -176,40 +174,33 @@ begin
     begin
       if AInstr.IntrinsicName = 'halt' then
       begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  %exit_trunc_' + IntToStr(AInstr.ResultId) +
-            ' = trunc i64 %' + IntToStr(AInstr.Operands[0].ValueId) + ' to i32');
-          Emit('  %exit_and_' + IntToStr(AInstr.ResultId) +
-            ' = and i32 %exit_trunc_' + IntToStr(AInstr.ResultId) + ', 255');
-          Emit('  call void asm sideeffect "movl $0, %edi\0Amovl $$60, %eax\0Asyscall",' +
-            ' "r"(i32 %exit_and_' + IntToStr(AInstr.ResultId) + ')');
-        end;
+        if AInstr.CallTarget <> '' then
+          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
+        else if Length(AInstr.Operands) >= 1 then
+          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
-        FNeedsNewline := True;
         if Length(AInstr.Operands) >= 1 then
-        begin
           Emit('  call void @write_i64_decimal(i64 %' +
             IntToStr(AInstr.Operands[0].ValueId) + ')');
-          Emit('  call void @write_newline()');
-        end;
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin
         I := AddStrConstant(AInstr.CallTarget);
-        Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+        Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
           ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
           IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
       end
       else if AInstr.IntrinsicName = 'write_str_var' then
       begin
-        FNeedsNewline := True;
         if Length(AInstr.Operands) >= 2 then
         begin
-          Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
             ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %' +
             IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
             IntToStr(AInstr.Operands[1].ValueId) + ')');
@@ -275,7 +266,6 @@ begin
   FLineCount := 0;
   FStrConstCount := 0;
   FNeedsWriteInt := False;
-  FNeedsNewline := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
@@ -328,22 +318,10 @@ begin
   Emit('  %len = ptrtoint ptr %end_ptr to i64');
   Emit('  %start_int = ptrtoint ptr %start_next to i64');
   Emit('  %write_len = sub i64 %len, %start_int');
-  Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+  Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
     ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %start_next, i64 %write_len)');
   Emit('  ret void');
   Emit('}');
-
-  if FNeedsNewline then
-  begin
-    Emit('');
-    Emit('@.newline = private constant [1 x i8] c"\0A"');
-    Emit('');
-    Emit('define internal void @write_newline() {');
-    Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
-      ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.newline, i64 1)');
-    Emit('  ret void');
-    Emit('}');
-  end;
 end;
 
 function THIRLlvmEmitter.AddStrConstant(const AValue: string): LongInt;

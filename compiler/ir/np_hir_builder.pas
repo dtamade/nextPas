@@ -513,23 +513,13 @@ end;
 procedure THIRBuilder.ProcessHaltCallConst(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
-  ConstVal: THIRValueId;
 begin
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:' + ANode.Operand;
-  EmitInstr(Instr);
-  ConstVal := Instr.ResultId;
-
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.IntrinsicName := 'halt';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(ConstVal);
+  Instr.CallTarget := ANode.Operand;
   EmitInstr(Instr);
   FBlockTerminated := True;
 end;
@@ -911,7 +901,6 @@ var
   Node: TTypedHirNode;
   EntryBlock: THIRBlockId;
   Instr: THIRInstr;
-  ZeroVal: THIRValueId;
 begin
   FCurrentFuncId := FModule.AddFunction('_start', GetIntType);
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
@@ -929,19 +918,10 @@ begin
   begin
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikLoad;
-    Instr.TypeId := GetIntType;
-    Instr.IntrinsicName := 'const:0';
-    EmitInstr(Instr);
-    ZeroVal := Instr.ResultId;
-
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
     Instr.IntrinsicName := 'halt';
-    SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(ZeroVal);
+    Instr.CallTarget := '0';
     EmitInstr(Instr);
   end;
 end;

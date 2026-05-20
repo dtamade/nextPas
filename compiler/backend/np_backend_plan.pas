@@ -587,8 +587,21 @@ begin
       Exit;
     end;
 
-    if (GetEnvironmentVariable('NEXTPAS_HIR_BACKEND') = '1') and
-       (FSemaModel <> nil) then
+    if (GetEnvironmentVariable('NEXTPAS_MIR_BACKEND') = '1') or
+       (FSemaModel = nil) then
+    begin
+      Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
+      try
+        if not Emitter.EmitToFile(LlvmIrArtifactPath) then
+        begin
+          FPlan.MarkFailure;
+          Exit;
+        end;
+      finally
+        Emitter.Free;
+      end;
+    end
+    else
     begin
       HirBuilder := THIRBuilder.Create(FSemaModel);
       try
@@ -602,19 +615,6 @@ begin
         end;
       finally
         HirBuilder.Free;
-      end;
-    end
-    else
-    begin
-      Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
-      try
-        if not Emitter.EmitToFile(LlvmIrArtifactPath) then
-        begin
-          FPlan.MarkFailure;
-          Exit;
-        end;
-      finally
-        Emitter.Free;
       end;
     end;
   end
