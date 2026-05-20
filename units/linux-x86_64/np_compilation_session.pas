@@ -14,7 +14,7 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
-  np_lexer, np_mir_model, np_source_database, np_target_facts,
+  np_lexer, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
   np_semantic_model, np_semantic_analyzer, np_workspace_model;

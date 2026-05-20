@@ -8,7 +8,7 @@ unit np_backend_plan;
 interface
 
 uses
-  SysUtils, np_mir_model, np_target_facts, np_llvm_emitter,
+  SysUtils, np_target_facts,
   np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_llvm_emitter, nextpas_json_helpers;
 
@@ -116,7 +116,6 @@ type
 
   TBackendPlanner = class
   private
-    FMirModel: TMirModel;
     FSemaModel: TSemanticModel;
     FTargetFacts: TTargetFactsView;
     FSourcePath: string;
@@ -127,7 +126,6 @@ type
     function BackendIntermediateRootPath: string;
   public
     constructor Create(
-      const AMirModel: TMirModel;
       const ASemaModel: TSemanticModel;
       const ATargetFacts: TTargetFactsView;
       const ASourcePath: string;
@@ -493,7 +491,6 @@ begin
 end;
 
 constructor TBackendPlanner.Create(
-  const AMirModel: TMirModel;
   const ASemaModel: TSemanticModel;
   const ATargetFacts: TTargetFactsView;
   const ASourcePath: string;
@@ -503,7 +500,6 @@ constructor TBackendPlanner.Create(
 );
 begin
   inherited Create;
-  FMirModel := AMirModel;
   FSemaModel := ASemaModel;
   FTargetFacts := ATargetFacts;
   FSourcePath := ASourcePath;
@@ -541,7 +537,6 @@ var
   AssemblyArtifactPath: string;
   BaseName: string;
   BitcodeArtifactPath: string;
-  Emitter: TLlvmEmitter;
   HirBuilder: THIRBuilder;
   HirEmitter: THIRLlvmEmitter;
   IntermediateRoot: string;
@@ -549,13 +544,13 @@ var
   ObjectArtifactPath: string;
   PrimaryArtifactPath: string;
 begin
-  if (FMirModel = nil) or (FMirModel.Status <> 'ready') then
+  if FSemaModel = nil then
   begin
     FPlan.MarkFailure;
     Exit;
   end;
 
-  FPlan.SetRootName(FMirModel.RootName);
+  FPlan.SetRootName(FSemaModel.RootName);
   FPlan.SetTargetMetadata(FTargetFacts);
   FPlan.SetOutputKind('executable');
   BaseName := ChangeFileExt(ExtractFileName(FSourcePath), '');
@@ -591,35 +586,18 @@ begin
       Exit;
     end;
 
-    if (GetEnvironmentVariable('NEXTPAS_MIR_BACKEND') = '1') or
-       (FSemaModel = nil) then
-    begin
-      Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
+    HirBuilder := THIRBuilder.Create(FSemaModel);
+    try
+      HirBuilder.Build;
+      HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module);
       try
-        if not Emitter.EmitToFile(LlvmIrArtifactPath) then
-        begin
-          FPlan.MarkFailure;
-          Exit;
-        end;
+        HirEmitter.EmitModule;
+        HirEmitter.SaveToFile(LlvmIrArtifactPath);
       finally
-        Emitter.Free;
+        HirEmitter.Free;
       end;
-    end
-    else
-    begin
-      HirBuilder := THIRBuilder.Create(FSemaModel);
-      try
-        HirBuilder.Build;
-        HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module);
-        try
-          HirEmitter.EmitModule;
-          HirEmitter.SaveToFile(LlvmIrArtifactPath);
-        finally
-          HirEmitter.Free;
-        end;
-      finally
-        HirBuilder.Free;
-      end;
+    finally
+      HirBuilder.Free;
     end;
   end
   else

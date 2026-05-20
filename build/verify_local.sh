@@ -562,7 +562,6 @@ require_path compiler/syntax/np_green_tree.pas
 require_path compiler/syntax/np_ast_facade.pas
 require_path compiler/sema/np_semantic_model.pas
 require_path compiler/sema/np_semantic_analyzer.pas
-require_path compiler/ir/np_mir_model.pas
 require_path compiler/backend/np_backend_plan.pas
 require_path compiler/toolchain/np_toolchain_runner.pas
 require_path tests/toolchain/toolchain_contract_smoke.pas
@@ -778,7 +777,6 @@ require_output_pattern '^search-index-scan-count=0$' "$STAGE0_SMOKE_OUTPUT" 'mis
 require_output_pattern '^symbol-graph-status=ready$' "$STAGE0_SMOKE_OUTPUT" 'missing-symbol-graph-ready-status'
 require_output_pattern '^type-graph-status=ready$' "$STAGE0_SMOKE_OUTPUT" 'missing-type-graph-ready-status'
 require_output_pattern '^typed-hir-status=ready$' "$STAGE0_SMOKE_OUTPUT" 'missing-typed-hir-ready-status'
-require_output_pattern '^mir-status=ready$' "$STAGE0_SMOKE_OUTPUT" 'missing-mir-ready-status'
 require_output_pattern '^backend-plan-status=ready$' "$STAGE0_SMOKE_OUTPUT" 'missing-backend-plan-ready-status'
 require_output_pattern '^backend-artifact-count=3$' "$STAGE0_SMOKE_OUTPUT" 'missing-backend-artifact-count'
 require_output_pattern '^backend-artifacts=.*"kind":"assembly-text".*"kind":"object-file".*"kind":"executable"' "$STAGE0_SMOKE_OUTPUT" 'missing-backend-artifacts'
@@ -2494,11 +2492,6 @@ require_output_pattern '^type-count=20$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-
 require_output_pattern '^typed-hir-node-count=8$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-node-count'
 require_output_pattern '^runtime-contract-count=2$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-runtime-contract-count'
 require_output_pattern '^typed-hir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-root-name'
-require_output_pattern '^mir-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-status'
-require_output_pattern '^mir-block-count=1$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-block-count'
-require_output_pattern '^mir-operation-count=9$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-operation-count'
-require_output_pattern '^mir-entry-block=entry$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-entry-block'
-require_output_pattern '^mir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-root-name'
 require_output_pattern '^backend-plan-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-plan-status'
 require_output_pattern '^backend-artifact-count=3$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifact-count'
 require_output_pattern '^backend-artifacts=.*"kind":"assembly-text".*"kind":"object-file".*"kind":"executable"' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifacts'
@@ -2574,7 +2567,6 @@ require_output_pattern '^human-summary=build succeeded$' "$SEMANTIC_SMOKE_OUTPUT
 require_output_pattern '"resolvedUnitCount":4' "$SEMANTIC_SMOKE_OUTPUT" 'missing-resolution-envelope-field'
 require_output_pattern '"semanticStatus":"ready"' "$SEMANTIC_SMOKE_OUTPUT" 'missing-semantic-envelope-field'
 require_output_pattern '"typedHirNodeCount":8' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-envelope-field'
-require_output_pattern '"mirOperationCount":9' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-envelope-field'
 require_output_pattern '"backendPlanStatus":"ready"' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-envelope-field'
 require_output_pattern '"backendArtifactCount":3' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifact-count-envelope-field'
 require_output_pattern '"backendArtifacts":\[\{"artifactId":1,"kind":"assembly-text","path":"[^"]+/\.nextpas/cache/backend/linux-x86_64/hello_with_units\.s"\},\{"artifactId":2,"kind":"object-file","path":"[^"]+/\.nextpas/cache/backend/linux-x86_64/hello_with_units\.o"\},\{"artifactId":3,"kind":"executable","path":"[^"]+/\.nextpas/out/linux-x86_64/hello_with_units"\}\]' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifacts-envelope-field'

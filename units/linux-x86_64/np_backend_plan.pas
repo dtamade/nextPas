@@ -7,7 +7,7 @@ unit np_backend_plan;
 interface
 
 uses
-  SysUtils, np_mir_model, np_target_facts;
+  SysUtils, np_target_facts;
 
 type
   TBackendArtifact = record

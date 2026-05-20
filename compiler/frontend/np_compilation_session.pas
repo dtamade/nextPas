@@ -14,7 +14,7 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
-  np_lexer, np_mir_model, np_hir_types, np_hir_model, np_hir_builder,
+  np_lexer, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
@@ -78,7 +78,6 @@ type
     FSearchIndexScanCount: LongInt;
     FSemanticModel: TSemanticModel;
     FSemanticStatus: string;
-    FMirModel: TMirModel;
     FMirStatus: string;
     FBackendPlan: TBackendPlan;
     FBackendStatus: string;
@@ -421,7 +420,6 @@ begin
   FSearchIndexScanCount := 0;
   FSemanticModel := nil;
   FSemanticStatus := 'deferred';
-  FMirModel := nil;
   FMirStatus := 'deferred';
   FBackendPlan := nil;
   FBackendStatus := 'deferred';
@@ -442,7 +440,6 @@ begin
   FOptions.WorkspaceModel.Free;
   FToolchainPlan.Free;
   FBackendPlan.Free;
-  FMirModel.Free;
   FSemanticModel.Free;
   FUnitGraph.Free;
   FSearchPathSet.Free;
@@ -483,7 +480,6 @@ end;
 procedure TCompilationSession.ResetIrState;
 begin
   ResetBackendState;
-  FreeAndNil(FMirModel);
   FMirStatus := 'deferred';
 end;
 
@@ -847,7 +843,6 @@ end;
 
 procedure TCompilationSession.LowerToMir;
 var
-  Lowerer: TMirLowerer;
   HirBuilder: THIRBuilder;
   HirPrinter: THIRPrinter;
   HirPath: string;
@@ -859,17 +854,7 @@ begin
     Exit;
   end;
 
-  Lowerer := TMirLowerer.Create(FSemanticModel);
-  try
-    Lowerer.Lower;
-    FMirModel := Lowerer.DetachModel;
-    if FMirModel = nil then
-      FMirStatus := 'deferred'
-    else
-      FMirStatus := FMirModel.Status;
-  finally
-    Lowerer.Free;
-  end;
+  FMirStatus := 'ready';
 
   if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
   begin
@@ -895,14 +880,13 @@ var
   Planner: TBackendPlanner;
 begin
   ResetBackendState;
-  if (FMirModel = nil) or (FMirStatus <> 'ready') then
+  if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
   begin
     FBackendStatus := 'failure';
     Exit;
   end;
 
   Planner := TBackendPlanner.Create(
-    FMirModel,
     FSemanticModel,
     FTargetFacts,
     FOptions.BuildContext.RequestedSourcePath,
@@ -1592,34 +1576,24 @@ end;
 
 function TCompilationSession.MirBlockCount: LongInt;
 begin
-  if FMirModel = nil then
-    Exit(0);
-
-  Result := FMirModel.BlockCount;
+  Result := 0;
 end;
 
 function TCompilationSession.MirOperationCount: LongInt;
 begin
-  if FMirModel = nil then
-    Exit(0);
-
-  Result := FMirModel.OperationCount;
+  Result := 0;
 end;
 
 function TCompilationSession.MirEntryBlockLabel: string;
 begin
-  if FMirModel = nil then
-    Exit('');
-
-  Result := FMirModel.EntryBlockLabel;
+  Result := '';
 end;
 
 function TCompilationSession.MirRootName: string;
 begin
-  if FMirModel = nil then
+  if FSemanticModel = nil then
     Exit('');
-
-  Result := FMirModel.RootName;
+  Result := FSemanticModel.RootName;
 end;
 
 function TCompilationSession.BackendOutputKind: string;

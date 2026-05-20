@@ -15,7 +15,7 @@ program toolchain_contract_smoke;
 
 uses
   Classes, SysUtils, BaseUnix, target_config, np_backend_plan,
-  np_diagnostics_sink, np_mir_model, np_package_manifest, np_package_workflow,
+  np_diagnostics_sink, np_package_manifest, np_package_workflow,
   np_source_database, np_target_facts, np_toolchain_plan, np_unit_resolver,
   np_workspace_model, np_toolchain_runner;
 
@@ -447,7 +447,6 @@ procedure PrintLlvmExecutionContract(const ATargetFacts: TTargetFactsView);
 var
   ArtifactDir: string;
   BackendPlan: TBackendPlan;
-  BackendPlanner: TBackendPlanner;
   BitcodePath: string;
   FakeBinDir: string;
   IrPath: string;
@@ -455,7 +454,6 @@ var
   LlvmFacts: TTargetFactsView;
   LlcScriptPath: string;
   LinkArgvCapturePath: string;
-  MirModel: TMirModel;
   ObjectPath: string;
   OptScriptPath: string;
   OutputPath: string;
@@ -530,28 +528,21 @@ begin
   LlvmFacts.LlvmEnabled := True;
   LlvmFacts.LlvmExecutableSetId := 'llvm-stable';
 
-  MirModel := TMirModel.Create;
-  MirModel.SetRootName('hello');
-  MirModel.AddBlock('entry');
-  MirModel.AddOperation('return', 1, 'hello', '');
-  MirModel.MarkReady;
-
-  BackendPlanner := TBackendPlanner.Create(
-    MirModel,
-    nil,
-    LlvmFacts,
-    'examples/smoke/hello.pas',
-    ArtifactDir,
-    ArtifactDir,
-    True
-  );
-  try
-    BackendPlanner.Plan;
-    BackendPlan := BackendPlanner.DetachPlan;
-  finally
-    BackendPlanner.Free;
-    MirModel.Free;
-  end;
+  BackendPlan := TBackendPlan.Create;
+  BackendPlan.SetRootName('hello');
+  BackendPlan.SetTargetMetadata(LlvmFacts);
+  BackendPlan.SetOutputKind('executable');
+  BackendPlan.AddArtifact('llvm-ir',
+    IncludeTrailingPathDelimiter(ArtifactDir) + 'hello.ll');
+  BackendPlan.AddArtifact('llvm-bitcode',
+    IncludeTrailingPathDelimiter(ArtifactDir) + 'hello.bc');
+  BackendPlan.AddArtifact('object-file',
+    IncludeTrailingPathDelimiter(ArtifactDir) + 'hello.o');
+  BackendPlan.AddArtifact('executable',
+    IncludeTrailingPathDelimiter(ArtifactDir) + 'hello');
+  BackendPlan.SetPrimaryArtifact('executable',
+    IncludeTrailingPathDelimiter(ArtifactDir) + 'hello');
+  BackendPlan.MarkReady;
 
   try
     EnsureRuntimeLibcFixture(LlvmFacts);
