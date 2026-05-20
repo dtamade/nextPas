@@ -3456,7 +3456,13 @@ begin
           IsStrReturn := True;
       end;
     end;
-    if IsStrReturn then
+    if Pos('.', Entry.Name) > 0 then
+    begin
+      FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
+        IntToStr(ParamCount + 1) + ':p' + ParamTypes);
+      RegisterRuntimeVar('self');
+    end
+    else if IsStrReturn then
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':s')
     else
