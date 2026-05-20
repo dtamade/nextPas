@@ -59,6 +59,7 @@ type
 
   THIROperand = record
     ValueId: THIRValueId;
+    TypeId: THIRTypeId;
   end;
 
   THIRPhiEntry = record
@@ -173,6 +174,7 @@ type
   end;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
+function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROperand;
 
 implementation
 
@@ -182,6 +184,13 @@ uses
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin
   Result.ValueId := AValueId;
+  Result.TypeId := 0;
+end;
+
+function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROperand;
+begin
+  Result.ValueId := AValueId;
+  Result.TypeId := ATypeId;
 end;
 
 constructor THIRModule.Create(const AName: string);

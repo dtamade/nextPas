@@ -14,6 +14,7 @@ type
     FLines: array of string;
     FLineCount: LongInt;
     FNeedsWriteInt: Boolean;
+    FNeedsStrConcat: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     procedure Emit(const S: string);
@@ -25,6 +26,7 @@ type
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
+    procedure EmitStrConcatHelper;
   public
     constructor Create(AModule: THIRModule);
     procedure EmitModule;
@@ -43,6 +45,7 @@ begin
   FModule := AModule;
   FLineCount := 0;
   FNeedsWriteInt := False;
+  FNeedsStrConcat := False;
   SetLength(FLines, 0);
 end;
 
@@ -165,7 +168,11 @@ begin
       for I := 0 to High(AInstr.Operands) do
       begin
         if I > 0 then Op := Op + ', ';
-        Op := Op + 'i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+        if AInstr.Operands[I].TypeId <> 0 then
+          Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' %' +
+            IntToStr(AInstr.Operands[I].ValueId)
+        else
+          Op := Op + 'i64 %' + IntToStr(AInstr.Operands[I].ValueId);
       end;
       Op := Op + ')';
       Emit(Op);
@@ -205,6 +212,103 @@ begin
             IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
             IntToStr(AInstr.Operands[1].ValueId) + ')');
         end;
+      end
+      else if AInstr.IntrinsicName = 'store_str_lit' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          I := AddStrConstant(AInstr.CallTarget);
+          Emit('  store ptr @.str.' + IntToStr(I) + ', ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  store i64 ' + IntToStr(Length(AInstr.CallTarget)) +
+            ', ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+        end;
+      end
+      else if AInstr.IntrinsicName = 'call_str_func' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Op := '  %callstr.' + IntToStr(AInstr.ResultId) +
+            ' = call {ptr, i64} @' + AInstr.CallTarget + '(';
+          for I := 2 to High(AInstr.Operands) do
+          begin
+            if I > 2 then Op := Op + ', ';
+            if AInstr.Operands[I].TypeId <> 0 then
+              Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' %' +
+                IntToStr(AInstr.Operands[I].ValueId)
+            else
+              Op := Op + 'i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+          end;
+          Op := Op + ')';
+          Emit(Op);
+          Emit('  %callstr.' + IntToStr(AInstr.ResultId) +
+            '.p = extractvalue {ptr, i64} %callstr.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+          Emit('  %callstr.' + IntToStr(AInstr.ResultId) +
+            '.l = extractvalue {ptr, i64} %callstr.' +
+            IntToStr(AInstr.ResultId) + ', 1');
+          Emit('  store ptr %callstr.' + IntToStr(AInstr.ResultId) +
+            '.p, ptr %' + IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  store i64 %callstr.' + IntToStr(AInstr.ResultId) +
+            '.l, ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+        end;
+      end
+      else if AInstr.IntrinsicName = 'str_concat' then
+      begin
+        FNeedsStrConcat := True;
+        if Length(AInstr.Operands) >= 6 then
+        begin
+          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
+            ' = call {ptr, i64} @np_str_concat(ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
+            IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[3].ValueId) + ')');
+          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
+            '.p = extractvalue {ptr, i64} %concat.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+          Emit('  %concat.' + IntToStr(AInstr.ResultId) +
+            '.l = extractvalue {ptr, i64} %concat.' +
+            IntToStr(AInstr.ResultId) + ', 1');
+          Emit('  store ptr %concat.' + IntToStr(AInstr.ResultId) +
+            '.p, ptr %' + IntToStr(AInstr.Operands[4].ValueId));
+          Emit('  store i64 %concat.' + IntToStr(AInstr.ResultId) +
+            '.l, ptr %' + IntToStr(AInstr.Operands[5].ValueId));
+        end;
+      end
+      else if AInstr.IntrinsicName = 'ret_str' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Emit('  %retstr.' + IntToStr(AInstr.ResultId) +
+            '.1 = insertvalue {ptr, i64} undef, ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', 0');
+          Emit('  %retstr.' + IntToStr(AInstr.ResultId) +
+            '.2 = insertvalue {ptr, i64} %retstr.' +
+            IntToStr(AInstr.ResultId) + '.1, i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId) + ', 1');
+          Emit('  ret {ptr, i64} %retstr.' + IntToStr(AInstr.ResultId) + '.2');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'gep_i64' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = getelementptr i64, ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId));
+      end
+      else if AInstr.IntrinsicName = 'arr_alloc' then
+      begin
+        FNeedsStrConcat := True;
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
+            '.sz = mul i64 %' + IntToStr(AInstr.Operands[0].ValueId) + ', 8');
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = call ptr @np_alloc(i64 %arralloc.' +
+            IntToStr(AInstr.ResultId) + '.sz)');
+        end;
       end;
     end;
   end;
@@ -232,9 +336,10 @@ end;
 procedure THIRLlvmEmitter.EmitFunction(const AFunc: THIRFunction);
 var
   I, J, K, MinIdx: LongInt;
-  ParamStr: string;
+  ParamStr, RetStr: string;
   Order: array of LongInt;
   MinVal, CurVal: LongInt;
+  T: THIRTypeRec;
 begin
   if AFunc.IsExternal then Exit;
 
@@ -246,8 +351,14 @@ begin
       ' %' + IntToStr(AFunc.Params[I].ValueId);
   end;
 
+  T := FModule.Types.GetType(AFunc.ReturnTypeId);
+  if T.Kind = htkString then
+    RetStr := '{ptr, i64}'
+  else
+    RetStr := TypeToLlvm(AFunc.ReturnTypeId);
+
   Emit('');
-  Emit('define ' + TypeToLlvm(AFunc.ReturnTypeId) + ' @' + AFunc.Name +
+  Emit('define ' + RetStr + ' @' + AFunc.Name +
     '(' + ParamStr + ') {');
 
   SetLength(Order, Length(AFunc.Blocks));
@@ -298,6 +409,7 @@ begin
   FLineCount := 0;
   FStrConstCount := 0;
   FNeedsWriteInt := False;
+  FNeedsStrConcat := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
@@ -313,6 +425,9 @@ begin
 
   if FNeedsWriteInt then
     EmitWriteIntHelper;
+
+  if FNeedsStrConcat then
+    EmitStrConcatHelper;
 end;
 
 procedure THIRLlvmEmitter.EmitWriteIntHelper;
@@ -391,6 +506,60 @@ begin
     Emit('@.str.' + IntToStr(I) + ' = private constant [' + IntToStr(Len) +
       ' x i8] c"' + EscapeLlvmStr(FStrConstants[I]) + '"');
   end;
+end;
+
+procedure THIRLlvmEmitter.EmitStrConcatHelper;
+begin
+  Emit('');
+  Emit('@__heap_cur = internal global ptr null');
+  Emit('');
+  Emit('define internal ptr @np_alloc(i64 %size) {');
+  Emit('entry:');
+  Emit('  %cur = load ptr, ptr @__heap_cur');
+  Emit('  %is_null = icmp eq ptr %cur, null');
+  Emit('  br i1 %is_null, label %init, label %alloc');
+  Emit('init:');
+  Emit('  %brk0 = call i64 asm sideeffect "movq $$12, %rax\0Axorq %rdi, %rdi\0Asyscall", "={rax},~{rcx},~{r11},~{rdi}"()');
+  Emit('  %brk0p = inttoptr i64 %brk0 to ptr');
+  Emit('  store ptr %brk0p, ptr @__heap_cur');
+  Emit('  br label %alloc');
+  Emit('alloc:');
+  Emit('  %base = load ptr, ptr @__heap_cur');
+  Emit('  %next = getelementptr i8, ptr %base, i64 %size');
+  Emit('  %nexti = ptrtoint ptr %next to i64');
+  Emit('  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %nexti)');
+  Emit('  store ptr %next, ptr @__heap_cur');
+  Emit('  ret ptr %base');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_memcpy(ptr %dst, ptr %src, i64 %n) {');
+  Emit('entry:');
+  Emit('  %cmp0 = icmp eq i64 %n, 0');
+  Emit('  br i1 %cmp0, label %done, label %loop');
+  Emit('loop:');
+  Emit('  %i = phi i64 [ 0, %entry ], [ %i_next, %loop ]');
+  Emit('  %sp = getelementptr i8, ptr %src, i64 %i');
+  Emit('  %b = load i8, ptr %sp');
+  Emit('  %dp = getelementptr i8, ptr %dst, i64 %i');
+  Emit('  store i8 %b, ptr %dp');
+  Emit('  %i_next = add i64 %i, 1');
+  Emit('  %cond = icmp eq i64 %i_next, %n');
+  Emit('  br i1 %cond, label %done, label %loop');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal {ptr, i64} @np_str_concat(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len) {');
+  Emit('entry:');
+  Emit('  %total = add i64 %a_len, %b_len');
+  Emit('  %buf = call ptr @np_alloc(i64 %total)');
+  Emit('  call void @np_memcpy(ptr %buf, ptr %a_ptr, i64 %a_len)');
+  Emit('  %dst2 = getelementptr i8, ptr %buf, i64 %a_len');
+  Emit('  call void @np_memcpy(ptr %dst2, ptr %b_ptr, i64 %b_len)');
+  Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %buf, 0');
+  Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
+  Emit('  ret {ptr, i64} %r2');
+  Emit('}');
 end;
 
 function THIRLlvmEmitter.AsText: string;

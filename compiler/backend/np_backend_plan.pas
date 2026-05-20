@@ -592,7 +592,7 @@ begin
     end;
 
     if (GetEnvironmentVariable('NEXTPAS_MIR_BACKEND') = '1') or
-       (FSemaModel = nil) or FNoFold then
+       (FSemaModel = nil) then
     begin
       Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
       try
