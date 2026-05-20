@@ -42,12 +42,17 @@ type
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
+    FCurrentMethodClass: string;
+    FClassVarNames: array of string;
+    FClassVarTypes: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
+    procedure RegisterClassVar(const AName, AClassName: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
+    function LookupClassVar(const AName: string): string;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
     function EncodeStrCallArgs(const ACallNode: TGreenNode;
@@ -287,6 +292,33 @@ begin
     if SameText(FRuntimeArrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
+end;
+
+procedure TSemanticAnalyzer.RegisterClassVar(const AName, AClassName: string);
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FClassVarNames) - 1 do
+    if SameText(FClassVarNames[Idx], AName) then
+    begin
+      FClassVarTypes[Idx] := AClassName;
+      Exit;
+    end;
+  Idx := Length(FClassVarNames);
+  SetLength(FClassVarNames, Idx + 1);
+  SetLength(FClassVarTypes, Idx + 1);
+  FClassVarNames[Idx] := AName;
+  FClassVarTypes[Idx] := AClassName;
+end;
+
+function TSemanticAnalyzer.LookupClassVar(const AName: string): string;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FClassVarNames) - 1 do
+    if SameText(FClassVarNames[Idx], AName) then
+      Exit(FClassVarTypes[Idx]);
+  Result := '';
 end;
 
 function TSemanticAnalyzer.EmitStrConcatOperand(const ANode: TGreenNode;
@@ -2459,6 +2491,58 @@ begin
         Exit(True);
       end;
   end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
+    (ANode.Text <> '') and
+    FModel.LookupConstValue(FCurrentMethodClass + '.' + ANode.Text + '$idx', Folded) then
+  begin
+    ABlob := 'field self ' + IntToStr(Folded) + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    FuncName := LookupClassVar(ANode.ChildAt(0).Text);
+    if FuncName <> '' then
+    begin
+      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+        'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+      Exit(True);
+    end;
+  end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkBinaryExpression) and
+    (ANode.ChildCount >= 2) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) and
+      EncodeRuntimeIntExprFold(ANode.ChildAt(1), ArgName) then
+    begin
+      if ANode.Text = '+' then
+        ABlob := FuncName + ArgName + 'add' + #10
+      else if ANode.Text = '-' then
+        ABlob := FuncName + ArgName + 'sub' + #10
+      else if ANode.Text = '*' then
+        ABlob := FuncName + ArgName + 'mul' + #10
+      else if SameText(ANode.Text, 'div') then
+        ABlob := FuncName + ArgName + 'div' + #10
+      else if SameText(ANode.Text, 'mod') then
+        ABlob := FuncName + ArgName + 'mod' + #10
+      else
+      begin
+        Result := EncodeRuntimeIntExpr(ANode, ABlob);
+        Exit;
+      end;
+      Exit(True);
+    end;
+  end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkUnaryExpression) and
+    (ANode.ChildCount >= 1) and (ANode.Text = '-') then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
+    begin
+      ABlob := FuncName + 'neg' + #10;
+      Exit(True);
+    end;
+  end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
@@ -2632,6 +2716,32 @@ begin
         (Child.ChildAt(0).NodeKind <> gnkDotAccess) and
         (Child.ChildAt(0).NodeKind <> gnkArrayAccess) then
         Arg := Child.ChildAt(0);
+      if FNoFold and (Arg <> nil) and
+        (Arg.NodeKind = gnkFunctionCall) and (Arg.ChildCount >= 1) and
+        (Arg.ChildAt(0) <> nil) and
+        (Arg.ChildAt(0).NodeKind = gnkDotAccess) and
+        (Arg.ChildAt(0).ChildCount >= 2) then
+      begin
+        StringValue := Arg.ChildAt(0).ChildAt(0).Text + '.' +
+          Arg.ChildAt(0).ChildAt(1).Text;
+        if FModel.LookupConstValue(
+          Arg.ChildAt(0).ChildAt(0).Text + '$size', Value) then
+        begin
+          Operand := Decoded + #9 + StringValue;
+          for ArgIndex := 1 to Arg.ChildCount - 1 do
+          begin
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+              Operand := Operand + #9 + StringValue;
+          end;
+          RegisterRuntimeVar(Decoded);
+          RegisterClassVar(Decoded, Arg.ChildAt(0).ChildAt(0).Text);
+          FModel.AddTypedHirNode(
+            'class-new-runtime', IntToStr(Value), 0, 0, Operand
+          );
+          Continue;
+        end;
+      end;
       if Arg <> nil then
       begin
         if FNoFold and IsRuntimeStrVar(Decoded) then
@@ -2690,11 +2800,21 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
-            RegisterRuntimeVar(Decoded);
-            FModel.AddTypedHirNode(
-              'assign-runtime', Decoded, 0, 0,
-              Decoded + #9 + Operand
-            );
+            if (FCurrentMethodClass <> '') and
+              FModel.LookupConstValue(
+                FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
+              FModel.AddTypedHirNode(
+                'field-store-runtime', Decoded, 0, 0,
+                'self' + #9 + IntToStr(Value) + #9 + Operand
+              )
+            else
+            begin
+              RegisterRuntimeVar(Decoded);
+              FModel.AddTypedHirNode(
+                'assign-runtime', Decoded, 0, 0,
+                Decoded + #9 + Operand
+              );
+            end;
           end;
         end
         else if EvaluateIntegerConstant(Arg, Value) then
@@ -2854,6 +2974,39 @@ begin
           end;
         end;
         Continue;
+      end;
+      if FNoFold and (Child.ChildCount >= 1) and
+        (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) then
+      begin
+        StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
+        if StringValue <> '' then
+        begin
+          Operand := StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text +
+            #9 + 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
+          Arg := nil;
+          if (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+            Arg := Child.ChildAt(0)
+          else if (Child.ChildCount >= 2) and
+            (Child.ChildAt(1) <> nil) and
+            (Child.ChildAt(1).NodeKind = gnkFunctionCall) then
+            Arg := Child.ChildAt(1);
+          if Arg <> nil then
+          begin
+            for ArgIndex := 1 to Arg.ChildCount - 1 do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                Operand := Operand + #9 + Decoded;
+            end;
+          end;
+          FModel.AddTypedHirNode('call-runtime',
+            StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text, 0, 0, Operand);
+          Continue;
+        end;
       end;
       if (not FNoFold) and
         LookupProcedureBody(Child.Text, BranchNode, DeclNode) and
@@ -3403,7 +3556,7 @@ var
   ParamCount: LongInt;
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
-  ParamTypes: string;
+  ParamTypes, RetVarName: string;
   IsStrParam, IsStrReturn: Boolean;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
@@ -3458,6 +3611,7 @@ begin
     end;
     if Pos('.', Entry.Name) > 0 then
     begin
+      FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1);
       FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount + 1) + ':p' + ParamTypes);
       RegisterRuntimeVar('self');
@@ -3468,9 +3622,6 @@ begin
     else
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes);
-    RegisterRuntimeVar(Entry.Name);
-    if IsStrReturn then
-      RegisterRuntimeStrVar(Entry.Name);
     if Entry.Decl <> nil then
     begin
       for J := 0 to Entry.Decl.ChildCount - 1 do
@@ -3495,23 +3646,31 @@ begin
         end;
       end;
     end;
-    if IsStrReturn then
-      FModel.AddTypedHirNode('var-decl-str-runtime', Entry.Name, 0, 0, Entry.Name)
+    if Pos('.', Entry.Name) > 0 then
+      RetVarName := Copy(Entry.Name, Pos('.', Entry.Name) + 1, Length(Entry.Name))
     else
-      FModel.AddTypedHirNode('var-decl-runtime', Entry.Name, 0, 0, Entry.Name);
+      RetVarName := Entry.Name;
+    RegisterRuntimeVar(RetVarName);
+    if IsStrReturn then
+      RegisterRuntimeStrVar(RetVarName);
+    if IsStrReturn then
+      FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName, 0, 0, RetVarName)
+    else
+      FModel.AddTypedHirNode('var-decl-runtime', RetVarName, 0, 0, RetVarName);
     SavedTerminated := FCurrentBlockTerminated;
     FCurrentBlockTerminated := False;
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
     begin
       if IsStrReturn then
-        FModel.AddTypedHirNode('ret-str-runtime', Entry.Name, 0, 0, Entry.Name)
+        FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
       else
-        FModel.AddTypedHirNode('ret-runtime', Entry.Name, 0, 0,
-          'var ' + Entry.Name + #10);
+        FModel.AddTypedHirNode('ret-runtime', RetVarName, 0, 0,
+          'var ' + RetVarName + #10);
     end;
     FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
+    FCurrentMethodClass := '';
   end;
 end;
 

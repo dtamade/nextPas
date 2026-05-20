@@ -309,6 +309,14 @@ begin
             ' = call ptr @np_alloc(i64 %arralloc.' +
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
+      end
+      else if AInstr.IntrinsicName = 'class_alloc' then
+      begin
+        FNeedsStrConcat := True;
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = call ptr @np_alloc(i64 %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ')');
       end;
     end;
   end;
