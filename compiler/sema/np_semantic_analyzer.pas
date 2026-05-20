@@ -1839,16 +1839,43 @@ end;
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
-  I: LongInt;
+  I, J: LongInt;
   Child, NameNode: TGreenNode;
   FieldTypeId: LongInt;
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
+  ClsName, ParentName, ConstName, FieldName: string;
+  ParentFieldVal: Int64;
+  DotPos, IdxPos: LongInt;
 begin
   if ANode = nil then
     Exit;
   ClassScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
+  ClsName := FModel.TypeAt(ATypeId - 1).Name;
   FieldIndex := 1;
+  if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    ParentName := ANode.ChildAt(0).Text;
+    if FModel.LookupConstValue(ParentName + '$size', ParentFieldVal) then
+    begin
+      FieldIndex := LongInt(ParentFieldVal) div 8;
+      for J := 0 to FModel.ConstValueCount - 1 do
+      begin
+        ConstName := FModel.ConstValueNameAt(J);
+        if (Pos(ParentName + '.', ConstName) = 1) and
+          (Pos('$idx', ConstName) > 0) then
+        begin
+          DotPos := Pos('.', ConstName);
+          IdxPos := Pos('$idx', ConstName);
+          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+          FModel.AddConstValue(
+            ClsName + '.' + FieldName + '$idx',
+            FModel.ConstValueAt(J));
+        end;
+      end;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -1867,7 +1894,7 @@ begin
         Child.ByteOffset);
       FModel.SetSymbolScope(FModel.SymbolCount, ClassScopeId);
       FModel.AddConstValue(
-        FModel.TypeAt(ATypeId - 1).Name + '.' + Child.Text + '$idx',
+        ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
       Inc(FieldIndex);
     end
@@ -1878,13 +1905,13 @@ begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
           FModel.AddSymbol(
-            FModel.TypeAt(ATypeId - 1).Name + '.' + NameNode.Text,
+            ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
       end;
     end;
   end;
   FModel.AddConstValue(
-    FModel.TypeAt(ATypeId - 1).Name + '$size',
+    ClsName + '$size',
     FieldIndex * 8);
 end;
 

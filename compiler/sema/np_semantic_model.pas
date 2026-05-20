@@ -162,6 +162,9 @@ type
     procedure AddConstValue(const AName: string; const AValue: Int64);
     function LookupConstValue(const AName: string;
       out AValue: Int64): Boolean;
+    function ConstValueCount: LongInt;
+    function ConstValueNameAt(AIndex: LongInt): string;
+    function ConstValueAt(AIndex: LongInt): Int64;
     procedure AddVarInitValue(const AName: string; const AValue: Int64);
     procedure RemoveVarInitValue(const AName: string);
     function LookupVarInitValue(const AName: string;
@@ -603,6 +606,27 @@ begin
       Exit(True);
     end;
   Result := False;
+end;
+
+function TSemanticModel.ConstValueCount: LongInt;
+begin
+  Result := Length(FConstValues);
+end;
+
+function TSemanticModel.ConstValueNameAt(AIndex: LongInt): string;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FConstValues)) then
+    Result := FConstValues[AIndex].Name
+  else
+    Result := '';
+end;
+
+function TSemanticModel.ConstValueAt(AIndex: LongInt): Int64;
+begin
+  if (AIndex >= 0) and (AIndex < Length(FConstValues)) then
+    Result := FConstValues[AIndex].Value
+  else
+    Result := 0;
 end;
 
 procedure TSemanticModel.AddVarInitValue(const AName: string; const AValue: Int64);
