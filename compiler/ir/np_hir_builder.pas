@@ -52,6 +52,7 @@ type
     procedure ProcessVarDecl(const ANode: TTypedHirNode);
     procedure ProcessAssign(const ANode: TTypedHirNode);
     procedure ProcessHaltCall(const ANode: TTypedHirNode);
+    procedure ProcessHaltCallConst(const ANode: TTypedHirNode);
     procedure ProcessCondBr(const ANode: TTypedHirNode);
     procedure ProcessBr(const ANode: TTypedHirNode);
     procedure ProcessBlockLabel(const ANode: TTypedHirNode);
@@ -509,6 +510,30 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessHaltCallConst(const ANode: TTypedHirNode);
+var
+  Instr: THIRInstr;
+  ConstVal: THIRValueId;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + ANode.Operand;
+  EmitInstr(Instr);
+  ConstVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'halt';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeOperand(ConstVal);
+  EmitInstr(Instr);
+  FBlockTerminated := True;
+end;
+
 procedure THIRBuilder.ProcessCondBr(const ANode: TTypedHirNode);
 var
   Term: THIRTerminator;
@@ -854,6 +879,8 @@ begin
     ProcessAssign(ANode)
   else if ANode.Kind = 'halt-call-runtime' then
     ProcessHaltCall(ANode)
+  else if ANode.Kind = 'halt-call' then
+    ProcessHaltCallConst(ANode)
   else if ANode.Kind = 'cond-br-runtime' then
     ProcessCondBr(ANode)
   else if ANode.Kind = 'br-runtime' then
