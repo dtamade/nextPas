@@ -14,16 +14,26 @@ type
     FModule: THIRModule;
     FCurrentFuncId: THIRFuncId;
     FCurrentBlockId: THIRBlockId;
+    FBlockTerminated: Boolean;
     FSavedFuncId: THIRFuncId;
     FSavedBlockId: THIRBlockId;
     FSavedAllocaNames: array of string;
     FSavedAllocaValues: array of THIRValueId;
     FSavedAllocaCount: LongInt;
+    FSavedBlockNames: array of string;
+    FSavedBlockIds: array of THIRBlockId;
+    FSavedBlockCount: LongInt;
 
     FAllocaNames: array of string;
     FAllocaValues: array of THIRValueId;
     FAllocaCount: LongInt;
 
+    FBlockNames: array of string;
+    FBlockIds: array of THIRBlockId;
+    FBlockCount: LongInt;
+
+    function EnsureBlock(const AName: string): THIRBlockId;
+    function FindBlock(const AName: string): THIRBlockId;
     procedure EnsureAlloca(const AName: string; AType: THIRTypeId);
     function FindAlloca(const AName: string): THIRValueId;
     function GetIntType: THIRTypeId;
@@ -77,14 +87,45 @@ begin
   FModule := THIRModule.Create('main');
   FCurrentFuncId := 0;
   FCurrentBlockId := 0;
+  FBlockTerminated := False;
   FAllocaCount := 0;
+  FBlockCount := 0;
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
+  SetLength(FBlockNames, 0);
+  SetLength(FBlockIds, 0);
 end;
 
 destructor THIRBuilder.Destroy;
 begin
   inherited Destroy;
+end;
+
+function THIRBuilder.FindBlock(const AName: string): THIRBlockId;
+var
+  I: LongInt;
+begin
+  for I := 0 to FBlockCount - 1 do
+    if FBlockNames[I] = AName then
+      Exit(FBlockIds[I]);
+  Result := 0;
+end;
+
+function THIRBuilder.EnsureBlock(const AName: string): THIRBlockId;
+begin
+  Result := FindBlock(AName);
+  if Result <> 0 then Exit;
+  if FCurrentFuncId = 0 then Exit(0);
+
+  Result := FModule.AddBlock(FCurrentFuncId, AName);
+  if FBlockCount >= Length(FBlockNames) then
+  begin
+    SetLength(FBlockNames, FBlockCount + 32);
+    SetLength(FBlockIds, FBlockCount + 32);
+  end;
+  FBlockNames[FBlockCount] := AName;
+  FBlockIds[FBlockCount] := Result;
+  Inc(FBlockCount);
 end;
 
 function THIRBuilder.Module: THIRModule;
@@ -456,6 +497,7 @@ begin
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeOperand(V);
     EmitInstr(Instr);
+    FBlockTerminated := True;
   end;
 end;
 
@@ -463,7 +505,7 @@ procedure THIRBuilder.ProcessCondBr(const ANode: TTypedHirNode);
 var
   Term: THIRTerminator;
   V: THIRValueId;
-  Blob, LabelPart, ElseLabel: string;
+  Blob, LabelPart, ThenLabel, ElseLabel: string;
   TabPos, NlPos: LongInt;
 begin
   Blob := ANode.Operand;
@@ -474,6 +516,7 @@ begin
   TabPos := Pos(#9, LabelPart);
   if TabPos > 0 then
   begin
+    ThenLabel := Copy(LabelPart, 1, TabPos - 1);
     ElseLabel := Copy(LabelPart, TabPos + 1, Length(LabelPart));
     if (Length(ElseLabel) > 0) and (ElseLabel[Length(ElseLabel)] = #10) then
       ElseLabel := Copy(ElseLabel, 1, Length(ElseLabel) - 1);
@@ -486,30 +529,52 @@ begin
   FillChar(Term, SizeOf(Term), 0);
   Term.Kind := htkCondBranch;
   Term.Condition := V;
-  Term.TrueBlock := 0;
-  Term.FalseBlock := 0;
+  Term.TrueBlock := EnsureBlock(ThenLabel);
+  Term.FalseBlock := EnsureBlock(ElseLabel);
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+  begin
     FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+    FBlockTerminated := True;
+  end;
 end;
 
 procedure THIRBuilder.ProcessBr(const ANode: TTypedHirNode);
 var
   Term: THIRTerminator;
+  Target: string;
 begin
+  Target := ANode.Operand;
+  if (Length(Target) > 0) and (Target[Length(Target)] = #10) then
+    Target := Copy(Target, 1, Length(Target) - 1);
+
   FillChar(Term, SizeOf(Term), 0);
   Term.Kind := htkBranch;
-  Term.TargetBlock := 0;
+  Term.TargetBlock := EnsureBlock(Target);
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+  begin
     FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+    FBlockTerminated := True;
+  end;
 end;
 
 procedure THIRBuilder.ProcessBlockLabel(const ANode: TTypedHirNode);
 var
   NewBlock: THIRBlockId;
+  Term: THIRTerminator;
 begin
   if FCurrentFuncId = 0 then Exit;
-  NewBlock := FModule.AddBlock(FCurrentFuncId, ANode.Operand);
+  NewBlock := EnsureBlock(ANode.Operand);
+
+  if (FCurrentBlockId <> 0) and (not FBlockTerminated) then
+  begin
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkBranch;
+    Term.TargetBlock := NewBlock;
+    FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+  end;
+
   FCurrentBlockId := NewBlock;
+  FBlockTerminated := False;
 end;
 
 procedure THIRBuilder.ProcessFunctionBegin(const ANode: TTypedHirNode);
@@ -530,6 +595,14 @@ begin
   begin
     FSavedAllocaNames[I] := FAllocaNames[I];
     FSavedAllocaValues[I] := FAllocaValues[I];
+  end;
+  FSavedBlockCount := FBlockCount;
+  SetLength(FSavedBlockNames, FBlockCount);
+  SetLength(FSavedBlockIds, FBlockCount);
+  for I := 0 to FBlockCount - 1 do
+  begin
+    FSavedBlockNames[I] := FBlockNames[I];
+    FSavedBlockIds[I] := FBlockIds[I];
   end;
 
   TabPos := Pos(#9, ANode.Operand);
@@ -582,7 +655,9 @@ begin
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
   FCurrentBlockId := EntryBlock;
+  FBlockTerminated := False;
   FAllocaCount := 0;
+  FBlockCount := 0;
 
   if ParamCount > 0 then
   begin
@@ -623,6 +698,12 @@ begin
     FAllocaNames[I] := FSavedAllocaNames[I];
     FAllocaValues[I] := FSavedAllocaValues[I];
   end;
+  FBlockCount := FSavedBlockCount;
+  for I := 0 to FSavedBlockCount - 1 do
+  begin
+    FBlockNames[I] := FSavedBlockNames[I];
+    FBlockIds[I] := FSavedBlockIds[I];
+  end;
 end;
 
 procedure THIRBuilder.ProcessRetRuntime(const ANode: TTypedHirNode);
@@ -635,7 +716,10 @@ begin
   Term.Kind := htkReturn;
   Term.ReturnValue := V;
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+  begin
     FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+    FBlockTerminated := True;
+  end;
 end;
 
 procedure THIRBuilder.ProcessCallRuntime(const ANode: TTypedHirNode);
@@ -747,6 +831,7 @@ begin
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
   FCurrentBlockId := EntryBlock;
+  FBlockTerminated := False;
 
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
   begin
