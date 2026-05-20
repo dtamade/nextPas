@@ -13,33 +13,32 @@ var
 begin
   SemaModel := TSemanticModel.Create;
 
-  // i := 3; while i > 0 do begin WriteLn(i); i := i - 1; end; Halt(0);
-  SemaModel.AddTypedHirNode('var-decl-runtime', 'i', 0, 0, 'i');
-  SemaModel.AddTypedHirNode('assign-runtime', 'i := 3', 0, 0,
-    'i' + #9 + 'int 3' + #10);
+  // function Double(x): Integer; begin Double := x * 2; end;
+  SemaModel.AddTypedHirNode('function-body-begin', 'Double', 0, 0,
+    'Double' + #9 + 'i' + #9 + '1' + #9 + 'x');
+  SemaModel.AddTypedHirNode('var-decl-runtime', 'x', 0, 0, 'x');
+  SemaModel.AddTypedHirNode('ret-runtime', 'Result', 0, 0,
+    'var x' + #10 + 'int 2' + #10 + 'mul' + #10);
+  SemaModel.AddTypedHirNode('function-body-end', 'Double', 0, 0, '');
 
-  SemaModel.AddTypedHirNode('block-label-runtime', 'wc', 0, 0, 'wc');
-  SemaModel.AddTypedHirNode('cond-br-runtime', 'while i > 0', 0, 0,
-    'var i' + #10 + 'int 0' + #10 + 'cmp sgt' + #10 +
-    'labels wb' + #9 + 'we' + #10);
+  // function Inc3(x): Integer; begin Inc3 := x + 3; end;
+  SemaModel.AddTypedHirNode('function-body-begin', 'Inc3', 0, 0,
+    'Inc3' + #9 + 'i' + #9 + '1' + #9 + 'x');
+  SemaModel.AddTypedHirNode('var-decl-runtime', 'x', 0, 0, 'x');
+  SemaModel.AddTypedHirNode('ret-runtime', 'Result', 0, 0,
+    'var x' + #10 + 'int 3' + #10 + 'add' + #10);
+  SemaModel.AddTypedHirNode('function-body-end', 'Inc3', 0, 0, '');
 
-  SemaModel.AddTypedHirNode('block-label-runtime', 'wb', 0, 0, 'wb');
-  SemaModel.AddTypedHirNode('write-int-runtime', 'WriteLn(i)', 0, 0,
-    'var i' + #10);
-  SemaModel.AddTypedHirNode('assign-runtime', 'i := i - 1', 0, 0,
-    'i' + #9 + 'var i' + #10 + 'int 1' + #10 + 'sub' + #10);
-  SemaModel.AddTypedHirNode('br-runtime', 'goto wc', 0, 0, 'wc');
-
-  SemaModel.AddTypedHirNode('block-label-runtime', 'we', 0, 0, 'we');
-  SemaModel.AddTypedHirNode('halt-call-runtime', 'Halt(0)', 0, 0,
-    'int 0' + #10);
+  // begin Halt(Double(Inc3(2))); end.  => (2+3)*2 = 10
+  SemaModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0,
+    'int 2' + #10 + 'call Inc3 1' + #10 + 'call Double 1' + #10);
 
   Builder := THIRBuilder.Create(SemaModel);
   Builder.Build;
 
   Emitter := THIRLlvmEmitter.Create(Builder.Module);
   Emitter.EmitModule;
-  Emitter.SaveToFile('/tmp/hir_e2e_writeln.ll');
+  Emitter.SaveToFile('/tmp/hir_e2e_compose.ll');
 
   Emitter.Free;
   Builder.Free;
