@@ -903,6 +903,7 @@ begin
 
   Planner := TBackendPlanner.Create(
     FMirModel,
+    FSemanticModel,
     FTargetFacts,
     FOptions.BuildContext.RequestedSourcePath,
     ArtifactRootPath,

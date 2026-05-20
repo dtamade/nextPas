@@ -8,7 +8,9 @@ unit np_backend_plan;
 interface
 
 uses
-  SysUtils, np_mir_model, np_target_facts, np_llvm_emitter, nextpas_json_helpers;
+  SysUtils, np_mir_model, np_target_facts, np_llvm_emitter,
+  np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
+  np_hir_llvm_emitter, nextpas_json_helpers;
 
 type
   TBackendArtifact = record
@@ -115,6 +117,7 @@ type
   TBackendPlanner = class
   private
     FMirModel: TMirModel;
+    FSemaModel: TSemanticModel;
     FTargetFacts: TTargetFactsView;
     FSourcePath: string;
     FArtifactRootPath: string;
@@ -124,6 +127,7 @@ type
   public
     constructor Create(
       const AMirModel: TMirModel;
+      const ASemaModel: TSemanticModel;
       const ATargetFacts: TTargetFactsView;
       const ASourcePath: string;
       const AArtifactRootPath: string;
@@ -488,6 +492,7 @@ end;
 
 constructor TBackendPlanner.Create(
   const AMirModel: TMirModel;
+  const ASemaModel: TSemanticModel;
   const ATargetFacts: TTargetFactsView;
   const ASourcePath: string;
   const AArtifactRootPath: string;
@@ -496,6 +501,7 @@ constructor TBackendPlanner.Create(
 begin
   inherited Create;
   FMirModel := AMirModel;
+  FSemaModel := ASemaModel;
   FTargetFacts := ATargetFacts;
   FSourcePath := ASourcePath;
   FArtifactRootPath := AArtifactRootPath;
@@ -532,6 +538,8 @@ var
   BaseName: string;
   BitcodeArtifactPath: string;
   Emitter: TLlvmEmitter;
+  HirBuilder: THIRBuilder;
+  HirEmitter: THIRLlvmEmitter;
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
@@ -579,15 +587,35 @@ begin
       Exit;
     end;
 
-    Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
-    try
-      if not Emitter.EmitToFile(LlvmIrArtifactPath) then
-      begin
-        FPlan.MarkFailure;
-        Exit;
+    if (GetEnvironmentVariable('NEXTPAS_HIR_BACKEND') = '1') and
+       (FSemaModel <> nil) then
+    begin
+      HirBuilder := THIRBuilder.Create(FSemaModel);
+      try
+        HirBuilder.Build;
+        HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module);
+        try
+          HirEmitter.EmitModule;
+          HirEmitter.SaveToFile(LlvmIrArtifactPath);
+        finally
+          HirEmitter.Free;
+        end;
+      finally
+        HirBuilder.Free;
       end;
-    finally
-      Emitter.Free;
+    end
+    else
+    begin
+      Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
+      try
+        if not Emitter.EmitToFile(LlvmIrArtifactPath) then
+        begin
+          FPlan.MarkFailure;
+          Exit;
+        end;
+      finally
+        Emitter.Free;
+      end;
     end;
   end
   else
