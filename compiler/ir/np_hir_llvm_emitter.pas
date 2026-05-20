@@ -15,12 +15,17 @@ type
     FLineCount: LongInt;
     FNeedsWriteInt: Boolean;
     FNeedsNewline: Boolean;
+    FStrConstants: array of string;
+    FStrConstCount: LongInt;
     procedure Emit(const S: string);
     function TypeToLlvm(ATypeId: THIRTypeId): string;
+    function AddStrConstant(const AValue: string): LongInt;
+    function EscapeLlvmStr(const AValue: string): string;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
+    procedure EmitStrConstants;
   public
     constructor Create(AModule: THIRModule);
     procedure EmitModule;
@@ -191,6 +196,24 @@ begin
             IntToStr(AInstr.Operands[0].ValueId) + ')');
           Emit('  call void @write_newline()');
         end;
+      end
+      else if AInstr.IntrinsicName = 'write_str' then
+      begin
+        I := AddStrConstant(AInstr.CallTarget);
+        Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+          ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
+          IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
+      end
+      else if AInstr.IntrinsicName = 'write_str_var' then
+      begin
+        FNeedsNewline := True;
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId) + ')');
+        end;
       end;
     end;
   end;
@@ -250,6 +273,7 @@ var
   I: LongInt;
 begin
   FLineCount := 0;
+  FStrConstCount := 0;
   FNeedsWriteInt := False;
   FNeedsNewline := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
@@ -258,6 +282,12 @@ begin
 
   for I := 0 to FModule.FunctionCount - 1 do
     EmitFunction(FModule.FunctionAt(I));
+
+  if FStrConstCount > 0 then
+  begin
+    Emit('');
+    EmitStrConstants;
+  end;
 
   if FNeedsWriteInt then
     EmitWriteIntHelper;
@@ -313,6 +343,43 @@ begin
       ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.newline, i64 1)');
     Emit('  ret void');
     Emit('}');
+  end;
+end;
+
+function THIRLlvmEmitter.AddStrConstant(const AValue: string): LongInt;
+begin
+  Result := FStrConstCount;
+  if FStrConstCount >= Length(FStrConstants) then
+    SetLength(FStrConstants, FStrConstCount + 16);
+  FStrConstants[FStrConstCount] := AValue;
+  Inc(FStrConstCount);
+end;
+
+function THIRLlvmEmitter.EscapeLlvmStr(const AValue: string): string;
+var
+  I: LongInt;
+  C: Char;
+begin
+  Result := '';
+  for I := 1 to Length(AValue) do
+  begin
+    C := AValue[I];
+    if (Ord(C) < 32) or (Ord(C) > 126) or (C = '"') or (C = '\') then
+      Result := Result + '\' + LowerCase(IntToHex(Ord(C), 2))
+    else
+      Result := Result + C;
+  end;
+end;
+
+procedure THIRLlvmEmitter.EmitStrConstants;
+var
+  I, Len: LongInt;
+begin
+  for I := 0 to FStrConstCount - 1 do
+  begin
+    Len := Length(FStrConstants[I]);
+    Emit('@.str.' + IntToStr(I) + ' = private constant [' + IntToStr(Len) +
+      ' x i8] c"' + EscapeLlvmStr(FStrConstants[I]) + '"');
   end;
 end;
 
