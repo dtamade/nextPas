@@ -13,11 +13,14 @@ type
     FModule: THIRModule;
     FLines: array of string;
     FLineCount: LongInt;
+    FNeedsWriteInt: Boolean;
+    FNeedsNewline: Boolean;
     procedure Emit(const S: string);
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
+    procedure EmitWriteIntHelper;
   public
     constructor Create(AModule: THIRModule);
     procedure EmitModule;
@@ -35,6 +38,8 @@ begin
   inherited Create;
   FModule := AModule;
   FLineCount := 0;
+  FNeedsWriteInt := False;
+  FNeedsNewline := False;
   SetLength(FLines, 0);
 end;
 
@@ -175,6 +180,17 @@ begin
           Emit('  call void asm sideeffect "movl $0, %edi\0Amovl $$60, %eax\0Asyscall",' +
             ' "r"(i32 %exit_and_' + IntToStr(AInstr.ResultId) + ')');
         end;
+      end
+      else if AInstr.IntrinsicName = 'write_int' then
+      begin
+        FNeedsWriteInt := True;
+        FNeedsNewline := True;
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  call void @write_i64_decimal(i64 %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ')');
+          Emit('  call void @write_newline()');
+        end;
       end;
     end;
   end;
@@ -234,12 +250,70 @@ var
   I: LongInt;
 begin
   FLineCount := 0;
+  FNeedsWriteInt := False;
+  FNeedsNewline := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
 
   for I := 0 to FModule.FunctionCount - 1 do
     EmitFunction(FModule.FunctionAt(I));
+
+  if FNeedsWriteInt then
+    EmitWriteIntHelper;
+end;
+
+procedure THIRLlvmEmitter.EmitWriteIntHelper;
+begin
+  Emit('');
+  Emit('define internal void @write_i64_decimal(i64 %v) {');
+  Emit('entry:');
+  Emit('  %buf = alloca [24 x i8]');
+  Emit('  %is_neg = icmp slt i64 %v, 0');
+  Emit('  %neg_v = sub i64 0, %v');
+  Emit('  %abs_v = select i1 %is_neg, i64 %neg_v, i64 %v');
+  Emit('  %end_ptr = getelementptr [24 x i8], ptr %buf, i64 0, i64 24');
+  Emit('  %first_ptr = getelementptr [24 x i8], ptr %buf, i64 0, i64 23');
+  Emit('  br label %loop');
+  Emit('loop:');
+  Emit('  %cur = phi i64 [ %abs_v, %entry ], [ %nxt, %loop ]');
+  Emit('  %ptr = phi ptr [ %first_ptr, %entry ], [ %ptr_prev, %loop ]');
+  Emit('  %digit = urem i64 %cur, 10');
+  Emit('  %digit_i8 = trunc i64 %digit to i8');
+  Emit('  %digit_ascii = add i8 %digit_i8, 48');
+  Emit('  store i8 %digit_ascii, ptr %ptr');
+  Emit('  %nxt = udiv i64 %cur, 10');
+  Emit('  %ptr_prev = getelementptr i8, ptr %ptr, i64 -1');
+  Emit('  %done = icmp eq i64 %nxt, 0');
+  Emit('  br i1 %done, label %neg_check, label %loop');
+  Emit('neg_check:');
+  Emit('  br i1 %is_neg, label %put_minus, label %finish');
+  Emit('put_minus:');
+  Emit('  store i8 45, ptr %ptr_prev');
+  Emit('  %ptr_minus_prev = getelementptr i8, ptr %ptr_prev, i64 -1');
+  Emit('  br label %finish');
+  Emit('finish:');
+  Emit('  %start_ptr = phi ptr [ %ptr_prev, %neg_check ], [ %ptr_minus_prev, %put_minus ]');
+  Emit('  %start_next = getelementptr i8, ptr %start_ptr, i64 1');
+  Emit('  %len = ptrtoint ptr %end_ptr to i64');
+  Emit('  %start_int = ptrtoint ptr %start_next to i64');
+  Emit('  %write_len = sub i64 %len, %start_int');
+  Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+    ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %start_next, i64 %write_len)');
+  Emit('  ret void');
+  Emit('}');
+
+  if FNeedsNewline then
+  begin
+    Emit('');
+    Emit('@.newline = private constant [1 x i8] c"\0A"');
+    Emit('');
+    Emit('define internal void @write_newline() {');
+    Emit('  call void asm sideeffect "movq $$1, %rax\0Asyscall",' +
+      ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.newline, i64 1)');
+    Emit('  ret void');
+    Emit('}');
+  end;
 end;
 
 function THIRLlvmEmitter.AsText: string;

@@ -13,36 +13,33 @@ var
 begin
   SemaModel := TSemanticModel.Create;
 
-  // i := 0; while i < 5 do i := i + 1; Halt(i);
+  // i := 3; while i > 0 do begin WriteLn(i); i := i - 1; end; Halt(0);
   SemaModel.AddTypedHirNode('var-decl-runtime', 'i', 0, 0, 'i');
-  SemaModel.AddTypedHirNode('assign-runtime', 'i := 0', 0, 0,
-    'i' + #9 + 'int 0' + #10);
+  SemaModel.AddTypedHirNode('assign-runtime', 'i := 3', 0, 0,
+    'i' + #9 + 'int 3' + #10);
 
-  // while condition check
-  SemaModel.AddTypedHirNode('block-label-runtime', 'while_cond', 0, 0, 'while_cond');
-  SemaModel.AddTypedHirNode('cond-br-runtime', 'while i < 5', 0, 0,
-    'var i' + #10 + 'int 5' + #10 + 'cmp slt' + #10 +
-    'labels while_body' + #9 + 'while_end' + #10);
+  SemaModel.AddTypedHirNode('block-label-runtime', 'wc', 0, 0, 'wc');
+  SemaModel.AddTypedHirNode('cond-br-runtime', 'while i > 0', 0, 0,
+    'var i' + #10 + 'int 0' + #10 + 'cmp sgt' + #10 +
+    'labels wb' + #9 + 'we' + #10);
 
-  // while body
-  SemaModel.AddTypedHirNode('block-label-runtime', 'while_body', 0, 0, 'while_body');
-  SemaModel.AddTypedHirNode('assign-runtime', 'i := i + 1', 0, 0,
-    'i' + #9 + 'var i' + #10 + 'int 1' + #10 + 'add' + #10);
-  SemaModel.AddTypedHirNode('br-runtime', 'goto while_cond', 0, 0, 'while_cond');
-
-  // after loop
-  SemaModel.AddTypedHirNode('block-label-runtime', 'while_end', 0, 0, 'while_end');
-  SemaModel.AddTypedHirNode('halt-call-runtime', 'Halt(i)', 0, 0,
+  SemaModel.AddTypedHirNode('block-label-runtime', 'wb', 0, 0, 'wb');
+  SemaModel.AddTypedHirNode('write-int-runtime', 'WriteLn(i)', 0, 0,
     'var i' + #10);
+  SemaModel.AddTypedHirNode('assign-runtime', 'i := i - 1', 0, 0,
+    'i' + #9 + 'var i' + #10 + 'int 1' + #10 + 'sub' + #10);
+  SemaModel.AddTypedHirNode('br-runtime', 'goto wc', 0, 0, 'wc');
+
+  SemaModel.AddTypedHirNode('block-label-runtime', 'we', 0, 0, 'we');
+  SemaModel.AddTypedHirNode('halt-call-runtime', 'Halt(0)', 0, 0,
+    'int 0' + #10);
 
   Builder := THIRBuilder.Create(SemaModel);
   Builder.Build;
 
   Emitter := THIRLlvmEmitter.Create(Builder.Module);
   Emitter.EmitModule;
-  Emitter.SaveToFile('/tmp/hir_e2e_loop.ll');
-
-  WriteLn(Emitter.AsText);
+  Emitter.SaveToFile('/tmp/hir_e2e_writeln.ll');
 
   Emitter.Free;
   Builder.Free;
