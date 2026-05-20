@@ -1748,15 +1748,21 @@ procedure TSemanticAnalyzer.ProcessEnumType(const ANode: TGreenNode;
 var
   I: LongInt;
   Child: TGreenNode;
+  Ordinal: Int64;
 begin
   if ANode = nil then
     Exit;
+  Ordinal := 0;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
     if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+    begin
       FModel.AddSymbol(Child.Text, 'enum-value', AOwnerUnitId, ATypeId,
         Child.ByteOffset);
+      FModel.AddConstValue(Child.Text, Ordinal);
+      Inc(Ordinal);
+    end;
   end;
 end;
 
@@ -2385,12 +2391,17 @@ begin
       IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
-  if (not FNoFold) and NeedsFoldFallback(ANode) then
-    if EvaluateIntegerConstant(ANode, Folded) then
-    begin
-      ABlob := 'int ' + IntToStr(Folded) + #10;
-      Exit(True);
-    end;
+  if NeedsFoldFallback(ANode) then
+  begin
+    if (not FNoFold) or
+      ((ANode.NodeKind = gnkIdentifier) and
+       FModel.LookupConstValue(ANode.Text, Folded)) then
+      if EvaluateIntegerConstant(ANode, Folded) then
+      begin
+        ABlob := 'int ' + IntToStr(Folded) + #10;
+        Exit(True);
+      end;
+  end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
