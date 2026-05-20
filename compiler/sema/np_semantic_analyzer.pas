@@ -116,6 +116,8 @@ type
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure ProcessRecordFields(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
+    procedure ProcessClassFields(const ANode: TGreenNode;
+      const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -962,7 +964,9 @@ begin
         Continue;
       if (SymI.ScopeId = SymJ.ScopeId) and SameText(SymI.Name, SymJ.Name) and
         (SymI.Kind <> 'parameter') and (SymJ.Kind <> 'parameter') and
-        (SymI.Kind <> 'enum-value') and (SymJ.Kind <> 'enum-value') then
+        (SymI.Kind <> 'enum-value') and (SymJ.Kind <> 'enum-value') and
+        (SymI.Kind <> 'method') and (SymJ.Kind <> 'method') and
+        (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') then
       begin
         EmitSemaError(
           'sema.duplicate-declaration',
@@ -1800,6 +1804,58 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
+  const AOwnerUnitId: string; const ATypeId: LongInt);
+var
+  I: LongInt;
+  Child, NameNode: TGreenNode;
+  FieldTypeId: LongInt;
+  FieldIndex: LongInt;
+  ClassScopeId: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+  ClassScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
+  FieldIndex := 1;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if Child = nil then
+      Continue;
+    if Child.NodeKind = gnkClassField then
+    begin
+      FieldTypeId := 0;
+      if Child.ChildCount > 0 then
+      begin
+        NameNode := Child.ChildAt(0);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+          FieldTypeId := ResolveTypeId(NameNode.Text);
+      end;
+      FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
+        Child.ByteOffset);
+      FModel.SetSymbolScope(FModel.SymbolCount, ClassScopeId);
+      FModel.AddConstValue(
+        FModel.TypeAt(ATypeId - 1).Name + '.' + Child.Text + '$idx',
+        FieldIndex);
+      Inc(FieldIndex);
+    end
+    else if Child.NodeKind = gnkClassMethod then
+    begin
+      if Child.ChildCount > 0 then
+      begin
+        NameNode := Child.ChildAt(0);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+          FModel.AddSymbol(
+            FModel.TypeAt(ATypeId - 1).Name + '.' + NameNode.Text,
+            'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+      end;
+    end;
+  end;
+  FModel.AddConstValue(
+    FModel.TypeAt(ATypeId - 1).Name + '$size',
+    FieldIndex * 8);
+end;
+
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
@@ -1836,6 +1892,7 @@ begin
             FModel.SetTypeParent(TypeId,
               FModel.FindTypeByName(TypeChild.ChildAt(0).Text));
         end;
+        ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
       end;
     end;
   end;
