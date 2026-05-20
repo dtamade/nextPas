@@ -2327,6 +2327,8 @@ var
   Folded: Int64;
   FuncName, ArgName: string;
   StrCallIdx, StrCallArgCount: LongInt;
+  BranchNode, DeclNode: TGreenNode;
+  Operand: string;
 begin
   ABlob := '';
   if ANode = nil then
@@ -2339,7 +2341,20 @@ begin
     (IsRuntimeStrVar(ANode.ChildAt(1).Text) or
      IsRuntimeArrVar(ANode.ChildAt(1).Text)) then
   begin
-    ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
+    if LookupProcedureBody(ANode.ChildAt(1).Text, BranchNode, DeclNode) then
+    begin
+      Inc(FBlockLabelCounter);
+      Operand := '$len_tmp_' + IntToStr(FBlockLabelCounter);
+      RegisterRuntimeVar(Operand);
+      RegisterRuntimeStrVar(Operand);
+      FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+      FModel.AddTypedHirNode(
+        'assign-str-call-runtime', ANode.ChildAt(1).Text, 0, 0, Operand
+      );
+      ABlob := 'var ' + Operand + '$len' + #10;
+    end
+    else
+      ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
@@ -2676,10 +2691,27 @@ begin
                 'write-string-runtime', 'Write', 0, 0, StringValue
               )
             else if (RhsNode.NodeKind = gnkIdentifier) and
-              IsRuntimeStrVar(RhsNode.Text) then
+              IsRuntimeStrVar(RhsNode.Text) and
+              not LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) then
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', 'Write', 0, 0, RhsNode.Text
               )
+            else if (RhsNode.NodeKind = gnkIdentifier) and
+              LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
+              IsRuntimeStrVar(RhsNode.Text) then
+            begin
+              Inc(FBlockLabelCounter);
+              Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(Operand);
+              RegisterRuntimeStrVar(Operand);
+              FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+              FModel.AddTypedHirNode(
+                'assign-str-call-runtime', RhsNode.Text, 0, 0, Operand
+              );
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', 'Write', 0, 0, Operand
+              );
+            end
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
               FModel.AddTypedHirNode(
                 'write-int-runtime', 'Write', 0, 0, Operand

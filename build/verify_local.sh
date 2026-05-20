@@ -2450,6 +2450,23 @@ if [ "$LLVM_STRFNCALL_EXIT" -ne 4 ]; then
 fi
 printf 'llvm-strfncall-program=pass\n'
 
+printf 'llvm-strfninline-program=running\n'
+LLVM_STRFNINLINE_OUT_DIR=$(mktemp -d)
+LLVM_STRFNINLINE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_strfninline.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STRFNINLINE_OUT_DIR" >"$LLVM_STRFNINLINE_OUTPUT" 2>&1; then
+  cat "$LLVM_STRFNINLINE_OUTPUT"
+  fail 'llvm-strfninline-program-build-failed'
+fi
+set +e
+"$LLVM_STRFNINLINE_OUT_DIR/llvm_strfninline" >/dev/null 2>&1
+LLVM_STRFNINLINE_EXIT=$?
+set -e
+if [ "$LLVM_STRFNINLINE_EXIT" -ne 11 ]; then
+  printf 'llvm-strfninline-expected-exit=11 actual-exit=%d\n' "$LLVM_STRFNINLINE_EXIT"
+  fail 'llvm-strfninline-program-wrong-exit-code'
+fi
+printf 'llvm-strfninline-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
