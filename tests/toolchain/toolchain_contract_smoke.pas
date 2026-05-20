@@ -538,10 +538,12 @@ begin
 
   BackendPlanner := TBackendPlanner.Create(
     MirModel,
+    nil,
     LlvmFacts,
     'examples/smoke/hello.pas',
     ArtifactDir,
-    ArtifactDir
+    ArtifactDir,
+    True
   );
   try
     BackendPlanner.Plan;

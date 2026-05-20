@@ -122,6 +122,7 @@ type
     FSourcePath: string;
     FArtifactRootPath: string;
     FOutputDirPath: string;
+    FNoFold: Boolean;
     FPlan: TBackendPlan;
     function BackendIntermediateRootPath: string;
   public
@@ -131,7 +132,8 @@ type
       const ATargetFacts: TTargetFactsView;
       const ASourcePath: string;
       const AArtifactRootPath: string;
-      const AOutputDirPath: string
+      const AOutputDirPath: string;
+      const ANoFold: Boolean
     );
     destructor Destroy; override;
     procedure Plan;
@@ -496,7 +498,8 @@ constructor TBackendPlanner.Create(
   const ATargetFacts: TTargetFactsView;
   const ASourcePath: string;
   const AArtifactRootPath: string;
-  const AOutputDirPath: string
+  const AOutputDirPath: string;
+  const ANoFold: Boolean
 );
 begin
   inherited Create;
@@ -506,6 +509,7 @@ begin
   FSourcePath := ASourcePath;
   FArtifactRootPath := AArtifactRootPath;
   FOutputDirPath := AOutputDirPath;
+  FNoFold := ANoFold;
   FPlan := TBackendPlan.Create;
 end;
 
@@ -588,7 +592,7 @@ begin
     end;
 
     if (GetEnvironmentVariable('NEXTPAS_MIR_BACKEND') = '1') or
-       (FSemaModel = nil) then
+       (FSemaModel = nil) or FNoFold then
     begin
       Emitter := TLlvmEmitter.Create(FMirModel, FTargetFacts);
       try

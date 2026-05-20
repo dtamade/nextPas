@@ -907,7 +907,8 @@ begin
     FTargetFacts,
     FOptions.BuildContext.RequestedSourcePath,
     ArtifactRootPath,
-    OutputDirPath
+    OutputDirPath,
+    FOptions.NoFold
   );
   try
     Planner.Plan;
