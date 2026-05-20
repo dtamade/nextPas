@@ -335,7 +335,15 @@ begin
       if V <> 0 then
         Push(EmitLoad(GetIntType, V))
       else
-        Push(0);
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikCall;
+        Instr.TypeId := GetIntType;
+        Instr.CallTarget := Arg;
+        EmitInstr(Instr);
+        Push(Instr.ResultId);
+      end;
     end
     else if Token = 'add' then
     begin
@@ -579,7 +587,7 @@ end;
 
 procedure THIRBuilder.ProcessFunctionBegin(const ANode: TTypedHirNode);
 var
-  TabPos, Pos2, Pos3: LongInt;
+  TabPos, ColonPos, Pos2, Pos3: LongInt;
   FuncName, Rest, ParamCountStr, ParamName: string;
   EntryBlock: THIRBlockId;
   I, ParamCount, SearchFrom: LongInt;
@@ -606,61 +614,55 @@ begin
   end;
 
   TabPos := Pos(#9, ANode.Operand);
+  ColonPos := Pos(':', ANode.Operand);
+
   if TabPos > 0 then
   begin
     FuncName := Copy(ANode.Operand, 1, TabPos - 1);
     Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
-  end
-  else
-  begin
-    FuncName := ANode.Operand;
-    Rest := '';
-  end;
 
-  FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
-
-  ParamCount := 0;
-  if Rest <> '' then
-  begin
-    Pos2 := Pos(#9, Rest);
-    if Pos2 > 0 then
+    ParamCount := 0;
+    if Rest <> '' then
     begin
-      Rest := Copy(Rest, Pos2 + 1, Length(Rest));
-      Pos3 := Pos(#9, Rest);
-      if Pos3 > 0 then
+      Pos2 := Pos(#9, Rest);
+      if Pos2 > 0 then
       begin
-        ParamCountStr := Copy(Rest, 1, Pos3 - 1);
-        ParamCount := StrToIntDef(ParamCountStr, 0);
-        Rest := Copy(Rest, Pos3 + 1, Length(Rest));
+        Rest := Copy(Rest, Pos2 + 1, Length(Rest));
+        Pos3 := Pos(#9, Rest);
+        if Pos3 > 0 then
+        begin
+          ParamCountStr := Copy(Rest, 1, Pos3 - 1);
+          ParamCount := StrToIntDef(ParamCountStr, 0);
+          Rest := Copy(Rest, Pos3 + 1, Length(Rest));
+        end;
       end;
     end;
-  end;
 
-  for I := 0 to ParamCount - 1 do
-  begin
-    SearchFrom := Pos(#9, Rest);
-    if SearchFrom > 0 then
+    FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
+
+    for I := 0 to ParamCount - 1 do
     begin
-      ParamName := Copy(Rest, 1, SearchFrom - 1);
-      Rest := Copy(Rest, SearchFrom + 1, Length(Rest));
-    end
-    else
-    begin
-      ParamName := Rest;
-      Rest := '';
+      SearchFrom := Pos(#9, Rest);
+      if SearchFrom > 0 then
+      begin
+        ParamName := Copy(Rest, 1, SearchFrom - 1);
+        Rest := Copy(Rest, SearchFrom + 1, Length(Rest));
+      end
+      else
+      begin
+        ParamName := Rest;
+        Rest := '';
+      end;
+      FModule.AddFunctionParam(FCurrentFuncId, ParamName, GetIntType, False, False);
     end;
-    FModule.AddFunctionParam(FCurrentFuncId, ParamName, GetIntType, False, False);
-  end;
 
-  EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
-  FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
-  FCurrentBlockId := EntryBlock;
-  FBlockTerminated := False;
-  FAllocaCount := 0;
-  FBlockCount := 0;
+    EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
+    FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
+    FCurrentBlockId := EntryBlock;
+    FBlockTerminated := False;
+    FAllocaCount := 0;
+    FBlockCount := 0;
 
-  if ParamCount > 0 then
-  begin
     for I := 0 to ParamCount - 1 do
     begin
       ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[I].ValueId;
@@ -683,6 +685,22 @@ begin
 
       EmitStore(GetIntType, ParamValueId, Instr.ResultId);
     end;
+  end
+  else
+  begin
+    FuncName := ANode.DisplayName;
+    ParamCount := 0;
+    if ColonPos > 0 then
+      ParamCount := StrToIntDef(Copy(ANode.Operand, 1, ColonPos - 1), 0);
+
+    FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
+
+    EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
+    FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
+    FCurrentBlockId := EntryBlock;
+    FBlockTerminated := False;
+    FAllocaCount := 0;
+    FBlockCount := 0;
   end;
 end;
 
@@ -725,12 +743,49 @@ end;
 procedure THIRBuilder.ProcessCallRuntime(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
+  TabPos: LongInt;
+  FuncName, Rest, ArgBlob: string;
+  ArgValue: THIRValueId;
 begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos > 0 then
+  begin
+    FuncName := Copy(ANode.Operand, 1, TabPos - 1);
+    Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  end
+  else
+  begin
+    FuncName := ANode.Operand;
+    Rest := '';
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikCall;
-  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.CallTarget := ANode.Operand;
+  Instr.TypeId := GetIntType;
+  Instr.CallTarget := FuncName;
+
+  while Rest <> '' do
+  begin
+    TabPos := Pos(#9, Rest);
+    if TabPos > 0 then
+    begin
+      ArgBlob := Copy(Rest, 1, TabPos - 1);
+      Rest := Copy(Rest, TabPos + 1, Length(Rest));
+    end
+    else
+    begin
+      ArgBlob := Rest;
+      Rest := '';
+    end;
+    ArgValue := ParseIntBlob(ArgBlob);
+    if ArgValue <> 0 then
+    begin
+      SetLength(Instr.Operands, Length(Instr.Operands) + 1);
+      Instr.Operands[High(Instr.Operands)] := MakeOperand(ArgValue);
+    end;
+  end;
+
   EmitInstr(Instr);
 end;
 
