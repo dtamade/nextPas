@@ -50,6 +50,8 @@ type
     function IsRuntimeArrVar(const AName: string): Boolean;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
+    function EncodeStrCallArgs(const ACallNode: TGreenNode;
+      const ADestVar: string): string;
     function NewBlockLabel(const APrefix: string): string;
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
@@ -305,6 +307,51 @@ begin
   FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
   FModel.AddTypedHirNode('assign-str-runtime', LitValue, 0, 0, TempName);
   Result := TempName;
+end;
+
+function TSemanticAnalyzer.EncodeStrCallArgs(const ACallNode: TGreenNode;
+  const ADestVar: string): string;
+var
+  ArgIndex: LongInt;
+  ArgNode: TGreenNode;
+  Blob, LitValue: string;
+begin
+  Result := '';
+  ArgIndex := 0;
+  if ACallNode.NodeKind = gnkFunctionCall then
+    ArgIndex := 1;
+  while ArgIndex < ACallNode.ChildCount do
+  begin
+    ArgNode := ACallNode.ChildAt(ArgIndex);
+    if ArgNode = nil then
+    begin
+      Inc(ArgIndex);
+      Continue;
+    end;
+    if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
+      Blob := 'strvar ' + ArgNode.Text + #10
+    else if ArgNode.NodeKind = gnkStringLiteral then
+    begin
+      LitValue := DecodePascalStringLiteral(ArgNode.Text);
+      Blob := EmitStrConcatOperand(ArgNode, ADestVar);
+      if Blob <> '' then
+        Blob := 'strvar ' + Blob + #10
+      else
+        Blob := '';
+    end
+    else if EncodeRuntimeIntExprFold(ArgNode, Blob) then
+      { Blob already set }
+    else
+      Blob := '';
+    if Blob <> '' then
+    begin
+      if Result <> '' then
+        Result := Result + #9 + Blob
+      else
+        Result := Blob;
+    end;
+    Inc(ArgIndex);
+  end;
 end;
 
 procedure TSemanticAnalyzer.EmitBlockLabel(const ALabel: string);
@@ -2520,6 +2567,16 @@ begin
             FModel.AddTypedHirNode(
               'assign-str-call-runtime', Arg.Text, 0, 0, Decoded
             )
+          else if (Arg.NodeKind = gnkFunctionCall) and
+            LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
+            IsRuntimeStrVar(Arg.Text) then
+          begin
+            Operand := EncodeStrCallArgs(Arg, Decoded);
+            FModel.AddTypedHirNode(
+              'assign-str-call-runtime', Arg.Text, 0, 0,
+              Decoded + #9 + Operand
+            );
+          end
           else if (Arg.NodeKind = gnkBinaryExpression) and
             (Arg.Text = '+') and (Arg.ChildCount >= 2) and
             (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then

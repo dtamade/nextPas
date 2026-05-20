@@ -222,8 +222,18 @@ begin
       if Length(Op.OperandRefs) >= 2 then
       begin
         ResultName := '%callstr.' + IntToStr(Op.OperationId);
-        WriteLn(AIrFile, '  ', ResultName,
-          ' = call {ptr, i64} @', Op.Operand, '()');
+        Write(AIrFile, '  ', ResultName, ' = call {ptr, i64} @', Op.Operand, '(');
+        LlvmArgIdx := 0;
+        for I := 2 to Length(Op.OperandRefs) - 1 do
+        begin
+          if LlvmArgIdx > 0 then Write(AIrFile, ', ');
+          if FMirModel.GetValue(Op.OperandRefs[I].ValueId).TypeKind = mtkPtr then
+            Write(AIrFile, 'ptr ', OperandText(Op.OperandRefs[I]))
+          else
+            Write(AIrFile, 'i64 ', OperandText(Op.OperandRefs[I]));
+          Inc(LlvmArgIdx);
+        end;
+        WriteLn(AIrFile, ')');
         WriteLn(AIrFile, '  ', ResultName,
           '.p = extractvalue {ptr, i64} ', ResultName, ', 0');
         WriteLn(AIrFile, '  ', ResultName,

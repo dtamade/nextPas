@@ -1489,6 +1489,14 @@ begin
     begin
       CallFuncName := Node.DisplayName;
       ArgBlob := Node.Operand;
+      TabIdx := Pos(#9, ArgBlob);
+      if TabIdx > 0 then
+      begin
+        CallParts := Copy(ArgBlob, TabIdx + 1, Length(ArgBlob) - TabIdx);
+        ArgBlob := Copy(ArgBlob, 1, TabIdx - 1);
+      end
+      else
+        CallParts := '';
       StrPtrVal := EnsureAllocaPtr(ArgBlob + '$ptr', FCurrentBlockId);
       StrLenVal := EnsureAlloca(ArgBlob + '$len', FCurrentBlockId);
       if (StrPtrVal > 0) and (StrLenVal > 0) then
@@ -1496,6 +1504,54 @@ begin
         SetLength(Operands, 2);
         Operands[0] := MakeValueOperand(StrPtrVal);
         Operands[1] := MakeValueOperand(StrLenVal);
+        while CallParts <> '' do
+        begin
+          TabIdx := Pos(#9, CallParts);
+          if TabIdx > 0 then
+          begin
+            RetType := Copy(CallParts, 1, TabIdx - 1);
+            CallParts := Copy(CallParts, TabIdx + 1, Length(CallParts) - TabIdx);
+          end
+          else
+          begin
+            RetType := CallParts;
+            CallParts := '';
+          end;
+          if (Length(RetType) > 7) and
+            (Copy(RetType, 1, 7) = 'strvar ') then
+          begin
+            RetType := Copy(RetType, 8, Length(RetType) - 8);
+            ExitValue := EnsureAllocaPtr(RetType + '$ptr',
+              FCurrentFuncEntryBlockId);
+            StrPtrVal := FModel.AddValue(mtkPtr, 0, RetType + '.ptr');
+            SetLength(SingleOp, 1);
+            SingleOp[0] := MakeValueOperand(ExitValue);
+            FModel.AddOperationWithResult(
+              'load-ptr', FCurrentBlockId, RetType, '', StrPtrVal, SingleOp
+            );
+            SetLength(Operands, Length(Operands) + 1);
+            Operands[Length(Operands) - 1] := MakeValueOperand(StrPtrVal);
+            ExitValue := EnsureAlloca(RetType + '$len',
+              FCurrentFuncEntryBlockId);
+            StrLenVal := FModel.AddValue(mtkI64, 0, RetType + '.len');
+            SetLength(SingleOp, 1);
+            SingleOp[0] := MakeValueOperand(ExitValue);
+            FModel.AddOperationWithResult(
+              'load', FCurrentBlockId, RetType, '', StrLenVal, SingleOp
+            );
+            SetLength(Operands, Length(Operands) + 1);
+            Operands[Length(Operands) - 1] := MakeValueOperand(StrLenVal);
+          end
+          else
+          begin
+            ExitValue := LowerHaltRuntimeBlob(RetType, FCurrentBlockId);
+            if ExitValue > 0 then
+            begin
+              SetLength(Operands, Length(Operands) + 1);
+              Operands[Length(Operands) - 1] := MakeValueOperand(ExitValue);
+            end;
+          end;
+        end;
         FModel.AddOperationWithResult(
           'call-str', FCurrentBlockId, 'call', CallFuncName, 0, Operands
         );
