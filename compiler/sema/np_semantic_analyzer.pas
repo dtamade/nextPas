@@ -10,7 +10,7 @@ interface
 
 uses
   np_ast_facade, np_diagnostics_sink, np_source_database, np_unit_graph,
-  np_semantic_model, np_green_tree;
+  np_semantic_model, np_green_tree, np_lexer;
 
 type
   TProcedureBodyEntry = record
@@ -141,6 +141,7 @@ type
     procedure WalkRuntimeVarDecls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
     procedure SeedFunctionBodies;
+    procedure SeedImportedUnitBodies;
   public
     constructor Create(
       const ARootAst: TAstFacade;
@@ -1456,6 +1457,7 @@ begin
   FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedDeclarations;
+  SeedImportedUnitBodies;
   AssignScopesToSymbols;
   CheckDuplicateDeclarations;
   CheckUndeclaredIdentifiers;
@@ -3174,6 +3176,92 @@ begin
         'var ' + Entry.Name + #10);
     FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedImportedUnitBodies;
+
+  procedure RegisterBodiesInNode(const ANode: TGreenNode);
+  var
+    ChildIdx, BodyIdx: LongInt;
+    Child, BodyChild: TGreenNode;
+  begin
+    if ANode = nil then
+      Exit;
+    for ChildIdx := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(ChildIdx);
+      if Child = nil then
+        Continue;
+      if (Child.NodeKind = gnkProcedureDecl) or
+        (Child.NodeKind = gnkFunctionDecl) then
+      begin
+        for BodyIdx := 0 to Child.ChildCount - 1 do
+        begin
+          BodyChild := Child.ChildAt(BodyIdx);
+          if (BodyChild <> nil) and (BodyChild.NodeKind = gnkBeginBlock) then
+          begin
+            RegisterProcedureBody(Child.Text, BodyChild, Child);
+            Break;
+          end;
+        end;
+      end
+      else if (Child.NodeKind = gnkInterfaceSection) or
+        (Child.NodeKind = gnkImplementationSection) then
+        RegisterBodiesInNode(Child);
+    end;
+  end;
+
+var
+  Index: LongInt;
+  ResolvedUnit: TResolvedUnit;
+  SourceText, Line: string;
+  UnitLexer: TLexerResult;
+  UnitTree: TGreenTree;
+  F: Text;
+  SourcePath: string;
+  TmpDiag: TDiagnosticsSink;
+begin
+  if FUnitGraph = nil then
+    Exit;
+  TmpDiag := TDiagnosticsSink.Create;
+  try
+    for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+    begin
+      ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
+      if SameText(ResolvedUnit.CanonicalName, FUnitGraph.RootName) then
+        Continue;
+      SourcePath := ResolvedUnit.SourcePath;
+      if Trim(SourcePath) = '' then
+        Continue;
+      if not FileExists(SourcePath) then
+        Continue;
+      Assign(F, SourcePath);
+      {$I-}
+      Reset(F);
+      {$I+}
+      if IOResult <> 0 then
+        Continue;
+      SourceText := '';
+      while not Eof(F) do
+      begin
+        ReadLn(F, Line);
+        if SourceText <> '' then
+          SourceText := SourceText + #10;
+        SourceText := SourceText + Line;
+      end;
+      Close(F);
+      UnitLexer := TLexerResult.Create(SourceText);
+      UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
+      if (UnitTree <> nil) and UnitTree.IsValid and
+        (UnitTree.RootNode <> nil) then
+        RegisterBodiesInNode(UnitTree.RootNode)
+      else if UnitTree <> nil then
+        UnitTree.Free;
+      UnitLexer.Free;
+    end;
+  finally
+    TmpDiag.Free;
   end;
 end;
 

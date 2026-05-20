@@ -2399,6 +2399,23 @@ if [ "$LLVM_STRPARAM_EXIT" -ne 5 ]; then
 fi
 printf 'llvm-strparam-program=pass\n'
 
+printf 'llvm-multiunit-program=running\n'
+LLVM_MULTIUNIT_OUT_DIR=$(mktemp -d)
+LLVM_MULTIUNIT_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_multiunit.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_MULTIUNIT_OUT_DIR" >"$LLVM_MULTIUNIT_OUTPUT" 2>&1; then
+  cat "$LLVM_MULTIUNIT_OUTPUT"
+  fail 'llvm-multiunit-program-build-failed'
+fi
+set +e
+"$LLVM_MULTIUNIT_OUT_DIR/llvm_multiunit" >/dev/null 2>&1
+LLVM_MULTIUNIT_EXIT=$?
+set -e
+if [ "$LLVM_MULTIUNIT_EXIT" -ne 7 ]; then
+  printf 'llvm-multiunit-expected-exit=7 actual-exit=%d\n' "$LLVM_MULTIUNIT_EXIT"
+  fail 'llvm-multiunit-program-wrong-exit-code'
+fi
+printf 'llvm-multiunit-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
@@ -2423,12 +2440,12 @@ require_output_pattern '^type-graph-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'mis
 require_output_pattern '^typed-hir-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-status'
 require_output_pattern '^symbol-count=4$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-symbol-count'
 require_output_pattern '^type-count=20$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-count'
-require_output_pattern '^typed-hir-node-count=7$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-node-count'
+require_output_pattern '^typed-hir-node-count=8$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-node-count'
 require_output_pattern '^runtime-contract-count=2$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-runtime-contract-count'
 require_output_pattern '^typed-hir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-root-name'
 require_output_pattern '^mir-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-status'
 require_output_pattern '^mir-block-count=1$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-block-count'
-require_output_pattern '^mir-operation-count=8$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-operation-count'
+require_output_pattern '^mir-operation-count=9$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-operation-count'
 require_output_pattern '^mir-entry-block=entry$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-entry-block'
 require_output_pattern '^mir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-root-name'
 require_output_pattern '^backend-plan-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-plan-status'
@@ -2505,8 +2522,8 @@ require_output_pattern '^diagnostics-summary=none$' "$SEMANTIC_SMOKE_OUTPUT" 'mi
 require_output_pattern '^human-summary=build succeeded$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-semantic-smoke-human-summary'
 require_output_pattern '"resolvedUnitCount":4' "$SEMANTIC_SMOKE_OUTPUT" 'missing-resolution-envelope-field'
 require_output_pattern '"semanticStatus":"ready"' "$SEMANTIC_SMOKE_OUTPUT" 'missing-semantic-envelope-field'
-require_output_pattern '"typedHirNodeCount":7' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-envelope-field'
-require_output_pattern '"mirOperationCount":8' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-envelope-field'
+require_output_pattern '"typedHirNodeCount":8' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-envelope-field'
+require_output_pattern '"mirOperationCount":9' "$SEMANTIC_SMOKE_OUTPUT" 'missing-mir-envelope-field'
 require_output_pattern '"backendPlanStatus":"ready"' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-envelope-field'
 require_output_pattern '"backendArtifactCount":3' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifact-count-envelope-field'
 require_output_pattern '"backendArtifacts":\[\{"artifactId":1,"kind":"assembly-text","path":"[^"]+/\.nextpas/cache/backend/linux-x86_64/hello_with_units\.s"\},\{"artifactId":2,"kind":"object-file","path":"[^"]+/\.nextpas/cache/backend/linux-x86_64/hello_with_units\.o"\},\{"artifactId":3,"kind":"executable","path":"[^"]+/\.nextpas/out/linux-x86_64/hello_with_units"\}\]' "$SEMANTIC_SMOKE_OUTPUT" 'missing-backend-artifacts-envelope-field'
