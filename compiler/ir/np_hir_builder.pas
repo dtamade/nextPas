@@ -514,10 +514,12 @@ end;
 
 procedure THIRBuilder.ProcessFunctionBegin(const ANode: TTypedHirNode);
 var
-  TabPos: LongInt;
-  FuncName: string;
+  TabPos, Pos2, Pos3: LongInt;
+  FuncName, Rest, ParamCountStr, ParamName: string;
   EntryBlock: THIRBlockId;
-  I: LongInt;
+  I, ParamCount, SearchFrom: LongInt;
+  ParamValueId: THIRValueId;
+  Instr: THIRInstr;
 begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
@@ -532,16 +534,81 @@ begin
 
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
-    FuncName := Copy(ANode.Operand, 1, TabPos - 1)
+  begin
+    FuncName := Copy(ANode.Operand, 1, TabPos - 1);
+    Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  end
   else
+  begin
     FuncName := ANode.Operand;
+    Rest := '';
+  end;
 
   FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
+
+  ParamCount := 0;
+  if Rest <> '' then
+  begin
+    Pos2 := Pos(#9, Rest);
+    if Pos2 > 0 then
+    begin
+      Rest := Copy(Rest, Pos2 + 1, Length(Rest));
+      Pos3 := Pos(#9, Rest);
+      if Pos3 > 0 then
+      begin
+        ParamCountStr := Copy(Rest, 1, Pos3 - 1);
+        ParamCount := StrToIntDef(ParamCountStr, 0);
+        Rest := Copy(Rest, Pos3 + 1, Length(Rest));
+      end;
+    end;
+  end;
+
+  for I := 0 to ParamCount - 1 do
+  begin
+    SearchFrom := Pos(#9, Rest);
+    if SearchFrom > 0 then
+    begin
+      ParamName := Copy(Rest, 1, SearchFrom - 1);
+      Rest := Copy(Rest, SearchFrom + 1, Length(Rest));
+    end
+    else
+    begin
+      ParamName := Rest;
+      Rest := '';
+    end;
+    FModule.AddFunctionParam(FCurrentFuncId, ParamName, GetIntType, False, False);
+  end;
+
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
   FCurrentBlockId := EntryBlock;
-
   FAllocaCount := 0;
+
+  if ParamCount > 0 then
+  begin
+    for I := 0 to ParamCount - 1 do
+    begin
+      ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[I].ValueId;
+      ParamName := FModule.FunctionAt(FModule.FunctionCount - 1).Params[I].Name;
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikAlloca;
+      Instr.TypeId := GetIntType;
+      EmitInstr(Instr);
+
+      if FAllocaCount >= Length(FAllocaNames) then
+      begin
+        SetLength(FAllocaNames, FAllocaCount + 32);
+        SetLength(FAllocaValues, FAllocaCount + 32);
+      end;
+      FAllocaNames[FAllocaCount] := ParamName;
+      FAllocaValues[FAllocaCount] := Instr.ResultId;
+      Inc(FAllocaCount);
+
+      EmitStore(GetIntType, ParamValueId, Instr.ResultId);
+    end;
+  end;
 end;
 
 procedure THIRBuilder.ProcessFunctionEnd(const ANode: TTypedHirNode);
