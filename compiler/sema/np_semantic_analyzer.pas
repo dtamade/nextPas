@@ -1951,7 +1951,15 @@ begin
         FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) then
         FModel.AddConstValue(
           ClsName + '.' + Child.Text + '$ptr', 1);
-      Inc(FieldIndex);
+      if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        (SameText(Child.ChildAt(0).Text, 'String') or
+         SameText(Child.ChildAt(0).Text, 'AnsiString')) then
+      begin
+        FModel.AddConstValue(ClsName + '.' + Child.Text + '$str', 1);
+        Inc(FieldIndex, 2);
+      end
+      else
+        Inc(FieldIndex);
     end
     else if Child.NodeKind = gnkClassMethod then
     begin
@@ -2580,6 +2588,20 @@ begin
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    (FCurrentMethodClass <> '') and
+    FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.ChildAt(1).Text + '$str', Folded) and
+    FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+  begin
+    ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
     ABlob := '';
@@ -3134,6 +3156,16 @@ begin
               'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
             )
           else if (Arg.NodeKind = gnkIdentifier) and
+            (FCurrentMethodClass <> '') and
+            FModel.LookupConstValue(
+              FCurrentMethodClass + '.' + Arg.Text + '$str', Value) and
+            FModel.LookupConstValue(
+              FCurrentMethodClass + '.' + Arg.Text + '$idx', Value) then
+            FModel.AddTypedHirNode(
+              'assign-str-field-load-runtime', Decoded, 0, 0,
+              Decoded + #9 + IntToStr(Value)
+            )
+          else if (Arg.NodeKind = gnkIdentifier) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
             FModel.AddTypedHirNode(
@@ -3165,6 +3197,37 @@ begin
                 );
             end;
           end;
+        end
+        else if FNoFold and (FCurrentMethodClass <> '') and
+          FModel.LookupConstValue(
+            FCurrentMethodClass + '.' + Decoded + '$str', Value) and
+          FModel.LookupConstValue(
+            FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
+        begin
+          if (Arg.NodeKind = gnkStringLiteral) then
+          begin
+            StringValue := DecodePascalStringLiteral(Arg.Text);
+            FModel.AddTypedHirNode(
+              'field-store-str-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(Value) + #9 + 'lit ' + StringValue
+            );
+          end
+          else if EvaluateStringConstant(Arg, StringValue) then
+            FModel.AddTypedHirNode(
+              'field-store-str-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(Value) + #9 + 'lit ' + StringValue
+            )
+          else if (Arg.NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Arg.Text) then
+            FModel.AddTypedHirNode(
+              'field-store-str-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(Value) + #9 + 'var ' + Arg.Text
+            )
+          else
+            FModel.AddTypedHirNode(
+              'field-store-str-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(Value) + #9 + 'var ' + Decoded
+            );
         end
         else if FNoFold and (Arg <> nil) and
           (Arg.NodeKind = gnkFunctionCall) and (Arg.ChildCount >= 1) and
@@ -4291,8 +4354,15 @@ begin
     if Pos('.', Entry.Name) > 0 then
     begin
       FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1);
-      FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
-        IntToStr(ParamCount + 1) + ':p' + ParamTypes);
+      if IsStrReturn then
+        FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount + 1) + ':p' + ParamTypes + ':s')
+      else if IsPtrReturn then
+        FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount + 1) + ':p' + ParamTypes + ':p')
+      else
+        FModel.AddTypedHirNode('method-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount + 1) + ':p' + ParamTypes);
       RegisterRuntimeVar('self');
     end
     else if IsStrReturn then

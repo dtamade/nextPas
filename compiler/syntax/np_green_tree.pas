@@ -2070,7 +2070,8 @@ begin
                 begin
                   Inc(ACursor);
                   if (ACursor < ALexer.TokenCount) and
-                    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
+                     (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
                   begin
                     ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
                       CurrentToken(ALexer, ACursor).ByteOffset, 0,

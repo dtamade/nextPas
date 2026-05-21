@@ -83,6 +83,8 @@ type
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
     procedure ProcessClassNew(const ANode: TTypedHirNode);
     procedure ProcessFieldStore(const ANode: TTypedHirNode);
+    procedure ProcessFieldStoreStr(const ANode: TTypedHirNode);
+    procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
   public
     constructor Create(ASemaModel: TSemanticModel);
@@ -1629,11 +1631,12 @@ end;
 
 procedure THIRBuilder.ProcessMethodBegin(const ANode: TTypedHirNode);
 var
-  I, ColonPos, ParamCount: LongInt;
-  FuncName, Rest, ParamTypes: string;
+  I, ColonPos, ParamCount, Pos2: LongInt;
+  FuncName, Rest, ParamTypes, RetSuffix: string;
   EntryBlock: THIRBlockId;
   ParamValueId: THIRValueId;
   Instr: THIRInstr;
+  RetType: THIRTypeId;
 begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
@@ -1661,16 +1664,40 @@ begin
   ColonPos := Pos(':', Rest);
   ParamCount := 0;
   ParamTypes := '';
+  RetSuffix := '';
   if ColonPos > 0 then
   begin
     ParamCount := StrToIntDef(Copy(Rest, 1, ColonPos - 1), 0);
     ParamTypes := Copy(Rest, ColonPos + 1, Length(Rest));
+    Pos2 := Pos(':', ParamTypes);
+    if Pos2 > 0 then
+    begin
+      RetSuffix := Copy(ParamTypes, Pos2 + 1, Length(ParamTypes));
+      ParamTypes := Copy(ParamTypes, 1, Pos2 - 1);
+    end;
   end;
 
-  FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
+  if RetSuffix = 's' then
+    RetType := GetStringType
+  else if RetSuffix = 'p' then
+    RetType := GetPtrType
+  else
+    RetType := GetIntType;
+
+  FCurrentFuncId := FModule.AddFunction(FuncName, RetType);
   FModule.AddFunctionParam(FCurrentFuncId, 'self', GetPtrType, False, False);
   for I := 1 to ParamCount - 1 do
-    FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetIntType, False, False);
+  begin
+    if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 's') then
+    begin
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntType, False, False);
+    end
+    else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'p') then
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, False, False)
+    else
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetIntType, False, False);
+  end;
 
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
@@ -1924,6 +1951,162 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessFieldStoreStr(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, Rest, IdxStr, SrcSpec, SrcName: string;
+  ObjPtr, IdxVal, FieldPtrPtr, FieldLenPtr, SrcPtr, SrcLen: THIRValueId;
+  Instr: THIRInstr;
+  Idx, IdxPlusOne: LongInt;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  IdxStr := Copy(Rest, 1, TabPos - 1);
+  SrcSpec := Copy(Rest, TabPos + 1, Length(Rest));
+  Idx := StrToIntDef(IdxStr, 0);
+  IdxPlusOne := Idx + 1;
+
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IdxStr;
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldPtrPtr := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(IdxPlusOne);
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldLenPtr := Instr.ResultId;
+
+  if (Length(SrcSpec) > 4) and (Copy(SrcSpec, 1, 4) = 'lit ') then
+  begin
+    SrcName := Copy(SrcSpec, 5, Length(SrcSpec));
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    Instr.IntrinsicName := 'store_str_lit';
+    Instr.CallTarget := SrcName;
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(FieldPtrPtr);
+    Instr.Operands[1] := MakeOperand(FieldLenPtr);
+    EmitInstr(Instr);
+  end
+  else if (Length(SrcSpec) > 4) and (Copy(SrcSpec, 1, 4) = 'var ') then
+  begin
+    SrcName := Copy(SrcSpec, 5, Length(SrcSpec));
+    SrcPtr := FindAlloca(SrcName + '$ptr');
+    SrcLen := FindAlloca(SrcName + '$len');
+    if (SrcPtr = 0) or (SrcLen = 0) then Exit;
+    SrcPtr := EmitLoad(GetPtrType, SrcPtr);
+    SrcLen := EmitLoad(GetIntType, SrcLen);
+    EmitStore(GetPtrType, SrcPtr, FieldPtrPtr);
+    EmitStore(GetIntType, SrcLen, FieldLenPtr);
+  end;
+end;
+
+procedure THIRBuilder.ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  DstName, IdxStr: string;
+  ObjPtr, IdxVal, FieldPtrPtr, FieldLenPtr, LoadedPtr, LoadedLen: THIRValueId;
+  DstPtrAlloca, DstLenAlloca: THIRValueId;
+  Instr: THIRInstr;
+  Idx, IdxPlusOne: LongInt;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  DstName := Copy(ANode.Operand, 1, TabPos - 1);
+  IdxStr := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  Idx := StrToIntDef(IdxStr, 0);
+  IdxPlusOne := Idx + 1;
+
+  ObjPtr := FindAlloca('self');
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(Idx);
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldPtrPtr := Instr.ResultId;
+  LoadedPtr := EmitLoad(GetPtrType, FieldPtrPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(IdxPlusOne);
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldLenPtr := Instr.ResultId;
+  LoadedLen := EmitLoad(GetIntType, FieldLenPtr);
+
+  DstPtrAlloca := FindAlloca(DstName + '$ptr');
+  DstLenAlloca := FindAlloca(DstName + '$len');
+  if (DstPtrAlloca = 0) or (DstLenAlloca = 0) then Exit;
+  EmitStore(GetPtrType, LoadedPtr, DstPtrAlloca);
+  EmitStore(GetIntType, LoadedLen, DstLenAlloca);
+end;
+
 procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);
 begin
   if (ANode.Kind = 'var-decl-runtime') or
@@ -1981,6 +2164,10 @@ begin
     ProcessClassNew(ANode)
   else if ANode.Kind = 'field-store-runtime' then
     ProcessFieldStore(ANode)
+  else if ANode.Kind = 'field-store-str-runtime' then
+    ProcessFieldStoreStr(ANode)
+  else if ANode.Kind = 'assign-str-field-load-runtime' then
+    ProcessAssignStrFieldLoad(ANode)
   else if ANode.Kind = 'vmt-store-runtime' then
     ProcessVmtStore(ANode);
 end;

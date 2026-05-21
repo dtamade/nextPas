@@ -2882,6 +2882,22 @@ if [ "$LLVM_OBJ_FIELD_EXIT" -ne 42 ]; then
 fi
 printf 'llvm-obj-field-program=pass\n'
 
+LLVM_STR_FIELD_OUT_DIR=$(mktemp -d)
+LLVM_STR_FIELD_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_str_field.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STR_FIELD_OUT_DIR" >"$LLVM_STR_FIELD_OUTPUT" 2>&1; then
+  cat "$LLVM_STR_FIELD_OUTPUT"
+  fail 'llvm-str-field-build-failed'
+fi
+set +e
+"$LLVM_STR_FIELD_OUT_DIR/llvm_str_field" >/dev/null 2>&1
+LLVM_STR_FIELD_EXIT=$?
+set -e
+if [ "$LLVM_STR_FIELD_EXIT" -ne 12 ]; then
+  printf 'llvm-str-field-expected-exit=12 actual-exit=%d\n' "$LLVM_STR_FIELD_EXIT"
+  fail 'llvm-str-field-wrong-exit-code'
+fi
+printf 'llvm-str-field-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
