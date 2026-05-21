@@ -2738,6 +2738,38 @@ if [ "$LLVM_RESULTVAR_EXIT" -ne 24 ]; then
 fi
 printf 'llvm-result-var-program=pass\n'
 
+LLVM_BREAKCONT_OUT_DIR=$(mktemp -d)
+LLVM_BREAKCONT_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_break_continue.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_BREAKCONT_OUT_DIR" >"$LLVM_BREAKCONT_OUTPUT" 2>&1; then
+  cat "$LLVM_BREAKCONT_OUTPUT"
+  fail 'llvm-break-continue-build-failed'
+fi
+set +e
+"$LLVM_BREAKCONT_OUT_DIR/llvm_break_continue" >/dev/null 2>&1
+LLVM_BREAKCONT_EXIT=$?
+set -e
+if [ "$LLVM_BREAKCONT_EXIT" -ne 25 ]; then
+  printf 'llvm-break-continue-expected-exit=25 actual-exit=%d\n' "$LLVM_BREAKCONT_EXIT"
+  fail 'llvm-break-continue-wrong-exit-code'
+fi
+printf 'llvm-break-continue-program=pass\n'
+
+LLVM_EXITFUNC_OUT_DIR=$(mktemp -d)
+LLVM_EXITFUNC_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_exit_func.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_EXITFUNC_OUT_DIR" >"$LLVM_EXITFUNC_OUTPUT" 2>&1; then
+  cat "$LLVM_EXITFUNC_OUTPUT"
+  fail 'llvm-exit-func-build-failed'
+fi
+set +e
+"$LLVM_EXITFUNC_OUT_DIR/llvm_exit_func" >/dev/null 2>&1
+LLVM_EXITFUNC_EXIT=$?
+set -e
+if [ "$LLVM_EXITFUNC_EXIT" -ne 45 ]; then
+  printf 'llvm-exit-func-expected-exit=45 actual-exit=%d\n' "$LLVM_EXITFUNC_EXIT"
+  fail 'llvm-exit-func-wrong-exit-code'
+fi
+printf 'llvm-exit-func-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

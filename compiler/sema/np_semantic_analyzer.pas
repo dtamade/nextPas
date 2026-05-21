@@ -39,6 +39,8 @@ type
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
     FCurrentScopeId: LongInt;
+    FBreakLabels: array of string;
+    FContinueLabels: array of string;
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
@@ -2869,6 +2871,30 @@ begin
         WalkHaltCalls(Child);
       Continue;
     end;
+    if (Child.NodeKind = gnkBreakStatement) and FNoFold then
+    begin
+      if Length(FBreakLabels) > 0 then
+        EmitGotoLabel(FBreakLabels[High(FBreakLabels)]);
+      FCurrentBlockTerminated := True;
+      Continue;
+    end;
+    if (Child.NodeKind = gnkContinueStatement) and FNoFold then
+    begin
+      if Length(FContinueLabels) > 0 then
+        EmitGotoLabel(FContinueLabels[High(FContinueLabels)]);
+      FCurrentBlockTerminated := True;
+      Continue;
+    end;
+    if (Child.NodeKind = gnkExitStatement) and FNoFold then
+    begin
+      if FCurrentRetVarName <> '' then
+        FModel.AddTypedHirNode('ret-runtime', FCurrentRetVarName, 0, 0,
+          'var ' + FCurrentRetVarName + #10)
+      else
+        FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
+      FCurrentBlockTerminated := True;
+      Continue;
+    end;
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       Decoded := Child.Text;
@@ -3206,6 +3232,43 @@ begin
         end;
         Continue;
       end;
+      if FNoFold and (SameText(Child.Text, 'Inc') or
+        SameText(Child.Text, 'Dec')) then
+      begin
+        Arg := nil;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and
+          (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end
+        else
+          Arg := Child;
+        if (Arg <> nil) and (Arg.ChildCount > ArgIndex) then
+        begin
+          RhsNode := Arg.ChildAt(ArgIndex);
+          if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) then
+          begin
+            Decoded := RhsNode.Text;
+            if SameText(Child.Text, 'Inc') then
+              StringValue := 'add'
+            else
+              StringValue := 'sub';
+            if (Arg.ChildCount > ArgIndex + 1) and
+              EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+              FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
+                Decoded + #9 + 'var ' + Decoded + #10 + Operand +
+                StringValue + #10)
+            else
+              FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
+                Decoded + #9 + 'var ' + Decoded + #10 + 'int 1' + #10 +
+                StringValue + #10);
+          end;
+        end;
+        Continue;
+      end;
       if FNoFold and (FCurrentMethodClass <> '') and
         (Pos('inherited ', Child.Text) = 1) then
       begin
@@ -3379,6 +3442,10 @@ begin
   CondLabel := NewBlockLabel('while-cond');
   BodyLabel := NewBlockLabel('while-body');
   ExitLabel := NewBlockLabel('while-end');
+  SetLength(FBreakLabels, Length(FBreakLabels) + 1);
+  FBreakLabels[High(FBreakLabels)] := ExitLabel;
+  SetLength(FContinueLabels, Length(FContinueLabels) + 1);
+  FContinueLabels[High(FContinueLabels)] := CondLabel;
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(CondLabel);
   FModel.AddTypedHirNode(
@@ -3390,6 +3457,8 @@ begin
   WalkHaltCalls(BodyNode);
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(ExitLabel);
+  SetLength(FBreakLabels, Length(FBreakLabels) - 1);
+  SetLength(FContinueLabels, Length(FContinueLabels) - 1);
 end;
 
 procedure TSemanticAnalyzer.LowerRuntimeRepeatStatement(const ANode: TGreenNode);
@@ -3406,6 +3475,10 @@ begin
   BodyLabel := NewBlockLabel('repeat-body');
   CondLabel := NewBlockLabel('repeat-cond');
   ExitLabel := NewBlockLabel('repeat-end');
+  SetLength(FBreakLabels, Length(FBreakLabels) + 1);
+  FBreakLabels[High(FBreakLabels)] := ExitLabel;
+  SetLength(FContinueLabels, Length(FContinueLabels) + 1);
+  FContinueLabels[High(FContinueLabels)] := CondLabel;
   EmitGotoLabel(BodyLabel);
   EmitBlockLabel(BodyLabel);
   WalkHaltCalls(BodyNode);
@@ -3417,6 +3490,8 @@ begin
   );
   FCurrentBlockTerminated := True;
   EmitBlockLabel(ExitLabel);
+  SetLength(FBreakLabels, Length(FBreakLabels) - 1);
+  SetLength(FContinueLabels, Length(FContinueLabels) - 1);
 end;
 
 procedure TSemanticAnalyzer.LowerRuntimeCaseStatement(const ANode: TGreenNode);
@@ -3574,6 +3649,10 @@ begin
     CondBlob + 'labels ' + BodyLabel + #9 + ExitLabel + #10
   );
   FCurrentBlockTerminated := True;
+  SetLength(FBreakLabels, Length(FBreakLabels) + 1);
+  FBreakLabels[High(FBreakLabels)] := ExitLabel;
+  SetLength(FContinueLabels, Length(FContinueLabels) + 1);
+  FContinueLabels[High(FContinueLabels)] := StepLabel;
   EmitBlockLabel(BodyLabel);
   WalkHaltCalls(BodyNode);
   EmitGotoLabel(StepLabel);
@@ -3584,6 +3663,8 @@ begin
   );
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(ExitLabel);
+  SetLength(FBreakLabels, Length(FBreakLabels) - 1);
+  SetLength(FContinueLabels, Length(FContinueLabels) - 1);
 end;
 
 procedure TSemanticAnalyzer.UnrollHaltForLoop(const ANode: TGreenNode);
