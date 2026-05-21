@@ -2866,6 +2866,22 @@ if [ "$LLVM_DESTRUCTOR_EXIT" -ne 3 ]; then
 fi
 printf 'llvm-destructor-program=pass\n'
 
+LLVM_OBJ_FIELD_OUT_DIR=$(mktemp -d)
+LLVM_OBJ_FIELD_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_obj_field.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_OBJ_FIELD_OUT_DIR" >"$LLVM_OBJ_FIELD_OUTPUT" 2>&1; then
+  cat "$LLVM_OBJ_FIELD_OUTPUT"
+  fail 'llvm-obj-field-build-failed'
+fi
+set +e
+"$LLVM_OBJ_FIELD_OUT_DIR/llvm_obj_field" >/dev/null 2>&1
+LLVM_OBJ_FIELD_EXIT=$?
+set -e
+if [ "$LLVM_OBJ_FIELD_EXIT" -ne 42 ]; then
+  printf 'llvm-obj-field-expected-exit=42 actual-exit=%d\n' "$LLVM_OBJ_FIELD_EXIT"
+  fail 'llvm-obj-field-wrong-exit-code'
+fi
+printf 'llvm-obj-field-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

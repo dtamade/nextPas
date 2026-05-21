@@ -584,7 +584,12 @@ begin
       if SpacePos > 0 then
       begin
         Token := Copy(Arg, 1, SpacePos - 1);
-        ArgCount := StrToIntDef(Copy(Arg, SpacePos + 1, Length(Arg)), 0);
+        Arg := Copy(Arg, SpacePos + 1, Length(Arg));
+        SpacePos := Pos(' ', Arg);
+        if SpacePos > 0 then
+          ArgCount := StrToIntDef(Copy(Arg, 1, SpacePos - 1), 0)
+        else
+          ArgCount := StrToIntDef(Arg, 0);
       end
       else
       begin
@@ -611,7 +616,10 @@ begin
         Instr.Operands[0] := MakeOperand(V);
         Instr.Operands[1] := MakeOperand(Rhs);
         EmitInstr(Instr);
-        Push(EmitLoad(GetIntType, Instr.ResultId));
+        if Pos(' p', Arg) > 0 then
+          PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
+        else
+          Push(EmitLoad(GetIntType, Instr.ResultId));
       end;
     end
     else if Token = 'vcall' then
@@ -1861,7 +1869,7 @@ end;
 procedure THIRBuilder.ProcessFieldStore(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
-  VarName, Rest, IdxStr, ValBlob: string;
+  VarName, Rest, IdxStr, ValBlob, Token: string;
   ObjPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
   Instr: THIRInstr;
 begin
@@ -1900,7 +1908,20 @@ begin
 
   ValVal := ParseIntBlob(ValBlob);
   if ValVal <> 0 then
-    EmitStore(GetIntType, ValVal, FieldPtr);
+  begin
+    if (Length(ValBlob) > 4) and (Copy(ValBlob, 1, 4) = 'var ') then
+    begin
+      Token := Copy(ValBlob, 5, Length(ValBlob));
+      if (Length(Token) > 0) and (Token[Length(Token)] = #10) then
+        Token := Copy(Token, 1, Length(Token) - 1);
+      if FindAllocaType(Token) = GetPtrType then
+        EmitStore(GetPtrType, ValVal, FieldPtr)
+      else
+        EmitStore(GetIntType, ValVal, FieldPtr);
+    end
+    else
+      EmitStore(GetIntType, ValVal, FieldPtr);
+  end;
 end;
 
 procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);

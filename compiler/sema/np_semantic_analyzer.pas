@@ -1947,6 +1947,10 @@ begin
       FModel.AddConstValue(
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
+      if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) then
+        FModel.AddConstValue(
+          ClsName + '.' + Child.Text + '$ptr', 1);
       Inc(FieldIndex);
     end
     else if Child.NodeKind = gnkClassMethod then
@@ -2667,7 +2671,12 @@ begin
     (ANode.Text <> '') and
     FModel.LookupConstValue(FCurrentMethodClass + '.' + ANode.Text + '$idx', Folded) then
   begin
-    ABlob := 'field self ' + IntToStr(Folded) + #10;
+    ABlob := 'field self ' + IntToStr(Folded);
+    if FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.Text + '$ptr', Folded) then
+      ABlob := ABlob + ' p' + #10
+    else
+      ABlob := ABlob + #10;
     Exit(True);
   end;
   if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
@@ -2687,6 +2696,35 @@ begin
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
     FuncName := LookupClassVar(ANode.ChildAt(0).Text);
+    if (FuncName = '') and (FCurrentMethodClass <> '') and
+      FModel.LookupConstValue(
+        FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '$ptr', Folded) and
+      FModel.LookupConstValue(
+        FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '$idx', Folded) then
+    begin
+      ArgName := 'field self ' + IntToStr(Folded) + ' p' + #10;
+      FuncName := '';
+      for StrCallIdx := 1 to FModel.SymbolCount do
+        if FModel.SymbolAt(StrCallIdx).Name =
+          FCurrentMethodClass + '.' + ANode.ChildAt(0).Text then
+        begin
+          if FModel.SymbolAt(StrCallIdx).TypeId > 0 then
+            FuncName := FModel.TypeAt(
+              FModel.SymbolAt(StrCallIdx).TypeId - 1).Name;
+          Break;
+        end;
+      if FuncName <> '' then
+      begin
+        if FModel.LookupConstValue(
+          FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
+          ABlob := ArgName + 'vcall ' + IntToStr(Folded) + ' 0' + #10
+        else
+          ABlob := ArgName +
+            'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+        Exit(True);
+      end;
+      FuncName := '';
+    end;
     if FuncName <> '' then
     begin
       if FModel.LookupStringConstValue(
@@ -2995,16 +3033,41 @@ begin
             if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
               Operand := Operand + #9 + StringValue;
           end;
-          RegisterRuntimeVar(Decoded);
-          RegisterClassVar(Decoded, Arg.ChildAt(0).ChildAt(0).Text);
-          FModel.AddTypedHirNode(
-            'class-new-runtime', IntToStr(Value), 0, 0, Operand
-          );
-          if FModel.LookupConstValue(
-            Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
-            FModel.AddTypedHirNode('vmt-store-runtime',
-              Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
-              Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
+          if (FCurrentMethodClass <> '') and
+            FModel.LookupConstValue(
+              FCurrentMethodClass + '.' + Decoded + '$idx', CondValue) then
+          begin
+            Inc(FBlockLabelCounter);
+            FuncName := '$obj_tmp_' + IntToStr(FBlockLabelCounter);
+            Operand := FuncName + #9 +
+              Copy(Operand, Pos(#9, Operand) + 1, Length(Operand));
+            RegisterRuntimeVar(FuncName);
+            RegisterClassVar(FuncName, Arg.ChildAt(0).ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'class-new-runtime', IntToStr(Value), 0, 0, Operand
+            );
+            if FModel.LookupConstValue(
+              Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+              FModel.AddTypedHirNode('vmt-store-runtime',
+                Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
+                FuncName + #9 + Arg.ChildAt(0).ChildAt(0).Text);
+            FModel.AddTypedHirNode('field-store-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(CondValue) + #9 +
+              'var ' + FuncName + #10);
+          end
+          else
+          begin
+            RegisterRuntimeVar(Decoded);
+            RegisterClassVar(Decoded, Arg.ChildAt(0).ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'class-new-runtime', IntToStr(Value), 0, 0, Operand
+            );
+            if FModel.LookupConstValue(
+              Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+              FModel.AddTypedHirNode('vmt-store-runtime',
+                Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
+                Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
+          end;
           Continue;
         end;
       end;
