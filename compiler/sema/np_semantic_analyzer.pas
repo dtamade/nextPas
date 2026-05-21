@@ -1918,6 +1918,26 @@ begin
           FModel.AddConstValue(
             ClsName + '.' + FieldName + '$idx',
             FModel.ConstValueAt(J));
+        end
+        else if (Pos(ParentName + '.', ConstName) = 1) and
+          (Pos('$str', ConstName) > 0) then
+        begin
+          DotPos := Pos('.', ConstName);
+          IdxPos := Pos('$str', ConstName);
+          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+          FModel.AddConstValue(
+            ClsName + '.' + FieldName + '$str',
+            FModel.ConstValueAt(J));
+        end
+        else if (Pos(ParentName + '.', ConstName) = 1) and
+          (Pos('$ptr', ConstName) > 0) then
+        begin
+          DotPos := Pos('.', ConstName);
+          IdxPos := Pos('$ptr', ConstName);
+          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+          FModel.AddConstValue(
+            ClsName + '.' + FieldName + '$ptr',
+            FModel.ConstValueAt(J));
         end;
       end;
     end;
