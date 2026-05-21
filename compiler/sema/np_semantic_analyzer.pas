@@ -3336,7 +3336,12 @@ begin
         Continue;
       end;
       if FNoFold and (SameText(Child.Text, 'Inc') or
-        SameText(Child.Text, 'Dec')) then
+        SameText(Child.Text, 'Dec')) and
+        not ((Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+          (Child.ChildAt(0).ChildCount >= 2) and
+          (Child.ChildAt(0).ChildAt(0) <> nil) and
+          (LookupClassVar(Child.ChildAt(0).ChildAt(0).Text) <> '')) then
       begin
         Arg := nil;
         ArgIndex := 0;
@@ -3455,6 +3460,25 @@ begin
             InhParentName + '.' +
             Child.ChildAt(0).ChildAt(0).ChildAt(1).Text,
             0, 0, Operand);
+          Continue;
+        end;
+      end;
+      if FNoFold and (Child.ChildCount >= 1) and
+        (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+        SameText(Child.ChildAt(0).ChildAt(1).Text, 'Free') then
+      begin
+        StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
+        if (StringValue <> '') and
+          FModel.LookupConstValue(StringValue + '$vmt_slot_Destroy', Value) then
+        begin
+          Operand := StringValue + '.Destroy' + #9 +
+            'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
+          FModel.AddTypedHirNode('call-runtime',
+            StringValue + '.Destroy', 0, 0, Operand);
           Continue;
         end;
       end;

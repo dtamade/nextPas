@@ -2850,6 +2850,22 @@ if [ "$LLVM_FACTORY_EXIT" -ne 42 ]; then
 fi
 printf 'llvm-factory-program=pass\n'
 
+LLVM_DESTRUCTOR_OUT_DIR=$(mktemp -d)
+LLVM_DESTRUCTOR_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_destructor.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_DESTRUCTOR_OUT_DIR" >"$LLVM_DESTRUCTOR_OUTPUT" 2>&1; then
+  cat "$LLVM_DESTRUCTOR_OUTPUT"
+  fail 'llvm-destructor-build-failed'
+fi
+set +e
+"$LLVM_DESTRUCTOR_OUT_DIR/llvm_destructor" >/dev/null 2>&1
+LLVM_DESTRUCTOR_EXIT=$?
+set -e
+if [ "$LLVM_DESTRUCTOR_EXIT" -ne 3 ]; then
+  printf 'llvm-destructor-expected-exit=3 actual-exit=%d\n' "$LLVM_DESTRUCTOR_EXIT"
+  fail 'llvm-destructor-wrong-exit-code'
+fi
+printf 'llvm-destructor-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
