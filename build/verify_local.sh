@@ -2578,6 +2578,38 @@ if [ "$LLVM_POLY_EXIT" -ne 42 ]; then
 fi
 printf 'llvm-class-polymorphic-program=pass\n'
 
+LLVM_SELFCALL_OUT_DIR=$(mktemp -d)
+LLVM_SELFCALL_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_self_call.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_SELFCALL_OUT_DIR" >"$LLVM_SELFCALL_OUTPUT" 2>&1; then
+  cat "$LLVM_SELFCALL_OUTPUT"
+  fail 'llvm-class-self-call-build-failed'
+fi
+set +e
+"$LLVM_SELFCALL_OUT_DIR/llvm_class_self_call" >/dev/null 2>&1
+LLVM_SELFCALL_EXIT=$?
+set -e
+if [ "$LLVM_SELFCALL_EXIT" -ne 20 ]; then
+  printf 'llvm-class-self-call-expected-exit=20 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
+  fail 'llvm-class-self-call-wrong-exit-code'
+fi
+printf 'llvm-class-self-call-program=pass\n'
+
+LLVM_OOP_OUT_DIR=$(mktemp -d)
+LLVM_OOP_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_oop_pattern.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_OOP_OUT_DIR" >"$LLVM_OOP_OUTPUT" 2>&1; then
+  cat "$LLVM_OOP_OUTPUT"
+  fail 'llvm-class-oop-pattern-build-failed'
+fi
+set +e
+"$LLVM_OOP_OUT_DIR/llvm_class_oop_pattern" >/dev/null 2>&1
+LLVM_OOP_EXIT=$?
+set -e
+if [ "$LLVM_OOP_EXIT" -ne 14 ]; then
+  printf 'llvm-class-oop-pattern-expected-exit=14 actual-exit=%d\n' "$LLVM_OOP_EXIT"
+  fail 'llvm-class-oop-pattern-wrong-exit-code'
+fi
+printf 'llvm-class-oop-pattern-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
