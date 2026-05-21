@@ -123,6 +123,11 @@ type
     IsExternal: Boolean;
   end;
 
+  THIRVmtGlobal = record
+    ClassName: string;
+    Funcs: array of string;
+  end;
+
   THIRGlobal = record
     Name: string;
     TypeId: THIRTypeId;
@@ -137,6 +142,7 @@ type
     FTypes: THIRTypeTable;
     FFunctions: array of THIRFunction;
     FGlobals: array of THIRGlobal;
+    FVmtGlobals: array of THIRVmtGlobal;
     FNextValueId: THIRValueId;
     FNextBlockId: THIRBlockId;
     FNextFuncId: THIRFuncId;
@@ -171,6 +177,9 @@ type
     function FunctionAt(AIndex: LongInt): THIRFunction;
     function GlobalCount: LongInt;
     function GlobalAt(AIndex: LongInt): THIRGlobal;
+    procedure AddVmtGlobal(const AClassName: string; const AFuncs: array of string);
+    function VmtGlobalCount: LongInt;
+    function VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
   end;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
@@ -200,6 +209,7 @@ begin
   FTypes := THIRTypeTable.Create;
   SetLength(FFunctions, 0);
   SetLength(FGlobals, 0);
+  SetLength(FVmtGlobals, 0);
   FNextValueId := 1;
   FNextBlockId := 1;
   FNextFuncId := 1;
@@ -373,6 +383,30 @@ end;
 function THIRModule.GlobalAt(AIndex: LongInt): THIRGlobal;
 begin
   Result := FGlobals[AIndex];
+end;
+
+procedure THIRModule.AddVmtGlobal(const AClassName: string; const AFuncs: array of string);
+var
+  Idx, I: LongInt;
+begin
+  for Idx := 0 to Length(FVmtGlobals) - 1 do
+    if FVmtGlobals[Idx].ClassName = AClassName then Exit;
+  Idx := Length(FVmtGlobals);
+  SetLength(FVmtGlobals, Idx + 1);
+  FVmtGlobals[Idx].ClassName := AClassName;
+  SetLength(FVmtGlobals[Idx].Funcs, Length(AFuncs));
+  for I := 0 to High(AFuncs) do
+    FVmtGlobals[Idx].Funcs[I] := AFuncs[I];
+end;
+
+function THIRModule.VmtGlobalCount: LongInt;
+begin
+  Result := Length(FVmtGlobals);
+end;
+
+function THIRModule.VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
+begin
+  Result := FVmtGlobals[AIndex];
 end;
 
 end.

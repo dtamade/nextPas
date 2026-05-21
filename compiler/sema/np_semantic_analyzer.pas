@@ -43,6 +43,7 @@ type
     FRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
+    FCurrentRetVarName: string;
     FClassVarNames: array of string;
     FClassVarTypes: array of string;
     procedure RegisterRuntimeVar(const AName: string);
@@ -1875,6 +1876,29 @@ begin
         end;
       end;
     end;
+    if FModel.LookupConstValue(ParentName + '$vmt_count', ParentFieldVal) then
+    begin
+      FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal);
+      for J := 0 to FModel.ConstValueCount - 1 do
+      begin
+        ConstName := FModel.ConstValueNameAt(J);
+        if (Pos(ParentName + '$vmt_slot_', ConstName) = 1) then
+        begin
+          FieldName := Copy(ConstName,
+            Length(ParentName + '$vmt_slot_') + 1, Length(ConstName));
+          FModel.AddConstValue(
+            ClsName + '$vmt_slot_' + FieldName,
+            FModel.ConstValueAt(J));
+        end;
+      end;
+      for J := 0 to ParentFieldVal - 1 do
+      begin
+        ConstName := ParentName + '$vmt_func_' + IntToStr(J);
+        if FModel.LookupStringConstValue(ConstName, FieldName) then
+          FModel.AddStringConstValue(
+            ClsName + '$vmt_func_' + IntToStr(J), FieldName);
+      end;
+    end;
   end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -1904,9 +1928,52 @@ begin
       begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
           FModel.AddSymbol(
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+          if Pos(';virtual', Child.Text) > 0 then
+          begin
+            if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
+              ParentFieldVal := 0;
+            FModel.AddConstValue(
+              ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
+            FModel.AddStringConstValue(
+              ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
+              ClsName + '.' + NameNode.Text);
+            FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal + 1);
+          end
+          else if Pos(';override', Child.Text) > 0 then
+          begin
+            if FModel.LookupConstValue(
+              ParentName + '$vmt_slot_' + NameNode.Text, ParentFieldVal) then
+            begin
+              FModel.AddConstValue(
+                ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
+              FModel.AddStringConstValue(
+                ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
+                ClsName + '.' + NameNode.Text);
+            end;
+          end;
+        end;
+      end;
+    end
+    else if Child.NodeKind = gnkClassProperty then
+    begin
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        NameNode := Child.ChildAt(J);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
+          if Pos('read:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              ClsName + '.' + Child.Text + '$read',
+              Copy(NameNode.Text, 6, Length(NameNode.Text)))
+          else if Pos('write:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              ClsName + '.' + Child.Text + '$write',
+              Copy(NameNode.Text, 7, Length(NameNode.Text)));
+        end;
       end;
     end;
   end;
@@ -2507,6 +2574,57 @@ begin
       IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(0).ChildCount >= 2) and
+    (ANode.ChildAt(0).ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(0).ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    FuncName := LookupClassVar(ANode.ChildAt(0).ChildAt(0).Text);
+    if FuncName <> '' then
+    begin
+      ABlob := '';
+      StrCallArgCount := 0;
+      for StrCallIdx := 1 to ANode.ChildCount - 1 do
+      begin
+        if (ANode.ChildAt(StrCallIdx) <> nil) and
+          EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), ArgName) then
+        begin
+          ABlob := ABlob + ArgName;
+          Inc(StrCallArgCount);
+        end;
+      end;
+      if FModel.LookupConstValue(
+        FuncName + '$vmt_slot_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
+          IntToStr(StrCallArgCount) + #10
+      else
+      begin
+        ArgName := FuncName;
+        while (ArgName <> '') and
+          (FModel.FindSymbolByName(ArgName + '.' +
+            ANode.ChildAt(0).ChildAt(1).Text) = 0) do
+        begin
+          Folded := FModel.FindTypeByName(ArgName);
+          if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+            ArgName := FModel.TypeAt(
+              FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+          else
+            ArgName := '';
+        end;
+        if ArgName = '' then ArgName := FuncName;
+        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob + 'call ' + ArgName + '.' +
+          ANode.ChildAt(0).ChildAt(1).Text + ' ' +
+          IntToStr(StrCallArgCount + 1) + #10;
+      end;
+      Exit(True);
+    end;
+  end;
   if NeedsFoldFallback(ANode) then
   begin
     if (not FNoFold) or
@@ -2525,6 +2643,18 @@ begin
     ABlob := 'field self ' + IntToStr(Folded) + #10;
     Exit(True);
   end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
+    (ANode.Text <> '') and
+    (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.Text) > 0) then
+  begin
+    if FModel.LookupConstValue(
+      FCurrentMethodClass + '$vmt_slot_' + ANode.Text, Folded) then
+      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0' + #10
+    else
+      ABlob := 'var self' + #10 +
+        'call ' + FCurrentMethodClass + '.' + ANode.Text + ' 1' + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
@@ -2532,12 +2662,35 @@ begin
     FuncName := LookupClassVar(ANode.ChildAt(0).Text);
     if FuncName <> '' then
     begin
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-        'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+      if FModel.LookupStringConstValue(
+        FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) then
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'call ' + FuncName + '.' + ArgName + ' 1' + #10
+      else if FModel.LookupConstValue(
+        FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'vcall ' + IntToStr(Folded) + ' 0' + #10
+      else
+      begin
+        ArgName := FuncName;
+        while (ArgName <> '') and
+          (FModel.FindSymbolByName(ArgName + '.' + ANode.ChildAt(1).Text) = 0) do
+        begin
+          Folded := FModel.FindTypeByName(ArgName);
+          if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+            ArgName := FModel.TypeAt(
+              FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+          else
+            ArgName := '';
+        end;
+        if ArgName = '' then ArgName := FuncName;
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'call ' + ArgName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+      end;
       Exit(True);
     end;
   end;
-  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkBinaryExpression) and
+  if (ANode.NodeKind = gnkBinaryExpression) and
     (ANode.ChildCount >= 2) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) and
@@ -2561,7 +2714,7 @@ begin
       Exit(True);
     end;
   end;
-  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkUnaryExpression) and
+  if (ANode.NodeKind = gnkUnaryExpression) and
     (ANode.ChildCount >= 1) and (ANode.Text = '-') then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
@@ -2569,6 +2722,12 @@ begin
       ABlob := FuncName + 'neg' + #10;
       Exit(True);
     end;
+  end;
+  if (ANode.NodeKind = gnkIdentifier) and (ANode.Text = 'Result') and
+    (FCurrentRetVarName <> '') then
+  begin
+    ABlob := 'var ' + FCurrentRetVarName + #10;
+    Exit(True);
   end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
@@ -2637,8 +2796,11 @@ var
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
-  Decoded, StringValue: string;
+  Decoded, StringValue, FuncName, ArgName: string;
   ParamSnaps: TParamSnapshots;
+  InhTypeId, InhParentId: LongInt;
+  InhMethodName, InhParentName: string;
+  DotPos: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -2710,6 +2872,8 @@ begin
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       Decoded := Child.Text;
+      if (Decoded = 'Result') and (FCurrentRetVarName <> '') then
+        Decoded := FCurrentRetVarName;
       if (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
@@ -2766,6 +2930,11 @@ begin
           FModel.AddTypedHirNode(
             'class-new-runtime', IntToStr(Value), 0, 0, Operand
           );
+          if FModel.LookupConstValue(
+            Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+            FModel.AddTypedHirNode('vmt-store-runtime',
+              Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
+              Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
           Continue;
         end;
       end;
@@ -2827,7 +2996,42 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
-            if (FCurrentMethodClass <> '') and
+            DotPos := Pos('.', Decoded);
+            if (DotPos > 0) and (FCurrentMethodClass = '') then
+            begin
+              ArgName := Copy(Decoded, 1, DotPos - 1);
+              FuncName := Copy(Decoded, DotPos + 1, Length(Decoded));
+              StringValue := LookupClassVar(ArgName);
+              if (StringValue <> '') and
+                FModel.LookupStringConstValue(
+                  StringValue + '.' + FuncName + '$write', ArgName) then
+              begin
+                FModel.AddTypedHirNode(
+                  'call-runtime',
+                  StringValue + '.' + ArgName, 0, 0,
+                  StringValue + '.' + ArgName + #9 +
+                  'var ' + Copy(Decoded, 1, DotPos - 1) + #10 + #9 +
+                  Operand
+                );
+              end
+              else if (StringValue <> '') and
+                FModel.LookupConstValue(
+                  StringValue + '.' + FuncName + '$idx', Value) then
+                FModel.AddTypedHirNode(
+                  'field-store-runtime', Decoded, 0, 0,
+                  Copy(Decoded, 1, DotPos - 1) + #9 +
+                  IntToStr(Value) + #9 + Operand
+                )
+              else
+              begin
+                RegisterRuntimeVar(Decoded);
+                FModel.AddTypedHirNode(
+                  'assign-runtime', Decoded, 0, 0,
+                  Decoded + #9 + Operand
+                );
+              end;
+            end
+            else if (FCurrentMethodClass <> '') and
               FModel.LookupConstValue(
                 FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
               FModel.AddTypedHirNode(
@@ -3002,6 +3206,31 @@ begin
         end;
         Continue;
       end;
+      if FNoFold and (FCurrentMethodClass <> '') and
+        (Pos('inherited ', Child.Text) = 1) then
+      begin
+        InhMethodName := Copy(Child.Text, 11, Length(Child.Text));
+        InhTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+        if (InhTypeId > 0) then
+        begin
+          InhParentId := FModel.TypeAt(InhTypeId - 1).ParentTypeId;
+          if InhParentId > 0 then
+          begin
+            InhParentName := FModel.TypeAt(InhParentId - 1).Name;
+            Operand := InhParentName + '.' + InhMethodName + #9 +
+              'var self' + #10;
+            for ArgIndex := 0 to Child.ChildCount - 1 do
+            begin
+              RhsNode := Child.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                Operand := Operand + #9 + Decoded;
+            end;
+            FModel.AddTypedHirNode('call-runtime',
+              InhParentName + '.' + InhMethodName, 0, 0, Operand);
+            Continue;
+          end;
+        end;
+      end;
       if FNoFold and (Child.ChildCount >= 1) and
         (Child.ChildAt(0) <> nil) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
@@ -3012,7 +3241,21 @@ begin
         StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
         if StringValue <> '' then
         begin
-          Operand := StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text +
+          InhParentName := StringValue;
+          while (InhParentName <> '') and
+            (FModel.FindSymbolByName(InhParentName + '.' +
+              Child.ChildAt(0).ChildAt(1).Text) = 0) do
+          begin
+            InhTypeId := FModel.FindTypeByName(InhParentName);
+            if (InhTypeId > 0) and
+              (FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0) then
+              InhParentName := FModel.TypeAt(
+                FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name
+            else
+              InhParentName := '';
+          end;
+          if InhParentName = '' then InhParentName := StringValue;
+          Operand := InhParentName + '.' + Child.ChildAt(0).ChildAt(1).Text +
             #9 + 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
           Arg := nil;
           if (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
@@ -3031,7 +3274,8 @@ begin
             end;
           end;
           FModel.AddTypedHirNode('call-runtime',
-            StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text, 0, 0, Operand);
+            InhParentName + '.' + Child.ChildAt(0).ChildAt(1).Text,
+            0, 0, Operand);
           Continue;
         end;
       end;
@@ -3678,6 +3922,7 @@ begin
     else
       RetVarName := Entry.Name;
     RegisterRuntimeVar(RetVarName);
+    FCurrentRetVarName := RetVarName;
     if IsStrReturn then
       RegisterRuntimeStrVar(RetVarName);
     if IsStrReturn then
@@ -3698,6 +3943,7 @@ begin
     FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
     FCurrentMethodClass := '';
+    FCurrentRetVarName := '';
   end;
 end;
 

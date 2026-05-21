@@ -79,6 +79,7 @@ type
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
     procedure ProcessClassNew(const ANode: TTypedHirNode);
     procedure ProcessFieldStore(const ANode: TTypedHirNode);
+    procedure ProcessVmtStore(const ANode: TTypedHirNode);
   public
     constructor Create(ASemaModel: TSemanticModel);
     destructor Destroy; override;
@@ -290,6 +291,8 @@ var
   CallArgs: array of THIRValueId;
   CallArgTypes: array of THIRTypeId;
   ConstVal: Int64;
+  SlotIdx, ExtraArgCount, VcallI: LongInt;
+  VcallArgs: array of THIRValueId;
 
   procedure Push(AVal: THIRValueId);
   begin
@@ -592,6 +595,69 @@ begin
         EmitInstr(Instr);
         Push(EmitLoad(GetIntType, Instr.ResultId));
       end;
+    end
+    else if Token = 'vcall' then
+    begin
+      SpacePos := Pos(' ', Arg);
+      if SpacePos > 0 then
+      begin
+        SlotIdx := StrToIntDef(Copy(Arg, 1, SpacePos - 1), 0);
+        ExtraArgCount := StrToIntDef(Copy(Arg, SpacePos + 1, Length(Arg)), 0);
+      end
+      else
+      begin
+        SlotIdx := StrToIntDef(Arg, 0);
+        ExtraArgCount := 0;
+      end;
+      SetLength(VcallArgs, ExtraArgCount);
+      for VcallI := ExtraArgCount - 1 downto 0 do
+        VcallArgs[VcallI] := Pop;
+      Rhs := Pop;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'const:0';
+      EmitInstr(Instr);
+      V := Instr.ResultId;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'gep_i64';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeOperand(Rhs);
+      Instr.Operands[1] := MakeOperand(V);
+      EmitInstr(Instr);
+      V := EmitLoad(GetPtrType, Instr.ResultId);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+      EmitInstr(Instr);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'gep_i64';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeOperand(V);
+      Instr.Operands[1] := MakeOperand(Instr.ResultId - 1);
+      EmitInstr(Instr);
+      V := EmitLoad(GetPtrType, Instr.ResultId);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'vcall';
+      SetLength(Instr.Operands, 2 + ExtraArgCount);
+      Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
+      Instr.Operands[1] := MakeTypedOperand(Rhs, GetPtrType);
+      for VcallI := 0 to ExtraArgCount - 1 do
+        Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
     end;
   end;
 
@@ -1669,6 +1735,73 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessVmtStore(const ANode: TTypedHirNode);
+var
+  ClsName, FuncName, VarName: string;
+  VmtCount: Int64;
+  I, TabPos: LongInt;
+  Funcs: array of string;
+  ObjPtr, ZeroVal, SlotPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos > 0 then
+  begin
+    VarName := Copy(ANode.Operand, 1, TabPos - 1);
+    ClsName := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  end
+  else
+  begin
+    VarName := 'self';
+    ClsName := ANode.Operand;
+  end;
+
+  if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
+    Exit;
+  SetLength(Funcs, VmtCount);
+  for I := 0 to VmtCount - 1 do
+  begin
+    if not FSemaModel.LookupStringConstValue(
+      ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
+      FuncName := '';
+    Funcs[I] := FuncName;
+  end;
+  FModule.AddVmtGlobal(ClsName, Funcs);
+
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:0';
+  EmitInstr(Instr);
+  ZeroVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(ZeroVal);
+  EmitInstr(Instr);
+  SlotPtr := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'vmt_store';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(SlotPtr, GetPtrType);
+  Instr.CallTarget := ClsName;
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessFieldStore(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -1769,7 +1902,9 @@ begin
   else if ANode.Kind = 'class-new-runtime' then
     ProcessClassNew(ANode)
   else if ANode.Kind = 'field-store-runtime' then
-    ProcessFieldStore(ANode);
+    ProcessFieldStore(ANode)
+  else if ANode.Kind = 'vmt-store-runtime' then
+    ProcessVmtStore(ANode);
 end;
 
 procedure THIRBuilder.Build;

@@ -2482,6 +2482,38 @@ if [ "$LLVM_CASE_EXIT" -ne 30 ]; then
 fi
 printf 'llvm-case-program=pass\n'
 
+LLVM_CASERANGE_OUT_DIR=$(mktemp -d)
+LLVM_CASERANGE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_case_range.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CASERANGE_OUT_DIR" >"$LLVM_CASERANGE_OUTPUT" 2>&1; then
+  cat "$LLVM_CASERANGE_OUTPUT"
+  fail 'llvm-case-range-build-failed'
+fi
+set +e
+"$LLVM_CASERANGE_OUT_DIR/llvm_case_range" >/dev/null 2>&1
+LLVM_CASERANGE_EXIT=$?
+set -e
+if [ "$LLVM_CASERANGE_EXIT" -ne 6 ]; then
+  printf 'llvm-case-range-expected-exit=6 actual-exit=%d\n' "$LLVM_CASERANGE_EXIT"
+  fail 'llvm-case-range-wrong-exit-code'
+fi
+printf 'llvm-case-range-program=pass\n'
+
+LLVM_ENUMCASE_OUT_DIR=$(mktemp -d)
+LLVM_ENUMCASE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_enum_case.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_ENUMCASE_OUT_DIR" >"$LLVM_ENUMCASE_OUTPUT" 2>&1; then
+  cat "$LLVM_ENUMCASE_OUTPUT"
+  fail 'llvm-enum-case-build-failed'
+fi
+set +e
+"$LLVM_ENUMCASE_OUT_DIR/llvm_enum_case" >/dev/null 2>&1
+LLVM_ENUMCASE_EXIT=$?
+set -e
+if [ "$LLVM_ENUMCASE_EXIT" -ne 10 ]; then
+  printf 'llvm-enum-case-expected-exit=10 actual-exit=%d\n' "$LLVM_ENUMCASE_EXIT"
+  fail 'llvm-enum-case-wrong-exit-code'
+fi
+printf 'llvm-enum-case-program=pass\n'
+
 LLVM_CLASS_OUT_DIR=$(mktemp -d)
 LLVM_CLASS_OUTPUT=$(mktemp)
 if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_basic.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CLASS_OUT_DIR" >"$LLVM_CLASS_OUTPUT" 2>&1; then
@@ -2513,6 +2545,198 @@ if [ "$LLVM_INHERIT_EXIT" -ne 34 ]; then
   fail 'llvm-class-inherit-wrong-exit-code'
 fi
 printf 'llvm-class-inherit-program=pass\n'
+
+LLVM_VIRTUAL_OUT_DIR=$(mktemp -d)
+LLVM_VIRTUAL_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_virtual.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VIRTUAL_OUT_DIR" >"$LLVM_VIRTUAL_OUTPUT" 2>&1; then
+  cat "$LLVM_VIRTUAL_OUTPUT"
+  fail 'llvm-class-virtual-build-failed'
+fi
+set +e
+"$LLVM_VIRTUAL_OUT_DIR/llvm_class_virtual" >/dev/null 2>&1
+LLVM_VIRTUAL_EXIT=$?
+set -e
+if [ "$LLVM_VIRTUAL_EXIT" -ne 25 ]; then
+  printf 'llvm-class-virtual-expected-exit=25 actual-exit=%d\n' "$LLVM_VIRTUAL_EXIT"
+  fail 'llvm-class-virtual-wrong-exit-code'
+fi
+printf 'llvm-class-virtual-program=pass\n'
+
+LLVM_MULTIVIRT_OUT_DIR=$(mktemp -d)
+LLVM_MULTIVIRT_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_multi_virtual.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_MULTIVIRT_OUT_DIR" >"$LLVM_MULTIVIRT_OUTPUT" 2>&1; then
+  cat "$LLVM_MULTIVIRT_OUTPUT"
+  fail 'llvm-class-multi-virtual-build-failed'
+fi
+set +e
+"$LLVM_MULTIVIRT_OUT_DIR/llvm_class_multi_virtual" >/dev/null 2>&1
+LLVM_MULTIVIRT_EXIT=$?
+set -e
+if [ "$LLVM_MULTIVIRT_EXIT" -ne 21 ]; then
+  printf 'llvm-class-multi-virtual-expected-exit=21 actual-exit=%d\n' "$LLVM_MULTIVIRT_EXIT"
+  fail 'llvm-class-multi-virtual-wrong-exit-code'
+fi
+printf 'llvm-class-multi-virtual-program=pass\n'
+
+LLVM_INHERITED_OUT_DIR=$(mktemp -d)
+LLVM_INHERITED_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_inherited.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_INHERITED_OUT_DIR" >"$LLVM_INHERITED_OUTPUT" 2>&1; then
+  cat "$LLVM_INHERITED_OUTPUT"
+  fail 'llvm-class-inherited-build-failed'
+fi
+set +e
+"$LLVM_INHERITED_OUT_DIR/llvm_class_inherited" >/dev/null 2>&1
+LLVM_INHERITED_EXIT=$?
+set -e
+if [ "$LLVM_INHERITED_EXIT" -ne 17 ]; then
+  printf 'llvm-class-inherited-expected-exit=17 actual-exit=%d\n' "$LLVM_INHERITED_EXIT"
+  fail 'llvm-class-inherited-wrong-exit-code'
+fi
+printf 'llvm-class-inherited-program=pass\n'
+
+LLVM_POLY_OUT_DIR=$(mktemp -d)
+LLVM_POLY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_polymorphic.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_POLY_OUT_DIR" >"$LLVM_POLY_OUTPUT" 2>&1; then
+  cat "$LLVM_POLY_OUTPUT"
+  fail 'llvm-class-polymorphic-build-failed'
+fi
+set +e
+"$LLVM_POLY_OUT_DIR/llvm_class_polymorphic" >/dev/null 2>&1
+LLVM_POLY_EXIT=$?
+set -e
+if [ "$LLVM_POLY_EXIT" -ne 42 ]; then
+  printf 'llvm-class-polymorphic-expected-exit=42 actual-exit=%d\n' "$LLVM_POLY_EXIT"
+  fail 'llvm-class-polymorphic-wrong-exit-code'
+fi
+printf 'llvm-class-polymorphic-program=pass\n'
+
+LLVM_SELFCALL_OUT_DIR=$(mktemp -d)
+LLVM_SELFCALL_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_self_call.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_SELFCALL_OUT_DIR" >"$LLVM_SELFCALL_OUTPUT" 2>&1; then
+  cat "$LLVM_SELFCALL_OUTPUT"
+  fail 'llvm-class-self-call-build-failed'
+fi
+set +e
+"$LLVM_SELFCALL_OUT_DIR/llvm_class_self_call" >/dev/null 2>&1
+LLVM_SELFCALL_EXIT=$?
+set -e
+if [ "$LLVM_SELFCALL_EXIT" -ne 20 ]; then
+  printf 'llvm-class-self-call-expected-exit=20 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
+  fail 'llvm-class-self-call-wrong-exit-code'
+fi
+printf 'llvm-class-self-call-program=pass\n'
+
+LLVM_OOP_OUT_DIR=$(mktemp -d)
+LLVM_OOP_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_oop_pattern.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_OOP_OUT_DIR" >"$LLVM_OOP_OUTPUT" 2>&1; then
+  cat "$LLVM_OOP_OUTPUT"
+  fail 'llvm-class-oop-pattern-build-failed'
+fi
+set +e
+"$LLVM_OOP_OUT_DIR/llvm_class_oop_pattern" >/dev/null 2>&1
+LLVM_OOP_EXIT=$?
+set -e
+if [ "$LLVM_OOP_EXIT" -ne 14 ]; then
+  printf 'llvm-class-oop-pattern-expected-exit=14 actual-exit=%d\n' "$LLVM_OOP_EXIT"
+  fail 'llvm-class-oop-pattern-wrong-exit-code'
+fi
+printf 'llvm-class-oop-pattern-program=pass\n'
+
+LLVM_VCALLARGS_OUT_DIR=$(mktemp -d)
+LLVM_VCALLARGS_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_vcall_args.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VCALLARGS_OUT_DIR" >"$LLVM_VCALLARGS_OUTPUT" 2>&1; then
+  cat "$LLVM_VCALLARGS_OUTPUT"
+  fail 'llvm-class-vcall-args-build-failed'
+fi
+set +e
+"$LLVM_VCALLARGS_OUT_DIR/llvm_class_vcall_args" >/dev/null 2>&1
+LLVM_VCALLARGS_EXIT=$?
+set -e
+if [ "$LLVM_VCALLARGS_EXIT" -ne 20 ]; then
+  printf 'llvm-class-vcall-args-expected-exit=20 actual-exit=%d\n' "$LLVM_VCALLARGS_EXIT"
+  fail 'llvm-class-vcall-args-wrong-exit-code'
+fi
+printf 'llvm-class-vcall-args-program=pass\n'
+
+LLVM_METHODARGS_OUT_DIR=$(mktemp -d)
+LLVM_METHODARGS_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_method_args.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_METHODARGS_OUT_DIR" >"$LLVM_METHODARGS_OUTPUT" 2>&1; then
+  cat "$LLVM_METHODARGS_OUTPUT"
+  fail 'llvm-class-method-args-build-failed'
+fi
+set +e
+"$LLVM_METHODARGS_OUT_DIR/llvm_class_method_args" >/dev/null 2>&1
+LLVM_METHODARGS_EXIT=$?
+set -e
+if [ "$LLVM_METHODARGS_EXIT" -ne 40 ]; then
+  printf 'llvm-class-method-args-expected-exit=40 actual-exit=%d\n' "$LLVM_METHODARGS_EXIT"
+  fail 'llvm-class-method-args-wrong-exit-code'
+fi
+printf 'llvm-class-method-args-program=pass\n'
+
+LLVM_OBJCOMPOSE_OUT_DIR=$(mktemp -d)
+LLVM_OBJCOMPOSE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/test_obj_compose.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_OBJCOMPOSE_OUT_DIR" >"$LLVM_OBJCOMPOSE_OUTPUT" 2>&1; then
+  cat "$LLVM_OBJCOMPOSE_OUTPUT"
+  fail 'llvm-class-obj-compose-build-failed'
+fi
+set +e
+"$LLVM_OBJCOMPOSE_OUT_DIR/test_obj_compose" >/dev/null 2>&1
+LLVM_OBJCOMPOSE_EXIT=$?
+set -e
+if [ "$LLVM_OBJCOMPOSE_EXIT" -ne 12 ]; then
+  printf 'llvm-class-obj-compose-expected-exit=12 actual-exit=%d\n' "$LLVM_OBJCOMPOSE_EXIT"
+  fail 'llvm-class-obj-compose-wrong-exit-code'
+fi
+printf 'llvm-class-obj-compose-program=pass\n'
+
+LLVM_NESTED_OUT_DIR=$(mktemp -d)
+LLVM_NESTED_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/test_nested_method.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_NESTED_OUT_DIR" >"$LLVM_NESTED_OUTPUT" 2>&1; then
+  cat "$LLVM_NESTED_OUTPUT"
+  fail 'llvm-class-nested-method-build-failed'
+fi
+set +e
+"$LLVM_NESTED_OUT_DIR/test_nested_method" >/dev/null 2>&1
+LLVM_NESTED_EXIT=$?
+set -e
+if [ "$LLVM_NESTED_EXIT" -ne 15 ]; then
+  printf 'llvm-class-nested-method-expected-exit=15 actual-exit=%d\n' "$LLVM_NESTED_EXIT"
+  fail 'llvm-class-nested-method-wrong-exit-code'
+fi
+printf 'llvm-class-nested-method-program=pass\n'
+
+LLVM_PROPERTY_OUT_DIR=$(mktemp -d)
+LLVM_PROPERTY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_property.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROPERTY_OUT_DIR" >"$LLVM_PROPERTY_OUTPUT" 2>&1; then
+  cat "$LLVM_PROPERTY_OUTPUT"
+  fail 'llvm-property-build-failed'
+fi
+set +e
+"$LLVM_PROPERTY_OUT_DIR/llvm_property" >/dev/null 2>&1
+LLVM_PROPERTY_EXIT=$?
+set -e
+if [ "$LLVM_PROPERTY_EXIT" -ne 12 ]; then
+  printf 'llvm-property-expected-exit=12 actual-exit=%d\n' "$LLVM_PROPERTY_EXIT"
+  fail 'llvm-property-wrong-exit-code'
+fi
+printf 'llvm-property-program=pass\n'
+
+LLVM_RESULTVAR_OUT_DIR=$(mktemp -d)
+LLVM_RESULTVAR_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_result_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_RESULTVAR_OUT_DIR" >"$LLVM_RESULTVAR_OUTPUT" 2>&1; then
+  cat "$LLVM_RESULTVAR_OUTPUT"
+  fail 'llvm-result-var-build-failed'
+fi
+set +e
+"$LLVM_RESULTVAR_OUT_DIR/llvm_result_var" >/dev/null 2>&1
+LLVM_RESULTVAR_EXIT=$?
+set -e
+if [ "$LLVM_RESULTVAR_EXIT" -ne 24 ]; then
+  printf 'llvm-result-var-expected-exit=24 actual-exit=%d\n' "$LLVM_RESULTVAR_EXIT"
+  fail 'llvm-result-var-wrong-exit-code'
+fi
+printf 'llvm-result-var-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
