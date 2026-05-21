@@ -353,12 +353,30 @@ function TSemanticAnalyzer.EmitStrConcatOperand(const ANode: TGreenNode;
   const ADestVar: string): string;
 var
   TempName, LitValue: string;
+  FieldIdx: Int64;
 begin
   Result := '';
   if ANode = nil then
     Exit;
   if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
     Exit(ANode.Text);
+  if (ANode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') and
+    FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.Text + '$str', FieldIdx) and
+    FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.Text + '$idx', FieldIdx) then
+  begin
+    Inc(FBlockLabelCounter);
+    TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(TempName);
+    RegisterRuntimeStrVar(TempName);
+    FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
+    FModel.AddTypedHirNode(
+      'assign-str-field-load-runtime', TempName, 0, 0,
+      TempName + #9 + IntToStr(FieldIdx)
+    );
+    Exit(TempName);
+  end;
   if ANode.NodeKind = gnkStringLiteral then
     LitValue := DecodePascalStringLiteral(ANode.Text)
   else if not EvaluateStringConstant(ANode, LitValue) then
