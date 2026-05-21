@@ -4696,8 +4696,6 @@ begin
               end;
               if IsStrParam then
                 ParamTypes := ParamTypes + 's'
-              else if IsVarP then
-                ParamTypes := ParamTypes + 'v'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
                 FModel.LookupConstValue(
@@ -4709,6 +4707,8 @@ begin
                 else
                   ParamTypes := ParamTypes + 'p';
               end
+              else if IsVarP then
+                ParamTypes := ParamTypes + 'v'
               else
                 ParamTypes := ParamTypes + 'i';
               Inc(ParamCount);

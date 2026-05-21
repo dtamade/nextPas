@@ -2447,6 +2447,9 @@ begin
   RecPtr := FindAlloca(VarName);
   if RecPtr = 0 then Exit;
 
+  if FindAllocaType(VarName) = GetPtrType then
+    RecPtr := EmitLoad(GetPtrType, RecPtr);
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
