@@ -2626,6 +2626,54 @@ if [ "$LLVM_VCALLARGS_EXIT" -ne 20 ]; then
 fi
 printf 'llvm-class-vcall-args-program=pass\n'
 
+LLVM_METHODARGS_OUT_DIR=$(mktemp -d)
+LLVM_METHODARGS_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_method_args.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_METHODARGS_OUT_DIR" >"$LLVM_METHODARGS_OUTPUT" 2>&1; then
+  cat "$LLVM_METHODARGS_OUTPUT"
+  fail 'llvm-class-method-args-build-failed'
+fi
+set +e
+"$LLVM_METHODARGS_OUT_DIR/llvm_class_method_args" >/dev/null 2>&1
+LLVM_METHODARGS_EXIT=$?
+set -e
+if [ "$LLVM_METHODARGS_EXIT" -ne 40 ]; then
+  printf 'llvm-class-method-args-expected-exit=40 actual-exit=%d\n' "$LLVM_METHODARGS_EXIT"
+  fail 'llvm-class-method-args-wrong-exit-code'
+fi
+printf 'llvm-class-method-args-program=pass\n'
+
+LLVM_OBJCOMPOSE_OUT_DIR=$(mktemp -d)
+LLVM_OBJCOMPOSE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/test_obj_compose.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_OBJCOMPOSE_OUT_DIR" >"$LLVM_OBJCOMPOSE_OUTPUT" 2>&1; then
+  cat "$LLVM_OBJCOMPOSE_OUTPUT"
+  fail 'llvm-class-obj-compose-build-failed'
+fi
+set +e
+"$LLVM_OBJCOMPOSE_OUT_DIR/test_obj_compose" >/dev/null 2>&1
+LLVM_OBJCOMPOSE_EXIT=$?
+set -e
+if [ "$LLVM_OBJCOMPOSE_EXIT" -ne 12 ]; then
+  printf 'llvm-class-obj-compose-expected-exit=12 actual-exit=%d\n' "$LLVM_OBJCOMPOSE_EXIT"
+  fail 'llvm-class-obj-compose-wrong-exit-code'
+fi
+printf 'llvm-class-obj-compose-program=pass\n'
+
+LLVM_NESTED_OUT_DIR=$(mktemp -d)
+LLVM_NESTED_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/test_nested_method.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_NESTED_OUT_DIR" >"$LLVM_NESTED_OUTPUT" 2>&1; then
+  cat "$LLVM_NESTED_OUTPUT"
+  fail 'llvm-class-nested-method-build-failed'
+fi
+set +e
+"$LLVM_NESTED_OUT_DIR/test_nested_method" >/dev/null 2>&1
+LLVM_NESTED_EXIT=$?
+set -e
+if [ "$LLVM_NESTED_EXIT" -ne 15 ]; then
+  printf 'llvm-class-nested-method-expected-exit=15 actual-exit=%d\n' "$LLVM_NESTED_EXIT"
+  fail 'llvm-class-nested-method-wrong-exit-code'
+fi
+printf 'llvm-class-nested-method-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

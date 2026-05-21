@@ -1969,6 +1969,36 @@ begin
                   CurrentToken(ALexer, ACursor).Lexeme);
                 Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+                begin
+                  TypeNode.AppendChild(ElementNode);
+                  Inc(ATree.FNodeCount);
+                  while (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+                  begin
+                    Inc(ACursor);
+                    if (ACursor < ALexer.TokenCount) and
+                      (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                    begin
+                      ElementNode := TGreenNode.Create(gnkClassField,
+                        CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                        CurrentToken(ALexer, ACursor).Lexeme);
+                      TypeNode.AppendChild(ElementNode);
+                      Inc(ATree.FNodeCount);
+                      Inc(ACursor);
+                    end;
+                  end;
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                  begin
+                    Inc(ACursor);
+                    if (ACursor < ALexer.TokenCount) and
+                      (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                      Inc(ACursor);
+                  end;
+                  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                end
+                else if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkColon) then
                 begin
                   Inc(ACursor);
@@ -1981,16 +2011,21 @@ begin
                     Inc(ATree.FNodeCount);
                     Inc(ACursor);
                   end;
+                  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                  TypeNode.AppendChild(ElementNode);
+                  Inc(ATree.FNodeCount);
                 end
                 else
+                begin
                   while (ACursor < ALexer.TokenCount) and
                     (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
                     (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
                     (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
                     Inc(ACursor);
-                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
-                TypeNode.AppendChild(ElementNode);
-                Inc(ATree.FNodeCount);
+                  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                  TypeNode.AppendChild(ElementNode);
+                  Inc(ATree.FNodeCount);
+                end;
               end
               else
                 Inc(ACursor);
