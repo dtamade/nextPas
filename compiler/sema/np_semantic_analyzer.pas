@@ -3472,6 +3472,33 @@ begin
                 'write-str-var-runtime', 'Write', 0, 0, Operand
               );
             end
+            else if (RhsNode.NodeKind = gnkDotAccess) and
+              (RhsNode.ChildCount >= 2) and
+              (RhsNode.ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(1) <> nil) and
+              (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
+              (RhsNode.ChildAt(1).NodeKind = gnkIdentifier) and
+              (LookupClassVar(RhsNode.ChildAt(0).Text) <> '') then
+            begin
+              FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
+              if FModel.LookupConstValue(
+                FuncName + '$vmt_slot_' + RhsNode.ChildAt(1).Text, Value) then
+              begin
+                Inc(FBlockLabelCounter);
+                Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+                RegisterRuntimeVar(Operand);
+                RegisterRuntimeStrVar(Operand);
+                FModel.AddTypedHirNode('var-decl-str-runtime', Operand, 0, 0, Operand);
+                FModel.AddTypedHirNode(
+                  'assign-str-vcall-runtime', RhsNode.ChildAt(1).Text, 0, 0,
+                  Operand + #9 + RhsNode.ChildAt(0).Text + #9 +
+                  IntToStr(Value)
+                );
+                FModel.AddTypedHirNode(
+                  'write-str-var-runtime', 'Write', 0, 0, Operand
+                );
+              end;
+            end
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
               FModel.AddTypedHirNode(
                 'write-int-runtime', 'Write', 0, 0, Operand
