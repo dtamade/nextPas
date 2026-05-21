@@ -2802,6 +2802,22 @@ if [ "$LLVM_SELFCALL_EXIT" -ne 9 ]; then
 fi
 printf 'llvm-self-call-program=pass\n'
 
+LLVM_INHCREATE_OUT_DIR=$(mktemp -d)
+LLVM_INHCREATE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_inherit_create.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_INHCREATE_OUT_DIR" >"$LLVM_INHCREATE_OUTPUT" 2>&1; then
+  cat "$LLVM_INHCREATE_OUTPUT"
+  fail 'llvm-inherit-create-build-failed'
+fi
+set +e
+"$LLVM_INHCREATE_OUT_DIR/llvm_inherit_create" >/dev/null 2>&1
+LLVM_INHCREATE_EXIT=$?
+set -e
+if [ "$LLVM_INHCREATE_EXIT" -ne 19 ]; then
+  printf 'llvm-inherit-create-expected-exit=19 actual-exit=%d\n' "$LLVM_INHCREATE_EXIT"
+  fail 'llvm-inherit-create-wrong-exit-code'
+fi
+printf 'llvm-inherit-create-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

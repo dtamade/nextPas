@@ -2939,11 +2939,30 @@ begin
         (Arg.ChildAt(0).NodeKind = gnkDotAccess) and
         (Arg.ChildAt(0).ChildCount >= 2) then
       begin
-        StringValue := Arg.ChildAt(0).ChildAt(0).Text + '.' +
+        InhParentName := Arg.ChildAt(0).ChildAt(0).Text;
+        StringValue := InhParentName + '.' +
           Arg.ChildAt(0).ChildAt(1).Text;
-        if FModel.LookupConstValue(
-          Arg.ChildAt(0).ChildAt(0).Text + '$size', Value) then
+        if FModel.LookupConstValue(InhParentName + '$size', Value) then
         begin
+          if FModel.FindSymbolByName(StringValue) = 0 then
+          begin
+            InhTypeId := FModel.FindTypeByName(InhParentName);
+            while (InhTypeId > 0) and
+              (FModel.FindSymbolByName(InhParentName + '.' +
+                Arg.ChildAt(0).ChildAt(1).Text) = 0) do
+            begin
+              if FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0 then
+              begin
+                InhParentName := FModel.TypeAt(
+                  FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name;
+                InhTypeId := FModel.FindTypeByName(InhParentName);
+              end
+              else
+                Break;
+            end;
+            StringValue := InhParentName + '.' +
+              Arg.ChildAt(0).ChildAt(1).Text;
+          end;
           Operand := Decoded + #9 + StringValue;
           for ArgIndex := 1 to Arg.ChildCount - 1 do
           begin
@@ -2971,7 +2990,26 @@ begin
         if FModel.LookupConstValue(
           Arg.ChildAt(0).Text + '$size', Value) then
         begin
-          StringValue := Arg.ChildAt(0).Text + '.' + Arg.ChildAt(1).Text;
+          InhParentName := Arg.ChildAt(0).Text;
+          StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
+          if FModel.FindSymbolByName(StringValue) = 0 then
+          begin
+            InhTypeId := FModel.FindTypeByName(InhParentName);
+            while (InhTypeId > 0) and
+              (FModel.FindSymbolByName(InhParentName + '.' +
+                Arg.ChildAt(1).Text) = 0) do
+            begin
+              if FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0 then
+              begin
+                InhParentName := FModel.TypeAt(
+                  FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name;
+                InhTypeId := FModel.FindTypeByName(InhParentName);
+              end
+              else
+                Break;
+            end;
+            StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
+          end;
           Operand := Decoded + #9 + StringValue;
           RegisterRuntimeVar(Decoded);
           RegisterClassVar(Decoded, Arg.ChildAt(0).Text);
