@@ -2786,6 +2786,22 @@ if [ "$LLVM_METHODINC_EXIT" -ne 3 ]; then
 fi
 printf 'llvm-method-inc-program=pass\n'
 
+LLVM_SELFCALL_OUT_DIR=$(mktemp -d)
+LLVM_SELFCALL_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_self_call.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_SELFCALL_OUT_DIR" >"$LLVM_SELFCALL_OUTPUT" 2>&1; then
+  cat "$LLVM_SELFCALL_OUTPUT"
+  fail 'llvm-self-call-build-failed'
+fi
+set +e
+"$LLVM_SELFCALL_OUT_DIR/llvm_self_call" >/dev/null 2>&1
+LLVM_SELFCALL_EXIT=$?
+set -e
+if [ "$LLVM_SELFCALL_EXIT" -ne 9 ]; then
+  printf 'llvm-self-call-expected-exit=9 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
+  fail 'llvm-self-call-wrong-exit-code'
+fi
+printf 'llvm-self-call-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

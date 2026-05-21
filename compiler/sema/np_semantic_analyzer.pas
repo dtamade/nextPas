@@ -3444,6 +3444,38 @@ begin
         end;
         Continue;
       end;
+      if FNoFold and (FCurrentMethodClass <> '') and
+        (not LookupProcedureBody(Child.Text, BranchNode, DeclNode)) and
+        LookupProcedureBody(FCurrentMethodClass + '.' + Child.Text,
+          BranchNode, DeclNode) then
+      begin
+        Operand := FCurrentMethodClass + '.' + Child.Text + #9 +
+          'var self' + #10;
+        Arg := nil;
+        if (Child.ChildCount >= 1) and
+          (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+          Arg := Child.ChildAt(0)
+        else
+          Arg := Child;
+        if Arg <> nil then
+        begin
+          if Arg.NodeKind = gnkFunctionCall then
+            ArgIndex := 1
+          else
+            ArgIndex := 0;
+          while ArgIndex < Arg.ChildCount do
+          begin
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              Operand := Operand + #9 + Decoded;
+            Inc(ArgIndex);
+          end;
+        end;
+        FModel.AddTypedHirNode('call-runtime',
+          FCurrentMethodClass + '.' + Child.Text, 0, 0, Operand);
+        Continue;
+      end;
       if FNoFold and LookupProcedureBody(Child.Text, BranchNode, DeclNode) then
       begin
         Operand := Child.Text;
