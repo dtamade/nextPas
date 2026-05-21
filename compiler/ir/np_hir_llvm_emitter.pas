@@ -342,7 +342,8 @@ begin
         if Length(AInstr.Operands) >= 2 then
         begin
           Op := '  %' + IntToStr(AInstr.ResultId) +
-            ' = call i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ' = call ' + TypeToLlvm(AInstr.TypeId) + ' %' +
+            IntToStr(AInstr.Operands[0].ValueId) +
             '(ptr %' + IntToStr(AInstr.Operands[1].ValueId);
           for I := 2 to High(AInstr.Operands) do
           begin

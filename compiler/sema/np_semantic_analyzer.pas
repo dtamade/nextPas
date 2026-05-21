@@ -2033,6 +2033,12 @@ begin
                 ClsName + '.' + NameNode.Text);
             end;
           end;
+          if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
+            (Child.ChildAt(1).NodeKind = gnkIdentifier) and
+            (FModel.LookupConstValue(Child.ChildAt(1).Text + '$size', ParentFieldVal) or
+             SameText(Child.ChildAt(1).Text, ClsName)) then
+            FModel.AddConstValue(
+              ClsName + '$ret_ptr_' + NameNode.Text, 1);
         end;
       end;
     end
@@ -2716,9 +2722,16 @@ begin
       end;
       if FModel.LookupConstValue(
         FuncName + '$vmt_slot_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+      begin
         ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
           ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
-          IntToStr(StrCallArgCount) + #10
+          IntToStr(StrCallArgCount);
+        if FModel.LookupConstValue(
+          FuncName + '$ret_ptr_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+          ABlob := ABlob + ' p' + #10
+        else
+          ABlob := ABlob + #10;
+      end
       else
       begin
         ArgName := FuncName;
@@ -2771,7 +2784,14 @@ begin
   begin
     if FModel.LookupConstValue(
       FCurrentMethodClass + '$vmt_slot_' + ANode.Text, Folded) then
-      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0' + #10
+    begin
+      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0';
+      if FModel.LookupConstValue(
+        FCurrentMethodClass + '$ret_ptr_' + ANode.Text, Folded) then
+        ABlob := ABlob + ' p' + #10
+      else
+        ABlob := ABlob + #10;
+    end
     else
       ABlob := 'var self' + #10 +
         'call ' + FCurrentMethodClass + '.' + ANode.Text + ' 1' + #10;
@@ -2803,7 +2823,14 @@ begin
       begin
         if FModel.LookupConstValue(
           FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
-          ABlob := ArgName + 'vcall ' + IntToStr(Folded) + ' 0' + #10
+        begin
+          ABlob := ArgName + 'vcall ' + IntToStr(Folded) + ' 0';
+          if FModel.LookupConstValue(
+            FuncName + '$ret_ptr_' + ANode.ChildAt(1).Text, Folded) then
+            ABlob := ABlob + ' p' + #10
+          else
+            ABlob := ABlob + #10;
+        end
         else
           ABlob := ArgName +
             'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
@@ -2819,8 +2846,15 @@ begin
           'call ' + FuncName + '.' + ArgName + ' 1' + #10
       else if FModel.LookupConstValue(
         FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
+      begin
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-          'vcall ' + IntToStr(Folded) + ' 0' + #10
+          'vcall ' + IntToStr(Folded) + ' 0';
+        if FModel.LookupConstValue(
+          FuncName + '$ret_ptr_' + ANode.ChildAt(1).Text, Folded) then
+          ABlob := ABlob + ' p' + #10
+        else
+          ABlob := ABlob + #10;
+      end
       else
       begin
         ArgName := FuncName;

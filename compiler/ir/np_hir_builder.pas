@@ -668,6 +668,13 @@ begin
     end
     else if Token = 'vcall' then
     begin
+      CmpLhsType := 0;
+      if (Length(Arg) > 2) and (Arg[Length(Arg)] = 'p') and
+        (Arg[Length(Arg) - 1] = ' ') then
+      begin
+        CmpLhsType := GetPtrType;
+        Arg := Copy(Arg, 1, Length(Arg) - 2);
+      end;
       SpacePos := Pos(' ', Arg);
       if SpacePos > 0 then
       begin
@@ -726,7 +733,10 @@ begin
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetIntType;
+      if CmpLhsType = GetPtrType then
+        Instr.TypeId := GetPtrType
+      else
+        Instr.TypeId := GetIntType;
       Instr.IntrinsicName := 'vcall';
       SetLength(Instr.Operands, 2 + ExtraArgCount);
       Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
@@ -739,7 +749,10 @@ begin
           Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
       end;
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      if CmpLhsType = GetPtrType then
+        PushTyped(Instr.ResultId, GetPtrType)
+      else
+        Push(Instr.ResultId);
     end;
   end;
 
@@ -2104,6 +2117,9 @@ begin
       else
         EmitStore(GetIntType, ValVal, FieldPtr);
     end
+    else if (Pos(' p' + #10, ValBlob) > 0) or
+      (Copy(ValBlob, 1, 4) = 'null') then
+      EmitStore(GetPtrType, ValVal, FieldPtr)
     else
       EmitStore(GetIntType, ValVal, FieldPtr);
   end;
