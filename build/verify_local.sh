@@ -2482,6 +2482,38 @@ if [ "$LLVM_CASE_EXIT" -ne 30 ]; then
 fi
 printf 'llvm-case-program=pass\n'
 
+LLVM_CASERANGE_OUT_DIR=$(mktemp -d)
+LLVM_CASERANGE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_case_range.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CASERANGE_OUT_DIR" >"$LLVM_CASERANGE_OUTPUT" 2>&1; then
+  cat "$LLVM_CASERANGE_OUTPUT"
+  fail 'llvm-case-range-build-failed'
+fi
+set +e
+"$LLVM_CASERANGE_OUT_DIR/llvm_case_range" >/dev/null 2>&1
+LLVM_CASERANGE_EXIT=$?
+set -e
+if [ "$LLVM_CASERANGE_EXIT" -ne 6 ]; then
+  printf 'llvm-case-range-expected-exit=6 actual-exit=%d\n' "$LLVM_CASERANGE_EXIT"
+  fail 'llvm-case-range-wrong-exit-code'
+fi
+printf 'llvm-case-range-program=pass\n'
+
+LLVM_ENUMCASE_OUT_DIR=$(mktemp -d)
+LLVM_ENUMCASE_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_enum_case.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_ENUMCASE_OUT_DIR" >"$LLVM_ENUMCASE_OUTPUT" 2>&1; then
+  cat "$LLVM_ENUMCASE_OUTPUT"
+  fail 'llvm-enum-case-build-failed'
+fi
+set +e
+"$LLVM_ENUMCASE_OUT_DIR/llvm_enum_case" >/dev/null 2>&1
+LLVM_ENUMCASE_EXIT=$?
+set -e
+if [ "$LLVM_ENUMCASE_EXIT" -ne 10 ]; then
+  printf 'llvm-enum-case-expected-exit=10 actual-exit=%d\n' "$LLVM_ENUMCASE_EXIT"
+  fail 'llvm-enum-case-wrong-exit-code'
+fi
+printf 'llvm-enum-case-program=pass\n'
+
 LLVM_CLASS_OUT_DIR=$(mktemp -d)
 LLVM_CLASS_OUTPUT=$(mktemp)
 if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_basic.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_CLASS_OUT_DIR" >"$LLVM_CLASS_OUTPUT" 2>&1; then
@@ -2673,6 +2705,22 @@ if [ "$LLVM_NESTED_EXIT" -ne 15 ]; then
   fail 'llvm-class-nested-method-wrong-exit-code'
 fi
 printf 'llvm-class-nested-method-program=pass\n'
+
+LLVM_PROPERTY_OUT_DIR=$(mktemp -d)
+LLVM_PROPERTY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_property.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_PROPERTY_OUT_DIR" >"$LLVM_PROPERTY_OUTPUT" 2>&1; then
+  cat "$LLVM_PROPERTY_OUTPUT"
+  fail 'llvm-property-build-failed'
+fi
+set +e
+"$LLVM_PROPERTY_OUT_DIR/llvm_property" >/dev/null 2>&1
+LLVM_PROPERTY_EXIT=$?
+set -e
+if [ "$LLVM_PROPERTY_EXIT" -ne 12 ]; then
+  printf 'llvm-property-expected-exit=12 actual-exit=%d\n' "$LLVM_PROPERTY_EXIT"
+  fail 'llvm-property-wrong-exit-code'
+fi
+printf 'llvm-property-program=pass\n'
 
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"

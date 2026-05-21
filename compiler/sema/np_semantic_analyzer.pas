@@ -1956,6 +1956,24 @@ begin
           end;
         end;
       end;
+    end
+    else if Child.NodeKind = gnkClassProperty then
+    begin
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        NameNode := Child.ChildAt(J);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
+          if Pos('read:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              ClsName + '.' + Child.Text + '$read',
+              Copy(NameNode.Text, 6, Length(NameNode.Text)))
+          else if Pos('write:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              ClsName + '.' + Child.Text + '$write',
+              Copy(NameNode.Text, 7, Length(NameNode.Text)));
+        end;
+      end;
     end;
   end;
   FModel.AddConstValue(
@@ -2643,7 +2661,11 @@ begin
     FuncName := LookupClassVar(ANode.ChildAt(0).Text);
     if FuncName <> '' then
     begin
-      if FModel.LookupConstValue(
+      if FModel.LookupStringConstValue(
+        FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) then
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'call ' + FuncName + '.' + ArgName + ' 1' + #10
+      else if FModel.LookupConstValue(
         FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
           'vcall ' + IntToStr(Folded) + ' 0' + #10
@@ -2767,10 +2789,11 @@ var
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
-  Decoded, StringValue: string;
+  Decoded, StringValue, FuncName, ArgName: string;
   ParamSnaps: TParamSnapshots;
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
+  DotPos: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -2964,7 +2987,42 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
-            if (FCurrentMethodClass <> '') and
+            DotPos := Pos('.', Decoded);
+            if (DotPos > 0) and (FCurrentMethodClass = '') then
+            begin
+              ArgName := Copy(Decoded, 1, DotPos - 1);
+              FuncName := Copy(Decoded, DotPos + 1, Length(Decoded));
+              StringValue := LookupClassVar(ArgName);
+              if (StringValue <> '') and
+                FModel.LookupStringConstValue(
+                  StringValue + '.' + FuncName + '$write', ArgName) then
+              begin
+                FModel.AddTypedHirNode(
+                  'call-runtime',
+                  StringValue + '.' + ArgName, 0, 0,
+                  StringValue + '.' + ArgName + #9 +
+                  'var ' + Copy(Decoded, 1, DotPos - 1) + #10 + #9 +
+                  Operand
+                );
+              end
+              else if (StringValue <> '') and
+                FModel.LookupConstValue(
+                  StringValue + '.' + FuncName + '$idx', Value) then
+                FModel.AddTypedHirNode(
+                  'field-store-runtime', Decoded, 0, 0,
+                  Copy(Decoded, 1, DotPos - 1) + #9 +
+                  IntToStr(Value) + #9 + Operand
+                )
+              else
+              begin
+                RegisterRuntimeVar(Decoded);
+                FModel.AddTypedHirNode(
+                  'assign-runtime', Decoded, 0, 0,
+                  Decoded + #9 + Operand
+                );
+              end;
+            end
+            else if (FCurrentMethodClass <> '') and
               FModel.LookupConstValue(
                 FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
               FModel.AddTypedHirNode(
