@@ -2173,6 +2173,8 @@ begin
   FModel.AddConstValue(
     ClsName + '$size',
     FieldIndex * 8);
+  if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
+    FModel.AddConstValue(ClsName + '$vmt_count', 0);
 end;
 
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;

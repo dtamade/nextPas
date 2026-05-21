@@ -2294,7 +2294,7 @@ begin
   end;
 
   if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
-    Exit;
+    VmtCount := 0;
 
   if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
     ParentClass := '';
