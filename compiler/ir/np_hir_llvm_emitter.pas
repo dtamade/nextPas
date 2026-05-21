@@ -334,7 +334,13 @@ begin
             ' = call i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
             '(ptr %' + IntToStr(AInstr.Operands[1].ValueId);
           for I := 2 to High(AInstr.Operands) do
-            Op := Op + ', i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+          begin
+            if AInstr.Operands[I].TypeId <> 0 then
+              Op := Op + ', ' + TypeToLlvm(AInstr.Operands[I].TypeId) +
+                ' %' + IntToStr(AInstr.Operands[I].ValueId)
+            else
+              Op := Op + ', i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+          end;
           Op := Op + ')';
           Emit(Op);
         end;

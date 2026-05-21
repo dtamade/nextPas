@@ -301,6 +301,7 @@ var
   ConstVal: Int64;
   SlotIdx, ExtraArgCount, VcallI: LongInt;
   VcallArgs: array of THIRValueId;
+  VcallArgTypes: array of THIRTypeId;
 
   procedure Push(AVal: THIRValueId);
   begin
@@ -639,8 +640,15 @@ begin
         ExtraArgCount := 0;
       end;
       SetLength(VcallArgs, ExtraArgCount);
+      SetLength(VcallArgTypes, ExtraArgCount);
       for VcallI := ExtraArgCount - 1 downto 0 do
+      begin
+        if StackCount > 0 then
+          VcallArgTypes[VcallI] := StackTypes[StackCount - 1]
+        else
+          VcallArgTypes[VcallI] := 0;
         VcallArgs[VcallI] := Pop;
+      end;
       Rhs := Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -684,7 +692,12 @@ begin
       Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
       Instr.Operands[1] := MakeTypedOperand(Rhs, GetPtrType);
       for VcallI := 0 to ExtraArgCount - 1 do
-        Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
+      begin
+        if VcallArgTypes[VcallI] <> 0 then
+          Instr.Operands[2 + VcallI] := MakeTypedOperand(VcallArgs[VcallI], VcallArgTypes[VcallI])
+        else
+          Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
+      end;
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end;

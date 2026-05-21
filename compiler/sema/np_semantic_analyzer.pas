@@ -2681,8 +2681,28 @@ begin
       StrCallArgCount := 0;
       for StrCallIdx := 1 to ANode.ChildCount - 1 do
       begin
-        if (ANode.ChildAt(StrCallIdx) <> nil) and
-          EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), ArgName) then
+        if ANode.ChildAt(StrCallIdx) = nil then
+          Continue;
+        if (ANode.ChildAt(StrCallIdx).NodeKind = gnkStringLiteral) then
+        begin
+          Inc(FBlockLabelCounter);
+          ArgName := '$str_arg_' + IntToStr(FBlockLabelCounter);
+          RegisterRuntimeVar(ArgName);
+          RegisterRuntimeStrVar(ArgName);
+          FModel.AddTypedHirNode('var-decl-str-runtime', ArgName, 0, 0, ArgName);
+          FModel.AddTypedHirNode('assign-str-runtime',
+            DecodePascalStringLiteral(ANode.ChildAt(StrCallIdx).Text),
+            0, 0, ArgName);
+          ABlob := ABlob + 'strvar ' + ArgName + #10;
+          Inc(StrCallArgCount, 2);
+        end
+        else if (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+          IsRuntimeStrVar(ANode.ChildAt(StrCallIdx).Text) then
+        begin
+          ABlob := ABlob + 'strvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
+          Inc(StrCallArgCount, 2);
+        end
+        else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), ArgName) then
         begin
           ABlob := ABlob + ArgName;
           Inc(StrCallArgCount);
