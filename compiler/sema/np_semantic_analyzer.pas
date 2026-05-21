@@ -3472,13 +3472,16 @@ begin
         SameText(Child.ChildAt(0).ChildAt(1).Text, 'Free') then
       begin
         StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
-        if (StringValue <> '') and
-          FModel.LookupConstValue(StringValue + '$vmt_slot_Destroy', Value) then
+        if StringValue <> '' then
         begin
-          Operand := StringValue + '.Destroy' + #9 +
-            'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
-          FModel.AddTypedHirNode('call-runtime',
-            StringValue + '.Destroy', 0, 0, Operand);
+          if FModel.LookupConstValue(
+            StringValue + '$vmt_slot_Destroy', Value) then
+          begin
+            Operand := StringValue + '.Destroy' + #9 +
+              'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
+            FModel.AddTypedHirNode('call-runtime',
+              StringValue + '.Destroy', 0, 0, Operand);
+          end;
           Continue;
         end;
       end;
