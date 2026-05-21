@@ -1942,6 +1942,10 @@ begin
                     [tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword,
                      tkOverloadKeyword]) do
                 begin
+                  if CurrentToken(ALexer, ACursor).Kind = tkVirtualKeyword then
+                    ElementNode.FText := ElementNode.FText + ';virtual'
+                  else if CurrentToken(ALexer, ACursor).Kind = tkOverrideKeyword then
+                    ElementNode.FText := ElementNode.FText + ';override';
                   Inc(ACursor);
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end;

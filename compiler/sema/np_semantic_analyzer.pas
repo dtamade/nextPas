@@ -1875,6 +1875,29 @@ begin
         end;
       end;
     end;
+    if FModel.LookupConstValue(ParentName + '$vmt_count', ParentFieldVal) then
+    begin
+      FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal);
+      for J := 0 to FModel.ConstValueCount - 1 do
+      begin
+        ConstName := FModel.ConstValueNameAt(J);
+        if (Pos(ParentName + '$vmt_slot_', ConstName) = 1) then
+        begin
+          FieldName := Copy(ConstName,
+            Length(ParentName + '$vmt_slot_') + 1, Length(ConstName));
+          FModel.AddConstValue(
+            ClsName + '$vmt_slot_' + FieldName,
+            FModel.ConstValueAt(J));
+        end;
+      end;
+      for J := 0 to ParentFieldVal - 1 do
+      begin
+        ConstName := ParentName + '$vmt_func_' + IntToStr(J);
+        if FModel.LookupStringConstValue(ConstName, FieldName) then
+          FModel.AddStringConstValue(
+            ClsName + '$vmt_func_' + IntToStr(J), FieldName);
+      end;
+    end;
   end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -1904,9 +1927,34 @@ begin
       begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
           FModel.AddSymbol(
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+          if Pos(';virtual', Child.Text) > 0 then
+          begin
+            if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
+              ParentFieldVal := 0;
+            FModel.AddConstValue(
+              ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
+            FModel.AddStringConstValue(
+              ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
+              ClsName + '.' + NameNode.Text);
+            FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal + 1);
+          end
+          else if Pos(';override', Child.Text) > 0 then
+          begin
+            if FModel.LookupConstValue(
+              ParentName + '$vmt_slot_' + NameNode.Text, ParentFieldVal) then
+            begin
+              FModel.AddConstValue(
+                ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
+              FModel.AddStringConstValue(
+                ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
+                ClsName + '.' + NameNode.Text);
+            end;
+          end;
+        end;
       end;
     end;
   end;
@@ -2532,12 +2580,17 @@ begin
     FuncName := LookupClassVar(ANode.ChildAt(0).Text);
     if FuncName <> '' then
     begin
-      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-        'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+      if FModel.LookupConstValue(
+        FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'vcall ' + IntToStr(Folded) + #10
+      else
+        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+          'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
       Exit(True);
     end;
   end;
-  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkBinaryExpression) and
+  if (ANode.NodeKind = gnkBinaryExpression) and
     (ANode.ChildCount >= 2) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) and
@@ -2561,7 +2614,7 @@ begin
       Exit(True);
     end;
   end;
-  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkUnaryExpression) and
+  if (ANode.NodeKind = gnkUnaryExpression) and
     (ANode.ChildCount >= 1) and (ANode.Text = '-') then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
@@ -2639,6 +2692,8 @@ var
   Value, CondValue: Int64;
   Decoded, StringValue: string;
   ParamSnaps: TParamSnapshots;
+  InhTypeId, InhParentId: LongInt;
+  InhMethodName, InhParentName: string;
 begin
   if ANode = nil then
     Exit;
@@ -2766,6 +2821,11 @@ begin
           FModel.AddTypedHirNode(
             'class-new-runtime', IntToStr(Value), 0, 0, Operand
           );
+          if FModel.LookupConstValue(
+            Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+            FModel.AddTypedHirNode('vmt-store-runtime',
+              Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
+              Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
           Continue;
         end;
       end;
@@ -3001,6 +3061,31 @@ begin
           end;
         end;
         Continue;
+      end;
+      if FNoFold and (FCurrentMethodClass <> '') and
+        (Pos('inherited ', Child.Text) = 1) then
+      begin
+        InhMethodName := Copy(Child.Text, 11, Length(Child.Text));
+        InhTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+        if (InhTypeId > 0) then
+        begin
+          InhParentId := FModel.TypeAt(InhTypeId - 1).ParentTypeId;
+          if InhParentId > 0 then
+          begin
+            InhParentName := FModel.TypeAt(InhParentId - 1).Name;
+            Operand := InhParentName + '.' + InhMethodName + #9 +
+              'var self' + #10;
+            for ArgIndex := 0 to Child.ChildCount - 1 do
+            begin
+              RhsNode := Child.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                Operand := Operand + #9 + Decoded;
+            end;
+            FModel.AddTypedHirNode('call-runtime',
+              InhParentName + '.' + InhMethodName, 0, 0, Operand);
+            Continue;
+          end;
+        end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
         (Child.ChildAt(0) <> nil) and

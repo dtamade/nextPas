@@ -2514,6 +2514,70 @@ if [ "$LLVM_INHERIT_EXIT" -ne 34 ]; then
 fi
 printf 'llvm-class-inherit-program=pass\n'
 
+LLVM_VIRTUAL_OUT_DIR=$(mktemp -d)
+LLVM_VIRTUAL_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_virtual.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VIRTUAL_OUT_DIR" >"$LLVM_VIRTUAL_OUTPUT" 2>&1; then
+  cat "$LLVM_VIRTUAL_OUTPUT"
+  fail 'llvm-class-virtual-build-failed'
+fi
+set +e
+"$LLVM_VIRTUAL_OUT_DIR/llvm_class_virtual" >/dev/null 2>&1
+LLVM_VIRTUAL_EXIT=$?
+set -e
+if [ "$LLVM_VIRTUAL_EXIT" -ne 25 ]; then
+  printf 'llvm-class-virtual-expected-exit=25 actual-exit=%d\n' "$LLVM_VIRTUAL_EXIT"
+  fail 'llvm-class-virtual-wrong-exit-code'
+fi
+printf 'llvm-class-virtual-program=pass\n'
+
+LLVM_MULTIVIRT_OUT_DIR=$(mktemp -d)
+LLVM_MULTIVIRT_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_multi_virtual.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_MULTIVIRT_OUT_DIR" >"$LLVM_MULTIVIRT_OUTPUT" 2>&1; then
+  cat "$LLVM_MULTIVIRT_OUTPUT"
+  fail 'llvm-class-multi-virtual-build-failed'
+fi
+set +e
+"$LLVM_MULTIVIRT_OUT_DIR/llvm_class_multi_virtual" >/dev/null 2>&1
+LLVM_MULTIVIRT_EXIT=$?
+set -e
+if [ "$LLVM_MULTIVIRT_EXIT" -ne 21 ]; then
+  printf 'llvm-class-multi-virtual-expected-exit=21 actual-exit=%d\n' "$LLVM_MULTIVIRT_EXIT"
+  fail 'llvm-class-multi-virtual-wrong-exit-code'
+fi
+printf 'llvm-class-multi-virtual-program=pass\n'
+
+LLVM_INHERITED_OUT_DIR=$(mktemp -d)
+LLVM_INHERITED_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_inherited.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_INHERITED_OUT_DIR" >"$LLVM_INHERITED_OUTPUT" 2>&1; then
+  cat "$LLVM_INHERITED_OUTPUT"
+  fail 'llvm-class-inherited-build-failed'
+fi
+set +e
+"$LLVM_INHERITED_OUT_DIR/llvm_class_inherited" >/dev/null 2>&1
+LLVM_INHERITED_EXIT=$?
+set -e
+if [ "$LLVM_INHERITED_EXIT" -ne 17 ]; then
+  printf 'llvm-class-inherited-expected-exit=17 actual-exit=%d\n' "$LLVM_INHERITED_EXIT"
+  fail 'llvm-class-inherited-wrong-exit-code'
+fi
+printf 'llvm-class-inherited-program=pass\n'
+
+LLVM_POLY_OUT_DIR=$(mktemp -d)
+LLVM_POLY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_polymorphic.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_POLY_OUT_DIR" >"$LLVM_POLY_OUTPUT" 2>&1; then
+  cat "$LLVM_POLY_OUTPUT"
+  fail 'llvm-class-polymorphic-build-failed'
+fi
+set +e
+"$LLVM_POLY_OUT_DIR/llvm_class_polymorphic" >/dev/null 2>&1
+LLVM_POLY_EXIT=$?
+set -e
+if [ "$LLVM_POLY_EXIT" -ne 42 ]; then
+  printf 'llvm-class-polymorphic-expected-exit=42 actual-exit=%d\n' "$LLVM_POLY_EXIT"
+  fail 'llvm-class-polymorphic-wrong-exit-code'
+fi
+printf 'llvm-class-polymorphic-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

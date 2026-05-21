@@ -27,6 +27,7 @@ type
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
     procedure EmitStrConcatHelper;
+    procedure EmitVmtGlobals;
   public
     constructor Create(AModule: THIRModule);
     procedure EmitModule;
@@ -317,6 +318,19 @@ begin
           Emit('  %' + IntToStr(AInstr.ResultId) +
             ' = call ptr @np_alloc(i64 %' +
             IntToStr(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'vmt_store' then
+      begin
+        if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
+          Emit('  store ptr @' + AInstr.CallTarget + '.vmt, ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId));
+      end
+      else if AInstr.IntrinsicName = 'vcall' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = call i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
+            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId) + ')');
       end;
     end;
   end;
@@ -441,6 +455,8 @@ begin
     Emit('');
     EmitStrConstants;
   end;
+
+  EmitVmtGlobals;
 
   if FNeedsWriteInt then
     EmitWriteIntHelper;
@@ -579,6 +595,29 @@ begin
   Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
   Emit('  ret {ptr, i64} %r2');
   Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitVmtGlobals;
+var
+  I, J: LongInt;
+  Vmt: THIRVmtGlobal;
+  Line: string;
+begin
+  for I := 0 to FModule.VmtGlobalCount - 1 do
+  begin
+    Vmt := FModule.VmtGlobalAt(I);
+    if Length(Vmt.Funcs) = 0 then Continue;
+    Line := '@' + Vmt.ClassName + '.vmt = internal constant [' +
+      IntToStr(Length(Vmt.Funcs)) + ' x ptr] [';
+    for J := 0 to High(Vmt.Funcs) do
+    begin
+      if J > 0 then Line := Line + ', ';
+      Line := Line + 'ptr @' + Vmt.Funcs[J];
+    end;
+    Line := Line + ']';
+    Emit('');
+    Emit(Line);
+  end;
 end;
 
 function THIRLlvmEmitter.AsText: string;
