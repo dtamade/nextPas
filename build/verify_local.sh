@@ -2914,6 +2914,22 @@ if [ "$LLVM_STR_CTOR_ARG_EXIT" -ne 5 ]; then
 fi
 printf 'llvm-str-ctor-arg-program=pass\n'
 
+LLVM_STR_RETURN_OUT_DIR=$(mktemp -d)
+LLVM_STR_RETURN_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_str_return.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_STR_RETURN_OUT_DIR" >"$LLVM_STR_RETURN_OUTPUT" 2>&1; then
+  cat "$LLVM_STR_RETURN_OUTPUT"
+  fail 'llvm-str-return-build-failed'
+fi
+set +e
+"$LLVM_STR_RETURN_OUT_DIR/llvm_str_return" >/dev/null 2>&1
+LLVM_STR_RETURN_EXIT=$?
+set -e
+if [ "$LLVM_STR_RETURN_EXIT" -ne 5 ]; then
+  printf 'llvm-str-return-expected-exit=5 actual-exit=%d\n' "$LLVM_STR_RETURN_EXIT"
+  fail 'llvm-str-return-wrong-exit-code'
+fi
+printf 'llvm-str-return-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

@@ -76,6 +76,7 @@ type
     procedure ProcessAssignStr(const ANode: TTypedHirNode);
     procedure ProcessAssignStrCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrCall(const ANode: TTypedHirNode);
+    procedure ProcessAssignStrVcall(const ANode: TTypedHirNode);
     procedure ProcessAssignStrConcat(const ANode: TTypedHirNode);
     procedure ProcessRetStrRuntime(const ANode: TTypedHirNode);
     procedure ProcessSetLengthArr(const ANode: TTypedHirNode);
@@ -1493,6 +1494,85 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessAssignStrVcall(const ANode: TTypedHirNode);
+var
+  Instr: THIRInstr;
+  DstName, ObjName: string;
+  DstPtr, DstLen: THIRValueId;
+  ObjAlloca, ObjVal, VmtPtr, SlotConst, FnPtr, V: THIRValueId;
+  SlotIdx: LongInt;
+  TabPos, TabPos2: LongInt;
+  Rest: string;
+begin
+  Rest := ANode.Operand;
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  DstName := Copy(Rest, 1, TabPos - 1);
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+  TabPos2 := Pos(#9, Rest);
+  if TabPos2 = 0 then Exit;
+  ObjName := Copy(Rest, 1, TabPos2 - 1);
+  SlotIdx := StrToIntDef(Copy(Rest, TabPos2 + 1, Length(Rest)), 0);
+
+  DstPtr := FindAlloca(DstName + '$ptr');
+  DstLen := FindAlloca(DstName + '$len');
+  if (DstPtr = 0) or (DstLen = 0) then Exit;
+
+  ObjAlloca := FindAlloca(ObjName);
+  if ObjAlloca = 0 then Exit;
+  ObjVal := EmitLoad(GetPtrType, ObjAlloca);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:0';
+  EmitInstr(Instr);
+  V := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjVal);
+  Instr.Operands[1] := MakeOperand(V);
+  EmitInstr(Instr);
+  VmtPtr := EmitLoad(GetPtrType, Instr.ResultId);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+  EmitInstr(Instr);
+  SlotConst := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(VmtPtr);
+  Instr.Operands[1] := MakeOperand(SlotConst);
+  EmitInstr(Instr);
+  FnPtr := EmitLoad(GetPtrType, Instr.ResultId);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'vcall_str';
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(FnPtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(ObjVal, GetPtrType);
+  Instr.Operands[2] := MakeOperand(DstPtr);
+  Instr.Operands[3] := MakeOperand(DstLen);
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessAssignStrConcat(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
@@ -2144,6 +2224,8 @@ begin
     ProcessAssignStrCopy(ANode)
   else if ANode.Kind = 'assign-str-call-runtime' then
     ProcessAssignStrCall(ANode)
+  else if ANode.Kind = 'assign-str-vcall-runtime' then
+    ProcessAssignStrVcall(ANode)
   else if ANode.Kind = 'assign-str-concat-runtime' then
     ProcessAssignStrConcat(ANode)
   else if ANode.Kind = 'halt-call-runtime' then

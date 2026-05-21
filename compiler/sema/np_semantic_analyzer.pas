@@ -3197,6 +3197,29 @@ begin
               Decoded + #9 + Operand
             );
           end
+          else if (Arg.NodeKind = gnkDotAccess) and
+            (Arg.ChildCount >= 2) and
+            (Arg.ChildAt(0) <> nil) and
+            (Arg.ChildAt(1) <> nil) and
+            (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+            (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+            (LookupClassVar(Arg.ChildAt(0).Text) <> '') then
+          begin
+            FuncName := LookupClassVar(Arg.ChildAt(0).Text);
+            if FModel.LookupConstValue(
+              FuncName + '$vmt_slot_' + Arg.ChildAt(1).Text, Value) then
+              FModel.AddTypedHirNode(
+                'assign-str-vcall-runtime', Arg.ChildAt(1).Text, 0, 0,
+                Decoded + #9 + Arg.ChildAt(0).Text + #9 +
+                IntToStr(Value)
+              )
+            else
+              FModel.AddTypedHirNode(
+                'assign-str-call-runtime',
+                FuncName + '.' + Arg.ChildAt(1).Text, 0, 0,
+                Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
+              );
+          end
           else if (Arg.NodeKind = gnkBinaryExpression) and
             (Arg.Text = '+') and (Arg.ChildCount >= 2) and
             (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then

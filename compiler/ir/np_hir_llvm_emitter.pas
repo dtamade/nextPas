@@ -338,6 +338,25 @@ begin
           Op := Op + ')';
           Emit(Op);
         end;
+      end
+      else if AInstr.IntrinsicName = 'vcall_str' then
+      begin
+        if Length(AInstr.Operands) >= 4 then
+        begin
+          Emit('  %vcallstr.' + IntToStr(AInstr.ResultId) +
+            ' = call {ptr, i64} %' + IntToStr(AInstr.Operands[0].ValueId) +
+            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId) + ')');
+          Emit('  %vcallstr.' + IntToStr(AInstr.ResultId) +
+            '.p = extractvalue {ptr, i64} %vcallstr.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+          Emit('  %vcallstr.' + IntToStr(AInstr.ResultId) +
+            '.l = extractvalue {ptr, i64} %vcallstr.' +
+            IntToStr(AInstr.ResultId) + ', 1');
+          Emit('  store ptr %vcallstr.' + IntToStr(AInstr.ResultId) +
+            '.p, ptr %' + IntToStr(AInstr.Operands[2].ValueId));
+          Emit('  store i64 %vcallstr.' + IntToStr(AInstr.ResultId) +
+            '.l, ptr %' + IntToStr(AInstr.Operands[3].ValueId));
+        end;
       end;
     end;
   end;
