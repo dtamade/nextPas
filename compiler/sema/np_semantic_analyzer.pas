@@ -4063,6 +4063,7 @@ var
   SavedTerminated: Boolean;
   ParamTypes, RetVarName: string;
   IsStrParam, IsStrReturn: Boolean;
+  Folded: Int64;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
@@ -4097,10 +4098,20 @@ begin
                 begin
                   IsStrParam := True;
                   RegisterRuntimeStrVar(ParamChild.Text);
+                end
+                else if (TypeChild <> nil) and
+                  FModel.LookupConstValue(TypeChild.Text + '$size', Folded) then
+                begin
+                  RegisterClassVar(ParamChild.Text, TypeChild.Text);
                 end;
               end;
               if IsStrParam then
                 ParamTypes := ParamTypes + 's'
+              else if (ParamChild.ChildCount > 0) and
+                (ParamChild.ChildAt(0) <> nil) and
+                FModel.LookupConstValue(
+                  ParamChild.ChildAt(0).Text + '$size', Folded) then
+                ParamTypes := ParamTypes + 'p'
               else
                 ParamTypes := ParamTypes + 'i';
               Inc(ParamCount);

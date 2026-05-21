@@ -678,24 +678,48 @@ begin
       ParamIdx := FPendingParamLlvmIdx;
       ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
 
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikAlloca;
-      Instr.TypeId := GetIntType;
-      EmitInstr(Instr);
-
-      if FAllocaCount >= Length(FAllocaNames) then
+      if FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].TypeId = GetPtrType then
       begin
-        SetLength(FAllocaNames, FAllocaCount + 32);
-        SetLength(FAllocaValues, FAllocaCount + 32);
-        SetLength(FAllocaTypes, FAllocaCount + 32);
-      end;
-      FAllocaNames[FAllocaCount] := ANode.Operand;
-      FAllocaValues[FAllocaCount] := Instr.ResultId;
-      FAllocaTypes[FAllocaCount] := GetIntType;
-      Inc(FAllocaCount);
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikAlloca;
+        Instr.TypeId := GetPtrType;
+        EmitInstr(Instr);
 
-      EmitStore(GetIntType, ParamValueId, Instr.ResultId);
+        if FAllocaCount >= Length(FAllocaNames) then
+        begin
+          SetLength(FAllocaNames, FAllocaCount + 32);
+          SetLength(FAllocaValues, FAllocaCount + 32);
+          SetLength(FAllocaTypes, FAllocaCount + 32);
+        end;
+        FAllocaNames[FAllocaCount] := ANode.Operand;
+        FAllocaValues[FAllocaCount] := Instr.ResultId;
+        FAllocaTypes[FAllocaCount] := GetPtrType;
+        Inc(FAllocaCount);
+
+        EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
+      end
+      else
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikAlloca;
+        Instr.TypeId := GetIntType;
+        EmitInstr(Instr);
+
+        if FAllocaCount >= Length(FAllocaNames) then
+        begin
+          SetLength(FAllocaNames, FAllocaCount + 32);
+          SetLength(FAllocaValues, FAllocaCount + 32);
+          SetLength(FAllocaTypes, FAllocaCount + 32);
+        end;
+        FAllocaNames[FAllocaCount] := ANode.Operand;
+        FAllocaValues[FAllocaCount] := Instr.ResultId;
+        FAllocaTypes[FAllocaCount] := GetIntType;
+        Inc(FAllocaCount);
+
+        EmitStore(GetIntType, ParamValueId, Instr.ResultId);
+      end;
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
     end
@@ -1067,6 +1091,8 @@ begin
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
       end
+      else if (I < Length(ParamName)) and (ParamName[I + 1] = 'p') then
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetPtrType, False, False)
       else
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetIntType, False, False);
     end;
