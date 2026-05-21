@@ -2956,6 +2956,16 @@ begin
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
           'call ' + FuncName + '.' + ArgName + ' 1' + #10
       else if FModel.LookupConstValue(
+        FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+      begin
+        ABlob := 'field ' + ANode.ChildAt(0).Text + ' ' + IntToStr(Folded);
+        if FModel.LookupConstValue(
+          FuncName + '.' + ANode.ChildAt(1).Text + '$ptr', Folded) then
+          ABlob := ABlob + ' p' + #10
+        else
+          ABlob := ABlob + #10;
+      end
+      else if FModel.LookupConstValue(
         FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
       begin
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
