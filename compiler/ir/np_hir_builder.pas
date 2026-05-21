@@ -1808,12 +1808,34 @@ begin
       ArgBlob := Rest;
       Rest := '';
     end;
-    ArgValue := ParseIntBlob(ArgBlob);
-    if ArgValue <> 0 then
+    if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strvar ') then
     begin
-      SetLength(ArgOps, ArgCount + 1);
-      ArgOps[ArgCount] := MakeOperand(ArgValue);
-      Inc(ArgCount);
+      VarName := Copy(ArgBlob, 8, Length(ArgBlob));
+      if (Length(VarName) > 0) and (VarName[Length(VarName)] = #10) then
+        VarName := Copy(VarName, 1, Length(VarName) - 1);
+      ArgValue := FindAlloca(VarName + '$ptr');
+      if ArgValue <> 0 then
+      begin
+        SetLength(ArgOps, ArgCount + 2);
+        ArgOps[ArgCount] := MakeTypedOperand(EmitLoad(GetPtrType, ArgValue), GetPtrType);
+        Inc(ArgCount);
+        ArgValue := FindAlloca(VarName + '$len');
+        if ArgValue <> 0 then
+          ArgOps[ArgCount] := MakeOperand(EmitLoad(GetIntType, ArgValue))
+        else
+          ArgOps[ArgCount] := MakeOperand(0);
+        Inc(ArgCount);
+      end;
+    end
+    else
+    begin
+      ArgValue := ParseIntBlob(ArgBlob);
+      if ArgValue <> 0 then
+      begin
+        SetLength(ArgOps, ArgCount + 1);
+        ArgOps[ArgCount] := MakeOperand(ArgValue);
+        Inc(ArgCount);
+      end;
     end;
   end;
 

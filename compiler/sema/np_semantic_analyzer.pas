@@ -3052,7 +3052,23 @@ begin
           for ArgIndex := 1 to Arg.ChildCount - 1 do
           begin
             RhsNode := Arg.ChildAt(ArgIndex);
-            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+            if RhsNode = nil then
+              Continue;
+            if (RhsNode.NodeKind = gnkStringLiteral) then
+            begin
+              Inc(FBlockLabelCounter);
+              FuncName := '$str_arg_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(FuncName);
+              RegisterRuntimeStrVar(FuncName);
+              FModel.AddTypedHirNode('var-decl-str-runtime', FuncName, 0, 0, FuncName);
+              FModel.AddTypedHirNode('assign-str-runtime',
+                DecodePascalStringLiteral(RhsNode.Text), 0, 0, FuncName);
+              Operand := Operand + #9 + 'strvar ' + FuncName + #10;
+            end
+            else if (RhsNode.NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(RhsNode.Text) then
+              Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
+            else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
               Operand := Operand + #9 + StringValue;
           end;
           if (FCurrentMethodClass <> '') and
