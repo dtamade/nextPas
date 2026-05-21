@@ -2072,6 +2072,7 @@ begin
             ClsName + '$vmt_func_' + IntToStr(J), FieldName);
       end;
     end;
+    FModel.AddStringConstValue(ClsName + '$parent_class', ParentName);
   end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
@@ -3093,6 +3094,20 @@ begin
     ABlob := LeftBlob + 'zext' + #10 + RightBlob + 'zext' + #10 +
       'add' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
     Exit(True);
+  end
+  else if SameText(Op, 'is') then
+  begin
+    if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+      (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+    begin
+      ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+        'is ' + ANode.ChildAt(1).Text + #10 +
+        'int 0' + #10 + 'cmp ne' + #10;
+      Exit(True);
+    end;
+    Exit(False);
   end
   else
     Exit(False);

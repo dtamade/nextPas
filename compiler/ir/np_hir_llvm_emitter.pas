@@ -18,6 +18,7 @@ type
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
+    FIsCheckCounter: LongInt;
     procedure Emit(const S: string);
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function AddStrConstant(const AValue: string): LongInt;
@@ -48,6 +49,7 @@ begin
   FLineCount := 0;
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
+  FIsCheckCounter := 0;
   SetLength(FLines, 0);
 end;
 
@@ -383,6 +385,45 @@ begin
           Emit('  store i64 %vcallstr.' + IntToStr(AInstr.ResultId) +
             '.l, ptr %' + IntToStr(AInstr.Operands[3].ValueId));
         end;
+      end
+      else if AInstr.IntrinsicName = 'is_instance' then
+      begin
+        if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
+        begin
+          Inc(FIsCheckCounter);
+          Emit('  br label %is.pre.' + IntToStr(FIsCheckCounter));
+          Emit('is.pre.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  br label %is.loop.' + IntToStr(FIsCheckCounter));
+          Emit('is.loop.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  %is.cur.' + IntToStr(FIsCheckCounter) +
+            ' = phi ptr [ %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', %is.pre.' + IntToStr(FIsCheckCounter) +
+            ' ], [ %is.parent.' + IntToStr(FIsCheckCounter) +
+            ', %is.next.' + IntToStr(FIsCheckCounter) + ' ]');
+          Emit('  %is.eq.' + IntToStr(FIsCheckCounter) +
+            ' = icmp eq ptr %is.cur.' + IntToStr(FIsCheckCounter) +
+            ', @' + AInstr.CallTarget + '.vmt');
+          Emit('  br i1 %is.eq.' + IntToStr(FIsCheckCounter) +
+            ', label %is.true.' + IntToStr(FIsCheckCounter) +
+            ', label %is.next.' + IntToStr(FIsCheckCounter));
+          Emit('is.next.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  %is.parent.' + IntToStr(FIsCheckCounter) +
+            ' = load ptr, ptr %is.cur.' + IntToStr(FIsCheckCounter));
+          Emit('  %is.done.' + IntToStr(FIsCheckCounter) +
+            ' = icmp eq ptr %is.parent.' + IntToStr(FIsCheckCounter) +
+            ', null');
+          Emit('  br i1 %is.done.' + IntToStr(FIsCheckCounter) +
+            ', label %is.false.' + IntToStr(FIsCheckCounter) +
+            ', label %is.loop.' + IntToStr(FIsCheckCounter));
+          Emit('is.true.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  br label %is.end.' + IntToStr(FIsCheckCounter));
+          Emit('is.false.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  br label %is.end.' + IntToStr(FIsCheckCounter));
+          Emit('is.end.' + IntToStr(FIsCheckCounter) + ':');
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = phi i64 [ 1, %is.true.' + IntToStr(FIsCheckCounter) +
+            ' ], [ 0, %is.false.' + IntToStr(FIsCheckCounter) + ' ]');
+        end;
       end;
     end;
   end;
@@ -674,7 +715,10 @@ begin
     for J := 0 to High(Vmt.Funcs) do
     begin
       if J > 0 then Line := Line + ', ';
-      Line := Line + 'ptr @' + Vmt.Funcs[J];
+      if Vmt.Funcs[J] = '' then
+        Line := Line + 'ptr null'
+      else
+        Line := Line + 'ptr @' + Vmt.Funcs[J];
     end;
     Line := Line + ']';
     Emit('');

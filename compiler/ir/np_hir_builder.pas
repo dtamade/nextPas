@@ -95,6 +95,7 @@ type
     procedure ProcessRecordCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
+    procedure EnsureVmtForClass(const AClassName: string);
   public
     constructor Create(ASemaModel: TSemanticModel);
     destructor Destroy; override;
@@ -509,6 +510,38 @@ begin
       if V <> 0 then
         PushTyped(V, GetPtrType);
     end
+    else if Token = 'is' then
+    begin
+      Rhs := Pop;
+      EnsureVmtForClass(Arg);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'const:0';
+      EmitInstr(Instr);
+      V := Instr.ResultId;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'gep_i64';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeOperand(Rhs);
+      Instr.Operands[1] := MakeOperand(V);
+      EmitInstr(Instr);
+      V := EmitLoad(GetPtrType, Instr.ResultId);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'is_instance';
+      SetLength(Instr.Operands, 1);
+      Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
+      Instr.CallTarget := Arg;
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
+    end
     else if Token = 'rload' then
     begin
       SpacePos := Pos(' ', Arg);
@@ -803,7 +836,7 @@ begin
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikLoad;
       Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+      Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx + 1);
       EmitInstr(Instr);
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -1819,7 +1852,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
   Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx + 1);
   EmitInstr(Instr);
   SlotConst := Instr.ResultId;
 
@@ -2207,9 +2240,38 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.EnsureVmtForClass(const AClassName: string);
+var
+  VmtCount: Int64;
+  I: LongInt;
+  Funcs: array of string;
+  FuncName, ParentClass: string;
+begin
+  if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
+    Exit;
+  if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
+    ParentClass := '';
+  SetLength(Funcs, VmtCount + 1);
+  if ParentClass <> '' then
+  begin
+    Funcs[0] := ParentClass + '.vmt';
+    EnsureVmtForClass(ParentClass);
+  end
+  else
+    Funcs[0] := '';
+  for I := 0 to VmtCount - 1 do
+  begin
+    if not FSemaModel.LookupStringConstValue(
+      AClassName + '$vmt_func_' + IntToStr(I), FuncName) then
+      FuncName := '';
+    Funcs[I + 1] := FuncName;
+  end;
+  FModule.AddVmtGlobal(AClassName, Funcs);
+end;
+
 procedure THIRBuilder.ProcessVmtStore(const ANode: TTypedHirNode);
 var
-  ClsName, FuncName, VarName: string;
+  ClsName, FuncName, VarName, ParentClass: string;
   VmtCount: Int64;
   I, TabPos: LongInt;
   Funcs: array of string;
@@ -2230,15 +2292,42 @@ begin
 
   if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
     Exit;
-  SetLength(Funcs, VmtCount);
+
+  if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
+    ParentClass := '';
+
+  SetLength(Funcs, VmtCount + 1);
+  if ParentClass <> '' then
+    Funcs[0] := ParentClass + '.vmt'
+  else
+    Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
     if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
-    Funcs[I] := FuncName;
+    Funcs[I + 1] := FuncName;
   end;
   FModule.AddVmtGlobal(ClsName, Funcs);
+
+  if (ParentClass <> '') and
+    FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
+  begin
+    SetLength(Funcs, VmtCount + 1);
+    if FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', FuncName) and
+      (FuncName <> '') then
+      Funcs[0] := FuncName + '.vmt'
+    else
+      Funcs[0] := '';
+    for I := 0 to VmtCount - 1 do
+    begin
+      if not FSemaModel.LookupStringConstValue(
+        ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
+        FuncName := '';
+      Funcs[I + 1] := FuncName;
+    end;
+    FModule.AddVmtGlobal(ParentClass, Funcs);
+  end;
 
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;

@@ -2295,6 +2295,23 @@ if [ "$LLVM_VAR_PARAM_EXIT" -ne 7 ]; then
 fi
 printf 'llvm-var-param-program=pass\n'
 
+printf 'llvm-is-operator-program=running\n'
+LLVM_IS_OP_OUT_DIR=$(mktemp -d)
+LLVM_IS_OP_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_is_operator.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_IS_OP_OUT_DIR" >"$LLVM_IS_OP_OUTPUT" 2>&1; then
+  cat "$LLVM_IS_OP_OUTPUT"
+  fail 'llvm-is-operator-program-build-failed'
+fi
+set +e
+"$LLVM_IS_OP_OUT_DIR/llvm_is_operator" >/dev/null 2>&1
+LLVM_IS_OP_EXIT=$?
+set -e
+if [ "$LLVM_IS_OP_EXIT" -ne 11 ]; then
+  printf 'llvm-is-operator-expected-exit=11 actual-exit=%d\n' "$LLVM_IS_OP_EXIT"
+  fail 'llvm-is-operator-program-wrong-exit-code'
+fi
+printf 'llvm-is-operator-program=pass\n'
+
 printf 'llvm-comprehensive-program=running\n'
 LLVM_COMPREHENSIVE_OUT_DIR=$(mktemp -d)
 LLVM_COMPREHENSIVE_OUTPUT=$(mktemp)
