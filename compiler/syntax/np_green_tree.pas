@@ -1454,6 +1454,7 @@ var
   TypeNode: TGreenNode;
   I: LongInt;
   Child: TGreenNode;
+  HasVarModifier: Boolean;
 begin
   if (ACursor >= ALexer.TokenCount) or
     (CurrentToken(ALexer, ACursor).Kind <> tkLParen) then
@@ -1468,9 +1469,14 @@ begin
   while (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind <> tkRParen) do
   begin
+    HasVarModifier := False;
     if CurrentToken(ALexer, ACursor).Kind in
       [tkVarKeyword, tkConstKeyword, tkOutKeyword] then
+    begin
+      if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
+        HasVarModifier := True;
       Inc(ACursor);
+    end;
 
     if CurrentToken(ALexer, ACursor).Kind <> tkIdentifier then
     begin
@@ -1483,8 +1489,12 @@ begin
     while True do
     begin
       NameToken := CurrentToken(ALexer, ACursor);
-      Decl := TGreenNode.Create(gnkParameterDecl, NameToken.ByteOffset, 0,
-        NameToken.Lexeme);
+      if HasVarModifier then
+        Decl := TGreenNode.Create(gnkParameterDecl, NameToken.ByteOffset, 0,
+          'var:' + NameToken.Lexeme)
+      else
+        Decl := TGreenNode.Create(gnkParameterDecl, NameToken.ByteOffset, 0,
+          NameToken.Lexeme);
       List.AppendChild(Decl);
       Inc(ATree.FNodeCount);
       Inc(ACursor);

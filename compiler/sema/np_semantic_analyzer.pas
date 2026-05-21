@@ -48,17 +48,26 @@ type
     FCurrentRetVarName: string;
     FClassVarNames: array of string;
     FClassVarTypes: array of string;
+    FRecordVarNames: array of string;
+    FRecordVarTypes: array of string;
+    FVarParamNames: array of string;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
+    procedure RegisterRecordVar(const AName, ATypeName: string);
+    procedure RegisterVarParam(const AName: string);
     procedure RegisterPtrReturnFunc(const AName, AClassName: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
+    function IsRecordVar(const AName: string): Boolean;
+    function IsVarParam(const AName: string): Boolean;
+    function IsVarParamAtPosition(const ADecl: TGreenNode; APosition: LongInt): Boolean;
     function LookupClassVar(const AName: string): string;
+    function LookupRecordVar(const AName: string): string;
     function LookupPtrReturnFunc(const AName: string): string;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
@@ -325,6 +334,97 @@ begin
   for Idx := 0 to Length(FClassVarNames) - 1 do
     if SameText(FClassVarNames[Idx], AName) then
       Exit(FClassVarTypes[Idx]);
+  Result := '';
+end;
+
+procedure TSemanticAnalyzer.RegisterRecordVar(const AName, ATypeName: string);
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRecordVarNames) - 1 do
+    if SameText(FRecordVarNames[Idx], AName) then
+    begin
+      FRecordVarTypes[Idx] := ATypeName;
+      Exit;
+    end;
+  Idx := Length(FRecordVarNames);
+  SetLength(FRecordVarNames, Idx + 1);
+  SetLength(FRecordVarTypes, Idx + 1);
+  FRecordVarNames[Idx] := AName;
+  FRecordVarTypes[Idx] := ATypeName;
+end;
+
+function TSemanticAnalyzer.IsRecordVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRecordVarNames) - 1 do
+    if SameText(FRecordVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TSemanticAnalyzer.RegisterVarParam(const AName: string);
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FVarParamNames) - 1 do
+    if SameText(FVarParamNames[Idx], AName) then
+      Exit;
+  Idx := Length(FVarParamNames);
+  SetLength(FVarParamNames, Idx + 1);
+  FVarParamNames[Idx] := AName;
+end;
+
+function TSemanticAnalyzer.IsVarParam(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FVarParamNames) - 1 do
+    if SameText(FVarParamNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.IsVarParamAtPosition(
+  const ADecl: TGreenNode; APosition: LongInt): Boolean;
+var
+  J, K, ParamIdx: LongInt;
+  Child, ParamChild: TGreenNode;
+begin
+  Result := False;
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      ParamIdx := 0;
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
+          Continue;
+        if ParamIdx = APosition then
+        begin
+          Result := (Length(ParamChild.Text) > 4) and
+            (Copy(ParamChild.Text, 1, 4) = 'var:');
+          Exit;
+        end;
+        Inc(ParamIdx);
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.LookupRecordVar(const AName: string): string;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FRecordVarNames) - 1 do
+    if SameText(FRecordVarNames[Idx], AName) then
+      Exit(FRecordVarTypes[Idx]);
   Result := '';
 end;
 
@@ -1857,10 +1957,14 @@ var
   FieldTypeId: LongInt;
   TypeChild: TGreenNode;
   J: LongInt;
+  FieldIndex: LongInt;
+  RecName: string;
 begin
   if ANode = nil then
     Exit;
+  RecName := FModel.TypeAt(ATypeId - 1).Name;
   RecordScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
+  FieldIndex := 0;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -1879,7 +1983,11 @@ begin
     FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
       Child.ByteOffset);
     FModel.SetSymbolScope(FModel.SymbolCount, RecordScopeId);
+    FModel.AddConstValue(RecName + '.' + Child.Text + '$idx', FieldIndex);
+    Inc(FieldIndex);
   end;
+  FModel.AddConstValue(RecName + '$size', FieldIndex * 8);
+  FModel.AddConstValue(RecName + '$record', 1);
 end;
 
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
@@ -2914,6 +3022,27 @@ begin
     ABlob := 'var ' + FCurrentRetVarName + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkIdentifier) and (ANode.Text <> '') and
+    IsRecordVar(ANode.Text) then
+  begin
+    ABlob := 'recvar ' + ANode.Text + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    IsRecordVar(ANode.ChildAt(0).Text) then
+  begin
+    FuncName := LookupRecordVar(ANode.ChildAt(0).Text);
+    if (FuncName <> '') and
+      FModel.LookupConstValue(
+        FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+    begin
+      ABlob := 'rload ' + ANode.ChildAt(0).Text + ' ' +
+        IntToStr(Folded) + #10;
+      Exit(True);
+    end;
+  end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
@@ -3086,8 +3215,30 @@ begin
       if (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
+      begin
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
+        if FNoFold and IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) then
+        begin
+          StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
+          if (StringValue <> '') and
+            FModel.LookupConstValue(
+              StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text + '$idx',
+              Value) then
+          begin
+            Arg := nil;
+            if Child.ChildCount >= 2 then
+              Arg := Child.ChildAt(1);
+            if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
+              FModel.AddTypedHirNode(
+                'record-field-store-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + Operand
+              );
+            Continue;
+          end;
+        end;
+      end;
       if FNoFold and (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
         (Child.ChildAt(0).ChildCount >= 2) and
@@ -3383,6 +3534,17 @@ begin
               Decoded + #9 + Operand
             );
           end;
+        end
+        else if FNoFold and IsRecordVar(Decoded) and
+          (Arg <> nil) and (Arg.NodeKind = gnkIdentifier) and
+          IsRecordVar(Arg.Text) then
+        begin
+          StringValue := LookupRecordVar(Decoded);
+          if FModel.LookupConstValue(StringValue + '$size', Value) then
+            FModel.AddTypedHirNode(
+              'record-copy-runtime', Decoded, 0, 0,
+              Decoded + #9 + Arg.Text + #9 + IntToStr(Value div 8)
+            );
         end
         else if FNoFold then
         begin
@@ -3890,15 +4052,21 @@ begin
             ArgIndex := 1
           else
             ArgIndex := 0;
+          DotPos := 0;
           while ArgIndex < Arg.ChildCount do
           begin
             RhsNode := Arg.ChildAt(ArgIndex);
             if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+              IsVarParamAtPosition(DeclNode, DotPos) and
+              IsRuntimeVar(RhsNode.Text) then
+              Operand := Operand + #9 + 'varref ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(RhsNode.Text) then
               Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
             else if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
               Operand := Operand + #9 + Decoded;
             Inc(ArgIndex);
+            Inc(DotPos);
           end;
         end;
         FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
@@ -4278,7 +4446,7 @@ var
   I, J, K: LongInt;
   Child, Decl, TypeChild, NextSibling: TGreenNode;
   IsStr, IsArr: Boolean;
-  Folded: Int64;
+  Folded, Value: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -4340,10 +4508,21 @@ begin
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
           FModel.LookupConstValue(Decl.ChildAt(0).Text + '$size', Folded) then
         begin
-          RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
-          FModel.AddTypedHirNode(
-            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
-          );
+          if FModel.LookupConstValue(Decl.ChildAt(0).Text + '$record', Value) then
+          begin
+            RegisterRecordVar(Decl.Text, Decl.ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'var-decl-record-runtime', Decl.Text, 0, 0,
+              Decl.Text + #9 + IntToStr(Folded div 8)
+            );
+          end
+          else
+          begin
+            RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+            );
+          end;
         end
         else
           FModel.AddTypedHirNode(
@@ -4440,9 +4619,9 @@ var
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
   ParamTypes, RetVarName: string;
-  IsStrParam, IsStrReturn, IsPtrReturn: Boolean;
+  IsStrParam, IsStrReturn, IsPtrReturn, IsVarP: Boolean;
   PtrReturnClass: string;
-  Folded: Int64;
+  Folded, Value: Int64;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
@@ -4468,7 +4647,15 @@ begin
             ParamChild := Child.ChildAt(K);
             if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
             begin
-              RegisterRuntimeVar(ParamChild.Text);
+              ParamTypes := ParamTypes;
+              RetVarName := ParamChild.Text;
+              IsVarP := (Length(RetVarName) > 4) and
+                (Copy(RetVarName, 1, 4) = 'var:');
+              if IsVarP then
+                RetVarName := Copy(RetVarName, 5, Length(RetVarName));
+              RegisterRuntimeVar(RetVarName);
+              if IsVarP then
+                RegisterVarParam(RetVarName);
               IsStrParam := False;
               if ParamChild.ChildCount > 0 then
               begin
@@ -4478,21 +4665,32 @@ begin
                    SameText(TypeChild.Text, 'AnsiString')) then
                 begin
                   IsStrParam := True;
-                  RegisterRuntimeStrVar(ParamChild.Text);
+                  RegisterRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
                   FModel.LookupConstValue(TypeChild.Text + '$size', Folded) then
                 begin
-                  RegisterClassVar(ParamChild.Text, TypeChild.Text);
+                  if FModel.LookupConstValue(TypeChild.Text + '$record', Value) then
+                    RegisterRecordVar(RetVarName, TypeChild.Text)
+                  else
+                    RegisterClassVar(RetVarName, TypeChild.Text);
                 end;
               end;
               if IsStrParam then
                 ParamTypes := ParamTypes + 's'
+              else if IsVarP then
+                ParamTypes := ParamTypes + 'v'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
                 FModel.LookupConstValue(
                   ParamChild.ChildAt(0).Text + '$size', Folded) then
-                ParamTypes := ParamTypes + 'p'
+              begin
+                if FModel.LookupConstValue(
+                  ParamChild.ChildAt(0).Text + '$record', Value) then
+                  ParamTypes := ParamTypes + 'r'
+                else
+                  ParamTypes := ParamTypes + 'p';
+              end
               else
                 ParamTypes := ParamTypes + 'i';
               Inc(ParamCount);
@@ -4550,11 +4748,21 @@ begin
             ParamChild := Child.ChildAt(K);
             if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
             begin
-              if IsRuntimeStrVar(ParamChild.Text) then
-                FModel.AddTypedHirNode('var-decl-str-runtime', ParamChild.Text,
-                  0, 0, ParamChild.Text)
+              RetVarName := ParamChild.Text;
+              if (Length(RetVarName) > 4) and
+                (Copy(RetVarName, 1, 4) = 'var:') then
+                RetVarName := Copy(RetVarName, 5, Length(RetVarName));
+              if IsRuntimeStrVar(RetVarName) then
+                FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
+                  0, 0, RetVarName)
+              else if IsRecordVar(RetVarName) then
+                FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName,
+                  0, 0, RetVarName)
+              else if IsVarParam(RetVarName) then
+                FModel.AddTypedHirNode('var-decl-varref-runtime', RetVarName,
+                  0, 0, RetVarName)
               else
-                FModel.AddTypedHirNode('var-decl-runtime', ParamChild.Text,
+                FModel.AddTypedHirNode('var-decl-runtime', RetVarName,
                   0, 0, ParamChild.Text);
             end;
           end;

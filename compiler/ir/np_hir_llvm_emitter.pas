@@ -91,7 +91,15 @@ begin
 
   case AInstr.Kind of
     hikAlloca:
-      Emit('  %' + IntToStr(AInstr.ResultId) + ' = alloca ' + LlvmType);
+    begin
+      if (AInstr.IntrinsicName <> '') and
+        (Copy(AInstr.IntrinsicName, 1, 7) = 'record:') then
+        Emit('  %' + IntToStr(AInstr.ResultId) + ' = alloca [' +
+          Copy(AInstr.IntrinsicName, 8, Length(AInstr.IntrinsicName)) +
+          ' x i64]')
+      else
+        Emit('  %' + IntToStr(AInstr.ResultId) + ' = alloca ' + LlvmType);
+    end;
     hikLoad:
     begin
       if AInstr.IntrinsicName <> '' then

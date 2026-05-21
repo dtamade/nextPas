@@ -2278,6 +2278,23 @@ if [ "$LLVM_RECORD_EXIT" -ne 7 ]; then
 fi
 printf 'llvm-record-program=pass\n'
 
+printf 'llvm-var-param-program=running\n'
+LLVM_VAR_PARAM_OUT_DIR=$(mktemp -d)
+LLVM_VAR_PARAM_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_var_param.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VAR_PARAM_OUT_DIR" >"$LLVM_VAR_PARAM_OUTPUT" 2>&1; then
+  cat "$LLVM_VAR_PARAM_OUTPUT"
+  fail 'llvm-var-param-program-build-failed'
+fi
+set +e
+"$LLVM_VAR_PARAM_OUT_DIR/llvm_var_param" >/dev/null 2>&1
+LLVM_VAR_PARAM_EXIT=$?
+set -e
+if [ "$LLVM_VAR_PARAM_EXIT" -ne 7 ]; then
+  printf 'llvm-var-param-expected-exit=7 actual-exit=%d\n' "$LLVM_VAR_PARAM_EXIT"
+  fail 'llvm-var-param-program-wrong-exit-code'
+fi
+printf 'llvm-var-param-program=pass\n'
+
 printf 'llvm-comprehensive-program=running\n'
 LLVM_COMPREHENSIVE_OUT_DIR=$(mktemp -d)
 LLVM_COMPREHENSIVE_OUTPUT=$(mktemp)

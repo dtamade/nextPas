@@ -21,6 +21,7 @@ type
     FSavedAllocaValues: array of THIRValueId;
     FSavedAllocaTypes: array of THIRTypeId;
     FSavedAllocaCount: LongInt;
+    FSavedVarParamFlags: array of Boolean;
     FSavedBlockNames: array of string;
     FSavedBlockIds: array of THIRBlockId;
     FSavedBlockCount: LongInt;
@@ -31,6 +32,8 @@ type
     FAllocaValues: array of THIRValueId;
     FAllocaTypes: array of THIRTypeId;
     FAllocaCount: LongInt;
+    FRecordAllocaSlots: array of LongInt;
+    FVarParamFlags: array of Boolean;
 
     FBlockNames: array of string;
     FBlockIds: array of THIRBlockId;
@@ -45,6 +48,7 @@ type
     procedure EnsureAlloca(const AName: string; AType: THIRTypeId);
     function FindAlloca(const AName: string): THIRValueId;
     function FindAllocaType(const AName: string): THIRTypeId;
+    function IsVarParamAlloca(const AName: string): Boolean;
     function GetIntType: THIRTypeId;
     function GetBoolType: THIRTypeId;
     function GetStringType: THIRTypeId;
@@ -87,6 +91,8 @@ type
     procedure ProcessClassNew(const ANode: TTypedHirNode);
     procedure ProcessFieldStore(const ANode: TTypedHirNode);
     procedure ProcessFieldStoreStr(const ANode: TTypedHirNode);
+    procedure ProcessRecordFieldStore(const ANode: TTypedHirNode);
+    procedure ProcessRecordCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
   public
@@ -121,6 +127,8 @@ begin
   FPendingParamLlvmIdx := 0;
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
+  SetLength(FRecordAllocaSlots, 0);
+  SetLength(FVarParamFlags, 0);
   SetLength(FBlockNames, 0);
   SetLength(FBlockIds, 0);
   FFwdFuncCount := 0;
@@ -208,10 +216,14 @@ begin
     SetLength(FAllocaNames, FAllocaCount + 32);
     SetLength(FAllocaValues, FAllocaCount + 32);
     SetLength(FAllocaTypes, FAllocaCount + 32);
+    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+    SetLength(FVarParamFlags, FAllocaCount + 32);
   end;
   FAllocaNames[FAllocaCount] := AName;
   FAllocaValues[FAllocaCount] := Instr.ResultId;
   FAllocaTypes[FAllocaCount] := AType;
+  FRecordAllocaSlots[FAllocaCount] := 0;
+  FVarParamFlags[FAllocaCount] := False;
   Inc(FAllocaCount);
 end;
 
@@ -233,6 +245,16 @@ begin
     if FAllocaNames[I] = AName then
       Exit(FAllocaTypes[I]);
   Result := 0;
+end;
+
+function THIRBuilder.IsVarParamAlloca(const AName: string): Boolean;
+var
+  I: LongInt;
+begin
+  for I := 0 to FAllocaCount - 1 do
+    if FAllocaNames[I] = AName then
+      Exit(FVarParamFlags[I]);
+  Result := False;
 end;
 
 procedure THIRBuilder.EmitInstr(const AInstr: THIRInstr);
@@ -327,6 +349,9 @@ var
   VcallArgs: array of THIRValueId;
   VcallArgTypes: array of THIRTypeId;
   CmpLhsType, CmpRhsType: THIRTypeId;
+  RecName: string;
+  FieldIdx, ValCode: LongInt;
+  IdxVal: THIRValueId;
 
   procedure Push(AVal: THIRValueId);
   begin
@@ -436,7 +461,12 @@ begin
       end;
       if V <> 0 then
       begin
-        if FindAllocaType(Arg) = GetPtrType then
+        if IsVarParamAlloca(Arg) then
+        begin
+          V := EmitLoad(GetPtrType, V);
+          Push(EmitLoad(GetIntType, V));
+        end
+        else if FindAllocaType(Arg) = GetPtrType then
           PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
         else
           Push(EmitLoad(GetIntType, V));
@@ -460,6 +490,61 @@ begin
         Instr.CallTarget := Arg;
         EmitInstr(Instr);
         Push(Instr.ResultId);
+      end;
+    end
+    else if Token = 'varref' then
+    begin
+      V := FindAlloca(Arg);
+      if V <> 0 then
+      begin
+        if IsVarParamAlloca(Arg) then
+          PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+        else
+          PushTyped(V, GetPtrType);
+      end;
+    end
+    else if Token = 'recvar' then
+    begin
+      V := FindAlloca(Arg);
+      if V <> 0 then
+        PushTyped(V, GetPtrType);
+    end
+    else if Token = 'rload' then
+    begin
+      SpacePos := Pos(' ', Arg);
+      if SpacePos > 0 then
+      begin
+        RecName := Copy(Arg, 1, SpacePos - 1);
+        Val(Copy(Arg, SpacePos + 1, Length(Arg)), FieldIdx, ValCode);
+        if ValCode = 0 then
+        begin
+          V := FindAlloca(RecName);
+          if V <> 0 then
+          begin
+            if FindAllocaType(RecName) = GetPtrType then
+              V := EmitLoad(GetPtrType, V);
+
+            FillChar(Instr, SizeOf(Instr), 0);
+            Instr.ResultId := FModule.NewValue;
+            Instr.Kind := hikLoad;
+            Instr.TypeId := GetIntType;
+            Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
+            EmitInstr(Instr);
+            IdxVal := Instr.ResultId;
+
+            FillChar(Instr, SizeOf(Instr), 0);
+            Instr.ResultId := FModule.NewValue;
+            Instr.Kind := hikIntrinsic;
+            Instr.TypeId := GetPtrType;
+            Instr.IntrinsicName := 'gep_i64';
+            SetLength(Instr.Operands, 2);
+            Instr.Operands[0] := MakeOperand(V);
+            Instr.Operands[1] := MakeOperand(IdxVal);
+            EmitInstr(Instr);
+
+            Push(EmitLoad(GetIntType, Instr.ResultId));
+          end;
+        end;
       end;
     end
     else if Token = 'add' then
@@ -765,6 +850,8 @@ var
   Instr: THIRInstr;
   ParamIdx: LongInt;
   ParamValueId: THIRValueId;
+  Arg: string;
+  TabPos, Code: LongInt;
 begin
   if ANode.Kind = 'var-decl-runtime' then
   begin
@@ -786,6 +873,8 @@ begin
           SetLength(FAllocaNames, FAllocaCount + 32);
           SetLength(FAllocaValues, FAllocaCount + 32);
           SetLength(FAllocaTypes, FAllocaCount + 32);
+          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+          SetLength(FVarParamFlags, FAllocaCount + 32);
         end;
         FAllocaNames[FAllocaCount] := ANode.Operand;
         FAllocaValues[FAllocaCount] := Instr.ResultId;
@@ -807,6 +896,8 @@ begin
           SetLength(FAllocaNames, FAllocaCount + 32);
           SetLength(FAllocaValues, FAllocaCount + 32);
           SetLength(FAllocaTypes, FAllocaCount + 32);
+          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+          SetLength(FVarParamFlags, FAllocaCount + 32);
         end;
         FAllocaNames[FAllocaCount] := ANode.Operand;
         FAllocaValues[FAllocaCount] := Instr.ResultId;
@@ -850,7 +941,103 @@ begin
   end
   else if ANode.Kind = 'var-decl-ptr-runtime' then
   begin
-    EnsureAlloca(ANode.Operand, GetPtrType);
+    if FPendingParamCount > 0 then
+    begin
+      ParamIdx := FPendingParamLlvmIdx;
+      ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikAlloca;
+      Instr.TypeId := GetPtrType;
+      EmitInstr(Instr);
+
+      if FAllocaCount >= Length(FAllocaNames) then
+      begin
+        SetLength(FAllocaNames, FAllocaCount + 32);
+        SetLength(FAllocaValues, FAllocaCount + 32);
+        SetLength(FAllocaTypes, FAllocaCount + 32);
+        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+        SetLength(FVarParamFlags, FAllocaCount + 32);
+      end;
+      FAllocaNames[FAllocaCount] := ANode.Operand;
+      FAllocaValues[FAllocaCount] := Instr.ResultId;
+      FAllocaTypes[FAllocaCount] := GetPtrType;
+      FRecordAllocaSlots[FAllocaCount] := 0;
+      Inc(FAllocaCount);
+
+      EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
+      Dec(FPendingParamCount);
+      Inc(FPendingParamLlvmIdx);
+    end
+    else
+      EnsureAlloca(ANode.Operand, GetPtrType);
+  end
+  else if ANode.Kind = 'var-decl-varref-runtime' then
+  begin
+    if FPendingParamCount > 0 then
+    begin
+      ParamIdx := FPendingParamLlvmIdx;
+      ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikAlloca;
+      Instr.TypeId := GetPtrType;
+      EmitInstr(Instr);
+
+      if FAllocaCount >= Length(FAllocaNames) then
+      begin
+        SetLength(FAllocaNames, FAllocaCount + 32);
+        SetLength(FAllocaValues, FAllocaCount + 32);
+        SetLength(FAllocaTypes, FAllocaCount + 32);
+        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+        SetLength(FVarParamFlags, FAllocaCount + 32);
+      end;
+      FAllocaNames[FAllocaCount] := ANode.Operand;
+      FAllocaValues[FAllocaCount] := Instr.ResultId;
+      FAllocaTypes[FAllocaCount] := GetPtrType;
+      FVarParamFlags[FAllocaCount] := True;
+      Inc(FAllocaCount);
+
+      EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
+      Dec(FPendingParamCount);
+      Inc(FPendingParamLlvmIdx);
+    end
+    else
+      EnsureAlloca(ANode.Operand, GetPtrType);
+  end
+  else if ANode.Kind = 'var-decl-record-runtime' then
+  begin
+    TabPos := Pos(#9, ANode.Operand);
+    if TabPos > 0 then
+    begin
+      Arg := Copy(ANode.Operand, 1, TabPos - 1);
+      Val(Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand)), ParamIdx, Code);
+      if Code = 0 then
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikAlloca;
+        Instr.TypeId := GetIntType;
+        Instr.IntrinsicName := 'record:' + IntToStr(ParamIdx);
+        EmitInstr(Instr);
+
+        if FAllocaCount >= Length(FAllocaNames) then
+        begin
+          SetLength(FAllocaNames, FAllocaCount + 32);
+          SetLength(FAllocaValues, FAllocaCount + 32);
+          SetLength(FAllocaTypes, FAllocaCount + 32);
+          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+          SetLength(FVarParamFlags, FAllocaCount + 32);
+        end;
+        FAllocaNames[FAllocaCount] := Arg;
+        FAllocaValues[FAllocaCount] := Instr.ResultId;
+        FAllocaTypes[FAllocaCount] := GetIntType;
+        FRecordAllocaSlots[FAllocaCount] := ParamIdx;
+        Inc(FAllocaCount);
+      end;
+    end;
   end;
 end;
 
@@ -875,10 +1062,18 @@ begin
   end;
   if (V <> 0) and (Addr <> 0) then
   begin
-    StoreType := FindAllocaType(VarName);
-    if StoreType = 0 then
-      StoreType := GetIntType;
-    EmitStore(StoreType, V, Addr);
+    if IsVarParamAlloca(VarName) then
+    begin
+      Addr := EmitLoad(GetPtrType, Addr);
+      EmitStore(GetIntType, V, Addr);
+    end
+    else
+    begin
+      StoreType := FindAllocaType(VarName);
+      if StoreType = 0 then
+        StoreType := GetIntType;
+      EmitStore(StoreType, V, Addr);
+    end;
   end;
 end;
 
@@ -1067,11 +1262,13 @@ begin
   SetLength(FSavedAllocaNames, FAllocaCount);
   SetLength(FSavedAllocaValues, FAllocaCount);
   SetLength(FSavedAllocaTypes, FAllocaCount);
+  SetLength(FSavedVarParamFlags, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
   begin
     FSavedAllocaNames[I] := FAllocaNames[I];
     FSavedAllocaValues[I] := FAllocaValues[I];
     FSavedAllocaTypes[I] := FAllocaTypes[I];
+    FSavedVarParamFlags[I] := FVarParamFlags[I];
   end;
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
@@ -1150,6 +1347,8 @@ begin
         SetLength(FAllocaNames, FAllocaCount + 32);
         SetLength(FAllocaValues, FAllocaCount + 32);
         SetLength(FAllocaTypes, FAllocaCount + 32);
+        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+        SetLength(FVarParamFlags, FAllocaCount + 32);
       end;
       FAllocaNames[FAllocaCount] := ParamName;
       FAllocaValues[FAllocaCount] := Instr.ResultId;
@@ -1198,7 +1397,10 @@ begin
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
       end
-      else if (I < Length(ParamName)) and (ParamName[I + 1] = 'p') then
+      else if (I < Length(ParamName)) and (ParamName[I + 1] = 'v') then
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetPtrType, True, False)
+      else if (I < Length(ParamName)) and
+        ((ParamName[I + 1] = 'p') or (ParamName[I + 1] = 'r')) then
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetPtrType, False, False)
       else
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetIntType, False, False);
@@ -1227,6 +1429,7 @@ begin
     FAllocaNames[I] := FSavedAllocaNames[I];
     FAllocaValues[I] := FSavedAllocaValues[I];
     FAllocaTypes[I] := FSavedAllocaTypes[I];
+    FVarParamFlags[I] := FSavedVarParamFlags[I];
   end;
   FBlockCount := FSavedBlockCount;
   for I := 0 to FSavedBlockCount - 1 do
@@ -1322,7 +1525,9 @@ begin
             ArgOps[ArgCount] := MakeOperand(ArgValue);
         end
         else if (Pos(' p' + #10, ArgBlob) > 0) or
-          (Copy(ArgBlob, 1, 4) = 'null') then
+          (Copy(ArgBlob, 1, 4) = 'null') or
+          (Copy(ArgBlob, 1, 7) = 'recvar ') or
+          (Copy(ArgBlob, 1, 7) = 'varref ') then
           ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType)
         else
           ArgOps[ArgCount] := MakeOperand(ArgValue);
@@ -1793,11 +1998,13 @@ begin
   SetLength(FSavedAllocaNames, FAllocaCount);
   SetLength(FSavedAllocaValues, FAllocaCount);
   SetLength(FSavedAllocaTypes, FAllocaCount);
+  SetLength(FSavedVarParamFlags, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
   begin
     FSavedAllocaNames[I] := FAllocaNames[I];
     FSavedAllocaValues[I] := FAllocaValues[I];
     FSavedAllocaTypes[I] := FAllocaTypes[I];
+    FSavedVarParamFlags[I] := FVarParamFlags[I];
   end;
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
@@ -1842,7 +2049,8 @@ begin
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntType, False, False);
     end
-    else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'p') then
+    else if (I < Length(ParamTypes)) and
+      ((ParamTypes[I + 1] = 'p') or (ParamTypes[I + 1] = 'r')) then
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, False, False)
     else
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetIntType, False, False);
@@ -1866,6 +2074,8 @@ begin
     SetLength(FAllocaNames, FAllocaCount + 32);
     SetLength(FAllocaValues, FAllocaCount + 32);
     SetLength(FAllocaTypes, FAllocaCount + 32);
+    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+    SetLength(FVarParamFlags, FAllocaCount + 32);
   end;
   FAllocaNames[FAllocaCount] := 'self';
   FAllocaValues[FAllocaCount] := Instr.ResultId;
@@ -2125,6 +2335,119 @@ begin
   end;
 end;
 
+procedure THIRBuilder.ProcessRecordFieldStore(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, Rest, IdxStr, ValBlob: string;
+  RecPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  IdxStr := Copy(Rest, 1, TabPos - 1);
+  ValBlob := Copy(Rest, TabPos + 1, Length(Rest));
+
+  RecPtr := FindAlloca(VarName);
+  if RecPtr = 0 then Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IdxStr;
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(RecPtr);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  FieldPtr := Instr.ResultId;
+
+  ValVal := ParseIntBlob(ValBlob);
+  if ValVal <> 0 then
+    EmitStore(GetIntType, ValVal, FieldPtr);
+end;
+
+procedure THIRBuilder.ProcessRecordCopy(const ANode: TTypedHirNode);
+var
+  TabPos, I, FieldCount, Code: LongInt;
+  DstName, Rest, SrcName, CountStr: string;
+  DstPtr, SrcPtr, IdxVal, SrcField, DstField, LoadedVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  DstName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  SrcName := Copy(Rest, 1, TabPos - 1);
+  CountStr := Copy(Rest, TabPos + 1, Length(Rest));
+  Val(CountStr, FieldCount, Code);
+  if Code <> 0 then Exit;
+
+  DstPtr := FindAlloca(DstName);
+  SrcPtr := FindAlloca(SrcName);
+  if (DstPtr = 0) or (SrcPtr = 0) then Exit;
+
+  for I := 0 to FieldCount - 1 do
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IntToStr(I);
+    EmitInstr(Instr);
+    IdxVal := Instr.ResultId;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(SrcPtr);
+    Instr.Operands[1] := MakeOperand(IdxVal);
+    EmitInstr(Instr);
+    SrcField := Instr.ResultId;
+
+    LoadedVal := EmitLoad(GetIntType, SrcField);
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IntToStr(I);
+    EmitInstr(Instr);
+    IdxVal := Instr.ResultId;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(DstPtr);
+    Instr.Operands[1] := MakeOperand(IdxVal);
+    EmitInstr(Instr);
+    DstField := Instr.ResultId;
+
+    EmitStore(GetIntType, LoadedVal, DstField);
+  end;
+end;
+
 procedure THIRBuilder.ProcessFieldStoreStr(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -2286,7 +2609,9 @@ begin
   if (ANode.Kind = 'var-decl-runtime') or
      (ANode.Kind = 'var-decl-str-runtime') or
      (ANode.Kind = 'var-decl-arr-runtime') or
-     (ANode.Kind = 'var-decl-ptr-runtime') then
+     (ANode.Kind = 'var-decl-ptr-runtime') or
+     (ANode.Kind = 'var-decl-varref-runtime') or
+     (ANode.Kind = 'var-decl-record-runtime') then
     ProcessVarDecl(ANode)
   else if ANode.Kind = 'assign-runtime' then
     ProcessAssign(ANode)
@@ -2340,6 +2665,10 @@ begin
     ProcessClassNew(ANode)
   else if ANode.Kind = 'field-store-runtime' then
     ProcessFieldStore(ANode)
+  else if ANode.Kind = 'record-field-store-runtime' then
+    ProcessRecordFieldStore(ANode)
+  else if ANode.Kind = 'record-copy-runtime' then
+    ProcessRecordCopy(ANode)
   else if ANode.Kind = 'field-store-str-runtime' then
     ProcessFieldStoreStr(ANode)
   else if ANode.Kind = 'assign-str-field-load-runtime' then
