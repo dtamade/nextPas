@@ -17,6 +17,7 @@ type
     FNeedsStrConcat: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
+    FCurrentReturnTypeId: THIRTypeId;
     procedure Emit(const S: string);
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function AddStrConstant(const AValue: string): LongInt;
@@ -345,13 +346,21 @@ end;
 procedure THIRLlvmEmitter.EmitTerminator(const ATerm: THIRTerminator);
 var
   I: LongInt;
+  RetTy: string;
+  T: THIRTypeRec;
 begin
   case ATerm.Kind of
     htkReturn:
       if ATerm.ReturnValue = 0 then
         Emit('  ret void')
-      else
-        Emit('  ret i64 %' + IntToStr(ATerm.ReturnValue));
+      else begin
+        T := FModule.Types.GetType(FCurrentReturnTypeId);
+        if T.Kind = htkString then
+          RetTy := '{ptr, i64}'
+        else
+          RetTy := TypeToLlvm(FCurrentReturnTypeId);
+        Emit('  ret ' + RetTy + ' %' + IntToStr(ATerm.ReturnValue));
+      end;
     htkBranch:
       Emit('  br label %bb' + IntToStr(ATerm.TargetBlock));
     htkCondBranch:
@@ -395,6 +404,8 @@ begin
     RetStr := '{ptr, i64}'
   else
     RetStr := TypeToLlvm(AFunc.ReturnTypeId);
+
+  FCurrentReturnTypeId := AFunc.ReturnTypeId;
 
   Emit('');
   Emit('define ' + RetStr + ' @' + AFunc.Name +

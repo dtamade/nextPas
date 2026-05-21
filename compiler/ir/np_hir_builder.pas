@@ -36,6 +36,10 @@ type
     FBlockIds: array of THIRBlockId;
     FBlockCount: LongInt;
 
+    FFwdFuncNames: array of string;
+    FFwdFuncRetTypes: array of THIRTypeId;
+    FFwdFuncCount: LongInt;
+
     function EnsureBlock(const AName: string): THIRBlockId;
     function FindBlock(const AName: string): THIRBlockId;
     procedure EnsureAlloca(const AName: string; AType: THIRTypeId);
@@ -114,6 +118,7 @@ begin
   SetLength(FAllocaValues, 0);
   SetLength(FBlockNames, 0);
   SetLength(FBlockIds, 0);
+  FFwdFuncCount := 0;
 end;
 
 destructor THIRBuilder.Destroy;
@@ -507,7 +512,17 @@ begin
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikCall;
-      Instr.TypeId := GetIntType;
+      Instr.TypeId := FModule.FindFunctionReturnType(Token);
+      if Instr.TypeId = 0 then
+      begin
+        Instr.TypeId := GetIntType;
+        for J := 0 to FFwdFuncCount - 1 do
+          if FFwdFuncNames[J] = Token then
+          begin
+            Instr.TypeId := FFwdFuncRetTypes[J];
+            Break;
+          end;
+      end;
       Instr.CallTarget := Token;
       SetLength(Instr.Operands, ArgCount);
       for J := 0 to ArgCount - 1 do
@@ -518,7 +533,10 @@ begin
           Instr.Operands[J] := MakeOperand(CallArgs[J]);
       end;
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      if FModule.Types.GetType(Instr.TypeId).Kind = htkPointer then
+        PushTyped(Instr.ResultId, Instr.TypeId)
+      else
+        Push(Instr.ResultId);
     end
     else if Token = 'strvar' then
     begin
@@ -752,6 +770,10 @@ begin
   begin
     EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
     EnsureAlloca(ANode.Operand + '$len', GetIntType);
+  end
+  else if ANode.Kind = 'var-decl-ptr-runtime' then
+  begin
+    EnsureAlloca(ANode.Operand, GetPtrType);
   end;
 end;
 
@@ -760,6 +782,7 @@ var
   TabPos: LongInt;
   VarName, Blob: string;
   V, Addr: THIRValueId;
+  StoreType: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
@@ -774,7 +797,12 @@ begin
     Addr := FindAlloca(VarName);
   end;
   if (V <> 0) and (Addr <> 0) then
-    EmitStore(GetIntType, V, Addr);
+  begin
+    StoreType := FindAllocaType(VarName);
+    if StoreType = 0 then
+      StoreType := GetIntType;
+    EmitStore(StoreType, V, Addr);
+  end;
 end;
 
 procedure THIRBuilder.ProcessHaltCall(const ANode: TTypedHirNode);
@@ -1081,6 +1109,8 @@ begin
 
     if Rest = 's' then
       FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType)
+    else if Rest = 'p' then
+      FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
     else
       FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
 
@@ -1877,7 +1907,8 @@ procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);
 begin
   if (ANode.Kind = 'var-decl-runtime') or
      (ANode.Kind = 'var-decl-str-runtime') or
-     (ANode.Kind = 'var-decl-arr-runtime') then
+     (ANode.Kind = 'var-decl-arr-runtime') or
+     (ANode.Kind = 'var-decl-ptr-runtime') then
     ProcessVarDecl(ANode)
   else if ANode.Kind = 'assign-runtime' then
     ProcessAssign(ANode)
@@ -1939,7 +1970,44 @@ var
   Node: TTypedHirNode;
   EntryBlock: THIRBlockId;
   Instr: THIRInstr;
+  FwdName, FwdRest: string;
+  FwdColon, FwdColon2: LongInt;
 begin
+  FFwdFuncCount := 0;
+  for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
+  begin
+    Node := FSemaModel.TypedHirNodeAt(I);
+    if (Node.Kind = 'function-body-begin') or
+       (Node.Kind = 'method-body-begin') then
+    begin
+      FwdName := Node.DisplayName;
+      FwdRest := '';
+      FwdColon := Pos(':', Node.Operand);
+      if FwdColon > 0 then
+      begin
+        FwdRest := Copy(Node.Operand, FwdColon + 1, Length(Node.Operand));
+        FwdColon2 := Pos(':', FwdRest);
+        if FwdColon2 > 0 then
+          FwdRest := Copy(FwdRest, FwdColon2 + 1, Length(FwdRest))
+        else
+          FwdRest := '';
+      end;
+      if FFwdFuncCount >= Length(FFwdFuncNames) then
+      begin
+        SetLength(FFwdFuncNames, FFwdFuncCount + 32);
+        SetLength(FFwdFuncRetTypes, FFwdFuncCount + 32);
+      end;
+      FFwdFuncNames[FFwdFuncCount] := FwdName;
+      if FwdRest = 'p' then
+        FFwdFuncRetTypes[FFwdFuncCount] := GetPtrType
+      else if FwdRest = 's' then
+        FFwdFuncRetTypes[FFwdFuncCount] := GetStringType
+      else
+        FFwdFuncRetTypes[FFwdFuncCount] := GetIntType;
+      Inc(FFwdFuncCount);
+    end;
+  end;
+
   FCurrentFuncId := FModule.AddFunction('_start', GetIntType);
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);

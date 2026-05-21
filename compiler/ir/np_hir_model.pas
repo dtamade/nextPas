@@ -175,6 +175,7 @@ type
 
     function FunctionCount: LongInt;
     function FunctionAt(AIndex: LongInt): THIRFunction;
+    function FindFunctionReturnType(const AName: string): THIRTypeId;
     function GlobalCount: LongInt;
     function GlobalAt(AIndex: LongInt): THIRGlobal;
     procedure AddVmtGlobal(const AClassName: string; const AFuncs: array of string);
@@ -373,6 +374,16 @@ end;
 function THIRModule.FunctionAt(AIndex: LongInt): THIRFunction;
 begin
   Result := FFunctions[AIndex];
+end;
+
+function THIRModule.FindFunctionReturnType(const AName: string): THIRTypeId;
+var
+  I: LongInt;
+begin
+  for I := 0 to High(FFunctions) do
+    if FFunctions[I].Name = AName then
+      Exit(FFunctions[I].ReturnTypeId);
+  Result := 0;
 end;
 
 function THIRModule.GlobalCount: LongInt;

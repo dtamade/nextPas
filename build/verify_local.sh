@@ -2834,6 +2834,22 @@ if [ "$LLVM_CLASSPARAM_EXIT" -ne 37 ]; then
 fi
 printf 'llvm-class-param-program=pass\n'
 
+LLVM_FACTORY_OUT_DIR=$(mktemp -d)
+LLVM_FACTORY_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_factory.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_FACTORY_OUT_DIR" >"$LLVM_FACTORY_OUTPUT" 2>&1; then
+  cat "$LLVM_FACTORY_OUTPUT"
+  fail 'llvm-factory-build-failed'
+fi
+set +e
+"$LLVM_FACTORY_OUT_DIR/llvm_factory" >/dev/null 2>&1
+LLVM_FACTORY_EXIT=$?
+set -e
+if [ "$LLVM_FACTORY_EXIT" -ne 42 ]; then
+  printf 'llvm-factory-expected-exit=42 actual-exit=%d\n' "$LLVM_FACTORY_EXIT"
+  fail 'llvm-factory-wrong-exit-code'
+fi
+printf 'llvm-factory-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

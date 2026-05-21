@@ -48,14 +48,18 @@ type
     FCurrentRetVarName: string;
     FClassVarNames: array of string;
     FClassVarTypes: array of string;
+    FPtrReturnFuncs: array of string;
+    FPtrReturnTypes: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
+    procedure RegisterPtrReturnFunc(const AName, AClassName: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
     function LookupClassVar(const AName: string): string;
+    function LookupPtrReturnFunc(const AName: string): string;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
     function EncodeStrCallArgs(const ACallNode: TGreenNode;
@@ -321,6 +325,27 @@ begin
   for Idx := 0 to Length(FClassVarNames) - 1 do
     if SameText(FClassVarNames[Idx], AName) then
       Exit(FClassVarTypes[Idx]);
+  Result := '';
+end;
+
+procedure TSemanticAnalyzer.RegisterPtrReturnFunc(const AName, AClassName: string);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FPtrReturnFuncs);
+  SetLength(FPtrReturnFuncs, NextIndex + 1);
+  SetLength(FPtrReturnTypes, NextIndex + 1);
+  FPtrReturnFuncs[NextIndex] := AName;
+  FPtrReturnTypes[NextIndex] := AClassName;
+end;
+
+function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FPtrReturnFuncs) - 1 do
+    if SameText(FPtrReturnFuncs[Idx], AName) then
+      Exit(FPtrReturnTypes[Idx]);
   Result := '';
 end;
 
@@ -3078,6 +3103,24 @@ begin
             end;
           end;
         end
+        else if FNoFold and (Arg <> nil) and
+          (Arg.NodeKind = gnkFunctionCall) and (Arg.ChildCount >= 1) and
+          (Arg.ChildAt(0) <> nil) and
+          (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+          (LookupPtrReturnFunc(Arg.ChildAt(0).Text) <> '') then
+        begin
+          if EncodeRuntimeIntExprFold(Arg, Operand) then
+          begin
+            RegisterRuntimeVar(Decoded);
+            RegisterClassVar(Decoded, LookupPtrReturnFunc(Arg.ChildAt(0).Text));
+            FModel.AddTypedHirNode(
+              'var-decl-ptr-runtime', Decoded, 0, 0, Decoded);
+            FModel.AddTypedHirNode(
+              'assign-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand
+            );
+          end;
+        end
         else if FNoFold then
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
@@ -3918,6 +3961,7 @@ var
   I, J, K: LongInt;
   Child, Decl, TypeChild, NextSibling: TGreenNode;
   IsStr, IsArr: Boolean;
+  Folded: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -3976,6 +4020,14 @@ begin
             'var-decl-arr-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          FModel.LookupConstValue(Decl.ChildAt(0).Text + '$size', Folded) then
+        begin
+          RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
+          FModel.AddTypedHirNode(
+            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
         else
           FModel.AddTypedHirNode(
             'var-decl-runtime', Decl.Text, 0, 0, Decl.Text
@@ -4031,6 +4083,7 @@ var
   I, J: LongInt;
   Entry: TProcedureBodyEntry;
   Child: TGreenNode;
+  Folded: Int64;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
@@ -4050,6 +4103,14 @@ begin
         RegisterRuntimeStrVar(Entry.Name);
         Break;
       end;
+      if (Child.NodeKind = gnkIdentifier) and
+        (Child.NodeKind <> gnkBeginBlock) and
+        FModel.LookupConstValue(Child.Text + '$size', Folded) and
+        (Pos('.', Entry.Name) = 0) then
+      begin
+        RegisterPtrReturnFunc(Entry.Name, Child.Text);
+        Break;
+      end;
     end;
   end;
 end;
@@ -4062,7 +4123,8 @@ var
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
   ParamTypes, RetVarName: string;
-  IsStrParam, IsStrReturn: Boolean;
+  IsStrParam, IsStrReturn, IsPtrReturn: Boolean;
+  PtrReturnClass: string;
   Folded: Int64;
 begin
   for I := 0 to Length(FProcedureBodies) - 1 do
@@ -4073,6 +4135,8 @@ begin
     ParamCount := 0;
     ParamTypes := '';
     IsStrReturn := False;
+    IsPtrReturn := False;
+    PtrReturnClass := '';
     if Entry.Decl <> nil then
     begin
       for J := 0 to Entry.Decl.ChildCount - 1 do
@@ -4122,9 +4186,18 @@ begin
           (Child.NodeKind <> gnkBeginBlock) and
           (SameText(Child.Text, 'String') or
            SameText(Child.Text, 'AnsiString')) then
-          IsStrReturn := True;
+          IsStrReturn := True
+        else if (Child.NodeKind = gnkIdentifier) and
+          (Child.NodeKind <> gnkBeginBlock) and
+          FModel.LookupConstValue(Child.Text + '$size', Folded) then
+        begin
+          IsPtrReturn := True;
+          PtrReturnClass := Child.Text;
+        end;
       end;
     end;
+    if IsPtrReturn and (Pos('.', Entry.Name) = 0) then
+      RegisterPtrReturnFunc(Entry.Name, PtrReturnClass);
     if Pos('.', Entry.Name) > 0 then
     begin
       FCurrentMethodClass := Copy(Entry.Name, 1, Pos('.', Entry.Name) - 1);
@@ -4135,6 +4208,9 @@ begin
     else if IsStrReturn then
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':s')
+    else if IsPtrReturn then
+      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+        IntToStr(ParamCount) + ':' + ParamTypes + ':p')
     else
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes);
@@ -4172,6 +4248,8 @@ begin
       RegisterRuntimeStrVar(RetVarName);
     if IsStrReturn then
       FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName, 0, 0, RetVarName)
+    else if IsPtrReturn then
+      FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
     else
       FModel.AddTypedHirNode('var-decl-runtime', RetVarName, 0, 0, RetVarName);
     SavedTerminated := FCurrentBlockTerminated;
