@@ -2555,6 +2555,57 @@ begin
       IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(0).ChildCount >= 2) and
+    (ANode.ChildAt(0).ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(0).ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    FuncName := LookupClassVar(ANode.ChildAt(0).ChildAt(0).Text);
+    if FuncName <> '' then
+    begin
+      ABlob := '';
+      StrCallArgCount := 0;
+      for StrCallIdx := 1 to ANode.ChildCount - 1 do
+      begin
+        if (ANode.ChildAt(StrCallIdx) <> nil) and
+          EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), ArgName) then
+        begin
+          ABlob := ABlob + ArgName;
+          Inc(StrCallArgCount);
+        end;
+      end;
+      if FModel.LookupConstValue(
+        FuncName + '$vmt_slot_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
+          IntToStr(StrCallArgCount) + #10
+      else
+      begin
+        ArgName := FuncName;
+        while (ArgName <> '') and
+          (FModel.FindSymbolByName(ArgName + '.' +
+            ANode.ChildAt(0).ChildAt(1).Text) = 0) do
+        begin
+          Folded := FModel.FindTypeByName(ArgName);
+          if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+            ArgName := FModel.TypeAt(
+              FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+          else
+            ArgName := '';
+        end;
+        if ArgName = '' then ArgName := FuncName;
+        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob + 'call ' + ArgName + '.' +
+          ANode.ChildAt(0).ChildAt(1).Text + ' ' +
+          IntToStr(StrCallArgCount + 1) + #10;
+      end;
+      Exit(True);
+    end;
+  end;
   if NeedsFoldFallback(ANode) then
   begin
     if (not FNoFold) or
@@ -2579,7 +2630,7 @@ begin
   begin
     if FModel.LookupConstValue(
       FCurrentMethodClass + '$vmt_slot_' + ANode.Text, Folded) then
-      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + #10
+      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0' + #10
     else
       ABlob := 'var self' + #10 +
         'call ' + FCurrentMethodClass + '.' + ANode.Text + ' 1' + #10;
@@ -2595,7 +2646,7 @@ begin
       if FModel.LookupConstValue(
         FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-          'vcall ' + IntToStr(Folded) + #10
+          'vcall ' + IntToStr(Folded) + ' 0' + #10
       else
       begin
         ArgName := FuncName;

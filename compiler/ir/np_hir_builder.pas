@@ -291,6 +291,8 @@ var
   CallArgs: array of THIRValueId;
   CallArgTypes: array of THIRTypeId;
   ConstVal: Int64;
+  SlotIdx, ExtraArgCount, VcallI: LongInt;
+  VcallArgs: array of THIRValueId;
 
   procedure Push(AVal: THIRValueId);
   begin
@@ -596,7 +598,20 @@ begin
     end
     else if Token = 'vcall' then
     begin
-      ArgCount := StrToIntDef(Arg, 0);
+      SpacePos := Pos(' ', Arg);
+      if SpacePos > 0 then
+      begin
+        SlotIdx := StrToIntDef(Copy(Arg, 1, SpacePos - 1), 0);
+        ExtraArgCount := StrToIntDef(Copy(Arg, SpacePos + 1, Length(Arg)), 0);
+      end
+      else
+      begin
+        SlotIdx := StrToIntDef(Arg, 0);
+        ExtraArgCount := 0;
+      end;
+      SetLength(VcallArgs, ExtraArgCount);
+      for VcallI := ExtraArgCount - 1 downto 0 do
+        VcallArgs[VcallI] := Pop;
       Rhs := Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -619,7 +634,7 @@ begin
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikLoad;
       Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:' + IntToStr(ArgCount);
+      Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
       EmitInstr(Instr);
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -636,9 +651,11 @@ begin
       Instr.Kind := hikIntrinsic;
       Instr.TypeId := GetIntType;
       Instr.IntrinsicName := 'vcall';
-      SetLength(Instr.Operands, 2);
+      SetLength(Instr.Operands, 2 + ExtraArgCount);
       Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
       Instr.Operands[1] := MakeTypedOperand(Rhs, GetPtrType);
+      for VcallI := 0 to ExtraArgCount - 1 do
+        Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end;

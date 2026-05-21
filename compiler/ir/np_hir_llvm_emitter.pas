@@ -328,9 +328,15 @@ begin
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+        begin
+          Op := '  %' + IntToStr(AInstr.ResultId) +
             ' = call i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
-            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId) + ')');
+            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId);
+          for I := 2 to High(AInstr.Operands) do
+            Op := Op + ', i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+          Op := Op + ')';
+          Emit(Op);
+        end;
       end;
     end;
   end;

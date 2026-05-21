@@ -2610,6 +2610,22 @@ if [ "$LLVM_OOP_EXIT" -ne 14 ]; then
 fi
 printf 'llvm-class-oop-pattern-program=pass\n'
 
+LLVM_VCALLARGS_OUT_DIR=$(mktemp -d)
+LLVM_VCALLARGS_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_class_vcall_args.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_VCALLARGS_OUT_DIR" >"$LLVM_VCALLARGS_OUTPUT" 2>&1; then
+  cat "$LLVM_VCALLARGS_OUTPUT"
+  fail 'llvm-class-vcall-args-build-failed'
+fi
+set +e
+"$LLVM_VCALLARGS_OUT_DIR/llvm_class_vcall_args" >/dev/null 2>&1
+LLVM_VCALLARGS_EXIT=$?
+set -e
+if [ "$LLVM_VCALLARGS_EXIT" -ne 20 ]; then
+  printf 'llvm-class-vcall-args-expected-exit=20 actual-exit=%d\n' "$LLVM_VCALLARGS_EXIT"
+  fail 'llvm-class-vcall-args-wrong-exit-code'
+fi
+printf 'llvm-class-vcall-args-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then
