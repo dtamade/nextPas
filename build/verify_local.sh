@@ -2722,6 +2722,22 @@ if [ "$LLVM_PROPERTY_EXIT" -ne 12 ]; then
 fi
 printf 'llvm-property-program=pass\n'
 
+LLVM_RESULTVAR_OUT_DIR=$(mktemp -d)
+LLVM_RESULTVAR_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_result_var.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_RESULTVAR_OUT_DIR" >"$LLVM_RESULTVAR_OUTPUT" 2>&1; then
+  cat "$LLVM_RESULTVAR_OUTPUT"
+  fail 'llvm-result-var-build-failed'
+fi
+set +e
+"$LLVM_RESULTVAR_OUT_DIR/llvm_result_var" >/dev/null 2>&1
+LLVM_RESULTVAR_EXIT=$?
+set -e
+if [ "$LLVM_RESULTVAR_EXIT" -ne 24 ]; then
+  printf 'llvm-result-var-expected-exit=24 actual-exit=%d\n' "$LLVM_RESULTVAR_EXIT"
+  fail 'llvm-result-var-wrong-exit-code'
+fi
+printf 'llvm-result-var-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

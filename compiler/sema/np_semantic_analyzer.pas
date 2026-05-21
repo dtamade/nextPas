@@ -43,6 +43,7 @@ type
     FRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
+    FCurrentRetVarName: string;
     FClassVarNames: array of string;
     FClassVarTypes: array of string;
     procedure RegisterRuntimeVar(const AName: string);
@@ -2722,6 +2723,12 @@ begin
       Exit(True);
     end;
   end;
+  if (ANode.NodeKind = gnkIdentifier) and (ANode.Text = 'Result') and
+    (FCurrentRetVarName <> '') then
+  begin
+    ABlob := 'var ' + FCurrentRetVarName + #10;
+    Exit(True);
+  end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
@@ -2865,6 +2872,8 @@ begin
     if Child.NodeKind = gnkAssignmentStatement then
     begin
       Decoded := Child.Text;
+      if (Decoded = 'Result') and (FCurrentRetVarName <> '') then
+        Decoded := FCurrentRetVarName;
       if (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
@@ -3913,6 +3922,7 @@ begin
     else
       RetVarName := Entry.Name;
     RegisterRuntimeVar(RetVarName);
+    FCurrentRetVarName := RetVarName;
     if IsStrReturn then
       RegisterRuntimeStrVar(RetVarName);
     if IsStrReturn then
@@ -3933,6 +3943,7 @@ begin
     FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
     FCurrentMethodClass := '';
+    FCurrentRetVarName := '';
   end;
 end;
 
