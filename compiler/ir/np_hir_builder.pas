@@ -1552,7 +1552,8 @@ begin
           StrVarName := Copy(ArgBlob, 5, Length(ArgBlob));
           if (Length(StrVarName) > 0) and (StrVarName[Length(StrVarName)] = #10) then
             StrVarName := Copy(StrVarName, 1, Length(StrVarName) - 1);
-          if FindAllocaType(StrVarName) = GetPtrType then
+          if (not IsVarParamAlloca(StrVarName)) and
+            (FindAllocaType(StrVarName) = GetPtrType) then
             ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType)
           else
             ArgOps[ArgCount] := MakeOperand(ArgValue);
