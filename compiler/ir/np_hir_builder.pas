@@ -1308,6 +1308,9 @@ begin
           else
             ArgOps[ArgCount] := MakeOperand(ArgValue);
         end
+        else if (Pos(' p' + #10, ArgBlob) > 0) or
+          (Copy(ArgBlob, 1, 4) = 'null') then
+          ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType)
         else
           ArgOps[ArgCount] := MakeOperand(ArgValue);
         Inc(ArgCount);
