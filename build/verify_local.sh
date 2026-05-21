@@ -2770,6 +2770,22 @@ if [ "$LLVM_EXITFUNC_EXIT" -ne 45 ]; then
 fi
 printf 'llvm-exit-func-program=pass\n'
 
+LLVM_METHODINC_OUT_DIR=$(mktemp -d)
+LLVM_METHODINC_OUTPUT=$(mktemp)
+if ! "$STAGE0_BINARY" build examples/smoke/llvm_method_inc.pas --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --target "$TARGET_ID" --workspace "$REPO_ROOT" --out-dir "$LLVM_METHODINC_OUT_DIR" >"$LLVM_METHODINC_OUTPUT" 2>&1; then
+  cat "$LLVM_METHODINC_OUTPUT"
+  fail 'llvm-method-inc-build-failed'
+fi
+set +e
+"$LLVM_METHODINC_OUT_DIR/llvm_method_inc" >/dev/null 2>&1
+LLVM_METHODINC_EXIT=$?
+set -e
+if [ "$LLVM_METHODINC_EXIT" -ne 3 ]; then
+  printf 'llvm-method-inc-expected-exit=3 actual-exit=%d\n' "$LLVM_METHODINC_EXIT"
+  fail 'llvm-method-inc-wrong-exit-code'
+fi
+printf 'llvm-method-inc-program=pass\n'
+
 printf 'semantic-smoke-check=running\n'
 printf 'semantic-smoke-command=%s build examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if ! run_stage0_build_capture "$SEMANTIC_SMOKE_OUTPUT" examples/smoke/hello_with_units.pas; then

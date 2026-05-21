@@ -2576,7 +2576,7 @@ begin
       IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
     (ANode.ChildAt(0).ChildCount >= 2) and
@@ -2964,6 +2964,28 @@ begin
           Continue;
         end;
       end;
+      if FNoFold and (Arg <> nil) and
+        (Arg.NodeKind = gnkDotAccess) and (Arg.ChildCount >= 2) and
+        (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
+      begin
+        if FModel.LookupConstValue(
+          Arg.ChildAt(0).Text + '$size', Value) then
+        begin
+          StringValue := Arg.ChildAt(0).Text + '.' + Arg.ChildAt(1).Text;
+          Operand := Decoded + #9 + StringValue;
+          RegisterRuntimeVar(Decoded);
+          RegisterClassVar(Decoded, Arg.ChildAt(0).Text);
+          FModel.AddTypedHirNode(
+            'class-new-runtime', IntToStr(Value), 0, 0, Operand
+          );
+          if FModel.LookupConstValue(
+            Arg.ChildAt(0).Text + '$vmt_count', Value) then
+            FModel.AddTypedHirNode('vmt-store-runtime',
+              Arg.ChildAt(0).Text, 0, 0,
+              Decoded + #9 + Arg.ChildAt(0).Text);
+          Continue;
+        end;
+      end;
       if Arg <> nil then
       begin
         if FNoFold and IsRuntimeStrVar(Decoded) then
@@ -3256,15 +3278,32 @@ begin
               StringValue := 'add'
             else
               StringValue := 'sub';
-            if (Arg.ChildCount > ArgIndex + 1) and
-              EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
-              FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'var ' + Decoded + #10 + Operand +
-                StringValue + #10)
+            if (FCurrentMethodClass <> '') and
+              FModel.LookupConstValue(
+                FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
+            begin
+              if (Arg.ChildCount > ArgIndex + 1) and
+                EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+                Operand := 'field self ' + IntToStr(Value) + #10 +
+                  Operand + StringValue + #10
+              else
+                Operand := 'field self ' + IntToStr(Value) + #10 +
+                  'int 1' + #10 + StringValue + #10;
+              FModel.AddTypedHirNode('field-store-runtime', Decoded, 0, 0,
+                'self' + #9 + IntToStr(Value) + #9 + Operand);
+            end
             else
-              FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
-                Decoded + #9 + 'var ' + Decoded + #10 + 'int 1' + #10 +
-                StringValue + #10);
+            begin
+              if (Arg.ChildCount > ArgIndex + 1) and
+                EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+                FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
+                  Decoded + #9 + 'var ' + Decoded + #10 + Operand +
+                  StringValue + #10)
+              else
+                FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
+                  Decoded + #9 + 'var ' + Decoded + #10 + 'int 1' + #10 +
+                  StringValue + #10);
+            end;
           end;
         end;
         Continue;
@@ -3292,6 +3331,50 @@ begin
               InhParentName + '.' + InhMethodName, 0, 0, Operand);
             Continue;
           end;
+        end;
+      end;
+      if FNoFold and (Child.ChildCount >= 1) and
+        (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkFunctionCall) and
+        (Child.ChildAt(0).ChildCount >= 1) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkDotAccess) and
+        (Child.ChildAt(0).ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) then
+      begin
+        StringValue := LookupClassVar(
+          Child.ChildAt(0).ChildAt(0).ChildAt(0).Text);
+        if StringValue <> '' then
+        begin
+          InhParentName := StringValue;
+          while (InhParentName <> '') and
+            (FModel.FindSymbolByName(InhParentName + '.' +
+              Child.ChildAt(0).ChildAt(0).ChildAt(1).Text) = 0) do
+          begin
+            InhTypeId := FModel.FindTypeByName(InhParentName);
+            if (InhTypeId > 0) and
+              (FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0) then
+              InhParentName := FModel.TypeAt(
+                FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name
+            else
+              InhParentName := '';
+          end;
+          if InhParentName = '' then InhParentName := StringValue;
+          Operand := InhParentName + '.' +
+            Child.ChildAt(0).ChildAt(0).ChildAt(1).Text + #9 +
+            'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;
+          for ArgIndex := 1 to Child.ChildAt(0).ChildCount - 1 do
+          begin
+            RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              Operand := Operand + #9 + Decoded;
+          end;
+          FModel.AddTypedHirNode('call-runtime',
+            InhParentName + '.' +
+            Child.ChildAt(0).ChildAt(0).ChildAt(1).Text,
+            0, 0, Operand);
+          Continue;
         end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
