@@ -233,7 +233,7 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if FAllocaNames[I] = AName then
+    if SameText(FAllocaNames[I], AName) then
       Exit(FAllocaValues[I]);
   Result := 0;
 end;
@@ -243,7 +243,7 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if FAllocaNames[I] = AName then
+    if SameText(FAllocaNames[I], AName) then
       Exit(FAllocaTypes[I]);
   Result := 0;
 end;
@@ -253,7 +253,7 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if FAllocaNames[I] = AName then
+    if SameText(FAllocaNames[I], AName) then
       Exit(FVarParamFlags[I]);
   Result := False;
 end;
