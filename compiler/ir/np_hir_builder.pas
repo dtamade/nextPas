@@ -2243,12 +2243,15 @@ end;
 procedure THIRBuilder.EnsureVmtForClass(const AClassName: string);
 var
   VmtCount: Int64;
-  I: LongInt;
+  I, J: LongInt;
   Funcs: array of string;
   FuncName, ParentClass: string;
 begin
+  for J := 0 to FModule.VmtGlobalCount - 1 do
+    if FModule.VmtGlobalAt(J).ClassName = AClassName then
+      Exit;
   if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
-    Exit;
+    VmtCount := 0;
   if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
     ParentClass := '';
   SetLength(Funcs, VmtCount + 1);

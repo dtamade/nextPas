@@ -4643,6 +4643,7 @@ begin
     Entry := FProcedureBodies[I];
     if Entry.Body = nil then
       Continue;
+    SetLength(FVarParamNames, 0);
     ParamCount := 0;
     ParamTypes := '';
     IsStrReturn := False;
