@@ -4803,7 +4803,12 @@ begin
     else
       RetVarName := Entry.Name;
     RegisterRuntimeVar(RetVarName);
-    FCurrentRetVarName := RetVarName;
+    if (Entry.Decl <> nil) and (Entry.Decl.NodeKind = gnkFunctionDecl) then
+      FCurrentRetVarName := RetVarName
+    else if Pos('.', Entry.Name) > 0 then
+      FCurrentRetVarName := RetVarName
+    else
+      FCurrentRetVarName := '';
     if IsStrReturn then
       RegisterRuntimeStrVar(RetVarName);
     if IsStrReturn then
