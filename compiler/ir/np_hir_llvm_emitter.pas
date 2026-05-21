@@ -99,6 +99,9 @@ begin
         if Copy(AInstr.IntrinsicName, 1, 6) = 'const:' then
           Emit('  %' + IntToStr(AInstr.ResultId) + ' = add ' + LlvmType +
             ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0')
+        else if AInstr.IntrinsicName = 'null' then
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = inttoptr i64 0 to ptr')
         else if Length(AInstr.Operands) > 0 then
           Emit('  %' + IntToStr(AInstr.ResultId) + ' = load ' + LlvmType +
             ', ptr %' + IntToStr(AInstr.Operands[0].ValueId))
@@ -155,9 +158,17 @@ begin
         hikCmpGe: Op := 'sge';
       end;
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = icmp ' + Op + ' i64' +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+      begin
+        if (AInstr.Operands[0].TypeId <> 0) and
+          (FModule.Types.GetType(AInstr.Operands[0].TypeId).Kind = htkPointer) then
+          Emit('  %' + IntToStr(AInstr.ResultId) + ' = icmp ' + Op + ' ptr' +
+            ' %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', %' + IntToStr(AInstr.Operands[1].ValueId))
+        else
+          Emit('  %' + IntToStr(AInstr.ResultId) + ' = icmp ' + Op + ' i64' +
+            ' %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', %' + IntToStr(AInstr.Operands[1].ValueId));
+      end;
     end;
     hikZext:
       if Length(AInstr.Operands) >= 1 then

@@ -1986,7 +1986,8 @@ begin
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
       if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
-        FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) then
+        (FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) or
+         SameText(Child.ChildAt(0).Text, ClsName)) then
         FModel.AddConstValue(
           ClsName + '.' + Child.Text + '$ptr', 1);
       if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
@@ -2600,6 +2601,11 @@ begin
   ABlob := '';
   if ANode = nil then
     Exit(False);
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'nil') then
+  begin
+    ABlob := 'null' + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
     SameText(ANode.ChildAt(0).Text, 'Length') and
@@ -2785,8 +2791,8 @@ begin
       ArgName := 'field self ' + IntToStr(Folded) + ' p' + #10;
       FuncName := '';
       for StrCallIdx := 1 to FModel.SymbolCount do
-        if FModel.SymbolAt(StrCallIdx).Name =
-          FCurrentMethodClass + '.' + ANode.ChildAt(0).Text then
+        if (FModel.SymbolAt(StrCallIdx).Name = ANode.ChildAt(0).Text) and
+          (FModel.SymbolAt(StrCallIdx).Kind = 'field') then
         begin
           if FModel.SymbolAt(StrCallIdx).TypeId > 0 then
             FuncName := FModel.TypeAt(

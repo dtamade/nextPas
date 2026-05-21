@@ -53,6 +53,8 @@ type
     procedure EmitInstr(const AInstr: THIRInstr);
     function EmitBinOp(AKind: THIRInstrKind; AType: THIRTypeId;
       ALhs, ARhs: THIRValueId): THIRValueId;
+    function EmitCmpOp(AKind: THIRInstrKind; AType: THIRTypeId;
+      ALhs, ARhs: THIRValueId; ALhsType, ARhsType: THIRTypeId): THIRValueId;
     function EmitLoad(AType: THIRTypeId; AAddr: THIRValueId): THIRValueId;
     procedure EmitStore(AType: THIRTypeId; AVal, AAddr: THIRValueId);
 
@@ -255,6 +257,28 @@ begin
   Result := Instr.ResultId;
 end;
 
+function THIRBuilder.EmitCmpOp(AKind: THIRInstrKind; AType: THIRTypeId;
+  ALhs, ARhs: THIRValueId; ALhsType, ARhsType: THIRTypeId): THIRValueId;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := AKind;
+  Instr.TypeId := AType;
+  SetLength(Instr.Operands, 2);
+  if (ALhsType <> 0) and (ALhsType = GetPtrType) then
+    Instr.Operands[0] := MakeTypedOperand(ALhs, GetPtrType)
+  else
+    Instr.Operands[0] := MakeOperand(ALhs);
+  if (ARhsType <> 0) and (ARhsType = GetPtrType) then
+    Instr.Operands[1] := MakeTypedOperand(ARhs, GetPtrType)
+  else
+    Instr.Operands[1] := MakeOperand(ARhs);
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
 function THIRBuilder.EmitLoad(AType: THIRTypeId;
   AAddr: THIRValueId): THIRValueId;
 var
@@ -302,6 +326,7 @@ var
   SlotIdx, ExtraArgCount, VcallI: LongInt;
   VcallArgs: array of THIRValueId;
   VcallArgTypes: array of THIRTypeId;
+  CmpLhsType, CmpRhsType: THIRTypeId;
 
   procedure Push(AVal: THIRValueId);
   begin
@@ -391,6 +416,16 @@ begin
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end
+    else if Token = 'null' then
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'null';
+      EmitInstr(Instr);
+      PushTyped(Instr.ResultId, GetPtrType);
+    end
     else if Token = 'var' then
     begin
       V := FindAlloca(Arg);
@@ -466,19 +501,24 @@ begin
     end
     else if Token = 'cmp' then
     begin
-      Rhs := Pop; Lhs := Pop;
+      CmpRhsType := 0;
+      if StackCount > 0 then CmpRhsType := StackTypes[StackCount - 1];
+      Rhs := Pop;
+      CmpLhsType := 0;
+      if StackCount > 0 then CmpLhsType := StackTypes[StackCount - 1];
+      Lhs := Pop;
       if Arg = 'eq' then
-        Push(EmitBinOp(hikCmpEq, GetBoolType, Lhs, Rhs))
+        Push(EmitCmpOp(hikCmpEq, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'ne' then
-        Push(EmitBinOp(hikCmpNe, GetBoolType, Lhs, Rhs))
+        Push(EmitCmpOp(hikCmpNe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'slt' then
-        Push(EmitBinOp(hikCmpLt, GetBoolType, Lhs, Rhs))
+        Push(EmitCmpOp(hikCmpLt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sle' then
-        Push(EmitBinOp(hikCmpLe, GetBoolType, Lhs, Rhs))
+        Push(EmitCmpOp(hikCmpLe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sgt' then
-        Push(EmitBinOp(hikCmpGt, GetBoolType, Lhs, Rhs))
+        Push(EmitCmpOp(hikCmpGt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sge' then
-        Push(EmitBinOp(hikCmpGe, GetBoolType, Lhs, Rhs));
+        Push(EmitCmpOp(hikCmpGe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType));
     end
     else if Token = 'zext' then
     begin
