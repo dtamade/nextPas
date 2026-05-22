@@ -4646,7 +4646,7 @@ var
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
   ParamTypes, RetVarName: string;
-  IsStrParam, IsStrReturn, IsPtrReturn, IsVarP: Boolean;
+  IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
 begin
@@ -4660,6 +4660,7 @@ begin
     ParamTypes := '';
     IsStrReturn := False;
     IsPtrReturn := False;
+    IsRecReturn := False;
     PtrReturnClass := '';
     if Entry.Decl <> nil then
     begin
@@ -4734,9 +4735,18 @@ begin
           IsStrReturn := True
         else if (Child.NodeKind = gnkIdentifier) and
           (Child.NodeKind <> gnkBeginBlock) and
-          FModel.LookupConstValue(Child.Text + '$size', Folded) then
+          FModel.LookupConstValue(Child.Text + '$size', Folded) and
+          (not FModel.LookupConstValue(Child.Text + '$record', Value)) then
         begin
           IsPtrReturn := True;
+          PtrReturnClass := Child.Text;
+        end
+        else if (Child.NodeKind = gnkIdentifier) and
+          (Child.NodeKind <> gnkBeginBlock) and
+          FModel.LookupConstValue(Child.Text + '$size', Folded) and
+          FModel.LookupConstValue(Child.Text + '$record', Value) then
+        begin
+          IsRecReturn := True;
           PtrReturnClass := Child.Text;
         end;
       end;
@@ -4763,6 +4773,15 @@ begin
     else if IsPtrReturn then
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':p')
+    else if IsRecReturn then
+    begin
+      if FModel.LookupConstValue(PtrReturnClass + '$size', Folded) then
+        FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount) + ':' + ParamTypes + ':r' + IntToStr(Folded div 8))
+      else
+        FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+          IntToStr(ParamCount) + ':' + ParamTypes);
+    end
     else
       FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes);
@@ -4813,9 +4832,13 @@ begin
       FCurrentRetVarName := '';
     if IsStrReturn then
       RegisterRuntimeStrVar(RetVarName);
+    if IsRecReturn then
+      RegisterRecordVar(RetVarName, PtrReturnClass);
     if IsStrReturn then
       FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName, 0, 0, RetVarName)
     else if IsPtrReturn then
+      FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
+    else if IsRecReturn then
       FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
     else
       FModel.AddTypedHirNode('var-decl-runtime', RetVarName, 0, 0, RetVarName);

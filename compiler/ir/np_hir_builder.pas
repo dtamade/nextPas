@@ -27,6 +27,7 @@ type
     FSavedBlockCount: LongInt;
     FPendingParamCount: LongInt;
     FPendingParamLlvmIdx: LongInt;
+    FSretValueId: THIRValueId;
 
     FAllocaNames: array of string;
     FAllocaValues: array of THIRValueId;
@@ -1037,6 +1038,23 @@ begin
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
     end
+    else if FSretValueId <> 0 then
+    begin
+      if FAllocaCount >= Length(FAllocaNames) then
+      begin
+        SetLength(FAllocaNames, FAllocaCount + 32);
+        SetLength(FAllocaValues, FAllocaCount + 32);
+        SetLength(FAllocaTypes, FAllocaCount + 32);
+        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+        SetLength(FVarParamFlags, FAllocaCount + 32);
+      end;
+      FAllocaNames[FAllocaCount] := ANode.Operand;
+      FAllocaValues[FAllocaCount] := FSretValueId;
+      FAllocaTypes[FAllocaCount] := GetPtrType;
+      FVarParamFlags[FAllocaCount] := False;
+      Inc(FAllocaCount);
+      FSretValueId := 0;
+    end
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
@@ -1455,6 +1473,11 @@ begin
       FCurrentFuncId := FModule.AddFunction(FuncName, GetStringType)
     else if Rest = 'p' then
       FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
+    else if (Length(Rest) > 1) and (Rest[1] = 'r') then
+    begin
+      FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
+      FModule.AddFunctionParam(FCurrentFuncId, 'sret_ptr', GetPtrType, False, False);
+    end
     else
       FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
 
@@ -1480,8 +1503,18 @@ begin
     FBlockTerminated := False;
     FAllocaCount := 0;
     FBlockCount := 0;
-    FPendingParamCount := ParamCount;
-    FPendingParamLlvmIdx := 0;
+    if (Length(Rest) > 1) and (Rest[1] = 'r') then
+    begin
+      FPendingParamCount := ParamCount;
+      FPendingParamLlvmIdx := 1;
+      FSretValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
+    end
+    else
+    begin
+      FPendingParamCount := ParamCount;
+      FPendingParamLlvmIdx := 0;
+      FSretValueId := 0;
+    end;
   end;
 end;
 
