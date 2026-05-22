@@ -313,6 +313,11 @@ begin
           Emit('  ret {ptr, i64} %retstr.' + IntToStr(AInstr.ResultId) + '.2');
         end;
       end
+      else if AInstr.IntrinsicName = 'global_ref' then
+      begin
+        Emit('  %' + IntToStr(AInstr.ResultId) +
+          ' = getelementptr i64, ptr @g_' + AInstr.CallTarget + ', i64 0');
+      end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
         if Length(AInstr.Operands) >= 2 then
@@ -541,6 +546,7 @@ end;
 procedure THIRLlvmEmitter.EmitModule;
 var
   I: LongInt;
+  G: THIRGlobal;
 begin
   FLineCount := 0;
   FStrConstCount := 0;
@@ -549,6 +555,13 @@ begin
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
+
+  for I := 0 to FModule.GlobalCount - 1 do
+  begin
+    G := FModule.GlobalAt(I);
+    Emit('');
+    Emit('@g_' + G.Name + ' = internal global i64 0');
+  end;
 
   for I := 0 to FModule.FunctionCount - 1 do
     EmitFunction(FModule.FunctionAt(I));

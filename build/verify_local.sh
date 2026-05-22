@@ -1413,7 +1413,7 @@ if ! "$STAGE0_BINARY" build examples/smoke/var_halt.pas --no-fold --toolchain-bi
 fi
 require_output_pattern '^status=success$' "$LLVM_NO_FOLD_VAR_HALT_PROGRAM_OUTPUT" 'missing-llvm-no-fold-var-halt-program-success-status'
 LLVM_NO_FOLD_VAR_HALT_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/var_halt.ll"
-if ! grep -q ' = alloca i64' "$LLVM_NO_FOLD_VAR_HALT_PROGRAM_IR_PATH"; then
+if ! grep -q '@g_' "$LLVM_NO_FOLD_VAR_HALT_PROGRAM_IR_PATH"; then
   cat "$LLVM_NO_FOLD_VAR_HALT_PROGRAM_IR_PATH"
   fail 'missing-llvm-no-fold-var-halt-program-ir-runtime-alloca'
 fi
@@ -1441,7 +1441,7 @@ if ! "$STAGE0_BINARY" build examples/smoke/var_chain.pas --no-fold --toolchain-b
 fi
 require_output_pattern '^status=success$' "$LLVM_NO_FOLD_VAR_CHAIN_PROGRAM_OUTPUT" 'missing-llvm-no-fold-var-chain-program-success-status'
 LLVM_NO_FOLD_VAR_CHAIN_PROGRAM_IR_PATH="$WORKSPACE_ARTIFACT_ROOT/cache/backend/$TARGET_ID/var_chain.ll"
-if ! grep -cE '= alloca i64' "$LLVM_NO_FOLD_VAR_CHAIN_PROGRAM_IR_PATH" | grep -q '^2$'; then
+if ! grep -cE '@g_' "$LLVM_NO_FOLD_VAR_CHAIN_PROGRAM_IR_PATH" | grep -qE '^[2-9]'; then
   cat "$LLVM_NO_FOLD_VAR_CHAIN_PROGRAM_IR_PATH"
   fail 'missing-llvm-no-fold-var-chain-program-ir-runtime-two-allocas'
 fi

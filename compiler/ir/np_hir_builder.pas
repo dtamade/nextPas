@@ -35,6 +35,11 @@ type
     FRecordAllocaSlots: array of LongInt;
     FVarParamFlags: array of Boolean;
 
+    FGlobalNames: array of string;
+    FGlobalTypes: array of THIRTypeId;
+    FGlobalCount: LongInt;
+    FInStartFunc: Boolean;
+
     FBlockNames: array of string;
     FBlockIds: array of THIRBlockId;
     FBlockCount: LongInt;
@@ -124,12 +129,16 @@ begin
   FBlockTerminated := False;
   FAllocaCount := 0;
   FBlockCount := 0;
+  FGlobalCount := 0;
+  FInStartFunc := True;
   FPendingParamCount := 0;
   FPendingParamLlvmIdx := 0;
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
   SetLength(FRecordAllocaSlots, 0);
   SetLength(FVarParamFlags, 0);
+  SetLength(FGlobalNames, 0);
+  SetLength(FGlobalTypes, 0);
   SetLength(FBlockNames, 0);
   SetLength(FBlockIds, 0);
   FFwdFuncCount := 0;
@@ -231,10 +240,23 @@ end;
 function THIRBuilder.FindAlloca(const AName: string): THIRValueId;
 var
   I: LongInt;
+  Instr: THIRInstr;
 begin
   for I := 0 to FAllocaCount - 1 do
     if SameText(FAllocaNames[I], AName) then
       Exit(FAllocaValues[I]);
+  for I := 0 to FGlobalCount - 1 do
+    if SameText(FGlobalNames[I], AName) then
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'global_ref';
+      Instr.CallTarget := AName;
+      EmitInstr(Instr);
+      Exit(Instr.ResultId);
+    end;
   Result := 0;
 end;
 
@@ -942,6 +964,18 @@ begin
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
     end
+    else if FInStartFunc then
+    begin
+      if FGlobalCount >= Length(FGlobalNames) then
+      begin
+        SetLength(FGlobalNames, FGlobalCount + 32);
+        SetLength(FGlobalTypes, FGlobalCount + 32);
+      end;
+      FGlobalNames[FGlobalCount] := ANode.Operand;
+      FGlobalTypes[FGlobalCount] := GetIntType;
+      Inc(FGlobalCount);
+      FModule.AddGlobal(ANode.Operand, GetIntType);
+    end
     else
       EnsureAlloca(ANode.Operand, GetIntType);
   end
@@ -1292,6 +1326,7 @@ begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
   FSavedAllocaCount := FAllocaCount;
+  FInStartFunc := False;
   SetLength(FSavedAllocaNames, FAllocaCount);
   SetLength(FSavedAllocaValues, FAllocaCount);
   SetLength(FSavedAllocaTypes, FAllocaCount);
@@ -2029,6 +2064,7 @@ begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
   FSavedAllocaCount := FAllocaCount;
+  FInStartFunc := False;
   SetLength(FSavedAllocaNames, FAllocaCount);
   SetLength(FSavedAllocaValues, FAllocaCount);
   SetLength(FSavedAllocaTypes, FAllocaCount);
