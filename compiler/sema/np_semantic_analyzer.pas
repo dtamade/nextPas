@@ -3529,7 +3529,9 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
-      if FCurrentRetVarName <> '' then
+      if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
+        FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0, FCurrentRetVarName)
+      else if FCurrentRetVarName <> '' then
         FModel.AddTypedHirNode('ret-runtime', FCurrentRetVarName, 0, 0,
           'var ' + FCurrentRetVarName + #10)
       else
