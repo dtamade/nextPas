@@ -84,7 +84,9 @@ type
     procedure PushInlining(const AName: string);
     procedure PopInlining;
     function CountDeclParams(const ADecl: TGreenNode): LongInt;
+    function GetParamSignature(const ADecl: TGreenNode): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
+    function MangledNameSig(const AName: string; const ASig: string): string;
     function HasOverload(const AName: string): Boolean;
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
@@ -613,6 +615,48 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
+var
+  J, K: LongInt;
+  Child, ParamChild, TypeChild: TGreenNode;
+  TypeName: string;
+  Dummy: Int64;
+begin
+  Result := '';
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
+          Continue;
+        TypeName := '';
+        if ParamChild.ChildCount > 0 then
+        begin
+          TypeChild := ParamChild.ChildAt(0);
+          if TypeChild <> nil then
+            TypeName := LowerCase(TypeChild.Text);
+        end;
+        if (TypeName = 'string') or (TypeName = 'ansistring') then
+          Result := Result + 's'
+        else if (TypeName = 'boolean') or (TypeName = 'bool') then
+          Result := Result + 'b'
+        else if FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
+          Result := Result + 'r'
+        else if FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
+          Result := Result + 'p'
+        else
+          Result := Result + 'i';
+      end;
+      Exit;
+    end;
+  end;
+end;
+
 function TSemanticAnalyzer.MangledName(const AName: string;
   AParamCount: LongInt): string;
 begin
@@ -622,19 +666,28 @@ begin
     Result := AName + '$' + IntToStr(AParamCount);
 end;
 
+function TSemanticAnalyzer.MangledNameSig(const AName: string;
+  const ASig: string): string;
+begin
+  if ASig = '' then
+    Result := AName
+  else
+    Result := AName + '$' + ASig;
+end;
+
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
   const ABody: TGreenNode; const ADecl: TGreenNode);
 var
   Index: LongInt;
   NextIndex: SizeInt;
-  ParamCount, ExistingParamCount: LongInt;
+  Sig, ExistingSig: string;
 begin
-  ParamCount := CountDeclParams(ADecl);
+  Sig := GetParamSignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
-      ExistingParamCount := CountDeclParams(FProcedureBodies[Index].Decl);
-      if ExistingParamCount = ParamCount then
+      ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
+      if ExistingSig = Sig then
       begin
         FProcedureBodies[Index].Body := ABody;
         FProcedureBodies[Index].Decl := ADecl;
@@ -2879,8 +2932,21 @@ begin
         Exit(False);
     end;
     if HasOverload(ANode.ChildAt(0).Text) then
-      ABlob := ABlob + 'call ' + MangledName(ANode.ChildAt(0).Text, StrCallArgCount) +
-        ' ' + IntToStr(StrCallArgCount) + #10
+    begin
+      ArgName := '';
+      for StrCallIdx := 1 to ANode.ChildCount - 1 do
+      begin
+        if (ANode.ChildAt(StrCallIdx) <> nil) and
+          ((ANode.ChildAt(StrCallIdx).NodeKind = gnkStringLiteral) or
+           ((ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(ANode.ChildAt(StrCallIdx).Text))) then
+          ArgName := ArgName + 's'
+        else
+          ArgName := ArgName + 'i';
+      end;
+      ABlob := ABlob + 'call ' + MangledNameSig(ANode.ChildAt(0).Text, ArgName) +
+        ' ' + IntToStr(StrCallArgCount) + #10;
+    end
     else
       ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
         IntToStr(StrCallArgCount) + #10;
@@ -4271,7 +4337,29 @@ begin
             ArgIndex := Arg.ChildCount;
         end;
         if HasOverload(Child.Text) then
-          Operand := MangledName(Child.Text, ArgIndex)
+        begin
+          StringValue := '';
+          if Arg <> nil then
+          begin
+            if Arg.NodeKind = gnkFunctionCall then
+              DotPos := 1
+            else
+              DotPos := 0;
+            while DotPos < Arg.ChildCount do
+            begin
+              RhsNode := Arg.ChildAt(DotPos);
+              if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+                IsRuntimeStrVar(RhsNode.Text) then
+                StringValue := StringValue + 's'
+              else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkStringLiteral) then
+                StringValue := StringValue + 's'
+              else
+                StringValue := StringValue + 'i';
+              Inc(DotPos);
+            end;
+          end;
+          Operand := MangledNameSig(Child.Text, StringValue);
+        end
         else
           Operand := Child.Text;
         if Arg <> nil then
@@ -4867,7 +4955,7 @@ begin
       Continue;
     SetLength(FVarParamNames, 0);
     if HasOverload(Entry.Name) then
-      EffName := MangledName(Entry.Name, CountDeclParams(Entry.Decl))
+      EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
       EffName := Entry.Name;
     ParamCount := 0;
