@@ -3289,6 +3289,16 @@ begin
       Exit(True);
     end;
   end;
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    IsRuntimeStrVar(ANode.ChildAt(0).Text) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
+    begin
+      ABlob := FuncName + 'strcharload ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+  end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 

@@ -330,6 +330,24 @@ begin
             IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
             IntToStr(AInstr.Operands[1].ValueId));
       end
+      else if AInstr.IntrinsicName = 'gep_i8' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = getelementptr i8, ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId));
+      end
+      else if AInstr.IntrinsicName = 'load_zext_i8' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  %zext.' + IntToStr(AInstr.ResultId) +
+            ' = load i8, ptr %' + IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = zext i8 %zext.' + IntToStr(AInstr.ResultId) + ' to i64');
+        end;
+      end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
         FNeedsStrConcat := True;

@@ -601,6 +601,50 @@ begin
       EmitInstr(Instr);
       Push(EmitLoad(GetIntType, Instr.ResultId));
     end
+    else if Token = 'strcharload' then
+    begin
+      Rhs := Pop;
+      V := FindAlloca(Arg + '$ptr');
+      if V <> 0 then
+      begin
+        V := EmitLoad(GetPtrType, V);
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikLoad;
+        Instr.TypeId := GetIntType;
+        Instr.IntrinsicName := 'const:1';
+        EmitInstr(Instr);
+        SlotIdx := Instr.ResultId;
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikSub;
+        Instr.TypeId := GetIntType;
+        SetLength(Instr.Operands, 2);
+        Instr.Operands[0] := MakeOperand(Rhs);
+        Instr.Operands[1] := MakeOperand(SlotIdx);
+        EmitInstr(Instr);
+        Rhs := Instr.ResultId;
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := GetPtrType;
+        Instr.IntrinsicName := 'gep_i8';
+        SetLength(Instr.Operands, 2);
+        Instr.Operands[0] := MakeOperand(V);
+        Instr.Operands[1] := MakeOperand(Rhs);
+        EmitInstr(Instr);
+        V := Instr.ResultId;
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := GetIntType;
+        Instr.IntrinsicName := 'load_zext_i8';
+        SetLength(Instr.Operands, 1);
+        Instr.Operands[0] := MakeOperand(V);
+        EmitInstr(Instr);
+        Push(Instr.ResultId);
+      end;
+    end
     else if Token = 'rload' then
     begin
       SpacePos := Pos(' ', Arg);
@@ -783,18 +827,34 @@ begin
         EmitInstr(Instr);
         V := Instr.ResultId;
 
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := GetPtrType;
-        Instr.IntrinsicName := 'gep_i64';
-        SetLength(Instr.Operands, 2);
-        Instr.Operands[0] := MakeOperand(V);
-        Instr.Operands[1] := MakeOperand(Rhs);
-        EmitInstr(Instr);
-        V := Instr.ResultId;
-
-        Push(EmitLoad(GetIntType, V));
+        if FindAlloca(Arg + '$len') <> 0 then
+        begin
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikIntrinsic;
+          Instr.TypeId := GetPtrType;
+          Instr.IntrinsicName := 'gep_i64';
+          SetLength(Instr.Operands, 2);
+          Instr.Operands[0] := MakeOperand(V);
+          Instr.Operands[1] := MakeOperand(Rhs);
+          EmitInstr(Instr);
+          V := Instr.ResultId;
+          Push(EmitLoad(GetIntType, V));
+        end
+        else
+        begin
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikIntrinsic;
+          Instr.TypeId := GetPtrType;
+          Instr.IntrinsicName := 'gep_i64';
+          SetLength(Instr.Operands, 2);
+          Instr.Operands[0] := MakeOperand(V);
+          Instr.Operands[1] := MakeOperand(Rhs);
+          EmitInstr(Instr);
+          V := Instr.ResultId;
+          Push(EmitLoad(GetIntType, V));
+        end;
       end
       else
         Push(Rhs);
