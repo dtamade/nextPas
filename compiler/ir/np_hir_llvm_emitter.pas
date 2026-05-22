@@ -23,6 +23,7 @@ type
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
+    function IsSretFunction(const AName: string): Boolean;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
@@ -186,8 +187,11 @@ begin
           IntToStr(AInstr.Operands[0].ValueId) + ' to i64');
     hikCall:
     begin
-      Op := '  %' + IntToStr(AInstr.ResultId) + ' = call ' + LlvmType +
-        ' @' + AInstr.CallTarget + '(';
+      if IsSretFunction(AInstr.CallTarget) then
+        Op := '  call void @' + AInstr.CallTarget + '('
+      else
+        Op := '  %' + IntToStr(AInstr.ResultId) + ' = call ' + LlvmType +
+          ' @' + AInstr.CallTarget + '(';
       for I := 0 to High(AInstr.Operands) do
       begin
         if I > 0 then Op := Op + ', ';
@@ -472,6 +476,21 @@ begin
   end;
 end;
 
+function THIRLlvmEmitter.IsSretFunction(const AName: string): Boolean;
+var
+  I: LongInt;
+  F: THIRFunction;
+begin
+  for I := 0 to FModule.FunctionCount - 1 do
+  begin
+    F := FModule.FunctionAt(I);
+    if SameText(F.Name, AName) and (Length(F.Params) > 0) and
+      (F.Params[0].Name = 'sret_ptr') then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
 procedure THIRLlvmEmitter.EmitFunction(const AFunc: THIRFunction);
 var
   I, J, K, MinIdx: LongInt;
@@ -491,7 +510,9 @@ begin
   end;
 
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
-  if T.Kind = htkString then
+  if (Length(AFunc.Params) > 0) and (AFunc.Params[0].Name = 'sret_ptr') then
+    RetStr := 'void'
+  else if T.Kind = htkString then
     RetStr := '{ptr, i64}'
   else
     RetStr := TypeToLlvm(AFunc.ReturnTypeId);

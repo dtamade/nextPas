@@ -3565,18 +3565,20 @@ begin
         else if FNoFold and IsRecordVar(Decoded) and
           (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
           (Arg.ChildCount >= 1) and (Arg.ChildAt(0) <> nil) and
-          (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
-          LookupProcedureBody(Arg.ChildAt(0).Text, BranchNode, DeclNode) then
+          (Arg.ChildAt(0).NodeKind = gnkIdentifier) then
         begin
-          Operand := Arg.ChildAt(0).Text + #9 + 'recvar ' + Decoded + #10;
-          for ArgIndex := 1 to Arg.ChildCount - 1 do
+          if LookupProcedureBody(Arg.ChildAt(0).Text, BranchNode, DeclNode) then
           begin
-            RhsNode := Arg.ChildAt(ArgIndex);
-            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-              Operand := Operand + #9 + StringValue;
+            Operand := Arg.ChildAt(0).Text + #9 + 'recvar ' + Decoded + #10;
+            for ArgIndex := 1 to Arg.ChildCount - 1 do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+                Operand := Operand + #9 + StringValue;
+            end;
+            FModel.AddTypedHirNode('call-runtime',
+              Arg.ChildAt(0).Text, 0, 0, Operand);
           end;
-          FModel.AddTypedHirNode('call-runtime',
-            Arg.ChildAt(0).Text, 0, 0, Operand);
         end
         else if FNoFold and IsRecordVar(Decoded) and
           (Arg <> nil) and (Arg.NodeKind = gnkIdentifier) and
@@ -3591,6 +3593,8 @@ begin
         end
         else if FNoFold then
         begin
+          if IsRecordVar(Decoded) and (Arg <> nil) then
+            WriteLn(StdErr, 'DBG-FALL: Decoded=', Decoded, ' ArgKind=', Ord(Arg.NodeKind), ' gnkFC=', Ord(gnkFunctionCall));
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
             DotPos := Pos('.', Decoded);
@@ -4647,7 +4651,8 @@ begin
         FModel.LookupConstValue(Child.Text + '$size', Folded) and
         (Pos('.', Entry.Name) = 0) then
       begin
-        RegisterPtrReturnFunc(Entry.Name, Child.Text);
+        if not FModel.LookupConstValue(Child.Text + '$record', Folded) then
+          RegisterPtrReturnFunc(Entry.Name, Child.Text);
         Break;
       end;
     end;

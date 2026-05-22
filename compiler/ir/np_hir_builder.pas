@@ -1050,7 +1050,7 @@ begin
       end;
       FAllocaNames[FAllocaCount] := ANode.Operand;
       FAllocaValues[FAllocaCount] := FSretValueId;
-      FAllocaTypes[FAllocaCount] := GetPtrType;
+      FAllocaTypes[FAllocaCount] := GetIntType;
       FVarParamFlags[FAllocaCount] := False;
       Inc(FAllocaCount);
       FSretValueId := 0;
@@ -1544,15 +1544,31 @@ procedure THIRBuilder.ProcessRetRuntime(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
   Term: THIRTerminator;
+  Func: THIRFunction;
 begin
-  V := ParseIntBlob(ANode.Operand);
-  FillChar(Term, SizeOf(Term), 0);
-  Term.Kind := htkReturn;
-  Term.ReturnValue := V;
-  if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+  Func := FModule.FunctionAt(FModule.FunctionCount - 1);
+  if (Length(Func.Params) > 0) and (Func.Params[0].Name = 'sret_ptr') then
   begin
-    FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
-    FBlockTerminated := True;
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkReturn;
+    Term.ReturnValue := 0;
+    if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+    begin
+      FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+      FBlockTerminated := True;
+    end;
+  end
+  else
+  begin
+    V := ParseIntBlob(ANode.Operand);
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkReturn;
+    Term.ReturnValue := V;
+    if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
+    begin
+      FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
+      FBlockTerminated := True;
+    end;
   end;
 end;
 
