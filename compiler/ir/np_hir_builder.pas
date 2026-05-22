@@ -1150,6 +1150,27 @@ begin
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx, 2);
     end
+    else if FInStartFunc then
+    begin
+      if FGlobalCount >= Length(FGlobalNames) then
+      begin
+        SetLength(FGlobalNames, FGlobalCount + 32);
+        SetLength(FGlobalTypes, FGlobalCount + 32);
+      end;
+      FGlobalNames[FGlobalCount] := ANode.Operand + '$ptr';
+      FGlobalTypes[FGlobalCount] := GetPtrType;
+      Inc(FGlobalCount);
+      FModule.AddGlobal(ANode.Operand + '$ptr', GetPtrType);
+      if FGlobalCount >= Length(FGlobalNames) then
+      begin
+        SetLength(FGlobalNames, FGlobalCount + 32);
+        SetLength(FGlobalTypes, FGlobalCount + 32);
+      end;
+      FGlobalNames[FGlobalCount] := ANode.Operand + '$len';
+      FGlobalTypes[FGlobalCount] := GetIntType;
+      Inc(FGlobalCount);
+      FModule.AddGlobal(ANode.Operand + '$len', GetIntType);
+    end
     else
     begin
       EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
@@ -1158,8 +1179,32 @@ begin
   end
   else if ANode.Kind = 'var-decl-arr-runtime' then
   begin
-    EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
-    EnsureAlloca(ANode.Operand + '$len', GetIntType);
+    if FInStartFunc then
+    begin
+      if FGlobalCount >= Length(FGlobalNames) then
+      begin
+        SetLength(FGlobalNames, FGlobalCount + 32);
+        SetLength(FGlobalTypes, FGlobalCount + 32);
+      end;
+      FGlobalNames[FGlobalCount] := ANode.Operand + '$ptr';
+      FGlobalTypes[FGlobalCount] := GetPtrType;
+      Inc(FGlobalCount);
+      FModule.AddGlobal(ANode.Operand + '$ptr', GetPtrType);
+      if FGlobalCount >= Length(FGlobalNames) then
+      begin
+        SetLength(FGlobalNames, FGlobalCount + 32);
+        SetLength(FGlobalTypes, FGlobalCount + 32);
+      end;
+      FGlobalNames[FGlobalCount] := ANode.Operand + '$len';
+      FGlobalTypes[FGlobalCount] := GetIntType;
+      Inc(FGlobalCount);
+      FModule.AddGlobal(ANode.Operand + '$len', GetIntType);
+    end
+    else
+    begin
+      EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
+      EnsureAlloca(ANode.Operand + '$len', GetIntType);
+    end;
   end
   else if ANode.Kind = 'var-decl-ptr-runtime' then
   begin
