@@ -4111,6 +4111,13 @@ begin
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', 'Write', 0, 0, RhsNode.Text
               )
+            else if (RhsNode.NodeKind = gnkFunctionCall) and
+              (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
+              SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
+              EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
+              FModel.AddTypedHirNode(
+                'write-int-runtime', 'Write', 0, 0, Operand
+              )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
               IsRuntimeStrVar(RhsNode.Text) then
