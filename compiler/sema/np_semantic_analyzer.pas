@@ -2911,6 +2911,23 @@ begin
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (SameText(ANode.ChildAt(0).Text, 'Ord') or
+     SameText(ANode.ChildAt(0).Text, 'Chr') or
+     SameText(ANode.ChildAt(0).Text, 'Pred') or
+     SameText(ANode.ChildAt(0).Text, 'Succ')) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
+    begin
+      if SameText(ANode.ChildAt(0).Text, 'Pred') then
+        ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
+      else if SameText(ANode.ChildAt(0).Text, 'Succ') then
+        ABlob := ABlob + 'int 1' + #10 + 'add' + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
     ABlob := '';
