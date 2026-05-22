@@ -1403,6 +1403,7 @@ begin
           begin
             LhsSym := FModel.SymbolAt(LhsSymId - 1);
             if (LhsSym.ParamCount >= 0) and
+              (not HasOverload(LhsName)) and
               ((LhsSym.Kind = 'procedure') or (LhsSym.Kind = 'function')) then
             begin
               RhsChild := ANode.ChildAt(0);
