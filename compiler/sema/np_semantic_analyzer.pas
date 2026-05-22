@@ -2106,6 +2106,26 @@ begin
         FModel.AddConstValue(ClsName + '.' + Child.Text + '$str', 1);
         Inc(FieldIndex, 2);
       end
+      else if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        FModel.LookupConstValue(Child.ChildAt(0).Text + '$record', ParentFieldVal) and
+        FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) then
+      begin
+        for J := 0 to FModel.ConstValueCount - 1 do
+        begin
+          ConstName := FModel.ConstValueNameAt(J);
+          if (Pos(Child.ChildAt(0).Text + '.', ConstName) = 1) and
+            (Pos('$idx', ConstName) > 0) then
+          begin
+            DotPos := Pos('.', ConstName);
+            IdxPos := Pos('$idx', ConstName);
+            FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+            FModel.AddConstValue(
+              ClsName + '.' + Child.Text + '.' + FieldName + '$idx',
+              FieldIndex + FModel.ConstValueAt(J));
+          end;
+        end;
+        Inc(FieldIndex, ParentFieldVal div 8);
+      end
       else
         Inc(FieldIndex);
     end
@@ -2887,6 +2907,18 @@ begin
       ABlob := ABlob + ' p' + #10
     else
       ABlob := ABlob + #10;
+    Exit(True);
+  end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkDotAccess) and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    FModel.LookupConstValue(
+      FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '.' +
+      ANode.ChildAt(1).Text + '$idx', Folded) then
+  begin
+    ABlob := 'field self ' + IntToStr(Folded) + #10;
     Exit(True);
   end;
   if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
