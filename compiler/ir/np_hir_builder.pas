@@ -85,6 +85,7 @@ type
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
+    procedure ProcessCopyStr(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
     procedure ProcessWriteStr(const ANode: TTypedHirNode);
     procedure ProcessWriteStrVar(const ANode: TTypedHirNode);
@@ -1770,6 +1771,74 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessCopyStr(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  DstName, SrcName, Rest, StartBlob, LenBlob: string;
+  SrcPtr, StartVal, LenVal, OneVal, OffsetVal, NewPtr: THIRValueId;
+  DstPtrAlloca, DstLenAlloca: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  DstName := Copy(ANode.Operand, 1, TabPos - 1);
+  Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  SrcName := Copy(Rest, 1, TabPos - 1);
+  Rest := Copy(Rest, TabPos + 1, Length(Rest));
+
+  TabPos := Pos(#9, Rest);
+  if TabPos = 0 then Exit;
+  StartBlob := Copy(Rest, 1, TabPos - 1);
+  LenBlob := Copy(Rest, TabPos + 1, Length(Rest));
+
+  StartVal := ParseIntBlob(StartBlob);
+  LenVal := ParseIntBlob(LenBlob);
+  if (StartVal = 0) or (LenVal = 0) then Exit;
+
+  SrcPtr := FindAlloca(SrcName + '$ptr');
+  if SrcPtr = 0 then Exit;
+  SrcPtr := EmitLoad(GetPtrType, SrcPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:1';
+  EmitInstr(Instr);
+  OneVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikSub;
+  Instr.TypeId := GetIntType;
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(StartVal);
+  Instr.Operands[1] := MakeOperand(OneVal);
+  EmitInstr(Instr);
+  OffsetVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i8';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(SrcPtr);
+  Instr.Operands[1] := MakeOperand(OffsetVal);
+  EmitInstr(Instr);
+  NewPtr := Instr.ResultId;
+
+  DstPtrAlloca := FindAlloca(DstName + '$ptr');
+  DstLenAlloca := FindAlloca(DstName + '$len');
+  if (DstPtrAlloca = 0) or (DstLenAlloca = 0) then Exit;
+
+  EmitStore(GetPtrType, NewPtr, DstPtrAlloca);
+  EmitStore(GetIntType, LenVal, DstLenAlloca);
+end;
+
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
@@ -2963,6 +3032,8 @@ begin
     ProcessCallRuntime(ANode)
   else if ANode.Kind = 'int-to-str-runtime' then
     ProcessIntToStr(ANode)
+  else if ANode.Kind = 'copy-str-runtime' then
+    ProcessCopyStr(ANode)
   else if ANode.Kind = 'write-int-runtime' then
     ProcessWriteInt(ANode)
   else if ANode.Kind = 'write-string-runtime' then

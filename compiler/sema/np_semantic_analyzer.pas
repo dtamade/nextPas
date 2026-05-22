@@ -3788,6 +3788,20 @@ begin
                 Decoded + #9 + Operand
               );
           end
+          else if (Arg.NodeKind = gnkFunctionCall) and
+            (Arg.ChildCount >= 4) and (Arg.ChildAt(0) <> nil) and
+            SameText(Arg.ChildAt(0).Text, 'Copy') then
+          begin
+            if (Arg.ChildAt(1) <> nil) and
+              (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+              IsRuntimeStrVar(Arg.ChildAt(1).Text) and
+              EncodeRuntimeIntExprFold(Arg.ChildAt(2), Operand) and
+              EncodeRuntimeIntExprFold(Arg.ChildAt(3), StringValue) then
+              FModel.AddTypedHirNode(
+                'copy-str-runtime', Decoded, 0, 0,
+                Decoded + #9 + Arg.ChildAt(1).Text + #9 + Operand + #9 + StringValue
+              );
+          end
           else if (Arg.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
             FModel.LookupConstValue(
