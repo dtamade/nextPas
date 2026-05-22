@@ -25,6 +25,7 @@ type
     FSavedBlockNames: array of string;
     FSavedBlockIds: array of THIRBlockId;
     FSavedBlockCount: LongInt;
+    FSavedEntryBlockId: THIRBlockId;
     FPendingParamCount: LongInt;
     FPendingParamLlvmIdx: LongInt;
     FSretValueId: THIRValueId;
@@ -40,6 +41,7 @@ type
     FGlobalTypes: array of THIRTypeId;
     FGlobalCount: LongInt;
     FInStartFunc: Boolean;
+    FEntryBlockId: THIRBlockId;
 
     FBlockNames: array of string;
     FBlockIds: array of THIRBlockId;
@@ -136,6 +138,7 @@ begin
   FBlockCount := 0;
   FGlobalCount := 0;
   FInStartFunc := True;
+  FEntryBlockId := 0;
   FPendingParamCount := 0;
   FPendingParamLlvmIdx := 0;
   SetLength(FAllocaNames, 0);
@@ -1495,6 +1498,7 @@ var
 begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
+  FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
   SetLength(FSavedAllocaNames, FAllocaCount);
@@ -1563,6 +1567,7 @@ begin
     EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
     FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
     FCurrentBlockId := EntryBlock;
+    FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
     FBlockCount := 0;
@@ -1641,6 +1646,7 @@ begin
     EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
     FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
     FCurrentBlockId := EntryBlock;
+    FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
     FBlockCount := 0;
@@ -1665,6 +1671,7 @@ var
 begin
   FCurrentFuncId := FSavedFuncId;
   FCurrentBlockId := FSavedBlockId;
+  FEntryBlockId := FSavedEntryBlockId;
   FAllocaCount := FSavedAllocaCount;
   for I := 0 to FSavedAllocaCount - 1 do
   begin
@@ -2408,6 +2415,7 @@ var
 begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
+  FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
   SetLength(FSavedAllocaNames, FAllocaCount);
@@ -2474,6 +2482,7 @@ begin
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
   FCurrentBlockId := EntryBlock;
+  FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
   FAllocaCount := 0;
   FBlockCount := 0;
@@ -3201,6 +3210,7 @@ begin
   EntryBlock := FModule.AddBlock(FCurrentFuncId, 'entry');
   FModule.SetEntryBlock(FCurrentFuncId, EntryBlock);
   FCurrentBlockId := EntryBlock;
+  FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
 
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
