@@ -825,6 +825,44 @@ begin
       if V <> 0 then
         Push(EmitLoad(GetIntType, V));
     end
+    else if Token = 'strlit' then
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'str_const';
+      Instr.CallTarget := Arg;
+      EmitInstr(Instr);
+      PushTyped(Instr.ResultId, GetPtrType);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'const:' + IntToStr(Length(Arg) - 2);
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
+    end
+    else if Token = 'strcmp' then
+    begin
+      Rhs := Pop;
+      V := Pop;
+      SlotIdx := Pop;
+      ExtraArgCount := Pop;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'str_cmp';
+      Instr.CallTarget := Arg;
+      SetLength(Instr.Operands, 4);
+      Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
+      Instr.Operands[1] := MakeOperand(SlotIdx);
+      Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
+      Instr.Operands[3] := MakeOperand(Rhs);
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
+    end
     else if Token = 'arrload' then
     begin
       Rhs := Pop;

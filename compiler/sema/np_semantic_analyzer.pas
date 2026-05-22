@@ -3400,6 +3400,32 @@ begin
   end
   else
     Exit(False);
+  if ((ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    IsRuntimeStrVar(ANode.ChildAt(0).Text)) or
+    (ANode.ChildAt(0).NodeKind = gnkStringLiteral) or
+    ((ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    IsRuntimeStrVar(ANode.ChildAt(1).Text)) or
+    (ANode.ChildAt(1).NodeKind = gnkStringLiteral) then
+  begin
+    LeftBlob := '';
+    RightBlob := '';
+    if (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+      IsRuntimeStrVar(ANode.ChildAt(0).Text) then
+      LeftBlob := 'strvar ' + ANode.ChildAt(0).Text + #10
+    else if ANode.ChildAt(0).NodeKind = gnkStringLiteral then
+      LeftBlob := 'strlit ' + ANode.ChildAt(0).Text + #10;
+    if (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+      IsRuntimeStrVar(ANode.ChildAt(1).Text) then
+      RightBlob := 'strvar ' + ANode.ChildAt(1).Text + #10
+    else if ANode.ChildAt(1).NodeKind = gnkStringLiteral then
+      RightBlob := 'strlit ' + ANode.ChildAt(1).Text + #10;
+    if (LeftBlob <> '') and (RightBlob <> '') then
+    begin
+      ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
+        'int 0' + #10 + 'cmp ne' + #10;
+      Exit(True);
+    end;
+  end;
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), LeftBlob) then
     Exit(False);
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(1), RightBlob) then

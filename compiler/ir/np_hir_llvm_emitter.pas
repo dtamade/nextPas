@@ -15,6 +15,7 @@ type
     FLineCount: LongInt;
     FNeedsWriteInt: Boolean;
     FNeedsStrConcat: Boolean;
+    FNeedsStrCmp: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
@@ -50,6 +51,7 @@ begin
   FLineCount := 0;
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
+  FNeedsStrCmp := False;
   FIsCheckCounter := 0;
   SetLength(FLines, 0);
 end;
@@ -362,6 +364,38 @@ begin
             ', i64 %abs.neg.' + IntToStr(AInstr.ResultId));
         end;
       end
+      else if AInstr.IntrinsicName = 'str_const' then
+      begin
+        Op := Copy(AInstr.CallTarget, 2, Length(AInstr.CallTarget) - 2);
+        Emit('  %' + IntToStr(AInstr.ResultId) +
+          ' = getelementptr i8, ptr @.str.' + IntToStr(
+            AddStrConstant(Op)) + ', i64 0');
+      end
+      else if AInstr.IntrinsicName = 'str_cmp' then
+      begin
+        if Length(AInstr.Operands) >= 4 then
+        begin
+          if AInstr.CallTarget = 'ne' then
+          begin
+            Emit('  %strcmp.' + IntToStr(AInstr.ResultId) +
+              ' = call i64 @np_str_cmp(ptr %' +
+              IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+              IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
+              IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
+              IntToStr(AInstr.Operands[3].ValueId) + ')');
+            Emit('  %' + IntToStr(AInstr.ResultId) +
+              ' = xor i64 %strcmp.' + IntToStr(AInstr.ResultId) + ', 1');
+          end
+          else
+            Emit('  %' + IntToStr(AInstr.ResultId) +
+              ' = call i64 @np_str_cmp(ptr %' +
+              IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+              IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
+              IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
+              IntToStr(AInstr.Operands[3].ValueId) + ')');
+          FNeedsStrCmp := True;
+        end;
+      end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
         FNeedsStrConcat := True;
@@ -618,6 +652,7 @@ begin
   FStrConstCount := 0;
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
+  FNeedsStrCmp := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
@@ -645,6 +680,35 @@ begin
 
   if FNeedsStrConcat then
     EmitStrConcatHelper;
+
+  if FNeedsStrCmp then
+  begin
+    Emit('');
+    Emit('define internal i64 @np_str_cmp(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len) {');
+    Emit('entry:');
+    Emit('  %len_eq = icmp eq i64 %a_len, %b_len');
+    Emit('  br i1 %len_eq, label %check_content, label %not_equal');
+    Emit('check_content:');
+    Emit('  %cmp0 = icmp eq i64 %a_len, 0');
+    Emit('  br i1 %cmp0, label %equal, label %loop');
+    Emit('loop:');
+    Emit('  %i = phi i64 [ 0, %check_content ], [ %i_next, %loop_cont ]');
+    Emit('  %ap = getelementptr i8, ptr %a_ptr, i64 %i');
+    Emit('  %bp = getelementptr i8, ptr %b_ptr, i64 %i');
+    Emit('  %ac = load i8, ptr %ap');
+    Emit('  %bc = load i8, ptr %bp');
+    Emit('  %eq = icmp eq i8 %ac, %bc');
+    Emit('  br i1 %eq, label %loop_cont, label %not_equal');
+    Emit('loop_cont:');
+    Emit('  %i_next = add i64 %i, 1');
+    Emit('  %done = icmp eq i64 %i_next, %a_len');
+    Emit('  br i1 %done, label %equal, label %loop');
+    Emit('equal:');
+    Emit('  ret i64 1');
+    Emit('not_equal:');
+    Emit('  ret i64 0');
+    Emit('}');
+  end;
 end;
 
 procedure THIRLlvmEmitter.EmitWriteIntHelper;
