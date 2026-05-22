@@ -697,7 +697,10 @@ begin
   begin
     G := FModule.GlobalAt(I);
     Emit('');
-    Emit('@g_' + G.Name + ' = internal global i64 0');
+    if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+      Emit('@g_' + G.Name + ' = internal global ptr null')
+    else
+      Emit('@g_' + G.Name + ' = internal global i64 0');
   end;
 
   for I := 0 to FModule.FunctionCount - 1 do
