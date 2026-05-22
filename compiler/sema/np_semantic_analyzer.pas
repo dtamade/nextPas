@@ -2917,6 +2917,18 @@ begin
      SameText(ANode.ChildAt(0).Text, 'Pred') or
      SameText(ANode.ChildAt(0).Text, 'Succ')) then
   begin
+    if (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkStringLiteral) and
+      (Length(ANode.ChildAt(1).Text) = 3) and
+      (ANode.ChildAt(1).Text[1] = '''') then
+    begin
+      ABlob := 'int ' + IntToStr(Ord(ANode.ChildAt(1).Text[2])) + #10;
+      if SameText(ANode.ChildAt(0).Text, 'Pred') then
+        ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
+      else if SameText(ANode.ChildAt(0).Text, 'Succ') then
+        ABlob := ABlob + 'int 1' + #10 + 'add' + #10;
+      Exit(True);
+    end;
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
     begin
       if SameText(ANode.ChildAt(0).Text, 'Pred') then
