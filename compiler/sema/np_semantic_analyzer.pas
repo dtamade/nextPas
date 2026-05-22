@@ -4714,6 +4714,8 @@ begin
                 if FModel.LookupConstValue(
                   ParamChild.ChildAt(0).Text + '$record', Value) then
                   ParamTypes := ParamTypes + 'r'
+                else if IsVarP then
+                  ParamTypes := ParamTypes + 'v'
                 else
                   ParamTypes := ParamTypes + 'p';
               end
