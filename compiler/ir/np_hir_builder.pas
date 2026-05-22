@@ -52,6 +52,8 @@ type
     function EnsureBlock(const AName: string): THIRBlockId;
     function FindBlock(const AName: string): THIRBlockId;
     procedure EnsureAlloca(const AName: string; AType: THIRTypeId);
+    procedure RegisterAllocaEntry(const AName: string; AValue: THIRValueId;
+      AType: THIRTypeId; AIsVarParam: Boolean);
     function FindAlloca(const AName: string): THIRValueId;
     function FindAllocaType(const AName: string): THIRTypeId;
     function IsVarParamAlloca(const AName: string): Boolean;
@@ -235,6 +237,25 @@ begin
   FAllocaTypes[FAllocaCount] := AType;
   FRecordAllocaSlots[FAllocaCount] := 0;
   FVarParamFlags[FAllocaCount] := False;
+  Inc(FAllocaCount);
+end;
+
+procedure THIRBuilder.RegisterAllocaEntry(const AName: string;
+  AValue: THIRValueId; AType: THIRTypeId; AIsVarParam: Boolean);
+begin
+  if FAllocaCount >= Length(FAllocaNames) then
+  begin
+    SetLength(FAllocaNames, FAllocaCount + 32);
+    SetLength(FAllocaValues, FAllocaCount + 32);
+    SetLength(FAllocaTypes, FAllocaCount + 32);
+    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
+    SetLength(FVarParamFlags, FAllocaCount + 32);
+  end;
+  FAllocaNames[FAllocaCount] := AName;
+  FAllocaValues[FAllocaCount] := AValue;
+  FAllocaTypes[FAllocaCount] := AType;
+  FRecordAllocaSlots[FAllocaCount] := 0;
+  FVarParamFlags[FAllocaCount] := AIsVarParam;
   Inc(FAllocaCount);
 end;
 
@@ -924,18 +945,7 @@ begin
         Instr.TypeId := GetPtrType;
         EmitInstr(Instr);
 
-        if FAllocaCount >= Length(FAllocaNames) then
-        begin
-          SetLength(FAllocaNames, FAllocaCount + 32);
-          SetLength(FAllocaValues, FAllocaCount + 32);
-          SetLength(FAllocaTypes, FAllocaCount + 32);
-          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-          SetLength(FVarParamFlags, FAllocaCount + 32);
-        end;
-        FAllocaNames[FAllocaCount] := ANode.Operand;
-        FAllocaValues[FAllocaCount] := Instr.ResultId;
-        FAllocaTypes[FAllocaCount] := GetPtrType;
-        Inc(FAllocaCount);
+        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetPtrType, False);
 
         EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
       end
@@ -955,10 +965,7 @@ begin
           SetLength(FRecordAllocaSlots, FAllocaCount + 32);
           SetLength(FVarParamFlags, FAllocaCount + 32);
         end;
-        FAllocaNames[FAllocaCount] := ANode.Operand;
-        FAllocaValues[FAllocaCount] := Instr.ResultId;
-        FAllocaTypes[FAllocaCount] := GetIntType;
-        Inc(FAllocaCount);
+        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetIntType, False);
 
         EmitStore(GetIntType, ParamValueId, Instr.ResultId);
       end;
@@ -1020,19 +1027,7 @@ begin
       Instr.TypeId := GetPtrType;
       EmitInstr(Instr);
 
-      if FAllocaCount >= Length(FAllocaNames) then
-      begin
-        SetLength(FAllocaNames, FAllocaCount + 32);
-        SetLength(FAllocaValues, FAllocaCount + 32);
-        SetLength(FAllocaTypes, FAllocaCount + 32);
-        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-        SetLength(FVarParamFlags, FAllocaCount + 32);
-      end;
-      FAllocaNames[FAllocaCount] := ANode.Operand;
-      FAllocaValues[FAllocaCount] := Instr.ResultId;
-      FAllocaTypes[FAllocaCount] := GetPtrType;
-      FRecordAllocaSlots[FAllocaCount] := 0;
-      Inc(FAllocaCount);
+      RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetPtrType, False);
 
       EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
       Dec(FPendingParamCount);
@@ -1040,19 +1035,7 @@ begin
     end
     else if FSretValueId <> 0 then
     begin
-      if FAllocaCount >= Length(FAllocaNames) then
-      begin
-        SetLength(FAllocaNames, FAllocaCount + 32);
-        SetLength(FAllocaValues, FAllocaCount + 32);
-        SetLength(FAllocaTypes, FAllocaCount + 32);
-        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-        SetLength(FVarParamFlags, FAllocaCount + 32);
-      end;
-      FAllocaNames[FAllocaCount] := ANode.Operand;
-      FAllocaValues[FAllocaCount] := FSretValueId;
-      FAllocaTypes[FAllocaCount] := GetIntType;
-      FVarParamFlags[FAllocaCount] := False;
-      Inc(FAllocaCount);
+      RegisterAllocaEntry(ANode.Operand, FSretValueId, GetIntType, False);
       FSretValueId := 0;
     end
     else
@@ -1071,19 +1054,7 @@ begin
       Instr.TypeId := GetPtrType;
       EmitInstr(Instr);
 
-      if FAllocaCount >= Length(FAllocaNames) then
-      begin
-        SetLength(FAllocaNames, FAllocaCount + 32);
-        SetLength(FAllocaValues, FAllocaCount + 32);
-        SetLength(FAllocaTypes, FAllocaCount + 32);
-        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-        SetLength(FVarParamFlags, FAllocaCount + 32);
-      end;
-      FAllocaNames[FAllocaCount] := ANode.Operand;
-      FAllocaValues[FAllocaCount] := Instr.ResultId;
-      FAllocaTypes[FAllocaCount] := GetPtrType;
-      FVarParamFlags[FAllocaCount] := True;
-      Inc(FAllocaCount);
+      RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetPtrType, True);
 
       EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
       Dec(FPendingParamCount);
@@ -1108,19 +1079,8 @@ begin
         Instr.IntrinsicName := 'record:' + IntToStr(ParamIdx);
         EmitInstr(Instr);
 
-        if FAllocaCount >= Length(FAllocaNames) then
-        begin
-          SetLength(FAllocaNames, FAllocaCount + 32);
-          SetLength(FAllocaValues, FAllocaCount + 32);
-          SetLength(FAllocaTypes, FAllocaCount + 32);
-          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-          SetLength(FVarParamFlags, FAllocaCount + 32);
-        end;
-        FAllocaNames[FAllocaCount] := Arg;
-        FAllocaValues[FAllocaCount] := Instr.ResultId;
-        FAllocaTypes[FAllocaCount] := GetIntType;
-        FRecordAllocaSlots[FAllocaCount] := ParamIdx;
-        Inc(FAllocaCount);
+        RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
+        FRecordAllocaSlots[FAllocaCount - 1] := ParamIdx;
       end;
     end;
   end;
@@ -1428,18 +1388,7 @@ begin
       Instr.TypeId := GetIntType;
       EmitInstr(Instr);
 
-      if FAllocaCount >= Length(FAllocaNames) then
-      begin
-        SetLength(FAllocaNames, FAllocaCount + 32);
-        SetLength(FAllocaValues, FAllocaCount + 32);
-        SetLength(FAllocaTypes, FAllocaCount + 32);
-        SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-        SetLength(FVarParamFlags, FAllocaCount + 32);
-      end;
-      FAllocaNames[FAllocaCount] := ParamName;
-      FAllocaValues[FAllocaCount] := Instr.ResultId;
-      FAllocaTypes[FAllocaCount] := GetIntType;
-      Inc(FAllocaCount);
+      RegisterAllocaEntry(ParamName, Instr.ResultId, GetIntType, False);
 
       EmitStore(GetIntType, ParamValueId, Instr.ResultId);
     end;
@@ -2188,18 +2137,7 @@ begin
   Instr.Kind := hikAlloca;
   Instr.TypeId := GetPtrType;
   EmitInstr(Instr);
-  if FAllocaCount >= Length(FAllocaNames) then
-  begin
-    SetLength(FAllocaNames, FAllocaCount + 32);
-    SetLength(FAllocaValues, FAllocaCount + 32);
-    SetLength(FAllocaTypes, FAllocaCount + 32);
-    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-    SetLength(FVarParamFlags, FAllocaCount + 32);
-  end;
-  FAllocaNames[FAllocaCount] := 'self';
-  FAllocaValues[FAllocaCount] := Instr.ResultId;
-  FAllocaTypes[FAllocaCount] := GetPtrType;
-  Inc(FAllocaCount);
+  RegisterAllocaEntry('self', Instr.ResultId, GetPtrType, False);
   EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
 
   FPendingParamCount := ParamCount - 1;
