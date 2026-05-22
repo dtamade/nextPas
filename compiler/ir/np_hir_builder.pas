@@ -586,6 +586,21 @@ begin
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end
+    else if Token = 'arr_load' then
+    begin
+      Rhs := Pop;
+      V := Pop;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'gep_i64';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeOperand(V);
+      Instr.Operands[1] := MakeOperand(Rhs);
+      EmitInstr(Instr);
+      Push(EmitLoad(GetIntType, Instr.ResultId));
+    end
     else if Token = 'rload' then
     begin
       SpacePos := Pos(' ', Arg);
@@ -1987,8 +2002,8 @@ end;
 procedure THIRBuilder.ProcessSetLengthArr(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
-  ArrName, Blob: string;
-  SizeVal, PtrVal: THIRValueId;
+  ArrName, Blob, ElemSizeStr: string;
+  SizeVal, PtrVal, ElemSizeVal: THIRValueId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -1996,19 +2011,50 @@ begin
   ArrName := Copy(ANode.Operand, 1, TabPos - 1);
   Blob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
 
+  TabPos := Pos(#9, Blob);
+  if TabPos > 0 then
+  begin
+    ElemSizeStr := Copy(Blob, TabPos + 1, Length(Blob));
+    Blob := Copy(Blob, 1, TabPos - 1);
+  end
+  else
+    ElemSizeStr := '';
+
   SizeVal := ParseIntBlob(Blob);
   if SizeVal = 0 then Exit;
 
   EmitStore(GetIntType, SizeVal, FindAlloca(ArrName + '$len'));
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'arr_alloc';
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(SizeVal);
-  EmitInstr(Instr);
+  if ElemSizeStr <> '' then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + ElemSizeStr;
+    EmitInstr(Instr);
+    ElemSizeVal := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'arr_alloc_sized';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(SizeVal);
+    Instr.Operands[1] := MakeOperand(ElemSizeVal);
+    EmitInstr(Instr);
+  end
+  else
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'arr_alloc';
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeOperand(SizeVal);
+    EmitInstr(Instr);
+  end;
   PtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, PtrVal, FindAlloca(ArrName + '$ptr'));

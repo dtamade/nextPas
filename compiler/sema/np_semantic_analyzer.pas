@@ -3074,6 +3074,30 @@ begin
     Exit(True);
   end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
+    (ANode.ChildAt(0).ChildCount >= 2) and
+    (ANode.ChildAt(0).ChildAt(0) <> nil) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    IsRuntimeArrVar(ANode.ChildAt(0).ChildAt(0).Text) and
+    FModel.LookupStringConstValue(
+      ANode.ChildAt(0).ChildAt(0).Text + '$arr_elem_type', FuncName) then
+  begin
+    if FModel.LookupConstValue(
+      FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+    begin
+      StrCallIdx := LongInt(Folded);
+      if FModel.LookupConstValue(
+        ANode.ChildAt(0).ChildAt(0).Text + '$arr_elem_size', Folded) and
+        EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), ArgName) then
+      begin
+        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + '$ptr' + #10 +
+          ArgName + 'int ' + IntToStr(Folded div 8) + #10 + 'mul' + #10 +
+          'int ' + IntToStr(StrCallIdx) + #10 + 'add' + #10 + 'arr_load' + #10;
+        Exit(True);
+      end;
+    end;
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
     IsRecordVar(ANode.ChildAt(0).Text) then
@@ -3293,6 +3317,34 @@ begin
                 'record-field-store-runtime', Decoded, 0, 0,
                 Child.ChildAt(0).ChildAt(0).Text + #9 +
                 IntToStr(Value) + #9 + Operand
+              );
+            Continue;
+          end;
+        end;
+        if FNoFold and
+          (Child.ChildAt(0).ChildAt(0) <> nil) and
+          (Child.ChildAt(0).ChildAt(0).NodeKind = gnkArrayAccess) and
+          (Child.ChildAt(0).ChildAt(0).ChildCount >= 2) and
+          (Child.ChildAt(0).ChildAt(0).ChildAt(0) <> nil) and
+          IsRuntimeArrVar(Child.ChildAt(0).ChildAt(0).ChildAt(0).Text) then
+        begin
+          FuncName := Child.ChildAt(0).ChildAt(0).ChildAt(0).Text;
+          if FModel.LookupStringConstValue(FuncName + '$arr_elem_type', StringValue) and
+            FModel.LookupConstValue(
+              StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text + '$idx', Value) and
+            FModel.LookupConstValue(FuncName + '$arr_elem_size', CondValue) then
+          begin
+            Arg := nil;
+            if Child.ChildCount >= 2 then
+              Arg := Child.ChildAt(1);
+            if (Arg <> nil) and
+              EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(0).ChildAt(1), Operand) and
+              EncodeRuntimeIntExprFold(Arg, StringValue) then
+              FModel.AddTypedHirNode(
+                'assign-arr-elem-runtime', FuncName, 0, 0,
+                FuncName + #9 + Operand + 'int ' + IntToStr(CondValue div 8) +
+                #10 + 'mul' + #10 + 'int ' + IntToStr(Value) + #10 + 'add' + #10 +
+                #9 + StringValue
               );
             Continue;
           end;
@@ -3858,10 +3910,18 @@ begin
             IsRuntimeArrVar(RhsNode.Text) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
-              FModel.AddTypedHirNode(
-                'setlength-arr-runtime', RhsNode.Text, 0, 0,
-                RhsNode.Text + #9 + Operand
-              );
+            begin
+              if FModel.LookupConstValue(RhsNode.Text + '$arr_elem_size', Value) then
+                FModel.AddTypedHirNode(
+                  'setlength-arr-runtime', RhsNode.Text, 0, 0,
+                  RhsNode.Text + #9 + Operand + #9 + IntToStr(Value)
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'setlength-arr-runtime', RhsNode.Text, 0, 0,
+                  RhsNode.Text + #9 + Operand
+                );
+            end;
           end;
         end;
         Continue;
@@ -4580,6 +4640,14 @@ begin
         else if IsArr then
         begin
           RegisterRuntimeArrVar(Decl.Text);
+          if (NextSibling <> nil) and (NextSibling.NodeKind = gnkArrayType) and
+            (NextSibling.ChildCount > 0) and (NextSibling.ChildAt(0) <> nil) and
+            FModel.LookupConstValue(NextSibling.ChildAt(0).Text + '$record', Folded) and
+            FModel.LookupConstValue(NextSibling.ChildAt(0).Text + '$size', Folded) then
+          begin
+            FModel.AddConstValue(Decl.Text + '$arr_elem_size', Folded);
+            FModel.AddStringConstValue(Decl.Text + '$arr_elem_type', NextSibling.ChildAt(0).Text);
+          end;
           FModel.AddTypedHirNode(
             'var-decl-arr-runtime', Decl.Text, 0, 0, Decl.Text
           );

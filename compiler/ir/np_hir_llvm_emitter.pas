@@ -342,6 +342,19 @@ begin
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
       end
+      else if AInstr.IntrinsicName = 'arr_alloc_sized' then
+      begin
+        FNeedsStrConcat := True;
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
+            '.sz = mul i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', %' + IntToStr(AInstr.Operands[1].ValueId));
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = call ptr @np_alloc(i64 %arralloc.' +
+            IntToStr(AInstr.ResultId) + '.sz)');
+        end;
+      end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
         FNeedsStrConcat := True;
