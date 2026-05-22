@@ -348,6 +348,20 @@ begin
             ' = zext i8 %zext.' + IntToStr(AInstr.ResultId) + ' to i64');
         end;
       end
+      else if AInstr.IntrinsicName = 'abs' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  %abs.neg.' + IntToStr(AInstr.ResultId) +
+            ' = sub i64 0, %' + IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  %abs.cmp.' + IntToStr(AInstr.ResultId) +
+            ' = icmp sge i64 %' + IntToStr(AInstr.Operands[0].ValueId) + ', 0');
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = select i1 %abs.cmp.' + IntToStr(AInstr.ResultId) +
+            ', i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', i64 %abs.neg.' + IntToStr(AInstr.ResultId));
+        end;
+      end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
         FNeedsStrConcat := True;

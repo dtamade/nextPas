@@ -720,6 +720,19 @@ begin
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end
+    else if Token = 'abs' then
+    begin
+      Rhs := Pop;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'abs';
+      SetLength(Instr.Operands, 1);
+      Instr.Operands[0] := MakeOperand(Rhs);
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
+    end
     else if Token = 'cmp' then
     begin
       CmpRhsType := 0;

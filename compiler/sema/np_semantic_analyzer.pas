@@ -2914,6 +2914,7 @@ begin
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (SameText(ANode.ChildAt(0).Text, 'Ord') or
      SameText(ANode.ChildAt(0).Text, 'Chr') or
+     SameText(ANode.ChildAt(0).Text, 'Abs') or
      SameText(ANode.ChildAt(0).Text, 'Pred') or
      SameText(ANode.ChildAt(0).Text, 'Succ')) then
   begin
@@ -2926,7 +2927,9 @@ begin
       if SameText(ANode.ChildAt(0).Text, 'Pred') then
         ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
       else if SameText(ANode.ChildAt(0).Text, 'Succ') then
-        ABlob := ABlob + 'int 1' + #10 + 'add' + #10;
+        ABlob := ABlob + 'int 1' + #10 + 'add' + #10
+      else if SameText(ANode.ChildAt(0).Text, 'Abs') then
+        ABlob := ABlob + 'abs' + #10;
       Exit(True);
     end;
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
@@ -2934,7 +2937,9 @@ begin
       if SameText(ANode.ChildAt(0).Text, 'Pred') then
         ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
       else if SameText(ANode.ChildAt(0).Text, 'Succ') then
-        ABlob := ABlob + 'int 1' + #10 + 'add' + #10;
+        ABlob := ABlob + 'int 1' + #10 + 'add' + #10
+      else if SameText(ANode.ChildAt(0).Text, 'Abs') then
+        ABlob := ABlob + 'abs' + #10;
       Exit(True);
     end;
   end;
