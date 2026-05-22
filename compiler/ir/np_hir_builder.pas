@@ -2204,7 +2204,7 @@ begin
   V := FindAlloca(VarName);
   if V = 0 then
     EnsureAlloca(VarName, GetPtrType)
-  else
+  else if not IsVarParamAlloca(VarName) then
   begin
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
@@ -2212,14 +2212,18 @@ begin
     Instr.TypeId := GetPtrType;
     EmitInstr(Instr);
     for I := 0 to FAllocaCount - 1 do
-      if FAllocaNames[I] = VarName then
+      if SameText(FAllocaNames[I], VarName) then
       begin
         FAllocaValues[I] := Instr.ResultId;
         FAllocaTypes[I] := GetPtrType;
         Break;
       end;
   end;
-  EmitStore(GetPtrType, PtrVal, FindAlloca(VarName));
+  V := FindAlloca(VarName);
+  if IsVarParamAlloca(VarName) then
+    EmitStore(GetPtrType, PtrVal, EmitLoad(GetPtrType, V))
+  else
+    EmitStore(GetPtrType, PtrVal, V);
 
   ArgCount := 1;
   SetLength(ArgOps, 1);
@@ -2372,6 +2376,8 @@ begin
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
   ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  if IsVarParamAlloca(VarName) then
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
