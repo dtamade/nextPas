@@ -3778,6 +3778,16 @@ begin
             FModel.AddTypedHirNode(
               'assign-str-copy-runtime', Arg.Text, 0, 0, Decoded
             )
+          else if (Arg.NodeKind = gnkFunctionCall) and
+            (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
+            SameText(Arg.ChildAt(0).Text, 'IntToStr') then
+          begin
+            if EncodeRuntimeIntExprFold(Arg.ChildAt(1), Operand) then
+              FModel.AddTypedHirNode(
+                'int-to-str-runtime', Decoded, 0, 0,
+                Decoded + #9 + Operand
+              );
+          end
           else if (Arg.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
             FModel.LookupConstValue(

@@ -84,6 +84,7 @@ type
     procedure ProcessFunctionEnd(const ANode: TTypedHirNode);
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
+    procedure ProcessIntToStr(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
     procedure ProcessWriteStr(const ANode: TTypedHirNode);
     procedure ProcessWriteStrVar(const ANode: TTypedHirNode);
@@ -1738,6 +1739,37 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessIntToStr(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, Blob: string;
+  V, PtrAlloca, LenAlloca: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  Blob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  V := ParseIntBlob(Blob);
+  if V = 0 then Exit;
+
+  PtrAlloca := FindAlloca(VarName + '$ptr');
+  LenAlloca := FindAlloca(VarName + '$len');
+  if (PtrAlloca = 0) or (LenAlloca = 0) then Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'int_to_str';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(PtrAlloca);
+  Instr.Operands[2] := MakeOperand(LenAlloca);
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
@@ -2929,6 +2961,8 @@ begin
     ProcessRetStrRuntime(ANode)
   else if ANode.Kind = 'call-runtime' then
     ProcessCallRuntime(ANode)
+  else if ANode.Kind = 'int-to-str-runtime' then
+    ProcessIntToStr(ANode)
   else if ANode.Kind = 'write-int-runtime' then
     ProcessWriteInt(ANode)
   else if ANode.Kind = 'write-string-runtime' then

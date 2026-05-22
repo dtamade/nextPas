@@ -16,6 +16,7 @@ type
     FNeedsWriteInt: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
+    FNeedsIntToStr: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
@@ -52,6 +53,7 @@ begin
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
+  FNeedsIntToStr := False;
   FIsCheckCounter := 0;
   SetLength(FLines, 0);
 end;
@@ -371,6 +373,26 @@ begin
           ' = getelementptr i8, ptr @.str.' + IntToStr(
             AddStrConstant(Op)) + ', i64 0');
       end
+      else if AInstr.IntrinsicName = 'int_to_str' then
+      begin
+        if Length(AInstr.Operands) >= 3 then
+        begin
+          Emit('  %its.' + IntToStr(AInstr.ResultId) +
+            ' = call {ptr, i64} @np_int_to_str(i64 %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ')');
+          Emit('  %its.' + IntToStr(AInstr.ResultId) +
+            '.p = extractvalue {ptr, i64} %its.' +
+            IntToStr(AInstr.ResultId) + ', 0');
+          Emit('  %its.' + IntToStr(AInstr.ResultId) +
+            '.l = extractvalue {ptr, i64} %its.' +
+            IntToStr(AInstr.ResultId) + ', 1');
+          Emit('  store ptr %its.' + IntToStr(AInstr.ResultId) +
+            '.p, ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+          Emit('  store i64 %its.' + IntToStr(AInstr.ResultId) +
+            '.l, ptr %' + IntToStr(AInstr.Operands[2].ValueId));
+          FNeedsIntToStr := True;
+        end;
+      end
       else if AInstr.IntrinsicName = 'str_cmp' then
       begin
         if Length(AInstr.Operands) >= 4 then
@@ -653,6 +675,7 @@ begin
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
+  FNeedsIntToStr := False;
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
@@ -678,7 +701,7 @@ begin
   if FNeedsWriteInt then
     EmitWriteIntHelper;
 
-  if FNeedsStrConcat then
+  if FNeedsStrConcat or FNeedsIntToStr then
     EmitStrConcatHelper;
 
   if FNeedsStrCmp then
@@ -707,6 +730,48 @@ begin
     Emit('  ret i64 1');
     Emit('not_equal:');
     Emit('  ret i64 0');
+    Emit('}');
+  end;
+
+  if FNeedsIntToStr then
+  begin
+    Emit('');
+    Emit('define internal {ptr, i64} @np_int_to_str(i64 %val) {');
+    Emit('entry:');
+    Emit('  %buf = call ptr @np_alloc(i64 21)');
+    Emit('  %is_neg = icmp slt i64 %val, 0');
+    Emit('  %abs_val = select i1 %is_neg, i64 0, i64 %val');
+    Emit('  %neg_val = sub i64 0, %val');
+    Emit('  %work = select i1 %is_neg, i64 %neg_val, i64 %val');
+    Emit('  br label %digit_loop');
+    Emit('digit_loop:');
+    Emit('  %n = phi i64 [ %work, %entry ], [ %n_next, %digit_loop ]');
+    Emit('  %pos = phi i64 [ 20, %entry ], [ %pos_next, %digit_loop ]');
+    Emit('  %d = urem i64 %n, 10');
+    Emit('  %c = add i64 %d, 48');
+    Emit('  %ct = trunc i64 %c to i8');
+    Emit('  %pos_next = sub i64 %pos, 1');
+    Emit('  %dp = getelementptr i8, ptr %buf, i64 %pos_next');
+    Emit('  store i8 %ct, ptr %dp');
+    Emit('  %n_next = udiv i64 %n, 10');
+    Emit('  %done = icmp eq i64 %n_next, 0');
+    Emit('  br i1 %done, label %finish, label %digit_loop');
+    Emit('finish:');
+    Emit('  %start = select i1 %is_neg, i64 1, i64 0');
+    Emit('  %final_pos = sub i64 %pos_next, %start');
+    Emit('  br i1 %is_neg, label %add_sign, label %calc_result');
+    Emit('add_sign:');
+    Emit('  %sign_pos = sub i64 %pos_next, 1');
+    Emit('  %sp = getelementptr i8, ptr %buf, i64 %sign_pos');
+    Emit('  store i8 45, ptr %sp');
+    Emit('  br label %calc_result');
+    Emit('calc_result:');
+    Emit('  %result_pos = phi i64 [ %pos_next, %finish ], [ %sign_pos, %add_sign ]');
+    Emit('  %result_ptr = getelementptr i8, ptr %buf, i64 %result_pos');
+    Emit('  %result_len = sub i64 21, %result_pos');
+    Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %result_ptr, 0');
+    Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %result_len, 1');
+    Emit('  ret {ptr, i64} %r2');
     Emit('}');
   end;
 end;
