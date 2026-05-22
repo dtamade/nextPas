@@ -746,7 +746,9 @@ begin
   );
   AdvanceCursor(LookaheadCursor);
 
-  if CurrentToken(ALexer, LookaheadCursor).Kind = tkNameKeyword then
+  if (CurrentToken(ALexer, LookaheadCursor).Kind = tkNameKeyword) or
+    ((CurrentToken(ALexer, LookaheadCursor).Kind = tkIdentifier) and
+     SameText(CurrentToken(ALexer, LookaheadCursor).Lexeme, 'name')) then
   begin
     AdvanceCursor(LookaheadCursor);
     if CurrentToken(ALexer, LookaheadCursor).Kind <> tkStringLiteral then
@@ -792,7 +794,7 @@ begin
 
   Token := CurrentToken(ALexer, ACursor);
   case Token.Kind of
-    tkIdentifier:
+    tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword:
       begin
         Inc(ACursor);
         if (ACursor < ALexer.TokenCount) and
@@ -3317,7 +3319,8 @@ var
           end;
           Result := True;
         end;
-      tkIdentifier, tkSelfKeyword:
+      tkIdentifier, tkSelfKeyword, tkNameKeyword, tkStringKeyword,
+        tkMessageKeyword, tkFileKeyword:
         begin
           if (ACursor + 1 < ALexer.TokenCount) and
             (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
@@ -3333,7 +3336,9 @@ var
         begin
           Inc(ACursor);
           if (ACursor < ALexer.TokenCount) and
-            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+            (CurrentToken(ALexer, ACursor).Kind in
+              [tkIdentifier, tkNameKeyword, tkStringKeyword,
+               tkMessageKeyword, tkFileKeyword]) then
           begin
             StmtNode := TGreenNode.Create(gnkVarDecl,
               Token.ByteOffset, 0, CurrentToken(ALexer, ACursor).Lexeme);

@@ -288,7 +288,6 @@ begin
     'procedure': Exit(tkProcedureKeyword);
     'function': Exit(tkFunctionKeyword);
     'external': Exit(tkExternalKeyword);
-    'name': Exit(tkNameKeyword);
     'cdecl': Exit(tkCdeclKeyword);
     'begin': Exit(tkBeginKeyword);
     'end': Exit(tkEndKeyword);
