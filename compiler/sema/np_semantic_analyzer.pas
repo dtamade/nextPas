@@ -3563,6 +3563,22 @@ begin
           end;
         end
         else if FNoFold and IsRecordVar(Decoded) and
+          (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
+          (Arg.ChildCount >= 1) and (Arg.ChildAt(0) <> nil) and
+          (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+          LookupProcedureBody(Arg.ChildAt(0).Text, BranchNode, DeclNode) then
+        begin
+          Operand := Arg.ChildAt(0).Text + #9 + 'recvar ' + Decoded + #10;
+          for ArgIndex := 1 to Arg.ChildCount - 1 do
+          begin
+            RhsNode := Arg.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+              Operand := Operand + #9 + StringValue;
+          end;
+          FModel.AddTypedHirNode('call-runtime',
+            Arg.ChildAt(0).Text, 0, 0, Operand);
+        end
+        else if FNoFold and IsRecordVar(Decoded) and
           (Arg <> nil) and (Arg.NodeKind = gnkIdentifier) and
           IsRecordVar(Arg.Text) then
         begin
