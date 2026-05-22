@@ -2909,6 +2909,29 @@ begin
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 3) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    SameText(ANode.ChildAt(0).Text, 'Pos') then
+  begin
+    ABlob := '';
+    if (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkStringLiteral) then
+      ABlob := ABlob + 'strlit ' + ANode.ChildAt(1).Text + #10
+    else if (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+      IsRuntimeStrVar(ANode.ChildAt(1).Text) then
+      ABlob := ABlob + 'strvar ' + ANode.ChildAt(1).Text + #10;
+    if (ANode.ChildAt(2) <> nil) and
+      (ANode.ChildAt(2).NodeKind = gnkIdentifier) and
+      IsRuntimeStrVar(ANode.ChildAt(2).Text) then
+      ABlob := ABlob + 'strvar ' + ANode.ChildAt(2).Text + #10;
+    if ABlob <> '' then
+    begin
+      ABlob := ABlob + 'strpos' + #10;
+      Exit(True);
+    end;
+  end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and

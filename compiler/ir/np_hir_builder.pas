@@ -865,6 +865,25 @@ begin
       EmitInstr(Instr);
       Push(Instr.ResultId);
     end
+    else if Token = 'strpos' then
+    begin
+      Rhs := Pop;
+      V := Pop;
+      SlotIdx := Pop;
+      ExtraArgCount := Pop;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'str_pos';
+      SetLength(Instr.Operands, 4);
+      Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
+      Instr.Operands[1] := MakeOperand(SlotIdx);
+      Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
+      Instr.Operands[3] := MakeOperand(Rhs);
+      EmitInstr(Instr);
+      Push(Instr.ResultId);
+    end
     else if Token = 'arrload' then
     begin
       Rhs := Pop;

@@ -418,6 +418,19 @@ begin
           FNeedsStrCmp := True;
         end;
       end
+      else if AInstr.IntrinsicName = 'str_pos' then
+      begin
+        if Length(AInstr.Operands) >= 4 then
+        begin
+          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = call i64 @np_str_pos(ptr %' +
+            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
+            IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
+            IntToStr(AInstr.Operands[3].ValueId) + ')');
+          FNeedsStrCmp := True;
+        end;
+      end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
         FNeedsStrConcat := True;
@@ -729,6 +742,38 @@ begin
     Emit('equal:');
     Emit('  ret i64 1');
     Emit('not_equal:');
+    Emit('  ret i64 0');
+    Emit('}');
+    Emit('');
+    Emit('define internal i64 @np_str_pos(ptr %sub_ptr, i64 %sub_len, ptr %s_ptr, i64 %s_len) {');
+    Emit('entry:');
+    Emit('  %max = sub i64 %s_len, %sub_len');
+    Emit('  %can = icmp sge i64 %max, 0');
+    Emit('  br i1 %can, label %outer_loop, label %not_found');
+    Emit('outer_loop:');
+    Emit('  %oi = phi i64 [ 0, %entry ], [ %oi_next, %outer_cont ]');
+    Emit('  br label %inner_loop');
+    Emit('inner_loop:');
+    Emit('  %ii = phi i64 [ 0, %outer_loop ], [ %ii_next, %inner_cont ]');
+    Emit('  %sp = getelementptr i8, ptr %s_ptr, i64 %oi');
+    Emit('  %spi = getelementptr i8, ptr %sp, i64 %ii');
+    Emit('  %subp = getelementptr i8, ptr %sub_ptr, i64 %ii');
+    Emit('  %sc = load i8, ptr %spi');
+    Emit('  %subc = load i8, ptr %subp');
+    Emit('  %match = icmp eq i8 %sc, %subc');
+    Emit('  br i1 %match, label %inner_cont, label %outer_cont');
+    Emit('inner_cont:');
+    Emit('  %ii_next = add i64 %ii, 1');
+    Emit('  %idone = icmp eq i64 %ii_next, %sub_len');
+    Emit('  br i1 %idone, label %found, label %inner_loop');
+    Emit('outer_cont:');
+    Emit('  %oi_next = add i64 %oi, 1');
+    Emit('  %odone = icmp sgt i64 %oi_next, %max');
+    Emit('  br i1 %odone, label %not_found, label %outer_loop');
+    Emit('found:');
+    Emit('  %result = add i64 %oi, 1');
+    Emit('  ret i64 %result');
+    Emit('not_found:');
     Emit('  ret i64 0');
     Emit('}');
   end;
