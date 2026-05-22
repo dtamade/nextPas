@@ -83,6 +83,11 @@ type
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
+    function CountDeclParams(const ADecl: TGreenNode): LongInt;
+    function MangledName(const AName: string; AParamCount: LongInt): string;
+    function HasOverload(const AName: string): Boolean;
+    function LookupOverload(const AName: string; AArgCount: LongInt;
+      out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
@@ -585,18 +590,56 @@ begin
   Result := '';
 end;
 
+function TSemanticAnalyzer.CountDeclParams(const ADecl: TGreenNode): LongInt;
+var
+  J, K: LongInt;
+  Child, ParamChild: TGreenNode;
+begin
+  Result := 0;
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
+          Inc(Result);
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.MangledName(const AName: string;
+  AParamCount: LongInt): string;
+begin
+  if AParamCount = 0 then
+    Result := AName
+  else
+    Result := AName + '$' + IntToStr(AParamCount);
+end;
+
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
   const ABody: TGreenNode; const ADecl: TGreenNode);
 var
   Index: LongInt;
   NextIndex: SizeInt;
+  ParamCount, ExistingParamCount: LongInt;
 begin
+  ParamCount := CountDeclParams(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
-      FProcedureBodies[Index].Body := ABody;
-      FProcedureBodies[Index].Decl := ADecl;
-      Exit;
+      ExistingParamCount := CountDeclParams(FProcedureBodies[Index].Decl);
+      if ExistingParamCount = ParamCount then
+      begin
+        FProcedureBodies[Index].Body := ABody;
+        FProcedureBodies[Index].Decl := ADecl;
+        Exit;
+      end;
     end;
   NextIndex := Length(FProcedureBodies);
   SetLength(FProcedureBodies, NextIndex + 1);
@@ -614,6 +657,35 @@ begin
   ADecl := nil;
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
+    begin
+      ABody := FProcedureBodies[Index].Body;
+      ADecl := FProcedureBodies[Index].Decl;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.HasOverload(const AName: string): Boolean;
+var
+  Index, Count: LongInt;
+begin
+  Count := 0;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, AName) then
+      Inc(Count);
+  Result := Count > 1;
+end;
+
+function TSemanticAnalyzer.LookupOverload(const AName: string;
+  AArgCount: LongInt; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+var
+  Index: LongInt;
+begin
+  ABody := nil;
+  ADecl := nil;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, AName) and
+      (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) then
     begin
       ABody := FProcedureBodies[Index].Body;
       ADecl := FProcedureBodies[Index].Decl;
@@ -1144,7 +1216,9 @@ begin
         (SymI.Kind <> 'parameter') and (SymJ.Kind <> 'parameter') and
         (SymI.Kind <> 'enum-value') and (SymJ.Kind <> 'enum-value') and
         (SymI.Kind <> 'method') and (SymJ.Kind <> 'method') and
-        (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') then
+        (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') and
+        (SymI.Kind <> 'function') and (SymJ.Kind <> 'function') and
+        (SymI.Kind <> 'procedure') and (SymJ.Kind <> 'procedure') then
       begin
         EmitSemaError(
           'sema.duplicate-declaration',
@@ -2804,8 +2878,12 @@ begin
       else
         Exit(False);
     end;
-    ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
-      IntToStr(StrCallArgCount) + #10;
+    if HasOverload(ANode.ChildAt(0).Text) then
+      ABlob := ABlob + 'call ' + MangledName(ANode.ChildAt(0).Text, StrCallArgCount) +
+        ' ' + IntToStr(StrCallArgCount) + #10
+    else
+      ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
+        IntToStr(StrCallArgCount) + #10;
     Exit(True);
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
@@ -4177,7 +4255,6 @@ begin
       end;
       if FNoFold and LookupProcedureBody(Child.Text, BranchNode, DeclNode) then
       begin
-        Operand := Child.Text;
         Arg := nil;
         if (Child.ChildCount >= 1) and
           (Child.ChildAt(0) <> nil) and
@@ -4185,6 +4262,18 @@ begin
           Arg := Child.ChildAt(0)
         else
           Arg := Child;
+        ArgIndex := 0;
+        if (Arg <> nil) then
+        begin
+          if Arg.NodeKind = gnkFunctionCall then
+            ArgIndex := Arg.ChildCount - 1
+          else
+            ArgIndex := Arg.ChildCount;
+        end;
+        if HasOverload(Child.Text) then
+          Operand := MangledName(Child.Text, ArgIndex)
+        else
+          Operand := Child.Text;
         if Arg <> nil then
         begin
           if Arg.NodeKind = gnkFunctionCall then
@@ -4766,7 +4855,7 @@ var
   ParamCount: LongInt;
   Child, ParamChild, TypeChild: TGreenNode;
   SavedTerminated: Boolean;
-  ParamTypes, RetVarName: string;
+  ParamTypes, RetVarName, EffName: string;
   IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
@@ -4777,6 +4866,10 @@ begin
     if Entry.Body = nil then
       Continue;
     SetLength(FVarParamNames, 0);
+    if HasOverload(Entry.Name) then
+      EffName := MangledName(Entry.Name, CountDeclParams(Entry.Decl))
+    else
+      EffName := Entry.Name;
     ParamCount := 0;
     ParamTypes := '';
     IsStrReturn := False;
@@ -4889,22 +4982,22 @@ begin
       RegisterRuntimeVar('self');
     end
     else if IsStrReturn then
-      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+      FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':s')
     else if IsPtrReturn then
-      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+      FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes + ':p')
     else if IsRecReturn then
     begin
       if FModel.LookupConstValue(PtrReturnClass + '$size', Folded) then
-        FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+        FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
           IntToStr(ParamCount) + ':' + ParamTypes + ':r' + IntToStr(Folded div 8))
       else
-        FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+        FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
           IntToStr(ParamCount) + ':' + ParamTypes);
     end
     else
-      FModel.AddTypedHirNode('function-body-begin', Entry.Name, 0, 0,
+      FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
         IntToStr(ParamCount) + ':' + ParamTypes);
     if Entry.Decl <> nil then
     begin
@@ -4974,7 +5067,7 @@ begin
         FModel.AddTypedHirNode('ret-runtime', RetVarName, 0, 0,
           'var ' + RetVarName + #10);
     end;
-    FModel.AddTypedHirNode('function-body-end', Entry.Name, 0, 0, '');
+    FModel.AddTypedHirNode('function-body-end', EffName, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
     FCurrentMethodClass := '';
     FCurrentRetVarName := '';
