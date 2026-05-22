@@ -1721,6 +1721,31 @@ begin
         Inc(ArgCount, 2);
       end;
     end
+    else if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strlit ') then
+    begin
+      StrVarName := Copy(ArgBlob, 8, Length(ArgBlob));
+      if (Length(StrVarName) > 0) and (StrVarName[Length(StrVarName)] = #10) then
+        StrVarName := Copy(StrVarName, 1, Length(StrVarName) - 1);
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'str_const';
+      Instr.CallTarget := StrVarName;
+      EmitInstr(Instr);
+      PtrVal := Instr.ResultId;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetIntType;
+      Instr.IntrinsicName := 'const:' + IntToStr(Length(StrVarName) - 2);
+      EmitInstr(Instr);
+      LenVal := Instr.ResultId;
+      SetLength(ArgOps, ArgCount + 2);
+      ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
+      ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntType);
+      Inc(ArgCount, 2);
+    end
     else
     begin
       ArgValue := ParseIntBlob(ArgBlob);

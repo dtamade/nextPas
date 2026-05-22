@@ -2981,6 +2981,12 @@ begin
         ABlob := ABlob + 'strvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
         Inc(StrCallArgCount, 2);
       end
+      else if (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkStringLiteral) then
+      begin
+        ABlob := ABlob + 'strlit ' + ANode.ChildAt(StrCallIdx).Text + #10;
+        Inc(StrCallArgCount, 2);
+      end
       else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
       begin
         ABlob := ABlob + FuncName;
@@ -4531,6 +4537,8 @@ begin
             else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(RhsNode.Text) then
               Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
+            else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkStringLiteral) then
+              Operand := Operand + #9 + 'strlit ' + RhsNode.Text + #10
             else if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
               Operand := Operand + #9 + Decoded;
             Inc(ArgIndex);
