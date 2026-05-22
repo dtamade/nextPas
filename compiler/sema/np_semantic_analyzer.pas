@@ -2858,8 +2858,8 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
 var
   Folded: Int64;
   FuncName, ArgName: string;
-  StrCallIdx, StrCallArgCount: LongInt;
-  BranchNode, DeclNode: TGreenNode;
+  StrCallIdx, StrCallArgCount, K, ArgIndex, DotPos: LongInt;
+  BranchNode, DeclNode, RhsNode: TGreenNode;
   Operand: string;
 begin
   ABlob := '';
@@ -2930,6 +2930,38 @@ begin
       end
       else
         Exit(False);
+    end;
+    if LookupProcedureBody(ANode.ChildAt(0).Text, BranchNode, DeclNode) and
+      (DeclNode <> nil) then
+    begin
+      StrCallIdx := ANode.ChildCount - 1;
+      for K := 0 to DeclNode.ChildCount - 1 do
+      begin
+        if (DeclNode.ChildAt(K) = nil) or
+          (DeclNode.ChildAt(K).NodeKind <> gnkParameterList) then
+          Continue;
+        ArgIndex := 0;
+        for DotPos := 0 to DeclNode.ChildAt(K).ChildCount - 1 do
+        begin
+          RhsNode := DeclNode.ChildAt(K).ChildAt(DotPos);
+          if (RhsNode = nil) or (RhsNode.NodeKind <> gnkParameterDecl) then
+            Continue;
+          Inc(ArgIndex);
+          if ArgIndex > StrCallIdx then
+          begin
+            if RhsNode.ChildCount > 1 then
+            begin
+              if EncodeRuntimeIntExprFold(
+                RhsNode.ChildAt(RhsNode.ChildCount - 1), FuncName) then
+              begin
+                ABlob := ABlob + FuncName;
+                Inc(StrCallArgCount);
+              end;
+            end;
+          end;
+        end;
+        Break;
+      end;
     end;
     if HasOverload(ANode.ChildAt(0).Text) then
     begin
@@ -3341,7 +3373,7 @@ var
   ParamSnaps: TParamSnapshots;
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
-  DotPos: LongInt;
+  DotPos, K: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -4383,6 +4415,33 @@ begin
               Operand := Operand + #9 + Decoded;
             Inc(ArgIndex);
             Inc(DotPos);
+          end;
+          if DeclNode <> nil then
+          begin
+            K := 0;
+            for ArgIndex := 0 to DeclNode.ChildCount - 1 do
+            begin
+              if (DeclNode.ChildAt(ArgIndex) = nil) or
+                (DeclNode.ChildAt(ArgIndex).NodeKind <> gnkParameterList) then
+                Continue;
+              for K := 0 to DeclNode.ChildAt(ArgIndex).ChildCount - 1 do
+              begin
+                RhsNode := DeclNode.ChildAt(ArgIndex).ChildAt(K);
+                if (RhsNode = nil) or (RhsNode.NodeKind <> gnkParameterDecl) then
+                  Continue;
+                Dec(DotPos);
+                if DotPos < 0 then
+                begin
+                  if RhsNode.ChildCount > 1 then
+                  begin
+                    if EncodeRuntimeIntExprFold(RhsNode.ChildAt(
+                      RhsNode.ChildCount - 1), Decoded) then
+                      Operand := Operand + #9 + Decoded;
+                  end;
+                end;
+              end;
+              Break;
+            end;
           end;
         end;
         FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);

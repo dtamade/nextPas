@@ -1451,7 +1451,7 @@ var
   List: TGreenNode;
   Decl: TGreenNode;
   NameToken: TToken;
-  TypeNode: TGreenNode;
+  TypeNode, DefaultExpr: TGreenNode;
   I: LongInt;
   Child: TGreenNode;
   HasVarModifier: Boolean;
@@ -1533,7 +1533,20 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
     begin
       Inc(ACursor);
-      ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+      DefaultExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+      if (DefaultExpr <> nil) and (List.ChildCount > 0) then
+      begin
+        for I := List.ChildCount - 1 downto 0 do
+        begin
+          Child := List.ChildAt(I);
+          if (Child <> nil) and (Child.NodeKind = gnkParameterDecl) then
+          begin
+            Child.AppendChild(DefaultExpr);
+            Inc(ATree.FNodeCount);
+            Break;
+          end;
+        end;
+      end;
     end;
 
     if (ACursor < ALexer.TokenCount) and
