@@ -318,10 +318,13 @@
   把 `unit` roots 明确降成 `object-file`，并让 toolchain 只走
   `bootstrap-native-assemble`，才能让 self-hosting 成功边界和真实产物形状对齐。
 - `build/verify_local.sh` 现在已经把 compiler-module self-compile 纳入 promotion path：
-  `np_diagnostics_sink` 与 `np_source_database` 必须在
+  `np_diagnostics_sink`、`np_source_database` 与 `np_workspace_model` 必须在
   `backend-output-kind=object-file`、
   `toolchain-plan-family=bootstrap-native-assemble`、
   `logical-link-request-status=deferred` 下稳定成功，而且不得偷偷退回 `native-link`。
+- `np_workspace_model` 这条 self-compile contract 还额外冻结
+  `tool-invocation-count=2` / `tool-run-step-count=2`，防止 unit root 被误扩成 transitive
+  extra assemble 或 native link。
 
 ## Technical Decisions
 
@@ -407,6 +410,8 @@
   `tool-status-event-count=16`；先前看到的 `20` 是 verify 脚本期望漂移，不是实现回归。
 - fresh `bash build/verify_local.sh` 已再次拿到 `verify-local=pass`，说明这轮修复没有引入
   新的 toolchain / semantic / self-host contract 漂移。
+- 后续接手时不要再把 `np_workspace_model` 当作“只在 notes 里成功”的灰色项：它现在已经和
+  `np_diagnostics_sink`、`np_source_database` 一起进入 `compiler-module-self-compile-check`。
 
 ## Resources
 

@@ -167,6 +167,7 @@ STAGE0_TEST_COMPILER_PASS_OUTPUT=$(mktemp)
 STAGE0_TEST_SMOKE_OUTPUT=$(mktemp)
 COMPILER_MODULE_DIAGNOSTICS_OUTPUT=$(mktemp)
 COMPILER_MODULE_SOURCE_DB_OUTPUT=$(mktemp)
+COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT=$(mktemp)
 STAGE0_ENV_STATUS_OUTPUT=$(mktemp)
 STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_OUTPUT=$(mktemp)
@@ -364,6 +365,7 @@ cleanup() {
   rm -f "$STAGE0_TEST_SMOKE_OUTPUT"
   rm -f "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT"
   rm -f "$COMPILER_MODULE_SOURCE_DB_OUTPUT"
+  rm -f "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT"
   rm -f "$STAGE0_ENV_STATUS_OUTPUT"
   rm -f "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_DOCTOR_OUTPUT"
@@ -1032,6 +1034,29 @@ require_output_pattern '^tool-invocation-plan=.*"planFamily":"bootstrap-native-a
 if grep -Eq '"stepId":"native-link"' "$COMPILER_MODULE_SOURCE_DB_OUTPUT"; then
   cat "$COMPILER_MODULE_SOURCE_DB_OUTPUT"
   fail 'unexpected-compiler-module-source-db-native-link'
+fi
+printf 'compiler-module-self-compile-command=%s build compiler/frontend/np_workspace_model.pas --fold --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! run_stage0_build_capture "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" compiler/frontend/np_workspace_model.pas; then
+  cat "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT"
+  fail 'compiler-module-workspace-model-self-compile-failed'
+fi
+require_output_pattern '^status=success$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-success-status'
+require_output_pattern '^result=success$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-success-result'
+require_output_pattern '^command-outcome=success$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-command-outcome'
+require_output_pattern '^ast-root-kind=unit$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-root-kind'
+require_output_pattern '^backend-output-kind=object-file$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-output-kind'
+require_output_pattern '^backend-primary-artifact-kind=object-file$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-primary-artifact-kind'
+require_output_pattern '^artifact=.*/\.nextpas/cache/backend/linux-x86_64/np_workspace_model\.o$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-artifact'
+require_output_pattern '^toolchain-plan-family=bootstrap-native-assemble$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-plan-family'
+require_output_pattern '^logical-link-request-status=deferred$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-link-request-status'
+require_output_pattern '^tool-invocation-count=2$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-tool-invocation-count'
+require_output_pattern '^tool-run-status=success$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-tool-run-status'
+require_output_pattern '^tool-run-step-count=2$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-tool-run-step-count'
+require_output_pattern '^human-summary=build succeeded$' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-human-summary'
+require_output_pattern '^tool-invocation-plan=.*"planFamily":"bootstrap-native-assemble".*"stepId":"host-fpc-emit-asm".*"stepId":"native-assemble"' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT" 'missing-compiler-module-workspace-model-tool-plan'
+if grep -Eq '"stepId":"native-link"' "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT"; then
+  cat "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT"
+  fail 'unexpected-compiler-module-workspace-model-native-link'
 fi
 printf 'compiler-module-self-compile-check=pass\n'
 

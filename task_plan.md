@@ -54,6 +54,32 @@ Completed
       `hello_with_units` 为 5-step / 16-event，并把 `typedHirNodeCount` 改回真实 `8`
 - [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
 
+## Addendum: 2026-05-23 Stage2 Self-compile Coverage Parity
+
+### Goal
+
+把 Stage2 compiler-module self-compile 的记录与 promotion path 对齐：上一批 notes 已经把
+`np_workspace_model` 写成 fresh 成功，但 `build/verify_local.sh` 只 gate 了
+`np_diagnostics_sink` 与 `np_source_database`。这批不扩大 self-hosting 语义，只把已经成立的
+`np_workspace_model` unit-root object-file contract 固化进 verify。
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 核对当前记录与 `build/verify_local.sh`，确认 drift 只在
+      `np_workspace_model` 是否进入 promotion path
+- [x] 在 `build/verify_local.sh` 增加
+      `compiler/frontend/np_workspace_model.pas` self-compile probe
+- [x] 复用 unit-root contract：`backend-output-kind=object-file`、
+      `toolchain-plan-family=bootstrap-native-assemble`、
+      `logical-link-request-status=deferred`
+- [x] 额外冻结 `tool-invocation-count=2` / `tool-run-step-count=2` 与 no-`native-link`，
+      防止 unit root 漂回 transitive extra assemble 或 link
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
 ## Addendum: 2026-05-23 Stage2 unit self-compile boundary
 
 ### Goal
@@ -69,7 +95,8 @@ Completed
   `bootstrap-native-assemble`（`host-fpc-emit-asm -> native-assemble`），不再伪造
   `native-link`
 - `build/verify_local.sh` 纳入 compiler-module self-compile gate，冻结
-  `np_diagnostics_sink` 与 `np_source_database` 的 object-file self-host contract
+  `np_diagnostics_sink`、`np_source_database` 与 `np_workspace_model` 的 object-file self-host
+  contract
 
 ### Status
 
@@ -92,8 +119,8 @@ Completed
 - 这批不是宣称 nextPas 已经能把 compiler units “完整链接成可执行”，而是把当前真实 ownership
   诚实地推进到“能把 compiler units 编译成 object-file 并经过 native assemble”
 - `np_diagnostics_sink` / `np_source_database` / `np_workspace_model` 现在都已在
-  `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble` 下
-  fresh 成功
+  `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble` 下进入
+  fresh verify gate
 - `array of const` 这一合法参数形态已补入 parser，并在 `TSemanticAnalyzer.GetParamSignature(...)`
   里补了 nil guard；`tests/parser/array_of_const_pass.pas` 已加入 parser smoke，fresh verify 通过
 

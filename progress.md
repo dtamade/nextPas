@@ -7,6 +7,17 @@
 
 - **Status:** completed
 - Actions taken:
+  - 接手后先核对 `task_plan.md`、`progress.md`、`findings.md` 与
+    `build/verify_local.sh`，确认最新 drift 是：记录已把 `np_workspace_model`
+    写入 fresh 成功范围，但 promotion path 只 gate 了 `np_diagnostics_sink` 与
+    `np_source_database`。
+  - 扩展 `build/verify_local.sh` 的 compiler-module self-compile gate，新增
+    `compiler/frontend/np_workspace_model.pas` probe，并冻结
+    `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble`、
+    `logical-link-request-status=deferred`、`tool-invocation-count=2`、
+    `tool-run-step-count=2` 与 no-`native-link` contract。
+  - 运行 fresh `bash build/verify_local.sh`，确认 coverage parity 修补后整套
+    `verify-local=pass`。
   - 复现并最小化定位 `nextpas build compiler/diagnostics/np_diagnostics_sink.pas` /
     `compiler/frontend/np_source_database.pas` 的 shared blocker，确认真正触发
     `parser.syntax-error: "IMPLEMENTATION" expected but "END" found` 的不是 `FreeAndNil` /
@@ -23,7 +34,7 @@
     不再为没有 entry point / linker script contract 的 unit 伪造 `native-link`。
   - 删除 `compiler/sema/np_semantic_analyzer.pas` 中遗留的 `DBG-FALL:` stderr 调试输出。
   - 扩展 `build/verify_local.sh`，新增 compiler-module self-compile gate，正式冻结
-    `np_diagnostics_sink` 与 `np_source_database` 的
+    `np_diagnostics_sink`、`np_source_database` 与 `np_workspace_model` 的
     `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble`、
     `logical-link-request-status=deferred` 与 no-`native-link` contract。
   - 继续追查并修复 `array of const` 新边界：在 parser 中接受 `array of const`，
@@ -1651,6 +1662,7 @@ Hello from nextPas!
 ## Test Results
 
 - `bash build/verify_local.sh`（installed-source extra assemble boundary + semantic-smoke contract realignment）：pass
+- `bash build/verify_local.sh`（Stage2 self-compile coverage parity for np_workspace_model）：pass
 - `bash build/verify_local.sh`（host-compiler runner reuse + tool run projection）：pass
 - `bash build/verify_local.sh`（toolchain plan runner execution contract）：pass
 - `bash build/verify_local.sh`（stage0 projection writer convergence）：pass
