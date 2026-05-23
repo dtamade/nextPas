@@ -1,7 +1,38 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-06 记录为准。
+2026-05-23 记录为准。
+
+## Session: 2026-05-23 (Stage2 unit self-compile boundary)
+
+- **Status:** completed
+- Actions taken:
+  - 复现并最小化定位 `nextpas build compiler/diagnostics/np_diagnostics_sink.pas` /
+    `compiler/frontend/np_source_database.pas` 的 shared blocker，确认真正触发
+    `parser.syntax-error: "IMPLEMENTATION" expected but "END" found` 的不是 `FreeAndNil` /
+    `Format`，而是 `class(Exception);` 这种 shorthand 派生类声明。
+  - 将 `SysUtils`、`np_workspace_model`、`np_toolchain_profiles`、
+    `np_toolchain_runner`、`target_config` 及对应 runtime SDK copies 里的
+    shorthand class 统一改成显式 `class(Exception) ... end;`，消除 parser 兼容性歧义。
+  - 扩展 `compiler/backend/np_backend_plan.pas` 与
+    `compiler/frontend/np_compilation_session.pas`，把 root kind 接入 backend plan，
+    让 `unit` roots 产出 `object-file`，而不是再无条件声明 `executable`。
+  - 扩展 `compiler/toolchain/np_toolchain_plan.pas`，为 unit roots 选择新的
+    `bootstrap-native-assemble` family，只执行
+    `host-fpc-emit-asm -> native-assemble`（以及 source-backed units 的额外 assemble steps），
+    不再为没有 entry point / linker script contract 的 unit 伪造 `native-link`。
+  - 删除 `compiler/sema/np_semantic_analyzer.pas` 中遗留的 `DBG-FALL:` stderr 调试输出。
+  - 扩展 `build/verify_local.sh`，新增 compiler-module self-compile gate，正式冻结
+    `np_diagnostics_sink` 与 `np_source_database` 的
+    `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble`、
+    `logical-link-request-status=deferred` 与 no-`native-link` contract。
+  - 继续追查并修复 `array of const` 新边界：在 parser 中接受 `array of const`，
+    并在 `TSemanticAnalyzer.GetParamSignature(...)` 中补 `TypeChild` nil guard，
+    消除 `np_diagnostics_sink` 自举时的 access violation。
+  - 新增 `tests/parser/array_of_const_pass.pas`，并 fresh 运行
+    `./tests/run_all_tests.sh --filter parser` 与 `bash build/verify_local.sh`，
+    确认 parser smoke / compiler-module self-compile 都恢复为 pass。
+  - 运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`。
 
 ## Session: 2026-05-23 (HIR LLVM alloca hoisting safety)
 

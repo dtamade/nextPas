@@ -645,9 +645,11 @@ begin
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
-        else if FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
+        else if (TypeChild <> nil) and
+          FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
           Result := Result + 'r'
-        else if FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
+        else if (TypeChild <> nil) and
+          FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
           Result := Result + 'p'
         else
           Result := Result + 'i';
@@ -3979,8 +3981,6 @@ begin
         end
         else if FNoFold then
         begin
-          if IsRecordVar(Decoded) and (Arg <> nil) then
-            WriteLn(StdErr, 'DBG-FALL: Decoded=', Decoded, ' ArgKind=', Ord(Arg.NodeKind), ' gnkFC=', Ord(gnkFunctionCall));
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
             DotPos := Pos('.', Decoded);

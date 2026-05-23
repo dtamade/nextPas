@@ -15,6 +15,49 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-23 Stage2 unit self-compile boundary
+
+### Goal
+
+把 Stage2 自编译从“卡在 target-installed `SysUtils` parser failure”和“把 `unit` 误当成
+`executable` 去 link”的混合失败，收口成一个真实、可验证、可持续的最小成功边界：
+
+- target-installed / compiler source 里的 `= class(Exception);` shorthand 改成 parser 已稳定支持的
+  `class(Exception) ... end;`
+- `compiler/backend/np_backend_plan.pas` 改为按 root kind 区分输出：
+  `program|library|package -> executable`，`unit -> object-file`
+- `compiler/toolchain/np_toolchain_plan.pas` 为 unit roots 走
+  `bootstrap-native-assemble`（`host-fpc-emit-asm -> native-assemble`），不再伪造
+  `native-link`
+- `build/verify_local.sh` 纳入 compiler-module self-compile gate，冻结
+  `np_diagnostics_sink` 与 `np_source_database` 的 object-file self-host contract
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 重现并定位 `parser.syntax-error: "IMPLEMENTATION" expected but "END" found`
+      到 `SysUtils` / compiler units 中的 `class(Exception);` shorthand
+- [x] 将 `SysUtils`、compiler/toolchain/frontend 相关 unit 里的 shorthand class 统一改为
+      显式空 body 形式
+- [x] 让 backend plan 按 root kind 选择 `object-file` / `executable`
+- [x] 让 toolchain plan 为 unit roots 选择 `bootstrap-native-assemble`
+- [x] 移除遗留 `DBG-FALL:` stderr 调试输出
+- [x] `build/verify_local.sh` 新增 compiler-module self-compile gate
+- [x] fresh `bash build/verify_local.sh` 通过，确认 `verify-local=pass`
+
+### Notes
+
+- 这批不是宣称 nextPas 已经能把 compiler units “完整链接成可执行”，而是把当前真实 ownership
+  诚实地推进到“能把 compiler units 编译成 object-file 并经过 native assemble”
+- `np_diagnostics_sink` / `np_source_database` / `np_workspace_model` 现在都已在
+  `backend-output-kind=object-file`、`toolchain-plan-family=bootstrap-native-assemble` 下
+  fresh 成功
+- `array of const` 这一合法参数形态已补入 parser，并在 `TSemanticAnalyzer.GetParamSignature(...)`
+  里补了 nil guard；`tests/parser/array_of_const_pass.pas` 已加入 parser smoke，fresh verify 通过
+
 ## Addendum: 2026-05-23 HIR LLVM alloca hoisting safety
 
 ### Goal

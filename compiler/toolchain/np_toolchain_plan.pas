@@ -1461,9 +1461,12 @@ var
   LinkerExecutable: string;
   LinkerProfile: TLinkerProfile;
   LinkerScriptPath: string;
+  LinkRequestStatus: string;
   ObjectArtifactPath: string;
   OutputKindValue: string;
   PrimaryArtifactKindValue: string;
+  RequiresLink: Boolean;
+  PlanFamilyId: string;
   StepIndex: LongInt;
 begin
   try
@@ -1514,24 +1517,38 @@ begin
 
   LinkerScriptPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
     ChangeFileExt(ExtractFileName(AssemblyArtifactPath), '') + '_link.res';
-  PreparePlanContext(
-    'bootstrap-native-assemble-link',
-    'host-compiler',
-    HostCompiler.Id
-  );
   OutputKindValue := 'executable';
   if (FBackendPlan <> nil) and (FBackendPlan.OutputKind <> '') then
     OutputKindValue := FBackendPlan.OutputKind;
+  RequiresLink := SameText(OutputKindValue, 'executable');
+  if RequiresLink then
+  begin
+    PlanFamilyId := 'bootstrap-native-assemble-link';
+    LinkRequestStatus := 'ready';
+  end
+  else
+  begin
+    PlanFamilyId := 'bootstrap-native-assemble';
+    LinkRequestStatus := 'deferred';
+  end;
+  PreparePlanContext(
+    PlanFamilyId,
+    'host-compiler',
+    HostCompiler.Id
+  );
   FPlan.ConfigureLogicalLinkRequest(
-    'ready',
+    LinkRequestStatus,
     FTargetFacts.ToolchainBindingId,
     FTargetFacts.TargetId,
     LinkerProfile.Id,
     OutputKindValue,
     ArtifactPath
   );
-  FPlan.AddLogicalObjectInput(ObjectArtifactPath);
-  AppendBackendLogicalLibraryRequests;
+  if RequiresLink then
+  begin
+    FPlan.AddLogicalObjectInput(ObjectArtifactPath);
+    AppendBackendLogicalLibraryRequests;
+  end;
 
   EmitAsmStep := FPlan.AddStep(
     'host-fpc-emit-asm',
@@ -1661,6 +1678,12 @@ begin
       'object-file',
       ExpandFileName(AdditionalObjectPath)
     );
+  end;
+
+  if not RequiresLink then
+  begin
+    FPlan.MarkReady;
+    Exit;
   end;
 
   LinkerExecutable := FirstStringOrDefault(LinkerProfile.DriverCandidates, 'ld');

@@ -1400,7 +1400,17 @@ begin
         end;
         if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
         begin
-          ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkConstKeyword) then
+          begin
+            ArgNode := TGreenNode.Create(gnkIdentifier,
+              CurrentToken(ALexer, ACursor).ByteOffset,
+              Length(CurrentToken(ALexer, ACursor).Lexeme),
+              CurrentToken(ALexer, ACursor).Lexeme);
+            Inc(ACursor);
+          end
+          else
+            ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
         end;
@@ -1872,8 +1882,18 @@ begin
             end;
             if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
             begin
-              ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkConstKeyword) then
+              begin
+                ElementNode := TGreenNode.Create(gnkIdentifier,
+                  CurrentToken(ALexer, ACursor).ByteOffset,
+                  Length(CurrentToken(ALexer, ACursor).Lexeme),
+                  CurrentToken(ALexer, ACursor).Lexeme);
+                Inc(ACursor);
+              end
+              else
+                ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
+                  ARootFileId);
               if ElementNode <> nil then
               begin
                 TypeNode.AppendChild(ElementNode);

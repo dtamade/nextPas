@@ -8,7 +8,8 @@ uses
   Classes, SysUtils;
 
 type
-  ETargetConfigError = class(Exception);
+  ETargetConfigError = class(Exception)
+  end;
 
   TToolchainBindingConfig = record
     BindingPath: string;

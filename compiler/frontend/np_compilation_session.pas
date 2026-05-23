@@ -377,10 +377,14 @@ function BuildSessionId(
 ): string;
 var
   EntropyToken: string;
+  SessionNonceText: string;
 begin
   Inc(GSessionNonce);
+  SessionNonceText := IntToStr(GSessionNonce);
+  while Length(SessionNonceText) < 2 do
+    SessionNonceText := '0' + SessionNonceText;
   EntropyToken := FormatDateTime('yyyymmddhhnnsszzz', Now) + '-' +
-    Format('%.2d', [GSessionNonce]);
+    SessionNonceText;
   Result := ACommandName + '-' + ATargetId + '-' + EntropyToken +
     '-file-' + IntToStr(ARootFileId);
 end;
@@ -892,6 +896,7 @@ begin
     FOptions.BuildContext.RequestedSourcePath,
     ArtifactRootPath,
     OutputDirPath,
+    AstRootKindName,
     FOptions.NoFold
   );
   try

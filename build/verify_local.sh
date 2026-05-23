@@ -165,6 +165,8 @@ STAGE0_TEST_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_TEST_UNKNOWN_GROUP_OUTPUT=$(mktemp)
 STAGE0_TEST_COMPILER_PASS_OUTPUT=$(mktemp)
 STAGE0_TEST_SMOKE_OUTPUT=$(mktemp)
+COMPILER_MODULE_DIAGNOSTICS_OUTPUT=$(mktemp)
+COMPILER_MODULE_SOURCE_DB_OUTPUT=$(mktemp)
 STAGE0_ENV_STATUS_OUTPUT=$(mktemp)
 STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_OUTPUT=$(mktemp)
@@ -360,6 +362,8 @@ cleanup() {
   rm -f "$STAGE0_TEST_UNKNOWN_GROUP_OUTPUT"
   rm -f "$STAGE0_TEST_COMPILER_PASS_OUTPUT"
   rm -f "$STAGE0_TEST_SMOKE_OUTPUT"
+  rm -f "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT"
+  rm -f "$COMPILER_MODULE_SOURCE_DB_OUTPUT"
   rm -f "$STAGE0_ENV_STATUS_OUTPUT"
   rm -f "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_DOCTOR_OUTPUT"
@@ -985,6 +989,51 @@ printf 'stage0-smoke-repeat=pass\n'
 require_absent_path "$REPO_ROOT/examples/smoke/hello"
 require_absent_path "$REPO_ROOT/examples/smoke/hello.o"
 printf 'stage0-smoke=pass\n'
+
+printf 'compiler-module-self-compile-check=running\n'
+printf 'compiler-module-self-compile-command=%s build compiler/diagnostics/np_diagnostics_sink.pas --fold --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! run_stage0_build_capture "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" compiler/diagnostics/np_diagnostics_sink.pas; then
+  cat "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT"
+  fail 'compiler-module-diagnostics-self-compile-failed'
+fi
+require_output_pattern '^status=success$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-success-status'
+require_output_pattern '^result=success$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-success-result'
+require_output_pattern '^command-outcome=success$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-command-outcome'
+require_output_pattern '^ast-root-kind=unit$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-root-kind'
+require_output_pattern '^backend-output-kind=object-file$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-output-kind'
+require_output_pattern '^backend-primary-artifact-kind=object-file$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-primary-artifact-kind'
+require_output_pattern '^artifact=.*/\.nextpas/cache/backend/linux-x86_64/np_diagnostics_sink\.o$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-artifact'
+require_output_pattern '^toolchain-plan-family=bootstrap-native-assemble$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-plan-family'
+require_output_pattern '^logical-link-request-status=deferred$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-link-request-status'
+require_output_pattern '^tool-run-status=success$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-tool-run-status'
+require_output_pattern '^human-summary=build succeeded$' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-human-summary'
+require_output_pattern '^tool-invocation-plan=.*"planFamily":"bootstrap-native-assemble".*"stepId":"host-fpc-emit-asm".*"stepId":"native-assemble"' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT" 'missing-compiler-module-diagnostics-tool-plan'
+if grep -Eq '"stepId":"native-link"' "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT"; then
+  cat "$COMPILER_MODULE_DIAGNOSTICS_OUTPUT"
+  fail 'unexpected-compiler-module-diagnostics-native-link'
+fi
+printf 'compiler-module-self-compile-command=%s build compiler/frontend/np_source_database.pas --fold --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! run_stage0_build_capture "$COMPILER_MODULE_SOURCE_DB_OUTPUT" compiler/frontend/np_source_database.pas; then
+  cat "$COMPILER_MODULE_SOURCE_DB_OUTPUT"
+  fail 'compiler-module-source-db-self-compile-failed'
+fi
+require_output_pattern '^status=success$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-success-status'
+require_output_pattern '^result=success$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-success-result'
+require_output_pattern '^command-outcome=success$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-command-outcome'
+require_output_pattern '^ast-root-kind=unit$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-root-kind'
+require_output_pattern '^backend-output-kind=object-file$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-output-kind'
+require_output_pattern '^backend-primary-artifact-kind=object-file$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-primary-artifact-kind'
+require_output_pattern '^artifact=.*/\.nextpas/cache/backend/linux-x86_64/np_source_database\.o$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-artifact'
+require_output_pattern '^toolchain-plan-family=bootstrap-native-assemble$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-plan-family'
+require_output_pattern '^logical-link-request-status=deferred$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-link-request-status'
+require_output_pattern '^tool-run-status=success$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-tool-run-status'
+require_output_pattern '^human-summary=build succeeded$' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-human-summary'
+require_output_pattern '^tool-invocation-plan=.*"planFamily":"bootstrap-native-assemble".*"stepId":"host-fpc-emit-asm".*"stepId":"native-assemble"' "$COMPILER_MODULE_SOURCE_DB_OUTPUT" 'missing-compiler-module-source-db-tool-plan'
+if grep -Eq '"stepId":"native-link"' "$COMPILER_MODULE_SOURCE_DB_OUTPUT"; then
+  cat "$COMPILER_MODULE_SOURCE_DB_OUTPUT"
+  fail 'unexpected-compiler-module-source-db-native-link'
+fi
+printf 'compiler-module-self-compile-check=pass\n'
 
 printf 'llvm-binding-smoke=running\n'
 cat >"$LLVM_BINDING_SMOKE_BIN_DIR/opt" <<'EOF'
@@ -4488,6 +4537,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

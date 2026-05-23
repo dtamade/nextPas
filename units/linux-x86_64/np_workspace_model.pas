@@ -8,7 +8,8 @@ uses
   SysUtils, np_package_manifest;
 
 type
-  EWorkspaceModelError = class(Exception);
+  EWorkspaceModelError = class(Exception)
+  end;
 
   TPackageRef = record
     PackageName: string;

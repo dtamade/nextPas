@@ -121,6 +121,7 @@ type
     FSourcePath: string;
     FArtifactRootPath: string;
     FOutputDirPath: string;
+    FRootKindName: string;
     FNoFold: Boolean;
     FPlan: TBackendPlan;
     function BackendIntermediateRootPath: string;
@@ -131,6 +132,7 @@ type
       const ASourcePath: string;
       const AArtifactRootPath: string;
       const AOutputDirPath: string;
+      const ARootKindName: string;
       const ANoFold: Boolean
     );
     destructor Destroy; override;
@@ -496,6 +498,7 @@ constructor TBackendPlanner.Create(
   const ASourcePath: string;
   const AArtifactRootPath: string;
   const AOutputDirPath: string;
+  const ARootKindName: string;
   const ANoFold: Boolean
 );
 begin
@@ -505,6 +508,7 @@ begin
   FSourcePath := ASourcePath;
   FArtifactRootPath := AArtifactRootPath;
   FOutputDirPath := AOutputDirPath;
+  FRootKindName := ARootKindName;
   FNoFold := ANoFold;
   FPlan := TBackendPlan.Create;
 end;
@@ -542,6 +546,8 @@ var
   IntermediateRoot: string;
   LlvmIrArtifactPath: string;
   ObjectArtifactPath: string;
+  OutputKindValue: string;
+  PrimaryArtifactKindValue: string;
   PrimaryArtifactPath: string;
 begin
   if FSemaModel = nil then
@@ -552,7 +558,14 @@ begin
 
   FPlan.SetRootName(FSemaModel.RootName);
   FPlan.SetTargetMetadata(FTargetFacts);
-  FPlan.SetOutputKind('executable');
+  OutputKindValue := 'executable';
+  PrimaryArtifactKindValue := 'executable';
+  if SameText(Trim(FRootKindName), 'unit') then
+  begin
+    OutputKindValue := 'object-file';
+    PrimaryArtifactKindValue := 'object-file';
+  end;
+  FPlan.SetOutputKind(OutputKindValue);
   BaseName := ChangeFileExt(ExtractFileName(FSourcePath), '');
   IntermediateRoot := BackendIntermediateRootPath;
   AssemblyArtifactPath := ExpandFileName(
@@ -561,7 +574,9 @@ begin
   ObjectArtifactPath := ExpandFileName(
     IncludeTrailingPathDelimiter(IntermediateRoot) + BaseName + '.o'
   );
-  if Trim(FOutputDirPath) <> '' then
+  if SameText(OutputKindValue, 'object-file') then
+    PrimaryArtifactPath := ObjectArtifactPath
+  else if Trim(FOutputDirPath) <> '' then
     PrimaryArtifactPath := ExpandFileName(
       IncludeTrailingPathDelimiter(FOutputDirPath) +
       BaseName
@@ -604,8 +619,9 @@ begin
     FPlan.AddArtifact('assembly-text', AssemblyArtifactPath);
 
   FPlan.AddArtifact('object-file', ObjectArtifactPath);
-  FPlan.AddArtifact('executable', PrimaryArtifactPath);
-  FPlan.SetPrimaryArtifact('executable', PrimaryArtifactPath);
+  if SameText(OutputKindValue, 'executable') then
+    FPlan.AddArtifact('executable', PrimaryArtifactPath);
+  FPlan.SetPrimaryArtifact(PrimaryArtifactKindValue, PrimaryArtifactPath);
   FPlan.MarkReady;
 end;
 

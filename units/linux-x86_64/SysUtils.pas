@@ -33,7 +33,8 @@ type
     property Message: string read FMessage;
   end;
 
-  EConvertError = class(Exception);
+  EConvertError = class(Exception)
+  end;
 
 // String operations
 function Trim(const S: string): string;

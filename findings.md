@@ -27,6 +27,11 @@
   根单元 implementation uses、requested-name mismatch、显式 `System` source upgrade。
 - 当前 `compiler/frontend/np_unit_graph.pas` 的 `AddResolvedUnit(...)` 已支持用真实 source-backed
   unit 升级 placeholder 节点，这是显式 `System` 行为变正确的关键。
+- 当前 `compiler/syntax/np_green_tree.pas` 已明确接受 `array of const` 这一形态；
+  `compiler/sema/np_semantic_analyzer.pas` 的 `GetParamSignature(...)` 也已补上
+  `TypeChild` nil guard，避免 `np_diagnostics_sink` 在参数签名抽取阶段 AV。
+- `tests/parser/array_of_const_pass.pas` 已新增并纳入 parser smoke，`./tests/run_all_tests.sh --filter parser`
+  与 fresh `bash build/verify_local.sh` 都已通过。
 - `build/verify_local.sh` 当前已经把新 gate 纳入 promotion path：
   `root-implementation-check`、`requested-name-mismatch-check`、
   `explicit-system-check`、`package-manifest-source-root-check`、
@@ -303,6 +308,20 @@
 - 当前“编译成功”仍然有明确 bootstrap-host 边界：
   resolution/graph/diagnostics 与 native assemble/link 已进入 nextPas 控制面，但第一步
   `host-fpc-emit-asm` 仍依赖宿主 `fpc` 发射汇编。
+- 当前 Stage2 compiler-module self-compile 的首个真实 parser blocker 不是 `FreeAndNil`、
+  `Format` 或 `SysUtils` 尾部缺 `implementation`，而是
+  `class(Exception);` 这种 shorthand 派生类声明；nextPas parser 对
+  `class(Exception) ... end;` 稳定，但对 shorthand 仍会把失败拖到 EOF 才报
+  `"IMPLEMENTATION" expected`。
+- 当前 `compiler/backend/np_backend_plan.pas` / `compiler/toolchain/np_toolchain_plan.pas`
+  原先无条件把 root source 当成 `executable`，这对 compiler units 是错误模型；
+  把 `unit` roots 明确降成 `object-file`，并让 toolchain 只走
+  `bootstrap-native-assemble`，才能让 self-hosting 成功边界和真实产物形状对齐。
+- `build/verify_local.sh` 现在已经把 compiler-module self-compile 纳入 promotion path：
+  `np_diagnostics_sink` 与 `np_source_database` 必须在
+  `backend-output-kind=object-file`、
+  `toolchain-plan-family=bootstrap-native-assemble`、
+  `logical-link-request-status=deferred` 下稳定成功，而且不得偷偷退回 `native-link`。
 
 ## Technical Decisions
 
@@ -358,6 +377,8 @@
 | `diagnostics-summary` / `human-summary` 虽然已由共享输出路径稳定发出，但 verify 之前只零散覆盖少数 failure 文本                                                                                    | 先对 success、sessionful failure 与 pre-session failure 做 focused probe，再把 representative summary line/envelope contract 补进 `build/verify_local.sh`                                                                                      |
 | 旧文档把 `plan-build-linux-x86_64-file-1-*` / `trace-build-linux-x86_64-file-1-*` 写成固定示例，已经和实现不符                                                                                     | 全面改成 `plan-<session-id>-...` / `trace-<session-id>-...`，并在规范里明确“唯一且一致”才是正式契约                                                                                                                                            |
 | 路线图近期建议一度偏向 richer toolchain projection，容易掩盖 semantic/workspace truth 仍待补强的现实                                                                                               | 在 master roadmap 和 master roadmap plan 里把近期优先级改回 warning contract、resolver/workspace truth，再谈更丰富的 toolchain 外层投影                                                                                                        |
+| parser 当前对 shorthand `class(Exception);` 不稳定，而 compiler RTL / frontend/toolchain source 恰好大量使用这种写法                                                                               | 把 shorthand 统一降格为显式 `class(Exception) ... end;`，先把语法形态收敛到已验证路径，避免 Stage2 自编译继续卡在 parser 假象上                                                                                                                |
+| compiler unit roots 没有 entry point，但 backend/toolchain 之前仍无条件产出 `executable` 并计划 `native-link`                                                                                      | 把 root kind 接入 backend/toolchain；`unit -> object-file`、`program|library|package -> executable`，让产物模型与真实 Pascal root semantics 对齐                                                                                               |
 | `compiler/diagnostics` / `compiler` / `unit-resolution` 规范与 planning files 还没有写出 split diagnostics accounting 和 lazy search-index projection                                              | 依据已通过的 toolchain contract 与 smoke verification，把这两条 contract 回写到架构说明和持续记录里                                                                                                                                            |
 | precedence 成功路径上的 `partial` search-index 行为之前只在手工 probe 里可见，promotion path 没有正式保护                                                                                          | 在 `build/verify_local.sh` 为 representative precedence 路径补齐 line/envelope 两层 partial-state 断言，并同步 README/架构规范                                                                                                                 |
 | `build/verify_local.sh` 的 toolchain contract probe 之前会把 `tests/toolchain/toolchain_contract_smoke` 与 `.o` 留在源码树                                                                         | 改成临时 build dir，并在 verify 里显式断言源码树中不存在这两个生成物                                                                                                                                                                           |

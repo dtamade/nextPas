@@ -8,7 +8,8 @@ uses
   Classes, Process, SysUtils, np_toolchain_plan;
 
 type
-  EToolchainRunnerError = class(Exception);
+  EToolchainRunnerError = class(Exception)
+  end;
 
   TToolchainExecutedSidecar = record
     Kind: string;

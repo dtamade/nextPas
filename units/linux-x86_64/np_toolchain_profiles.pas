@@ -8,7 +8,8 @@ uses
   Classes, SysUtils;
 
 type
-  EToolProfileError = class(Exception);
+  EToolProfileError = class(Exception)
+  end;
 
   TStringArray = array of string;
 
