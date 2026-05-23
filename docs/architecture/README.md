@@ -25,6 +25,7 @@
 
 - `documentation-baseline-specification.md`：nextPas 文档基线规范
 - `overview.md`：nextPas 架构总览与 Mermaid 总图
+- `architecture-principles-specification.md`：nextPas 架构原则与质量门槛规范
 - `compatibility-matrix.md`：nextPas 兼容性矩阵
 - `master-roadmap.md`：nextPas 主路线图
 - `compiler-roadmap.md`：nextPas 编译器路线图
@@ -84,6 +85,7 @@
 
 - 先读 `documentation-baseline-specification.md`，确认文档分层和裁决顺序
 - 再读 `overview.md`，了解第一阶段的顶层边界
+- 然后读 `architecture-principles-specification.md`，确认所有设计和实现批次共同遵守的质量门槛
 - 然后读 `compatibility-matrix.md`，确认兼容范围和硬护栏
 - 再读 `master-roadmap.md`，确认 nextPas 作为整套开发环境的全局推进顺序
 - 再读 `compiler-roadmap.md`，确认 compiler execution spine、边界冻结和 promotion gate

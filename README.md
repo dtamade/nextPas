@@ -21,9 +21,9 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 
 - 稳定架构专题已经补齐，覆盖总览、兼容矩阵、自举路线图、`compiler`、toolchain、
   workspace、workspace file format、package workflow、developer tooling、language service、
-  future GUI framework、PlatformShell、UI runtime、UI interaction、UI layout、UI style/theme、
-  UI motion、UI text layout、UI accessibility、UI rendering、future IDE、`rtl`、`crt`、
-  `packages`、`stage0`、目标平台、测试 `harness` 和发行布局。
+  架构原则与质量门槛、future GUI framework、PlatformShell、UI runtime、UI interaction、
+  UI layout、UI style/theme、UI motion、UI text layout、UI accessibility、UI rendering、
+  future IDE、`rtl`、`crt`、`packages`、`stage0`、目标平台、测试 `harness` 和发行布局。
 - phase1 已完成；当前主线进入 post-phase1 的批次推进阶段。
 - `docs/architecture/master-roadmap.md` 现已接管长期产品路线图入口。
 - `docs/architecture/compiler-roadmap.md` 现已接管编译器执行主线入口。
@@ -45,6 +45,7 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 - 文档分层规则：`docs/architecture/documentation-baseline-specification.md`
 - 架构目录：`docs/architecture/README.md`
 - 架构总览与 Mermaid 总图：`docs/architecture/overview.md`
+- 架构原则与质量门槛：`docs/architecture/architecture-principles-specification.md`
 - 产品主路线图：`docs/architecture/master-roadmap.md`
 - 编译器路线图：`docs/architecture/compiler-roadmap.md`
 - 自举路线图：`docs/architecture/bootstrap-roadmap.md`

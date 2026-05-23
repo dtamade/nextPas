@@ -15,6 +15,32 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Architecture Principles and Quality Bar
+
+### Goal
+
+把“打造 FreePascal 领域一流现代 Pascal 开发环境”的高阶目标固化为可引用、可验证、
+可执行的架构原则，而不是停留在愿景口号：
+
+- 新增 `docs/architecture/architecture-principles-specification.md`，明确正确性、shared truth、
+  thin entrypoint、性能前置、可维护性、统一词汇与兼容性诚实这些长期门槛
+- 让 `overview.md`、`master-roadmap.md`、仓库 README 与架构目录都把这份规范作为后续设计入口
+- 将新规范纳入 `build/verify_local.sh` 的 docs-check，避免架构质量门槛从仓库验证入口漂走
+- 同步 `task_plan.md`、`progress.md`、`findings.md`，让后续“继续”能直接沿该质量门槛推进
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 新增 `docs/architecture/architecture-principles-specification.md`
+- [x] 同步 README、架构目录、总览、主路线图与 docs-check
+- [x] 同步 `task_plan.md`、`progress.md`、`findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`，确认新规范进入 docs-check 且整套
+      `verify-local=pass`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 `pkg inspect` package workflow detail hardening
 
 ### Goal

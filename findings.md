@@ -10,6 +10,10 @@
 
 ## Research Findings
 
+- 当前 `docs/architecture/architecture-principles-specification.md` 已把用户提出的长期质量目标
+  固化为可执行门槛：每个切片都要明确 owner、truth object、projection、promotion gate、
+  non-goal 与回退信号；这条规范应作为 `master-roadmap.md`、compiler 自举路线和后续 package /
+  language-service / GUI / IDE 工作的共同约束。
 - 当前 `compiler/ir/np_hir_builder.pas` 里 `FEntryBlockId` 基础设施已经足够支持 late alloca hoist；
   真正缺的是 `EnsureAlloca(...)` 仍把 `hikAlloca` 发到 current block。
 - 当前 `compiler/ir/np_hir_llvm_emitter.pas` 之前依赖 raw `%1/%2/...` 匿名数值 SSA 名，
@@ -342,6 +346,7 @@
 | 文档只写当前已验证事实，并明确标注 search path / host-backed 限制                                                                      | 避免把设计目标误写成当前能力                                                                                            |
 | `stage0 test` 继续做 thin wrapper，而不是重写 harness                                                                                | harness 已经是 execution owner；driver 只该负责 CLI parse、workspace root 选择与 env bridge                           |
 | planning files 与架构文档必须同步最小 package/workspace source root 现状                                                               | 避免下一轮恢复时被过时的“project roots 未落地”表述误导                                                                  |
+| 长期质量目标必须先落成 `architecture-principles-specification.md`，再继续扩局部能力                                                   | 防止“现代、高性能、优雅、一流框架”只停留在口号；后续切片要围绕 owner、truth object、projection、promotion gate 和 non-goal 做取舍 |
 | `.sisyphus/`、FPC 中间产物、runner/bootstrap 产物、snapshot diff evidence 和已知 smoke/example 产物统一进入 ignore                     | 降低源码树污染，避免历史生成物继续影响测试与工作区判断                                                                  |
 | resolution diagnostics 继续沿用现有 message 通路，只在 formatter 层接入 typed search-path provenance                                   | 保持改动面最小，同时把 consulted root / candidate origin 变成 verify-able output                                        |
 | workspace discovery 这一批只做“已有 truth 的稳定投影”，不提前引入完整 workspace model                                                  | 保持变更 grounded 在当前实现上，同时让 CLI / envelope 更诚实                                                            |

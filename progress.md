@@ -3,6 +3,24 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Architecture principles and quality bar)
+
+- **Status:** completed
+- Actions taken:
+  - 接手后先核对工作树、最近提交与 `task_plan.md` / `progress.md` / `findings.md`，
+    确认上一批 `pkg inspect` package workflow detail hardening 已在 `066a357` 收口，
+    当前工作树干净。
+  - 按用户新的长期质量要求，把本轮最高价值切片定为“先固化整体规格、架构原则与演进纪律”，
+    而不是继续扩一个局部命令字段。
+  - 新增 `docs/architecture/architecture-principles-specification.md`，把正确性优先、
+    shared truth、thin entrypoint、性能前置、清晰 ownership、统一词汇、兼容性诚实、
+    promotion gate 和回退信号写成后续批次必须遵守的工程门槛。
+  - 同步 README、架构目录、总览、主路线图、`build/verify_local.sh` docs-check 与
+    tracking 文件。
+  - 运行 fresh `bash build/verify_local.sh`，确认
+    `verified-path=docs/architecture/architecture-principles-specification.md` 出现在 docs-check，
+    且最终 `verify-local=pass` / `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (`pkg inspect` package workflow detail hardening)
 
 - **Status:** completed

@@ -11,6 +11,8 @@
 `compiler-roadmap.md`。
 如果你要看 FPC `stage0 -> stage1 -> stage2` 的自举所有权路径，读
 `bootstrap-roadmap.md`。这份文档只负责“整个产品面先长什么、后长什么”的长期顺序。
+所有路线图切片还必须遵守 `architecture-principles-specification.md`：长期愿景只有在
+owner、truth object、projection、promotion gate 和诚实非目标都清楚时，才算进入可落地设计。
 
 ## 先把主路线图的约束写清楚
 
@@ -23,6 +25,7 @@
 - 文档、命令表面、验证入口和证据必须一起推进，不能只升级其中一层。
 - nextPas 的长期自举路线要建立在仓库内的 nextPas-native `rtl/core` 之上，而不是长期依赖
   仓库外未完成的 core framework 或宿主 RTL 习惯。
+- 正确性、性能、可维护性和优雅性必须落成可验证 contract，不能停留在愿景描述。
 
 因此，这份主路线图不会把 nextPas 写成“先做个 compiler，剩下以后再说”，也不会把 GUI、IDE、
 package manager 或 cross toolchain 写成脱离编译器与 workspace truth 的孤立 side project。

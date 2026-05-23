@@ -8,6 +8,8 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 package、GUI framework 和 IDE，继续读 `master-roadmap.md`。如果你要看 compiler
 自己应该按什么顺序接管，继续读 `compiler-roadmap.md`。如果你要看
 `stage0 -> stage1 -> stage2` 的自举所有权路径，继续读 `bootstrap-roadmap.md`。
+如果你要看所有设计与实现批次共同遵守的质量门槛，先读
+`architecture-principles-specification.md`。
 
 ## 先按三层路线图理解 nextPas
 
