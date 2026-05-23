@@ -1553,7 +1553,32 @@ function TCompilationSession.SymbolsJson: string;
 var
   Fields: string;
   Index: LongInt;
+  Scope: TSemanticScope;
   Symbol: TSemanticSymbol;
+  SymbolType: TSemanticType;
+  UnitInfo: TResolvedUnit;
+
+  function SemanticScopeKindName(const AKind: TScopeKind): string;
+  begin
+    case AKind of
+      skCompilation:
+        Result := 'compilation';
+      skUnit:
+        Result := 'unit';
+      skInterface:
+        Result := 'interface';
+      skImplementation:
+        Result := 'implementation';
+      skCallable:
+        Result := 'callable';
+      skRecord:
+        Result := 'record';
+      skClass:
+        Result := 'class';
+      skBlock:
+        Result := 'block';
+    end;
+  end;
 begin
   if FSemanticModel = nil then
     Exit('[]');
@@ -1570,8 +1595,45 @@ begin
     AppendJsonStringField(Fields, 'name', Symbol.Name);
     AppendJsonStringField(Fields, 'kind', Symbol.Kind);
     AppendJsonStringField(Fields, 'ownerUnitId', Symbol.OwnerUnitId);
+    if (FUnitGraph <> nil) and
+      FUnitGraph.FindUnit(Symbol.OwnerUnitId, UnitInfo) then
+      AppendJsonStringField(Fields, 'ownerUnitName', UnitInfo.CanonicalName);
     AppendJsonIntegerField(Fields, 'scopeId', Symbol.ScopeId, True);
+    if Symbol.ScopeId > 0 then
+    begin
+      Scope := FSemanticModel.ScopeAt(Symbol.ScopeId - 1);
+      if Scope.ScopeId > 0 then
+      begin
+        AppendJsonStringField(
+          Fields,
+          'scopeKind',
+          SemanticScopeKindName(Scope.Kind)
+        );
+        AppendJsonStringField(Fields, 'scopeName', Scope.Name);
+        AppendJsonIntegerField(
+          Fields,
+          'scopeParentId',
+          Scope.ParentScopeId,
+          Scope.ParentScopeId > 0
+        );
+      end;
+    end;
     AppendJsonIntegerField(Fields, 'typeId', Symbol.TypeId, True);
+    if Symbol.TypeId > 0 then
+    begin
+      SymbolType := FSemanticModel.TypeAt(Symbol.TypeId - 1);
+      if SymbolType.TypeId > 0 then
+      begin
+        AppendJsonStringField(Fields, 'typeName', SymbolType.Name);
+        AppendJsonStringField(Fields, 'typeKind', SymbolType.Kind);
+        AppendJsonIntegerField(
+          Fields,
+          'typeParentId',
+          SymbolType.ParentTypeId,
+          SymbolType.ParentTypeId > 0
+        );
+      end;
+    end;
     AppendJsonIntegerField(
       Fields,
       'paramCount',

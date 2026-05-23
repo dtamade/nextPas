@@ -3,6 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 38 query symbols semantic metadata projection)
+
+- **Status:** completed
+- Actions taken:
+  - 从 `b3045ca` 继续，先确认工作树干净、最近提交是 Batch 37 query symbol detail
+    projection，并按架构原则重新复盘下一批候选。
+  - 选择 Batch 38 richer `query symbols` semantic metadata：它仍是只读、session-owned、
+    对 future IDE / automation 价值高；暂不进入 `env use/sync` 或 package resolver / lockfile
+    写入这类副作用边界。
+  - 在 `build/verify_local.sh` 先新增
+    `stage0-query-symbols-semantic-metadata-check` RED gate，用
+    `examples/smoke/var_halt.pas` 要求变量 symbol `x` 同时投影 `ownerUnitName=VarHalt`、
+    `scopeKind=unit`、`scopeName=VarHalt`、`typeName=Integer` 与 `typeKind=builtin`。
+  - RED 运行确认当前输出只有 `ownerUnitId=varhalt`、`scopeId=2` 与 `typeId=2`，
+    缺少可读 owner/scope/type metadata，失败边界正好落在新增 gate。
+  - 在 `TCompilationSession.SymbolsJson` 中继续从 session-owned truth 补字段：
+    `ownerUnitName` 来自 `FUnitGraph.FindUnit(...)`，scope metadata 来自
+    `TSemanticModel.ScopeAt(...)`，type metadata 来自 `TSemanticModel.TypeAt(...)`。
+  - focused 重新编译 stage0 并运行
+    `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/var_halt.pas --target linux-x86_64 --workspace <repo>`，
+    确认 line-based `query-symbols` 与 envelope `querySymbols` 都带上 owner/scope/type metadata，
+    且 MIR / backend / toolchain 仍保持 `deferred`。
+  - 同步 `tools/stage0/README.md`、stage0 driver spec、developer tooling spec、rolling plan、
+    `task_plan.md` 与 `findings.md`，明确这批仍不是 LSP / language service / incremental query。
+  - 运行 `git diff --check` 与 fresh `bash build/verify_local.sh`，确认新 gate 进入
+    `stage0QueryCheck=pass`，最终得到 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 37 query symbols detail projection)
 
 - **Status:** completed

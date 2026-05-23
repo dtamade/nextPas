@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 37` 为准。
+以最新完成的 `Batch 38` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -43,12 +43,13 @@
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
   readiness 与 binding readiness，`query symbols` 也已投影
-  `analysisSource=compilation-session` 与 `queryResultCount`，`pkg inspect` 也已投影
+  `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
+  与可读 owner/scope/type metadata，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
   `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 37` 已完成。
+- `Batch 1` 到 `Batch 38` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -67,7 +68,10 @@
   extensibility 与 resolver search-index staleness tracking 收成当前最新 verified baseline。
   `Batch 37` 继续把 `query symbols` 从 aggregate count 加固为 session-owned symbol detail
   projection，line-based `query-symbols` 与 envelope `querySymbols` 都来自同一份
-  `TSemanticModel`。下一步优先转回 richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
+  `TSemanticModel`。`Batch 38` 则继续把 raw ids 加固成可读 semantic metadata：
+  `ownerUnitName` 来自同一份 `TUnitGraph`，`scopeKind` / `scopeName` 来自
+  `TSemanticScope`，`typeName` / `typeKind` 来自 `TSemanticType`。下一步优先转回
+  richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。
 
@@ -1697,6 +1701,45 @@ symbol graph，而不是从 stdout 或 build output 里反推。
 - `command-envelope=<json>.result.querySymbols` 必须存在
 - 代表性结果必须包含 `HelloWithUnits`、`Stage0Greeter` 与 `Stage0GreeterImpl` 三个
   `kind=unit` symbols
+- `analysis-source=compilation-session` 必须保持不变
+- `mir-status=deferred`、`backend-plan-status=deferred` 与 `toolchain-plan-status=deferred`
+  必须保持不变
+- fresh `bash build/verify_local.sh` 必须继续得到 `verify-local=pass`
+
+## Batch 38: `query symbols` semantic metadata projection
+
+- 状态：完成
+- 归属路线段：Workspace and Developer Tooling Integration / Unit Resolution and Semantic Core
+
+### 这一批要解决什么
+
+Batch 37 已经让 `query symbols` 输出结构化 symbol detail，但结果仍偏 raw id：调用方能看到
+`ownerUnitId`、`scopeId` 与 `typeId`，却还要自己回查 semantic model 才能展示“这个 symbol
+属于哪个 unit / scope / type”。对 CLI、future IDE adapter 和 automation 来说，这会诱导它们
+在 query 之外重扫源码或维护第二套 lookup。
+
+这一批把 query result 继续收紧成 session-owned semantic metadata projection：raw ids 继续保留，
+但可读 metadata 由同一份 compilation session 补齐。
+
+### 这一批已经交付了什么
+
+- `compiler/frontend/np_compilation_session.pas` 的 `SymbolsJson` 现在会在每个 symbol detail 中，
+  从 `FUnitGraph` 补出 `ownerUnitName`
+- 同一函数会从 `TSemanticModel.ScopeAt(...)` 补出 `scopeKind`、`scopeName` 与 `scopeParentId`
+- 同一函数会从 `TSemanticModel.TypeAt(...)` 补出 `typeName`、`typeKind` 与可用时的
+  `typeParentId`
+- `build/verify_local.sh` 新增 `stage0-query-symbols-semantic-metadata-check`，用
+  `examples/smoke/var_halt.pas` 冻结变量 symbol `x` 的 owner/scope/type metadata
+- 这批继续保持 `query symbols` 只执行 syntax / resolution / semantic analysis，不执行 MIR、
+  backend 或 toolchain
+
+### Promotion gate
+
+- `nextpas query symbols examples/smoke/var_halt.pas --target linux-x86_64 --workspace <repo>`
+  必须输出变量 symbol `x`
+- 该 symbol 必须同时带有 `ownerUnitName=VarHalt`、`scopeKind=unit`、`scopeName=VarHalt`、
+  `typeName=Integer` 与 `typeKind=builtin`
+- line-based `query-symbols=<json-array>` 与 envelope `querySymbols[]` 必须同步带上这批 metadata
 - `analysis-source=compilation-session` 必须保持不变
 - `mir-status=deferred`、`backend-plan-status=deferred` 与 `toolchain-plan-status=deferred`
   必须保持不变

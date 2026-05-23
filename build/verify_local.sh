@@ -4477,6 +4477,19 @@ require_output_pattern '^command-envelope=.*"queryStatus":"success".*"analysisSo
 require_output_pattern '^command-envelope=.*"querySymbols":\[.*"name":"HelloWithUnits".*"kind":"unit".*"name":"Stage0Greeter".*"kind":"unit".*"name":"Stage0GreeterImpl".*"kind":"unit"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-detail'
 require_output_pattern '^command-envelope=.*"mirStatus":"deferred".*"backendPlanStatus":"deferred".*"toolchainPlanStatus":"deferred"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-deferred-stages'
 
+printf 'stage0-query-symbols-semantic-metadata-check=running\n'
+printf 'stage0-query-symbols-semantic-metadata-command=%s query symbols examples/smoke/var_halt.pas --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" query symbols examples/smoke/var_halt.pas --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$STAGE0_QUERY_SYMBOLS_OUTPUT" 2>&1; then
+  cat "$STAGE0_QUERY_SYMBOLS_OUTPUT"
+  fail 'stage0-query-symbols-semantic-metadata-failed'
+fi
+cat "$STAGE0_QUERY_SYMBOLS_OUTPUT"
+require_output_pattern '^query-symbols=\[.*"name":"x".*"kind":"variable".*"ownerUnitName":"VarHalt".*"scopeKind":"unit".*"scopeName":"VarHalt".*"typeName":"Integer".*"typeKind":"builtin"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-semantic-metadata-detail'
+require_output_pattern '^command-envelope=.*"querySymbols":\[.*"name":"x".*"kind":"variable".*"ownerUnitName":"VarHalt".*"scopeKind":"unit".*"scopeName":"VarHalt".*"typeName":"Integer".*"typeKind":"builtin"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-semantic-metadata-envelope-detail'
+require_output_pattern '^mir-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-semantic-metadata-deferred-mir'
+require_output_pattern '^backend-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-semantic-metadata-deferred-backend'
+require_output_pattern '^toolchain-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-semantic-metadata-deferred-toolchain'
+
 printf 'stage0-query-invalid-arguments-check=running\n'
 printf 'stage0-query-invalid-arguments-command=%s query\n' "$STAGE0_BINARY"
 if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" query >"$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT" 2>&1; then

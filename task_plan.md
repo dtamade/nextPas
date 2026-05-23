@@ -15,6 +15,38 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 38 Query Symbols Semantic Metadata
+
+### Goal
+
+把 Batch 37 已经公开的 `query-symbols` 从 raw ids 继续推进到可被 CLI、future IDE adapter
+和 automation 直接消费的 semantic metadata projection，同时继续守住 query 只读边界：
+
+- owner 继续是 `TCompilationSession`；`stage0` CLI 不从 stdout、源码文本或 build output
+  反推 symbol metadata
+- truth objects 是同一份 `TSemanticModel` 的 `TSemanticSymbol` / `TSemanticScope` /
+  `TSemanticType`，以及同一份 `TUnitGraph` 的 owner unit truth
+- `querySymbols[]` 在保留 raw `ownerUnitId`、`scopeId`、`typeId` 的同时，补充
+  `ownerUnitName`、`scopeKind`、`scopeName`、`scopeParentId`、`typeName`、`typeKind`
+  与 `typeParentId`
+- promotion gate 继续落在 `build/verify_local.sh` 的 query check，新增 `var_halt.pas`
+  focused probe，冻结变量符号 `x` 的 owner/scope/type metadata
+- non-goal：不实现 references、rename、completion、open document overlay、incremental
+  invalidation，也不执行 MIR/backend/toolchain
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 先把 `stage0-query-symbols-semantic-metadata-check` 写成 RED gate
+- [x] 在 `TCompilationSession.SymbolsJson` 中从 session-owned model / unit graph 补 semantic metadata
+- [x] focused probe 确认 `var_halt.pas` 的变量符号输出 `ownerUnitName`、scope metadata 与 type metadata
+- [x] 同步 stage0 / developer tooling / rolling plan 文档和持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 37 Query Symbols Detail Projection
 
 ### Goal

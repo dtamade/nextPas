@@ -523,7 +523,11 @@ semantic query 是 developer tooling 和 language service 的交界面。nextPas
 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]` 会通过
 `TCompilationSession` 执行 syntax / resolution / semantic analysis，并输出
 `queryKind=symbols`、`queryStatus=success`、`analysisSource=compilation-session` 与
-`queryResultCount`，同时把同一份 semantic symbol graph 投影成 `querySymbols`。
+`queryResultCount`，同时把同一份 semantic symbol graph 投影成 `querySymbols`。当前
+`querySymbols[]` 既保留 `ownerUnitId` / `scopeId` / `typeId` 这类稳定 identity，也会从同一份
+`TUnitGraph`、`TSemanticScope` 与 `TSemanticType` 补出可读的 owner unit、scope 和 type
+metadata，方便 CLI、automation 与 future IDE adapter 直接消费，而不需要重扫源码或解析
+build output。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
 

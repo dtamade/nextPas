@@ -20,6 +20,12 @@
 - 当前 `query symbols` 的实现已经走 `ResolveWorkspaceModel(...)` 与 `TCompilationSession`，
   但 public projection 仍停在 `query-result-count` / `queryResultCount`；这让 CLI/IDE/automation
   只能知道 symbol graph 有结果，不能消费具体 symbol truth。
+- Batch 37 之后的 focused probe 继续暴露下一层真实缺口：`querySymbols[]` 已经有
+  `ownerUnitId`、`scopeId` 与 `typeId`，但如果不投影 `ownerUnitName`、`scopeKind` /
+  `scopeName` 与 `typeName` / `typeKind`，CLI、automation 和 future IDE adapter 仍然需要
+  自己回查或重扫 semantic truth；因此 Batch 38 选择在 `TCompilationSession.SymbolsJson`
+  内从同一份 `TUnitGraph` / `TSemanticModel` 补 semantic metadata，而不是让 stage0 CLI
+  或调用方重建 lookup。
 - 当前 `compiler/ir/np_hir_builder.pas` 里 `FEntryBlockId` 基础设施已经足够支持 late alloca hoist；
   真正缺的是 `EnsureAlloca(...)` 仍把 `hikAlloca` 发到 current block。
 - 当前 `compiler/ir/np_hir_llvm_emitter.pas` 之前依赖 raw `%1/%2/...` 匿名数值 SSA 名，
