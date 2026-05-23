@@ -15,6 +15,42 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 40 Doctor Package/Workspace Coherence
+
+### Goal
+
+把 `doctor` 的只读 health inspection 再往 package/workspace truth 收拢：在有 `--workspace`
+时复用 `ResolvePackageInspectionSourcePath(...)` + `ResolveWorkspaceModel(...)`，打印
+`PackageProjection`，并在缺少 package workspace truth 时投影
+`doctor.package-workspace-missing`；以 repo root 缺少 package descriptor 作为负向样本，
+但继续保持 `doctor` 不是 `env sync`、`env use` 或 `env bootstrap`。
+
+- owner 继续是 `tools/stage0/nextpas_command_doctor.pas` 与
+  `tools/stage0/nextpas_projection_context.pas`
+- truth objects 是 `TEnvironmentProjectionContext`、`TPackageProjectionContext` 与
+  `TDoctorProjectionContext`
+- line-based output 与 command envelope 同步投影 package workflow truth
+- promotion gate 继续落在 `build/verify_local.sh` 的 `stage0-doctor-check`
+- non-goal：不把 `doctor` 变成 package manager 执行面，也不修改环境状态
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 先确认 `doctor` 的 package/workspace coherence 仍然是只读 inspection，而不是执行面
+- [x] 在 `tools/stage0/nextpas_command_doctor.pas` 中有 `--workspace` 时复用 package inspection
+      source path 与 workspace model，并打印 `PackageProjection`
+- [x] 在 `tools/stage0/nextpas_projection_context.pas` 中加入
+      `doctor.package-workspace-missing` finding，并把 package workflow truth 纳入 doctor check count
+- [x] 扩展 `build/verify_local.sh` 的 `stage0-doctor-check`，冻结 repo root 的 package truth
+      缺失边界与 envelope finding
+- [x] 同步 `tools/stage0/README.md`、architecture specs、roadmap、`task_plan.md`、
+      `progress.md`、`findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 39 Query Semantic Graph Side Tables
 
 ### Goal

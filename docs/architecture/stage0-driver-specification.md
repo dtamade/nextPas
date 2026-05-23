@@ -177,16 +177,21 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 - 不修改 active selection、distribution、runtime SDK、channel state 或 workspace source
 - 复用 `env status` 已使用的 target facts、toolchain binding、distribution 与 runtime locator
-- 可选消费 `--workspace <root>`，只确认 workspace root 是否可解释为目录
+- 可选消费 `--workspace <root>`；先确认 workspace root 是否可解释为目录，再在存在 package
+  workspace truth 时复用它，并在缺少 package truth 时投影 `doctor.package-workspace-missing`
 - 即使发现 runtime SDK 缺失，也继续以 `status=success` / `result=success` 表示 inspection 本身完成
 - 真实健康摘要通过 `doctor-workspace-status`、`doctor-toolchain-binding-status`、
   `doctor-status`、`doctor-check-count`、`doctor-finding-count` 与代表性
   `doctor-finding-*` 字段投影
+- 当 workspace 没有 package truth 时，还会同步投影 `package-workflow-status`、
+  `package-manifest-status`、`package-lock-status`、`package-install-plan-status` 与
+  `package-source-root-count`
 - `command-envelope=<json>.result.doctorFindings[]` 保存同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
 
-当前 `doctor` 已冻结最小 structured finding contract；package/workspace coherence 检查与更完整的
-health taxonomy 应在后续批次继续加固。
+当前 `doctor` 已冻结最小 structured finding contract，并把 package/workspace coherence 的
+缺失路径接进 `doctor.package-workspace-missing`；更完整的 health taxonomy 仍应在后续批次
+继续加固。
 
 ## `stage0 query symbols` 提供最小只读 semantic query
 

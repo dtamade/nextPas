@@ -90,6 +90,7 @@ procedure CaptureEnvironmentProjectionFromTargetConfig(
 procedure CaptureDoctorProjectionFromEnvironment(
   var AContext: TDoctorProjectionContext;
   const AEnvironmentContext: TEnvironmentProjectionContext;
+  const APackageContext: TPackageProjectionContext;
   const AWorkspaceRoot: string
 );
 procedure CapturePackageProjectionFromWorkflowTruth(
@@ -511,6 +512,7 @@ end;
 procedure CaptureDoctorProjectionFromEnvironment(
   var AContext: TDoctorProjectionContext;
   const AEnvironmentContext: TEnvironmentProjectionContext;
+  const APackageContext: TPackageProjectionContext;
   const AWorkspaceRoot: string
 );
 begin
@@ -556,6 +558,18 @@ begin
         'pass an existing workspace root'
       );
     end;
+
+    Inc(AContext.CheckCount);
+    if (APackageContext.WorkflowStatus <> 'ready') or
+      (APackageContext.SourceRootCount <= 0) then
+      AddDoctorFinding(
+        AContext,
+        'doctor.package-workspace-missing',
+        'warning',
+        'package-workspace:' + AWorkspaceRoot,
+        'package workspace truth is missing',
+        'add nextpas.package.toml with at least one source root or point --workspace at a package workspace'
+      );
   end;
 
   if AContext.FindingsJson <> '' then

@@ -3,6 +3,31 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 40 doctor package/workspace coherence)
+
+- **Status:** completed
+- Actions taken:
+  - 重新对齐 `task_plan.md`、`progress.md`、`findings.md` 和主路线图顶部状态，确认这轮真正
+    要收口的是 `doctor` 的 package/workspace coherence，而不是继续往 `env use/sync` 或更
+    深的 package manager 方向发散。
+  - 在 `tools/stage0/nextpas_command_doctor.pas` 中让 `doctor` 在有 `--workspace` 时复用
+    `ResolvePackageInspectionSourcePath(...)` + `ResolveWorkspaceModel(...)`，并打印
+    `PackageProjection`。
+  - 在 `tools/stage0/nextpas_projection_context.pas` 中把 package projection 接进
+    `CaptureDoctorProjectionFromEnvironment(...)`，并新增
+    `doctor.package-workspace-missing` finding。
+  - 在 `build/verify_local.sh` 中把 repo root 的 `doctor` success path 冻结成 package truth
+    缺失的负向样本，要求 `package-workflow-status=missing`、
+    `package-manifest-status=missing`、`package-lock-status=deferred`、
+    `package-install-plan-status=deferred`、`package-source-root-count=0`，并把
+    `doctor-check-count=5`、`doctor-finding-count=2` 与两个 finding code 一起纳入 gate。
+  - 同步更新 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/architecture/package-workflow-specification.md` 与 `tools/stage0/README.md`，
+    让维护文档和实现保持一致。
+  - fresh `bash build/verify_local.sh` 继续通过，`verify-local=pass`。
+
 ## Session: 2026-05-24 (Batch 39 query symbols semantic graph side-table projection)
 
 - **Status:** completed

@@ -10,9 +10,8 @@
 
 ## Research Findings
 
-- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 内部存在可恢复性 drift：
-  顶部仍写当前 contract 以 `Batch 35` 为准，但同一文件后续已经记录 `Batch 36`
-  driver decomposition + compiler core hardening 完成；这会误导下一轮“继续”的恢复点。
+- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部已同步到 `Batch 40`，
+  不会再误导下一轮“继续”的恢复点。
 - 当前 `docs/architecture/architecture-principles-specification.md` 已把用户提出的长期质量目标
   固化为可执行门槛：每个切片都要明确 owner、truth object、projection、promotion gate、
   non-goal 与回退信号；这条规范应作为 `master-roadmap.md`、compiler 自举路线和后续 package /
@@ -101,6 +100,12 @@
   line-based output 会投影 `doctor-workspace-status=ready`、
   `doctor-toolchain-binding-status=ready`、`doctor-finding-code=doctor.runtime-sdk-missing`
   与 `doctor-finding-severity=warning`。
+- 当前 `doctor` 的只读 inspection 现在也会把 package/workspace truth 纳入：
+  当 `--workspace` 指向没有 package truth 的目录时，会同步投影
+  `package-workflow-status=missing`、`package-manifest-status=missing`、
+  `package-lock-status=deferred`、`package-install-plan-status=deferred`、
+  `package-source-root-count=0`，并给出 `doctor.package-workspace-missing`；这条 finding 仍然不
+  改变 `doctor` 的只读边界。
 - 当前 `command-envelope=<json>.result.doctorFindings[]` 会保留同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`；这属于
   health inspection result，不替代 compiler diagnostics sink。

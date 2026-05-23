@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 39` 为准。
+以最新完成的 `Batch 40` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -42,7 +42,9 @@
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
-  readiness 与 binding readiness，`query symbols` 也已投影
+  readiness 与 binding readiness，并把 package workflow truth 与
+  `doctor.package-workspace-missing` 这条 package/workspace coherence finding 一并纳入只读
+  inspection，`query symbols` 也已投影
   `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
   side tables，`pkg inspect` 也已投影
@@ -73,7 +75,12 @@
   `ownerUnitName` 来自同一份 `TUnitGraph`，`scopeKind` / `scopeName` 来自
   `TSemanticScope`，`typeName` / `typeKind` 来自 `TSemanticType`。`Batch 39` 再把
   `TSemanticScope` / `TSemanticType` graph 作为 normalized `queryScopes` / `queryTypes`
-  side tables 投影出来，让调用方不用在 `querySymbols` 之外维护第二套 lookup。下一步优先转回
+  side tables 投影出来，让调用方不用在 `querySymbols` 之外维护第二套 lookup。`Batch 40`
+  则把 `doctor` 的只读 health inspection 继续接上 package/workspace truth：当 workspace
+  没有 package truth 时，会同步投影 `package-workflow-status`、
+  `package-manifest-status`、`package-lock-status`、
+  `package-install-plan-status`、`package-source-root-count`，并给出
+  `doctor.package-workspace-missing`。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。

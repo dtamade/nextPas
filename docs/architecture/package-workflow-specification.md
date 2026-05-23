@@ -486,6 +486,9 @@ bundled toolchain、甚至更完整的 developer distribution。
   resolution failure、fetch failure、install placement conflict、toolchain precondition failure
 - `doctor` 必须能检查 manifest/lock coherence、registry or mirror reachability、install root health、
   target/toolchain compatibility 和 workspace package state
+- 当前 stage0 doctor 的最小实现已经会在缺少 package workspace truth 的 root 上投影
+  `doctor.package-workspace-missing`，作为 package health 的只读 failure signal；它仍不执行
+  fetch、install 或 resolution
 
 这条规则会直接决定 future IDE package view、CI automation 和 local diagnostics 是否优雅。
 

@@ -137,6 +137,12 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `doctor-status=healthy|warning`
 - `doctor-check-count=<count>`
 - `doctor-finding-count=<count>`
+- `package-workflow-status`
+- `package-manifest-status`
+- `package-lock-status`
+- `package-install-plan-status`
+- `package-source-root-count`
+- 缺少 package truth 时还会出现 `doctor.package-workspace-missing`
 
 这条 surface 当前仍是只读 inspection：它解释当前 target / binding / runtime / workspace
 状态是否健康，但不执行 `env sync`、不安装 runtime SDK，也不替代 `build` 或 `test`。
