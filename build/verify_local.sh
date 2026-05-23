@@ -174,6 +174,9 @@ STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_PKG_INSPECT_OUTPUT=$(mktemp)
 STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
+HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
+HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
+HIR_LATE_ALLOCA_LL=$(mktemp)
 TOOLCHAIN_CONTRACT_OUTPUT=$(mktemp)
 TOOLCHAIN_CONTRACT_BUILD_DIR=$(mktemp -d)
 TOOLCHAIN_CONTRACT_BINARY="$TOOLCHAIN_CONTRACT_BUILD_DIR/toolchain_contract_smoke"
@@ -366,6 +369,8 @@ cleanup() {
   rm -f "$STAGE0_PKG_INSPECT_OUTPUT"
   rm -f "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
+  rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
+  rm -f "$HIR_LATE_ALLOCA_LL"
   rm -f "$TOOLCHAIN_CONTRACT_OUTPUT"
   rm -rf "$TOOLCHAIN_CONTRACT_BUILD_DIR"
   rm -f "$TOOLCHAIN_FAILURE_OUTPUT"
@@ -565,6 +570,7 @@ require_path compiler/sema/np_semantic_analyzer.pas
 require_path compiler/backend/np_backend_plan.pas
 require_path compiler/toolchain/np_toolchain_runner.pas
 require_path tests/toolchain/toolchain_contract_smoke.pas
+require_path tests/hir/test_hir_late_alloca_hoist.pas
 require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
@@ -621,6 +627,39 @@ mkdir -p "$STAGE0_BUILD_DIR"
 printf 'stage0-command=fpc %s -FE%s -FU%s tools/stage0/nextpas.pas\n' "$STAGE0_FPC_FLAGS" "$STAGE0_BUILD_DIR" "$STAGE0_BUILD_DIR"
 fpc $STAGE0_FPC_FLAGS -FE"$STAGE0_BUILD_DIR" -FU"$STAGE0_BUILD_DIR" tools/stage0/nextpas.pas
 printf 'stage0-build=pass\n'
+
+printf 'hir-late-alloca-hoist=running\n'
+printf 'hir-late-alloca-hoist-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_late_alloca_hoist.pas\n' "$HIR_LATE_ALLOCA_BUILD_DIR" "$HIR_LATE_ALLOCA_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas
+  fail 'hir-late-alloca-hoist-build-failed'
+fi
+if [ ! -x "$HIR_LATE_ALLOCA_BINARY" ]; then
+  fail 'missing-hir-late-alloca-hoist-binary'
+fi
+printf 'hir-late-alloca-hoist-emit-command=%s %s\n' "$HIR_LATE_ALLOCA_BINARY" "$HIR_LATE_ALLOCA_LL"
+if ! "$HIR_LATE_ALLOCA_BINARY" "$HIR_LATE_ALLOCA_LL"; then
+  fail 'hir-late-alloca-hoist-emit-failed'
+fi
+if ! opt -disable-output "$HIR_LATE_ALLOCA_LL" >/dev/null 2>&1; then
+  cat "$HIR_LATE_ALLOCA_LL"
+  fail 'hir-late-alloca-hoist-opt-verify-failed'
+fi
+require_output_pattern '%v[0-9]+' "$HIR_LATE_ALLOCA_LL" 'missing-hir-late-alloca-named-values'
+ENTRY_BLOCK_IR=$(awk '
+  /^bb1:$/ { in_entry=1; next }
+  /^bb[0-9]+:$/ && in_entry { exit }
+  in_entry { print }
+' "$HIR_LATE_ALLOCA_LL")
+if [ -z "$ENTRY_BLOCK_IR" ]; then
+  cat "$HIR_LATE_ALLOCA_LL"
+  fail 'missing-hir-late-alloca-entry-block'
+fi
+printf '%s\n' "$ENTRY_BLOCK_IR" | grep -Eq '^  %v[0-9]+ = alloca i64$' || {
+  cat "$HIR_LATE_ALLOCA_LL"
+  fail 'missing-hir-late-alloca-entry-alloca'
+}
+printf 'hir-late-alloca-hoist=pass\n'
 
 printf 'lexer-conformance=running\n'
 mkdir -p "$LEX_SNAPSHOT_BUILD_DIR"

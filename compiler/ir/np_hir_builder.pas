@@ -227,7 +227,10 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikAlloca;
   Instr.TypeId := AType;
-  EmitInstr(Instr);
+  if (FCurrentFuncId <> 0) and (FEntryBlockId <> 0) then
+    FModule.AddInstr(FCurrentFuncId, FEntryBlockId, Instr)
+  else
+    EmitInstr(Instr);
 
   if FAllocaCount >= Length(FAllocaNames) then
   begin

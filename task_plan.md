@@ -15,6 +15,43 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-23 HIR LLVM alloca hoisting safety
+
+### Goal
+
+把 HIR LLVM emitter 的 SSA 命名从匿名数值寄存器切到稳定 named values，并让
+`THIRBuilder.EnsureAlloca(...)` 真正写入函数 entry block。这样晚到的 slot materialization
+不再受 LLVM 文本 IR 顺序编号约束，也不会再依赖 emitter 按 `ResultId` 重新排序 block。
+
+- 修改 `compiler/ir/np_hir_builder.pas`：`EnsureAlloca(...)` 在函数上下文中直接调用
+  `FModule.AddInstr(FCurrentFuncId, FEntryBlockId, Instr)`，把 fallback alloca hoist 到 entry block
+- 修改 `compiler/ir/np_hir_llvm_emitter.pas`：新增 `ValueRef(...)`，把 raw `%` + 数值引用统一发射为
+  `%vN` named SSA values（覆盖定义、使用与 function params）
+- 去掉 `EmitFunction(...)` 中按首个 `ResultId` 重新排序 block 的 hack，恢复按 HIR block 原始顺序发射
+- 新增 `tests/hir/test_hir_late_alloca_hoist.pas` focused probe：构造“非 entry block 首次 materialize
+  late slot” 的 synthetic HIR，断言生成 IR 既能过 `opt` 解析，又把 `alloca` 放在 entry block
+- 扩展 `build/verify_local.sh`：正式纳入上述 focused probe，并冻结 `%vN` named-value evidence
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] `THIRBuilder.EnsureAlloca(...)` 改为 entry-block insertion
+- [x] `THIRLlvmEmitter` 新增 `ValueRef(...)` 并切换 raw numeric SSA refs 到 `%vN`
+- [x] `EmitFunction(...)` 改为按 HIR block 原始顺序发射，不再按 `ResultId` 排序
+- [x] 新增 `tests/hir/test_hir_late_alloca_hoist.pas`
+- [x] `build/verify_local.sh` 纳入 focused hoist gate，并用 `opt -disable-output` 验证 IR
+- [x] fresh `bash build/verify_local.sh` 通过，确认 LLVM/host 路径无回退
+
+### Notes
+
+- 这批不是扩 LLVM 语义面，而是把既有 HIR path 的文本 IR 稳定性补齐，为后续更多 late alloca /
+  synthetic slot 场景扫掉结构性约束
+- `%arralloc.*`、`%abs.*`、`%is.*`、`%callstr.*` 这类已有显式命名 helper SSA 名继续保留；
+  变化的是原先裸 `%1/%2/...` 的 result / operand / param 引用现在统一成为 `%vN`
+
 ## Addendum: 2026-05-17 Sema Const Identifier Resolution — Halt(MyConst) → exit(42)
 
 ### Goal

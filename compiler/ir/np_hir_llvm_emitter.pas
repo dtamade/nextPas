@@ -22,6 +22,7 @@ type
     FCurrentReturnTypeId: THIRTypeId;
     FIsCheckCounter: LongInt;
     procedure Emit(const S: string);
+    function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
@@ -66,6 +67,11 @@ begin
   Inc(FLineCount);
 end;
 
+function THIRLlvmEmitter.ValueRef(AValueId: THIRValueId): string;
+begin
+  Result := '%v' + IntToStr(AValueId);
+end;
+
 function THIRLlvmEmitter.TypeToLlvm(ATypeId: THIRTypeId): string;
 var
   T: THIRTypeRec;
@@ -101,67 +107,67 @@ begin
     begin
       if (AInstr.IntrinsicName <> '') and
         (Copy(AInstr.IntrinsicName, 1, 7) = 'record:') then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = alloca [' +
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = alloca [' +
           Copy(AInstr.IntrinsicName, 8, Length(AInstr.IntrinsicName)) +
           ' x i64]')
       else
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = alloca ' + LlvmType);
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = alloca ' + LlvmType);
     end;
     hikLoad:
     begin
       if AInstr.IntrinsicName <> '' then
       begin
         if Copy(AInstr.IntrinsicName, 1, 6) = 'const:' then
-          Emit('  %' + IntToStr(AInstr.ResultId) + ' = add ' + LlvmType +
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
             ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0')
         else if AInstr.IntrinsicName = 'null' then
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = inttoptr i64 0 to ptr')
         else if Length(AInstr.Operands) > 0 then
-          Emit('  %' + IntToStr(AInstr.ResultId) + ' = load ' + LlvmType +
-            ', ptr %' + IntToStr(AInstr.Operands[0].ValueId))
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
         else
-          Emit('  %' + IntToStr(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
       end
       else if Length(AInstr.Operands) > 0 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = load ' + LlvmType +
-          ', ptr %' + IntToStr(AInstr.Operands[0].ValueId))
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
       else
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
     end;
     hikStore:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  store ' + LlvmType + ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  store ' + LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
     hikAdd:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = add ' + LlvmType +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
+          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikSub:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
+          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikMul:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = mul ' + LlvmType +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = mul ' + LlvmType +
+          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikDiv:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = sdiv ' + LlvmType +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sdiv ' + LlvmType +
+          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikMod:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = srem ' + LlvmType +
-          ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-          ', %' + IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = srem ' + LlvmType +
+          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikNeg:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' 0, %' + IntToStr(AInstr.Operands[0].ValueId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
+          ' 0, ' + ValueRef(AInstr.Operands[0].ValueId));
     hikCmpEq, hikCmpNe, hikCmpLt, hikCmpLe, hikCmpGt, hikCmpGe:
     begin
       case AInstr.Kind of
@@ -176,34 +182,32 @@ begin
       begin
         if (AInstr.Operands[0].TypeId <> 0) and
           (FModule.Types.GetType(AInstr.Operands[0].TypeId).Kind = htkPointer) then
-          Emit('  %' + IntToStr(AInstr.ResultId) + ' = icmp ' + Op + ' ptr' +
-            ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-            ', %' + IntToStr(AInstr.Operands[1].ValueId))
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' ptr' +
+            ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', ' + ValueRef(AInstr.Operands[1].ValueId))
         else
-          Emit('  %' + IntToStr(AInstr.ResultId) + ' = icmp ' + Op + ' i64' +
-            ' %' + IntToStr(AInstr.Operands[0].ValueId) +
-            ', %' + IntToStr(AInstr.Operands[1].ValueId));
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' i64' +
+            ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', ' + ValueRef(AInstr.Operands[1].ValueId));
       end;
     end;
     hikZext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  %' + IntToStr(AInstr.ResultId) + ' = zext i1 %' +
-          IntToStr(AInstr.Operands[0].ValueId) + ' to i64');
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext i1 ' + ValueRef(AInstr.Operands[0].ValueId) + ' to i64');
     hikCall:
     begin
       if IsSretFunction(AInstr.CallTarget) then
         Op := '  call void @' + AInstr.CallTarget + '('
       else
-        Op := '  %' + IntToStr(AInstr.ResultId) + ' = call ' + LlvmType +
+        Op := '  ' + ValueRef(AInstr.ResultId) + ' = call ' + LlvmType +
           ' @' + AInstr.CallTarget + '(';
       for I := 0 to High(AInstr.Operands) do
       begin
         if I > 0 then Op := Op + ', ';
         if AInstr.Operands[I].TypeId <> 0 then
-          Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' %' +
-            IntToStr(AInstr.Operands[I].ValueId)
+          Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' + ValueRef(AInstr.Operands[I].ValueId)
         else
-          Op := Op + 'i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+          Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
       end;
       Op := Op + ')';
       Emit(Op);
@@ -217,15 +221,13 @@ begin
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
         else if Length(AInstr.Operands) >= 1 then
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
-            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ')');
+            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
         if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @write_i64_decimal(i64 %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ')');
+          Emit('  call void @write_i64_decimal(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin
@@ -239,9 +241,7 @@ begin
         if Length(AInstr.Operands) >= 2 then
         begin
           Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
-            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId) + ')');
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ')');
         end;
       end
       else if AInstr.IntrinsicName = 'store_str_lit' then
@@ -249,10 +249,9 @@ begin
         if Length(AInstr.Operands) >= 2 then
         begin
           I := AddStrConstant(AInstr.CallTarget);
-          Emit('  store ptr @.str.' + IntToStr(I) + ', ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  store ptr @.str.' + IntToStr(I) + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
           Emit('  store i64 ' + IntToStr(Length(AInstr.CallTarget)) +
-            ', ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+            ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
         end;
       end
       else if AInstr.IntrinsicName = 'call_str_func' then
@@ -265,10 +264,9 @@ begin
           begin
             if I > 2 then Op := Op + ', ';
             if AInstr.Operands[I].TypeId <> 0 then
-              Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' %' +
-                IntToStr(AInstr.Operands[I].ValueId)
+              Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' + ValueRef(AInstr.Operands[I].ValueId)
             else
-              Op := Op + 'i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+              Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
           end;
           Op := Op + ')';
           Emit(Op);
@@ -279,9 +277,9 @@ begin
             '.l = extractvalue {ptr, i64} %callstr.' +
             IntToStr(AInstr.ResultId) + ', 1');
           Emit('  store ptr %callstr.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr %' + IntToStr(AInstr.Operands[0].ValueId));
+            '.p, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
           Emit('  store i64 %callstr.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+            '.l, ptr ' + ValueRef(AInstr.Operands[1].ValueId));
         end;
       end
       else if AInstr.IntrinsicName = 'str_concat' then
@@ -290,11 +288,7 @@ begin
         if Length(AInstr.Operands) >= 6 then
         begin
           Emit('  %concat.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} @np_str_concat(ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
-            IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[3].ValueId) + ')');
+            ' = call {ptr, i64} @np_str_concat(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
           Emit('  %concat.' + IntToStr(AInstr.ResultId) +
             '.p = extractvalue {ptr, i64} %concat.' +
             IntToStr(AInstr.ResultId) + ', 0');
@@ -302,9 +296,9 @@ begin
             '.l = extractvalue {ptr, i64} %concat.' +
             IntToStr(AInstr.ResultId) + ', 1');
           Emit('  store ptr %concat.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr %' + IntToStr(AInstr.Operands[4].ValueId));
+            '.p, ptr ' + ValueRef(AInstr.Operands[4].ValueId));
           Emit('  store i64 %concat.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr %' + IntToStr(AInstr.Operands[5].ValueId));
+            '.l, ptr ' + ValueRef(AInstr.Operands[5].ValueId));
         end;
       end
       else if AInstr.IntrinsicName = 'ret_str' then
@@ -312,43 +306,37 @@ begin
         if Length(AInstr.Operands) >= 2 then
         begin
           Emit('  %retstr.' + IntToStr(AInstr.ResultId) +
-            '.1 = insertvalue {ptr, i64} undef, ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', 0');
+            '.1 = insertvalue {ptr, i64} undef, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', 0');
           Emit('  %retstr.' + IntToStr(AInstr.ResultId) +
             '.2 = insertvalue {ptr, i64} %retstr.' +
-            IntToStr(AInstr.ResultId) + '.1, i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId) + ', 1');
+            IntToStr(AInstr.ResultId) + '.1, i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', 1');
           Emit('  ret {ptr, i64} %retstr.' + IntToStr(AInstr.ResultId) + '.2');
         end;
       end
       else if AInstr.IntrinsicName = 'global_ref' then
       begin
-        Emit('  %' + IntToStr(AInstr.ResultId) +
+        Emit('  ' + ValueRef(AInstr.ResultId) +
           ' = getelementptr i64, ptr @g_' + AInstr.CallTarget + ', i64 0');
       end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
         if Length(AInstr.Operands) >= 2 then
-          Emit('  %' + IntToStr(AInstr.ResultId) +
-            ' = getelementptr i64, ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = getelementptr i64, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId));
       end
       else if AInstr.IntrinsicName = 'gep_i8' then
       begin
         if Length(AInstr.Operands) >= 2 then
-          Emit('  %' + IntToStr(AInstr.ResultId) +
-            ' = getelementptr i8, ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = getelementptr i8, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId));
       end
       else if AInstr.IntrinsicName = 'load_zext_i8' then
       begin
         if Length(AInstr.Operands) >= 1 then
         begin
           Emit('  %zext.' + IntToStr(AInstr.ResultId) +
-            ' = load i8, ptr %' + IntToStr(AInstr.Operands[0].ValueId));
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = load i8, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = zext i8 %zext.' + IntToStr(AInstr.ResultId) + ' to i64');
         end;
       end
@@ -357,19 +345,19 @@ begin
         if Length(AInstr.Operands) >= 1 then
         begin
           Emit('  %abs.neg.' + IntToStr(AInstr.ResultId) +
-            ' = sub i64 0, %' + IntToStr(AInstr.Operands[0].ValueId));
+            ' = sub i64 0, ' + ValueRef(AInstr.Operands[0].ValueId));
           Emit('  %abs.cmp.' + IntToStr(AInstr.ResultId) +
-            ' = icmp sge i64 %' + IntToStr(AInstr.Operands[0].ValueId) + ', 0');
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+            ' = icmp sge i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ', 0');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = select i1 %abs.cmp.' + IntToStr(AInstr.ResultId) +
-            ', i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ', i64 ' + ValueRef(AInstr.Operands[0].ValueId) +
             ', i64 %abs.neg.' + IntToStr(AInstr.ResultId));
         end;
       end
       else if AInstr.IntrinsicName = 'str_const' then
       begin
         Op := Copy(AInstr.CallTarget, 2, Length(AInstr.CallTarget) - 2);
-        Emit('  %' + IntToStr(AInstr.ResultId) +
+        Emit('  ' + ValueRef(AInstr.ResultId) +
           ' = getelementptr i8, ptr @.str.' + IntToStr(
             AddStrConstant(Op)) + ', i64 0');
       end
@@ -378,8 +366,7 @@ begin
         if Length(AInstr.Operands) >= 3 then
         begin
           Emit('  %its.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} @np_int_to_str(i64 %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ')');
+            ' = call {ptr, i64} @np_int_to_str(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
           Emit('  %its.' + IntToStr(AInstr.ResultId) +
             '.p = extractvalue {ptr, i64} %its.' +
             IntToStr(AInstr.ResultId) + ', 0');
@@ -387,9 +374,9 @@ begin
             '.l = extractvalue {ptr, i64} %its.' +
             IntToStr(AInstr.ResultId) + ', 1');
           Emit('  store ptr %its.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr %' + IntToStr(AInstr.Operands[1].ValueId));
+            '.p, ptr ' + ValueRef(AInstr.Operands[1].ValueId));
           Emit('  store i64 %its.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr %' + IntToStr(AInstr.Operands[2].ValueId));
+            '.l, ptr ' + ValueRef(AInstr.Operands[2].ValueId));
           FNeedsIntToStr := True;
         end;
       end
@@ -400,21 +387,13 @@ begin
           if AInstr.CallTarget = 'ne' then
           begin
             Emit('  %strcmp.' + IntToStr(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr %' +
-              IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-              IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
-              IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
-              IntToStr(AInstr.Operands[3].ValueId) + ')');
-            Emit('  %' + IntToStr(AInstr.ResultId) +
+              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
+            Emit('  ' + ValueRef(AInstr.ResultId) +
               ' = xor i64 %strcmp.' + IntToStr(AInstr.ResultId) + ', 1');
           end
           else
-            Emit('  %' + IntToStr(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr %' +
-              IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-              IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
-              IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
-              IntToStr(AInstr.Operands[3].ValueId) + ')');
+            Emit('  ' + ValueRef(AInstr.ResultId) +
+              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
           FNeedsStrCmp := True;
         end;
       end
@@ -422,12 +401,8 @@ begin
       begin
         if Length(AInstr.Operands) >= 4 then
         begin
-          Emit('  %' + IntToStr(AInstr.ResultId) +
-            ' = call i64 @np_str_pos(ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[1].ValueId) + ', ptr %' +
-            IntToStr(AInstr.Operands[2].ValueId) + ', i64 %' +
-            IntToStr(AInstr.Operands[3].ValueId) + ')');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call i64 @np_str_pos(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
           FNeedsStrCmp := True;
         end;
       end
@@ -437,8 +412,8 @@ begin
         if Length(AInstr.Operands) >= 1 then
         begin
           Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
-            '.sz = mul i64 %' + IntToStr(AInstr.Operands[0].ValueId) + ', 8');
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+            '.sz = mul i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ', 8');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call ptr @np_alloc(i64 %arralloc.' +
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
@@ -449,9 +424,9 @@ begin
         if Length(AInstr.Operands) >= 2 then
         begin
           Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
-            '.sz = mul i64 %' + IntToStr(AInstr.Operands[0].ValueId) +
-            ', %' + IntToStr(AInstr.Operands[1].ValueId));
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+            '.sz = mul i64 ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call ptr @np_alloc(i64 %arralloc.' +
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
@@ -460,31 +435,28 @@ begin
       begin
         FNeedsStrConcat := True;
         if Length(AInstr.Operands) >= 1 then
-          Emit('  %' + IntToStr(AInstr.ResultId) +
-            ' = call ptr @np_alloc(i64 %' +
-            IntToStr(AInstr.Operands[0].ValueId) + ')');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @np_alloc(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'vmt_store' then
       begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
-          Emit('  store ptr @' + AInstr.CallTarget + '.vmt, ptr %' +
-            IntToStr(AInstr.Operands[0].ValueId));
+          Emit('  store ptr @' + AInstr.CallTarget + '.vmt, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
       end
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then
         begin
-          Op := '  %' + IntToStr(AInstr.ResultId) +
-            ' = call ' + TypeToLlvm(AInstr.TypeId) + ' %' +
-            IntToStr(AInstr.Operands[0].ValueId) +
-            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId);
+          Op := '  ' + ValueRef(AInstr.ResultId) +
+            ' = call ' + TypeToLlvm(AInstr.TypeId) + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+            '(ptr ' + ValueRef(AInstr.Operands[1].ValueId);
           for I := 2 to High(AInstr.Operands) do
           begin
             if AInstr.Operands[I].TypeId <> 0 then
               Op := Op + ', ' + TypeToLlvm(AInstr.Operands[I].TypeId) +
-                ' %' + IntToStr(AInstr.Operands[I].ValueId)
+                ' ' + ValueRef(AInstr.Operands[I].ValueId)
             else
-              Op := Op + ', i64 %' + IntToStr(AInstr.Operands[I].ValueId);
+              Op := Op + ', i64 ' + ValueRef(AInstr.Operands[I].ValueId);
           end;
           Op := Op + ')';
           Emit(Op);
@@ -495,8 +467,8 @@ begin
         if Length(AInstr.Operands) >= 4 then
         begin
           Emit('  %vcallstr.' + IntToStr(AInstr.ResultId) +
-            ' = call {ptr, i64} %' + IntToStr(AInstr.Operands[0].ValueId) +
-            '(ptr %' + IntToStr(AInstr.Operands[1].ValueId) + ')');
+            ' = call {ptr, i64} ' + ValueRef(AInstr.Operands[0].ValueId) +
+            '(ptr ' + ValueRef(AInstr.Operands[1].ValueId) + ')');
           Emit('  %vcallstr.' + IntToStr(AInstr.ResultId) +
             '.p = extractvalue {ptr, i64} %vcallstr.' +
             IntToStr(AInstr.ResultId) + ', 0');
@@ -504,9 +476,9 @@ begin
             '.l = extractvalue {ptr, i64} %vcallstr.' +
             IntToStr(AInstr.ResultId) + ', 1');
           Emit('  store ptr %vcallstr.' + IntToStr(AInstr.ResultId) +
-            '.p, ptr %' + IntToStr(AInstr.Operands[2].ValueId));
+            '.p, ptr ' + ValueRef(AInstr.Operands[2].ValueId));
           Emit('  store i64 %vcallstr.' + IntToStr(AInstr.ResultId) +
-            '.l, ptr %' + IntToStr(AInstr.Operands[3].ValueId));
+            '.l, ptr ' + ValueRef(AInstr.Operands[3].ValueId));
         end;
       end
       else if AInstr.IntrinsicName = 'is_instance' then
@@ -519,7 +491,7 @@ begin
           Emit('  br label %is.loop.' + IntToStr(FIsCheckCounter));
           Emit('is.loop.' + IntToStr(FIsCheckCounter) + ':');
           Emit('  %is.cur.' + IntToStr(FIsCheckCounter) +
-            ' = phi ptr [ %' + IntToStr(AInstr.Operands[0].ValueId) +
+            ' = phi ptr [ ' + ValueRef(AInstr.Operands[0].ValueId) +
             ', %is.pre.' + IntToStr(FIsCheckCounter) +
             ' ], [ %is.parent.' + IntToStr(FIsCheckCounter) +
             ', %is.next.' + IntToStr(FIsCheckCounter) + ' ]');
@@ -543,7 +515,7 @@ begin
           Emit('is.false.' + IntToStr(FIsCheckCounter) + ':');
           Emit('  br label %is.end.' + IntToStr(FIsCheckCounter));
           Emit('is.end.' + IntToStr(FIsCheckCounter) + ':');
-          Emit('  %' + IntToStr(AInstr.ResultId) +
+          Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = phi i64 [ 1, %is.true.' + IntToStr(FIsCheckCounter) +
             ' ], [ 0, %is.false.' + IntToStr(FIsCheckCounter) + ' ]');
         end;
@@ -568,17 +540,17 @@ begin
           RetTy := '{ptr, i64}'
         else
           RetTy := TypeToLlvm(FCurrentReturnTypeId);
-        Emit('  ret ' + RetTy + ' %' + IntToStr(ATerm.ReturnValue));
+        Emit('  ret ' + RetTy + ' ' + ValueRef(ATerm.ReturnValue));
       end;
     htkBranch:
       Emit('  br label %bb' + IntToStr(ATerm.TargetBlock));
     htkCondBranch:
-      Emit('  br i1 %' + IntToStr(ATerm.Condition) +
+      Emit('  br i1 ' + ValueRef(ATerm.Condition) +
         ', label %bb' + IntToStr(ATerm.TrueBlock) +
         ', label %bb' + IntToStr(ATerm.FalseBlock));
     htkSwitch:
     begin
-      Emit('  switch i64 %' + IntToStr(ATerm.Condition) +
+      Emit('  switch i64 ' + ValueRef(ATerm.Condition) +
         ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
       for I := 0 to High(ATerm.SwitchCases) do
         Emit('    i64 ' + IntToStr(ATerm.SwitchCases[I].Value) +
@@ -607,10 +579,8 @@ end;
 
 procedure THIRLlvmEmitter.EmitFunction(const AFunc: THIRFunction);
 var
-  I, J, K, MinIdx: LongInt;
+  I, J: LongInt;
   ParamStr, RetStr: string;
-  Order: array of LongInt;
-  MinVal, CurVal: LongInt;
   T: THIRTypeRec;
 begin
   if AFunc.IsExternal then Exit;
@@ -620,7 +590,7 @@ begin
   begin
     if I > 0 then ParamStr := ParamStr + ', ';
     ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId) +
-      ' %' + IntToStr(AFunc.Params[I].ValueId);
+      ' ' + ValueRef(AFunc.Params[I].ValueId);
   end;
 
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
@@ -637,42 +607,12 @@ begin
   Emit('define ' + RetStr + ' @' + AFunc.Name +
     '(' + ParamStr + ') {');
 
-  SetLength(Order, Length(AFunc.Blocks));
-  for I := 0 to High(Order) do
-    Order[I] := I;
-  for I := 0 to High(Order) - 1 do
+  for I := 0 to High(AFunc.Blocks) do
   begin
-    MinIdx := I;
-    if Length(AFunc.Blocks[Order[MinIdx]].Instrs) > 0 then
-      MinVal := AFunc.Blocks[Order[MinIdx]].Instrs[0].ResultId
-    else
-      MinVal := MaxInt;
-    for K := I + 1 to High(Order) do
-    begin
-      if Length(AFunc.Blocks[Order[K]].Instrs) > 0 then
-        CurVal := AFunc.Blocks[Order[K]].Instrs[0].ResultId
-      else
-        CurVal := MaxInt;
-      if CurVal < MinVal then
-      begin
-        MinVal := CurVal;
-        MinIdx := K;
-      end;
-    end;
-    if MinIdx <> I then
-    begin
-      J := Order[I];
-      Order[I] := Order[MinIdx];
-      Order[MinIdx] := J;
-    end;
-  end;
-
-  for I := 0 to High(Order) do
-  begin
-    Emit('bb' + IntToStr(AFunc.Blocks[Order[I]].Id) + ':');
-    for J := 0 to High(AFunc.Blocks[Order[I]].Instrs) do
-      EmitInstr(AFunc.Blocks[Order[I]].Instrs[J]);
-    EmitTerminator(AFunc.Blocks[Order[I]].Terminator);
+    Emit('bb' + IntToStr(AFunc.Blocks[I].Id) + ':');
+    for J := 0 to High(AFunc.Blocks[I].Instrs) do
+      EmitInstr(AFunc.Blocks[I].Instrs[J]);
+    EmitTerminator(AFunc.Blocks[I].Terminator);
   end;
 
   Emit('}');

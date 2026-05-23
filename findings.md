@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- 当前 `compiler/ir/np_hir_builder.pas` 里 `FEntryBlockId` 基础设施已经足够支持 late alloca hoist；
+  真正缺的是 `EnsureAlloca(...)` 仍把 `hikAlloca` 发到 current block。
+- 当前 `compiler/ir/np_hir_llvm_emitter.pas` 之前依赖 raw `%1/%2/...` 匿名数值 SSA 名，
+  并用“按 block 首个 `ResultId` 排序”的方式迁就 LLVM 文本 IR 的顺序编号约束。
+- 把 emitter 切到 `%vN` named SSA values 之后，entry-block hoist 可以安全落地，且 block 输出顺序
+  可以回到 HIR 原始顺序，不再需要 `ResultId` 排序 hack。
+- `tests/hir/test_hir_late_alloca_hoist.pas` + `build/verify_local.sh` 里的 `opt -disable-output`
+  probe 已经把这条 contract 冻结下来：late slot 的 `alloca` 必须位于 entry block，生成 IR 也必须可解析。
 - 外部审查报告对 `harness` 假绿风险的判断是成立的：
   旧路径确实更接近 fixture/snapshot inventory，而不是完整真实执行。
 - 当前 `tests/harness/runner.pas` 已经补成真实执行模型：

@@ -3,6 +3,22 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-06 记录为准。
 
+## Session: 2026-05-23 (HIR LLVM alloca hoisting safety)
+
+- **Status:** completed
+- Actions taken:
+  - 继续沿着已提交的 `FEntryBlockId` 基础设施推进，把 `compiler/ir/np_hir_builder.pas`
+    的 `EnsureAlloca(...)` 改为函数上下文内直接写入 entry block，而不是当前 block。
+  - 在 `compiler/ir/np_hir_llvm_emitter.pas` 新增 `ValueRef(...)`，把原先依赖 LLVM 匿名数值编号
+    的 raw `%1/%2/...` result / operand / param 引用统一切换为 `%vN` named SSA values。
+  - 删除 `EmitFunction(...)` 按首个 `ResultId` 重排 blocks 的输出层 hack，恢复按 HIR 原始 block
+    顺序发射，避免 entry block 因文本编号约束被意外后移。
+  - 新增 `tests/hir/test_hir_late_alloca_hoist.pas` synthetic probe，专门构造
+    “非 entry block 首次 materialize late slot”的 HIR 场景。
+  - 扩展 `build/verify_local.sh`，让该 probe 成为正式 gate，并通过 `opt -disable-output`
+    同时验证 IR 可解析与 entry-block hoist evidence。
+  - 运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`。
+
 ## Session: 2026-05-06 (Phase 4 GreenCST/Parser + Phase 5 Semantic Analysis Extension)
 
 ### Phase 4: GreenCST/Parser Extension
