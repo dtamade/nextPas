@@ -659,6 +659,10 @@ printf '%s\n' "$ENTRY_BLOCK_IR" | grep -Eq '^  %v[0-9]+ = alloca i64$' || {
   cat "$HIR_LATE_ALLOCA_LL"
   fail 'missing-hir-late-alloca-entry-alloca'
 }
+grep -Eq '^  br i1 %v[0-9]+, label %bb[0-9]+, label %bb[0-9]+$' "$HIR_LATE_ALLOCA_LL" || {
+  cat "$HIR_LATE_ALLOCA_LL"
+  fail 'missing-hir-late-alloca-branch'
+}
 printf 'hir-late-alloca-hoist=pass\n'
 
 printf 'lexer-conformance=running\n'

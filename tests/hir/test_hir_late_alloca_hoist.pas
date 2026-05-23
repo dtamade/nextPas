@@ -19,13 +19,19 @@ begin
 
   SemaModel := TSemanticModel.Create;
 
-  SemaModel.AddTypedHirNode('cond-br-runtime', 'if', 0, 0,
-    'int 1' + #10 + 'int 1' + #10 + 'cmp eq' + #10 +
-    'labels then' + #9 + 'exit');
-  SemaModel.AddTypedHirNode('block-label-runtime', 'then', 0, 0, 'then');
+  SemaModel.AddTypedHirNode('var-decl-runtime', 'i', 0, 0, 'i');
+  SemaModel.AddTypedHirNode('assign-runtime', 'i := 3', 0, 0,
+    'i' + #9 + 'int 3' + #10);
+  SemaModel.AddTypedHirNode('block-label-runtime', 'cond', 0, 0, 'cond');
+  SemaModel.AddTypedHirNode('cond-br-runtime', 'while', 0, 0,
+    'var i' + #10 + 'int 0' + #10 + 'cmp sgt' + #10 +
+    'labels body' + #9 + 'exit');
+  SemaModel.AddTypedHirNode('block-label-runtime', 'body', 0, 0, 'body');
   SemaModel.AddTypedHirNode('assign-runtime', 'late.slot := 7', 0, 0,
     'late.slot' + #9 + 'int 7' + #10);
-  SemaModel.AddTypedHirNode('br-runtime', 'exit', 0, 0, 'exit');
+  SemaModel.AddTypedHirNode('assign-runtime', 'i := i - 1', 0, 0,
+    'i' + #9 + 'var i' + #10 + 'int 1' + #10 + 'sub' + #10);
+  SemaModel.AddTypedHirNode('br-runtime', 'cond', 0, 0, 'cond');
   SemaModel.AddTypedHirNode('block-label-runtime', 'exit', 0, 0, 'exit');
   SemaModel.AddTypedHirNode('halt-call-runtime', 'Halt(late.slot)', 0, 0,
     'var late.slot' + #10);
