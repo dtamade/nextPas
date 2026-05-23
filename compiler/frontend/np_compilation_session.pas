@@ -611,6 +611,8 @@ begin
   SetLength(Result, 0);
   if FUnitGraph = nil then
     Exit;
+  if SameText(AstRootKindName, 'unit') then
+    Exit;
 
   ResolvedSourcePath := ExpandFileName(FOptions.BuildContext.ResolvedSourcePath);
   for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
@@ -618,8 +620,7 @@ begin
     ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
     if Trim(ResolvedUnit.SourcePath) = '' then
       Continue;
-    if SameText(ResolvedUnit.OriginClass, 'installed-source') or
-      SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
+    if SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
       Continue;
     if SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
       Continue;

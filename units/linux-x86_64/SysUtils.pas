@@ -69,6 +69,7 @@ procedure FindClose(var F: TSearchRec);
 function IntToStr(Value: Integer): string;
 function StrToInt(const S: string): Integer;
 function StrToIntDef(const S: string; Default: Integer): Integer;
+function IntToHex(Value: Int64; Digits: Integer): string;
 
 // Date/Time
 function Now: TDateTime;
@@ -384,6 +385,32 @@ begin
   Val(S, Result, Code);
   if Code <> 0 then
     Result := Default;
+end;
+
+function IntToHex(Value: Int64; Digits: Integer): string;
+const
+  HexChars: array[0..15] of Char = (
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
+  );
+var
+  Buffer: string;
+  UnsignedValue: QWord;
+begin
+  if Digits < 1 then
+    Digits := 1;
+
+  UnsignedValue := QWord(Value);
+  Buffer := '';
+  repeat
+    Buffer := HexChars[UnsignedValue and $F] + Buffer;
+    UnsignedValue := UnsignedValue shr 4;
+  until UnsignedValue = 0;
+
+  while Length(Buffer) < Digits do
+    Buffer := '0' + Buffer;
+
+  Result := Buffer;
 end;
 
 { Environment }

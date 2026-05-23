@@ -1,6 +1,7 @@
 unit np_diagnostics_sink;
 
 {$mode objfpc}{$H+}
+{$UNITPATH .}
 {$UNITPATH ../../rtl/core/base}
 
 interface

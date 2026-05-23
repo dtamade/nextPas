@@ -15,6 +15,45 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-23 Installed-source Extra Assemble Boundary Closure
+
+### Goal
+
+把这轮 Stage2 / semantic smoke follow-up 从“linked root 缺少 source-backed unit `.o`”和
+“unit root 被误扩成 transitive extra assemble”两侧一起收口，形成更诚实的最小边界：
+
+- `compiler/diagnostics/np_diagnostics_sink.pas` 必须能稳定解析同目录
+  `nextpas_json_helpers`，不再依赖偶然 search path
+- `units/linux-x86_64/SysUtils.pas` 必须补齐当前 compiler path 真实需要的
+  `IntToHex(Value: Int64; Digits: Integer)`
+- `compiler/frontend/np_compilation_session.pas` 的
+  `CollectAdditionalAssemblyBaseNames()` 必须只在 `program|library|package` 这类 linked root
+  上收集额外 assemble base name，并允许 `installed-source` units 进入集合
+- `unit` root 必须继续停留在 `host-fpc-emit-asm -> native-assemble`，不能为 transitive deps
+  伪造 extra assemble steps
+- `build/verify_local.sh` 必须把 `hello_with_units` 的 semantic-smoke reality 冻结为
+  `typed-hir-node-count=8`、`tool-invocation-count=5`、`tool-run-step-count=5`、
+  `tool-status-event-count=16`
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 先复现 `hello_with_units` link failure，确认真实缺口是
+      `Stage0Greeter.o` / `Stage0GreeterImpl.o` 没有物化，而不是 link command 本身错误
+- [x] 在 `compiler/diagnostics/np_diagnostics_sink.pas` 补上 `{$UNITPATH .}`，让同目录
+      `nextpas_json_helpers` 成为明确依赖
+- [x] 在 `units/linux-x86_64/SysUtils.pas` 补上
+      `IntToHex(Value: Int64; Digits: Integer)`，消除当前 compiler/self-host path 的 RTL 缺口
+- [x] 调整 `CollectAdditionalAssemblyBaseNames()`：
+      `unit` root 直接返回空集合；linked root 只跳过 `implicit-runtime`，不再错误排除
+      `installed-source`
+- [x] 回写 `build/verify_local.sh` 的 semantic-smoke contract，固定
+      `hello_with_units` 为 5-step / 16-event，并把 `typedHirNodeCount` 改回真实 `8`
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
 ## Addendum: 2026-05-23 Stage2 unit self-compile boundary
 
 ### Goal

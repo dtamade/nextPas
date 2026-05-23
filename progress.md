@@ -1624,8 +1624,33 @@ Hello from nextPas!
   - 在 fresh verify 后再次清理 `examples/smoke/*`、`tests/toolchain/*_smoke` 与
     `tools/stage0/nextpas` 这类临时二进制，保持工作区整洁
 
+### Phase 6: Installed-source Extra Assemble Boundary Closure
+
+- **Status:** completed
+- Actions taken:
+  - 复现 `examples/smoke/hello_with_units.pas` 的真实失败边界，确认 regression 不在 linker，
+    而在 linked root 没有把 `installed-source` 的 `Stage0Greeter` /
+    `Stage0GreeterImpl` 物化成 `.o`。
+  - 在 `compiler/diagnostics/np_diagnostics_sink.pas` 补上 `{$UNITPATH .}`，
+    让本地 `nextpas_json_helpers` 成为明确可解析依赖，避免 compiler module self-compile
+    再被 search path 偶然性卡住。
+  - 在 `units/linux-x86_64/SysUtils.pas` 补齐
+    `IntToHex(Value: Int64; Digits: Integer)`，对齐当前 compiler/self-host path
+    实际会调用的 RTL 形态。
+  - 调整 `compiler/frontend/np_compilation_session.pas` 的
+    `CollectAdditionalAssemblyBaseNames()`：`unit` root 直接返回空集合；linked root
+    允许 `installed-source` units 进入 extra assemble set，但继续跳过
+    `implicit-runtime`。
+  - 回写 `build/verify_local.sh` 的 semantic-smoke contract：
+    `hello_with_units` 现在固定为 `typed-hir-node-count=8`、
+    `tool-invocation-count=5`、`tool-run-step-count=5`、
+    `tool-status-event-count=16`，不再沿用那次误抓到的 `20`。
+  - 重新运行 fresh `bash build/verify_local.sh`，确认新增边界修复与 contract 对齐后
+    整套 `verify-local=pass`。
+
 ## Test Results
 
+- `bash build/verify_local.sh`（installed-source extra assemble boundary + semantic-smoke contract realignment）：pass
 - `bash build/verify_local.sh`（host-compiler runner reuse + tool run projection）：pass
 - `bash build/verify_local.sh`（toolchain plan runner execution contract）：pass
 - `bash build/verify_local.sh`（stage0 projection writer convergence）：pass

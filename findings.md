@@ -392,6 +392,22 @@
 | success-path build trace/status-event 之前仍是单步摘要，later-step failure trace ref 也还是 step-anchored                                                                                          | 扩 `compiler/frontend/np_compilation_session.pas` 与 runner transcript，让 success/failure 全部对齐 plan-level `build-trace-ref=trace-<session-id>-toolchain-plan`，并用 fresh `bash build/verify_local.sh` 冻结 full-step transcript contract |
 | 当前多步 production path 已经真实执行 root/native steps，但显式 source-backed unit 还需要额外 assemble step 才能保持 smoke 全绿                                                                    | 在 `TCompilationSession` 收集 source-backed unit 的额外 assembly base name，并让 planner 追加 `native-assemble-<unit>` steps，再用 `build/verify_local.sh` 冻结这条 contract                                                                   |
 
+## 2026-05-23 Follow-up Findings
+
+- `compiler/diagnostics/np_diagnostics_sink.pas` 当前必须显式带 `{$UNITPATH .}`，否则同目录
+  `nextpas_json_helpers` 不会稳定进入 compiler-module self-compile 的解析面。
+- `units/linux-x86_64/SysUtils.pas` 当前还缺一条真实 compiler dependency；
+  `IntToHex(Value: Int64; Digits: Integer)` 补齐后，Stage2 / diagnostics path 才重新闭合。
+- `compiler/frontend/np_compilation_session.pas` 的 extra-assemble 边界现在已经明确：
+  `unit` root 不追加 transitive deps；linked root 会收集 source-backed units，包括
+  `installed-source`，但继续跳过 `implicit-runtime`。
+- `examples/smoke/hello_with_units.pas` 在 `run_stage0_build_capture` 的 `--fold` 语境下，
+  当前真实 contract 已冻结为 `typed-hir-node-count=8`、
+  `tool-invocation-count=5`、`tool-run-step-count=5`、
+  `tool-status-event-count=16`；先前看到的 `20` 是 verify 脚本期望漂移，不是实现回归。
+- fresh `bash build/verify_local.sh` 已再次拿到 `verify-local=pass`，说明这轮修复没有引入
+  新的 toolchain / semantic / self-host contract 漂移。
+
 ## Resources
 
 - [runner.pas](/home/dtamade/projects/nextPas/tests/harness/runner.pas)
