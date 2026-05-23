@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 35` 为准。
+以最新完成的 `Batch 36` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -48,7 +48,7 @@
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
   `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 35` 已完成。
+- `Batch 1` 到 `Batch 36` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -62,8 +62,10 @@
   transcript 都已收口到完整 multi-step trace。`doctor` 的第一条只读 health inspection、
   最小 structured finding contract、`query symbols` 的第一条 compilation-session-backed
   semantic query 与 `pkg inspect` 的第一条 workspace-model-backed package workflow projection
-  也已进入统一 command surface。下一步优先转回 richer `env` actions / richer `query` /
-  richer package workflow，而不是继续在已经闭环的 success-path transcript、
+  也已进入统一 command surface。`Batch 36` 又把 stage0 driver decomposition、
+  projection helper ownership、malformed manifest graceful fallback、diagnostic record
+  extensibility 与 resolver search-index staleness tracking 收成当前最新 verified baseline。
+  下一步优先转回 richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。
 

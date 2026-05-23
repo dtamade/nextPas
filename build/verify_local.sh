@@ -540,6 +540,7 @@ for path in \
   docs/adr/0001-fpc-reference-baseline.md \
   docs/architecture/overview.md \
   docs/architecture/architecture-principles-specification.md \
+  docs/plans/2026-03-24-nextpas-master-roadmap-plan.md \
   docs/architecture/compatibility-matrix.md \
   docs/architecture/directory-structure-specification.md \
   docs/architecture/bootstrap-roadmap.md \

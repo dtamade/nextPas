@@ -15,6 +15,33 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Rolling Plan Batch 36 Truth Sync
+
+### Goal
+
+把当前 rolling plan 的入口状态同步到真实最新基线，避免后续恢复时误以为 production-path
+contract 仍停在 `Batch 35`：
+
+- `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部必须写明当前最新完成批次是
+  `Batch 36`
+- 当前状态段必须把 stage0 driver decomposition、projection ownership、malformed manifest
+  fallback、diagnostic record extensibility 与 resolver search-index staleness tracking 写成
+  `Batch 36` 已验证 baseline
+- `build/verify_local.sh` docs-check 必须要求当前 rolling plan 存在，避免活动主线入口从验证入口漂走
+- 同步 `task_plan.md`、`progress.md`、`findings.md`，让下一次“继续”从真实最新批次恢复
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 同步 rolling plan 顶部状态到 `Batch 36`
+- [x] 将 rolling plan 纳入 docs-check
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Architecture Principles and Quality Bar
 
 ### Goal

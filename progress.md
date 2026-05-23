@@ -3,6 +3,25 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Rolling plan Batch 36 truth sync)
+
+- **Status:** completed
+- Actions taken:
+  - 从 `332c838` 继续，先核对工作树、最近提交、`task_plan.md`、`progress.md` 与
+    `findings.md`，确认工作树干净且上一批 architecture quality bar 已收口。
+  - 复查 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`，发现顶部仍写
+    “以最新完成的 `Batch 35` 为准”和“`Batch 1` 到 `Batch 35` 已完成”，但同一文件后面
+    已有 `Batch 36: driver decomposition + compiler core hardening` 的 completed 记录。
+  - 将 rolling plan 顶部状态同步到 `Batch 36`，并补上 `Batch 36` 当前 verified baseline
+    摘要。
+  - 将当前 rolling plan 加入 `build/verify_local.sh` docs-check，避免活动主线入口从本地验证
+    路径漂走。
+  - 运行 fresh `bash build/verify_local.sh`，确认 docs-check 已包含
+    `verified-path=docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`，最终得到
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+  - 收口前复查 diff，确认本批只同步 rolling plan 恢复口径、docs-check coverage 与持续记录，
+    不改编译器行为。
+
 ## Session: 2026-05-24 (Architecture principles and quality bar)
 
 - **Status:** completed
