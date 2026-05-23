@@ -267,7 +267,8 @@ nextPas 想要现代、高性能、优雅，就不能把 language service 写成
   - 不承诺公开 language service binary、LSP server 或 IDE integration
   - 但 compiler pipeline、semantic model、diagnostics 和 target truth 必须按 shared analysis 方向收敛
   - 当前 `query symbols` 只能作为 compilation-session-backed 的最小 CLI semantic query，
-    不能被描述成完整 language service
+    可以投影 `querySymbols`、`queryScopes` 与 `queryTypes` 这类 session-owned semantic
+    graph snapshots，但不能被描述成完整 language service
 - `stage1`
   - 开始把 `LanguageServiceSession`、overlay、snapshot 和 query surface 收紧成正式内部边界
   - 可以先以进程内 API 或受控实验入口验证 analysis contract

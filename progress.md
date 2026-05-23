@@ -3,6 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 39 query symbols semantic graph side-table projection)
+
+- **Status:** completed
+- Actions taken:
+  - 从 Batch 38 的语义 metadata projection 继续推进，先复盘架构原则、rolling plan 和当前
+    `query symbols` truth，确认下一步仍应留在只读 `query` 轨道，而不是进入 `env use/sync`
+    或 package resolver / lockfile 写入。
+  - 在 `task_plan.md` 写入 Batch 39 计划，把目标收束为 normalized semantic graph side tables：
+    `querySymbols[]` 保留 inline metadata，`queryScopes[]` 与 `queryTypes[]` 则作为同一份
+    session-owned truth 的 normalized lookup surface。
+  - 在 `build/verify_local.sh` 新增 `stage0-query-symbols-semantic-graph-check` RED gate，
+    先验证失败边界确实落在缺少 `query-scopes` / `query-types` side tables。
+  - 在 `compiler/frontend/np_compilation_session.pas` 新增 `ScopesJson` 与 `TypesJson`，都从
+    同一份 `TSemanticModel` 生成；随后把 `tools/stage0/nextpas_projection_types.pas`、
+    `tools/stage0/nextpas_projection_context.pas`、
+    `tools/stage0/nextpas_projection_text.pas`、
+    `tools/stage0/nextpas_projection_json.pas` 与
+    `tools/stage0/nextpas_command_query.pas` 一起补齐。
+  - focused probe 确认 `query-scopes` 输出 `scopeId=2` / `kind=unit` / `name=VarHalt`，
+    `query-types` 输出 `typeId=2` / `name=Integer` / `kind=builtin`，且 envelope 同步带上
+    `queryScopes` 与 `queryTypes`。
+  - 同步 `tools/stage0/README.md`、`docs/architecture/stage0-driver-specification.md`、
+    `docs/architecture/developer-tooling-specification.md`、
+    `docs/architecture/language-service-specification.md` 与 rolling plan，
+    明确这批仍然是 compilation-session-backed 的最小 query surface，不是完整 language service。
+  - 运行 fresh `bash build/verify_local.sh`，确认 `stage0QueryCheck=pass` 与最终
+    `verify-local=pass`。
+
 ## Session: 2026-05-24 (Batch 38 query symbols semantic metadata projection)
 
 - **Status:** completed

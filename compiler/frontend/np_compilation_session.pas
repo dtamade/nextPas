@@ -209,7 +209,10 @@ type
     function UnitGraphRootName: string;
     function SymbolCount: LongInt;
     function SymbolsJson: string;
+    function ScopeCount: LongInt;
+    function ScopesJson: string;
     function TypeCount: LongInt;
+    function TypesJson: string;
     function TypedHirNodeCount: LongInt;
     function RuntimeContractCount: LongInt;
     function TypedHirRootName: string;
@@ -1549,6 +1552,28 @@ begin
   Result := FSemanticModel.SymbolCount;
 end;
 
+function SemanticScopeKindName(const AKind: TScopeKind): string;
+begin
+  case AKind of
+    skCompilation:
+      Result := 'compilation';
+    skUnit:
+      Result := 'unit';
+    skInterface:
+      Result := 'interface';
+    skImplementation:
+      Result := 'implementation';
+    skCallable:
+      Result := 'callable';
+    skRecord:
+      Result := 'record';
+    skClass:
+      Result := 'class';
+    skBlock:
+      Result := 'block';
+  end;
+end;
+
 function TCompilationSession.SymbolsJson: string;
 var
   Fields: string;
@@ -1557,28 +1582,6 @@ var
   Symbol: TSemanticSymbol;
   SymbolType: TSemanticType;
   UnitInfo: TResolvedUnit;
-
-  function SemanticScopeKindName(const AKind: TScopeKind): string;
-  begin
-    case AKind of
-      skCompilation:
-        Result := 'compilation';
-      skUnit:
-        Result := 'unit';
-      skInterface:
-        Result := 'interface';
-      skImplementation:
-        Result := 'implementation';
-      skCallable:
-        Result := 'callable';
-      skRecord:
-        Result := 'record';
-      skClass:
-        Result := 'class';
-      skBlock:
-        Result := 'block';
-    end;
-  end;
 begin
   if FSemanticModel = nil then
     Exit('[]');
@@ -1647,12 +1650,84 @@ begin
   Result := Result + ']';
 end;
 
+function TCompilationSession.ScopeCount: LongInt;
+begin
+  if FSemanticModel = nil then
+    Exit(0);
+
+  Result := FSemanticModel.ScopeCount;
+end;
+
+function TCompilationSession.ScopesJson: string;
+var
+  Fields: string;
+  Index: LongInt;
+  Scope: TSemanticScope;
+begin
+  if FSemanticModel = nil then
+    Exit('[]');
+
+  Result := '[';
+  for Index := 0 to FSemanticModel.ScopeCount - 1 do
+  begin
+    if Index > 0 then
+      Result := Result + ',';
+
+    Scope := FSemanticModel.ScopeAt(Index);
+    Fields := '';
+    AppendJsonIntegerField(Fields, 'scopeId', Scope.ScopeId, True);
+    AppendJsonStringField(Fields, 'kind', SemanticScopeKindName(Scope.Kind));
+    AppendJsonStringField(Fields, 'name', Scope.Name);
+    AppendJsonIntegerField(
+      Fields,
+      'parentScopeId',
+      Scope.ParentScopeId,
+      Scope.ParentScopeId > 0
+    );
+
+    Result := Result + '{' + Fields + '}';
+  end;
+  Result := Result + ']';
+end;
+
 function TCompilationSession.TypeCount: LongInt;
 begin
   if FSemanticModel = nil then
     Exit(0);
 
   Result := FSemanticModel.TypeCount;
+end;
+
+function TCompilationSession.TypesJson: string;
+var
+  Fields: string;
+  Index: LongInt;
+  SymbolType: TSemanticType;
+begin
+  if FSemanticModel = nil then
+    Exit('[]');
+
+  Result := '[';
+  for Index := 0 to FSemanticModel.TypeCount - 1 do
+  begin
+    if Index > 0 then
+      Result := Result + ',';
+
+    SymbolType := FSemanticModel.TypeAt(Index);
+    Fields := '';
+    AppendJsonIntegerField(Fields, 'typeId', SymbolType.TypeId, True);
+    AppendJsonStringField(Fields, 'name', SymbolType.Name);
+    AppendJsonStringField(Fields, 'kind', SymbolType.Kind);
+    AppendJsonIntegerField(
+      Fields,
+      'parentTypeId',
+      SymbolType.ParentTypeId,
+      SymbolType.ParentTypeId > 0
+    );
+
+    Result := Result + '{' + Fields + '}';
+  end;
+  Result := Result + ']';
 end;
 
 function TCompilationSession.TypedHirNodeCount: LongInt;

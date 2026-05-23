@@ -199,6 +199,8 @@ type
     ResultCount: LongInt;
     HasResultCount: Boolean;
     SymbolsJson: string;
+    ScopesJson: string;
+    TypesJson: string;
   end;
 
   TPackageProjectionContext = record

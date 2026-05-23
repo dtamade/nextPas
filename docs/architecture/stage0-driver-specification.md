@@ -198,13 +198,16 @@ health taxonomy 应在后续批次继续加固。
 - 不调用 `LowerToMir`、`PlanBackend`、`PlanToolchain` 或 `ExecuteToolchain`
 - 真实 query 摘要通过 `query-kind=symbols`、`query-status=success`、
   `analysis-source=compilation-session`、`query-result-count=<count>` 与
-  `query-symbols=<json-array>` 投影
+  `query-symbols=<json-array>` / `query-scopes=<json-array>` /
+  `query-types=<json-array>` 投影
 - `command-envelope=<json>.result` 同步保留 `queryKind`、`queryStatus`、`analysisSource`、
-  `queryResultCount` 与 `querySymbols`
+  `queryResultCount`、`querySymbols`、`queryScopes` 与 `queryTypes`
 - `querySymbols` 必须来自同一份 `TCompilationSession` / `TSemanticModel`，当前条目至少包含
   `symbolId`、`name`、`kind`、`ownerUnitId`、可解析时的 `ownerUnitName`、`scopeId`、
   可解析时的 `scopeKind` / `scopeName` / `scopeParentId`、`typeId`、
   可解析时的 `typeName` / `typeKind` / `typeParentId` 和 `byteOffset`
+- `queryScopes` / `queryTypes` 必须同样来自同一份 `TSemanticModel`，作为 `scopeId` /
+  `typeId` 的 normalized side tables，而不是由 CLI 重新推导
 
 当前 `query symbols` 的 `analysis-source` 必须诚实写成 `compilation-session`。它不是
 `LanguageServiceSession`，也不提供 open document overlay、incremental invalidation、references、

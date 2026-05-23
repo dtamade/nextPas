@@ -18,14 +18,15 @@
   non-goal 与回退信号；这条规范应作为 `master-roadmap.md`、compiler 自举路线和后续 package /
   language-service / GUI / IDE 工作的共同约束。
 - 当前 `query symbols` 的实现已经走 `ResolveWorkspaceModel(...)` 与 `TCompilationSession`，
-  但 public projection 仍停在 `query-result-count` / `queryResultCount`；这让 CLI/IDE/automation
-  只能知道 symbol graph 有结果，不能消费具体 symbol truth。
+  并且 public projection 现在同时投影 `querySymbols`、`queryScopes` 与 `queryTypes`；
+  这让 CLI/IDE/automation 能直接消费 normalized semantic truth，而不是只知道 query 有结果。
 - Batch 37 之后的 focused probe 继续暴露下一层真实缺口：`querySymbols[]` 已经有
   `ownerUnitId`、`scopeId` 与 `typeId`，但如果不投影 `ownerUnitName`、`scopeKind` /
   `scopeName` 与 `typeName` / `typeKind`，CLI、automation 和 future IDE adapter 仍然需要
   自己回查或重扫 semantic truth；因此 Batch 38 选择在 `TCompilationSession.SymbolsJson`
-  内从同一份 `TUnitGraph` / `TSemanticModel` 补 semantic metadata，而不是让 stage0 CLI
-  或调用方重建 lookup。
+  内从同一份 `TUnitGraph` / `TSemanticModel` 补 semantic metadata，而 Batch 39 则继续把
+  `TSemanticScope` / `TSemanticType` graph 作为 normalized `queryScopes` / `queryTypes`
+  side tables 投影出来，避免调用方再维护一套 lookup。
 - 当前 `compiler/ir/np_hir_builder.pas` 里 `FEntryBlockId` 基础设施已经足够支持 late alloca hoist；
   真正缺的是 `EnsureAlloca(...)` 仍把 `hikAlloca` 发到 current block。
 - 当前 `compiler/ir/np_hir_llvm_emitter.pas` 之前依赖 raw `%1/%2/...` 匿名数值 SSA 名，
@@ -123,9 +124,14 @@
 - 当前 `query symbols` 已明确和完整 language service 分层：它输出
   `analysis-source=compilation-session`，不宣称拥有 `LanguageServiceSession`、open document
   overlay、incremental invalidation、references、rename preflight 或 completion。
-- 当前 `query symbols` 成功路径会投影 `query-kind=symbols`、`query-status=success` 与
-  `query-result-count=<count>`，并让 `command-envelope=<json>.result` 同步保留
-  `queryKind`、`queryStatus`、`analysisSource` 与 `queryResultCount`。
+- 当前 `query symbols` 成功路径会投影 `query-kind=symbols`、`query-status=success`、
+  `query-result-count=<count>`、`query-symbols=<json-array>`、`query-scopes=<json-array>` 与
+  `query-types=<json-array>`，并让 `command-envelope=<json>.result` 同步保留 `queryKind`、
+  `queryStatus`、`analysisSource`、`queryResultCount`、`querySymbols`、`queryScopes` 与
+  `queryTypes`。
+- 当前 `queryScopes` 与 `queryTypes` 不是新的 language service 协议，而是同一份
+  `TSemanticModel` 的 normalized side tables；它们保留 `scopeId` / `typeId` 的稳定 identity，
+  让调用方可以不再在 CLI 外部自行补 lookup。
 - 当前 `build/verify_local.sh` 也已经把 `nextpas query symbols` 的 success path 与 bare
   `nextpas query` 的 invalid-arguments contract 纳入 promotion path，因此最小 `query`
   公开面不再只靠手工 probe 留证。

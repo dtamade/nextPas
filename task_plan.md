@@ -15,6 +15,40 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 39 Query Semantic Graph Side Tables
+
+### Goal
+
+把 `query symbols` 从“每个 symbol 都携带可读 metadata”继续推进到可被 CLI、automation
+和 future IDE adapter 直接消费的 normalized semantic graph projection：
+
+- owner 继续是 `TCompilationSession`；`stage0` CLI 不重扫源码、不解析 stdout、不维护第二套
+  semantic lookup
+- truth objects 是同一份 `TSemanticModel` 的 `TSemanticSymbol`、`TSemanticScope` 与
+  `TSemanticType`
+- line-based output 在 `query-symbols` 之外新增 `query-scopes=<json-array>` 与
+  `query-types=<json-array>`，让 `scopeId` / `typeId` 可以通过同一份 query result 回查
+- `command-envelope=<json>.result` 同步新增 `queryScopes` 与 `queryTypes`
+- promotion gate 新增 `stage0-query-symbols-semantic-graph-check`，用 `var_halt.pas`
+  冻结 unit scope `VarHalt` 与 builtin type `Integer` side table
+- non-goal：不新增 LSP / language service session，不做 overlay、incremental invalidation、
+  references、rename、completion，也不执行 MIR/backend/toolchain
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 先把 `stage0-query-symbols-semantic-graph-check` 写成 RED gate
+- [x] 在 `TCompilationSession` 中从 session-owned `TSemanticModel` 暴露 `ScopesJson` 与
+      `TypesJson`
+- [x] 扩展 query projection context、line output 与 envelope mirror
+- [x] focused probe 确认 `var_halt.pas` 的 scope/type side tables 与 symbol metadata 同步
+- [x] 同步 stage0 / developer tooling / rolling plan 文档和持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 38 Query Symbols Semantic Metadata
 
 ### Goal

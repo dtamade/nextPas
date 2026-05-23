@@ -319,6 +319,8 @@ begin
   AContext.ResultCount := 0;
   AContext.HasResultCount := False;
   AContext.SymbolsJson := '';
+  AContext.ScopesJson := '';
+  AContext.TypesJson := '';
 end;
 
 procedure ClearPackageProjectionContextValue(

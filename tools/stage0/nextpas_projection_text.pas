@@ -831,6 +831,16 @@ begin
     'query-symbols',
     AContext.SymbolsJson
   );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'query-scopes',
+    AContext.ScopesJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'query-types',
+    AContext.TypesJson
+  );
 end;
 procedure PrintPackageProjectionFields(const UseStdErr: Boolean; const AContext: TPackageProjectionContext);
 begin

@@ -148,13 +148,18 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `analysis-source=compilation-session`
 - `query-result-count=<count>`
 - `query-symbols=<json-array>`
+- `query-scopes=<json-array>`
+- `query-types=<json-array>`
 
 这条 surface 当前不是完整 language service，也不是 LSP server。它只把
 `TCompilationSession` 已经拥有的 syntax / resolution / semantic 结果投影为只读 query
 结果。`query-symbols` 是同一份 semantic symbol graph 的结构化 mirror，当前每个条目至少
 包含 `symbolId`、`name`、`kind`、`ownerUnitId`、可解析时的 `ownerUnitName`、
 `scopeId`、可解析时的 `scopeKind` / `scopeName` / `scopeParentId`、`typeId`、
-可解析时的 `typeName` / `typeKind` / `typeParentId` 和 `byteOffset`；因此成功路径会显示
+可解析时的 `typeName` / `typeKind` / `typeParentId` 和 `byteOffset`。`query-scopes`
+与 `query-types` 则是同一份 `TSemanticModel` 的 normalized side tables，供调用方用
+`scopeId` / `typeId` 回查 scope 与 type truth，而不需要重扫源码或解析 build output。
+因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
 
@@ -282,7 +287,7 @@ resolution / sema / MIR / backend / toolchain skeleton：
 `test` 命令会把 harness 当前已有的 group / smoke 结果直接透传出来；`env status`
 会把当前 target/binding/distribution/runtime 解析结果投影成 line-based output 与
 `command-envelope=<json>`；`query symbols` 会把 compilation session 的 semantic symbol
-count 作为当前最小查询结果投影出来；最后一条未知命令示例应该以非零状态退出，并打印清晰的
+detail、scope side table 与 type side table 作为当前最小查询结果投影出来；最后一条未知命令示例应该以非零状态退出，并打印清晰的
 `unsupported-command` 消息。
 
 ## workspace discovery、unit root 和产物落点
@@ -745,6 +750,7 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass` 与
 `stage0DoctorInvalidArgumentsCheck=pass`、`query-kind=symbols`、
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
+`query-scopes=<json-array>`、`query-types=<json-array>`、
 `stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
 `package-lock-status=deferred`、`package-workflow-manifest-path=<path>`、

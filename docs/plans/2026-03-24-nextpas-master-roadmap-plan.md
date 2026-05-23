@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 38` 为准。
+以最新完成的 `Batch 39` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -44,12 +44,13 @@
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
   readiness 与 binding readiness，`query symbols` 也已投影
   `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
-  与可读 owner/scope/type metadata，`pkg inspect` 也已投影
+  与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
+  side tables，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
   `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 38` 已完成。
+- `Batch 1` 到 `Batch 39` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -70,7 +71,9 @@
   projection，line-based `query-symbols` 与 envelope `querySymbols` 都来自同一份
   `TSemanticModel`。`Batch 38` 则继续把 raw ids 加固成可读 semantic metadata：
   `ownerUnitName` 来自同一份 `TUnitGraph`，`scopeKind` / `scopeName` 来自
-  `TSemanticScope`，`typeName` / `typeKind` 来自 `TSemanticType`。下一步优先转回
+  `TSemanticScope`，`typeName` / `typeKind` 来自 `TSemanticType`。`Batch 39` 再把
+  `TSemanticScope` / `TSemanticType` graph 作为 normalized `queryScopes` / `queryTypes`
+  side tables 投影出来，让调用方不用在 `querySymbols` 之外维护第二套 lookup。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。
@@ -1740,6 +1743,50 @@ Batch 37 已经让 `query symbols` 输出结构化 symbol detail，但结果仍�
 - 该 symbol 必须同时带有 `ownerUnitName=VarHalt`、`scopeKind=unit`、`scopeName=VarHalt`、
   `typeName=Integer` 与 `typeKind=builtin`
 - line-based `query-symbols=<json-array>` 与 envelope `querySymbols[]` 必须同步带上这批 metadata
+- `analysis-source=compilation-session` 必须保持不变
+- `mir-status=deferred`、`backend-plan-status=deferred` 与 `toolchain-plan-status=deferred`
+  必须保持不变
+- fresh `bash build/verify_local.sh` 必须继续得到 `verify-local=pass`
+
+## Batch 39: `query symbols` semantic graph side-table projection
+
+- 状态：完成
+- 归属路线段：Workspace and Developer Tooling Integration / Unit Resolution and Semantic Core
+
+### 这一批要解决什么
+
+Batch 38 已经让每个 `querySymbols[]` 条目带上可读 owner/scope/type metadata，但如果 future
+IDE adapter 或 automation 想按 `scopeId` / `typeId` 建立稳定索引，仍然缺少同一份 query result
+里的 normalized side tables。长期看，这会诱导调用方在 CLI 之外重扫源码或自己缓存半套
+semantic model。
+
+这一批把 `TSemanticScope` 与 `TSemanticType` graph 作为 session-owned side tables 同步投影：
+`querySymbols[]` 继续保留 inline metadata 方便 shell / human inspection，`queryScopes[]` 与
+`queryTypes[]` 则提供可按 id 回查的 normalized truth。
+
+### 这一批已经交付了什么
+
+- `compiler/frontend/np_compilation_session.pas` 新增 `ScopesJson` 与 `TypesJson`，都从同一份
+  `TSemanticModel` 生成 query result JSON
+- `tools/stage0/nextpas_projection_types.pas` 的 `TQueryProjectionContext` 新增
+  `ScopesJson` 与 `TypesJson`
+- `tools/stage0/nextpas_projection_text.pas` 新增 line-based `query-scopes=<json-array>` 与
+  `query-types=<json-array>`
+- `tools/stage0/nextpas_projection_json.pas` 新增 envelope field `queryScopes` 与
+  `queryTypes`
+- `tools/stage0/nextpas_command_query.pas` 继续只执行 syntax / resolution / semantic analysis，
+  并把 `Session.ScopesJson` / `Session.TypesJson` 投影成 query side tables；不执行 MIR、
+  backend 或 toolchain
+- `build/verify_local.sh` 新增 `stage0-query-symbols-semantic-graph-check`，用
+  `examples/smoke/var_halt.pas` 冻结 unit scope `VarHalt` 与 builtin type `Integer` side table
+
+### Promotion gate
+
+- `nextpas query symbols examples/smoke/var_halt.pas --target linux-x86_64 --workspace <repo>`
+  必须输出 `query-scopes=[...]` 与 `query-types=[...]`
+- `queryScopes[]` 必须包含 `scopeId=2`、`kind=unit`、`name=VarHalt` 与 `parentScopeId=1`
+- `queryTypes[]` 必须包含 `typeId=2`、`name=Integer` 与 `kind=builtin`
+- `command-envelope=<json>.result.queryScopes` 与 `queryTypes` 必须同步带上这批 side tables
 - `analysis-source=compilation-session` 必须保持不变
 - `mir-status=deferred`、`backend-plan-status=deferred` 与 `toolchain-plan-status=deferred`
   必须保持不变

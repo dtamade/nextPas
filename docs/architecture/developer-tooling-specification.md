@@ -527,7 +527,9 @@ semantic query 是 developer tooling 和 language service 的交界面。nextPas
 `querySymbols[]` 既保留 `ownerUnitId` / `scopeId` / `typeId` 这类稳定 identity，也会从同一份
 `TUnitGraph`、`TSemanticScope` 与 `TSemanticType` 补出可读的 owner unit、scope 和 type
 metadata，方便 CLI、automation 与 future IDE adapter 直接消费，而不需要重扫源码或解析
-build output。
+build output。`queryScopes[]` 与 `queryTypes[]` 则把同一份 `TSemanticModel` 的 scope/type
+graph 作为 normalized side tables 同步投影进 line output 与 result envelope，避免调用方在
+`querySymbols[]` 之外维护第二套 `scopeId` / `typeId` lookup。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
 

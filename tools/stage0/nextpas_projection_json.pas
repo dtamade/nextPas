@@ -634,6 +634,10 @@ begin
   );
   if AContext.SymbolsJson <> '' then
     AppendJsonField(AFields, 'querySymbols', AContext.SymbolsJson);
+  if AContext.ScopesJson <> '' then
+    AppendJsonField(AFields, 'queryScopes', AContext.ScopesJson);
+  if AContext.TypesJson <> '' then
+    AppendJsonField(AFields, 'queryTypes', AContext.TypesJson);
 end;
 
 procedure AppendPackageProjectionJsonFields(

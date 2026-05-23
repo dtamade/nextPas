@@ -113,6 +113,8 @@ begin
     AState.QueryProjection.ResultCount := Session.SymbolCount;
     AState.QueryProjection.HasResultCount := True;
     AState.QueryProjection.SymbolsJson := Session.SymbolsJson;
+    AState.QueryProjection.ScopesJson := Session.ScopesJson;
+    AState.QueryProjection.TypesJson := Session.TypesJson;
 
     WriteLn('mode=query');
     WriteLn('command=query');
