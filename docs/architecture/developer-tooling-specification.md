@@ -450,11 +450,11 @@ FPC 的独立工具生态说明了一个长期问题：一旦每个工具都有�
 `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，以及
 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
 `test`、最小 `env` state projection、最小 `doctor` health inspection 与最小 `query`
-semantic projection 五条公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
+semantic projection、只读 `pkg inspect` package workflow projection 六条公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
 结果对象。
 
 `build/verify_local.sh` 现在也会为 `verify-local` 自己输出同一类 `command-envelope=<json>`，
-这样当前 `build`、`test`、`env`、`doctor`、`query`、`verify-local` 六条最小公开命令面已经都站到了同一类
+这样当前 `build`、`test`、`env`、`doctor`、`query`、`pkg`、`verify-local` 七条最小公开命令面已经都站到了同一类
 result bridge 上。
 
 ## `env` 结果字段也必须是正式 contract，不是随手打印几行路径

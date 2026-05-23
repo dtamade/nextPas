@@ -45,7 +45,8 @@
   readiness 与 binding readiness，`query symbols` 也已投影
   `analysisSource=compilation-session` 与 `queryResultCount`，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
-  `packageInstallPlanStatus`。
+  `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
+  `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
 - `Batch 1` 到 `Batch 35` 已完成。
 - 当前滚动批次继续建立在已经存在的
@@ -1568,7 +1569,9 @@ structured finding surface：
   `nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]`
 - 这批故意只做 workspace-model-backed package workflow projection：当前会复用 shared
   workspace model、target facts 与 toolchain binding，并投影 `package-workflow-status=ready|missing`、
-  `package-manifest-status=ready|missing`、`package-source-root-count=<count>` 与
+  `package-manifest-status=ready|missing`、`package-lock-status=deferred`、
+  `package-workflow-manifest-path=<path>`、`package-root-path=<path>`、`package-name=<name>`、
+  `package-lockfile-path=<path>`、`package-source-root-count=<count>` 与
   `package-install-plan-status=deferred`
 - `compiler/frontend/np_package_workflow.pas` 现在补齐
   `BuildPackageWorkflowTruthFromWorkspaceModel`，让 package workflow truth 可以直接消费

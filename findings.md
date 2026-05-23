@@ -125,6 +125,10 @@
   `package-workflow-manifest-status=ready`、`package-workflow-lock-status=deferred`、
   `package-install-plan-status=deferred` 与 `package-workflow-source-root-count=<non-zero>`；
   这让 package workflow skeleton 不再只靠文档留证。
+- 当前 `pkg inspect` 的 detail contract 也已进入 promotion path：line-based output 与
+  `command-envelope=<json>.result` 会同时投影 workflow-owned manifest path、package root、
+  package name、lock status 与 canonical lockfile path；这仍然是只读 truth projection，
+  不执行 fetch、install、dependency resolution、lockfile write 或 publish workflow。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

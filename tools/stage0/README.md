@@ -157,6 +157,11 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 
 - `package-workflow-status=ready|missing`
 - `package-manifest-status=ready|missing`
+- `package-lock-status=deferred`
+- `package-workflow-manifest-path=<path>`
+- `package-root-path=<path>`
+- `package-name=<name>`
+- `package-lockfile-path=<path>`
 - `package-source-root-count=<count>`
 - `package-install-plan-status=deferred`
 
@@ -737,6 +742,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
 `stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
+`package-lock-status=deferred`、`package-workflow-manifest-path=<path>`、
+`package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
 `package-source-root-count=<non-zero>`、`package-install-plan-status=deferred`、
 `stage0PkgCheck=pass` 与 `stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
 `env` / `doctor` / `query` / `pkg` surface 也进入正式 gate。

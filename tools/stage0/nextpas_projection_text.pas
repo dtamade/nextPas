@@ -851,6 +851,11 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'package-workflow-manifest-path',
+    AContext.ManifestPath
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'package-root-path',
     AContext.PackageRootPath
   );

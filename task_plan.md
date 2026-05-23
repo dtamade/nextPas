@@ -15,6 +15,37 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 `pkg inspect` package workflow detail hardening
+
+### Goal
+
+把已经存在的 package workflow truth 从 aggregate status 继续推进到可消费的只读细节投影，
+同时继续守住 non-executing package manager 边界：
+
+- `pkg inspect` 必须继续复用 `WorkspaceModel` / `PackageWorkflowTruth`，不执行 fetch、install、
+  dependency resolution、lockfile write 或 publish workflow
+- line-based output 必须冻结 workflow-owned manifest path、package root、package name、
+  lock status 与 canonical lockfile path
+- `command-envelope=<json>.result` 必须同步带上 `packageWorkflowManifestPath`、
+  `packageRootPath`、`packageName`、`packageLockStatus` 与 `packageLockfilePath`
+- `build/verify_local.sh` 必须把这批 detail fields 纳入 `stage0-pkg-inspect-check`
+
+### Status
+
+Completed
+
+### Completed Steps
+
+- [x] 扩展 `tools/stage0/nextpas_projection_text.pas`，新增
+      `package-workflow-manifest-path`
+- [x] 扩展 `tools/stage0/nextpas_projection_json.pas`，新增
+      `packageWorkflowManifestPath`
+- [x] 加严 `build/verify_local.sh` 的 `stage0-pkg-inspect-check`，冻结
+      manifest path、package root、package name、lock status 与 lockfile path 的 line/envelope
+      contract
+- [x] 同步回写 `tools/stage0/README.md`、package workflow / roadmap docs 与持续记录
+- [x] 重新运行 fresh `bash build/verify_local.sh`，确认整套 `verify-local=pass`
+
 ## Addendum: 2026-05-23 Installed-source Extra Assemble Boundary Closure
 
 ### Goal

@@ -1,7 +1,29 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-23 记录为准。
+2026-05-24 记录为准。
+
+## Session: 2026-05-24 (`pkg inspect` package workflow detail hardening)
+
+- **Status:** completed
+- Actions taken:
+  - 先核对工作树、最近提交与 `task_plan.md` / `progress.md` / `findings.md`，确认
+    2026-05-23 的 Stage2 / alloca / installed-source / workspace-model gate 都已收口，
+    当前最高价值增量是 richer package workflow projection。
+  - 扩展 `tools/stage0/nextpas_projection_text.pas`，让 `pkg inspect` 正式输出
+    `package-workflow-manifest-path`，把已经 capture 的 `ManifestPath` 从内部 truth 提升为
+    public read-only projection。
+  - 扩展 `tools/stage0/nextpas_projection_json.pas`，让
+    `command-envelope=<json>.result` 同步带上 `packageWorkflowManifestPath`，并继续保留
+    `packageRootPath`、`packageName`、`packageLockStatus` 与 `packageLockfilePath`。
+  - 加严 `build/verify_local.sh` 的 `stage0-pkg-inspect-check`，冻结
+    `package-manifest-path`、`package-workflow-manifest-path`、`package-root-path`、
+    `package-name`、`package-lock-status` 与 `package-lockfile-path`，以及对应 envelope
+    detail fields。
+  - 同步回写 docs 与 tracking，明确这批只是只读 package workflow detail hardening，
+    不执行 fetch、install、dependency resolution、lockfile write 或 publish workflow。
+  - 运行 fresh `bash build/verify_local.sh`，确认 `stage0PkgCheck=pass`、整套
+    `command-envelope` success result 与最终 `verify-local=pass`。
 
 ## Session: 2026-05-23 (Stage2 unit self-compile boundary)
 

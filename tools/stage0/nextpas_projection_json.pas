@@ -655,6 +655,11 @@ begin
     'packageInstallPlanStatus',
     AContext.InstallPlanStatus
   );
+  AppendJsonStringField(
+    AFields,
+    'packageWorkflowManifestPath',
+    AContext.ManifestPath
+  );
   AppendJsonStringField(AFields, 'packageRootPath', AContext.PackageRootPath);
   AppendJsonStringField(AFields, 'packageName', AContext.PackageName);
   AppendJsonStringField(AFields, 'packageLockfilePath', AContext.LockfilePath);
