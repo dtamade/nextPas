@@ -15,6 +15,35 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 37 Query Symbols Detail Projection
+
+### Goal
+
+把已经存在的只读 `query symbols` 从“只给 aggregate count”推进到可被 CLI、IDE adapter
+和 automation 直接消费的结构化 symbol detail projection，同时继续守住它不是完整
+language service / LSP 的边界：
+
+- owner 继续是 `TCompilationSession` / `TSemanticModel`，不在 stage0 CLI 旁路重扫源码或解析输出
+- truth object 是当前 semantic symbol graph 中的 `TSemanticSymbol`
+- line-based output 必须新增 `query-symbols=<json-array>`，与 `query-result-count` 表达同一批结果
+- `command-envelope=<json>.result` 必须新增 `querySymbols`，字段来自同一份 session-owned JSON
+- promotion gate 继续落在 `build/verify_local.sh` 的 `stage0-query-symbols-check`
+- non-goal：不实现 LSP server、open document overlay、incremental invalidation、references、
+  rename preflight、completion 或 backend/toolchain execution
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 先把 `stage0-query-symbols-check` 写成 RED gate，要求 line/envelope 两层 symbol detail
+- [x] 在 `TCompilationSession` 暴露 session-owned `SymbolsJson`
+- [x] 扩展 `TQueryProjectionContext`、text/json projection helper 与 `RunQuerySymbols`
+- [x] 同步 stage0 / developer tooling / rolling plan 文档和持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Rolling Plan Batch 36 Truth Sync
 
 ### Goal

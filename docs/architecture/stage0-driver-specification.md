@@ -197,9 +197,12 @@ health taxonomy 应在后续批次继续加固。
 - 复用 `ResolveWorkspaceModel(...)` 与 `TCompilationSession`，执行 syntax、unit resolution 与 semantic analysis
 - 不调用 `LowerToMir`、`PlanBackend`、`PlanToolchain` 或 `ExecuteToolchain`
 - 真实 query 摘要通过 `query-kind=symbols`、`query-status=success`、
-  `analysis-source=compilation-session` 与 `query-result-count=<count>` 投影
-- `command-envelope=<json>.result` 同步保留 `queryKind`、`queryStatus`、`analysisSource`
-  与 `queryResultCount`
+  `analysis-source=compilation-session`、`query-result-count=<count>` 与
+  `query-symbols=<json-array>` 投影
+- `command-envelope=<json>.result` 同步保留 `queryKind`、`queryStatus`、`analysisSource`、
+  `queryResultCount` 与 `querySymbols`
+- `querySymbols` 必须来自同一份 `TCompilationSession` / `TSemanticModel`，当前条目至少包含
+  `symbolId`、`name`、`kind`、`ownerUnitId`、`scopeId`、`typeId` 和 `byteOffset`
 
 当前 `query symbols` 的 `analysis-source` 必须诚实写成 `compilation-session`。它不是
 `LanguageServiceSession`，也不提供 open document overlay、incremental invalidation、references、

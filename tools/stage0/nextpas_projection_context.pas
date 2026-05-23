@@ -318,6 +318,7 @@ begin
   AContext.AnalysisSource := '';
   AContext.ResultCount := 0;
   AContext.HasResultCount := False;
+  AContext.SymbolsJson := '';
 end;
 
 procedure ClearPackageProjectionContextValue(

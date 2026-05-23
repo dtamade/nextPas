@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 37 query symbols detail projection)
+
+- **Status:** completed
+- Actions taken:
+  - 从 `2ce3220` 继续，先核对工作树与最近提交，确认上一批 rolling plan Batch 36 truth
+    sync 已提交且工作树干净。
+  - 按 `architecture-principles-specification.md` 的 owner/truth/projection/promotion gate
+    门槛复盘下一步候选：`env use/sync` 会立刻进入副作用物化边界，`pkg` 下一步容易过早进入
+    resolver/lock 写入；当前最高价值、最低分叉风险的切片是 richer `query symbols` detail
+    projection。
+  - 读取 `nextpas_command_query.pas`、projection helpers、`TCompilationSession` 与
+    `TSemanticModel`，确认当前 query 已复用 compilation session，但 public result 仍只有
+    `query-result-count` / `queryResultCount`，没有 symbol detail。
+  - 在 `build/verify_local.sh` 的 `stage0-query-symbols-check` 先写 RED gate，要求
+    line-based `query-symbols` 和 envelope `querySymbols` 同时存在，并 focused probe 确认
+    旧实现确实缺少这两个 detail fields。
+  - 在 `TCompilationSession` 新增 `SymbolsJson`，从 session-owned `TSemanticModel.SymbolAt(...)`
+    生成 symbol detail JSON；随后扩展 `TQueryProjectionContext`、text/json projection helper
+    与 `RunQuerySymbols`，让 line/envelope 两层消费同一份 JSON。
+  - focused 重新编译 stage0 并运行
+    `nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace <repo>`，
+    确认输出 `query-symbols=[...]`，envelope 中也出现 `querySymbols`，代表性 symbols 包含
+    `HelloWithUnits`、`System`、`Stage0Greeter` 与 `Stage0GreeterImpl`。
+  - 同步 `tools/stage0/README.md`、stage0 driver spec、developer tooling spec、rolling plan
+    与持续记录，明确这批仍不是 LSP / language service / incremental query。
+  - 运行 fresh `bash build/verify_local.sh`，确认 `stage0QueryCheck=pass`，新的
+    `query-symbols` / `querySymbols` gate 通过，最终得到 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Rolling plan Batch 36 truth sync)
 
 - **Status:** completed

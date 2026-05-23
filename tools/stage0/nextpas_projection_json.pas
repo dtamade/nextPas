@@ -632,6 +632,8 @@ begin
     AContext.ResultCount,
     AContext.HasResultCount
   );
+  if AContext.SymbolsJson <> '' then
+    AppendJsonField(AFields, 'querySymbols', AContext.SymbolsJson);
 end;
 
 procedure AppendPackageProjectionJsonFields(

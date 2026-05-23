@@ -4462,6 +4462,7 @@ require_output_pattern '^query-kind=symbols$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'mi
 require_output_pattern '^query-status=success$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-status'
 require_output_pattern '^analysis-source=compilation-session$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-analysis-source'
 require_output_pattern '^query-result-count=[1-9][0-9]*$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-result-count'
+require_output_pattern '^query-symbols=\[.*"name":"HelloWithUnits".*"kind":"unit".*"name":"Stage0Greeter".*"kind":"unit".*"name":"Stage0GreeterImpl".*"kind":"unit"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-detail'
 require_output_pattern '^mir-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-mir'
 require_output_pattern '^backend-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-backend'
 require_output_pattern '^toolchain-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-deferred-toolchain'
@@ -4473,6 +4474,7 @@ require_output_pattern '^human-summary=query symbols completed$' "$STAGE0_QUERY_
 require_output_pattern '^command-envelope=.*"command":"query"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-command'
 require_output_pattern '^command-envelope=.*"selector":"symbols".*"queryKind":"symbols"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-kind'
 require_output_pattern '^command-envelope=.*"queryStatus":"success".*"analysisSource":"compilation-session".*"queryResultCount":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-result'
+require_output_pattern '^command-envelope=.*"querySymbols":\[.*"name":"HelloWithUnits".*"kind":"unit".*"name":"Stage0Greeter".*"kind":"unit".*"name":"Stage0GreeterImpl".*"kind":"unit"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-detail'
 require_output_pattern '^command-envelope=.*"mirStatus":"deferred".*"backendPlanStatus":"deferred".*"toolchainPlanStatus":"deferred"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-symbols-envelope-deferred-stages'
 
 printf 'stage0-query-invalid-arguments-check=running\n'

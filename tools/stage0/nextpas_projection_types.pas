@@ -198,6 +198,7 @@ type
     AnalysisSource: string;
     ResultCount: LongInt;
     HasResultCount: Boolean;
+    SymbolsJson: string;
   end;
 
   TPackageProjectionContext = record

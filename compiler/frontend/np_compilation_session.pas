@@ -208,6 +208,7 @@ type
     function UnitGraphEdgeCount: LongInt;
     function UnitGraphRootName: string;
     function SymbolCount: LongInt;
+    function SymbolsJson: string;
     function TypeCount: LongInt;
     function TypedHirNodeCount: LongInt;
     function RuntimeContractCount: LongInt;
@@ -1546,6 +1547,42 @@ begin
     Exit(0);
 
   Result := FSemanticModel.SymbolCount;
+end;
+
+function TCompilationSession.SymbolsJson: string;
+var
+  Fields: string;
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  if FSemanticModel = nil then
+    Exit('[]');
+
+  Result := '[';
+  for Index := 0 to FSemanticModel.SymbolCount - 1 do
+  begin
+    if Index > 0 then
+      Result := Result + ',';
+
+    Symbol := FSemanticModel.SymbolAt(Index);
+    Fields := '';
+    AppendJsonIntegerField(Fields, 'symbolId', Symbol.SymbolId, True);
+    AppendJsonStringField(Fields, 'name', Symbol.Name);
+    AppendJsonStringField(Fields, 'kind', Symbol.Kind);
+    AppendJsonStringField(Fields, 'ownerUnitId', Symbol.OwnerUnitId);
+    AppendJsonIntegerField(Fields, 'scopeId', Symbol.ScopeId, True);
+    AppendJsonIntegerField(Fields, 'typeId', Symbol.TypeId, True);
+    AppendJsonIntegerField(
+      Fields,
+      'paramCount',
+      Symbol.ParamCount,
+      Symbol.ParamCount >= 0
+    );
+    AppendJsonIntegerField(Fields, 'byteOffset', Symbol.ByteOffset, True);
+
+    Result := Result + '{' + Fields + '}';
+  end;
+  Result := Result + ']';
 end;
 
 function TCompilationSession.TypeCount: LongInt;

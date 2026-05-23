@@ -112,6 +112,7 @@ begin
     AState.QueryProjection.AnalysisSource := 'compilation-session';
     AState.QueryProjection.ResultCount := Session.SymbolCount;
     AState.QueryProjection.HasResultCount := True;
+    AState.QueryProjection.SymbolsJson := Session.SymbolsJson;
 
     WriteLn('mode=query');
     WriteLn('command=query');

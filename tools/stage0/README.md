@@ -147,11 +147,14 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `query-status=success`
 - `analysis-source=compilation-session`
 - `query-result-count=<count>`
+- `query-symbols=<json-array>`
 
 这条 surface 当前不是完整 language service，也不是 LSP server。它只把
 `TCompilationSession` 已经拥有的 syntax / resolution / semantic 结果投影为只读 query
-结果；因此成功路径会显示 `mir-status=deferred`、`backend-plan-status=deferred` 与
-`toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
+结果。`query-symbols` 是同一份 semantic symbol graph 的结构化 mirror，当前每个条目至少
+包含 `symbolId`、`name`、`kind`、`ownerUnitId`、`scopeId`、`typeId` 和
+`byteOffset`；因此成功路径会显示 `mir-status=deferred`、`backend-plan-status=deferred`
+与 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
 
 `pkg inspect` 当前还会额外投影最小 package workflow 汇总：
 

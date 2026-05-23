@@ -826,6 +826,11 @@ begin
     AContext.ResultCount,
     AContext.HasResultCount
   );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'query-symbols',
+    AContext.SymbolsJson
+  );
 end;
 procedure PrintPackageProjectionFields(const UseStdErr: Boolean; const AContext: TPackageProjectionContext);
 begin

@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 36` 为准。
+以最新完成的 `Batch 37` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -48,7 +48,7 @@
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
   `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 36` 已完成。
+- `Batch 1` 到 `Batch 37` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -65,7 +65,9 @@
   也已进入统一 command surface。`Batch 36` 又把 stage0 driver decomposition、
   projection helper ownership、malformed manifest graceful fallback、diagnostic record
   extensibility 与 resolver search-index staleness tracking 收成当前最新 verified baseline。
-  下一步优先转回 richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
+  `Batch 37` 继续把 `query symbols` 从 aggregate count 加固为 session-owned symbol detail
+  projection，line-based `query-symbols` 与 envelope `querySymbols` 都来自同一份
+  `TSemanticModel`。下一步优先转回 richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。
 
@@ -1612,11 +1614,11 @@ semantic query surface、package workflow projection 与 compiler core robustnes
 下一批不应该再回头补”library request 有没有进入 argv”、”env state 能不能被只读投影”、
 “doctor 能不能作为 command surface 执行”、”runtime SDK finding 能不能结构化输出”、
 “env readiness evidence 能不能稳定输出”、”query symbols 能不能走 compilation session”、
-“pkg inspect 能不能投影 package workflow status”或”resolver 能不能累积多个错误”
+“query symbols 能不能投影具体 symbol detail”、”pkg inspect 能不能投影 package workflow status”或”resolver 能不能累积多个错误”
 这类已闭环问题，
 而应该转回 richer developer tooling 与更高层控制面。
 
-但这些后续批次必须建立在前三十五批真实收口之后，而不是提前平行开工。
+但这些后续批次必须建立在前面已完成批次的真实收口之上，而不是提前平行开工。
 
 ## 这份计划故意不做什么
 
@@ -1663,3 +1665,39 @@ semantic query surface、package workflow projection 与 compiler core robustnes
 - `grep -c '^var$' nextpas.pas` 全局 var 块消失
 - `grep -rl 'function JsonEscape' compiler/ tools/` 只返回 nextpas_json_helpers
 - verify-local=pass
+
+## Batch 37: `query symbols` detail projection
+
+- 状态：完成
+- 归属路线段：Workspace and Developer Tooling Integration / Unit Resolution and Semantic Core
+
+### 这一批要解决什么
+
+把已经存在的只读 `query symbols` 从”只告诉调用方有多少 symbol”推进到可消费的结构化
+symbol detail projection，让 CLI、future IDE adapter 与 automation 能消费同一份 semantic
+symbol graph，而不是从 stdout 或 build output 里反推。
+
+### 这一批已经交付了什么
+
+- `compiler/frontend/np_compilation_session.pas` 新增 `SymbolsJson`，从 session-owned
+  `TSemanticModel.SymbolAt(...)` 生成 query result JSON
+- `tools/stage0/nextpas_projection_types.pas` 的 `TQueryProjectionContext` 新增
+  `SymbolsJson`
+- `tools/stage0/nextpas_projection_text.pas` 新增 line-based `query-symbols=<json-array>`
+- `tools/stage0/nextpas_projection_json.pas` 新增 envelope field `querySymbols`
+- `tools/stage0/nextpas_command_query.pas` 继续只执行 syntax / resolution / semantic analysis，
+  并把 `Session.SymbolsJson` 投影成 query result；不执行 MIR、backend 或 toolchain
+- `build/verify_local.sh` 的 `stage0-query-symbols-check` 现在会冻结 line/envelope 两层
+  symbol detail，并继续断言 query path 的 MIR / backend / toolchain 状态保持 `deferred`
+
+### Promotion gate
+
+- `nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64 --workspace <repo>`
+  必须输出 `query-symbols=[...]`
+- `command-envelope=<json>.result.querySymbols` 必须存在
+- 代表性结果必须包含 `HelloWithUnits`、`Stage0Greeter` 与 `Stage0GreeterImpl` 三个
+  `kind=unit` symbols
+- `analysis-source=compilation-session` 必须保持不变
+- `mir-status=deferred`、`backend-plan-status=deferred` 与 `toolchain-plan-status=deferred`
+  必须保持不变
+- fresh `bash build/verify_local.sh` 必须继续得到 `verify-local=pass`
