@@ -176,6 +176,7 @@ COMPILER_MODULE_SOURCE_DB_OUTPUT=$(mktemp)
 COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT=$(mktemp)
 STAGE0_ENV_STATUS_OUTPUT=$(mktemp)
 STAGE0_ENV_USE_OUTPUT=$(mktemp)
+STAGE0_ENV_SYNC_OUTPUT=$(mktemp)
 STAGE0_ENV_USE_STATUS_OUTPUT=$(mktemp)
 STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_ENV_USE_WORKSPACE=$(mktemp -d)
@@ -388,6 +389,7 @@ cleanup() {
   rm -f "$COMPILER_MODULE_WORKSPACE_MODEL_OUTPUT"
   rm -f "$STAGE0_ENV_STATUS_OUTPUT"
   rm -f "$STAGE0_ENV_USE_OUTPUT"
+  rm -f "$STAGE0_ENV_SYNC_OUTPUT"
   rm -f "$STAGE0_ENV_USE_STATUS_OUTPUT"
   rm -f "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_DOCTOR_OUTPUT"
@@ -4447,6 +4449,7 @@ printf 'stage0-env-status-check=pass\n'
 
 ENV_USE_BINDING_ID="linux-x86_64-to-linux-x86_64-llvm"
 ENV_SELECTION_PATH="$STAGE0_ENV_USE_WORKSPACE/.nextpas/env/selections/$TARGET_ID.toml"
+ENV_RESOLUTION_PATH="$STAGE0_ENV_USE_WORKSPACE/.nextpas/env/resolution/$TARGET_ID.toml"
 printf 'stage0-env-use-check=running\n'
 printf 'stage0-env-use-command=%s env use --target %s --toolchain-binding %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$ENV_USE_BINDING_ID" "$STAGE0_ENV_USE_WORKSPACE"
 if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" env use --target "$TARGET_ID" --toolchain-binding "$ENV_USE_BINDING_ID" --workspace "$STAGE0_ENV_USE_WORKSPACE" >"$STAGE0_ENV_USE_OUTPUT" 2>&1; then
@@ -4495,6 +4498,42 @@ require_output_pattern '^result=success$' "$STAGE0_ENV_USE_STATUS_OUTPUT" 'missi
 require_output_pattern '^command-envelope=.*"selector":"status".*"envSelectionStatus":"ready".*"envSelectionToolchainBindingId":"linux-x86_64-to-linux-x86_64-llvm"' "$STAGE0_ENV_USE_STATUS_OUTPUT" 'missing-stage0-env-use-status-envelope-selection'
 require_output_pattern '^command-envelope=.*"toolchainBindingId":"linux-x86_64-to-linux-x86_64-llvm".*"backendFamily":"llvm"' "$STAGE0_ENV_USE_STATUS_OUTPUT" 'missing-stage0-env-use-status-envelope-binding'
 printf 'stage0-env-use-check=pass\n'
+
+printf 'stage0-env-sync-check=running\n'
+printf 'stage0-env-sync-command=%s env sync --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$STAGE0_ENV_USE_WORKSPACE"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" env sync --target "$TARGET_ID" --workspace "$STAGE0_ENV_USE_WORKSPACE" >"$STAGE0_ENV_SYNC_OUTPUT" 2>&1; then
+  cat "$STAGE0_ENV_SYNC_OUTPUT"
+  fail 'stage0-env-sync-check-failed'
+fi
+cat "$STAGE0_ENV_SYNC_OUTPUT"
+require_path "$ENV_RESOLUTION_PATH"
+require_output_literal "env-resolution-path=$ENV_RESOLUTION_PATH" "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-resolution-path'
+require_output_pattern '^env-resolution-status=ready$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-resolution-status'
+require_output_pattern '^env-sync-change=materialized$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-change'
+require_output_pattern '^env-selection-status=ready$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-selection-status'
+require_output_pattern '^env-selection-toolchain-binding-id=linux-x86_64-to-linux-x86_64-llvm$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-selection-binding'
+require_output_pattern '^toolchain-binding-id=linux-x86_64-to-linux-x86_64-llvm$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-toolchain-binding-id'
+require_output_pattern '^backend-family=llvm$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-backend-family'
+require_output_pattern '^status=success$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-status'
+require_output_pattern '^result=success$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-result'
+require_output_pattern '^human-summary=environment synchronized$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-human-summary'
+require_output_pattern '^command-envelope=.*"command":"env".*"selector":"sync"' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-envelope-selector'
+require_output_pattern '^command-envelope=.*"envResolutionPath":".*".*"envResolutionStatus":"ready".*"envSyncChange":"materialized"' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-envelope-resolution'
+require_output_literal 'selection_status = "ready"' "$ENV_RESOLUTION_PATH" 'missing-stage0-env-sync-resolution-file-selection-status'
+require_output_literal 'selection_toolchain_binding_id = "linux-x86_64-to-linux-x86_64-llvm"' "$ENV_RESOLUTION_PATH" 'missing-stage0-env-sync-resolution-file-selection-binding'
+require_output_literal 'toolchain_binding_id = "linux-x86_64-to-linux-x86_64-llvm"' "$ENV_RESOLUTION_PATH" 'missing-stage0-env-sync-resolution-file-binding'
+require_output_literal 'environment_status = "incomplete"' "$ENV_RESOLUTION_PATH" 'missing-stage0-env-sync-resolution-file-environment-status'
+require_output_literal 'runtime_libc_present = false' "$ENV_RESOLUTION_PATH" 'missing-stage0-env-sync-resolution-file-runtime-libc'
+
+printf 'stage0-env-sync-repeat-command=%s env sync --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$STAGE0_ENV_USE_WORKSPACE"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" env sync --target "$TARGET_ID" --workspace "$STAGE0_ENV_USE_WORKSPACE" >"$STAGE0_ENV_SYNC_OUTPUT" 2>&1; then
+  cat "$STAGE0_ENV_SYNC_OUTPUT"
+  fail 'stage0-env-sync-repeat-check-failed'
+fi
+cat "$STAGE0_ENV_SYNC_OUTPUT"
+require_output_pattern '^env-sync-change=unchanged$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-repeat-change'
+require_output_pattern '^env-resolution-status=ready$' "$STAGE0_ENV_SYNC_OUTPUT" 'missing-stage0-env-sync-repeat-resolution-status'
+printf 'stage0-env-sync-check=pass\n'
 
 printf 'stage0-doctor=running\n'
 printf 'stage0-doctor-command=%s doctor --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
@@ -5063,6 +5102,7 @@ require_output_pattern '^failure-kind=invalid-arguments$' "$STAGE0_ENV_INVALID_A
 require_output_pattern '^human-summary=invalid-arguments$' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-human-summary'
 require_output_pattern '^  nextpas env status --target linux-x86_64 \[--toolchain-binding <id>\] \[--workspace <root>\]$' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-status-usage'
 require_output_pattern '^  nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>$' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-use-usage'
+require_output_pattern '^  nextpas env sync --target linux-x86_64 \[--toolchain-binding <id>\] --workspace <root>$' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-sync-usage'
 require_output_pattern '^command-envelope=.*"command":"env"' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-envelope-command'
 require_output_pattern '^command-envelope=.*"selector":"env".*"failureKind":"invalid-arguments"' "$STAGE0_ENV_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-env-invalid-arguments-envelope-failure'
 printf 'stage0-env-invalid-arguments-check=pass\n'
@@ -5095,6 +5135,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

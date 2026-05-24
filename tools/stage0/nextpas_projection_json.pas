@@ -559,6 +559,13 @@ begin
     'envSelectionToolchainBindingId',
     AContext.SelectionToolchainBindingId
   );
+  AppendJsonStringField(AFields, 'envResolutionPath', AContext.ResolutionPath);
+  AppendJsonStringField(
+    AFields,
+    'envResolutionStatus',
+    AContext.ResolutionStatus
+  );
+  AppendJsonStringField(AFields, 'envSyncChange', AContext.SyncChange);
   AppendJsonStringField(
     AFields,
     'toolchainBindingPath',

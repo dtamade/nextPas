@@ -16,6 +16,11 @@
 - `env status --workspace <root>` 现在会在没有显式 `--toolchain-binding` 时读取同一份
   selection sidecar，并把 `env-selection-status=ready` 与 selected binding 继续投影出来；
   显式 `--toolchain-binding` 仍然覆盖 workspace-local selection。
+- `env sync` 现在会把 workspace-local resolution cache 写进
+  `<workspace>/.nextpas/env/resolution/<target>.toml`，并在 line output / envelope 中公开
+  `env-resolution-path`、`env-resolution-status=ready` 与 `env-sync-change=materialized|updated|unchanged`。
+- fresh `bash build/verify_local.sh` 已再次通过，说明 `env sync` gate 的 workspace-local
+  resolution cache contract 和验证脚本变量边界都已收口。
 - 这条 selection sidecar 只属于 ArtifactRootSet 管辖的 machine-local state，不回写
   `nextpas.workspace.toml`、`nextpas.package.toml` 或 `nextpas.lock`。
 - fresh `bash build/verify_local.sh` 已经把 `stage0EnvUseCheck=pass` 纳入 promotion path，
@@ -101,6 +106,10 @@
   target/toolchain/distribution/runtime truth，显式投影
   `toolchain-binding-path`、distribution dirs、`runtime-root`、`runtime-libc`、
   `runtime-libc-present`、`environment-readiness` 与 `runtime-sdk-status`。
+- 当前 `tools/stage0/nextpas.pas` 也已拥有最小 workspace-local `env sync` surface：
+  `nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>` 会写
+  `<workspace>/.nextpas/env/resolution/<target>.toml`，并把 selection 输入、resolved binding、
+  distribution/runtime readiness 与 sync delta 公开给 CLI、IDE 与 automation。
 - 当前 `env status` 已明确和 `doctor` 分层：即使当前仓库缺少
   `lib/nextpas/runtime/linux-x86_64/libc.so`，命令也继续保持
   `status=success` / `result=success`，把 `environment-readiness=incomplete`、

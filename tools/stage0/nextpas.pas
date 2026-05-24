@@ -105,7 +105,8 @@ begin
   begin
     if ParamCount < 3 then
       Fail(State, 'invalid-arguments', True);
-    if (ParamStr(2) <> 'status') and (ParamStr(2) <> 'use') then
+    if (ParamStr(2) <> 'status') and (ParamStr(2) <> 'use') and
+      (ParamStr(2) <> 'sync') then
       Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := ParamStr(2);
@@ -155,8 +156,15 @@ begin
         ToolchainBindingOverride,
         WorkspaceOverride
       )
-    else
+    else if State.SelectorName = 'use' then
       RunEnvUse(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      )
+    else
+      RunEnvSync(
         State,
         TargetName,
         ToolchainBindingOverride,

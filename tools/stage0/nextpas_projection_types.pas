@@ -163,6 +163,9 @@ type
     SelectionStatus: string;
     SelectionTarget: string;
     SelectionToolchainBindingId: string;
+    ResolutionPath: string;
+    ResolutionStatus: string;
+    SyncChange: string;
     ToolchainBindingPath: string;
     DistributionBinDir: string;
     DistributionLibDir: string;

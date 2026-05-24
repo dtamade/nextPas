@@ -562,6 +562,8 @@ FPC 的 `.pri`、`fppkg.cfg`、generated manifest 和 package-specific config fi
 - `env/resolution/`
   - 放置 environment resolution cache，例如 workspace requirement 到 binding/sysroot/runtime set 的
     派生结果
+  - 当前 `stage0 env sync` 已先落地 workspace-local resolution sidecar：
+    `env/resolution/<target>.toml`
 
 这里故意只推荐 bucket，不新增新的 persisted truth object：
 

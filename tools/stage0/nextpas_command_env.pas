@@ -23,6 +23,13 @@ procedure RunEnvUse(
   const WorkspaceOverride: string
 );
 
+procedure RunEnvSync(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+
 implementation
 
 type
@@ -63,6 +70,33 @@ begin
     IncludeTrailingPathDelimiter(EnvSelectionDirectory(ArtifactRootPath)) +
     TargetName + '.toml'
   );
+end;
+
+function EnvResolutionDirectory(const ArtifactRootPath: string): string;
+begin
+  Result := ExpandFileName(
+    IncludeTrailingPathDelimiter(ArtifactRootPath) + 'env' +
+    DirectorySeparator + 'resolution'
+  );
+end;
+
+function EnvResolutionPath(
+  const ArtifactRootPath: string;
+  const TargetName: string
+): string;
+begin
+  Result := ExpandFileName(
+    IncludeTrailingPathDelimiter(EnvResolutionDirectory(ArtifactRootPath)) +
+    TargetName + '.toml'
+  );
+end;
+
+function BoolSidecarString(const Value: Boolean): string;
+begin
+  if Value then
+    Exit('true');
+
+  Result := 'false';
 end;
 
 procedure CaptureWorkspaceSelectionContext(
@@ -234,6 +268,108 @@ begin
   end;
 end;
 
+procedure WriteEnvResolutionSidecar(
+  const ResolutionPath: string;
+  const TargetConfig: TTargetConfig;
+  const EnvironmentContext: TEnvironmentProjectionContext;
+  out SyncChange: string
+);
+var
+  ExistedBefore: Boolean;
+  ExistingLines: TStringList;
+  Lines: TStringList;
+begin
+  ExistedBefore := FileExists(ResolutionPath);
+  if not ForceDirectories(ExtractFileDir(ResolutionPath)) then
+    raise Exception.Create('env-resolution-directory-create-failed: ' +
+      ExtractFileDir(ResolutionPath));
+
+  Lines := TStringList.Create;
+  try
+    Lines.Add('# nextPas workspace-local environment resolution');
+    Lines.Add('target = ' + QuoteSidecarString(TargetConfig.TargetId));
+    Lines.Add(
+      'selection_path = ' + QuoteSidecarString(EnvironmentContext.SelectionPath)
+    );
+    Lines.Add(
+      'selection_status = ' + QuoteSidecarString(EnvironmentContext.SelectionStatus)
+    );
+    Lines.Add(
+      'selection_target = ' + QuoteSidecarString(EnvironmentContext.SelectionTarget)
+    );
+    Lines.Add(
+      'selection_toolchain_binding_id = ' +
+      QuoteSidecarString(EnvironmentContext.SelectionToolchainBindingId)
+    );
+    Lines.Add(
+      'toolchain_binding_path = ' +
+      QuoteSidecarString(EnvironmentContext.ToolchainBindingPath)
+    );
+    Lines.Add(
+      'toolchain_binding_id = ' + QuoteSidecarString(TargetConfig.ToolchainBindingId)
+    );
+    Lines.Add('backend_family = ' + QuoteSidecarString(TargetConfig.BackendFamily));
+    Lines.Add('runtime_sdk = ' + QuoteSidecarString(TargetConfig.RuntimeSdkId));
+    Lines.Add(
+      'distribution_bin_dir = ' +
+      QuoteSidecarString(EnvironmentContext.DistributionBinDir)
+    );
+    Lines.Add(
+      'distribution_lib_dir = ' +
+      QuoteSidecarString(EnvironmentContext.DistributionLibDir)
+    );
+    Lines.Add(
+      'distribution_share_dir = ' +
+      QuoteSidecarString(EnvironmentContext.DistributionShareDir)
+    );
+    Lines.Add('runtime_root = ' + QuoteSidecarString(EnvironmentContext.RuntimeRootPath));
+    Lines.Add('runtime_libc = ' + QuoteSidecarString(EnvironmentContext.RuntimeLibcPath));
+    Lines.Add(
+      'runtime_libc_present = ' + BoolSidecarString(EnvironmentContext.RuntimeLibcPresent)
+    );
+    Lines.Add(
+      'environment_readiness = ' +
+      QuoteSidecarString(EnvironmentContext.EnvironmentReadiness)
+    );
+    Lines.Add(
+      'environment_status = ' + QuoteSidecarString(EnvironmentContext.EnvironmentStatus)
+    );
+    Lines.Add(
+      'runtime_sdk_status = ' + QuoteSidecarString(EnvironmentContext.RuntimeSdkStatus)
+    );
+    Lines.Add(
+      'toolchain_binding_status = ' +
+      QuoteSidecarString(EnvironmentContext.ToolchainBindingStatus)
+    );
+    Lines.Add(
+      'distribution_status = ' + QuoteSidecarString(EnvironmentContext.DistributionStatus)
+    );
+
+    if ExistedBefore then
+    begin
+      ExistingLines := TStringList.Create;
+      try
+        ExistingLines.LoadFromFile(ResolutionPath);
+        if ExistingLines.Text = Lines.Text then
+        begin
+          SyncChange := 'unchanged';
+          Exit;
+        end;
+      finally
+        ExistingLines.Free;
+      end;
+    end;
+
+    Lines.SaveToFile(ResolutionPath);
+    if ExistedBefore then
+      SyncChange := 'updated'
+    else
+      SyncChange := 'materialized';
+  finally
+    Lines.Free;
+  end;
+end;
+
 procedure RunEnvStatus(
   var AState: TNextPasState;
   const TargetName: string;
@@ -376,6 +512,93 @@ begin
     False
   );
   WriteLn('human-summary=environment selection updated');
+end;
+
+procedure RunEnvSync(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+var
+  EffectiveToolchainBinding: string;
+  TargetConfig: TTargetConfig;
+begin
+  AState.BuildContext.TargetName := TargetName;
+  if WorkspaceOverride = '' then
+    Fail(AState, 'missing-required-option: --workspace', True);
+
+  CaptureWorkspaceSelectionContext(AState, TargetName, WorkspaceOverride);
+  ApplyWorkspaceSelection(
+    AState,
+    TargetName,
+    ToolchainBindingOverride,
+    EffectiveToolchainBinding
+  );
+
+  try
+    TargetConfig := LoadTargetConfig(
+      TargetName,
+      ParamStr(0),
+      EffectiveToolchainBinding
+    );
+  except
+    on E: ETargetConfigError do
+      Fail(AState, E.Message);
+    on E: Exception do
+      Fail(AState, 'env-resolution-write-failed: ' + E.Message);
+  end;
+
+  AState.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+  AState.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
+  CaptureToolchainProjectionFromTargetConfig(
+    AState.ToolchainProjection,
+    TargetConfig
+  );
+  CaptureEnvironmentProjectionFromTargetConfig(
+    AState.EnvironmentProjection,
+    TargetConfig
+  );
+  AState.EnvironmentProjection.ResolutionPath := EnvResolutionPath(
+    AState.BuildContext.ArtifactRootPath,
+    TargetName
+  );
+  try
+    WriteEnvResolutionSidecar(
+      AState.EnvironmentProjection.ResolutionPath,
+      TargetConfig,
+      AState.EnvironmentProjection,
+      AState.EnvironmentProjection.SyncChange
+    );
+  except
+    on E: Exception do
+      Fail(AState, 'env-resolution-write-failed: ' + E.Message);
+  end;
+  AState.EnvironmentProjection.ResolutionStatus := 'ready';
+
+  WriteLn('mode=env');
+  WriteLn('command=env');
+  WriteLn('selector=sync');
+  WriteLn('target=', TargetName);
+  WriteLn('target-config=', TargetConfig.ConfigPath);
+  WriteLn('compiler=', TargetConfig.CompilerExecutable);
+  PrintBuildContextProjection(False, AState.BuildContext);
+  PrintToolchainProjectionFields(False, AState.ToolchainProjection);
+  PrintEnvironmentProjectionFields(False, AState.EnvironmentProjection);
+  WriteLn('status=success');
+  WriteLn('result=success');
+  WriteLn('command-outcome=success');
+  PrintCommandEnvelope(
+    AState,
+    ExitSuccessCode,
+    'sync',
+    'success',
+    'success',
+    '',
+    'environment synchronized',
+    False
+  );
+  WriteLn('human-summary=environment synchronized');
 end;
 
 end.

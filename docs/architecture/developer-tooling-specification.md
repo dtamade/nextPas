@@ -318,11 +318,11 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、`env status/use`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、`env status/use/sync`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
 `nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface、
-`env status/use` surface、最小 `doctor` health inspection、最小 `query symbols`
+`env status/use/sync` surface、最小 `doctor` health inspection、最小 `query symbols`
 semantic projection 与只读 `pkg inspect` package workflow projection 收进同一个 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
@@ -330,8 +330,9 @@ semantic projection 与只读 `pkg inspect` package workflow projection 收进�
 - 未来的 richer `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
-- 当前 `env status/use` 只是最小 environment state projection / workspace-local selection
-  mutation，不等于 `env sync` / `env bootstrap` / materialization；当前 `doctor`
+- 当前 `env status/use/sync` 只是最小 environment state projection、workspace-local selection
+  mutation 与 workspace-local resolution cache mutation，不等于 `env bootstrap`、download/unpack/install
+  或完整 runtime SDK materialization；当前 `doctor`
   已经有最小 structured finding contract，但不等于完整
   package/workspace coherence taxonomy
 - 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
@@ -449,11 +450,13 @@ FPC 的独立工具生态说明了一个长期问题：一旦每个工具都有�
 `tests/run_all_tests.sh --filter <group>` 与 `--filter smoke` 现在也已经补上同样的
 `command-envelope=<json>` bridge。当前 `tools/stage0/nextpas.pas` 也开始以 thin wrapper
 公开 `nextpas test --filter <group>` / `--filter smoke`，并新增只读
-`nextpas env status --target linux-x86_64 [--toolchain-binding <id>]` 与
+`nextpas env status --target linux-x86_64 [--toolchain-binding <id>]`、workspace-local
+`nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>`、
+`nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>` 与
 `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，以及
 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
-`test`、最小 `env` state projection、最小 `doctor` health inspection 与最小 `query`
-semantic projection、只读 `pkg inspect` package workflow projection 六条公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
+`test`、最小 `env` state/selection/resolution projection、最小 `doctor` health inspection 与最小 `query`
+semantic projection、只读 `pkg inspect` package workflow projection 六类公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
 结果对象。
 
 `build/verify_local.sh` 现在也会为 `verify-local` 自己输出同一类 `command-envelope=<json>`，
@@ -492,6 +495,11 @@ result bridge 上。
 `<workspace>/.nextpas/env/selections/<target>.toml`，并让后续
 `env status --workspace <root>` 在没有显式 `--toolchain-binding` 时消费该 workspace-local
 preferred binding selection。
+`nextpas env sync --target <target> --workspace <root>` 则只刷新
+`<workspace>/.nextpas/env/resolution/<target>.toml`，把当前 selection/default binding 解析出的
+binding、distribution 与 runtime readiness 写成 machine-local resolution cache，并用
+`envSyncChange` 表达本次是 `materialized`、`updated` 还是 `unchanged`；它仍不下载、不解包、不安装 runtime SDK，
+也不修改 selection、descriptor、manifest 或 lockfile。
 
 ## `doctor` 必须是正式能力，不是 support 脚本
 

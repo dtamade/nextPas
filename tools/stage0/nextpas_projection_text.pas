@@ -708,6 +708,21 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'env-resolution-path',
+    AContext.ResolutionPath
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-resolution-status',
+    AContext.ResolutionStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-sync-change',
+    AContext.SyncChange
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'toolchain-binding-path',
     AContext.ToolchainBindingPath
   );

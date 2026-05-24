@@ -67,6 +67,7 @@
   `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
+- 当前 rolling window 已开始推进 Batch 50：`env sync` workspace-local resolution cache。
 - 这份计划从现在起接管”当前主线的批次顺序”。
 - `Batch 1` 到 `Batch 46` 已完成。
 - 当前滚动批次继续建立在已经存在的

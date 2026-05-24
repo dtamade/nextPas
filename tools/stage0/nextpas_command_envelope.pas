@@ -107,6 +107,11 @@ begin
     '  nextpas env use --target linux-x86_64 ' +
     '--toolchain-binding <id> --workspace <root>'
   );
+  WriteUsageLine(
+    UseStdErr,
+    '  nextpas env sync --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] --workspace <root>'
+  );
 end;
 
 procedure PrintDoctorUsage(const UseStdErr: Boolean);
@@ -201,6 +206,11 @@ begin
     False,
     '  nextpas env use --target linux-x86_64 ' +
     '--toolchain-binding <id> --workspace <root>'
+  );
+  WriteUsageLine(
+    False,
+    '  nextpas env sync --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] --workspace <root>'
   );
   WriteUsageLine(
     False,

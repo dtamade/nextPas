@@ -1,7 +1,7 @@
 # nextPas tools/stage0/
 
 `tools/stage0/` 承接 nextPas 第一阶段最小但真实的命令行控制面。这里现在公开
-`build`、最小 `test`、`env status/use`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，
+`build`、最小 `test`、`env status/use/sync`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，
 但仍不假装已经是完整工具链前端。
 
 如果你要看冻结后的边界，先读
@@ -19,6 +19,7 @@ nextpas test --list-groups [--workspace <root>]
 nextpas test --filter <group> [--workspace <root>]
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>
+nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
@@ -74,6 +75,8 @@ NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --workspace "$PWD"
 NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   env status --target linux-x86_64 --workspace "$PWD"
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  env sync --target linux-x86_64 --workspace "$PWD"
 ```
 
 Then:
@@ -106,16 +109,17 @@ Then:
 这些命令现在都走统一 `nextpas` 产品壳：`build` 继续由 driver 自己驱动 compiler/toolchain，
 `test` 则只做最小参数解析后 thin-wrap 到 `tests/run_all_tests.sh` 与
 `tests/harness/runner.pas`，`env status` 则解析 target / binding / distribution /
-runtime state，`env use` 只更新 workspace-local selection sidecar，不下载或安装环境，
+runtime state，`env use` 只更新 workspace-local selection sidecar，`env sync` 则刷新
+workspace-local resolution sidecar，不下载或安装环境，
 `doctor` 则复用同一批 environment truth 做只读健康检查，
 `query symbols` 则复用 compilation session 的 syntax / resolution / semantic truth 做只读 symbol 查询，
 `pkg inspect` 则复用 workspace model 与 package manifest truth 做只读 package workflow 投影。
-其中 `build`、`test --filter <group|smoke>`、`env status/use`、`doctor`、`query symbols` 与 `pkg inspect`
+其中 `build`、`test --filter <group|smoke>`、`env status/use/sync`、`doctor`、`query symbols` 与 `pkg inspect`
 的执行路径都会额外输出一条
 `command-envelope=<json>`。这些 key/value 现在至少会对齐这些公共字段：
 
 - `command=build|test|env|doctor|query|pkg`
-- `selector=build|test|group|smoke|status|doctor|symbols|inspect`
+- `selector=build|test|group|smoke|status|use|sync|doctor|symbols|inspect`
 - `status=success|failure`
 - `result=success|failure`
 - `command-outcome=success|failure`
@@ -149,6 +153,17 @@ runtime state，`env use` 只更新 workspace-local selection sidecar，不下�
 - 后续 `env status --target <target> --workspace <root>` 在没有显式
   `--toolchain-binding` 时会读取该 selection
 - 显式 `--toolchain-binding` 仍高于 workspace selection
+
+`env sync` 当前只支持 workspace-local environment resolution cache：
+
+- sidecar 路径固定为 `<workspace>/.nextpas/env/resolution/<target>.toml`
+- `env sync --target <target> --workspace <root>` 会在未显式传
+  `--toolchain-binding` 时读取 workspace selection，并复用同一份 target config /
+  toolchain binding / distribution / runtime projection
+- 输出会额外投影 `env-resolution-path`、`env-resolution-status=ready` 与
+  `env-sync-change=materialized|updated|unchanged`
+- 它不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest、lockfile
+  或 selection sidecar
 
 这条 surface 当前故意把“状态解析 / selection 切换”和“健康诊断”分开：即使 runtime 仍然缺失，
 `env status` 也会保持 `status=success` / `result=success`，并把未就绪事实放进
@@ -793,7 +808,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、
 临时 workspace 下的 `nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`
-和 `nextpas env status --target linux-x86_64 --workspace ...`、裸
+和 `nextpas env status --target linux-x86_64 --workspace ...`、同一 workspace 下的
+`nextpas env sync --target linux-x86_64 --workspace ...`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
 与 package manifest fixture、workspace member fixture 下的 `nextpas doctor --workspace ...`
 正向 package workspace 样本、裸 `nextpas doctor`、
@@ -805,7 +821,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`env-selection-status=updated|ready`、
-`stage0EnvStatusCheck=pass`、`stage0EnvUseCheck=pass`
+`env-resolution-status=ready`、`env-sync-change=materialized|unchanged`、
+`stage0EnvStatusCheck=pass`、`stage0EnvUseCheck=pass`、`stage0EnvSyncCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass`、
 `stage0DoctorPackageWorkspaceCheck=pass`、`stage0DoctorWorkspaceMemberCheck=pass` 与
 `stage0DoctorDeclaredDependenciesCheck=pass`、`stage0DoctorMalformedDependenciesCheck=pass`、
@@ -831,8 +848,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 
 ## 这里现在不做什么
 
-- 除了 `env status/use` 与只读 `doctor` 之外，不承诺 environment mutation verbs，例如
-  `env sync`、`env bootstrap` 或 `env clean`。
+- 除了 `env status/use/sync` 与只读 `doctor` 之外，不承诺更深的 environment mutation verbs，例如
+  `env bootstrap`、download/unpack/install 或 `env clean`。
 - `query symbols` 当前只是 compilation-session-backed 的最小 CLI 查询，不承诺完整
   language service、LSP 或 IDE 集成。
 - `pkg inspect` 当前只是 workspace-model-backed 的最小只读投影，不承诺完整

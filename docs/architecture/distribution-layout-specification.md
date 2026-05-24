@@ -216,7 +216,7 @@ sidecar。
 - active channel、selected distribution release、resolved dist root、activated binding 与 runtime SDK
   readiness 可以作为 machine-local environment state 存在
 - 但这些状态必须是从 shared distribution metadata 解析出来的结果，而不是另一份独立 registry
-- `env sync` / `env use` 改写的是本地选择结果，不改写发行物自带的 metadata truth
+- `env use` 改写的是本地选择结果，`env sync` 刷新的是本地 resolution / materialization 结果；二者都不改写发行物自带的 metadata truth
 - 一旦发行物升级或 channel 切换，新的 canonical truth 仍由新 metadata 提供，再由 `env` 重新解析
 
 这条边界能保证 nextPas 的环境控制面既现代、可更新，又不失去可解释性。

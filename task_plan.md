@@ -15,6 +15,44 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 50 Env Sync Workspace Resolution Cache
+
+### Goal
+
+把 `env` family 从 selection mutation 继续推进到第一条 workspace-local sync 闭环：
+
+- 新增 `nextpas env sync --target linux-x86_64 --workspace <root> [--toolchain-binding <id>]`
+- `env sync` 在未显式传 `--toolchain-binding` 时读取 Batch 49 的 workspace selection
+- 只写 `<workspace>/.nextpas/env/resolution/<target>.toml`，记录当前 resolved binding、distribution、runtime SDK readiness 与 selection 输入
+- 公开输出与 `command-envelope=<json>` 必须暴露 resolution path / status / sync delta，方便 CLI、IDE 与 automation 判断本机环境 resolution 是否已经刷新
+
+### Architecture Decision
+
+本批次只 materialize ArtifactRootSet 管辖下的 machine-local environment resolution cache，
+不下载、不解包、不安装 runtime SDK，不改写 `env/selections`、`nextpas.workspace.toml`、
+`nextpas.package.toml` 或 `nextpas.lock`。`env sync` 是 workspace-local sync surface，
+不是 `env bootstrap` 或完整 distribution installer。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 确认当前 `env` 已有 `status/use` 和 workspace selection sidecar，但没有 `sync` 入口
+- [x] 实现 `env sync` parser、resolution sidecar write、line output 与 command envelope projection
+- [x] 扩展 `build/verify_local.sh`，覆盖首次 materialized 与二次 unchanged
+- [x] 同步 stage0 / developer tooling / workspace file / distribution specs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Non-goals
+
+- 不做 `env bootstrap`、下载、解包、archive cache、metadata channel resolver 或 runtime SDK 安装
+- 不让 `env sync` 改写 selection sidecar；切换 binding 仍由 `env use` 负责
+- 不回写 workspace descriptor、package manifest 或 lockfile
+- 不让 `build` / `doctor` / `pkg` 在本批次隐式消费 resolution cache
+
 ## Addendum: 2026-05-24 Batch 49 Env Use Workspace Selection Sidecar
 
 ### Goal

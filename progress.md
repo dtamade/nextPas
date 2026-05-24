@@ -3,6 +3,31 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 50 env sync workspace resolution cache)
+
+- **Status:** completed
+- Objective:
+  - 把 `env` family 从 selection mutation 继续推进到第一条 workspace-local sync 闭环，让
+    `env sync` 只刷新 `<workspace>/.nextpas/env/resolution/<target>.toml`，并在输出与 envelope 中
+    暴露 resolution path / status / sync delta。
+- Baseline:
+  - Batch 49 已经把 `env use` 收口到 workspace-local selection sidecar。
+  - 现有 `env status` 可以在没有显式 `--toolchain-binding` 时读取 selection sidecar，但没有
+    resolution cache 或 sync delta contract。
+- Actions taken:
+  - 在 `task_plan.md` 顶部新增 Batch 50 addendum，明确这轮只 materialize workspace-local
+    environment resolution cache，不触碰 distribution canonical truth。
+  - 在 `tools/stage0/nextpas_command_env.pas` 增加 `env sync` 入口、resolution sidecar writer 与
+    deterministic `materialized|updated|unchanged` delta 计算。
+  - 扩展 `TEnvironmentProjectionContext`、line-based output 与 command envelope，新增
+    `env-resolution-path`、`env-resolution-status` 与 `env-sync-change`。
+  - 扩展 `tools/stage0/nextpas.pas`、usage contract、`build/verify_local.sh` 与相关 docs，准备
+    把 `env sync` 纳入正式 gate。
+  - 修复 `build/verify_local.sh` 里 `ENV_RESOLUTION_PATH` 的临时变量缺口，并 fresh
+    `bash build/verify_local.sh` 通过，确认 `env sync` gate 的 materialized/unchanged 路径都已收口。
+
+## Session: 2026-05-24 (Batch 49 env use workspace selection sidecar)
+
 ## Session: 2026-05-24 (Batch 49 env use workspace selection sidecar)
 
 - **Status:** completed

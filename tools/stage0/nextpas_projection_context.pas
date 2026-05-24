@@ -366,6 +366,9 @@ begin
   AContext.SelectionStatus := '';
   AContext.SelectionTarget := '';
   AContext.SelectionToolchainBindingId := '';
+  AContext.ResolutionPath := '';
+  AContext.ResolutionStatus := '';
+  AContext.SyncChange := '';
   AContext.ToolchainBindingPath := '';
   AContext.DistributionBinDir := '';
   AContext.DistributionLibDir := '';
