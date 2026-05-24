@@ -272,8 +272,9 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 package manifest truth 投影为只读 package workflow 结果；`pkg graph` 还会把同一份 truth
 展开成 root node、declared-dependency nodes 与 `declared-dependency` edges。
 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
-lock-missing blocked path 与 package-free manifest-missing missing path；`pkg inspect / pkg graph`
-promotion gate 继续覆盖 package manifest root 与 workspace descriptor root 解析到 member
+lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid blocked
+path 与 source-roots-missing blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
+package manifest root 与 workspace descriptor root 解析到 member
 package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots`、
 `package-dependencies` / `packageDependencies` 明细，以及 dependency requirement validation
 status / issue detail，避免 `pkg inspect`、`pkg plan`、`pkg graph` 和 `doctor` 对 workspace
@@ -853,7 +854,10 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 与 workspace member fixture 下的 `nextpas pkg inspect --workspace ...` 正向 package workflow
 样本、workspace member fixture 下的 `nextpas pkg plan --workspace ...` lock-missing blocked
 install-plan preflight 样本、package-free 临时 workspace 下的 `nextpas pkg plan --workspace ...`
-manifest-missing missing preflight 样本、workspace member fixture 下的
+manifest-missing missing preflight 样本、malformed dependency fixture 下的
+`nextpas pkg plan --workspace ...` dependency-invalid blocked preflight 样本、manifest/lock ready
+但 source roots 为空的 `nextpas pkg plan --workspace ...` source-roots-missing blocked preflight
+样本、workspace member fixture 下的
 `nextpas pkg graph --workspace ...` 正向 package graph 样本、裸 `nextpas pkg`，冻结
 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
@@ -874,13 +878,14 @@ manifest-missing missing preflight 样本、workspace member fixture 下的
 `package-workflow-status=ready`、`package-manifest-status=ready`、
 `package-lock-status=ready|missing`、`package-workflow-manifest-path=<path>`、
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
-`package-source-root-count=<non-zero>`、`package-source-roots=<json-array>`、
+`package-source-root-count=<count>`、`package-source-roots=<json-array>`、
 `package-dependency-validation-status=valid|invalid|missing`、
 `package-install-plan-status=ready|blocked|missing`、
 `package-install-plan-blocker-code` /
 `package-install-plan-blocker-message`、
 `stage0PkgCheck=pass`、`stage0PkgPlanCheck=pass`、`stage0PkgPlanBlockedCheck=pass`、
-`stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanInvalidArgumentsCheck=pass`、
+`stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanDependencyBlockedCheck=pass`、
+`stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanInvalidArgumentsCheck=pass`、
 `stage0PkgWorkspaceMemberCheck=pass` 与
 `stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgGraphCheck=pass`、
 `stage0PkgGraphInvalidArgumentsCheck=pass`、

@@ -340,8 +340,9 @@ semantic projection 与只读 `pkg inspect / pkg plan / pkg graph` package workf
 - 当前 `pkg inspect / pkg plan / pkg graph` 只是 workspace-model-backed 的最小只读投影，不等于完整
   package manager、fetch/install/update/publish workflow 或 dependency resolution；其中 `pkg plan`
   是 install plan preflight 的专用只读面，它的 promotion gate 当前直接覆盖 package manifest
-  ready path、workspace member lock-missing blocked path 与 package-free manifest-missing missing
-  path；`pkg inspect / pkg graph` 继续冻结 workspace descriptor root 解析到 member package 的
+  ready path、workspace member lock-missing blocked path、package-free manifest-missing missing
+  path、dependency-invalid blocked path 与 source-roots-missing blocked path；`pkg inspect / pkg graph`
+  继续冻结 workspace descriptor root 解析到 member package 的
   ready 路径、source roots、declared dependencies 明细以及 package graph root/dependency nodes
   与 edges 的只读投影
 

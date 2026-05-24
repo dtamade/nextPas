@@ -10,6 +10,19 @@
 
 ## Research Findings
 
+- `pkg plan` 的 preflight blocker matrix 现在被完整 gate 到当前 truth 已拥有的四个终止原因：
+  `package-manifest-missing`、`package-dependencies-invalid`、
+  `package-source-roots-missing` 与 `package-lock-missing`。
+- malformed dependency fixture 下的 `nextpas pkg plan` 会稳定投影
+  `package-install-plan-status=blocked`、
+  `package-install-plan-blocker-code=package-dependencies-invalid` 与
+  `package-install-plan-blocker-message=package dependency validation is invalid`。
+- `tests/fixtures/package_manifest_no_source_roots` 固定了 manifest/lock ready 但 source roots 为空的
+  package truth；该 fixture 下的 `nextpas pkg plan` 会稳定投影
+  `package-install-plan-blocker-code=package-source-roots-missing` 与
+  `package-install-plan-blocker-message=package source roots are missing`。
+- 这个 Batch 55 仍然不做 dependency resolution、fetch/install、publish 或 lockfile write；
+  它只把已经存在的 `TPackageWorkflowTruth` preflight truth 纳入 `pkg plan` 专用 promotion gate。
 - `pkg plan` 现在不再只靠 ready path 证明自己可用：`build/verify_local.sh` 已新增
   `stage0PkgPlanBlockedCheck=pass` 与 `stage0PkgPlanMissingCheck=pass`，分别冻结
   lockfile 缺失导致的 blocked preflight 和 package truth 缺失导致的 missing preflight。

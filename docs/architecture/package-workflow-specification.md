@@ -532,8 +532,9 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
   root node、declared-dependency nodes 与 `declared-dependency` edges
   - 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
-    lock-missing blocked path 与 package-free manifest-missing missing path，确保 install plan
-    preflight 的三态和 blocker detail 不需要由调用方间接推断
+    lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid
+    blocked path 与 source-roots-missing blocked path，确保 install plan preflight 的三态和
+    blocker detail 不需要由调用方间接推断
   - 当前 `pkg inspect / pkg graph` promotion gate 继续覆盖 package manifest root 与 workspace
     descriptor root 解析到 member package 的 ready 路径，确保 CLI、IDE 和 automation 后续共享
     同一条 package membership truth

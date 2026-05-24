@@ -1,0 +1,3 @@
+[package]
+name = "tests.package-manifest-no-source-roots"
+version = "0.1.0"

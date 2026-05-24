@@ -29,6 +29,7 @@ WORKSPACE_ARTIFACT_ROOT="$REPO_ROOT/.nextpas"
 HOST_FPC_CACHE_ROOT="$WORKSPACE_ARTIFACT_ROOT/cache/host-fpc/$TARGET_ID"
 PACKAGE_MANIFEST_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/package_manifest_source_root"
 PACKAGE_MANIFEST_ARTIFACT_ROOT="$PACKAGE_MANIFEST_FIXTURE_ROOT/.nextpas"
+PACKAGE_NO_SOURCE_ROOTS_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/package_manifest_no_source_roots"
 WORKSPACE_MEMBER_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/workspace_member_source_root"
 WORKSPACE_MEMBER_ARTIFACT_ROOT="$WORKSPACE_MEMBER_FIXTURE_ROOT/.nextpas"
 DECLARED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/workspace_declared_dependencies"
@@ -197,6 +198,8 @@ STAGE0_PKG_INSPECT_OUTPUT=$(mktemp)
 STAGE0_PKG_PLAN_OUTPUT=$(mktemp)
 STAGE0_PKG_PLAN_BLOCKED_OUTPUT=$(mktemp)
 STAGE0_PKG_PLAN_MISSING_OUTPUT=$(mktemp)
+STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT=$(mktemp)
+STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT=$(mktemp)
 STAGE0_PKG_PLAN_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT=$(mktemp)
 STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT=$(mktemp)
@@ -419,6 +422,8 @@ cleanup() {
   rm -f "$STAGE0_PKG_PLAN_OUTPUT"
   rm -f "$STAGE0_PKG_PLAN_BLOCKED_OUTPUT"
   rm -f "$STAGE0_PKG_PLAN_MISSING_OUTPUT"
+  rm -f "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT"
+  rm -f "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT"
   rm -f "$STAGE0_PKG_PLAN_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT"
   rm -f "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT"
@@ -667,6 +672,8 @@ require_path tests/fixtures/workspace_declared_dependencies/app/src/DependencyAn
 require_path tests/fixtures/workspace_malformed_dependencies/nextpas.workspace.toml
 require_path tests/fixtures/workspace_malformed_dependencies/app/nextpas.package.toml
 require_path tests/fixtures/workspace_malformed_dependencies/app/src/DependencyAnchor.pas
+require_path tests/fixtures/package_manifest_no_source_roots/nextpas.lock
+require_path tests/fixtures/package_manifest_no_source_roots/nextpas.package.toml
 require_path tests/fixtures/root_source_precedence/root_source_precedence_smoke.pas
 require_path tests/fixtures/root_source_precedence/PriorityGreeter.pas
 require_path tests/fixtures/root_source_precedence/explicit/PriorityGreeter.pas
@@ -5080,6 +5087,59 @@ require_output_pattern '^command-envelope=.*"packageManifestStatus":"missing".*"
 require_output_pattern '^command-envelope=.*"packageLockStatus":"missing".*"packageSourceRootCount":0.*"packageDependencyCount":0.*"packageDependencies":\[\]' "$STAGE0_PKG_PLAN_MISSING_OUTPUT" 'missing-stage0-pkg-plan-missing-envelope-workflow-detail'
 printf 'stage0-pkg-plan-missing-check=pass\n'
 
+printf 'stage0-pkg-plan-dependency-blocked-check=running\n'
+printf 'stage0-pkg-plan-dependency-blocked-command=%s pkg plan --workspace %s --target %s\n' "$STAGE0_BINARY" "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT" "$TARGET_ID"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg plan --workspace "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT" --target "$TARGET_ID" >"$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT"
+  fail 'stage0-pkg-plan-dependency-blocked-failed'
+fi
+cat "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-command'
+require_output_pattern '^selector=plan$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-selector'
+require_output_pattern '^workspace-root=.*/tests/fixtures/workspace_malformed_dependencies/app$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-root'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-workflow-status'
+require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-manifest-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-lock-status'
+require_output_pattern '^package-install-plan-status=blocked$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-install-plan-status'
+require_output_pattern '^package-install-plan-blocker-code=package-dependencies-invalid$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-install-plan-blocker-code'
+require_output_pattern '^package-install-plan-blocker-message=package dependency validation is invalid$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-install-plan-blocker-message'
+require_output_pattern '^package-dependency-count=6$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-dependency-count'
+require_output_pattern '^package-dependency-validation-status=invalid$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-validation-status'
+require_output_pattern '^package-dependency-issue-count=5$' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-issue-count'
+require_output_pattern '^command-envelope=.*"selector":"plan".*"packageWorkflowStatus":"ready"' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-envelope-workflow'
+require_output_pattern '^command-envelope=.*"packageInstallPlanStatus":"blocked".*"packageInstallPlanBlockerCode":"package-dependencies-invalid".*"packageInstallPlanBlockerMessage":"package dependency validation is invalid".*"packageDependencyValidationStatus":"invalid".*"packageDependencyIssueCount":5' "$STAGE0_PKG_PLAN_DEPENDENCY_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-dependency-blocked-envelope-result'
+printf 'stage0-pkg-plan-dependency-blocked-check=pass\n'
+
+printf 'stage0-pkg-plan-source-roots-blocked-check=running\n'
+printf 'stage0-pkg-plan-source-roots-blocked-command=%s pkg plan --workspace %s --target %s\n' "$STAGE0_BINARY" "$PACKAGE_NO_SOURCE_ROOTS_FIXTURE_ROOT" "$TARGET_ID"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg plan --workspace "$PACKAGE_NO_SOURCE_ROOTS_FIXTURE_ROOT" --target "$TARGET_ID" >"$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT"
+  fail 'stage0-pkg-plan-source-roots-blocked-failed'
+fi
+cat "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-command'
+require_output_pattern '^selector=plan$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-selector'
+require_output_pattern '^workspace-root=.*/tests/fixtures/package_manifest_no_source_roots$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-root'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-workflow-status'
+require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-manifest-status'
+require_output_pattern '^package-lock-status=ready$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-lock-status'
+require_output_pattern '^package-install-plan-status=blocked$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-install-plan-status'
+require_output_pattern '^package-install-plan-blocker-code=package-source-roots-missing$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-install-plan-blocker-code'
+require_output_pattern '^package-install-plan-blocker-message=package source roots are missing$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-install-plan-blocker-message'
+require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/package_manifest_no_source_roots/nextpas\.package\.toml$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-workflow-manifest-path'
+require_output_pattern '^package-root-path=.*/tests/fixtures/package_manifest_no_source_roots$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-package-root-path'
+require_output_pattern '^package-name=tests\.package-manifest-no-source-roots$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-package-name'
+require_output_pattern '^package-lockfile-path=.*/tests/fixtures/package_manifest_no_source_roots/nextpas\.lock$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-lockfile-path'
+require_output_pattern '^package-source-root-count=0$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-source-root-count'
+require_output_pattern '^package-source-roots=\[\]$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-source-roots'
+require_output_pattern '^package-dependency-count=0$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-dependency-count'
+require_output_pattern '^package-dependency-validation-status=valid$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-validation-status'
+require_output_pattern '^status=success$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-success-status'
+require_output_pattern '^result=success$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-success-result'
+require_output_pattern '^command-outcome=success$' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-command-outcome'
+require_output_pattern '^command-envelope=.*"selector":"plan".*"packageManifestStatus":"ready".*"packageLockStatus":"ready".*"packageInstallPlanStatus":"blocked".*"packageInstallPlanBlockerCode":"package-source-roots-missing".*"packageInstallPlanBlockerMessage":"package source roots are missing".*"packageSourceRootCount":0.*"packageSourceRoots":\[\]' "$STAGE0_PKG_PLAN_SOURCE_ROOTS_BLOCKED_OUTPUT" 'missing-stage0-pkg-plan-source-roots-blocked-envelope-result'
+printf 'stage0-pkg-plan-source-roots-blocked-check=pass\n'
+
 printf 'stage0-pkg-plan-invalid-arguments-check=running\n'
 printf 'stage0-pkg-plan-invalid-arguments-command=%s pkg plan --target %s\n' "$STAGE0_BINARY" "$TARGET_ID"
 if NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg plan --target "$TARGET_ID" >"$STAGE0_PKG_PLAN_INVALID_ARGUMENTS_OUTPUT" 2>&1; then
@@ -5378,6 +5438,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

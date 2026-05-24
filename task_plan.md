@@ -15,6 +15,51 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 55 Package Plan Blocker Matrix Gates
+
+### Goal
+
+把 `nextpas pkg plan` 的 install-plan preflight 从“三态已公开”继续推进到“关键 blocker
+原因全覆盖”：同一条 `pkg plan` 专用只读面必须覆盖当前 `TPackageWorkflowTruth` 已经拥有的
+四类终止原因，避免 CLI / IDE / automation 在 blocked 场景里还要绕回 `pkg inspect` 推断。
+
+### Architecture Decision
+
+本批次仍不新增 resolver、fetch、install 或第二套 planner。`pkg plan` 继续复用
+`WorkspaceModel` + `TPackageManifestInfo` + `TPackageWorkflowTruth`；这轮只把剩余 blocker 纳入
+promotion gate：
+
+- malformed dependency fixture 必须投影 `blocked` 与 `package-dependencies-invalid`
+- manifest / lock ready 但无 source roots 的 fixture 必须投影 `blocked` 与
+  `package-source-roots-missing`
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 新增 `package_manifest_no_source_roots` fixture，冻结 manifest / lock ready 但 source roots
+      为空的 package truth
+- [x] 扩展 `build/verify_local.sh`，覆盖 `pkg plan` dependency-invalid 与 source-roots-missing
+      blocked 命令结果
+- [x] 同步 tools README、package workflow / developer tooling spec、rolling roadmap 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 通过，确认
+  `stage0PkgPlanDependencyBlockedCheck=pass`、
+  `stage0PkgPlanSourceRootsBlockedCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolution、fetch、install 或 publish
+- 不改 install plan blocker 顺序
+- 不改 lockfile write path
+
 ## Addendum: 2026-05-25 Batch 54 Package Plan Blocked/Missing Gates
 
 ### Goal

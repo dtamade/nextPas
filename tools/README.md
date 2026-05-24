@@ -47,7 +47,9 @@ resolution sidecar，不承担 `bootstrap`、下载、解包或 runtime SDK 安�
 `pkg inspect / pkg plan / pkg graph` 只复用 workspace model 与 package manifest truth 做只读
 package workflow 投影，不提前执行 resolver、fetch/install 或 lockfile mutation。`pkg plan`
 是 install plan preflight 的专用只读面，直接公开 ready、blocked 与 missing 三态及 blocker
-detail；`pkg graph` 则把同一份 truth 再展开成 root/dependency nodes 与 edges。
+detail；当前 gate 已覆盖 manifest-missing、dependency-invalid、source-roots-missing 与
+lock-missing 四类 preflight 终止原因。`pkg graph` 则把同一份 truth 再展开成 root/dependency
+nodes 与 edges。
 
 ## 这里必须和谁对齐
 

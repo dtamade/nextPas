@@ -3,6 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 55 package plan blocker matrix gates)
+
+- **Status:** completed
+- Objective:
+  - 把 `pkg plan` 的 install plan preflight 从 ready / lock-missing / manifest-missing
+    继续扩展到当前 truth 已拥有的完整 blocker matrix，让调用方能直接看到
+    dependency invalid 与 source roots missing 两类 blocked 原因。
+- Baseline:
+  - Batch 54 已经让 `pkg plan` 覆盖 ready、lock-missing blocked 与 manifest-missing missing。
+  - `BuildPackageInstallPlanTruth` 已经按
+    manifest missing -> dependency invalid -> source roots missing -> lock missing -> ready
+    的顺序推导 blocker，但 `pkg plan` 专用 promotion gate 还没有覆盖 dependency invalid 和
+    source roots missing。
+- Actions taken:
+  - 新增 `tests/fixtures/package_manifest_no_source_roots`，固定 manifest/lock ready 但
+    `package-source-root-count=0` 的只读 package truth。
+  - 扩展 `build/verify_local.sh`，新增 `stage0PkgPlanDependencyBlockedCheck`，用 malformed
+    dependency fixture 冻结 `package-install-plan-blocker-code=package-dependencies-invalid`。
+  - 新增 `stage0PkgPlanSourceRootsBlockedCheck`，用 no-source-roots fixture 冻结
+    `package-install-plan-blocker-code=package-source-roots-missing`。
+  - 同步 tools README、developer tooling spec、package workflow spec、master roadmap 与
+    task_plan。
+- Verification:
+  - focused probe 已确认两条 `pkg plan` 输出分别稳定投影
+    `package-dependencies-invalid` 与 `package-source-roots-missing`。
+  - 首次 fresh `bash build/verify_local.sh` 失败在
+    `missing-stage0-pkg-plan-dependency-blocked-envelope-result`；根因是新增 shell gate
+    的 envelope 正则把 package install-plan 字段与 dependency validation 字段顺序写反，
+    stage0 真实输出本身已经包含预期 blocker truth。
+  - 已按 `tools/stage0/nextpas_projection_json.pas` 的真实投影顺序修正
+    dependency-invalid 与 source-roots-missing 两条 envelope 断言。
+  - fresh `bash build/verify_local.sh` 通过，最终输出
+    `stage0PkgPlanDependencyBlockedCheck=pass`、
+    `stage0PkgPlanSourceRootsBlockedCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-25 (Batch 54 package plan blocked/missing gates)
 
 - **Status:** completed
