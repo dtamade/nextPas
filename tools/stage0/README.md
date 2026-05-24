@@ -175,6 +175,8 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 
 - `package-workflow-status=ready|missing`
 - `package-manifest-status=ready|missing`
+- `workspace-descriptor-path=<path>`（有值时）
+- `package-manifest-path=<path>`（有值时）
 - `package-lock-status=deferred`
 - `package-workflow-manifest-path=<path>`
 - `package-root-path=<path>`
@@ -186,6 +188,8 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
 或 lockfile write。它只把 `WorkspaceModel` 与 `PackageManifestInfo` 已经拥有的
 package manifest truth 投影为只读 package workflow 结果。
+当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到 member
+package 的 ready 路径，避免 `pkg inspect` 和 `doctor` 对 workspace membership 形成两套解释。
 
 在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
 resolution / sema / MIR / backend / toolchain skeleton：
@@ -752,7 +756,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
 与裸 `nextpas query`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
-与裸 `nextpas pkg`，冻结 `environment-readiness=incomplete`、
+与 workspace member fixture 下的 `nextpas pkg inspect --workspace ...` 正向 package workflow
+样本、裸 `nextpas pkg`，冻结 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
@@ -767,7 +772,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `package-lock-status=deferred`、`package-workflow-manifest-path=<path>`、
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
 `package-source-root-count=<non-zero>`、`package-install-plan-status=deferred`、
-`stage0PkgCheck=pass` 与 `stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
+`stage0PkgCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass` 与
+`stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
 `env` / `doctor` / `query` / `pkg` surface 也进入正式 gate。
 
 这意味着本地验证与 Linux CI 不应该再各自拼装另一套 `stage0` 成功路径。

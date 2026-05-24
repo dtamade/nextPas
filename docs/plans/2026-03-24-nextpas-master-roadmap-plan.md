@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 42` 为准。
+以最新完成的 `Batch 43` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -39,7 +39,8 @@
   `stage0DoctorWorkspaceMemberCheck=pass`、
   `stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryInvalidArgumentsCheck=pass`、
-  `stage0PkgCheck=pass`、`stage0PkgInvalidArgumentsCheck=pass`、
+  `stage0PkgCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass`、
+  `stage0PkgInvalidArgumentsCheck=pass`、
   `stage0EnvInvalidArgumentsCheck=pass`、`multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
@@ -53,9 +54,10 @@
   side tables，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
-  `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
+  `packageName`、`packageLockStatus` 与 `packageLockfilePath`；workspace member fixture 也已让
+  `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 42` 已完成。
+- `Batch 1` 到 `Batch 43` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -88,7 +90,9 @@
   `doctor.package-workspace-missing`。`Batch 42` 则把 ready contract 扩展到 workspace
   descriptor root + member package：explicit workspace root 会稳定投影 descriptor path、
   member package manifest/root/name/lockfile 与 source root count，且不会误报
-  `doctor.package-workspace-missing`。下一步优先转回
+  `doctor.package-workspace-missing`。`Batch 43` 再把同一条 workspace member ready
+  contract 扩展到 `pkg inspect`：只读 package workflow projection 也会稳定投影 descriptor
+  path、member package manifest/root/name/lockfile 与 source root count。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。

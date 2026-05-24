@@ -166,6 +166,12 @@
   `command-envelope=<json>.result` 会同时投影 workflow-owned manifest path、package root、
   package name、lock status 与 canonical lockfile path；这仍然是只读 truth projection，
   不执行 fetch、install、dependency resolution、lockfile write 或 publish workflow。
+- 当前 `pkg inspect` 的 workspace descriptor + member package ready 路径也已经进入 gate：
+  `tests/fixtures/workspace_member_source_root` 会把显式 workspace descriptor root 稳定解析到
+  `app/nextpas.package.toml`，投影 `workspace-descriptor-path`、member
+  `package-manifest-path`、`package-root-path`、`package-name`、`package-lockfile-path` 与
+  `package-source-root-count=1`；这让 `pkg inspect` 与 `doctor` 共享同一条 package workflow
+  truth，而不是各自解释 workspace membership。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

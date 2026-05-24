@@ -336,7 +336,9 @@ semantic projection 与只读 `pkg inspect` package workflow projection 收进�
 - 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
   language service、LSP、open document overlay 或 IDE integration
 - 当前 `pkg inspect` 只是 workspace-model-backed 的最小只读投影，不等于完整
-  package manager、fetch/install/update/publish workflow 或 dependency resolution
+  package manager、fetch/install/update/publish workflow 或 dependency resolution；它的
+  promotion gate 当前同时覆盖 package manifest root 与 workspace descriptor root 解析到
+  member package 的 ready 路径
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 

@@ -15,6 +15,40 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 43 Pkg Inspect Workspace Member Contract
+
+### Goal
+
+把 Batch 42 已冻结的 workspace descriptor root + member package ready contract，从 `doctor`
+同步扩展到只读 `pkg inspect`：
+
+- `pkg inspect --workspace <workspace descriptor root>` 必须复用 shared `WorkspaceModel` /
+  `PackageWorkflowTruth`
+- workspace descriptor root 必须稳定解析到 member package manifest
+  `app/nextpas.package.toml`
+- package workflow 正向字段必须投影 `package-workflow-status=ready`、
+  `package-manifest-status=ready`、`package-source-root-count=1` 与 member
+  manifest/root/name/lockfile detail fields
+- `command-envelope=<json>.result` 必须同步保留 workspace descriptor path 与 member
+  package detail fields
+- non-goal：不修改 `pkg inspect` 实现、不做 package resolution/fetch/install、不打开
+  lockfile write、publish workflow 或 package manager mutation verbs
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] focused probe 确认 `tests/fixtures/workspace_member_source_root` 下 `pkg inspect` 已经返回
+      workspace descriptor + member package ready
+- [x] 扩展 `build/verify_local.sh`，新增 `stage0-pkg-workspace-member-check`
+- [x] 同步 verify-local success envelope，新增 `stage0PkgWorkspaceMemberCheck`
+- [x] 同步 `tools/stage0/README.md`、stage0 / developer tooling / package workflow specs、
+      rolling plan、`progress.md`、`findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 42 Doctor Workspace Member Package Contract
 
 ### Goal
