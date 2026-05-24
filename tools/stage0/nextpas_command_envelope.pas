@@ -148,6 +148,11 @@ begin
   );
   WriteUsageLine(
     UseStdErr,
+    '  nextpas pkg plan --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
+  WriteUsageLine(
+    UseStdErr,
     '  nextpas pkg graph --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
@@ -242,6 +247,11 @@ begin
   );
   WriteUsageLine(
     False,
+    '  nextpas pkg plan --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
+  WriteUsageLine(
+    False,
     '  nextpas pkg graph --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
@@ -332,6 +342,11 @@ begin
   WriteUsageLine(
     True,
     '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
+  WriteUsageLine(
+    True,
+    '  nextpas pkg plan --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
   WriteUsageLine(

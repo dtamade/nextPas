@@ -317,7 +317,8 @@ begin
     State.SelectorName := 'pkg';
     if ParamCount < 3 then
       Fail(State, 'invalid-arguments', True);
-    if (ParamStr(2) <> 'inspect') and (ParamStr(2) <> 'graph') then
+    if (ParamStr(2) <> 'inspect') and (ParamStr(2) <> 'plan') and
+      (ParamStr(2) <> 'graph') then
       Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := ParamStr(2);
@@ -361,6 +362,13 @@ begin
 
     if State.SelectorName = 'inspect' then
       RunPkgInspect(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      )
+    else if State.SelectorName = 'plan' then
+      RunPkgPlan(
         State,
         TargetName,
         ToolchainBindingOverride,

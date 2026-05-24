@@ -15,6 +15,44 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 53 Package Plan Read-only Surface
+
+### Goal
+
+把 package workflow 的 install plan preflight truth 公开成真实 `nextpas pkg plan` 面，
+让 CLI / IDE / automation 直接消费 workspace-model-backed package install-plan truth，
+而不是继续只在 `doctor` / `pkg inspect` 里间接看到它。
+
+### Architecture Decision
+
+`pkg plan` 只做 read-only projection，直接复用 `WorkspaceModel` + `TPackageManifestInfo` +
+`TPackageWorkflowTruth`，不碰 resolver、fetch、install 或 lockfile write。install plan 语义
+仍然维持 Batch 48 冻结下来的 `ready|blocked|missing` preflight truth；`pkg plan` 只是把同一份
+truth 公开成一个专用只读面，而不是第二套 install planner。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 扩展 `build/verify_local.sh`，覆盖 `pkg plan` 正向样本与负向参数 gate
+- [x] 同步 stage0 / developer tooling / package workflow / stage0 driver 文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 通过，确认 `stage0PkgPlanCheck=pass`、
+  `stage0PkgPlanInvalidArgumentsCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolution、fetch、install 或 publish
+- 不改 lockfile write path
+- 不引入第二套 package install plan truth
+
 ## Addendum: 2026-05-25 Batch 52 Package Graph Read-only Surface
 
 ### Goal

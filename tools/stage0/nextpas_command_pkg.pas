@@ -16,6 +16,12 @@ procedure RunPkgInspect(
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string
 );
+procedure RunPkgPlan(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
 procedure RunPkgGraph(
   var AState: TNextPasState;
   const TargetName: string;
@@ -124,6 +130,23 @@ begin
     WorkspaceOverride,
     'inspect',
     'package inspection completed'
+  );
+end;
+
+procedure RunPkgPlan(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+begin
+  RunPkgProjection(
+    AState,
+    TargetName,
+    ToolchainBindingOverride,
+    WorkspaceOverride,
+    'plan',
+    'package install plan preflight captured'
   );
 end;
 

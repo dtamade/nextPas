@@ -524,13 +524,13 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
 
 - `stage0`
   - 当前不承诺完整 `pkg` family，也不承诺 manifest/lock file format
-  - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect / pkg graph` surface
-- `pkg inspect / pkg graph` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
+  - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect / pkg plan / pkg graph` surface
+- `pkg inspect / pkg plan / pkg graph` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
   manifest status、workflow manifest path、package root、package name、lock status、canonical
   lockfile path、source root count、source roots JSON 明细、declared dependency count /
-  dependencies JSON 明细、install plan status 与 install plan blocker code/message；其中 `pkg graph`
-  还会把同一份 truth 进一步展开成 root node、declared-dependency nodes 与
-  `declared-dependency` edges
+  dependencies JSON 明细、install plan status 与 install plan blocker code/message；其中 `pkg plan`
+  是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
+  root node、declared-dependency nodes 与 `declared-dependency` edges
   - 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到
     member package 的 ready 路径，确保 CLI、IDE 和 automation 后续共享同一条 package membership truth
   - 但 package workflow 的对象边界、install root 角色与相邻控制面必须先冻结

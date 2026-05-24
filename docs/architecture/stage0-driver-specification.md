@@ -24,6 +24,7 @@ nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
+nextpas pkg plan --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 nextpas pkg graph --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 ```
 
@@ -47,11 +48,11 @@ nextpas pkg graph --workspace <root> --target linux-x86_64 [--toolchain-binding 
 - `query symbols`
   - 让 CLI-facing semantic query 先以只读、compilation-session-backed surface 进入统一
     `nextpas` 产品壳，而不是假装完整 language service 或 LSP server 已经落地
-- `pkg inspect / pkg graph`
-  - 让 package workflow truth 先以只读 inspection / graph surface 进入统一产品壳，而不是提前
+- `pkg inspect / pkg plan / pkg graph`
+  - 让 package workflow truth 先以只读 inspection / install-plan preflight / graph surface 进入统一产品壳，而不是提前
     执行 resolver、fetch/install 或 lockfile mutation
-  - `pkg graph` 进一步把同一份 truth 展开成 root node、declared-dependency nodes 与
-    `declared-dependency` edges，供 CLI / IDE / automation 直接消费
+  - `pkg plan` 负责 install plan preflight truth；`pkg graph` 进一步把同一份 truth 展开成 root node、
+    declared-dependency nodes 与 `declared-dependency` edges，供 CLI / IDE / automation 直接消费
 
 当前 `--target` 与 `--toolchain-binding` 是两条分开的输入轴：
 
@@ -143,7 +144,7 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 组成                       | 第一阶段职责                                                                     |
 | -------------------------- | -------------------------------------------------------------------------------- |
-| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status/use/sync/clean` 投影或更新 target/binding/distribution/runtime selection、resolution 与 sidecar cleanup state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect / pkg graph` 投影只读 package workflow truth（含 source roots、declared dependencies 以及 graph nodes/edges） |
+| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status/use/sync/clean` 投影或更新 target/binding/distribution/runtime selection、resolution 与 sidecar cleanup state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect / pkg plan / pkg graph` 投影只读 package workflow truth（含 source roots、declared dependencies、install plan 以及 graph nodes/edges） |
 | `tools/stage0/README.md`   | 说明用法、退出码、范围约束和当前不支持的事项                                     |
 | `examples/smoke/hello.pas` | 作为规范输入，证明驱动路径真实可走通                                             |
 
@@ -162,9 +163,9 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 行为     | 要求                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------- |
-| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`、`nextpas env sync --target linux-x86_64 [--toolchain-binding ...] --workspace ...`、`nextpas env clean --target linux-x86_64 --workspace ...`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas pkg inspect --workspace ... --target linux-x86_64 [--toolchain-binding ...]` / `nextpas pkg graph --workspace ... --target linux-x86_64 [--toolchain-binding ...]` |
+| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`、`nextpas env sync --target linux-x86_64 [--toolchain-binding ...] --workspace ...`、`nextpas env clean --target linux-x86_64 --workspace ...`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas pkg inspect --workspace ... --target linux-x86_64 [--toolchain-binding ...]` / `nextpas pkg plan --workspace ... --target linux-x86_64 [--toolchain-binding ...]` / `nextpas pkg graph --workspace ... --target linux-x86_64 [--toolchain-binding ...]` |
 | 宿主关系 | 由 FreePascal 负责把驱动入口编译成可执行程序                                                              |
-| 输出语义 | `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect / pkg graph` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
+| 输出语义 | `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect / pkg plan / pkg graph` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
 | 未知命令 | 以非零状态退出，并打印清晰的 `unsupported-command` 消息                                                   |
 
 这组行为既是任务 9 的验收接口，也是后续 `build/verify_local.sh` 与 Linux CI

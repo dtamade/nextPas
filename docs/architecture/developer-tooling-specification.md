@@ -317,12 +317,12 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect / pkg graph`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect / pkg plan / pkg graph`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
 `nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface、
 `env status/use/sync/clean` surface、最小 `doctor` health inspection、最小 `query symbols`
-semantic projection 与只读 `pkg inspect / pkg graph` package workflow projection 收进同一个
+semantic projection 与只读 `pkg inspect / pkg plan / pkg graph` package workflow projection 收进同一个
 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
@@ -337,11 +337,11 @@ semantic projection 与只读 `pkg inspect / pkg graph` package workflow project
   package/workspace coherence taxonomy
 - 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
   language service、LSP、open document overlay 或 IDE integration
-- 当前 `pkg inspect / pkg graph` 只是 workspace-model-backed 的最小只读投影，不等于完整
-  package manager、fetch/install/update/publish workflow 或 dependency resolution；它的
-  promotion gate 当前同时覆盖 package manifest root 与 workspace descriptor root 解析到
-  member package 的 ready 路径，并冻结 source roots、declared dependencies 明细以及
-  package graph root/dependency nodes 与 edges 的只读投影
+- 当前 `pkg inspect / pkg plan / pkg graph` 只是 workspace-model-backed 的最小只读投影，不等于完整
+  package manager、fetch/install/update/publish workflow 或 dependency resolution；其中 `pkg plan`
+  是 install plan preflight 的专用只读面，它的 promotion gate 当前同时覆盖 package manifest root
+  与 workspace descriptor root 解析到 member package 的 ready 路径，并冻结 source roots、
+  declared dependencies 明细以及 package graph root/dependency nodes 与 edges 的只读投影
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 
@@ -458,7 +458,7 @@ FPC 的独立工具生态说明了一个长期问题：一旦每个工具都有�
 `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，以及
 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
 `test`、最小 `env` state/selection/resolution/cleanup projection、最小 `doctor` health inspection 与最小 `query`
-semantic projection、只读 `pkg inspect / pkg graph` package workflow projection 六类公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
+semantic projection、只读 `pkg inspect / pkg plan / pkg graph` package workflow projection 六类公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
 结果对象。
 
 `build/verify_local.sh` 现在也会为 `verify-local` 自己输出同一类 `command-envelope=<json>`，

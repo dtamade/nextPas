@@ -1,7 +1,7 @@
 # nextPas tools/stage0/
 
 `tools/stage0/` 承接 nextPas 第一阶段最小但真实的命令行控制面。这里现在公开
-`build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect / pkg graph`，
+`build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect / pkg plan / pkg graph`，
 但仍不假装已经是完整工具链前端。
 
 如果你要看冻结后的边界，先读
@@ -24,6 +24,7 @@ nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
+nextpas pkg plan --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 nextpas pkg graph --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 ```
 
@@ -103,6 +104,8 @@ Then:
 NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   pkg inspect --workspace "$PWD" --target linux-x86_64
 NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  pkg plan --workspace "$PWD" --target linux-x86_64
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   pkg graph --workspace "$PWD" --target linux-x86_64
 ```
 
@@ -120,15 +123,15 @@ workspace-local resolution sidecar，`env clean` 则清理 workspace-local selec
 resolution sidecar，不下载或安装环境，
 `doctor` 则复用同一批 environment truth 做只读健康检查，
 `query symbols` 则复用 compilation session 的 syntax / resolution / semantic truth 做只读 symbol 查询，
-`pkg inspect / pkg graph` 则复用 workspace model 与 package manifest truth 做只读 package workflow 投影；
-其中 `pkg graph` 还会把 declared dependency truth 投影为 root/dependency nodes 与
-`declared-dependency` edges。
-其中 `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect / pkg graph`
+`pkg inspect / pkg plan / pkg graph` 则复用 workspace model 与 package manifest truth 做只读
+package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用只读面，`pkg graph`
+还会把 declared dependency truth 投影为 root/dependency nodes 与 `declared-dependency` edges。
+其中 `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect / pkg plan / pkg graph`
 的执行路径都会额外输出一条
 `command-envelope=<json>`。这些 key/value 现在至少会对齐这些公共字段：
 
 - `command=build|test|env|doctor|query|pkg`
-- `selector=build|test|group|smoke|status|use|sync|clean|doctor|symbols|inspect`
+- `selector=build|test|group|smoke|status|use|sync|clean|doctor|symbols|inspect|plan|graph`
 - `status=success|failure`
 - `result=success|failure`
 - `command-outcome=success|failure`
@@ -237,7 +240,7 @@ resolution sidecar，不下载或安装环境，
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
 
-`pkg inspect / pkg graph` 当前还会额外投影最小 package workflow 汇总：
+`pkg inspect / pkg plan / pkg graph` 当前还会额外投影最小 package workflow 汇总：
 
 - `package-workflow-status=ready|missing`
 - `package-manifest-status=ready|missing`
@@ -843,9 +846,11 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
 与裸 `nextpas query`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
+与 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg plan --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
 与 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg graph --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
 与 workspace member fixture 下的 `nextpas pkg inspect --workspace ...` 正向 package workflow
-样本、workspace member fixture 下的 `nextpas pkg graph --workspace ...` 正向 package graph
+样本、workspace member fixture 下的 `nextpas pkg plan --workspace ...` 正向 install-plan
+preflight 样本、workspace member fixture 下的 `nextpas pkg graph --workspace ...` 正向 package graph
 样本、裸 `nextpas pkg`，冻结 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
@@ -884,8 +889,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
   `env bootstrap`、download/unpack/install 或 `env gc`。
 - `query symbols` 当前只是 compilation-session-backed 的最小 CLI 查询，不承诺完整
   language service、LSP 或 IDE 集成。
-- `pkg inspect / pkg graph` 当前只是 workspace-model-backed 的最小只读投影，不承诺完整
-  package manager、fetch/install/update/publish workflow 或 dependency resolution。
+- `pkg inspect / pkg plan / pkg graph` 当前只是 workspace-model-backed 的最小只读投影，
+  不承诺完整 package manager、fetch/install/update/publish workflow 或 dependency resolution。
 - 不在这里塞入格式化、LSP 或 IDE 集成。
 - 不把多目标矩阵提前做进 CLI 表面。
 - 不绕过 `build/targets/` 目标规格边界，直接把完整平台模型做死在这里。
