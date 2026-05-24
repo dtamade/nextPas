@@ -492,6 +492,9 @@ bundled toolchain、甚至更完整的 developer distribution。
 - package manifest fixture 也已进入 `doctor` promotion gate 的正向样本：ready package
   workspace 必须投影 package workflow ready，并且不能出现
   `doctor.package-workspace-missing`
+- workspace descriptor root + member package fixture 也已进入 `doctor` promotion gate：
+  ready workspace member 必须投影 descriptor path、member manifest/root/name/lockfile 与 source
+  root count，并且不能出现 `doctor.package-workspace-missing`
 
 这条规则会直接决定 future IDE package view、CI automation 和 local diagnostics 是否优雅。
 

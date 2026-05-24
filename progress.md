@@ -3,6 +3,30 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 42 doctor workspace member package contract)
+
+- **Status:** completed
+- Actions taken:
+  - 从 Batch 41 继续复盘架构原则和 rolling plan，确认下一步仍不应打开 package manager
+    mutation 或 `env sync`，而是先把 `doctor` 的 package/workspace ready contract 覆盖到
+    workspace descriptor root + member package 这一真实 workspace 形态。
+  - focused probe 运行
+    `.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64 --workspace tests/fixtures/workspace_member_source_root`，
+    确认现有实现已经把 explicit workspace descriptor root 解析到
+    `app/nextpas.package.toml`，输出 `package-workflow-status=ready`、
+    `package-manifest-status=ready`、`package-source-root-count=1`、
+    `package-name=tests.workspace-member-source-root.app`，且只保留
+    `doctor.runtime-sdk-missing`，不会误报 `doctor.package-workspace-missing`。
+  - 扩展 `build/verify_local.sh`，新增 `stage0-doctor-workspace-member-check`，冻结
+    workspace descriptor path、member package manifest/root/name/lockfile fields、line-based
+    output 与 envelope package fields，并显式禁止 `doctor.package-workspace-missing`。
+  - 同步 verify-local final envelope，新增 `stage0DoctorWorkspaceMemberCheck=pass`，让
+    shell gate 和结构化 verify result 对齐。
+  - 同步 `task_plan.md`、`findings.md`、`tools/stage0/README.md`、stage0 / developer tooling /
+    package workflow specs 与 rolling plan。
+  - fresh `bash build/verify_local.sh` 继续通过，最终输出
+    `stage0DoctorWorkspaceMemberCheck=pass` 与 `verify-local=pass`。
+
 ## Session: 2026-05-24 (Batch 41 doctor package workspace positive contract)
 
 - **Status:** completed

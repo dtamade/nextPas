@@ -110,6 +110,12 @@
   `tests/fixtures/package_manifest_source_root` 会稳定表现为 `package-workflow-status=ready`、
   `package-manifest-status=ready`、`package-source-root-count=1`，并且不会出现
   `doctor.package-workspace-missing`；这防止合法 package workspace 被误报成缺失 package truth。
+- 当前 `doctor` 的 workspace descriptor + member package ready 路径也已经进入 gate：
+  `tests/fixtures/workspace_member_source_root` 会把显式 workspace descriptor root 稳定解析到
+  `app/nextpas.package.toml`，投影 `workspace-descriptor-path`、member
+  `package-manifest-path`、`package-root-path`、`package-name`、`package-lockfile-path` 与
+  `package-source-root-count=1`，并且不会出现 `doctor.package-workspace-missing`；这防止
+  future workspace package tooling 把 workspace root 与 package root 混为一谈。
 - 当前 `command-envelope=<json>.result.doctorFindings[]` 会保留同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`；这属于
   health inspection result，不替代 compiler diagnostics sink。

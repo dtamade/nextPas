@@ -143,6 +143,8 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-install-plan-status`
 - `package-source-root-count`
 - 缺少 package truth 时还会出现 `doctor.package-workspace-missing`
+- workspace descriptor root 指向 member package 时还会稳定投影
+  `workspace-descriptor-path` 与 member package detail fields
 
 这条 surface 当前仍是只读 inspection：它解释当前 target / binding / runtime / workspace
 状态是否健康，但不执行 `env sync`、不安装 runtime SDK，也不替代 `build` 或 `test`。
@@ -745,8 +747,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
-与 package manifest fixture 下的 `nextpas doctor --workspace ...` 正向 package workspace
-样本、裸 `nextpas doctor`、
+与 package manifest fixture、workspace member fixture 下的 `nextpas doctor --workspace ...`
+正向 package workspace 样本、裸 `nextpas doctor`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
 与裸 `nextpas query`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
@@ -755,7 +757,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass`、
-`stage0DoctorPackageWorkspaceCheck=pass` 与 `stage0DoctorInvalidArgumentsCheck=pass`、
+`stage0DoctorPackageWorkspaceCheck=pass`、`stage0DoctorWorkspaceMemberCheck=pass` 与
+`stage0DoctorInvalidArgumentsCheck=pass`、
 `query-kind=symbols`、
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
 `query-scopes=<json-array>`、`query-types=<json-array>`、

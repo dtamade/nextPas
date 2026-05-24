@@ -15,6 +15,41 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 42 Doctor Workspace Member Package Contract
+
+### Goal
+
+把 Batch 41 的 ready package workspace gate 从单包 manifest root 扩展到 workspace descriptor
+root + member package 的真实形态：
+
+- `doctor --workspace <workspace descriptor root>` 必须复用 shared `WorkspaceModel`
+- workspace descriptor root 必须稳定解析到 member package manifest
+  `app/nextpas.package.toml`
+- package workflow 正向字段必须投影 `package-workflow-status=ready`、
+  `package-manifest-status=ready`、`package-source-root-count=1` 与 member
+  manifest/root/name/lockfile detail fields
+- 正向样本仍可因为当前 runtime SDK 缺失而有 `doctor.runtime-sdk-missing`，但不能出现
+  `doctor.package-workspace-missing`
+- `command-envelope=<json>.result` 必须同步保留 workspace descriptor path 与 member
+  package detail fields
+- non-goal：不修改 `doctor` 实现、不做 package resolution/fetch/install、不打开
+  `env sync` 或 package manager mutation verbs
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] focused probe 确认 `tests/fixtures/workspace_member_source_root` 下 `doctor` 已经返回
+      workspace descriptor + member package ready，且没有 `doctor.package-workspace-missing`
+- [x] 扩展 `build/verify_local.sh`，新增 `stage0-doctor-workspace-member-check`
+- [x] 同步 verify-local success envelope，新增 `stage0DoctorWorkspaceMemberCheck`
+- [x] 同步 `tools/stage0/README.md`、stage0 / developer tooling / package workflow specs、
+      rolling plan、`progress.md`、`findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 41 Doctor Package Workspace Positive Contract
 
 ### Goal
