@@ -342,7 +342,8 @@ semantic projection 与只读 `pkg inspect / pkg plan / pkg graph` package workf
   是 install plan preflight 的专用只读面，它的 promotion gate 当前直接覆盖 package manifest
   ready path、workspace member lock-missing blocked path、package-free manifest-missing missing
   path、dependency-invalid blocked path、source-roots-missing blocked path、invalid-lock blocked path
-  与 manifest-lock out-of-sync blocked path；
+  与 manifest-lock out-of-sync blocked path，并在 out-of-sync blocker 上公开 expected package
+  与 actual lock entries detail；
   `pkg inspect / pkg graph`
   继续冻结 workspace descriptor root 解析到 member package 的
   ready 路径、source roots、declared dependencies 明细以及 package graph root/dependency nodes

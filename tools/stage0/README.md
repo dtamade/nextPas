@@ -271,6 +271,8 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 - `package-install-plan-status=ready|blocked|missing`
 - `package-install-plan-blocker-code=<code>`（有 blocker 时）
 - `package-install-plan-blocker-message=<message>`（有 blocker 时）
+- `package-install-plan-blocker-expected-package=<json-object>`（有 mismatch detail 时）
+- `package-install-plan-blocker-lock-entries=<json-array>`（有 mismatch detail 时）
 
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
 或 lockfile write。它只把 `WorkspaceModel`、`PackageManifestInfo` 与最小 `nextpas.lock` v1
@@ -279,7 +281,8 @@ read-only parser 已经拥有的 truth 投影为只读 package workflow 结果�
 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
 lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid blocked
 path、source-roots-missing blocked path、invalid-lock blocked path 与 manifest-lock out-of-sync
-blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
+blocked path，并在 out-of-sync blocker 上公开 expected package 与 actual lock entries detail；
+`pkg inspect / pkg graph` promotion gate 继续覆盖
 package manifest root 与 workspace descriptor root 解析到 member
 package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots`、
 `package-dependencies` / `packageDependencies` 明细、lockfile format/entry/issue detail，以及
@@ -895,6 +898,8 @@ preflight 样本、package lock detail fixture 下的 `nextpas pkg inspect --wor
 `package-install-plan-status=ready|blocked|missing`、
 `package-install-plan-blocker-code` /
 `package-install-plan-blocker-message`、
+`package-install-plan-blocker-expected-package` /
+`package-install-plan-blocker-lock-entries`、
 `stage0PkgCheck=pass`、`stage0PkgLockDetailCheck=pass`、`stage0PkgPlanCheck=pass`、`stage0PkgPlanBlockedCheck=pass`、
 `stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanDependencyBlockedCheck=pass`、
 `stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanLockInvalidCheck=pass`、

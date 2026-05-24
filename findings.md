@@ -10,6 +10,13 @@
 
 ## Research Findings
 
+- `package-lock-out-of-sync` blocker 现在有独立 mismatch detail：line output 公开
+  `package-install-plan-blocker-expected-package` 与
+  `package-install-plan-blocker-lock-entries`，command envelope 公开对应 camelCase 字段。
+- mismatch detail 只在 out-of-sync blocker 上输出；focused probe 已确认 ready path 不输出空的
+  blocker detail，避免 automation 把空数组误解成阻塞证据。
+- Batch 58 仍然不做 resolver、version solving、fetch/install 或 lockfile write；它只把已有
+  manifest-lock consistency preflight 的解释力补齐。
 - `pkg plan` 现在会在 lockfile valid 之后做最小 manifest-lock identity check：manifest 的
   package name/version 必须出现在 canonical `nextpas.lock` entries 里，否则 install preflight
   会阻塞为 `package-lock-out-of-sync`。

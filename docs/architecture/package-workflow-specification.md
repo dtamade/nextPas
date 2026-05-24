@@ -152,7 +152,7 @@ lockfile v1 只读 parser。这批 reality 先冻结四件事：
 - install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
   与必要的 blocker code/message；lockfile invalid 会在 lock missing 之前阻塞为
   `package-lock-invalid`，lockfile valid 但没有匹配 manifest package name/version 时会阻塞为
-  `package-lock-out-of-sync`
+  `package-lock-out-of-sync`，并携带 expected manifest package identity 与 actual lock entries
 - 这批刻意不执行 registry lookup、fetch、dependency solver、install placement 或 lockfile write
 
 ## repository、registry、source、mirror 必须分角色，而不是混成一个词
@@ -548,6 +548,7 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   manifest status、workflow manifest path、package root、package name、lock status、canonical
   lockfile path、source root count、source roots JSON 明细、declared dependency count /
   dependencies JSON 明细、install plan status 与 install plan blocker code/message；其中 `pkg plan`
+  在 out-of-sync blocker 上还会投影 expected package 与 lock entries detail，并且
   是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
   root node、declared-dependency nodes 与 `declared-dependency` edges
   - 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member

@@ -70,7 +70,9 @@
   `packageDependencyValidationStatus`、`packageDependencyIssueCount`、`packageDependencyIssues`、
   `packageGraphStatus`、`packageGraphNodeCount`、`packageGraphEdgeCount`、`packageGraphNodes`、
   `packageGraphEdges`、`packageInstallPlanStatus`、`packageInstallPlanBlockerCode` 与
-  `packageInstallPlanBlockerMessage`；`packageLockStatus` 现在根据 canonical lockfile 是否缺失、
+  `packageInstallPlanBlockerMessage`，并在 manifest-lock mismatch 时投影
+  `packageInstallPlanBlockerExpectedPackage` 与 `packageInstallPlanBlockerLockEntries`；
+  `packageLockStatus` 现在根据 canonical lockfile 是否缺失、
   是否是最小 v1 valid lockfile 投影 `missing|ready|invalid`，并同步公开
   `packageLockFormatVersion`、`packageLockEntryCount`、`packageLockEntries`、
   `packageLockIssueCount` 与 `packageLockIssues`；`packageInstallPlanStatus` 继续作为只读 preflight truth，投影
@@ -79,13 +81,14 @@
   `packageLockfilePath`；`pkg plan` 当前还直接覆盖 package manifest ready path、
   workspace member lock-missing blocked path、package-free manifest-missing missing path、
   malformed dependency invalid blocked path 与 manifest/lock ready 但 source-roots missing
-  blocked path、invalid lockfile blocked path、manifest-lock out-of-sync blocked path；workspace member fixture 也已让
+  blocked path、invalid lockfile blocked path、manifest-lock out-of-sync blocked path 及其
+  expected/actual detail；workspace member fixture 也已让
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 57：manifest-lock consistency preflight。
+- 当前 rolling window 已推进到 Batch 58：manifest-lock mismatch detail。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 57` 已完成。
+- `Batch 1` 到 `Batch 58` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持

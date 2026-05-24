@@ -3,6 +3,31 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 58 manifest-lock mismatch detail)
+
+- **Status:** completed
+- Objective:
+  - 让 `pkg plan` 的 `package-lock-out-of-sync` blocker 直接携带 expected manifest package
+    identity 与 actual lock entries，提升 CLI / IDE / automation 的解释力。
+- Baseline:
+  - Batch 57 已能阻塞 out-of-sync lockfile，但输出只有 blocker code/message。
+  - 调用方要解释“manifest 要什么、lock 实际有什么”仍需自己拼接其它字段。
+- Actions taken:
+  - 扩展 `stage0PkgPlanLockOutOfSyncCheck`，要求 line output 与 command envelope 同时出现
+    `package-install-plan-blocker-expected-package` /
+    `package-install-plan-blocker-lock-entries` 及对应 camelCase 字段。
+  - 在 `TPackageInstallPlanTruth` 中为 out-of-sync blocker 保存 expected package identity 与
+    lock entries。
+  - 扩展 stage0 package projection context、text output 与 JSON envelope。
+  - focused GREEN 已确认 out-of-sync fixture 输出 expected manifest `0.1.0` 与 actual lock
+    `0.2.0`；ready fixture 不输出 blocker detail。
+- Verification:
+  - RED：focused probe 确认旧输出缺少 expected/actual detail。
+  - GREEN：focused probe 确认新增 detail 出现，且 ready path 未污染 blocker detail。
+  - final：fresh `bash build/verify_local.sh` 通过，最终输出
+    `stage0PkgPlanLockOutOfSyncCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-25 (Batch 57 manifest-lock consistency preflight)
 
 - **Status:** completed

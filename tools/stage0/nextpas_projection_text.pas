@@ -965,6 +965,16 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'package-install-plan-blocker-expected-package',
+    AContext.InstallPlanBlockerExpectedPackageJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-install-plan-blocker-lock-entries',
+    AContext.InstallPlanBlockerLockEntriesJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'package-graph-status',
     AContext.GraphStatus
   );

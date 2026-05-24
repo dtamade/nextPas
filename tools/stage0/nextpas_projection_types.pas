@@ -231,6 +231,8 @@ type
     InstallPlanStatus: string;
     InstallPlanBlockerCode: string;
     InstallPlanBlockerMessage: string;
+    InstallPlanBlockerExpectedPackageJson: string;
+    InstallPlanBlockerLockEntriesJson: string;
     GraphStatus: string;
     GraphNodeCount: LongInt;
     HasGraphNodeCount: Boolean;

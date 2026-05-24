@@ -220,6 +220,19 @@ begin
   Result := '[' + EntryJson + ']';
 end;
 
+function BuildJsonPackageIdentity(
+  const AName: string;
+  const AVersion: string
+): string;
+var
+  EntryFields: string;
+begin
+  EntryFields := '';
+  AppendJsonField(EntryFields, 'name', JsonString(AName));
+  AppendJsonField(EntryFields, 'version', JsonString(AVersion));
+  Result := '{' + EntryFields + '}';
+end;
+
 function BuildJsonPackageLockIssueArray(
   const AValues: array of TPackageLockIssueInfo
 ): string;
@@ -597,6 +610,8 @@ begin
   AContext.InstallPlanStatus := '';
   AContext.InstallPlanBlockerCode := '';
   AContext.InstallPlanBlockerMessage := '';
+  AContext.InstallPlanBlockerExpectedPackageJson := '';
+  AContext.InstallPlanBlockerLockEntriesJson := '';
   AContext.GraphStatus := '';
   AContext.GraphNodeCount := 0;
   AContext.HasGraphNodeCount := False;
@@ -886,6 +901,17 @@ begin
     AWorkflowTruth.InstallPlanTruth.BlockerCode;
   AContext.InstallPlanBlockerMessage :=
     AWorkflowTruth.InstallPlanTruth.BlockerMessage;
+  if AWorkflowTruth.InstallPlanTruth.BlockerExpectedPackageName <> '' then
+    AContext.InstallPlanBlockerExpectedPackageJson :=
+      BuildJsonPackageIdentity(
+        AWorkflowTruth.InstallPlanTruth.BlockerExpectedPackageName,
+        AWorkflowTruth.InstallPlanTruth.BlockerExpectedPackageVersion
+      );
+  if AWorkflowTruth.InstallPlanTruth.BlockerExpectedPackageName <> '' then
+    AContext.InstallPlanBlockerLockEntriesJson :=
+      BuildJsonPackageLockEntryArray(
+        AWorkflowTruth.InstallPlanTruth.BlockerLockEntries
+      );
   AContext.GraphStatus := AWorkflowTruth.GraphTruth.Status;
   AContext.GraphNodeCount := AWorkflowTruth.GraphTruth.NodeCount;
   AContext.HasGraphNodeCount := AWorkflowTruth.ManifestTruth.Status <> '';

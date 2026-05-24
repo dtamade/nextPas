@@ -724,6 +724,18 @@ begin
       'packageInstallPlanBlockerMessage',
       AContext.InstallPlanBlockerMessage
     );
+  if AContext.InstallPlanBlockerExpectedPackageJson <> '' then
+    AppendJsonField(
+      AFields,
+      'packageInstallPlanBlockerExpectedPackage',
+      AContext.InstallPlanBlockerExpectedPackageJson
+    );
+  if AContext.InstallPlanBlockerLockEntriesJson <> '' then
+    AppendJsonField(
+      AFields,
+      'packageInstallPlanBlockerLockEntries',
+      AContext.InstallPlanBlockerLockEntriesJson
+    );
   AppendJsonStringField(AFields, 'packageGraphStatus', AContext.GraphStatus);
   AppendJsonIntegerField(
     AFields,

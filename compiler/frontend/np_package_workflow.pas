@@ -39,6 +39,9 @@ type
     PackageRootPath: string;
     BlockerCode: string;
     BlockerMessage: string;
+    BlockerExpectedPackageName: string;
+    BlockerExpectedPackageVersion: string;
+    BlockerLockEntries: TPackageLockEntryInfoArray;
   end;
 
   TPackageGraphNodeInfo = record
@@ -202,6 +205,10 @@ begin
   Result.PackageRootPath := AManifestTruth.PackageRootPath;
   Result.BlockerCode := 'package-manifest-missing';
   Result.BlockerMessage := 'package manifest is missing';
+  Result.BlockerExpectedPackageName := '';
+  Result.BlockerExpectedPackageVersion := '';
+  Result.BlockerLockEntries := nil;
+  SetLength(Result.BlockerLockEntries, 0);
 
   if AManifestTruth.Status <> 'ready' then
     Exit;
@@ -243,12 +250,19 @@ begin
   Result.BlockerCode := 'package-lock-out-of-sync';
   Result.BlockerMessage :=
     'canonical package lockfile is out of sync with package manifest';
+  Result.BlockerExpectedPackageName := AManifestTruth.PackageName;
+  Result.BlockerExpectedPackageVersion := AManifestTruth.PackageVersion;
+  Result.BlockerLockEntries := ALockTruth.Entries;
   if not LockMatchesManifest then
     Exit;
 
   Result.Status := 'ready';
   Result.BlockerCode := '';
   Result.BlockerMessage := '';
+  Result.BlockerExpectedPackageName := '';
+  Result.BlockerExpectedPackageVersion := '';
+  Result.BlockerLockEntries := nil;
+  SetLength(Result.BlockerLockEntries, 0);
 end;
 
 function ResolveLockfilePath(const AWorkspaceRootPath: string): string;

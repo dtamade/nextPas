@@ -15,6 +15,58 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 58 Manifest-Lock Mismatch Detail
+
+### Goal
+
+把 `package-lock-out-of-sync` 从一个裸 blocker 推进到可解释的 preflight detail：`pkg plan`
+在 manifest package identity 与 lock entries 不一致时，必须同时公开 manifest 期望的
+package name/version，以及当前 lockfile 实际 entries。
+
+### Architecture Decision
+
+本批次仍然只做 read-only preflight detail：
+
+- `TPackageInstallPlanTruth` 在 out-of-sync blocker 上携带 expected package identity 与 lock entries
+- stage0 line output 新增
+  `package-install-plan-blocker-expected-package` 与
+  `package-install-plan-blocker-lock-entries`
+- command envelope 新增
+  `packageInstallPlanBlockerExpectedPackage` 与
+  `packageInstallPlanBlockerLockEntries`
+- ready path 不输出 blocker detail，避免调用方把空 detail 误解成真实阻塞
+- 不做 resolver、version solving、lockfile writer、lockfile rewrite 或 install mutation
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `stage0PkgPlanLockOutOfSyncCheck`，要求 expected package 与 lock entries detail
+- [x] 在 install-plan truth 中携带 out-of-sync blocker detail
+- [x] 扩展 stage0 text/json projection
+- [x] focused GREEN：确认 out-of-sync path 有 detail，ready path 不带 blocker detail
+- [x] 同步 package workflow / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused probe 确认旧输出没有
+  `package-install-plan-blocker-expected-package` /
+  `package-install-plan-blocker-lock-entries`
+- GREEN: focused probe 确认 out-of-sync fixture 输出 expected manifest identity 与 actual lock entries，
+  且 ready fixture 不输出 blocker detail
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0PkgPlanLockOutOfSyncCheck=pass`
+
+### Non-goals
+
+- 不做 resolver 或 version solving
+- 不写入或重写 `nextpas.lock`
+- 不把 lockfile skeleton 扩展成完整 target snapshot grammar
+
 ## Addendum: 2026-05-25 Batch 57 Manifest-Lock Consistency Preflight
 
 ### Goal
