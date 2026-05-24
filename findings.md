@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- `env use` 现在已经是真实 mutation surface：它把 workspace-local preferred binding 写进
+  `<workspace>/.nextpas/env/selections/<target>.toml`，并把 selection 结果投影到 line-based
+  output 与 `command-envelope=<json>`。
+- `env status --workspace <root>` 现在会在没有显式 `--toolchain-binding` 时读取同一份
+  selection sidecar，并把 `env-selection-status=ready` 与 selected binding 继续投影出来；
+  显式 `--toolchain-binding` 仍然覆盖 workspace-local selection。
+- 这条 selection sidecar 只属于 ArtifactRootSet 管辖的 machine-local state，不回写
+  `nextpas.workspace.toml`、`nextpas.package.toml` 或 `nextpas.lock`。
+- fresh `bash build/verify_local.sh` 已经把 `stage0EnvUseCheck=pass` 纳入 promotion path，
+  所以 `env use` / `env status --workspace` 已进入正式 gate。
 - `package-lock-status` 现在已经不再是“path 已知但状态固定 deferred”的空壳字段；
   它会根据 canonical `nextpas.lock` 的存在性投影 `ready|missing`，并由同一份
   `TPackageWorkflowTruth` 贯穿 `doctor` / `pkg inspect`。

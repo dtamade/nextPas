@@ -318,11 +318,11 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、只读 `env status`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、`env status/use`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
 `nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface、
-只读 `env status` surface、最小 `doctor` health inspection、最小 `query symbols`
+`env status/use` surface、最小 `doctor` health inspection、最小 `query symbols`
 semantic projection 与只读 `pkg inspect` package workflow projection 收进同一个 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
@@ -330,8 +330,9 @@ semantic projection 与只读 `pkg inspect` package workflow projection 收进�
 - 未来的 richer `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
-- 当前 `env status` 只是最小 read-only projection，不等于 `env use` / `env sync` /
-  `env bootstrap`；当前 `doctor` 已经有最小 structured finding contract，但不等于完整
+- 当前 `env status/use` 只是最小 environment state projection / workspace-local selection
+  mutation，不等于 `env sync` / `env bootstrap` / materialization；当前 `doctor`
+  已经有最小 structured finding contract，但不等于完整
   package/workspace coherence taxonomy
 - 当前 `query symbols` 只是 compilation-session-backed 的最小 CLI semantic query，不等于完整
   language service、LSP、open document overlay 或 IDE integration
@@ -482,11 +483,15 @@ result bridge 上。
 
 只有这样，environment tooling 才算现代、优雅，而不是又回到历史 shell utility 的路子上。
 
-当前 `tools/stage0/nextpas.pas` 已经先把这条 contract 的最小只读面落地：`nextpas env status`
+当前 `tools/stage0/nextpas.pas` 已经先把这条 contract 的最小面落地：`nextpas env status`
 会通过同一类 `command-envelope=<json>` 返回 target / binding / distribution / runtime state，
 即使 runtime SDK 仍缺失，也会用 `environmentReadiness`、`environmentStatus`、
 `runtimeSdkStatus`、`toolchainBindingStatus`、`distributionStatus` 与 `runtimeLibcPresent`
 表达“不完整”，而不是把这类状态误报成命令执行失败。
+`nextpas env use --target <target> --toolchain-binding <id> --workspace <root>` 则只写
+`<workspace>/.nextpas/env/selections/<target>.toml`，并让后续
+`env status --workspace <root>` 在没有显式 `--toolchain-binding` 时消费该 workspace-local
+preferred binding selection。
 
 ## `doctor` 必须是正式能力，不是 support 脚本
 

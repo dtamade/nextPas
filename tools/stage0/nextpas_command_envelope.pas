@@ -99,7 +99,13 @@ begin
   WriteUsageLine(UseStdErr, 'Usage:');
   WriteUsageLine(
     UseStdErr,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
+    '  nextpas env status --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    UseStdErr,
+    '  nextpas env use --target linux-x86_64 ' +
+    '--toolchain-binding <id> --workspace <root>'
   );
 end;
 
@@ -188,7 +194,13 @@ begin
   );
   WriteUsageLine(
     False,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
+    '  nextpas env status --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    False,
+    '  nextpas env use --target linux-x86_64 ' +
+    '--toolchain-binding <id> --workspace <root>'
   );
   WriteUsageLine(
     False,
@@ -262,7 +274,13 @@ begin
   );
   WriteUsageLine(
     True,
-    '  nextpas env status --target linux-x86_64 [--toolchain-binding <id>]'
+    '  nextpas env status --target linux-x86_64 ' +
+    '[--toolchain-binding <id>] [--workspace <root>]'
+  );
+  WriteUsageLine(
+    True,
+    '  nextpas env use --target linux-x86_64 ' +
+    '--toolchain-binding <id> --workspace <root>'
   );
   WriteUsageLine(
     True,

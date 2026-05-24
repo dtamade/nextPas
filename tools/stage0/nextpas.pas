@@ -105,18 +105,20 @@ begin
   begin
     if ParamCount < 3 then
       Fail(State, 'invalid-arguments', True);
-    if ParamStr(2) <> 'status' then
+    if (ParamStr(2) <> 'status') and (ParamStr(2) <> 'use') then
       Fail(State, 'invalid-arguments', True);
 
-    State.SelectorName := 'status';
+    State.SelectorName := ParamStr(2);
     TargetName := '';
     ToolchainBindingOverride := '';
+    WorkspaceOverride := '';
     Index := 3;
     while Index <= ParamCount do
     begin
       OptionName := ParamStr(Index);
       if (OptionName <> '--target') and
-        (OptionName <> '--toolchain-binding') then
+        (OptionName <> '--toolchain-binding') and
+        (OptionName <> '--workspace') then
         Fail(State, 'unknown-option: ' + OptionName, True);
       if Index = ParamCount then
         Fail(State, 'invalid-arguments', True);
@@ -128,10 +130,17 @@ begin
         TargetName := ParamStr(Index);
       end
       else
+      if OptionName = '--toolchain-binding' then
       begin
         if ToolchainBindingOverride <> '' then
           Fail(State, 'duplicate-option: --toolchain-binding', True);
         ToolchainBindingOverride := ParamStr(Index);
+      end
+      else
+      begin
+        if WorkspaceOverride <> '' then
+          Fail(State, 'duplicate-option: --workspace', True);
+        WorkspaceOverride := ParamStr(Index);
       end;
       Inc(Index);
     end;
@@ -139,7 +148,20 @@ begin
     if TargetName = '' then
       Fail(State, 'missing-required-option: --target', True);
 
-    RunEnvStatus(State, TargetName, ToolchainBindingOverride);
+    if State.SelectorName = 'status' then
+      RunEnvStatus(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      )
+    else
+      RunEnvUse(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      );
     Halt(ExitSuccessCode);
   end;
 

@@ -15,6 +15,50 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 49 Env Use Workspace Selection Sidecar
+
+### Goal
+
+把 `env` family 从纯只读 `status` 推进到第一条真实但最小的 mutation verb：
+
+- 新增 `nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>`
+- `env use` 只写 workspace-local machine state：
+  `<workspace>/.nextpas/env/selections/<target>.toml`
+- `env status --target <target> --workspace <root>` 在没有显式
+  `--toolchain-binding` 时读取该 selection，并继续复用同一份 target / binding /
+  distribution / runtime projection
+- 公开输出与 `command-envelope=<json>` 必须暴露 selection path / status / target /
+  selected binding，方便 CLI、IDE 与 automation 判断当前机器选择
+
+### Architecture Decision
+
+本批次只让 `env use` 改变 ArtifactRootSet 管辖下的 machine-local selection sidecar，不改
+`nextpas.workspace.toml`、`nextpas.package.toml`、`nextpas.lock`、target config 或 toolchain
+binding config。显式 `--toolchain-binding` 继续高于 selection；`env sync` / `env bootstrap`
+仍然不开启下载、解包、runtime SDK materialize 或 install result mutation。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 确认当前 `env` 入口只有只读 `status`，且文档已把
+      `env/selections` 归入 ArtifactRootSet machine-local sidecar
+- [x] 实现 `env use` parser、selection sidecar write，以及
+      `env status --workspace` selection read
+- [x] 扩展 line-based output、command envelope 与 `build/verify_local.sh` gate
+- [x] 同步 stage0 / developer tooling / workspace 文件层文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Non-goals
+
+- 不做 `env sync`、`env bootstrap`、下载、解包或 runtime SDK 安装
+- 不让 `build` / `doctor` 在本批次隐式消费 workspace selection
+- 不把 active selection 写进 workspace descriptor、package manifest 或 lockfile
+- 不新增 channel / distribution resolver；本批次只冻结 preferred binding selection
+
 ## Addendum: 2026-05-24 Batch 48 Package Install Plan Preflight Truth
 
 ### Goal

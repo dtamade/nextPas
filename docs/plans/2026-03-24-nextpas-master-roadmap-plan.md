@@ -36,6 +36,7 @@
   `toolchainFailureCheck=pass`、`assemblerFailureAttributionCheck=pass`、
   `linkerFailureAttributionCheck=pass`、`stage0EnvStatusCheck=pass`、
   `stage0DoctorCheck=pass`、`stage0DoctorPackageWorkspaceCheck=pass`、
+  `stage0EnvUseCheck=pass`、
   `stage0DoctorWorkspaceMemberCheck=pass`、
   `stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryInvalidArgumentsCheck=pass`、
@@ -44,7 +45,9 @@
   `stage0EnvInvalidArgumentsCheck=pass`、`multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
-  `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
+  `distributionStatus`，`env use` 已把 workspace-local preferred binding selection 写入
+  `ArtifactRootSet/env/selections` sidecar 并可被后续 `env status --workspace` 读取，`doctor`
+  result contract 也已投影 `doctorFindings[]`、workspace
   readiness 与 binding readiness，并把 package workflow truth 与
   `doctor.package-workspace-missing` 这条 package/workspace coherence finding 一并纳入只读
   inspection，并用 package manifest fixture 与 workspace member fixture 冻结了 ready

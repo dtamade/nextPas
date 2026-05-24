@@ -551,6 +551,14 @@ procedure AppendEnvironmentProjectionJsonFields(
   const AContext: TEnvironmentProjectionContext
 );
 begin
+  AppendJsonStringField(AFields, 'envSelectionPath', AContext.SelectionPath);
+  AppendJsonStringField(AFields, 'envSelectionStatus', AContext.SelectionStatus);
+  AppendJsonStringField(AFields, 'envSelectionTarget', AContext.SelectionTarget);
+  AppendJsonStringField(
+    AFields,
+    'envSelectionToolchainBindingId',
+    AContext.SelectionToolchainBindingId
+  );
   AppendJsonStringField(
     AFields,
     'toolchainBindingPath',

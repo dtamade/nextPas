@@ -9,20 +9,22 @@
 什么对象边界上，继续读 `workspace-specification.md`。如果你要看 `build/test/pkg/fmt/doc/env/doctor/query`
 怎样最终收敛到统一产品命令面，继续读 `developer-tooling-specification.md`。
 
-## `stage0` 驱动入口当前服务五条最小公开路径
+## `stage0` 驱动入口当前服务一组最小公开路径
 
-当前仓库已经承诺这五条明确的公开命令：
+当前仓库已经承诺这些明确的公开命令：
 
 ```text
 nextpas build <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>] [--unit-root <dir>]... [--out-dir <dir>]
 nextpas test --list-groups [--workspace <root>]
 nextpas test --filter <group> [--workspace <root>]
-nextpas env status --target linux-x86_64 [--toolchain-binding <id>]
+nextpas env status --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 ```
 
-这五条命令的意义分别是：
+这组命令的意义分别是：
 
 - `build`
   - 让 FreePascal 托管的 `stage0` 路径在 Linux x86_64 上证明 nextPas 已经拥有最小但真实的
@@ -33,12 +35,18 @@ nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] 
 - `env status`
   - 让 shared target/binding/distribution/runtime truth 先以只读 surface 进入统一
     `nextpas` 产品壳，而不是继续散落在 support script 或手工 probe 里
+- `env use`
+  - 让 workspace-local preferred binding selection 进入 ArtifactRootSet 管辖的
+    `env/selections` sidecar，而不是写回 descriptor、manifest、lockfile 或 target config
 - `doctor`
   - 让 environment / toolchain / workspace health inspection 先以只读 surface 进入统一
     `nextpas` 产品壳，而不是把健康判断混进 `env status` 或 support script
 - `query symbols`
   - 让 CLI-facing semantic query 先以只读、compilation-session-backed surface 进入统一
     `nextpas` 产品壳，而不是假装完整 language service 或 LSP server 已经落地
+- `pkg inspect`
+  - 让 package workflow truth 先以只读 inspection surface 进入统一产品壳，而不是提前执行
+    resolver、fetch/install 或 lockfile mutation
 
 当前 `--target` 与 `--toolchain-binding` 是两条分开的输入轴：
 
@@ -75,12 +83,13 @@ nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] 
   但 binding switch 会导致 cache miss
 - future 可以考虑更细粒度的 cache key（包含 binding ID），但这不是 `stage0` 的承诺
 
-第一阶段当前除了这五条路径之外，不承诺更多子命令，也不承诺泛化的命令树。
+第一阶段当前除了这组路径之外，不承诺更多子命令，也不承诺泛化的命令树。
 
-这同样意味着：第一阶段除了只读 `env status` 与只读 `doctor` 之外，仍不承诺 `env bootstrap`、
-channel switch、runtime SDK install 或其他 environment management verb。但 future 如果补上
-这些能力，它们也必须继续挂在统一 `nextpas` 产品壳下，复用同一套 parser、global options 与
-result envelope，而不是另外长出一个 installer 或 channel CLI 世界。
+这同样意味着：第一阶段除了 `env status/use` 与只读 `doctor` 之外，仍不承诺
+`env bootstrap`、`env sync`、runtime SDK install、download/materialize 或其他 environment
+management verb。但 future 如果补上这些能力，它们也必须继续挂在统一 `nextpas` 产品壳下，
+复用同一套 parser、global options 与 result envelope，而不是另外长出一个 installer 或
+channel CLI 世界。
 
 当前 `query symbols` 也只承诺最小 CLI 查询，不承诺公开 language service binary、LSP server、
 open document overlay、incremental invalidation 或 IDE integration。
@@ -129,7 +138,7 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 组成                       | 第一阶段职责                                                                     |
 | -------------------------- | -------------------------------------------------------------------------------- |
-| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status` 投影 target/binding/distribution/runtime state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth（含 source roots 与 declared dependencies） |
+| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status/use` 投影或更新 target/binding/distribution/runtime selection state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth（含 source roots 与 declared dependencies） |
 | `tools/stage0/README.md`   | 说明用法、退出码、范围约束和当前不支持的事项                                     |
 | `examples/smoke/hello.pas` | 作为规范输入，证明驱动路径真实可走通                                             |
 
@@ -148,15 +157,15 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 行为     | 要求                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------- |
-| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...]`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` |
+| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas pkg inspect --workspace ... --target linux-x86_64 [--toolchain-binding ...]` |
 | 宿主关系 | 由 FreePascal 负责把驱动入口编译成可执行程序                                                              |
-| 输出语义 | `build`、`test --filter <group|smoke>`、`env status`、`doctor` 与 `query symbols` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
+| 输出语义 | `build`、`test --filter <group|smoke>`、`env status/use`、`doctor`、`query symbols` 与 `pkg inspect` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
 | 未知命令 | 以非零状态退出，并打印清晰的 `unsupported-command` 消息                                                   |
 
 这组行为既是任务 9 的验收接口，也是后续 `build/verify_local.sh` 与 Linux CI
 会依赖的控制面。
 
-## `stage0 env status` 只投影已解析 environment state
+## `stage0 env status/use` 只触碰 environment state
 
 `env status` 当前是 `stage0` 上最小、只读的 environment surface。它的职责边界固定如下：
 
@@ -170,6 +179,16 @@ open document overlay、incremental invalidation 或 IDE integration。
 - `environment-readiness` 当前保留为兼容字段，并与 `environment-status` 使用同一
   derived readiness vocabulary
 - 为什么当前状态不适合 build/test/pkg/doc/query，属于当前最小 `doctor` 与后续更完整 health inspection 的诊断边界
+
+`env use` 当前是 `stage0` 上第一条最小 mutation surface。它的职责边界固定如下：
+
+- 只接受 `--target`、`--toolchain-binding` 与 `--workspace`
+- 只写 `<workspace>/.nextpas/env/selections/<target>.toml`
+- 写入前必须复用 target config / toolchain binding validation，确认 binding 属于同一
+  host/target pair
+- 不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest 或 lockfile
+- 后续 `env status --workspace <root>` 在没有显式 `--toolchain-binding` 时可以读取该 selection
+- 显式 `--toolchain-binding` 继续高于 workspace-local selection
 
 ## `stage0 doctor` 提供最小只读 health inspection
 

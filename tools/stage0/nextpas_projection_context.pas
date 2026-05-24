@@ -362,6 +362,10 @@ procedure ClearEnvironmentProjectionContextValue(
   var AContext: TEnvironmentProjectionContext
 );
 begin
+  AContext.SelectionPath := '';
+  AContext.SelectionStatus := '';
+  AContext.SelectionTarget := '';
+  AContext.SelectionToolchainBindingId := '';
   AContext.ToolchainBindingPath := '';
   AContext.DistributionBinDir := '';
   AContext.DistributionLibDir := '';

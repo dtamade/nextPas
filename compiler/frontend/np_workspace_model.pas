@@ -69,6 +69,10 @@ function ResolveWorkspaceModel(
   const AOutDirOverride: string
 ): TWorkspaceModel;
 
+function ResolveWorkspaceArtifactRootPath(
+  const AWorkspaceRootPath: string
+): string;
+
 function TryResolveWorkspaceModel(
   const AResolvedSourcePath: string;
   const AWorkspaceOverride: string;
@@ -165,6 +169,13 @@ begin
   Result := ExpandFileName(
     IncludeTrailingPathDelimiter(AWorkspaceRootPath) + '.nextpas'
   );
+end;
+
+function ResolveWorkspaceArtifactRootPath(
+  const AWorkspaceRootPath: string
+): string;
+begin
+  Result := BuildArtifactRootPath(AWorkspaceRootPath);
 end;
 
 function BuildOutputDirPath(

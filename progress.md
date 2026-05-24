@@ -3,6 +3,33 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 49 env use workspace selection sidecar)
+
+- **Status:** completed
+- Objective:
+  - 把 `env` family 从纯只读 `status` 推进到第一条真实但最小的 mutation verb，
+    让 `env use` 只写 workspace-local selection sidecar，并让 `env status --workspace`
+    在没有显式 `--toolchain-binding` 时读取该 selection。
+- Baseline:
+  - 现有 `env status` 只读投影 target/binding/distribution/runtime truth。
+  - 规格文档已经把 `ArtifactRootSet/env/selections` 写成 machine-local sidecar 分桶，
+    但 stage0 还没有真正的 selection write/read 入口。
+- Actions taken:
+  - 在 `task_plan.md` 顶部新增 Batch 49 addendum，明确这轮只做 workspace-local preferred
+    binding selection sidecar。
+  - 在 `compiler/frontend/np_workspace_model.pas` 暴露 workspace artifact root helper，
+    让 `env` 可以复用同一份 artifact-root 归属。
+  - 在 `tools/stage0/nextpas.pas` 与 `tools/stage0/nextpas_command_env.pas` 增加
+    `nextpas env use` parser、selection sidecar 写入与 `env status --workspace` selection
+    读取；显式 `--toolchain-binding` 继续覆盖 selection。
+  - 扩展 `TEnvironmentProjectionContext`、line-based projection 与 command envelope，加入
+    `env-selection-path`、`env-selection-status`、`env-selection-target` 与
+    `env-selection-toolchain-binding-id`。
+  - 同步 `build/verify_local.sh`、stage0 README、developer tooling / stage0 / workspace file
+    specs 与持续记录。
+  - fresh `bash build/verify_local.sh` 已通过，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 48 package install plan preflight truth)
 
 - **Status:** completed

@@ -557,6 +557,8 @@ FPC 的 `.pri`、`fppkg.cfg`、generated manifest 和 package-specific config fi
   - 放置 unpack / verify / materialize 期间的临时 staging root 与 interrupted work state
 - `env/selections/`
   - 放置 machine-local active channel、distribution release、preferred binding 等 selection sidecar
+  - 当前 `stage0 env use` 已先落地 workspace-local preferred binding sidecar：
+    `env/selections/<target>.toml`
 - `env/resolution/`
   - 放置 environment resolution cache，例如 workspace requirement 到 binding/sysroot/runtime set 的
     派生结果

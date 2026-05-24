@@ -688,6 +688,26 @@ procedure PrintEnvironmentProjectionFields(const UseStdErr: Boolean; const ACont
 begin
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'env-selection-path',
+    AContext.SelectionPath
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-selection-status',
+    AContext.SelectionStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-selection-target',
+    AContext.SelectionTarget
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-selection-toolchain-binding-id',
+    AContext.SelectionToolchainBindingId
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'toolchain-binding-path',
     AContext.ToolchainBindingPath
   );

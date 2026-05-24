@@ -159,6 +159,10 @@ type
   end;
 
   TEnvironmentProjectionContext = record
+    SelectionPath: string;
+    SelectionStatus: string;
+    SelectionTarget: string;
+    SelectionToolchainBindingId: string;
     ToolchainBindingPath: string;
     DistributionBinDir: string;
     DistributionLibDir: string;
