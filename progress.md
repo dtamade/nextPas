@@ -3,6 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 57 manifest-lock consistency preflight)
+
+- **Status:** completed
+- Objective:
+  - 让 `pkg plan` 在 manifest package name/version 与 canonical `nextpas.lock` entries
+    不一致时，直接投影 `package-lock-out-of-sync` blocker。
+- Baseline:
+  - Batch 56 已经能区分 lock missing、ready 与 invalid，并能投影 lock entries。
+  - 但 out-of-sync fixture 在实现前仍会被误报为 `package-install-plan-status=ready`，
+    因为 install-plan preflight 只检查 lockfile 是否 valid。
+- Actions taken:
+  - 新增 `tests/fixtures/package_lock_out_of_sync`，固定 manifest `0.1.0` 与 lock `0.2.0`
+    不一致的 read-only preflight 边界。
+  - 将 `TPackageManifestInfo.PackageVersion` 贯通到 `TWorkspaceModel` 与
+    `TPackageWorkflowTruth`。
+  - 在 `BuildPackageInstallPlanTruth` 中加入 manifest package name/version 与 lock entry
+    的最小 identity match；不匹配时投影 `package-lock-out-of-sync`。
+  - 将 ready lock fixtures 调整为当前 package 自身的 name/version，避免一致性检查误伤
+    ready path。
+  - 扩展 `build/verify_local.sh`，新增 `stage0PkgPlanLockOutOfSyncCheck`。
+- Verification:
+  - RED：focused probe 确认 out-of-sync fixture 在实现前仍输出
+    `package-install-plan-status=ready`。
+  - GREEN：focused probe 确认 out-of-sync fixture 输出
+    `package-install-plan-status=blocked`、
+    `package-install-plan-blocker-code=package-lock-out-of-sync` 与
+    `package-install-plan-blocker-message=canonical package lockfile is out of sync with package manifest`。
+
 ## Session: 2026-05-25 (Batch 56 package lockfile v1 read-only detail)
 
 - **Status:** completed

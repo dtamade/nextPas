@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 56` 为准。
+以最新完成的 `Batch 57` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -46,6 +46,7 @@
   `stage0PkgPlanDependencyBlockedCheck=pass`、
   `stage0PkgPlanSourceRootsBlockedCheck=pass`、
   `stage0PkgPlanLockInvalidCheck=pass`、
+  `stage0PkgPlanLockOutOfSyncCheck=pass`、
   `stage0PkgPlanInvalidArgumentsCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass`、
   `stage0PkgDeclaredDependenciesCheck=pass`、
   `stage0PkgGraphCheck=pass`、`stage0PkgGraphInvalidArgumentsCheck=pass`、
@@ -78,13 +79,13 @@
   `packageLockfilePath`；`pkg plan` 当前还直接覆盖 package manifest ready path、
   workspace member lock-missing blocked path、package-free manifest-missing missing path、
   malformed dependency invalid blocked path 与 manifest/lock ready 但 source-roots missing
-  blocked path、invalid lockfile blocked path；workspace member fixture 也已让
+  blocked path、invalid lockfile blocked path、manifest-lock out-of-sync blocked path；workspace member fixture 也已让
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 56：package lockfile v1 read-only detail。
+- 当前 rolling window 已推进到 Batch 57：manifest-lock consistency preflight。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 56` 已完成。
+- `Batch 1` 到 `Batch 57` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持

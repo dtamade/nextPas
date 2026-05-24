@@ -15,6 +15,57 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 57 Manifest-Lock Consistency Preflight
+
+### Goal
+
+把 `pkg plan` 的 lockfile preflight 从“lockfile 可解析”继续推进到“manifest 与 lock 的最小
+identity 一致”：当 `nextpas.package.toml` 声明的 package name/version 在 canonical
+`nextpas.lock` entries 中找不到同名同版本 package 时，`pkg plan` 必须停在明确的
+`package-lock-out-of-sync` blocker。
+
+### Architecture Decision
+
+本批次仍然只做 read-only preflight：
+
+- `TPackageManifestInfo` 开始保存 `[package].version`，并通过 `WorkspaceModel` 传给
+  `TPackageWorkflowTruth`
+- `BuildPackageInstallPlanTruth` 在 lock status 为 `ready` 后检查 manifest package
+  name/version 是否存在于 lock entries
+- install-plan blocker 顺序更新为 manifest missing -> dependency invalid -> source roots missing ->
+  lock invalid -> lock missing -> lock out of sync -> ready
+- 不做 dependency resolution、version solving、lockfile writer、lockfile rewrite 或 install mutation
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 新增 out-of-sync lock fixture，并把 ready lock fixtures 调整为当前 package identity
+- [x] 新增 `stage0PkgPlanLockOutOfSyncCheck`，冻结 `package-lock-out-of-sync` blocker
+- [x] 将 package manifest version 纳入 manifest/workspace/workflow truth
+- [x] 在 install-plan preflight 中加入 manifest-lock identity match
+- [x] 同步 package workflow / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused probe 确认 out-of-sync fixture 在实现前仍被误报为
+  `package-install-plan-status=ready`
+- GREEN: focused probe 确认 out-of-sync fixture 投影
+  `package-install-plan-status=blocked` 与
+  `package-install-plan-blocker-code=package-lock-out-of-sync`
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0PkgPlanLockOutOfSyncCheck=pass`
+
+### Non-goals
+
+- 不做 resolver 或 version solving
+- 不写入或重写 `nextpas.lock`
+- 不把 lockfile skeleton 扩展成完整 target snapshot grammar
+
 ## Addendum: 2026-05-25 Batch 56 Package Lockfile v1 Read-only Detail
 
 ### Goal

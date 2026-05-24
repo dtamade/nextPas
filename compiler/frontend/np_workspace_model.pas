@@ -13,6 +13,7 @@ type
 
   TPackageRef = record
     PackageName: string;
+    PackageVersion: string;
     ManifestPath: string;
     PackageRootPath: string;
     WorkspaceMemberPath: string;
@@ -382,6 +383,7 @@ begin
   begin
     PackageInfo := PackageInfos[Index];
     PackageRef.PackageName := PackageInfo.PackageName;
+    PackageRef.PackageVersion := PackageInfo.PackageVersion;
     PackageRef.ManifestPath := PackageInfo.ManifestPath;
     PackageRef.PackageRootPath := PackageInfo.PackageRootPath;
     if Result.FWorkspaceDescriptorPath <> '' then

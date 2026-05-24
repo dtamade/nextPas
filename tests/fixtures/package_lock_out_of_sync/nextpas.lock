@@ -1,0 +1,6 @@
+[lockfile]
+format-version = 1
+
+[[package]]
+name = "tests.package-lock-out-of-sync"
+version = "0.2.0"

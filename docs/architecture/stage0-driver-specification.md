@@ -241,7 +241,8 @@ package manifest fixture，以及 workspace descriptor root 解析到 member pac
 fixture，确保合法 package workspace 不会误报 `doctor.package-workspace-missing`，也不会把
 workspace root 和 member package root 混为一谈。`package-lock-status` 现在会根据 canonical
 `nextpas.lock` 是否缺失、是否符合最小 v1 grammar 投影 `missing|ready|invalid`，而不是把 lock
-truth 一律压成 deferred；invalid lockfile 会让 `pkg plan` 停在 `package-lock-invalid`。
+truth 一律压成 deferred；invalid lockfile 会让 `pkg plan` 停在 `package-lock-invalid`，
+valid lockfile 与 manifest package name/version 不一致时会停在 `package-lock-out-of-sync`。
 
 ## `stage0 query symbols` 提供最小只读 semantic query
 

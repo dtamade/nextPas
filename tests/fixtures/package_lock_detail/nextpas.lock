@@ -2,5 +2,5 @@
 format-version = 1
 
 [[package]]
-name = "nextpas.graphics"
+name = "tests.package-lock-detail"
 version = "0.1.0"

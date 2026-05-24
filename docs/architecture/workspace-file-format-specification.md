@@ -456,8 +456,9 @@ version = "0.1.0"
   - resolved package identity 与 selected version
 
 target snapshots、declared provenance、source/content digest 与 dependency selected version 仍是
-后续 resolver / lock writer 应该补进来的 replay evidence；Batch 56 只读解析当前最小 skeleton，
-让 tooling 可以诚实区分 missing、ready 与 invalid。
+后续 resolver / lock writer 应该补进来的 replay evidence；当前只读 preflight 先解析最小
+skeleton，并要求 manifest package name/version 能在 lock entries 中找到同名同版本项，让 tooling
+可以诚实区分 missing、ready、invalid 与 out-of-sync。
 
 这里继续明确不允许什么：
 

@@ -28,6 +28,7 @@ type
     ManifestPath: string;
     PackageRootPath: string;
     PackageName: string;
+    PackageVersion: string;
     SourceRoots: TStringArray;
     Dependencies: TPackageDependencyInfoArray;
     DependencyIssues: TPackageDependencyIssueInfoArray;
@@ -539,6 +540,7 @@ begin
   Result.ManifestPath := '';
   Result.PackageRootPath := '';
   Result.PackageName := '';
+  Result.PackageVersion := '';
   Result.SourceRoots := nil;
   SetLength(Result.SourceRoots, 0);
   Result.Dependencies := nil;
@@ -581,6 +583,13 @@ begin
       begin
         Result.PackageName := Trim(Copy(TrimmedLine, EqPos + 1, MaxInt));
         Result.PackageName := ParseTomlStringLiteral(Result.PackageName);
+        Continue;
+      end;
+
+      if (CurrentSection = 'package') and (KeyName = 'version') then
+      begin
+        Result.PackageVersion := Trim(Copy(TrimmedLine, EqPos + 1, MaxInt));
+        Result.PackageVersion := ParseTomlStringLiteral(Result.PackageVersion);
         Continue;
       end;
 
@@ -636,6 +645,7 @@ begin
       AInfo.ManifestPath := ExpandFileName(AManifestPath);
       AInfo.PackageRootPath := ExtractFileDir(ExpandFileName(AManifestPath));
       AInfo.PackageName := '';
+      AInfo.PackageVersion := '';
       AInfo.SourceRoots := nil;
       SetLength(AInfo.SourceRoots, 0);
       AInfo.Dependencies := nil;
@@ -770,6 +780,7 @@ begin
     Result.ManifestPath := '';
     Result.PackageRootPath := '';
     Result.PackageName := '';
+    Result.PackageVersion := '';
     Result.SourceRoots := nil;
     SetLength(Result.SourceRoots, 0);
     Result.Dependencies := nil;

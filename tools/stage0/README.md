@@ -278,7 +278,8 @@ read-only parser 已经拥有的 truth 投影为只读 package workflow 结果�
 展开成 root node、declared-dependency nodes 与 `declared-dependency` edges。
 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
 lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid blocked
-path、source-roots-missing blocked path 与 invalid-lock blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
+path、source-roots-missing blocked path、invalid-lock blocked path 与 manifest-lock out-of-sync
+blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
 package manifest root 与 workspace descriptor root 解析到 member
 package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots`、
 `package-dependencies` / `packageDependencies` 明细、lockfile format/entry/issue detail，以及
@@ -864,7 +865,8 @@ manifest-missing missing preflight 样本、malformed dependency fixture 下的
 `nextpas pkg plan --workspace ...` dependency-invalid blocked preflight 样本、manifest/lock ready
 但 source roots 为空的 `nextpas pkg plan --workspace ...` source-roots-missing blocked preflight
 样本、invalid lock fixture 下的 `nextpas pkg plan --workspace ...` lock-invalid blocked preflight
-样本、package lock detail fixture 下的 `nextpas pkg inspect --workspace ...` lock detail 样本、workspace member fixture 下的
+样本、out-of-sync lock fixture 下的 `nextpas pkg plan --workspace ...` lock-out-of-sync blocked
+preflight 样本、package lock detail fixture 下的 `nextpas pkg inspect --workspace ...` lock detail 样本、workspace member fixture 下的
 `nextpas pkg graph --workspace ...` 正向 package graph 样本、裸 `nextpas pkg`，冻结
 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
@@ -896,6 +898,7 @@ manifest-missing missing preflight 样本、malformed dependency fixture 下的
 `stage0PkgCheck=pass`、`stage0PkgLockDetailCheck=pass`、`stage0PkgPlanCheck=pass`、`stage0PkgPlanBlockedCheck=pass`、
 `stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanDependencyBlockedCheck=pass`、
 `stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanLockInvalidCheck=pass`、
+`stage0PkgPlanLockOutOfSyncCheck=pass`、
 `stage0PkgPlanInvalidArgumentsCheck=pass`、
 `stage0PkgWorkspaceMemberCheck=pass` 与
 `stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgGraphCheck=pass`、

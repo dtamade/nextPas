@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- `pkg plan` 现在会在 lockfile valid 之后做最小 manifest-lock identity check：manifest 的
+  package name/version 必须出现在 canonical `nextpas.lock` entries 里，否则 install preflight
+  会阻塞为 `package-lock-out-of-sync`。
+- `TPackageManifestInfo` 现在保存 `[package].version`，并经由 `WorkspaceModel` 进入
+  `TPackageWorkflowTruth`；这只是 read-only preflight 输入，不是 resolver 或 lock writer。
+- `tests/fixtures/package_lock_out_of_sync` 固定了 manifest `0.1.0` 与 lock `0.2.0`
+  不一致的边界；focused probe 已确认实现前会误报 ready，实现后会投影
+  `package-install-plan-blocker-code=package-lock-out-of-sync`。
+- `build/verify_local.sh` 已新增 `stage0PkgPlanLockOutOfSyncCheck=pass`，用于冻结
+  manifest-lock out-of-sync blocked plan path。
 - `nextpas.lock` 现在有最小 v1 只读 parser：当前实现读取 `[lockfile] format-version = 1` 与
   `[[package]] name/version`，并通过 `TPackageLockTruth` 投影 format version、entries 与 issues。
 - `package-lock-status` 已从存在性 truth 扩展为 `missing|ready|invalid`；invalid lockfile 不再被误报为

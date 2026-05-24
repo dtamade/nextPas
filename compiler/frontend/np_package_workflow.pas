@@ -13,6 +13,7 @@ type
     ManifestPath: string;
     PackageRootPath: string;
     PackageName: string;
+    PackageVersion: string;
     SourceRootCount: LongInt;
     SourceRoots: TStringArray;
     DependencyCount: LongInt;
@@ -192,6 +193,9 @@ function BuildPackageInstallPlanTruth(
   const ALockTruth: TPackageLockTruth;
   const AWorkspaceRootPath: string
 ): TPackageInstallPlanTruth;
+var
+  LockEntryIndex: LongInt;
+  LockMatchesManifest: Boolean;
 begin
   Result.Status := 'missing';
   Result.WorkspaceRootPath := AWorkspaceRootPath;
@@ -223,6 +227,23 @@ begin
     Exit;
   end;
   if ALockTruth.Status <> 'ready' then
+    Exit;
+
+  LockMatchesManifest := False;
+  for LockEntryIndex := 0 to Length(ALockTruth.Entries) - 1 do
+    if (ALockTruth.Entries[LockEntryIndex].Name =
+      AManifestTruth.PackageName) and
+      (ALockTruth.Entries[LockEntryIndex].Version =
+      AManifestTruth.PackageVersion) then
+    begin
+      LockMatchesManifest := True;
+      Break;
+    end;
+
+  Result.BlockerCode := 'package-lock-out-of-sync';
+  Result.BlockerMessage :=
+    'canonical package lockfile is out of sync with package manifest';
+  if not LockMatchesManifest then
     Exit;
 
   Result.Status := 'ready';
@@ -262,6 +283,7 @@ begin
   Result.ManifestTruth.ManifestPath := AManifestInfo.ManifestPath;
   Result.ManifestTruth.PackageRootPath := AManifestInfo.PackageRootPath;
   Result.ManifestTruth.PackageName := AManifestInfo.PackageName;
+  Result.ManifestTruth.PackageVersion := AManifestInfo.PackageVersion;
   Result.ManifestTruth.SourceRootCount := Length(AManifestInfo.SourceRoots);
   Result.ManifestTruth.SourceRoots := AManifestInfo.SourceRoots;
   Result.ManifestTruth.DependencyCount := Length(AManifestInfo.Dependencies);
@@ -313,6 +335,7 @@ begin
   ManifestInfo.ManifestPath := '';
   ManifestInfo.PackageRootPath := '';
   ManifestInfo.PackageName := '';
+  ManifestInfo.PackageVersion := '';
   SetLength(ManifestInfo.SourceRoots, 0);
   SetLength(ManifestInfo.Dependencies, 0);
   SetLength(ManifestInfo.DependencyIssues, 0);
@@ -323,6 +346,7 @@ begin
     ManifestInfo.ManifestPath := PackageRef.ManifestPath;
     ManifestInfo.PackageRootPath := PackageRef.PackageRootPath;
     ManifestInfo.PackageName := PackageRef.PackageName;
+    ManifestInfo.PackageVersion := PackageRef.PackageVersion;
     ManifestInfo.SourceRoots := PackageRef.SourceRoots;
     ManifestInfo.Dependencies := PackageRef.Dependencies;
     ManifestInfo.DependencyIssues := PackageRef.DependencyIssues;
