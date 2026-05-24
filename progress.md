@@ -3,6 +3,26 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 48 package install plan preflight truth)
+
+- **Status:** completed
+- Objective:
+  - 把 package workflow 里还停在 `deferred` 的 install plan truth 推进成只读 preflight truth，
+    让 `doctor` / `pkg inspect` 能区分 `ready`、`blocked` 与 `missing`，并在被阻塞时给出 blocker
+    code/message。
+- Baseline:
+  - 当前 `package-lock-status` 已经按 canonical `nextpas.lock` 的存在性投影 `ready|missing`。
+  - 现有 package workflow truth 仍把 `package-install-plan-status` 当成无解释力的 `deferred` 占位。
+  - 现有 verify gate 也仍在按 `deferred` 口径冻结包面输出。
+- Actions taken:
+  - 在 `task_plan.md` 顶部新增 Batch 48 addendum，明确这轮只做 install plan preflight truth。
+  - 在 `compiler/frontend/np_package_workflow.pas` 中把 install plan truth 从占位态收成三态
+    preflight，并补 blocker code/message。
+  - 在 `tools/stage0` 投影层新增 `package-install-plan-blocker-code` /
+    `package-install-plan-blocker-message`，并同步更新 `build/verify_local.sh` 与 package 文档。
+  - fresh `bash build/verify_local.sh` 已通过，确认包面三态和 blocker 投影都已收口。
+  - 完成短评审并提交 git，收口到 `616110c`。
+
 ## Session: 2026-05-24 (Batch 47 package lockfile presence truth)
 
 - **Status:** completed

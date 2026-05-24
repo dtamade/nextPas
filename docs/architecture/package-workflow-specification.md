@@ -147,7 +147,8 @@ nextPas 在这里进一步冻结：
   source root count
 - lock truth 当前只冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否存在投影
   `status=ready|missing`
-- install plan truth 当前只冻结 workspace/package provenance 与 `status=deferred`
+- install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
+  与必要的 blocker code/message
 - 这批刻意不执行 registry lookup、fetch、dependency solver、install placement 或 lockfile write
 
 ## repository、registry、source、mirror 必须分角色，而不是混成一个词
@@ -524,10 +525,10 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
 - `stage0`
   - 当前不承诺完整 `pkg` family，也不承诺 manifest/lock file format
   - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect` surface
-  - `pkg inspect` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
-    manifest status、workflow manifest path、package root、package name、lock status、canonical
-    lockfile path、source root count、source roots JSON 明细、declared dependency count /
-    dependencies JSON 明细与 install plan status
+- `pkg inspect` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
+  manifest status、workflow manifest path、package root、package name、lock status、canonical
+  lockfile path、source root count、source roots JSON 明细、declared dependency count /
+  dependencies JSON 明细、install plan status 与 install plan blocker code/message
   - 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到
     member package 的 ready 路径，确保 CLI、IDE 和 automation 后续共享同一条 package membership truth
   - 但 package workflow 的对象边界、install root 角色与相邻控制面必须先冻结

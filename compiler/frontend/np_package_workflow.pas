@@ -31,6 +31,8 @@ type
     Status: string;
     WorkspaceRootPath: string;
     PackageRootPath: string;
+    BlockerCode: string;
+    BlockerMessage: string;
   end;
 
   TPackageWorkflowTruth = record
@@ -53,6 +55,43 @@ function BuildPackageWorkflowTruthFromWorkspaceModel(
 ): TPackageWorkflowTruth;
 
 implementation
+
+function BuildPackageInstallPlanTruth(
+  const AManifestTruth: TPackageManifestTruth;
+  const ALockTruth: TPackageLockTruth;
+  const AWorkspaceRootPath: string
+): TPackageInstallPlanTruth;
+begin
+  Result.Status := 'missing';
+  Result.WorkspaceRootPath := AWorkspaceRootPath;
+  Result.PackageRootPath := AManifestTruth.PackageRootPath;
+  Result.BlockerCode := 'package-manifest-missing';
+  Result.BlockerMessage := 'package manifest is missing';
+
+  if AManifestTruth.Status <> 'ready' then
+    Exit;
+
+  Result.Status := 'blocked';
+  Result.BlockerCode := 'package-dependencies-invalid';
+  Result.BlockerMessage := 'package dependency validation is invalid';
+
+  if AManifestTruth.DependencyValidationStatus = 'invalid' then
+    Exit;
+
+  Result.BlockerCode := 'package-source-roots-missing';
+  Result.BlockerMessage := 'package source roots are missing';
+  if AManifestTruth.SourceRootCount <= 0 then
+    Exit;
+
+  Result.BlockerCode := 'package-lock-missing';
+  Result.BlockerMessage := 'canonical package lockfile is missing';
+  if ALockTruth.Status <> 'ready' then
+    Exit;
+
+  Result.Status := 'ready';
+  Result.BlockerCode := '';
+  Result.BlockerMessage := '';
+end;
 
 function ResolveLockfilePath(const AWorkspaceRootPath: string): string;
 begin
@@ -105,9 +144,11 @@ begin
   else
     Result.LockTruth.Status := 'missing';
 
-  Result.InstallPlanTruth.Status := 'deferred';
-  Result.InstallPlanTruth.WorkspaceRootPath := WorkspaceRootPath;
-  Result.InstallPlanTruth.PackageRootPath := AManifestInfo.PackageRootPath;
+  Result.InstallPlanTruth := BuildPackageInstallPlanTruth(
+    Result.ManifestTruth,
+    Result.LockTruth,
+    WorkspaceRootPath
+  );
 
   Result.PackageSourceRootCount := Result.ManifestTruth.SourceRootCount;
   Result.PackageDependencyCount := Result.ManifestTruth.DependencyCount;

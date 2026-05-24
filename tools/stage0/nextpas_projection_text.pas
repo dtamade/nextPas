@@ -866,6 +866,16 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'package-install-plan-blocker-code',
+    AContext.InstallPlanBlockerCode
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-install-plan-blocker-message',
+    AContext.InstallPlanBlockerMessage
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'package-workflow-manifest-path',
     AContext.ManifestPath
   );

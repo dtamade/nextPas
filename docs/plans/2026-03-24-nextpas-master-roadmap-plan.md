@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 46` 为准。
+以最新完成的 `Batch 47` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -54,9 +54,11 @@
   side tables，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
   `packageSourceRoots`、`packageDependencyCount`、`packageDependencies`、
-  `packageDependencyValidationStatus`、`packageDependencyIssueCount`、`packageDependencyIssues` 与
-  `packageInstallPlanStatus`，`packageLockStatus` 现在根据 canonical lockfile 是否存在投影
-  `ready|missing`，并继续冻结
+  `packageDependencyValidationStatus`、`packageDependencyIssueCount`、`packageDependencyIssues`、
+  `packageInstallPlanStatus`、`packageInstallPlanBlockerCode` 与
+  `packageInstallPlanBlockerMessage`；`packageLockStatus` 现在根据 canonical lockfile 是否存在
+  投影 `ready|missing`，`packageInstallPlanStatus` 继续作为只读 preflight truth，投影
+  `ready|blocked|missing` 并在有阻塞时公开 blocker 详情；并继续冻结
   `packageWorkflowManifestPath`、`packageRootPath`、`packageName`、`packageLockStatus` 与
   `packageLockfilePath`；workspace member fixture 也已让
   `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
@@ -90,7 +92,8 @@
   则把 `doctor` 的只读 health inspection 继续接上 package/workspace truth：当 workspace
   没有 package truth 时，会同步投影 `package-workflow-status`、
   `package-manifest-status`、`package-lock-status`、
-  `package-install-plan-status`、`package-source-root-count` 与
+  `package-install-plan-status`、`package-install-plan-blocker-code`、
+  `package-install-plan-blocker-message`、`package-source-root-count` 与
   `package-source-roots`，并给出
   `doctor.package-workspace-missing`。`Batch 41` 再把同一条 coherence contract 的正向样本
   纳入 gate：合法 package workspace 会稳定投影 package workflow ready，且不会误报
@@ -1618,7 +1621,9 @@ structured finding surface：
   `package-workflow-manifest-path=<path>`、`package-root-path=<path>`、`package-name=<name>`、
   `package-lockfile-path=<path>`、`package-source-root-count=<count>`、
   `package-source-roots=<json-array>` 与
-  `package-install-plan-status=deferred`
+  `package-install-plan-status=ready|blocked|missing`、
+  `package-install-plan-blocker-code` 与
+  `package-install-plan-blocker-message`
 - `compiler/frontend/np_package_workflow.pas` 现在补齐
   `BuildPackageWorkflowTruthFromWorkspaceModel`，让 package workflow truth 可以直接消费
   `WorkspaceModel` 并投影 manifest/lock/install plan status

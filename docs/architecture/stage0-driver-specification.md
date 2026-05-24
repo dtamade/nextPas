@@ -184,7 +184,8 @@ open document overlay、incremental invalidation 或 IDE integration。
   `doctor-status`、`doctor-check-count`、`doctor-finding-count` 与代表性
   `doctor-finding-*` 字段投影
 - 当 workspace 没有 package truth 时，还会同步投影 `package-workflow-status`、
-  `package-manifest-status`、`package-lock-status`、`package-install-plan-status` 与
+  `package-manifest-status`、`package-lock-status`、`package-install-plan-status`、
+  `package-install-plan-blocker-code` / `package-install-plan-blocker-message` 与
   `package-source-root-count` / `package-source-roots` / `package-dependency-count` /
   `package-dependencies`
 - `command-envelope=<json>.result.doctorFindings[]` 保存同一条 finding 的

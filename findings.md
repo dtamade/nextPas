@@ -16,10 +16,16 @@
 - `tests/fixtures/package_manifest_source_root/nextpas.lock` 让 package manifest fixture 形成
   真实 ready path；workspace member / declared dependencies / repo root 仍然缺锁，因此会稳定
   投影 `missing`。
-- `package-install-plan-status` 仍然保留 deferred，本轮没有提前打开 install plan 生成、
-  resolver 或 lockfile write。
-- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部已同步到 `Batch 47`，
-  不会再误导下一轮“继续”的恢复点。
+- `package-install-plan-status` 现在改成只读 preflight truth，投影
+  `ready|blocked|missing`；有 blocker 时还会同步投影
+  `package-install-plan-blocker-code` / `package-install-plan-blocker-message`。
+- `tests/fixtures/package_manifest_source_root` 现在会稳定投影 `package-install-plan-status=ready`；
+  workspace member / declared dependencies fixture 会因为缺锁稳定投影 `blocked`，而
+  `workspace_malformed_dependencies` 会因为 dependency validation invalid 稳定投影 `blocked`。
+- Batch 48 已经被 fresh `bash build/verify_local.sh` 验证为 pass，并以 git commit
+  `616110c` 收口。
+- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部已经同步到 `Batch 48`
+  install plan preflight truth，不会再误导下一轮“继续”的恢复点。
 - 当前 `docs/architecture/architecture-principles-specification.md` 已把用户提出的长期质量目标
   固化为可执行门槛：每个切片都要明确 owner、truth object、projection、promotion gate、
   non-goal 与回退信号；这条规范应作为 `master-roadmap.md`、compiler 自举路线和后续 package /

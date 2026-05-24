@@ -661,6 +661,18 @@ begin
     'packageInstallPlanStatus',
     AContext.InstallPlanStatus
   );
+  if AContext.InstallPlanBlockerCode <> '' then
+    AppendJsonStringField(
+      AFields,
+      'packageInstallPlanBlockerCode',
+      AContext.InstallPlanBlockerCode
+    );
+  if AContext.InstallPlanBlockerMessage <> '' then
+    AppendJsonStringField(
+      AFields,
+      'packageInstallPlanBlockerMessage',
+      AContext.InstallPlanBlockerMessage
+    );
   AppendJsonStringField(
     AFields,
     'packageWorkflowManifestPath',

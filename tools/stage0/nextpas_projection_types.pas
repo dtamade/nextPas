@@ -208,6 +208,8 @@ type
     ManifestStatus: string;
     LockStatus: string;
     InstallPlanStatus: string;
+    InstallPlanBlockerCode: string;
+    InstallPlanBlockerMessage: string;
     ManifestPath: string;
     PackageRootPath: string;
     PackageName: string;

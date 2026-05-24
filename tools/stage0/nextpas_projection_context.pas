@@ -419,6 +419,8 @@ begin
   AContext.ManifestStatus := '';
   AContext.LockStatus := '';
   AContext.InstallPlanStatus := '';
+  AContext.InstallPlanBlockerCode := '';
+  AContext.InstallPlanBlockerMessage := '';
   AContext.ManifestPath := '';
   AContext.PackageRootPath := '';
   AContext.PackageName := '';
@@ -685,6 +687,10 @@ begin
   AContext.ManifestStatus := AWorkflowTruth.ManifestTruth.Status;
   AContext.LockStatus := AWorkflowTruth.LockTruth.Status;
   AContext.InstallPlanStatus := AWorkflowTruth.InstallPlanTruth.Status;
+  AContext.InstallPlanBlockerCode :=
+    AWorkflowTruth.InstallPlanTruth.BlockerCode;
+  AContext.InstallPlanBlockerMessage :=
+    AWorkflowTruth.InstallPlanTruth.BlockerMessage;
   AContext.ManifestPath := AWorkflowTruth.ManifestTruth.ManifestPath;
   AContext.PackageRootPath := AWorkflowTruth.ManifestTruth.PackageRootPath;
   AContext.PackageName := AWorkflowTruth.ManifestTruth.PackageName;

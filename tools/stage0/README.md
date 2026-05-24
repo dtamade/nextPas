@@ -195,7 +195,9 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-dependency-validation-status=valid|invalid|missing`
 - `package-dependency-issue-count=<count>`
 - `package-dependency-issues=<json-array>`
-- `package-install-plan-status=deferred`
+- `package-install-plan-status=ready|blocked|missing`
+- `package-install-plan-blocker-code=<code>`（有 blocker 时）
+- `package-install-plan-blocker-message=<message>`（有 blocker 时）
 
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
 或 lockfile write。它只把 `WorkspaceModel` 与 `PackageManifestInfo` 已经拥有的
@@ -789,7 +791,9 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
 `package-source-root-count=<non-zero>`、`package-source-roots=<json-array>`、
 `package-dependency-validation-status=valid|invalid|missing`、
-`package-install-plan-status=deferred`、
+`package-install-plan-status=ready|blocked|missing`、
+`package-install-plan-blocker-code` /
+`package-install-plan-blocker-message`、
 `stage0PkgCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass` 与
 `stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgMalformedDependenciesCheck=pass`、
 `stage0PkgInvalidArgumentsCheck=pass`，确保当前最小

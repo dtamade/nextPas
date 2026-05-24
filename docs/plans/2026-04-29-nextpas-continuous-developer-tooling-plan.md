@@ -350,8 +350,9 @@ git commit -m "feat: add minimal query symbols surface"
 In `tests/toolchain/toolchain_contract_smoke.pas`, add a package workflow probe that imports `np_package_workflow` and prints:
 
 - `package-workflow-manifest-status=ready`
-- `package-workflow-lock-status=deferred`
-- `package-install-plan-status=deferred`
+- `package-workflow-lock-status=ready|missing`
+- `package-install-plan-status=ready|blocked|missing`
+- `package-install-plan-blocker-code` / `package-install-plan-blocker-message`
 - `package-workflow-source-root-count=<count>`
 
 Add `build/verify_local.sh` gates for those fields.
@@ -434,7 +435,8 @@ Expected fields:
 - `package-manifest-status=ready`
 - `package-source-root-count=<non-zero>`
 - `package-source-roots=<json-array>`
-- `package-install-plan-status=deferred`
+- `package-install-plan-status=ready|blocked|missing`
+- `package-install-plan-blocker-code` / `package-install-plan-blocker-message`
 - `command-envelope=.*"command":"pkg"`
 - `command-envelope=.*"selector":"inspect"`
 

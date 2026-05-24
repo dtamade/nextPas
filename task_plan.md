@@ -15,6 +15,57 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 48 Package Install Plan Preflight Truth
+
+### Goal
+
+把 package workflow 里还停在 `deferred` 的 install plan truth 收成真正可消费的只读预检结果，
+让 CLI / automation 能直接判断“现在能不能进入 install plan 生成前置阶段”，而不是只看到一条
+没有解释力的占位状态：
+
+- `package-install-plan-status` 继续作为公开 surface，但状态语义改为 `ready|blocked|missing`
+- `missing` 只表示 package workflow 本身不可用，或没有可解释的 package truth
+- `blocked` 表示 package truth 已存在，但仍有明确阻塞，必要时补 `package-install-plan-blocker-code`
+  与 `package-install-plan-blocker-message`
+- `ready` 表示 install plan preflight 已满足，仍不代表真正执行 resolver / install / write-back
+- `doctor` / `pkg inspect` 继续共享同一份 package workflow truth，不分裂成两套解释
+
+### Architecture Decision
+
+install plan preflight 只负责回答“能否进入下一步”，不提前打开任何 resolver、fetch、install、
+lockfile write 或 mutation path。它的状态边界会按 package workflow truth 的现有层级做最小派生：
+
+- manifest 不存在时，install plan 直接 `missing`
+- manifest 存在但被 dependency validation、lock presence 或 source-root completeness 阻塞时，install plan
+  投影为 `blocked`
+- 只有 manifest、lock、dependency 与 source-root 前置条件都满足时，才投影为 `ready`
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 确认当前 install-plan 投影仍然固定为 `deferred`，并定位相关 truth / projection / verify
+      代码路径
+- [x] 在 `compiler/frontend/np_package_workflow.pas` 落 install plan preflight truth 与 blocker 详情
+- [x] 同步 `tools/stage0` 投影、`tests/toolchain/toolchain_contract_smoke.pas`、`build/verify_local.sh`
+      与相关文档
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 通过，最终输出 `verify-local=pass`
+  与 `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolver
+- 不做 install plan writer
+- 不做 lockfile mutation
+- 不改 `nextpas.lock` 文件语法或 registry 语义
+
 ## Addendum: 2026-05-24 Batch 47 Package Lockfile Presence Truth
 
 ### Goal
