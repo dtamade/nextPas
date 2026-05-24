@@ -103,6 +103,22 @@ function ResolvePackageInspectionSourcePath(
 
 implementation
 
+function BuildJsonStringArray(const AValues: array of string): string;
+var
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryJson := EntryJson + JsonString(AValues[Index]);
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
 begin
   AContext.SourcePath := '';
@@ -338,6 +354,7 @@ begin
   AContext.LockfilePath := '';
   AContext.SourceRootCount := 0;
   AContext.HasSourceRootCount := False;
+  AContext.SourceRootsJson := '';
 end;
 
 procedure CaptureBuildCommandContextValue(
@@ -596,6 +613,9 @@ begin
   AContext.LockfilePath := AWorkflowTruth.LockTruth.LockfilePath;
   AContext.SourceRootCount := AWorkflowTruth.PackageSourceRootCount;
   AContext.HasSourceRootCount := AWorkflowTruth.ManifestTruth.Status <> '';
+  AContext.SourceRootsJson := BuildJsonStringArray(
+    AWorkflowTruth.ManifestTruth.SourceRoots
+  );
 end;
 
 function ResolvePackageInspectionSourcePath(const AWorkspaceRoot: string): string;

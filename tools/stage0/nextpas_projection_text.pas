@@ -890,6 +890,11 @@ begin
     AContext.SourceRootCount,
     AContext.HasSourceRootCount
   );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-source-roots',
+    AContext.SourceRootsJson
+  );
 end;
 procedure PrintDiagnosticsDetailProjection(const UseStdErr: Boolean; const ADiagnostics: TDiagnosticProjectionContext);
 begin

@@ -338,7 +338,7 @@ semantic projection 与只读 `pkg inspect` package workflow projection 收进�
 - 当前 `pkg inspect` 只是 workspace-model-backed 的最小只读投影，不等于完整
   package manager、fetch/install/update/publish workflow 或 dependency resolution；它的
   promotion gate 当前同时覆盖 package manifest root 与 workspace descriptor root 解析到
-  member package 的 ready 路径
+  member package 的 ready 路径，并冻结 source roots 明细投影
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 

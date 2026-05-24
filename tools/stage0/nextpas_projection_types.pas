@@ -214,6 +214,7 @@ type
     LockfilePath: string;
     SourceRootCount: LongInt;
     HasSourceRootCount: Boolean;
+    SourceRootsJson: string;
   end;
 
   TNextPasState = record

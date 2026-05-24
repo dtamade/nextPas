@@ -3,6 +3,27 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 44 package source roots projection)
+
+- **Status:** completed
+- Actions taken:
+  - 从 Batch 43 继续，按用户反馈把重心从“再加 gate”切回真实代码能力：选择把
+    `TPackageWorkflowTruth.ManifestTruth.SourceRoots` 公开投影，而不是让消费者只拿
+    `package-source-root-count`。
+  - 扩展 `TPackageProjectionContext`，新增 `SourceRootsJson`，并在
+    `CapturePackageProjectionFromWorkflowTruth(...)` 中从同一份 package workflow truth 生成
+    JSON array。
+  - 扩展 `tools/stage0/nextpas_projection_text.pas` 与
+    `tools/stage0/nextpas_projection_json.pas`，新增 line-based
+    `package-source-roots=<json-array>` 与 envelope `packageSourceRoots`。
+  - 加严 `build/verify_local.sh` 的 repo-root missing package truth、package manifest fixture、
+    workspace member fixture、`doctor --workspace` 与 `pkg inspect` 两条公开面，冻结 count 与
+    roots 明细同步。
+  - 同步 `task_plan.md`、`findings.md`、`tools/stage0/README.md`、stage0 / developer tooling /
+    package workflow specs 与 rolling plan。
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 43 pkg inspect workspace member contract)
 
 - **Status:** completed

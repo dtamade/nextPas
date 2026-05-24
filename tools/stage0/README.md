@@ -142,6 +142,7 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-lock-status`
 - `package-install-plan-status`
 - `package-source-root-count`
+- `package-source-roots`
 - 缺少 package truth 时还会出现 `doctor.package-workspace-missing`
 - workspace descriptor root 指向 member package 时还会稳定投影
   `workspace-descriptor-path` 与 member package detail fields
@@ -183,13 +184,15 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-name=<name>`
 - `package-lockfile-path=<path>`
 - `package-source-root-count=<count>`
+- `package-source-roots=<json-array>`
 - `package-install-plan-status=deferred`
 
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
 或 lockfile write。它只把 `WorkspaceModel` 与 `PackageManifestInfo` 已经拥有的
 package manifest truth 投影为只读 package workflow 结果。
 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到 member
-package 的 ready 路径，避免 `pkg inspect` 和 `doctor` 对 workspace membership 形成两套解释。
+package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots` 明细，避免
+`pkg inspect` 和 `doctor` 对 workspace membership 或 source roots 形成两套解释。
 
 在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
 resolution / sema / MIR / backend / toolchain skeleton：
@@ -771,7 +774,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `package-workflow-status=ready`、`package-manifest-status=ready`、
 `package-lock-status=deferred`、`package-workflow-manifest-path=<path>`、
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
-`package-source-root-count=<non-zero>`、`package-install-plan-status=deferred`、
+`package-source-root-count=<non-zero>`、`package-source-roots=<json-array>`、
+`package-install-plan-status=deferred`、
 `stage0PkgCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass` 与
 `stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
 `env` / `doctor` / `query` / `pkg` surface 也进入正式 gate。

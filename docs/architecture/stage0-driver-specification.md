@@ -185,7 +185,7 @@ open document overlay、incremental invalidation 或 IDE integration。
   `doctor-finding-*` 字段投影
 - 当 workspace 没有 package truth 时，还会同步投影 `package-workflow-status`、
   `package-manifest-status`、`package-lock-status`、`package-install-plan-status` 与
-  `package-source-root-count`
+  `package-source-root-count` / `package-source-roots`
 - `command-envelope=<json>.result.doctorFindings[]` 保存同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
 

@@ -433,6 +433,7 @@ Expected fields:
 - `package-workflow-status=ready`
 - `package-manifest-status=ready`
 - `package-source-root-count=<non-zero>`
+- `package-source-roots=<json-array>`
 - `package-install-plan-status=deferred`
 - `command-envelope=.*"command":"pkg"`
 - `command-envelope=.*"selector":"inspect"`

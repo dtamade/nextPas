@@ -15,6 +15,36 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 44 Package Source Roots Projection
+
+### Goal
+
+把 package workflow truth 中已经存在的 `SourceRoots` 从内部事实提升为公开只读投影，避免
+IDE、CI 或 automation 只能拿到 `package-source-root-count` 后再回头解析 manifest：
+
+- `pkg inspect` 与 `doctor --workspace` 必须继续复用同一份 `PackageWorkflowTruth`
+- line-based output 在 `package-source-root-count` 之外新增
+  `package-source-roots=<json-array>`
+- `command-envelope=<json>.result` 同步新增 `packageSourceRoots`
+- 缺少 package truth 时投影 `package-source-roots=[]`，与
+  `package-source-root-count=0` 保持一致
+- non-goal：不做 package resolution、fetch、install、lockfile write 或 manifest 格式扩展
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 扩展 `TPackageProjectionContext`，承载 `SourceRootsJson`
+- [x] 在 `CapturePackageProjectionFromWorkflowTruth(...)` 中从
+      `ManifestTruth.SourceRoots` 生成 JSON array
+- [x] 扩展 line-based output 与 command envelope
+- [x] 加严 `build/verify_local.sh` 的 doctor / pkg inspect package roots detail gate
+- [x] 同步最小文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 43 Pkg Inspect Workspace Member Contract
 
 ### Goal

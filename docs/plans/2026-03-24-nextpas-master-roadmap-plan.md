@@ -52,9 +52,10 @@
   `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
   side tables，`pkg inspect` 也已投影
-  `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount` 与
-  `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
-  `packageName`、`packageLockStatus` 与 `packageLockfilePath`；workspace member fixture 也已让
+  `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
+  `packageSourceRoots` 与 `packageInstallPlanStatus`，并继续冻结
+  `packageWorkflowManifestPath`、`packageRootPath`、`packageName`、`packageLockStatus` 与
+  `packageLockfilePath`；workspace member fixture 也已让
   `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径。
 - 这份计划从现在起接管”当前主线的批次顺序”。
 - `Batch 1` 到 `Batch 43` 已完成。
@@ -84,7 +85,8 @@
   则把 `doctor` 的只读 health inspection 继续接上 package/workspace truth：当 workspace
   没有 package truth 时，会同步投影 `package-workflow-status`、
   `package-manifest-status`、`package-lock-status`、
-  `package-install-plan-status`、`package-source-root-count`，并给出
+  `package-install-plan-status`、`package-source-root-count` 与
+  `package-source-roots`，并给出
   `doctor.package-workspace-missing`。`Batch 41` 再把同一条 coherence contract 的正向样本
   纳入 gate：合法 package workspace 会稳定投影 package workflow ready，且不会误报
   `doctor.package-workspace-missing`。`Batch 42` 则把 ready contract 扩展到 workspace
@@ -92,7 +94,9 @@
   member package manifest/root/name/lockfile 与 source root count，且不会误报
   `doctor.package-workspace-missing`。`Batch 43` 再把同一条 workspace member ready
   contract 扩展到 `pkg inspect`：只读 package workflow projection 也会稳定投影 descriptor
-  path、member package manifest/root/name/lockfile 与 source root count。下一步优先转回
+  path、member package manifest/root/name/lockfile 与 source root count。`Batch 44` 继续把
+  package workflow truth 已经持有的 `SourceRoots` 提升为 `package-source-roots` /
+  `packageSourceRoots`，让 CLI、IDE 与 automation 不需要回头重读 manifest。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。
@@ -1601,7 +1605,8 @@ structured finding surface：
   workspace model、target facts 与 toolchain binding，并投影 `package-workflow-status=ready|missing`、
   `package-manifest-status=ready|missing`、`package-lock-status=deferred`、
   `package-workflow-manifest-path=<path>`、`package-root-path=<path>`、`package-name=<name>`、
-  `package-lockfile-path=<path>`、`package-source-root-count=<count>` 与
+  `package-lockfile-path=<path>`、`package-source-root-count=<count>`、
+  `package-source-roots=<json-array>` 与
   `package-install-plan-status=deferred`
 - `compiler/frontend/np_package_workflow.pas` 现在补齐
   `BuildPackageWorkflowTruthFromWorkspaceModel`，让 package workflow truth 可以直接消费

@@ -675,6 +675,8 @@ begin
     AContext.SourceRootCount,
     AContext.HasSourceRootCount
   );
+  if AContext.SourceRootsJson <> '' then
+    AppendJsonField(AFields, 'packageSourceRoots', AContext.SourceRootsJson);
 end;
 
 function BuildCommandEnvelopeJson(

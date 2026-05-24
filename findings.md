@@ -172,6 +172,10 @@
   `package-manifest-path`、`package-root-path`、`package-name`、`package-lockfile-path` 与
   `package-source-root-count=1`；这让 `pkg inspect` 与 `doctor` 共享同一条 package workflow
   truth，而不是各自解释 workspace membership。
+- 当前 package workflow truth 已经持有完整 `SourceRoots`，不应只公开 count：
+  `package-source-roots=<json-array>` 与 envelope `packageSourceRoots` 现在也来自同一份
+  `ManifestTruth.SourceRoots`。缺少 package truth 时它稳定为 `[]`，ready package workspace
+  则投影 resolved source root 路径，避免 IDE/CI/automation 为了拿 roots 明细再重读 manifest。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。
