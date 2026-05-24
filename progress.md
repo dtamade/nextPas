@@ -3,6 +3,33 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 54 package plan blocked/missing gates)
+
+- **Status:** completed
+- Objective:
+  - 把 `pkg plan` 的 promotion path 从 ready-only 扩展到 `ready|blocked|missing` 三态，
+    让 install plan preflight 的失败原因能被 CLI / IDE / automation 直接消费。
+- Baseline:
+  - Batch 53 已经公开 `nextpas pkg plan`，但正式 gate 只覆盖 package manifest fixture 的
+    ready path 与缺少 `--workspace` 的参数失败。
+  - `TPackageWorkflowTruth` 实际已经能投影 blocked / missing，只是 `pkg plan` 专用 surface
+    还没有把这些边界冻进 verification。
+- Actions taken:
+  - 扩展 `build/verify_local.sh`，新增 `stage0PkgPlanBlockedCheck`，用 workspace member fixture
+    冻结缺 canonical lockfile 时的 `package-install-plan-status=blocked`、
+    `package-install-plan-blocker-code=package-lock-missing`。
+  - 新增 `stage0PkgPlanMissingCheck`，用 package-free 临时 workspace 冻结
+    `package-workflow-status=missing`、`package-install-plan-status=missing` 与
+    `package-install-plan-blocker-code=package-manifest-missing`。
+  - 同步 tools README、developer tooling spec、package workflow spec、stage0 README、master roadmap、
+    task_plan 与 findings。
+- Verification:
+  - focused probe 已确认 blocked / missing 两条 `pkg plan` 输出的 line fields 与
+    `command-envelope=<json>` 一致。
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `stage0PkgPlanBlockedCheck=pass`、
+    `stage0PkgPlanMissingCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-25 (Batch 53 package plan read-only surface)
 
 - **Status:** completed

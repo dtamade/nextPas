@@ -46,8 +46,8 @@ resolution sidecar，不承担 `bootstrap`、下载、解包或 runtime SDK 安�
 `query symbols` 只复用 compilation session 的语义结果，不假装完整 language service 已经落地。
 `pkg inspect / pkg plan / pkg graph` 只复用 workspace model 与 package manifest truth 做只读
 package workflow 投影，不提前执行 resolver、fetch/install 或 lockfile mutation。`pkg plan`
-是 install plan preflight 的专用只读面，`pkg graph` 则把同一份 truth 再展开成
-root/dependency nodes 与 edges。
+是 install plan preflight 的专用只读面，直接公开 ready、blocked 与 missing 三态及 blocker
+detail；`pkg graph` 则把同一份 truth 再展开成 root/dependency nodes 与 edges。
 
 ## 这里必须和谁对齐
 

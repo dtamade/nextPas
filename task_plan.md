@@ -15,6 +15,47 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 54 Package Plan Blocked/Missing Gates
+
+### Goal
+
+把 `nextpas pkg plan` 从只验证 ready path 推进到完整 preflight 状态边界：同一条公开面必须
+直接覆盖 `ready`、`blocked` 与 `missing`，让 CLI / IDE / automation 不需要从
+`pkg inspect` 或 `doctor` 间接推断 install plan 为什么不能继续。
+
+### Architecture Decision
+
+本批次不新增第二套 plan logic。`pkg plan` 继续复用 `WorkspaceModel` +
+`TPackageManifestInfo` + `TPackageWorkflowTruth`；这轮只把现有 truth 的 blocked / missing
+行为纳入 promotion gate：
+
+- workspace member fixture 缺 canonical lockfile 时必须投影 `blocked` 与
+  `package-lock-missing`
+- package-free workspace 必须投影 `missing` 与 `package-manifest-missing`
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 扩展 `build/verify_local.sh`，覆盖 `pkg plan` blocked 与 missing 正向命令结果
+- [x] 同步 tools README、package workflow / developer tooling / stage0 README 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 通过，确认 `stage0PkgPlanBlockedCheck=pass`、
+  `stage0PkgPlanMissingCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolution、fetch、install 或 publish
+- 不改 lockfile write path
+- 不新增 install planner；只冻结现有 preflight truth 的状态边界
+
 ## Addendum: 2026-05-25 Batch 53 Package Plan Read-only Surface
 
 ### Goal

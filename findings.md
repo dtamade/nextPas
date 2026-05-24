@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- `pkg plan` 现在不再只靠 ready path 证明自己可用：`build/verify_local.sh` 已新增
+  `stage0PkgPlanBlockedCheck=pass` 与 `stage0PkgPlanMissingCheck=pass`，分别冻结
+  lockfile 缺失导致的 blocked preflight 和 package truth 缺失导致的 missing preflight。
+- workspace member fixture 下的 `nextpas pkg plan` 会稳定投影
+  `package-install-plan-status=blocked`、`package-install-plan-blocker-code=package-lock-missing`
+  与 `package-install-plan-blocker-message=canonical package lockfile is missing`。
+- package-free 临时 workspace 下的 `nextpas pkg plan` 会稳定投影
+  `package-workflow-status=missing`、`package-install-plan-status=missing`、
+  `package-install-plan-blocker-code=package-manifest-missing` 与
+  `package-install-plan-blocker-message=package manifest is missing`。
 - `pkg inspect / pkg plan / pkg graph` 现在共享同一份
   `WorkspaceModel` + `TPackageManifestInfo` + `TPackageWorkflowTruth`；其中 `pkg plan` 是真实的
   install plan preflight surface，只读，不碰 resolver、fetch、install 或 lockfile write。
