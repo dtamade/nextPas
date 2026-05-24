@@ -253,7 +253,7 @@ preview 私有缓存补出来。package workflow 在这里继续把这条边界�
 - dependency requirement string 当前最小支持 `=`、`>`、`>=`、`<`、`<=`
 - 多个 comparator 用逗号表达 intersection，例如 `>=0.1.0, <0.2.0`
 - malformed requirement 必须作为 package workflow truth 暴露 validation status 与 issue detail，
-  不能被 parser、`doctor` 或 `pkg inspect` 静默吞掉
+  不能被 parser、`doctor`、`pkg inspect` 或 `pkg graph` 静默吞掉
 - 第一阶段不要求 union range、feature flag、optional dependency、target-specific dependency table
   或复杂 solver annotation
 - compatibility hint 当前最小只推荐 `[compatibility].targets = [...]`
@@ -524,11 +524,13 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
 
 - `stage0`
   - 当前不承诺完整 `pkg` family，也不承诺 manifest/lock file format
-  - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect` surface
-- `pkg inspect` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
+  - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect / pkg graph` surface
+- `pkg inspect / pkg graph` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
   manifest status、workflow manifest path、package root、package name、lock status、canonical
   lockfile path、source root count、source roots JSON 明细、declared dependency count /
-  dependencies JSON 明细、install plan status 与 install plan blocker code/message
+  dependencies JSON 明细、install plan status 与 install plan blocker code/message；其中 `pkg graph`
+  还会把同一份 truth 进一步展开成 root node、declared-dependency nodes 与
+  `declared-dependency` edges
   - 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到
     member package 的 ready 路径，确保 CLI、IDE 和 automation 后续共享同一条 package membership truth
   - 但 package workflow 的对象边界、install root 角色与相邻控制面必须先冻结

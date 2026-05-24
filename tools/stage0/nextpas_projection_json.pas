@@ -702,6 +702,23 @@ begin
       'packageInstallPlanBlockerMessage',
       AContext.InstallPlanBlockerMessage
     );
+  AppendJsonStringField(AFields, 'packageGraphStatus', AContext.GraphStatus);
+  AppendJsonIntegerField(
+    AFields,
+    'packageGraphNodeCount',
+    AContext.GraphNodeCount,
+    AContext.HasGraphNodeCount
+  );
+  AppendJsonIntegerField(
+    AFields,
+    'packageGraphEdgeCount',
+    AContext.GraphEdgeCount,
+    AContext.HasGraphEdgeCount
+  );
+  if AContext.GraphNodesJson <> '' then
+    AppendJsonField(AFields, 'packageGraphNodes', AContext.GraphNodesJson);
+  if AContext.GraphEdgesJson <> '' then
+    AppendJsonField(AFields, 'packageGraphEdges', AContext.GraphEdgesJson);
   AppendJsonStringField(
     AFields,
     'packageWorkflowManifestPath',

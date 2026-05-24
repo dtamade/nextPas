@@ -146,6 +146,11 @@ begin
     '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
+  WriteUsageLine(
+    UseStdErr,
+    '  nextpas pkg graph --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
 end;
 
 procedure PrintUsage(const ACommandName: string);
@@ -235,6 +240,11 @@ begin
     '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
+  WriteUsageLine(
+    False,
+    '  nextpas pkg graph --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
 end;
 
 procedure PrintUsageError(const ACommandName: string);
@@ -322,6 +332,11 @@ begin
   WriteUsageLine(
     True,
     '  nextpas pkg inspect --workspace <root> --target linux-x86_64 ' +
+    '[--toolchain-binding <id>]'
+  );
+  WriteUsageLine(
+    True,
+    '  nextpas pkg graph --workspace <root> --target linux-x86_64 ' +
     '[--toolchain-binding <id>]'
   );
 end;

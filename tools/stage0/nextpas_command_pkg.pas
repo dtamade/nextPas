@@ -16,14 +16,22 @@ procedure RunPkgInspect(
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string
 );
-
-implementation
-
-procedure RunPkgInspect(
+procedure RunPkgGraph(
   var AState: TNextPasState;
   const TargetName: string;
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string
+);
+
+implementation
+
+procedure RunPkgProjection(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string;
+  const SelectorName: string;
+  const Summary: string
 );
 var
   InspectionSourcePath: string;
@@ -76,7 +84,7 @@ begin
 
     WriteLn('mode=pkg');
     WriteLn('command=pkg');
-    WriteLn('selector=inspect');
+    WriteLn('selector=', SelectorName);
     WriteLn('target=', TargetName);
     WriteLn('target-config=', TargetConfig.ConfigPath);
     WriteLn('compiler=', TargetConfig.CompilerExecutable);
@@ -89,17 +97,51 @@ begin
     PrintCommandEnvelope(
       AState,
       ExitSuccessCode,
-      'inspect',
+      SelectorName,
       'success',
       'success',
       '',
-      'package inspection completed',
+      Summary,
       False
     );
-    WriteLn('human-summary=package inspection completed');
+    WriteLn('human-summary=', Summary);
   finally
     WorkspaceModel.Free;
   end;
+end;
+
+procedure RunPkgInspect(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+begin
+  RunPkgProjection(
+    AState,
+    TargetName,
+    ToolchainBindingOverride,
+    WorkspaceOverride,
+    'inspect',
+    'package inspection completed'
+  );
+end;
+
+procedure RunPkgGraph(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+begin
+  RunPkgProjection(
+    AState,
+    TargetName,
+    ToolchainBindingOverride,
+    WorkspaceOverride,
+    'graph',
+    'package graph captured'
+  );
 end;
 
 end.

@@ -937,6 +937,33 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'package-graph-status',
+    AContext.GraphStatus
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-graph-node-count',
+    AContext.GraphNodeCount,
+    AContext.HasGraphNodeCount
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-graph-edge-count',
+    AContext.GraphEdgeCount,
+    AContext.HasGraphEdgeCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-graph-nodes',
+    AContext.GraphNodesJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-graph-edges',
+    AContext.GraphEdgesJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'package-workflow-manifest-path',
     AContext.ManifestPath
   );

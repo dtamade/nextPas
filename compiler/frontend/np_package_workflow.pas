@@ -35,11 +35,40 @@ type
     BlockerMessage: string;
   end;
 
+  TPackageGraphNodeInfo = record
+    NodeId: string;
+    Kind: string;
+    PackageName: string;
+    Requirement: string;
+    ManifestPath: string;
+    PackageRootPath: string;
+  end;
+
+  TPackageGraphNodeInfoArray = array of TPackageGraphNodeInfo;
+
+  TPackageGraphEdgeInfo = record
+    FromNodeId: string;
+    ToNodeId: string;
+    Kind: string;
+    Requirement: string;
+  end;
+
+  TPackageGraphEdgeInfoArray = array of TPackageGraphEdgeInfo;
+
+  TPackageGraphTruth = record
+    Status: string;
+    NodeCount: LongInt;
+    EdgeCount: LongInt;
+    Nodes: TPackageGraphNodeInfoArray;
+    Edges: TPackageGraphEdgeInfoArray;
+  end;
+
   TPackageWorkflowTruth = record
     Status: string;
     ManifestTruth: TPackageManifestTruth;
     LockTruth: TPackageLockTruth;
     InstallPlanTruth: TPackageInstallPlanTruth;
+    GraphTruth: TPackageGraphTruth;
     PackageSourceRootCount: LongInt;
     PackageDependencyCount: LongInt;
     PackageDependencyValidationStatus: string;
@@ -55,6 +84,103 @@ function BuildPackageWorkflowTruthFromWorkspaceModel(
 ): TPackageWorkflowTruth;
 
 implementation
+
+procedure AppendGraphNode(
+  var AValues: TPackageGraphNodeInfoArray;
+  const AValue: TPackageGraphNodeInfo
+);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(AValues);
+  SetLength(AValues, NextIndex + 1);
+  AValues[NextIndex] := AValue;
+end;
+
+procedure AppendGraphEdge(
+  var AValues: TPackageGraphEdgeInfoArray;
+  const AValue: TPackageGraphEdgeInfo
+);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(AValues);
+  SetLength(AValues, NextIndex + 1);
+  AValues[NextIndex] := AValue;
+end;
+
+function PackageGraphRootNodeId(const AManifestTruth: TPackageManifestTruth): string;
+begin
+  if Trim(AManifestTruth.PackageName) <> '' then
+    Exit('package:' + AManifestTruth.PackageName);
+
+  Result := 'package:root';
+end;
+
+function PackageGraphDependencyNodeId(
+  const ADependency: TPackageDependencyInfo
+): string;
+begin
+  Result := 'dependency:' + ADependency.PackageName;
+end;
+
+function BuildPackageGraphTruth(
+  const AManifestTruth: TPackageManifestTruth
+): TPackageGraphTruth;
+var
+  DependencyIndex: LongInt;
+  DependencyNode: TPackageGraphNodeInfo;
+  Edge: TPackageGraphEdgeInfo;
+  RootNode: TPackageGraphNodeInfo;
+  RootNodeId: string;
+begin
+  Result.Status := 'missing';
+  Result.NodeCount := 0;
+  Result.EdgeCount := 0;
+  SetLength(Result.Nodes, 0);
+  SetLength(Result.Edges, 0);
+
+  if AManifestTruth.Status <> 'ready' then
+    Exit;
+
+  if AManifestTruth.DependencyValidationStatus = 'invalid' then
+    Result.Status := 'invalid'
+  else
+    Result.Status := 'ready';
+
+  RootNodeId := PackageGraphRootNodeId(AManifestTruth);
+  RootNode.NodeId := RootNodeId;
+  RootNode.Kind := 'workspace-package';
+  RootNode.PackageName := AManifestTruth.PackageName;
+  RootNode.Requirement := '';
+  RootNode.ManifestPath := AManifestTruth.ManifestPath;
+  RootNode.PackageRootPath := AManifestTruth.PackageRootPath;
+  AppendGraphNode(Result.Nodes, RootNode);
+
+  for DependencyIndex := 0 to Length(AManifestTruth.Dependencies) - 1 do
+  begin
+    DependencyNode.NodeId := PackageGraphDependencyNodeId(
+      AManifestTruth.Dependencies[DependencyIndex]
+    );
+    DependencyNode.Kind := 'declared-dependency';
+    DependencyNode.PackageName :=
+      AManifestTruth.Dependencies[DependencyIndex].PackageName;
+    DependencyNode.Requirement :=
+      AManifestTruth.Dependencies[DependencyIndex].Requirement;
+    DependencyNode.ManifestPath := '';
+    DependencyNode.PackageRootPath := '';
+    AppendGraphNode(Result.Nodes, DependencyNode);
+
+    Edge.FromNodeId := RootNodeId;
+    Edge.ToNodeId := DependencyNode.NodeId;
+    Edge.Kind := 'declared-dependency';
+    Edge.Requirement := AManifestTruth.Dependencies[DependencyIndex].Requirement;
+    AppendGraphEdge(Result.Edges, Edge);
+  end;
+
+  Result.NodeCount := Length(Result.Nodes);
+  Result.EdgeCount := Length(Result.Edges);
+end;
 
 function BuildPackageInstallPlanTruth(
   const AManifestTruth: TPackageManifestTruth;
@@ -149,6 +275,7 @@ begin
     Result.LockTruth,
     WorkspaceRootPath
   );
+  Result.GraphTruth := BuildPackageGraphTruth(Result.ManifestTruth);
 
   Result.PackageSourceRootCount := Result.ManifestTruth.SourceRootCount;
   Result.PackageDependencyCount := Result.ManifestTruth.DependencyCount;

@@ -190,6 +190,96 @@ begin
   Result := '[' + EntryJson + ']';
 end;
 
+function BuildJsonPackageGraphNodeArray(
+  const AValues: array of TPackageGraphNodeInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'nodeId',
+      JsonString(AValues[Index].NodeId)
+    );
+    AppendJsonField(
+      EntryFields,
+      'kind',
+      JsonString(AValues[Index].Kind)
+    );
+    AppendJsonField(
+      EntryFields,
+      'name',
+      JsonString(AValues[Index].PackageName)
+    );
+    AppendJsonField(
+      EntryFields,
+      'requirement',
+      JsonString(AValues[Index].Requirement)
+    );
+    AppendJsonField(
+      EntryFields,
+      'manifestPath',
+      JsonString(AValues[Index].ManifestPath)
+    );
+    AppendJsonField(
+      EntryFields,
+      'packageRootPath',
+      JsonString(AValues[Index].PackageRootPath)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
+function BuildJsonPackageGraphEdgeArray(
+  const AValues: array of TPackageGraphEdgeInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'fromNodeId',
+      JsonString(AValues[Index].FromNodeId)
+    );
+    AppendJsonField(
+      EntryFields,
+      'toNodeId',
+      JsonString(AValues[Index].ToNodeId)
+    );
+    AppendJsonField(
+      EntryFields,
+      'kind',
+      JsonString(AValues[Index].Kind)
+    );
+    AppendJsonField(
+      EntryFields,
+      'requirement',
+      JsonString(AValues[Index].Requirement)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
 begin
   AContext.SourcePath := '';
@@ -434,6 +524,13 @@ begin
   AContext.InstallPlanStatus := '';
   AContext.InstallPlanBlockerCode := '';
   AContext.InstallPlanBlockerMessage := '';
+  AContext.GraphStatus := '';
+  AContext.GraphNodeCount := 0;
+  AContext.HasGraphNodeCount := False;
+  AContext.GraphEdgeCount := 0;
+  AContext.HasGraphEdgeCount := False;
+  AContext.GraphNodesJson := '';
+  AContext.GraphEdgesJson := '';
   AContext.ManifestPath := '';
   AContext.PackageRootPath := '';
   AContext.PackageName := '';
@@ -704,6 +801,17 @@ begin
     AWorkflowTruth.InstallPlanTruth.BlockerCode;
   AContext.InstallPlanBlockerMessage :=
     AWorkflowTruth.InstallPlanTruth.BlockerMessage;
+  AContext.GraphStatus := AWorkflowTruth.GraphTruth.Status;
+  AContext.GraphNodeCount := AWorkflowTruth.GraphTruth.NodeCount;
+  AContext.HasGraphNodeCount := AWorkflowTruth.ManifestTruth.Status <> '';
+  AContext.GraphEdgeCount := AWorkflowTruth.GraphTruth.EdgeCount;
+  AContext.HasGraphEdgeCount := AWorkflowTruth.ManifestTruth.Status <> '';
+  AContext.GraphNodesJson := BuildJsonPackageGraphNodeArray(
+    AWorkflowTruth.GraphTruth.Nodes
+  );
+  AContext.GraphEdgesJson := BuildJsonPackageGraphEdgeArray(
+    AWorkflowTruth.GraphTruth.Edges
+  );
   AContext.ManifestPath := AWorkflowTruth.ManifestTruth.ManifestPath;
   AContext.PackageRootPath := AWorkflowTruth.ManifestTruth.PackageRootPath;
   AContext.PackageName := AWorkflowTruth.ManifestTruth.PackageName;

@@ -15,6 +15,44 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 52 Package Graph Read-only Surface
+
+### Goal
+
+把 package workflow 的只读 graph surface 收成真实 `nextpas pkg graph` 公开面，让 CLI / IDE /
+automation 直接消费 workspace-model-backed package graph truth，而不是自己重拼 declared
+dependency intent。
+
+### Architecture Decision
+
+graph 只做 read-only projection，直接复用 `WorkspaceModel` + `TPackageManifestInfo` +
+`TPackageWorkflowTruth`，不碰 resolver、fetch、install 或 lockfile write。图语义固定为
+package root node + declared-dependency nodes + `declared-dependency` edges；它只是同一份
+package workflow truth 的另一种只读视图，不是第二套 graph engine。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 扩展 `build/verify_local.sh`，覆盖 `pkg graph` 正向样本与负向参数 gate
+- [x] 同步 stage0 / developer tooling / package workflow / stage0 driver 文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 通过，确认 `stage0PkgGraphCheck=pass`、
+  `stage0PkgGraphInvalidArgumentsCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolution、fetch、install 或 publish
+- 不改 lockfile write path
+- 不引入第二套 package graph truth
+
 ## Addendum: 2026-05-24 Batch 51 Env Clean Workspace-Local Cache Cleanup
 
 ### Goal

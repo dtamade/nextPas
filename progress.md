@@ -1,7 +1,30 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-24 记录为准。
+2026-05-25 记录为准。
+
+## Session: 2026-05-25 (Batch 52 package graph read-only surface)
+
+- **Status:** completed
+- Objective:
+  - 把 package workflow 的只读 graph surface 收成真实 `nextpas pkg graph` 公开面，让
+    CLI / IDE / automation 直接消费 workspace-model-backed package graph truth。
+- Baseline:
+  - 现有 `pkg inspect` 已经投影 workspace-model-backed package workflow truth，但还没有
+    独立的只读 graph surface，也没有 graph-specific gate。
+- Actions taken:
+  - 在 `compiler/frontend/np_package_workflow.pas` 中补 `TPackageGraphTruth` 与
+    root/dependency nodes + `declared-dependency` edges 的只读构造逻辑。
+  - 在 `tools/stage0` 里把 `nextpas pkg graph` 接入 parser、usage、text/json projection 与
+    command envelope。
+  - 扩展 `build/verify_local.sh`，覆盖 declared-dependencies 正向样本、graph 的负向参数 gate，
+    并把 graph pass key 接进最终 verify envelope。
+  - 同步 tools README、stage0 README、stage0 driver spec、package workflow spec、
+    developer tooling spec、master roadmap、task_plan 与 findings。
+- Verification:
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `stage0PkgGraphCheck=pass`、
+    `stage0PkgGraphInvalidArgumentsCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
 
 ## Session: 2026-05-24 (Batch 50 env sync workspace resolution cache)
 

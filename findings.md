@@ -10,6 +10,21 @@
 
 ## Research Findings
 
+- `pkg graph` 现在是一个真正的只读 package workflow projection：它直接复用
+  `WorkspaceModel` + `TPackageManifestInfo` + `TPackageWorkflowTruth`，把同一份 truth 展开成
+  package root node、declared-dependency nodes 与 `declared-dependency` edges，不碰 resolver、
+  fetch、install 或 lockfile write。
+- `tests/fixtures/workspace_declared_dependencies/app` 现在会稳定投影
+  `packageGraphStatus=ready`、`packageGraphNodeCount=3` 与 `packageGraphEdgeCount=2`，并且
+  envelope 会同步携带 `packageGraphNodes` / `packageGraphEdges`。
+- `tests/fixtures/workspace_malformed_dependencies/app` 现在会稳定投影
+  `packageGraphStatus=invalid`，但仍然把同一份 declared dependencies truth 展开为 root / dependency
+  nodes 与 edges，和 package dependency validation 共享同一套只读边界。
+- `nextpas pkg graph --target linux-x86_64` 的负向参数 gate 现在会诚实投影
+  `failure-kind=missing-required-option` 与 `human-summary=missing-required-option: --workspace`，
+  并在 usage 里公开 `nextpas pkg graph --workspace <root> --target linux-x86_64`。
+- fresh `bash build/verify_local.sh` 已再次通过，说明 `stage0PkgGraphCheck=pass`、
+  `stage0PkgGraphInvalidArgumentsCheck=pass` 与最终 `verify-local=pass` 已进入正式 promotion path。
 - `env clean` 现在是一个真正的 workspace-local maintenance surface：它只删除
   `<workspace>/.nextpas/env/selections/<target>.toml` 与
   `<workspace>/.nextpas/env/resolution/<target>.toml`，并通过

@@ -317,10 +317,10 @@ begin
     State.SelectorName := 'pkg';
     if ParamCount < 3 then
       Fail(State, 'invalid-arguments', True);
-    if ParamStr(2) <> 'inspect' then
+    if (ParamStr(2) <> 'inspect') and (ParamStr(2) <> 'graph') then
       Fail(State, 'invalid-arguments', True);
 
-    State.SelectorName := 'inspect';
+    State.SelectorName := ParamStr(2);
     TargetName := '';
     ToolchainBindingOverride := '';
     WorkspaceOverride := '';
@@ -359,7 +359,20 @@ begin
     if TargetName = '' then
       Fail(State, 'missing-required-option: --target', True);
 
-    RunPkgInspect(State, TargetName, ToolchainBindingOverride, WorkspaceOverride);
+    if State.SelectorName = 'inspect' then
+      RunPkgInspect(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      )
+    else
+      RunPkgGraph(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      );
     Halt(ExitSuccessCode);
   end;
 

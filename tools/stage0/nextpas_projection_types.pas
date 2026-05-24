@@ -223,6 +223,13 @@ type
     InstallPlanStatus: string;
     InstallPlanBlockerCode: string;
     InstallPlanBlockerMessage: string;
+    GraphStatus: string;
+    GraphNodeCount: LongInt;
+    HasGraphNodeCount: Boolean;
+    GraphEdgeCount: LongInt;
+    HasGraphEdgeCount: Boolean;
+    GraphNodesJson: string;
+    GraphEdgesJson: string;
     ManifestPath: string;
     PackageRootPath: string;
     PackageName: string;
