@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 43` 为准。
+以最新完成的 `Batch 45` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -62,6 +62,9 @@
   workspace descriptor root + member package 的 dependency intent 投影。
 - 这份计划从现在起接管”当前主线的批次顺序”。
 - `Batch 1` 到 `Batch 45` 已完成。
+- 当前下一批计划为 `Batch 46 Dependency Requirement Grammar Validation`：把已投影的
+  declared dependency requirement 从 raw string 提升为格式可信、违规可解释的 read-only
+  workflow truth，仍不打开 resolver、fetch/install 或 lockfile write。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -102,10 +105,10 @@
   `packageSourceRoots`，让 CLI、IDE 与 automation 不需要回头重读 manifest。`Batch 45` 再把
   `[dependencies]` declared intent 提升为 `package-dependency-count` /
   `package-dependencies` 与 envelope `packageDependencyCount` / `packageDependencies`，但仍不执行
-  dependency resolution、fetch/install 或 lockfile write。下一步优先转回
-  richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
-  最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
-  surface 上空转。
+  dependency resolution、fetch/install 或 lockfile write。下一步优先做 Batch 46：验证
+  dependency requirement 的最小 comparator grammar，并让 malformed dependency intent 在
+  `doctor` / `pkg inspect` 的只读 package workflow projection 中可见、可解释，避免 IDE、CI
+  或 automation 消费不可信的 package declaration。
 
 ## 执行规则
 

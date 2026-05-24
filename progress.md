@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 46 dependency requirement grammar validation planning)
+
+- **Status:** completed (planning-only slice)
+- Objective:
+  - 本轮只做下一批次 plan 落盘，把 Batch 46 收窄成 dependency requirement grammar
+    validation，不进入 resolver、fetch/install 或 lockfile 写入。
+- Context confirmed:
+  - live 工作树干净，当前分支 `main`。
+  - 当前 HEAD 为 `b3f8691 feat: project package declared dependencies`。
+  - Batch 45 已完成 declared dependency intent 的只读投影，并由 fresh
+    `bash build/verify_local.sh` 证明 `stage0DoctorDeclaredDependenciesCheck=pass`、
+    `stage0PkgDeclaredDependenciesCheck=pass` 与 `verify-local=pass`。
+  - `planning-with-files` catchup 报告仍提到更早 alloca 线程；该线程已在当前计划外收口，
+    本轮以 live git state 与当前 planning files 为准。
+- Planning outcome:
+  - Batch 46 目标定为 `Dependency Requirement Grammar Validation`。
+  - 第一阶段 grammar 只支持 comparator `=`、`>`、`>=`、`<`、`<=`，多个 comparator 用逗号表达
+    intersection。
+  - invalid dependency requirement 必须可见、可解释，不能在 manifest parser 中静默消失。
+  - 本批次明确不做 resolver、registry lookup、fetch/install、lockfile write、semantic version
+    ordering、feature flag、optional dependency 或 target-specific dependency table。
+- Next execution step:
+  - 下一轮从 focused probe 当前 malformed dependency 行为开始，然后补 RED gate、实现 validation
+    result 与共享 projection，最终以 fresh `bash build/verify_local.sh` 收口。
+- Verification:
+  - `git diff --check` 通过。
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 45 declared dependencies projection)
 
 - **Status:** completed

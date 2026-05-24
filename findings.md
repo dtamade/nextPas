@@ -181,6 +181,12 @@
   requirement，并通过 `package-dependency-count`、`package-dependencies=<json-array>`、
   `packageDependencyCount` 与 `packageDependencies` 只读投影；这仍然不是 dependency
   resolution、fetch/install 或 lockfile write。
+- Batch 46 的最新未收口 blocker 是 dependency requirement validation：
+  `compiler/frontend/np_package_manifest.pas` 当前 `ParsePackageDependencyInfo(...)` 只抽取
+  inline table 里的 `version` / `requirement` 字符串，遇到无法解析的 dependency line 会
+  `Continue`，因此 malformed requirement 存在静默消失风险。下一批应把已冻结的最小 grammar
+  (`=`、`>`、`>=`、`<`、`<=`，逗号 intersection) 收成 manifest/workflow 层共享 truth，
+  并让 `doctor` / `pkg inspect` 公开投影 invalid dependency detail。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

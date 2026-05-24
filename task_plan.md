@@ -15,6 +15,66 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 46 Dependency Requirement Grammar Validation
+
+### Goal
+
+把 Batch 45 已经公开的 declared dependency intent 从“字符串被投影”推进到“格式可信、
+违规可解释”的最小 deterministic contract：
+
+- `[dependencies]` 继续只接受 keyed inline table 形状：
+  `"package.name" = { version = ">=0.1.0" }`
+- dependency requirement string 第一阶段只支持 comparator grammar：`=`、`>`、`>=`、`<`、`<=`
+- 多 comparator 用逗号表达 intersection，例如 `>=0.1.0, <0.2.0`
+- invalid dependency requirement 不能静默消失；`doctor` / `pkg inspect` 必须能暴露可解释的
+  malformed dependency intent
+- read-only inspection command 可以继续成功返回，但 package workflow truth 必须把 invalid
+  manifest/dependency state 投影给 IDE、CI 与 automation
+
+### Architecture Decision
+
+本批次不打开 resolver。dependency requirement validation 属于 manifest / workflow truth 的输入
+可信度边界，先挡住不可信 declaration 进入后续 lock、solver、IDE package view 或 CI automation。
+
+第一阶段明确不支持 union range、feature flag、optional dependency、target-specific dependency
+table 或 solver annotation；这些属于 future schema / resolver batch，而不是本批次的 parser
+扩张。
+
+### Status
+
+Planned
+
+### Acceptance
+
+- valid examples 必须保留为 declared dependency intent：
+  `=0.1.0`、`>0.1.0`、`>=0.1.0`、`<0.2.0`、`<=0.2.0`、
+  `>=0.1.0, <0.2.0`
+- invalid examples 必须被稳定暴露为 malformed dependency intent，而不是被忽略：
+  `^0.1.0`、`~>0.1`、`>=`、`>=0.1.0 || <0.2.0`、empty requirement
+- `doctor --workspace` 与 `pkg inspect` 至少一条公开 projection surface 能显示 dependency
+  validation status / malformed dependency detail；理想路径是两者共享同一份 package workflow truth
+- `build/verify_local.sh` 必须新增 malformed dependency fixture gate，并在最终 envelope 暴露
+  对应 check pass 字段
+- fresh `bash build/verify_local.sh` 必须通过
+
+### Non-goals
+
+- 不做 dependency resolution、version selection、registry lookup、fetch/install 或 lockfile write
+- 不做 semantic version ordering / compatibility solving；本批次只验证 requirement syntax shape
+- 不把 target-specific dependency table、optional dependency 或 feature flag 写进当前 grammar
+- 不把 diagnostics contract 大重构塞进本批次；只补足本批次需要的 deterministic invalid state
+
+### Planned Steps
+
+- [ ] focused probe 当前 parser 对 malformed dependency 的行为，确认是否静默跳过
+- [ ] 设计 manifest/workflow 层的 validation result 承载方式，避免 CLI 两侧各自解析
+- [ ] 新增 malformed dependency fixture，覆盖 invalid requirement 不静默消失
+- [ ] 先把 `build/verify_local.sh` gate 写成 RED，冻结 `doctor` / `pkg inspect` 预期
+- [ ] 实现最小 comparator grammar validation 与 projection
+- [ ] 同步 stage0 README、workspace/package workflow specs、rolling plan 与持续记录
+- [ ] 运行 fresh `bash build/verify_local.sh`
+- [ ] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 45 Declared Dependencies Projection
 
 ### Goal
