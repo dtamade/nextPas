@@ -745,7 +745,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
-与裸 `nextpas doctor`、
+与 package manifest fixture 下的 `nextpas doctor --workspace ...` 正向 package workspace
+样本、裸 `nextpas doctor`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
 与裸 `nextpas query`、
 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
@@ -753,8 +754,9 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
-与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass` 与
-`stage0DoctorInvalidArgumentsCheck=pass`、`query-kind=symbols`、
+与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass`、
+`stage0DoctorPackageWorkspaceCheck=pass` 与 `stage0DoctorInvalidArgumentsCheck=pass`、
+`query-kind=symbols`、
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
 `query-scopes=<json-array>`、`query-types=<json-array>`、
 `stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、

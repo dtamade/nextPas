@@ -15,6 +15,38 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 41 Doctor Package Workspace Positive Contract
+
+### Goal
+
+把 Batch 40 已接入的 `doctor` package/workspace coherence 从“只冻结缺失路径”推进到
+“ready 与 missing 两侧都被 promotion gate 保护”：
+
+- `doctor --workspace <package root>` 必须复用同一份 `WorkspaceModel` / `PackageWorkflowTruth`
+- package workspace 正向样本必须稳定投影 `package-workflow-status=ready`、
+  `package-manifest-status=ready`、`package-source-root-count=1` 与 manifest/root/name/lockfile
+  detail fields
+- 正向样本仍可因为当前 runtime SDK 缺失而有 `doctor.runtime-sdk-missing`，但不能出现
+  `doctor.package-workspace-missing`
+- `command-envelope=<json>.result` 必须同步保留同一批 package detail fields
+- non-goal：不修改 `doctor` 实现、不执行 fetch/install/resolution、不进入 `env sync` 或
+  package manager mutation verbs
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] focused probe 确认 `tests/fixtures/package_manifest_source_root` 下 `doctor` 已经返回
+      package workflow ready，且没有 `doctor.package-workspace-missing`
+- [x] 扩展 `build/verify_local.sh`，新增 `stage0-doctor-package-workspace-check`
+- [x] 同步 verify-local success envelope，新增 `stage0DoctorPackageWorkspaceCheck`
+- [x] 同步 `tools/stage0/README.md`、stage0 / developer tooling / package workflow specs、
+      rolling plan、`progress.md`、`findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 40 Doctor Package/Workspace Coherence
 
 ### Goal

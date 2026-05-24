@@ -3,6 +3,27 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 41 doctor package workspace positive contract)
+
+- **Status:** completed
+- Actions taken:
+  - 从 Batch 40 继续复盘架构原则和 rolling plan，确认最高价值不是继续打开 `env sync` /
+    package mutation，而是把 `doctor` 的 package/workspace coherence 从负向样本补成双向
+    promotion contract。
+  - focused probe 运行
+    `.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64 --workspace tests/fixtures/package_manifest_source_root`，
+    确认现有实现已经输出 `package-workflow-status=ready`、
+    `package-manifest-status=ready`、`package-source-root-count=1`，且只保留
+    `doctor.runtime-sdk-missing`，不会误报 `doctor.package-workspace-missing`。
+  - 扩展 `build/verify_local.sh`，新增 `stage0-doctor-package-workspace-check`，用
+    `tests/fixtures/package_manifest_source_root` 冻结 ready package workspace 的 line-based
+    output 与 envelope package fields，并显式禁止 `doctor.package-workspace-missing`。
+  - 同步 verify-local final envelope，新增 `stage0DoctorPackageWorkspaceCheck=pass`，避免
+    shell gate 已扩充但结构化 verify result 落后。
+  - 同步 `task_plan.md`、`findings.md`、`tools/stage0/README.md`、stage0 / developer tooling /
+    package workflow specs 与 rolling plan。
+  - fresh `bash build/verify_local.sh` 继续通过，`verify-local=pass`。
+
 ## Session: 2026-05-24 (Batch 40 doctor package/workspace coherence)
 
 - **Status:** completed

@@ -489,6 +489,9 @@ bundled toolchain、甚至更完整的 developer distribution。
 - 当前 stage0 doctor 的最小实现已经会在缺少 package workspace truth 的 root 上投影
   `doctor.package-workspace-missing`，作为 package health 的只读 failure signal；它仍不执行
   fetch、install 或 resolution
+- package manifest fixture 也已进入 `doctor` promotion gate 的正向样本：ready package
+  workspace 必须投影 package workflow ready，并且不能出现
+  `doctor.package-workspace-missing`
 
 这条规则会直接决定 future IDE package view、CI automation 和 local diagnostics 是否优雅。
 

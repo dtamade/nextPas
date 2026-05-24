@@ -106,6 +106,10 @@
   `package-lock-status=deferred`、`package-install-plan-status=deferred`、
   `package-source-root-count=0`，并给出 `doctor.package-workspace-missing`；这条 finding 仍然不
   改变 `doctor` 的只读边界。
+- 当前 `doctor` 的 package/workspace coherence 已经有正反两侧 gate：
+  `tests/fixtures/package_manifest_source_root` 会稳定表现为 `package-workflow-status=ready`、
+  `package-manifest-status=ready`、`package-source-root-count=1`，并且不会出现
+  `doctor.package-workspace-missing`；这防止合法 package workspace 被误报成缺失 package truth。
 - 当前 `command-envelope=<json>.result.doctorFindings[]` 会保留同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`；这属于
   health inspection result，不替代 compiler diagnostics sink。

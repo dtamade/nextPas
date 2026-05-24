@@ -191,7 +191,9 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 当前 `doctor` 已冻结最小 structured finding contract，并把 package/workspace coherence 的
 缺失路径接进 `doctor.package-workspace-missing`；更完整的 health taxonomy 仍应在后续批次
-继续加固。
+继续加固。promotion gate 同时覆盖缺失 package truth 的 repo root 与 ready package truth 的
+package manifest fixture，确保合法 package workspace 不会误报
+`doctor.package-workspace-missing`。
 
 ## `stage0 query symbols` 提供最小只读 semantic query
 

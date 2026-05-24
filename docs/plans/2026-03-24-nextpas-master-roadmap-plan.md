@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 40` 为准。
+以最新完成的 `Batch 41` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -35,7 +35,8 @@
   其中 `toolchainContractCheck=pass`、`semanticSmokeCheck=pass`、
   `toolchainFailureCheck=pass`、`assemblerFailureAttributionCheck=pass`、
   `linkerFailureAttributionCheck=pass`、`stage0EnvStatusCheck=pass`、
-  `stage0DoctorCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass`、
+  `stage0DoctorCheck=pass`、`stage0DoctorPackageWorkspaceCheck=pass`、
+  `stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryInvalidArgumentsCheck=pass`、
   `stage0PkgCheck=pass`、`stage0PkgInvalidArgumentsCheck=pass`、
   `stage0EnvInvalidArgumentsCheck=pass`、`multipleMissingUnitsCheck=pass` 与
@@ -44,7 +45,8 @@
   `distributionStatus`，`doctor` result contract 也已投影 `doctorFindings[]`、workspace
   readiness 与 binding readiness，并把 package workflow truth 与
   `doctor.package-workspace-missing` 这条 package/workspace coherence finding 一并纳入只读
-  inspection，`query symbols` 也已投影
+  inspection，并用 package manifest fixture 冻结了 ready package workspace 不会误报
+  `doctor.package-workspace-missing`，`query symbols` 也已投影
   `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
   side tables，`pkg inspect` 也已投影
@@ -52,7 +54,7 @@
   `packageInstallPlanStatus`，并继续冻结 `packageWorkflowManifestPath`、`packageRootPath`、
   `packageName`、`packageLockStatus` 与 `packageLockfilePath`。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 39` 已完成。
+- `Batch 1` 到 `Batch 41` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -80,6 +82,8 @@
   没有 package truth 时，会同步投影 `package-workflow-status`、
   `package-manifest-status`、`package-lock-status`、
   `package-install-plan-status`、`package-source-root-count`，并给出
+  `doctor.package-workspace-missing`。`Batch 41` 再把同一条 coherence contract 的正向样本
+  纳入 gate：合法 package workspace 会稳定投影 package workflow ready，且不会误报
   `doctor.package-workspace-missing`。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`

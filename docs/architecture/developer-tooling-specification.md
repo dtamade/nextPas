@@ -504,8 +504,9 @@ result bridge 上。
 `doctorWorkspaceStatus`、`doctorToolchainBindingStatus`、`doctorStatus`、`doctorCheckCount`、
 `doctorFindingCount` 与 `doctorFindings`。当前已冻结的代表性 finding 是
 `doctor.runtime-sdk-missing`；当 workspace 缺少 package truth 时，还会投影
-`doctor.package-workspace-missing`。package/workspace coherence 的更完整 health taxonomy
-仍应继续分批加固。
+`doctor.package-workspace-missing`。当前 promotion gate 也覆盖 ready package workspace，确保
+合法 package manifest/source root 不会被误报成 package truth 缺失。package/workspace
+coherence 的更完整 health taxonomy 仍应继续分批加固。
 
 ## `query` 必须消费 shared analysis，不得退化成文本扫描
 
