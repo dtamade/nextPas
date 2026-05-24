@@ -215,6 +215,9 @@ type
     SourceRootCount: LongInt;
     HasSourceRootCount: Boolean;
     SourceRootsJson: string;
+    DependencyCount: LongInt;
+    HasDependencyCount: Boolean;
+    DependenciesJson: string;
   end;
 
   TNextPasState = record

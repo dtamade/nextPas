@@ -677,6 +677,14 @@ begin
   );
   if AContext.SourceRootsJson <> '' then
     AppendJsonField(AFields, 'packageSourceRoots', AContext.SourceRootsJson);
+  AppendJsonIntegerField(
+    AFields,
+    'packageDependencyCount',
+    AContext.DependencyCount,
+    AContext.HasDependencyCount
+  );
+  if AContext.DependenciesJson <> '' then
+    AppendJsonField(AFields, 'packageDependencies', AContext.DependenciesJson);
 end;
 
 function BuildCommandEnvelopeJson(

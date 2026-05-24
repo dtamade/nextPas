@@ -176,6 +176,11 @@
   `package-source-roots=<json-array>` 与 envelope `packageSourceRoots` 现在也来自同一份
   `ManifestTruth.SourceRoots`。缺少 package truth 时它稳定为 `[]`，ready package workspace
   则投影 resolved source root 路径，避免 IDE/CI/automation 为了拿 roots 明细再重读 manifest。
+- 当前 package workflow truth 已继续持有 declared dependency intent：
+  `nextpas.package.toml` 的 `[dependencies]` keyed inline table 会被收成 dependency name /
+  requirement，并通过 `package-dependency-count`、`package-dependencies=<json-array>`、
+  `packageDependencyCount` 与 `packageDependencies` 只读投影；这仍然不是 dependency
+  resolution、fetch/install 或 lockfile write。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

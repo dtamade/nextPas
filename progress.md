@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 45 declared dependencies projection)
+
+- **Status:** completed
+- Objective:
+  - 本轮只做一件事：把 package manifest 的 declared dependencies 接入只读 workflow
+    projection，形成 IDE/CI/package workflow 后续可消费的声明性 dependency truth。
+- Acceptance:
+  - `doctor --workspace` 与 `pkg inspect` 都投影 `package-dependency-count`、
+    `package-dependencies=<json-array>`、`packageDependencyCount` 与 `packageDependencies`。
+  - fixture 同时覆盖 package manifest root 与 workspace descriptor root + member package。
+  - 不执行 dependency resolution、fetch/install 或 lockfile write。
+- Actions taken:
+  - 重新核对 `task_plan.md` / `progress.md` / `findings.md`、最近提交与当前工作树，确认
+    Batch 44 已在 `c65ed15` 收口且工作树干净。
+  - 查明当前 `np_package_manifest.pas` 还只解析 package name 与 source roots，
+    `TPackageManifestInfo` / `TPackageRef` / `TPackageManifestTruth` 均没有 declared
+    dependencies 字段。
+  - 扩展 manifest parser / workspace model / package workflow truth，新增 declared
+    dependency name + requirement 的只读 truth path。
+  - 新增 `tests/fixtures/workspace_declared_dependencies`，用同一套 fixture 覆盖 package
+    manifest root 与 workspace descriptor root + member package 两种 package discovery 形态。
+  - 扩展 package projection text/json 输出，新增 `package-dependency-count`、
+    `package-dependencies`、`packageDependencyCount` 与 `packageDependencies`，并避免无
+    package workflow truth 的命令 envelope 提前泄漏 package dependency 字段。
+  - 扩展 `build/verify_local.sh`，新增 doctor / pkg declared dependency gates，冻结
+    `[dependencies]` keyed inline table 的 line-based 与 envelope 投影。
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `stage0DoctorDeclaredDependenciesCheck=pass`、
+    `stage0PkgDeclaredDependenciesCheck=pass` 与 `verify-local=pass`。
+
 ## Session: 2026-05-24 (Batch 44 package source roots projection)
 
 - **Status:** completed

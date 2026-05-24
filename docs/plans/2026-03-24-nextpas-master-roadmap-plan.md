@@ -53,12 +53,15 @@
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
   side tables，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
-  `packageSourceRoots` 与 `packageInstallPlanStatus`，并继续冻结
+  `packageSourceRoots`、`packageDependencyCount`、`packageDependencies` 与
+  `packageInstallPlanStatus`，并继续冻结
   `packageWorkflowManifestPath`、`packageRootPath`、`packageName`、`packageLockStatus` 与
   `packageLockfilePath`；workspace member fixture 也已让
-  `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径。
+  `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
+  dependencies fixture 也已让 `doctor` / `pkg inspect` 同时冻结 package manifest root 与
+  workspace descriptor root + member package 的 dependency intent 投影。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 43` 已完成。
+- `Batch 1` 到 `Batch 45` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -96,7 +99,10 @@
   contract 扩展到 `pkg inspect`：只读 package workflow projection 也会稳定投影 descriptor
   path、member package manifest/root/name/lockfile 与 source root count。`Batch 44` 继续把
   package workflow truth 已经持有的 `SourceRoots` 提升为 `package-source-roots` /
-  `packageSourceRoots`，让 CLI、IDE 与 automation 不需要回头重读 manifest。下一步优先转回
+  `packageSourceRoots`，让 CLI、IDE 与 automation 不需要回头重读 manifest。`Batch 45` 再把
+  `[dependencies]` declared intent 提升为 `package-dependency-count` /
+  `package-dependencies` 与 envelope `packageDependencyCount` / `packageDependencies`，但仍不执行
+  dependency resolution、fetch/install 或 lockfile write。下一步优先转回
   richer `env` actions / richer `query` / richer package workflow，而不是继续在已经闭环的 success-path transcript、
   最小 `env status` / `doctor` projection、最小 `query symbols` surface 或最小 `pkg inspect`
   surface 上空转。

@@ -1,0 +1,10 @@
+[package]
+name = "tests.workspace-declared-dependencies.app"
+version = "0.1.0"
+
+[sources]
+roots = ["src"]
+
+[dependencies]
+"nextpas.ui.runtime" = { version = ">=0.1.0, <0.2.0" }
+"nextpas.graphics" = { version = ">=0.1.0" }

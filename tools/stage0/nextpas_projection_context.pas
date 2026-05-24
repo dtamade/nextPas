@@ -7,6 +7,7 @@ interface
 uses
   SysUtils, nextpas_projection_types, nextpas_json_helpers,
   np_compilation_session, np_workspace_model, np_package_workflow,
+  np_package_manifest,
   np_toolchain_profiles, target_config;
 
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
@@ -114,6 +115,36 @@ begin
     if EntryJson <> '' then
       EntryJson := EntryJson + ',';
     EntryJson := EntryJson + JsonString(AValues[Index]);
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
+function BuildJsonDependencyArray(
+  const AValues: array of TPackageDependencyInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'name',
+      JsonString(AValues[Index].PackageName)
+    );
+    AppendJsonField(
+      EntryFields,
+      'requirement',
+      JsonString(AValues[Index].Requirement)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
   end;
 
   Result := '[' + EntryJson + ']';
@@ -355,6 +386,9 @@ begin
   AContext.SourceRootCount := 0;
   AContext.HasSourceRootCount := False;
   AContext.SourceRootsJson := '';
+  AContext.DependencyCount := 0;
+  AContext.HasDependencyCount := False;
+  AContext.DependenciesJson := '';
 end;
 
 procedure CaptureBuildCommandContextValue(
@@ -615,6 +649,11 @@ begin
   AContext.HasSourceRootCount := AWorkflowTruth.ManifestTruth.Status <> '';
   AContext.SourceRootsJson := BuildJsonStringArray(
     AWorkflowTruth.ManifestTruth.SourceRoots
+  );
+  AContext.DependencyCount := AWorkflowTruth.PackageDependencyCount;
+  AContext.HasDependencyCount := AWorkflowTruth.ManifestTruth.Status <> '';
+  AContext.DependenciesJson := BuildJsonDependencyArray(
+    AWorkflowTruth.ManifestTruth.Dependencies
   );
 end;
 

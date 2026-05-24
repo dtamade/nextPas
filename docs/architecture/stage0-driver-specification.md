@@ -129,7 +129,7 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 组成                       | 第一阶段职责                                                                     |
 | -------------------------- | -------------------------------------------------------------------------------- |
-| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status` 投影 target/binding/distribution/runtime state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth |
+| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status` 投影 target/binding/distribution/runtime state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth（含 source roots 与 declared dependencies） |
 | `tools/stage0/README.md`   | 说明用法、退出码、范围约束和当前不支持的事项                                     |
 | `examples/smoke/hello.pas` | 作为规范输入，证明驱动路径真实可走通                                             |
 
@@ -185,7 +185,8 @@ open document overlay、incremental invalidation 或 IDE integration。
   `doctor-finding-*` 字段投影
 - 当 workspace 没有 package truth 时，还会同步投影 `package-workflow-status`、
   `package-manifest-status`、`package-lock-status`、`package-install-plan-status` 与
-  `package-source-root-count` / `package-source-roots`
+  `package-source-root-count` / `package-source-roots` / `package-dependency-count` /
+  `package-dependencies`
 - `command-envelope=<json>.result.doctorFindings[]` 保存同一条 finding 的
   `code`、`severity`、`subject`、`summary` 与 `suggestedAction`
 

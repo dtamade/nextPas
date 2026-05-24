@@ -8,11 +8,19 @@ uses
   Classes, SysUtils;
 
 type
+  TPackageDependencyInfo = record
+    PackageName: string;
+    Requirement: string;
+  end;
+
+  TPackageDependencyInfoArray = array of TPackageDependencyInfo;
+
   TPackageManifestInfo = record
     ManifestPath: string;
     PackageRootPath: string;
     PackageName: string;
     SourceRoots: TStringArray;
+    Dependencies: TPackageDependencyInfoArray;
   end;
 
   TPackageManifestInfoArray = array of TPackageManifestInfo;
@@ -109,6 +117,26 @@ begin
 
   for Index := 0 to Length(AValues) - 1 do
     if AValues[Index].ManifestPath = AValue.ManifestPath then
+      Exit;
+
+  NextIndex := Length(AValues);
+  SetLength(AValues, NextIndex + 1);
+  AValues[NextIndex] := AValue;
+end;
+
+procedure AppendUniquePackageDependencyInfo(
+  var AValues: TPackageDependencyInfoArray;
+  const AValue: TPackageDependencyInfo
+);
+var
+  Index: SizeInt;
+  NextIndex: SizeInt;
+begin
+  if Trim(AValue.PackageName) = '' then
+    Exit;
+
+  for Index := 0 to Length(AValues) - 1 do
+    if AValues[Index].PackageName = AValue.PackageName then
       Exit;
 
   NextIndex := Length(AValues);
@@ -218,6 +246,81 @@ begin
     );
 end;
 
+function ParseTomlStringLiteral(const AValue: string): string;
+var
+  TrimmedValue: string;
+begin
+  TrimmedValue := Trim(AValue);
+  if (Length(TrimmedValue) >= 2) and (TrimmedValue[1] = '"') and
+    (TrimmedValue[Length(TrimmedValue)] = '"') then
+    Exit(Copy(TrimmedValue, 2, Length(TrimmedValue) - 2));
+
+  Result := TrimmedValue;
+end;
+
+function ExtractTomlInlineTableStringField(
+  const AValue: string;
+  const AFieldName: string
+): string;
+var
+  FieldPos: SizeInt;
+  FieldTail: string;
+  QuotePos: SizeInt;
+  EndQuotePos: SizeInt;
+begin
+  Result := '';
+  FieldPos := Pos(LowerCase(AFieldName), LowerCase(AValue));
+  if FieldPos <= 0 then
+    Exit;
+
+  FieldTail := Copy(AValue, FieldPos + Length(AFieldName), MaxInt);
+  QuotePos := Pos('"', FieldTail);
+  if QuotePos <= 0 then
+    Exit;
+
+  FieldTail := Copy(FieldTail, QuotePos + 1, MaxInt);
+  EndQuotePos := Pos('"', FieldTail);
+  if EndQuotePos <= 0 then
+    Exit;
+
+  Result := Copy(FieldTail, 1, EndQuotePos - 1);
+end;
+
+function ParsePackageDependencyInfo(
+  const ALine: string;
+  out ADependency: TPackageDependencyInfo
+): Boolean;
+var
+  EqPos: SizeInt;
+  KeyValue: string;
+  TableValue: string;
+  RequirementText: string;
+begin
+  Result := False;
+  ADependency.PackageName := '';
+  ADependency.Requirement := '';
+
+  EqPos := Pos('=', ALine);
+  if EqPos <= 0 then
+    Exit;
+
+  KeyValue := ParseTomlStringLiteral(Copy(ALine, 1, EqPos - 1));
+  TableValue := Trim(Copy(ALine, EqPos + 1, MaxInt));
+  if (Length(TableValue) < 2) or (TableValue[1] <> '{') or
+    (TableValue[Length(TableValue)] <> '}') then
+    Exit;
+
+  RequirementText := ExtractTomlInlineTableStringField(TableValue, 'version');
+  if RequirementText = '' then
+    RequirementText := ExtractTomlInlineTableStringField(TableValue, 'requirement');
+  if RequirementText = '' then
+    Exit;
+
+  ADependency.PackageName := KeyValue;
+  ADependency.Requirement := RequirementText;
+  Result := ADependency.PackageName <> '';
+end;
+
 function BuildProjectUnitRootInfo(
   const ARootPath: string;
   const AProvenanceKind: string;
@@ -292,6 +395,7 @@ var
   KeyName: string;
   LineIndex: LongInt;
   Lines: TStringList;
+  DependencyInfo: TPackageDependencyInfo;
   ManifestDirectory: string;
   ManifestPath: string;
   RawLine: string;
@@ -304,6 +408,8 @@ begin
   Result.PackageName := '';
   Result.SourceRoots := nil;
   SetLength(Result.SourceRoots, 0);
+  Result.Dependencies := nil;
+  SetLength(Result.Dependencies, 0);
 
   ManifestPath := ExpandFileName(AManifestPath);
   if not FileExists(ManifestPath) then
@@ -339,19 +445,21 @@ begin
       if (CurrentSection = 'package') and (KeyName = 'name') then
       begin
         Result.PackageName := Trim(Copy(TrimmedLine, EqPos + 1, MaxInt));
-        if (Length(Result.PackageName) >= 2) and
-          (Result.PackageName[1] = '"') and
-          (Result.PackageName[Length(Result.PackageName)] = '"') then
-          Result.PackageName := Copy(
-            Result.PackageName,
-            2,
-            Length(Result.PackageName) - 2
-          );
+        Result.PackageName := ParseTomlStringLiteral(Result.PackageName);
         Continue;
       end;
 
       if (CurrentSection <> 'sources') or (KeyName <> 'roots') then
+      begin
+        if CurrentSection <> 'dependencies' then
+          Continue;
+
+        if not ParsePackageDependencyInfo(TrimmedLine, DependencyInfo) then
+          Continue;
+
+        AppendUniquePackageDependencyInfo(Result.Dependencies, DependencyInfo);
         Continue;
+      end;
 
       RootEntries := ParseTomlStringArray(Copy(TrimmedLine, EqPos + 1, MaxInt));
       for EntryIndex := 0 to Length(RootEntries) - 1 do
@@ -390,6 +498,8 @@ begin
       AInfo.PackageName := '';
       AInfo.SourceRoots := nil;
       SetLength(AInfo.SourceRoots, 0);
+      AInfo.Dependencies := nil;
+      SetLength(AInfo.Dependencies, 0);
       AErrorText := E.Message;
       Result := False;
     end;
@@ -520,6 +630,8 @@ begin
     Result.PackageName := '';
     Result.SourceRoots := nil;
     SetLength(Result.SourceRoots, 0);
+    Result.Dependencies := nil;
+    SetLength(Result.Dependencies, 0);
     Exit;
   end;
 

@@ -15,6 +15,8 @@ type
     PackageName: string;
     SourceRootCount: LongInt;
     SourceRoots: TStringArray;
+    DependencyCount: LongInt;
+    Dependencies: TPackageDependencyInfoArray;
   end;
 
   TPackageLockTruth = record
@@ -34,6 +36,7 @@ type
     LockTruth: TPackageLockTruth;
     InstallPlanTruth: TPackageInstallPlanTruth;
     PackageSourceRootCount: LongInt;
+    PackageDependencyCount: LongInt;
   end;
 
 function BuildPackageWorkflowTruth(
@@ -79,6 +82,8 @@ begin
   Result.ManifestTruth.PackageName := AManifestInfo.PackageName;
   Result.ManifestTruth.SourceRootCount := Length(AManifestInfo.SourceRoots);
   Result.ManifestTruth.SourceRoots := AManifestInfo.SourceRoots;
+  Result.ManifestTruth.DependencyCount := Length(AManifestInfo.Dependencies);
+  Result.ManifestTruth.Dependencies := AManifestInfo.Dependencies;
 
   Result.LockTruth.Status := 'deferred';
   Result.LockTruth.LockfilePath := ResolveLockfilePath(WorkspaceRootPath);
@@ -88,6 +93,7 @@ begin
   Result.InstallPlanTruth.PackageRootPath := AManifestInfo.PackageRootPath;
 
   Result.PackageSourceRootCount := Result.ManifestTruth.SourceRootCount;
+  Result.PackageDependencyCount := Result.ManifestTruth.DependencyCount;
   if ManifestReady then
     Result.Status := 'ready'
   else
@@ -105,6 +111,7 @@ begin
   ManifestInfo.PackageRootPath := '';
   ManifestInfo.PackageName := '';
   SetLength(ManifestInfo.SourceRoots, 0);
+  SetLength(ManifestInfo.Dependencies, 0);
 
   if (AWorkspaceModel <> nil) and (AWorkspaceModel.PackageRefCount > 0) then
   begin
@@ -113,6 +120,7 @@ begin
     ManifestInfo.PackageRootPath := PackageRef.PackageRootPath;
     ManifestInfo.PackageName := PackageRef.PackageName;
     ManifestInfo.SourceRoots := PackageRef.SourceRoots;
+    ManifestInfo.Dependencies := PackageRef.Dependencies;
   end;
 
   if AWorkspaceModel <> nil then

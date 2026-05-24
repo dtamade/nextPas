@@ -895,6 +895,17 @@ begin
     'package-source-roots',
     AContext.SourceRootsJson
   );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-dependency-count',
+    AContext.DependencyCount,
+    AContext.HasDependencyCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-dependencies',
+    AContext.DependenciesJson
+  );
 end;
 procedure PrintDiagnosticsDetailProjection(const UseStdErr: Boolean; const ADiagnostics: TDiagnosticProjectionContext);
 begin

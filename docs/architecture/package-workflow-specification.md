@@ -523,7 +523,8 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect` surface
   - `pkg inspect` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
     manifest status、workflow manifest path、package root、package name、lock status、canonical
-    lockfile path、source root count、source roots JSON 明细与 install plan status
+    lockfile path、source root count、source roots JSON 明细、declared dependency count /
+    dependencies JSON 明细与 install plan status
   - 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到
     member package 的 ready 路径，确保 CLI、IDE 和 automation 后续共享同一条 package membership truth
   - 但 package workflow 的对象边界、install root 角色与相邻控制面必须先冻结

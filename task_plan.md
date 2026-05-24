@@ -15,6 +15,36 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 45 Declared Dependencies Projection
+
+### Goal
+
+把 package manifest 的 `[dependencies]` declared intent 接入 shared package workflow truth，并
+通过 `doctor --workspace` / `pkg inspect` 做只读投影：
+
+- manifest parser 支持当前规范已冻结的 keyed inline table 形状：
+  `"package.name" = { version = ">=0.1.0" }`
+- `TPackageManifestInfo`、`TWorkspaceModel.PackageRef` 与 `TPackageManifestTruth` 持有
+  declared dependency name / requirement
+- line-based output 新增 `package-dependency-count` 与 `package-dependencies=<json-array>`
+- `command-envelope=<json>.result` 同步新增 `packageDependencyCount` 与 `packageDependencies`
+- non-goal：不做 dependency resolution、solver、fetch/install、lockfile write、target-specific
+  dependencies 或 feature flags
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 确认当前 parser/workflow 只持有 package identity 与 source roots
+- [x] 扩展 manifest parser、workspace model 与 workflow truth
+- [x] 扩展 package projection text/json 输出
+- [x] 加严 `build/verify_local.sh` 的 doctor / pkg inspect declared dependency gate
+- [x] 同步必要文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 44 Package Source Roots Projection
 
 ### Goal
