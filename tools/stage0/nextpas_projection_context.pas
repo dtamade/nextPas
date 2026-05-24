@@ -150,6 +150,46 @@ begin
   Result := '[' + EntryJson + ']';
 end;
 
+function BuildJsonDependencyIssueArray(
+  const AValues: array of TPackageDependencyIssueInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'name',
+      JsonString(AValues[Index].PackageName)
+    );
+    AppendJsonField(
+      EntryFields,
+      'requirement',
+      JsonString(AValues[Index].Requirement)
+    );
+    AppendJsonField(
+      EntryFields,
+      'code',
+      JsonString(AValues[Index].Code)
+    );
+    AppendJsonField(
+      EntryFields,
+      'message',
+      JsonString(AValues[Index].Message)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
 begin
   AContext.SourcePath := '';
@@ -389,6 +429,10 @@ begin
   AContext.DependencyCount := 0;
   AContext.HasDependencyCount := False;
   AContext.DependenciesJson := '';
+  AContext.DependencyValidationStatus := '';
+  AContext.DependencyIssueCount := 0;
+  AContext.HasDependencyIssueCount := False;
+  AContext.DependencyIssuesJson := '';
 end;
 
 procedure CaptureBuildCommandContextValue(
@@ -654,6 +698,13 @@ begin
   AContext.HasDependencyCount := AWorkflowTruth.ManifestTruth.Status <> '';
   AContext.DependenciesJson := BuildJsonDependencyArray(
     AWorkflowTruth.ManifestTruth.Dependencies
+  );
+  AContext.DependencyValidationStatus :=
+    AWorkflowTruth.PackageDependencyValidationStatus;
+  AContext.DependencyIssueCount := AWorkflowTruth.PackageDependencyIssueCount;
+  AContext.HasDependencyIssueCount := AWorkflowTruth.ManifestTruth.Status <> '';
+  AContext.DependencyIssuesJson := BuildJsonDependencyIssueArray(
+    AWorkflowTruth.ManifestTruth.DependencyIssues
   );
 end;
 

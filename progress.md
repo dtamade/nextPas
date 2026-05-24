@@ -3,6 +3,71 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-24 记录为准。
 
+## Session: 2026-05-24 (Batch 47 package lockfile presence truth)
+
+- **Status:** completed
+- Objective:
+  - 把 package workflow 里仍然固定为 deferred 的 lock truth 收成真实只读事实，让
+    `package-lock-status` 直接反映 canonical `nextpas.lock` 是否存在。
+- Baseline:
+  - 本轮开始时 package workflow 的 lock truth 仍是固定 deferred，`doctor` / `pkg inspect`
+    只能看到 path，不能区分有锁/没锁。
+  - 当前仓库中 package fixture 目录还没有 lockfile，`build/verify_local.sh` 的 package lock
+    断言全部围绕 deferred 口径。
+- Actions taken:
+  - 在 `compiler/frontend/np_package_workflow.pas` 中把 lock truth 改成文件存在即 `ready`，
+    否则 `missing`。
+  - 在 `tests/fixtures/package_manifest_source_root/nextpas.lock` 新增真实 fixture lockfile，
+    让 package fixture 形成可观察的 ready path。
+  - 扩展 `build/verify_local.sh`，把 `toolchain-contract`、`doctor` 与 `pkg inspect`
+    的 package lock 断言拆成 ready / missing 两类，并保持 `package-install-plan-status`
+    继续 deferred。
+  - 同步 `docs/architecture/package-workflow-specification.md`、
+    `docs/architecture/workspace-file-format-specification.md`、
+    `docs/architecture/stage0-driver-specification.md`、
+    `tools/stage0/README.md`、`docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`、
+    `task_plan.md` 与 `findings.md`。
+- Verification:
+  - `git diff --check` 通过。
+  - fresh `bash build/verify_local.sh` 通过，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+## Session: 2026-05-24 (Batch 46 dependency requirement grammar validation)
+
+- **Status:** completed
+- Objective:
+  - 直接实现 Batch 46：把 dependency requirement 从 raw string projection 升级为 manifest /
+    workflow 层共享 validation truth，并让 `doctor` / `pkg inspect` 同步投影。
+- Baseline:
+  - 本轮开始时 live HEAD 为 `1732dc6 docs: plan dependency requirement validation`，工作树干净。
+  - focused probe 确认旧行为会把 `^0.1.0` 当作普通 requirement 投影：
+    `package-manifest-status=ready`、`package-dependency-count=2`，没有 invalid signal。
+- Actions taken:
+  - 在 `compiler/frontend/np_package_manifest.pas` 中新增最小 comparator grammar validation：
+    支持 `=`、`>`、`>=`、`<`、`<=`，多个 comparator 用逗号表达 intersection。
+  - 保留所有 declared dependencies 原始 intent，同时新增 dependency issue truth；invalid
+    requirement 不再静默消失。
+  - 将 dependency validation status / issue count / issue detail 贯穿
+    `TWorkspaceModel.PackageRef`、`TPackageManifestTruth`、`TPackageWorkflowTruth` 与 stage0
+    package projection。
+  - `doctor` / `pkg inspect` 新增 line fields：
+    `package-dependency-validation-status`、`package-dependency-issue-count`、
+    `package-dependency-issues`；envelope 同步新增 camelCase 字段。
+  - 新增 `tests/fixtures/workspace_malformed_dependencies`，覆盖 `^0.1.0`、`~>0.1`、`>=`、
+    `>=0.1.0 || <0.2.0` 与 empty requirement。
+  - 扩展 `build/verify_local.sh`，新增 `stage0DoctorMalformedDependenciesCheck=pass` 与
+    `stage0PkgMalformedDependenciesCheck=pass`，同时确认 valid declared dependency fixture
+    仍投影 `package-dependency-validation-status=valid` 与 issue count 0。
+  - 同步 stage0 README、workspace/package workflow specs、rolling plan、`task_plan.md` 与
+    `findings.md`。
+- Verification:
+  - `sh -n build/verify_local.sh` 通过。
+  - `git diff --check` 通过。
+  - fresh `bash build/verify_local.sh` 通过，最终输出
+    `stage0DoctorMalformedDependenciesCheck=pass`、
+    `stage0PkgMalformedDependenciesCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 46 dependency requirement grammar validation planning)
 
 - **Status:** completed (planning-only slice)

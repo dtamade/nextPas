@@ -685,6 +685,23 @@ begin
   );
   if AContext.DependenciesJson <> '' then
     AppendJsonField(AFields, 'packageDependencies', AContext.DependenciesJson);
+  AppendJsonStringField(
+    AFields,
+    'packageDependencyValidationStatus',
+    AContext.DependencyValidationStatus
+  );
+  AppendJsonIntegerField(
+    AFields,
+    'packageDependencyIssueCount',
+    AContext.DependencyIssueCount,
+    AContext.HasDependencyIssueCount
+  );
+  if AContext.DependencyIssuesJson <> '' then
+    AppendJsonField(
+      AFields,
+      'packageDependencyIssues',
+      AContext.DependencyIssuesJson
+    );
 end;
 
 function BuildCommandEnvelopeJson(

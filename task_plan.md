@@ -15,6 +15,53 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 47 Package Lockfile Presence Truth
+
+### Goal
+
+把 package workflow 里仍然固定为 deferred 的 lock truth 收成真实只读事实：
+
+- `package-lock-status` 继续只读投影 canonical `nextpas.lock` 的存在性
+- lockfile 存在时投影 `ready`
+- lockfile 不存在时投影 `missing`
+- `package-install-plan-status` 继续保持 deferred，本批次不打开 install plan 生成、resolver、
+  write-back 或 lockfile mutation
+- `doctor` / `pkg inspect` 继续共享同一份 package workflow truth，不再让 lock truth 被固定成
+  失真的默认值
+
+### Architecture Decision
+
+lock truth 现在属于 package workflow 的最小可见状态，不再只靠“path 已知但 status deferred”
+来表达。我们只读观察 canonical lockfile 是否存在，先让 CLI / automation 能区分“有锁”和“没锁”，
+不提前打开真正的 lock write。
+
+### Status
+
+Completed
+
+### Acceptance
+
+- ready package fixture 必须稳定投影 `package-lock-status=ready`
+- 没有 lockfile 的 workspace / package root 必须稳定投影 `package-lock-status=missing`
+- `command-envelope=<json>.result` 必须同步投影 `packageLockStatus`
+- `package-install-plan-status` 仍然保持 deferred
+- fresh `bash build/verify_local.sh` 必须通过
+
+### Non-goals
+
+- 不做 lockfile writer
+- 不做 dependency resolution
+- 不做 install plan generation
+- 不改变现有 package manifest / dependency validation grammar
+
+### Planned Steps
+
+- [x] 确认当前 lock truth 与 verify gate 的现状
+- [x] 实现 lockfile presence truth 并补 package fixture lockfile
+- [x] 同步 verify gate、文档与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
 ## Addendum: 2026-05-24 Batch 46 Dependency Requirement Grammar Validation
 
 ### Goal
@@ -42,7 +89,7 @@ table 或 solver annotation；这些属于 future schema / resolver batch，而�
 
 ### Status
 
-Planned
+Completed
 
 ### Acceptance
 
@@ -66,14 +113,15 @@ Planned
 
 ### Planned Steps
 
-- [ ] focused probe 当前 parser 对 malformed dependency 的行为，确认是否静默跳过
-- [ ] 设计 manifest/workflow 层的 validation result 承载方式，避免 CLI 两侧各自解析
-- [ ] 新增 malformed dependency fixture，覆盖 invalid requirement 不静默消失
-- [ ] 先把 `build/verify_local.sh` gate 写成 RED，冻结 `doctor` / `pkg inspect` 预期
-- [ ] 实现最小 comparator grammar validation 与 projection
-- [ ] 同步 stage0 README、workspace/package workflow specs、rolling plan 与持续记录
-- [ ] 运行 fresh `bash build/verify_local.sh`
-- [ ] 简短 review 后提交
+- [x] focused probe 当前 parser 对 malformed dependency 的行为，确认 `^0.1.0` 会作为 raw string
+      投影且没有 invalid signal
+- [x] 设计 manifest/workflow 层的 validation result 承载方式，避免 CLI 两侧各自解析
+- [x] 新增 malformed dependency fixture，覆盖 invalid requirement 不静默消失
+- [x] 先把 `build/verify_local.sh` gate 写成 RED，冻结 `doctor` / `pkg inspect` 预期
+- [x] 实现最小 comparator grammar validation 与 projection
+- [x] 同步 stage0 README、workspace/package workflow specs、rolling plan 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ## Addendum: 2026-05-24 Batch 45 Declared Dependencies Projection
 

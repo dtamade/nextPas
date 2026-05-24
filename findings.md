@@ -10,7 +10,15 @@
 
 ## Research Findings
 
-- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部已同步到 `Batch 40`，
+- `package-lock-status` 现在已经不再是“path 已知但状态固定 deferred”的空壳字段；
+  它会根据 canonical `nextpas.lock` 的存在性投影 `ready|missing`，并由同一份
+  `TPackageWorkflowTruth` 贯穿 `doctor` / `pkg inspect`。
+- `tests/fixtures/package_manifest_source_root/nextpas.lock` 让 package manifest fixture 形成
+  真实 ready path；workspace member / declared dependencies / repo root 仍然缺锁，因此会稳定
+  投影 `missing`。
+- `package-install-plan-status` 仍然保留 deferred，本轮没有提前打开 install plan 生成、
+  resolver 或 lockfile write。
+- 当前 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部已同步到 `Batch 47`，
   不会再误导下一轮“继续”的恢复点。
 - 当前 `docs/architecture/architecture-principles-specification.md` 已把用户提出的长期质量目标
   固化为可执行门槛：每个切片都要明确 owner、truth object、projection、promotion gate、
@@ -187,6 +195,15 @@
   `Continue`，因此 malformed requirement 存在静默消失风险。下一批应把已冻结的最小 grammar
   (`=`、`>`、`>=`、`<`、`<=`，逗号 intersection) 收成 manifest/workflow 层共享 truth，
   并让 `doctor` / `pkg inspect` 公开投影 invalid dependency detail。
+- Batch 46 已收口 dependency requirement validation：
+  `TPackageManifestInfo` 继续保留所有 declared dependency intent，同时新增 dependency issue
+  truth；`TWorkspaceModel.PackageRef` 与 `TPackageWorkflowTruth` 负责把 validation status /
+  issue count / issue details 传给 stage0 projection。`doctor` 与 `pkg inspect` 现在都会投影
+  `package-dependency-validation-status=valid|invalid|missing`、
+  `package-dependency-issue-count=<count>`、`package-dependency-issues=<json-array>`，envelope
+  同步投影 camelCase 字段。`tests/fixtures/workspace_malformed_dependencies` 覆盖 `^0.1.0`、
+  `~>0.1`、`>=`、`>=0.1.0 || <0.2.0` 与 empty requirement；fresh
+  `bash build/verify_local.sh` 已通过。
 - 当前 `tests/run_all_tests.sh` 的 stage0 bootstrap failure 已不再把关键回放线索吞掉：
   失败输出会继续带上 `bootstrap-step`、`bootstrap-command`、
   `bootstrap-stderr-file`，并在 stderr 文件非空时直接回显原始 stderr evidence。

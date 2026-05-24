@@ -142,9 +142,9 @@ nextPas 在这里先冻结一个明确立场：
 
 当前仓库里的最小真实落点已经先把 lockfile owner/path 作为 typed truth 暴露出来：
 `compiler/frontend/np_package_workflow.pas` 现阶段会把 workspace-scoped canonical
-`nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，但状态继续固定为
-`deferred`。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的读写、
-resolver snapshot 与 atomic replace 仍未开始实现。
+`nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，并根据文件是否存在投影
+`status=ready|missing`。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，
+对应的读写、resolver snapshot 与 atomic replace 仍未开始实现。
 
 ## root discovery 必须 deterministic，而且不能靠全树重扫
 
@@ -372,6 +372,8 @@ nextPas 现在不需要一次把整套 package grammar 全锁死，但有几条�
 - `[dependencies]` 当前至少接受 keyed table + inline table 形状
 - dependency requirement string 当前最小支持这些 comparator：`=`、`>`、`>=`、`<`、`<=`
 - 多个 comparator 用逗号表达 intersection，例如 `>=0.1.0, <0.2.0`
+- 不符合这套 grammar 的 requirement 仍属于 manifest/workflow truth，必须投影 validation
+  status 与 issue detail，不能静默消失
 - 第一阶段不要求现在就支持 union range、feature flag、optional dependency 或 target-specific
   dependency table
 - `[compatibility]` 当前最小只推荐 `targets = [...]`

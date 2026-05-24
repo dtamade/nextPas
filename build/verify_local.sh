@@ -35,6 +35,8 @@ DECLARED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/workspace_
 DECLARED_DEPENDENCY_PACKAGE_FIXTURE_ROOT="$DECLARED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT/app"
 DECLARED_DEPENDENCY_WORKSPACE_ARTIFACT_ROOT="$DECLARED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT/.nextpas"
 DECLARED_DEPENDENCY_PACKAGE_ARTIFACT_ROOT="$DECLARED_DEPENDENCY_PACKAGE_FIXTURE_ROOT/.nextpas"
+MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/workspace_malformed_dependencies"
+MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT="$MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT/app"
 STAGE0_SMOKE_OUTPUT=$(mktemp)
 STAGE0_SMOKE_REPEAT_OUTPUT=$(mktemp)
 LLVM_BINDING_SMOKE_OUTPUT=$(mktemp)
@@ -179,6 +181,8 @@ STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT=$(mktemp)
+STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT=$(mktemp)
+STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT=$(mktemp)
 STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_QUERY_SYMBOLS_OUTPUT=$(mktemp)
 STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
@@ -186,6 +190,8 @@ STAGE0_PKG_INSPECT_OUTPUT=$(mktemp)
 STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT=$(mktemp)
 STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT=$(mktemp)
 STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT=$(mktemp)
+STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT=$(mktemp)
+STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT=$(mktemp)
 STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
@@ -384,6 +390,8 @@ cleanup() {
   rm -f "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT"
   rm -f "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT"
   rm -f "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT"
+  rm -f "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT"
+  rm -f "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT"
   rm -f "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$STAGE0_QUERY_SYMBOLS_OUTPUT"
   rm -f "$STAGE0_QUERY_INVALID_ARGUMENTS_OUTPUT"
@@ -391,6 +399,8 @@ cleanup() {
   rm -f "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT"
   rm -f "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT"
   rm -f "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT"
+  rm -f "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT"
+  rm -f "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT"
   rm -f "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
@@ -626,6 +636,9 @@ require_path tests/fixtures/workspace_member_source_root/shared/src/WorkspaceMem
 require_path tests/fixtures/workspace_declared_dependencies/nextpas.workspace.toml
 require_path tests/fixtures/workspace_declared_dependencies/app/nextpas.package.toml
 require_path tests/fixtures/workspace_declared_dependencies/app/src/DependencyAnchor.pas
+require_path tests/fixtures/workspace_malformed_dependencies/nextpas.workspace.toml
+require_path tests/fixtures/workspace_malformed_dependencies/app/nextpas.package.toml
+require_path tests/fixtures/workspace_malformed_dependencies/app/src/DependencyAnchor.pas
 require_path tests/fixtures/root_source_precedence/root_source_precedence_smoke.pas
 require_path tests/fixtures/root_source_precedence/PriorityGreeter.pas
 require_path tests/fixtures/root_source_precedence/explicit/PriorityGreeter.pas
@@ -3459,7 +3472,7 @@ require_output_pattern '^workspace-model-member-artifact-root=.*/tests/fixtures/
 require_output_pattern '^workspace-model-member-output-dir=.*/tests/fixtures/workspace_member_source_root/\.nextpas/out/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-member-output-dir'
 require_output_pattern '^workspace-model-member-host-cache-root=.*/tests/fixtures/workspace_member_source_root/\.nextpas/cache/host-fpc/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-member-host-cache-root'
 require_output_pattern '^package-workflow-manifest-status=ready$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-manifest-status'
-require_output_pattern '^package-workflow-lock-status=deferred$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-lock-status'
+require_output_pattern '^package-workflow-lock-status=ready$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-install-plan-status'
 require_output_pattern '^package-workflow-source-root-count=[1-9][0-9]*$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-package-workflow-source-root-count'
 printf 'toolchain-contract-check=pass\n'
@@ -4444,7 +4457,7 @@ require_output_pattern '^doctor-workspace-status=ready$' "$STAGE0_DOCTOR_OUTPUT"
 require_output_pattern '^doctor-toolchain-binding-status=ready$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-toolchain-binding-status'
 require_output_pattern '^package-workflow-status=missing$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-workflow-status'
 require_output_pattern '^package-manifest-status=missing$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-install-plan-status'
 require_output_pattern '^package-source-root-count=0$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-source-root-count'
 require_output_pattern '^package-source-roots=\[\]$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-package-source-roots'
@@ -4479,7 +4492,7 @@ require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' 
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-lock-status'
+require_output_pattern '^package-lock-status=ready$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/package_manifest_source_root$' "$STAGE0_DOCTOR_PACKAGE_WORKSPACE_OUTPUT" 'missing-stage0-doctor-package-workspace-root-path'
@@ -4516,7 +4529,7 @@ require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_m
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_member_source_root/app$' "$STAGE0_DOCTOR_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-doctor-workspace-member-package-root-path'
@@ -4555,7 +4568,7 @@ require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' 
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_declared_dependencies/app$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-root-path'
@@ -4565,6 +4578,9 @@ require_output_pattern '^package-source-root-count=1$' "$STAGE0_DOCTOR_DECLARED_
 require_output_pattern '^package-source-roots=\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-source-roots'
 require_output_pattern '^package-dependency-count=2$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-dependency-count'
 require_output_pattern '^package-dependencies=\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-dependencies'
+require_output_pattern '^package-dependency-validation-status=valid$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-validation-status'
+require_output_pattern '^package-dependency-issue-count=0$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-issue-count'
+require_output_pattern '^package-dependency-issues=\[\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-issues'
 require_output_pattern '^doctor-workspace-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-doctor-workspace-status'
 require_output_pattern '^doctor-toolchain-binding-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-doctor-toolchain-binding-status'
 require_output_pattern '^doctor-check-count=5$' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-check-count'
@@ -4573,6 +4589,7 @@ require_output_pattern '^doctor-finding-code=doctor\.runtime-sdk-missing$' "$STA
 require_output_pattern '^command-envelope=.*"packageWorkflowStatus":"ready".*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":1' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-envelope-package'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":1.*"packageSourceRoots":\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-envelope-source-roots'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":2.*"packageDependencies":\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-envelope-dependencies'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"valid".*"packageDependencyIssueCount":0.*"packageDependencyIssues":\[\]' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-package-envelope-validation'
 if grep -Eq 'doctor\.package-workspace-missing' "$STAGE0_DOCTOR_DECLARED_DEPS_PACKAGE_OUTPUT"; then
   fail 'unexpected-stage0-doctor-declared-dependencies-package-missing-finding'
 fi
@@ -4592,7 +4609,7 @@ require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_d
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_declared_dependencies/app$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-root-path'
@@ -4602,6 +4619,9 @@ require_output_pattern '^package-source-root-count=1$' "$STAGE0_DOCTOR_DECLARED_
 require_output_pattern '^package-source-roots=\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-source-roots'
 require_output_pattern '^package-dependency-count=2$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-dependency-count'
 require_output_pattern '^package-dependencies=\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-dependencies'
+require_output_pattern '^package-dependency-validation-status=valid$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-validation-status'
+require_output_pattern '^package-dependency-issue-count=0$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-issue-count'
+require_output_pattern '^package-dependency-issues=\[\]$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-issues'
 require_output_pattern '^doctor-workspace-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-doctor-workspace-status'
 require_output_pattern '^doctor-toolchain-binding-status=ready$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-doctor-toolchain-binding-status'
 require_output_pattern '^doctor-check-count=5$' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-check-count'
@@ -4612,10 +4632,44 @@ require_output_pattern '^command-envelope=.*"packageManifestPath":".*/tests/fixt
 require_output_pattern '^command-envelope=.*"packageWorkflowStatus":"ready".*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":1' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-envelope-package'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":1.*"packageSourceRoots":\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-envelope-source-roots'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":2.*"packageDependencies":\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-envelope-dependencies'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"valid".*"packageDependencyIssueCount":0.*"packageDependencyIssues":\[\]' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-declared-dependencies-workspace-envelope-validation'
 if grep -Eq 'doctor\.package-workspace-missing' "$STAGE0_DOCTOR_DECLARED_DEPS_WORKSPACE_OUTPUT"; then
   fail 'unexpected-stage0-doctor-declared-dependencies-workspace-missing-finding'
 fi
 printf 'stage0-doctor-declared-dependencies-check=pass\n'
+
+printf 'stage0-doctor-malformed-dependencies-check=running\n'
+printf 'stage0-doctor-malformed-dependencies-package-command=%s doctor --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" doctor --target "$TARGET_ID" --workspace "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT" >"$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 2>&1; then
+  cat "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT"
+  fail 'stage0-doctor-malformed-dependencies-package-failed'
+fi
+cat "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT"
+require_output_pattern '^command=doctor$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-command'
+require_output_pattern '^workspace-root=.*/tests/fixtures/workspace_malformed_dependencies/app$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-root'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-workflow-status'
+require_output_pattern '^package-manifest-status=ready$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-manifest-status'
+require_output_pattern '^package-dependency-count=6$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-dependency-count'
+require_output_pattern '^package-dependency-validation-status=invalid$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-validation-status'
+require_output_pattern '^package-dependency-issue-count=5$' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-issue-count'
+require_output_pattern '^package-dependency-issues=.*"name":"nextpas\.invalid\.caret".*"requirement":"\^0\.1\.0".*"name":"nextpas\.invalid\.twiddle".*"requirement":"~>0\.1".*"name":"nextpas\.invalid\.missing-version".*"requirement":">=".+"name":"nextpas\.invalid\.union".*"requirement":">=0\.1\.0 \|\| <0\.2\.0".*"name":"nextpas\.invalid\.empty".*"requirement":""' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-issues'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"invalid".*"packageDependencyIssueCount":5.*"packageDependencyIssues":\[.*"nextpas\.invalid\.caret".*"nextpas\.invalid\.empty"' "$STAGE0_DOCTOR_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-package-envelope-validation'
+
+printf 'stage0-doctor-malformed-dependencies-workspace-command=%s doctor --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" doctor --target "$TARGET_ID" --workspace "$MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT" >"$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 2>&1; then
+  cat "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT"
+  fail 'stage0-doctor-malformed-dependencies-workspace-failed'
+fi
+cat "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT"
+require_output_pattern '^command=doctor$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-command'
+require_output_pattern '^workspace-root=.*/tests/fixtures/workspace_malformed_dependencies$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-root'
+require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_malformed_dependencies/nextpas\.workspace\.toml$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-descriptor-path'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-workflow-status'
+require_output_pattern '^package-dependency-count=6$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-dependency-count'
+require_output_pattern '^package-dependency-validation-status=invalid$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-validation-status'
+require_output_pattern '^package-dependency-issue-count=5$' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-issue-count'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"invalid".*"packageDependencyIssueCount":5.*"packageDependencyIssues":\[.*"nextpas\.invalid\.caret".*"nextpas\.invalid\.empty"' "$STAGE0_DOCTOR_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-doctor-malformed-dependencies-workspace-envelope-validation'
+printf 'stage0-doctor-malformed-dependencies-check=pass\n'
 
 printf 'stage0-doctor-invalid-arguments-check=running\n'
 printf 'stage0-doctor-invalid-arguments-command=%s doctor\n' "$STAGE0_BINARY"
@@ -4715,7 +4769,7 @@ require_output_pattern '^command=pkg$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-sta
 require_output_pattern '^selector=inspect$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-selector'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-lock-status'
+require_output_pattern '^package-lock-status=ready$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-lock-status'
 require_output_pattern '^package-source-root-count=[1-9][0-9]*$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-source-root-count'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-install-plan-status'
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml$' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-build-context-manifest-path'
@@ -4734,7 +4788,7 @@ require_output_pattern '^command-envelope=.*"selector":"inspect".*"packageWorkfl
 require_output_pattern '^command-envelope=.*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":[1-9][0-9]*' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-result'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":[1-9][0-9]*.*"packageSourceRoots":\[".*/tests/fixtures/package_manifest_source_root/src"\]' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-source-roots'
 require_output_pattern '^command-envelope=.*"packageManifestPath":".*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml"' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-build-context-manifest-path'
-require_output_pattern '^command-envelope=.*"packageLockStatus":"deferred".*"packageWorkflowManifestPath":".*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml".*"packageRootPath":".*/tests/fixtures/package_manifest_source_root".*"packageName":"tests\.package-manifest-source-root".*"packageLockfilePath":".*/tests/fixtures/package_manifest_source_root/nextpas\.lock"' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-workflow-detail'
+require_output_pattern '^command-envelope=.*"packageLockStatus":"ready".*"packageWorkflowManifestPath":".*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml".*"packageRootPath":".*/tests/fixtures/package_manifest_source_root".*"packageName":"tests\.package-manifest-source-root".*"packageLockfilePath":".*/tests/fixtures/package_manifest_source_root/nextpas\.lock"' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-workflow-detail'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":0.*"packageDependencies":\[\]' "$STAGE0_PKG_INSPECT_OUTPUT" 'missing-stage0-pkg-inspect-envelope-dependencies'
 
 printf 'stage0-pkg-workspace-member-check=running\n'
@@ -4753,7 +4807,7 @@ require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_m
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_member_source_root/app$' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-package-root-path'
@@ -4771,7 +4825,7 @@ require_output_pattern '^command-envelope=.*"selector":"inspect".*"workspaceDesc
 require_output_pattern '^command-envelope=.*"packageManifestPath":".*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml"' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-manifest-path'
 require_output_pattern '^command-envelope=.*"packageWorkflowStatus":"ready".*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":1' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-package'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":1.*"packageSourceRoots":\[".*/tests/fixtures/workspace_member_source_root/app/app"\]' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-source-roots'
-require_output_pattern '^command-envelope=.*"packageLockStatus":"deferred".*"packageWorkflowManifestPath":".*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml".*"packageRootPath":".*/tests/fixtures/workspace_member_source_root/app".*"packageName":"tests\.workspace-member-source-root\.app".*"packageLockfilePath":".*/tests/fixtures/workspace_member_source_root/nextpas\.lock"' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-workflow-detail'
+require_output_pattern '^command-envelope=.*"packageLockStatus":"missing".*"packageWorkflowManifestPath":".*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml".*"packageRootPath":".*/tests/fixtures/workspace_member_source_root/app".*"packageName":"tests\.workspace-member-source-root\.app".*"packageLockfilePath":".*/tests/fixtures/workspace_member_source_root/nextpas\.lock"' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-workflow-detail'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":0.*"packageDependencies":\[\]' "$STAGE0_PKG_WORKSPACE_MEMBER_OUTPUT" 'missing-stage0-pkg-workspace-member-envelope-dependencies'
 printf 'stage0-pkg-workspace-member-check=pass\n'
 
@@ -4790,7 +4844,7 @@ require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' 
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_declared_dependencies/app$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-root-path'
@@ -4800,6 +4854,9 @@ require_output_pattern '^package-source-root-count=1$' "$STAGE0_PKG_DECLARED_DEP
 require_output_pattern '^package-source-roots=\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-source-roots'
 require_output_pattern '^package-dependency-count=2$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-dependency-count'
 require_output_pattern '^package-dependencies=\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-dependencies'
+require_output_pattern '^package-dependency-validation-status=valid$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-validation-status'
+require_output_pattern '^package-dependency-issue-count=0$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-issue-count'
+require_output_pattern '^package-dependency-issues=\[\]$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-issues'
 require_output_pattern '^status=success$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-success-status'
 require_output_pattern '^result=success$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-success-result'
 require_output_pattern '^command-outcome=success$' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-command-outcome'
@@ -4808,6 +4865,7 @@ require_output_pattern '^command-envelope=.*"selector":"inspect".*"packageWorkfl
 require_output_pattern '^command-envelope=.*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":1' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-envelope-result'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":1.*"packageSourceRoots":\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-envelope-source-roots'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":2.*"packageDependencies":\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-envelope-dependencies'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"valid".*"packageDependencyIssueCount":0.*"packageDependencyIssues":\[\]' "$STAGE0_PKG_DECLARED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-package-envelope-validation'
 
 printf 'stage0-pkg-declared-dependencies-workspace-command=%s pkg inspect --workspace %s/tests/fixtures/workspace_declared_dependencies --target %s\n' "$STAGE0_BINARY" "$REPO_ROOT" "$TARGET_ID"
 if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg inspect --workspace "$REPO_ROOT/tests/fixtures/workspace_declared_dependencies" --target "$TARGET_ID" >"$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 2>&1; then
@@ -4824,7 +4882,7 @@ require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_d
 require_output_pattern '^package-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-manifest-path'
 require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-workflow-status'
 require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-manifest-status'
-require_output_pattern '^package-lock-status=deferred$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-lock-status'
+require_output_pattern '^package-lock-status=missing$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-lock-status'
 require_output_pattern '^package-install-plan-status=deferred$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-install-plan-status'
 require_output_pattern '^package-workflow-manifest-path=.*/tests/fixtures/workspace_declared_dependencies/app/nextpas\.package\.toml$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-workflow-manifest-path'
 require_output_pattern '^package-root-path=.*/tests/fixtures/workspace_declared_dependencies/app$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-root-path'
@@ -4834,6 +4892,9 @@ require_output_pattern '^package-source-root-count=1$' "$STAGE0_PKG_DECLARED_DEP
 require_output_pattern '^package-source-roots=\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-source-roots'
 require_output_pattern '^package-dependency-count=2$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-dependency-count'
 require_output_pattern '^package-dependencies=\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-dependencies'
+require_output_pattern '^package-dependency-validation-status=valid$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-validation-status'
+require_output_pattern '^package-dependency-issue-count=0$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-issue-count'
+require_output_pattern '^package-dependency-issues=\[\]$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-issues'
 require_output_pattern '^status=success$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-success-status'
 require_output_pattern '^result=success$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-success-result'
 require_output_pattern '^command-outcome=success$' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-command-outcome'
@@ -4843,7 +4904,43 @@ require_output_pattern '^command-envelope=.*"packageManifestPath":".*/tests/fixt
 require_output_pattern '^command-envelope=.*"packageWorkflowStatus":"ready".*"packageManifestStatus":"ready".*"packageInstallPlanStatus":"deferred".*"packageSourceRootCount":1' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-envelope-workflow'
 require_output_pattern '^command-envelope=.*"packageSourceRootCount":1.*"packageSourceRoots":\[".*/tests/fixtures/workspace_declared_dependencies/app/src"\]' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-envelope-source-roots'
 require_output_pattern '^command-envelope=.*"packageDependencyCount":2.*"packageDependencies":\[\{"name":"nextpas\.ui\.runtime","requirement":">=0\.1\.0, <0\.2\.0"\},\{"name":"nextpas\.graphics","requirement":">=0\.1\.0"\}\]' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-envelope-dependencies'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"valid".*"packageDependencyIssueCount":0.*"packageDependencyIssues":\[\]' "$STAGE0_PKG_DECLARED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-declared-dependencies-workspace-envelope-validation'
 printf 'stage0-pkg-declared-dependencies-check=pass\n'
+
+printf 'stage0-pkg-malformed-dependencies-check=running\n'
+printf 'stage0-pkg-malformed-dependencies-package-command=%s pkg inspect --workspace %s --target %s\n' "$STAGE0_BINARY" "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT" "$TARGET_ID"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg inspect --workspace "$MALFORMED_DEPENDENCY_PACKAGE_FIXTURE_ROOT" --target "$TARGET_ID" >"$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT"
+  fail 'stage0-pkg-malformed-dependencies-package-failed'
+fi
+cat "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-command'
+require_output_pattern '^selector=inspect$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-selector'
+require_output_pattern '^workspace-root=.*/tests/fixtures/workspace_malformed_dependencies/app$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-root'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-workflow-status'
+require_output_pattern '^package-manifest-status=ready$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-manifest-status'
+require_output_pattern '^package-dependency-count=6$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-dependency-count'
+require_output_pattern '^package-dependency-validation-status=invalid$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-validation-status'
+require_output_pattern '^package-dependency-issue-count=5$' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-issue-count'
+require_output_pattern '^package-dependency-issues=.*"name":"nextpas\.invalid\.caret".*"requirement":"\^0\.1\.0".*"name":"nextpas\.invalid\.twiddle".*"requirement":"~>0\.1".*"name":"nextpas\.invalid\.missing-version".*"requirement":">=".+"name":"nextpas\.invalid\.union".*"requirement":">=0\.1\.0 \|\| <0\.2\.0".*"name":"nextpas\.invalid\.empty".*"requirement":""' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-issues'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"invalid".*"packageDependencyIssueCount":5.*"packageDependencyIssues":\[.*"nextpas\.invalid\.caret".*"nextpas\.invalid\.empty"' "$STAGE0_PKG_MALFORMED_DEPS_PACKAGE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-package-envelope-validation'
+
+printf 'stage0-pkg-malformed-dependencies-workspace-command=%s pkg inspect --workspace %s --target %s\n' "$STAGE0_BINARY" "$MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT" "$TARGET_ID"
+if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" pkg inspect --workspace "$MALFORMED_DEPENDENCY_WORKSPACE_FIXTURE_ROOT" --target "$TARGET_ID" >"$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 2>&1; then
+  cat "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT"
+  fail 'stage0-pkg-malformed-dependencies-workspace-failed'
+fi
+cat "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT"
+require_output_pattern '^command=pkg$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-command'
+require_output_pattern '^selector=inspect$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-selector'
+require_output_pattern '^workspace-root=.*/tests/fixtures/workspace_malformed_dependencies$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-root'
+require_output_pattern '^workspace-descriptor-path=.*/tests/fixtures/workspace_malformed_dependencies/nextpas\.workspace\.toml$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-descriptor-path'
+require_output_pattern '^package-workflow-status=ready$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-workflow-status'
+require_output_pattern '^package-dependency-count=6$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-dependency-count'
+require_output_pattern '^package-dependency-validation-status=invalid$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-validation-status'
+require_output_pattern '^package-dependency-issue-count=5$' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-issue-count'
+require_output_pattern '^command-envelope=.*"packageDependencyValidationStatus":"invalid".*"packageDependencyIssueCount":5.*"packageDependencyIssues":\[.*"nextpas\.invalid\.caret".*"nextpas\.invalid\.empty"' "$STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT" 'missing-stage0-pkg-malformed-dependencies-workspace-envelope-validation'
+printf 'stage0-pkg-malformed-dependencies-check=pass\n'
 
 printf 'stage0-pkg-invalid-arguments-check=running\n'
 printf 'stage0-pkg-invalid-arguments-command=%s pkg\n' "$STAGE0_BINARY"
@@ -4904,6 +5001,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmIfVarProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

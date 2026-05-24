@@ -145,6 +145,9 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-source-roots`
 - `package-dependency-count`
 - `package-dependencies`
+- `package-dependency-validation-status`
+- `package-dependency-issue-count`
+- `package-dependency-issues`
 - 缺少 package truth 时还会出现 `doctor.package-workspace-missing`
 - workspace descriptor root 指向 member package 时还会稳定投影
   `workspace-descriptor-path` 与 member package detail fields
@@ -180,7 +183,7 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-manifest-status=ready|missing`
 - `workspace-descriptor-path=<path>`（有值时）
 - `package-manifest-path=<path>`（有值时）
-- `package-lock-status=deferred`
+- `package-lock-status=ready|missing`
 - `package-workflow-manifest-path=<path>`
 - `package-root-path=<path>`
 - `package-name=<name>`
@@ -189,6 +192,9 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 - `package-source-roots=<json-array>`
 - `package-dependency-count=<count>`
 - `package-dependencies=<json-array>`
+- `package-dependency-validation-status=valid|invalid|missing`
+- `package-dependency-issue-count=<count>`
+- `package-dependency-issues=<json-array>`
 - `package-install-plan-status=deferred`
 
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
@@ -196,7 +202,8 @@ runtime state，不做健康判定，也不修改环境，`doctor` 则复用同�
 package manifest truth 投影为只读 package workflow 结果。
 当前 promotion gate 同时覆盖 package manifest root 与 workspace descriptor root 解析到 member
 package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots`、
-`package-dependencies` / `packageDependencies` 明细，避免
+`package-dependencies` / `packageDependencies` 明细，以及 dependency requirement validation
+status / issue detail，避免
 `pkg inspect` 和 `doctor` 对 workspace membership 或 source roots 形成两套解释。
 
 在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
@@ -771,18 +778,21 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `distribution-status=incomplete|ready`、`stage0EnvStatusCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass`、
 `stage0DoctorPackageWorkspaceCheck=pass`、`stage0DoctorWorkspaceMemberCheck=pass` 与
-`stage0DoctorDeclaredDependenciesCheck=pass`、`stage0DoctorInvalidArgumentsCheck=pass`、
+`stage0DoctorDeclaredDependenciesCheck=pass`、`stage0DoctorMalformedDependenciesCheck=pass`、
+`stage0DoctorInvalidArgumentsCheck=pass`、
 `query-kind=symbols`、
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
 `query-scopes=<json-array>`、`query-types=<json-array>`、
 `stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
-`package-lock-status=deferred`、`package-workflow-manifest-path=<path>`、
+`package-lock-status=ready|missing`、`package-workflow-manifest-path=<path>`、
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
 `package-source-root-count=<non-zero>`、`package-source-roots=<json-array>`、
+`package-dependency-validation-status=valid|invalid|missing`、
 `package-install-plan-status=deferred`、
 `stage0PkgCheck=pass`、`stage0PkgWorkspaceMemberCheck=pass` 与
-`stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
+`stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgMalformedDependenciesCheck=pass`、
+`stage0PkgInvalidArgumentsCheck=pass`，确保当前最小
 `env` / `doctor` / `query` / `pkg` surface 也进入正式 gate。
 
 这意味着本地验证与 Linux CI 不应该再各自拼装另一套 `stage0` 成功路径。

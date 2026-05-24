@@ -1,0 +1,14 @@
+[package]
+name = "tests.workspace-malformed-dependencies.app"
+version = "0.1.0"
+
+[sources]
+roots = ["src"]
+
+[dependencies]
+"nextpas.invalid.caret" = { version = "^0.1.0" }
+"nextpas.invalid.twiddle" = { version = "~>0.1" }
+"nextpas.invalid.missing-version" = { version = ">=" }
+"nextpas.invalid.union" = { version = ">=0.1.0 || <0.2.0" }
+"nextpas.invalid.empty" = { version = "" }
+"nextpas.graphics" = { version = ">=0.1.0" }

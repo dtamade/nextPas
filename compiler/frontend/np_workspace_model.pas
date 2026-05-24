@@ -18,6 +18,7 @@ type
     WorkspaceMemberPath: string;
     SourceRoots: TStringArray;
     Dependencies: TPackageDependencyInfoArray;
+    DependencyIssues: TPackageDependencyIssueInfoArray;
   end;
 
   TTargetSelection = record
@@ -236,6 +237,7 @@ begin
     Result.WorkspaceMemberPath := '';
     SetLength(Result.SourceRoots, 0);
     SetLength(Result.Dependencies, 0);
+    SetLength(Result.DependencyIssues, 0);
     Exit;
   end;
 
@@ -374,9 +376,10 @@ begin
     if Result.FWorkspaceDescriptorPath <> '' then
       PackageRef.WorkspaceMemberPath := PackageInfo.PackageRootPath
     else
-      PackageRef.WorkspaceMemberPath := '';
+    PackageRef.WorkspaceMemberPath := '';
     PackageRef.SourceRoots := PackageInfo.SourceRoots;
     PackageRef.Dependencies := PackageInfo.Dependencies;
+    PackageRef.DependencyIssues := PackageInfo.DependencyIssues;
 
     SetLength(Result.FPackageRefs, Length(Result.FPackageRefs) + 1);
     Result.FPackageRefs[High(Result.FPackageRefs)] := PackageRef;

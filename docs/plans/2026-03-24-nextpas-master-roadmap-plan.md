@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 45` 为准。
+以最新完成的 `Batch 46` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -53,18 +53,17 @@
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryScopes` / `queryTypes`
   side tables，`pkg inspect` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
-  `packageSourceRoots`、`packageDependencyCount`、`packageDependencies` 与
-  `packageInstallPlanStatus`，并继续冻结
+  `packageSourceRoots`、`packageDependencyCount`、`packageDependencies`、
+  `packageDependencyValidationStatus`、`packageDependencyIssueCount`、`packageDependencyIssues` 与
+  `packageInstallPlanStatus`，`packageLockStatus` 现在根据 canonical lockfile 是否存在投影
+  `ready|missing`，并继续冻结
   `packageWorkflowManifestPath`、`packageRootPath`、`packageName`、`packageLockStatus` 与
   `packageLockfilePath`；workspace member fixture 也已让
   `pkg inspect` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 45` 已完成。
-- 当前下一批计划为 `Batch 46 Dependency Requirement Grammar Validation`：把已投影的
-  declared dependency requirement 从 raw string 提升为格式可信、违规可解释的 read-only
-  workflow truth，仍不打开 resolver、fetch/install 或 lockfile write。
+- `Batch 1` 到 `Batch 46` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -105,10 +104,13 @@
   `packageSourceRoots`，让 CLI、IDE 与 automation 不需要回头重读 manifest。`Batch 45` 再把
   `[dependencies]` declared intent 提升为 `package-dependency-count` /
   `package-dependencies` 与 envelope `packageDependencyCount` / `packageDependencies`，但仍不执行
-  dependency resolution、fetch/install 或 lockfile write。下一步优先做 Batch 46：验证
-  dependency requirement 的最小 comparator grammar，并让 malformed dependency intent 在
-  `doctor` / `pkg inspect` 的只读 package workflow projection 中可见、可解释，避免 IDE、CI
-  或 automation 消费不可信的 package declaration。
+  dependency resolution、fetch/install 或 lockfile write。`Batch 46` 则继续把 dependency
+  requirement 的最小 comparator grammar 收进 manifest / workflow truth，并让 malformed
+  dependency intent 通过 `package-dependency-validation-status`、
+  `package-dependency-issue-count`、`package-dependency-issues` 与 envelope camelCase 字段
+  在 `doctor` / `pkg inspect` 中可见、可解释，避免 IDE、CI 或 automation 消费不可信的
+  package declaration。下一步优先继续 richer package workflow / richer query / richer env
+  action 中最高价值的真实功能切片。
 
 ## 执行规则
 
@@ -1612,7 +1614,7 @@ structured finding surface：
   `nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]`
 - 这批故意只做 workspace-model-backed package workflow projection：当前会复用 shared
   workspace model、target facts 与 toolchain binding，并投影 `package-workflow-status=ready|missing`、
-  `package-manifest-status=ready|missing`、`package-lock-status=deferred`、
+  `package-manifest-status=ready|missing`、`package-lock-status=ready|missing`、
   `package-workflow-manifest-path=<path>`、`package-root-path=<path>`、`package-name=<name>`、
   `package-lockfile-path=<path>`、`package-source-root-count=<count>`、
   `package-source-roots=<json-array>` 与

@@ -195,7 +195,8 @@ open document overlay、incremental invalidation 或 IDE integration。
 继续加固。promotion gate 同时覆盖缺失 package truth 的 repo root、ready package truth 的
 package manifest fixture，以及 workspace descriptor root 解析到 member package 的 ready
 fixture，确保合法 package workspace 不会误报 `doctor.package-workspace-missing`，也不会把
-workspace root 和 member package root 混为一谈。
+workspace root 和 member package root 混为一谈。`package-lock-status` 现在会根据 canonical
+`nextpas.lock` 是否存在投影 `ready|missing`，而不是把 lock truth 一律压成 deferred。
 
 ## `stage0 query symbols` 提供最小只读 semantic query
 

@@ -145,7 +145,8 @@ nextPas 在这里进一步冻结：
 
 - manifest truth 可以如实投影 `ready|missing`、manifest path、package root、package name 与
   source root count
-- lock truth 当前只冻结 canonical path `<workspace>/nextpas.lock` 与 `status=deferred`
+- lock truth 当前只冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否存在投影
+  `status=ready|missing`
 - install plan truth 当前只冻结 workspace/package provenance 与 `status=deferred`
 - 这批刻意不执行 registry lookup、fetch、dependency solver、install placement 或 lockfile write
 
@@ -250,6 +251,8 @@ preview 私有缓存补出来。package workflow 在这里继续把这条边界�
 
 - dependency requirement string 当前最小支持 `=`、`>`、`>=`、`<`、`<=`
 - 多个 comparator 用逗号表达 intersection，例如 `>=0.1.0, <0.2.0`
+- malformed requirement 必须作为 package workflow truth 暴露 validation status 与 issue detail，
+  不能被 parser、`doctor` 或 `pkg inspect` 静默吞掉
 - 第一阶段不要求 union range、feature flag、optional dependency、target-specific dependency table
   或复杂 solver annotation
 - compatibility hint 当前最小只推荐 `[compatibility].targets = [...]`

@@ -906,6 +906,22 @@ begin
     'package-dependencies',
     AContext.DependenciesJson
   );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-dependency-validation-status',
+    AContext.DependencyValidationStatus
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-dependency-issue-count',
+    AContext.DependencyIssueCount,
+    AContext.HasDependencyIssueCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-dependency-issues',
+    AContext.DependencyIssuesJson
+  );
 end;
 procedure PrintDiagnosticsDetailProjection(const UseStdErr: Boolean; const ADiagnostics: TDiagnosticProjectionContext);
 begin

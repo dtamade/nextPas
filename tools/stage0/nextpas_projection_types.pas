@@ -218,6 +218,10 @@ type
     DependencyCount: LongInt;
     HasDependencyCount: Boolean;
     DependenciesJson: string;
+    DependencyValidationStatus: string;
+    DependencyIssueCount: LongInt;
+    HasDependencyIssueCount: Boolean;
+    DependencyIssuesJson: string;
   end;
 
   TNextPasState = record

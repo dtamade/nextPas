@@ -17,6 +17,9 @@ type
     SourceRoots: TStringArray;
     DependencyCount: LongInt;
     Dependencies: TPackageDependencyInfoArray;
+    DependencyValidationStatus: string;
+    DependencyIssueCount: LongInt;
+    DependencyIssues: TPackageDependencyIssueInfoArray;
   end;
 
   TPackageLockTruth = record
@@ -37,6 +40,8 @@ type
     InstallPlanTruth: TPackageInstallPlanTruth;
     PackageSourceRootCount: LongInt;
     PackageDependencyCount: LongInt;
+    PackageDependencyValidationStatus: string;
+    PackageDependencyIssueCount: LongInt;
   end;
 
 function BuildPackageWorkflowTruth(
@@ -84,9 +89,21 @@ begin
   Result.ManifestTruth.SourceRoots := AManifestInfo.SourceRoots;
   Result.ManifestTruth.DependencyCount := Length(AManifestInfo.Dependencies);
   Result.ManifestTruth.Dependencies := AManifestInfo.Dependencies;
+  Result.ManifestTruth.DependencyIssueCount :=
+    Length(AManifestInfo.DependencyIssues);
+  Result.ManifestTruth.DependencyIssues := AManifestInfo.DependencyIssues;
+  if not ManifestReady then
+    Result.ManifestTruth.DependencyValidationStatus := 'missing'
+  else if Result.ManifestTruth.DependencyIssueCount > 0 then
+    Result.ManifestTruth.DependencyValidationStatus := 'invalid'
+  else
+    Result.ManifestTruth.DependencyValidationStatus := 'valid';
 
-  Result.LockTruth.Status := 'deferred';
   Result.LockTruth.LockfilePath := ResolveLockfilePath(WorkspaceRootPath);
+  if FileExists(Result.LockTruth.LockfilePath) then
+    Result.LockTruth.Status := 'ready'
+  else
+    Result.LockTruth.Status := 'missing';
 
   Result.InstallPlanTruth.Status := 'deferred';
   Result.InstallPlanTruth.WorkspaceRootPath := WorkspaceRootPath;
@@ -94,6 +111,9 @@ begin
 
   Result.PackageSourceRootCount := Result.ManifestTruth.SourceRootCount;
   Result.PackageDependencyCount := Result.ManifestTruth.DependencyCount;
+  Result.PackageDependencyValidationStatus :=
+    Result.ManifestTruth.DependencyValidationStatus;
+  Result.PackageDependencyIssueCount := Result.ManifestTruth.DependencyIssueCount;
   if ManifestReady then
     Result.Status := 'ready'
   else
@@ -112,6 +132,7 @@ begin
   ManifestInfo.PackageName := '';
   SetLength(ManifestInfo.SourceRoots, 0);
   SetLength(ManifestInfo.Dependencies, 0);
+  SetLength(ManifestInfo.DependencyIssues, 0);
 
   if (AWorkspaceModel <> nil) and (AWorkspaceModel.PackageRefCount > 0) then
   begin
@@ -121,6 +142,7 @@ begin
     ManifestInfo.PackageName := PackageRef.PackageName;
     ManifestInfo.SourceRoots := PackageRef.SourceRoots;
     ManifestInfo.Dependencies := PackageRef.Dependencies;
+    ManifestInfo.DependencyIssues := PackageRef.DependencyIssues;
   end;
 
   if AWorkspaceModel <> nil then
