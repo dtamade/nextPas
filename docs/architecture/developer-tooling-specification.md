@@ -341,10 +341,12 @@ semantic projection 与只读 `pkg inspect / pkg plan / pkg graph` package workf
   package manager、fetch/install/update/publish workflow 或 dependency resolution；其中 `pkg plan`
   是 install plan preflight 的专用只读面，它的 promotion gate 当前直接覆盖 package manifest
   ready path、workspace member lock-missing blocked path、package-free manifest-missing missing
-  path、dependency-invalid blocked path 与 source-roots-missing blocked path；`pkg inspect / pkg graph`
+  path、dependency-invalid blocked path、source-roots-missing blocked path 与 invalid-lock blocked path；
+  `pkg inspect / pkg graph`
   继续冻结 workspace descriptor root 解析到 member package 的
   ready 路径、source roots、declared dependencies 明细以及 package graph root/dependency nodes
-  与 edges 的只读投影
+  与 edges 的只读投影；canonical `nextpas.lock` 当前只读解析最小 v1 detail，公开
+  `missing|ready|invalid`、format version、entries 与 issues，不写回 lockfile
 
 也就是说，今天不做全命令树，不等于以后允许结构分叉。
 

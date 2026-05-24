@@ -45,10 +45,12 @@ build/test/env/doctor/query/pkg 工具入口表面；其中 `env status` 投影�
 resolution sidecar，不承担 `bootstrap`、下载、解包或 runtime SDK 安装动作，
 `query symbols` 只复用 compilation session 的语义结果，不假装完整 language service 已经落地。
 `pkg inspect / pkg plan / pkg graph` 只复用 workspace model 与 package manifest truth 做只读
-package workflow 投影，不提前执行 resolver、fetch/install 或 lockfile mutation。`pkg plan`
+package workflow 投影，不提前执行 resolver、fetch/install 或 lockfile mutation。canonical
+`nextpas.lock` 当前只读解析最小 v1 detail，公开 `missing|ready|invalid`、format version、
+entries 与 issues。`pkg plan`
 是 install plan preflight 的专用只读面，直接公开 ready、blocked 与 missing 三态及 blocker
 detail；当前 gate 已覆盖 manifest-missing、dependency-invalid、source-roots-missing 与
-lock-missing 四类 preflight 终止原因。`pkg graph` 则把同一份 truth 再展开成 root/dependency
+lock-invalid、lock-missing 五类 preflight 终止原因。`pkg graph` 则把同一份 truth 再展开成 root/dependency
 nodes 与 edges。
 
 ## 这里必须和谁对齐

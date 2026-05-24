@@ -1,1 +1,6 @@
-# nextpas lock fixture
+[lockfile]
+format-version = 1
+
+[[package]]
+name = "nextpas.graphics"
+version = "0.1.0"

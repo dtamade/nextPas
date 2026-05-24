@@ -141,14 +141,17 @@ nextPas 在这里进一步冻结：
 当前仓库里的最小真实落点已经先有了 compiler-owned truth skeleton：
 `compiler/frontend/np_package_workflow.pas` 现阶段只持有 `TPackageManifestTruth`、
 `TPackageLockTruth`、`TPackageInstallPlanTruth` 与 `TPackageWorkflowTruth`，并且只消费
-`np_package_manifest.pas` 已有的 `TPackageManifestInfo`。这批 reality 先冻结四件事：
+`np_package_manifest.pas` 已有的 `TPackageManifestInfo` 与 `np_package_lock.pas` 的最小
+lockfile v1 只读 parser。这批 reality 先冻结四件事：
 
 - manifest truth 可以如实投影 `ready|missing`、manifest path、package root、package name 与
   source root count
-- lock truth 当前只冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否存在投影
-  `status=ready|missing`
+- lock truth 当前冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否缺失、是否符合
+  最小 v1 grammar 投影 `status=missing|ready|invalid`，同时公开 format version、package entries
+  与 validation issues
 - install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
-  与必要的 blocker code/message
+  与必要的 blocker code/message；lockfile invalid 会在 lock missing 之前阻塞为
+  `package-lock-invalid`
 - 这批刻意不执行 registry lookup、fetch、dependency solver、install placement 或 lockfile write
 
 ## repository、registry、source、mirror 必须分角色，而不是混成一个词
@@ -325,6 +328,21 @@ manifest 负责表达“想要什么”，那 lock 就必须能明确回答“�
 - `PackageLock` 可以保留 `declared_provenance` 这类 machine-owned projection，但不拥有 mirror
   preference 或 install repository policy
 - 它只保留 resolution replay 真正需要的投影，而不是再长成第二份 package database
+
+当前实现先落地最小可解释 v1 skeleton，而不是完整 resolver snapshot：
+
+```toml
+[lockfile]
+format-version = 1
+
+[[package]]
+name = "nextpas.graphics"
+version = "0.1.0"
+```
+
+这份 skeleton 只让 `pkg inspect` / `pkg plan` 区分 missing、ready 和 invalid，并能解释
+invalid 的具体 issue；target snapshot、provenance、digest 和 dependency selection 仍属于后续
+resolver / lock writer 批次。
 
 ## fetched source roots、build roots、cache roots、install roots 必须各自有正式语义
 

@@ -15,6 +15,52 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 56 Package Lockfile v1 Read-only Detail
+
+### Goal
+
+把 canonical `nextpas.lock` 从“存在即 ready”的布尔事实推进到最小 v1 只读 detail：
+CLI / IDE / automation 应能直接看到 lockfile format version、package entries 与 validation
+issues，并且 `pkg plan` 在 lockfile 无效时必须停在明确的 `package-lock-invalid` blocker。
+
+### Architecture Decision
+
+本批次新增 `compiler/frontend/np_package_lock.pas`，但仍保持 read-only boundary：
+
+- 当前只读取最小 TOML v1：`[lockfile] format-version = 1` 与 `[[package]] name/version`
+- `package-lock-status` 扩展为 `missing|ready|invalid`
+- install-plan blocker 顺序更新为 manifest missing -> dependency invalid -> source roots missing ->
+  lock invalid -> lock missing -> ready
+- 不做 resolver、fetch/install、publish、lockfile writer 或 lockfile mutation
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 新增 lock detail / invalid lock fixtures，并把既有 ready lock fixtures 升级为最小 v1 TOML
+- [x] 新增 `np_package_lock` 只读 parser 与 validation issue model
+- [x] 扩展 package workflow truth、line output 与 command envelope 的 lock detail 投影
+- [x] 扩展 `build/verify_local.sh`，覆盖 lock detail ready path 与 invalid-lock blocked plan path
+- [x] 同步 package workflow / workspace file / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh `bash build/verify_local.sh` 先失败在
+  `missing-stage0-pkg-lock-detail-format-version`
+- GREEN: fresh `bash build/verify_local.sh` 通过，确认 `stage0PkgLockDetailCheck=pass`、
+  `stage0PkgPlanLockInvalidCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`
+
+### Non-goals
+
+- 不做 dependency resolution、fetch、install 或 publish
+- 不写入或重写 `nextpas.lock`
+- 不把最小 v1 skeleton 扩展成完整 resolver snapshot grammar
+
 ## Addendum: 2026-05-25 Batch 55 Package Plan Blocker Matrix Gates
 
 ### Goal

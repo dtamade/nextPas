@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- `nextpas.lock` 现在有最小 v1 只读 parser：当前实现读取 `[lockfile] format-version = 1` 与
+  `[[package]] name/version`，并通过 `TPackageLockTruth` 投影 format version、entries 与 issues。
+- `package-lock-status` 已从存在性 truth 扩展为 `missing|ready|invalid`；invalid lockfile 不再被误报为
+  ready，也不会继续落入 `package-lock-missing`。
+- invalid lock fixture 会稳定投影 `package-install-plan-status=blocked`、
+  `package-install-plan-blocker-code=package-lock-invalid` 与
+  `package-install-plan-blocker-message=canonical package lockfile is invalid`。
+- `build/verify_local.sh` 已新增 `stage0PkgLockDetailCheck=pass` 与
+  `stage0PkgPlanLockInvalidCheck=pass`，分别冻结 lock detail ready path 与 invalid-lock blocked plan path。
+- Batch 56 仍然不做 dependency resolution、fetch/install、publish 或 lockfile write；它只把 canonical
+  lockfile 的最小可解释读模型纳入 package workflow truth。
 - `pkg plan` 的 preflight blocker matrix 现在被完整 gate 到当前 truth 已拥有的四个终止原因：
   `package-manifest-missing`、`package-dependencies-invalid`、
   `package-source-roots-missing` 与 `package-lock-missing`。

@@ -5,7 +5,7 @@ unit np_package_workflow;
 interface
 
 uses
-  SysUtils, np_package_manifest, np_workspace_model;
+  SysUtils, np_package_manifest, np_package_lock, np_workspace_model;
 
 type
   TPackageManifestTruth = record
@@ -25,6 +25,11 @@ type
   TPackageLockTruth = record
     Status: string;
     LockfilePath: string;
+    FormatVersion: LongInt;
+    EntryCount: LongInt;
+    Entries: TPackageLockEntryInfoArray;
+    IssueCount: LongInt;
+    Issues: TPackageLockIssueInfoArray;
   end;
 
   TPackageInstallPlanTruth = record
@@ -211,6 +216,12 @@ begin
 
   Result.BlockerCode := 'package-lock-missing';
   Result.BlockerMessage := 'canonical package lockfile is missing';
+  if ALockTruth.Status = 'invalid' then
+  begin
+    Result.BlockerCode := 'package-lock-invalid';
+    Result.BlockerMessage := 'canonical package lockfile is invalid';
+    Exit;
+  end;
   if ALockTruth.Status <> 'ready' then
     Exit;
 
@@ -234,6 +245,7 @@ function BuildPackageWorkflowTruth(
   const AWorkspaceRootPath: string
 ): TPackageWorkflowTruth;
 var
+  LockInfo: TPackageLockInfo;
   ManifestReady: Boolean;
   WorkspaceRootPath: string;
 begin
@@ -264,11 +276,14 @@ begin
   else
     Result.ManifestTruth.DependencyValidationStatus := 'valid';
 
-  Result.LockTruth.LockfilePath := ResolveLockfilePath(WorkspaceRootPath);
-  if FileExists(Result.LockTruth.LockfilePath) then
-    Result.LockTruth.Status := 'ready'
-  else
-    Result.LockTruth.Status := 'missing';
+  LockInfo := LoadPackageLockInfo(ResolveLockfilePath(WorkspaceRootPath));
+  Result.LockTruth.Status := LockInfo.Status;
+  Result.LockTruth.LockfilePath := LockInfo.LockfilePath;
+  Result.LockTruth.FormatVersion := LockInfo.FormatVersion;
+  Result.LockTruth.EntryCount := Length(LockInfo.Entries);
+  Result.LockTruth.Entries := LockInfo.Entries;
+  Result.LockTruth.IssueCount := Length(LockInfo.Issues);
+  Result.LockTruth.Issues := LockInfo.Issues;
 
   Result.InstallPlanTruth := BuildPackageInstallPlanTruth(
     Result.ManifestTruth,

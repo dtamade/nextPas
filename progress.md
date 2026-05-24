@@ -3,6 +3,38 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 56 package lockfile v1 read-only detail)
+
+- **Status:** completed
+- Objective:
+  - 把 `nextpas.lock` 从存在性 truth 推进到最小 v1 只读 detail，让 `pkg inspect` / `pkg plan`
+    直接投影 lock format version、entries 与 validation issues。
+- Baseline:
+  - Batch 55 已经把 `pkg plan` 的 blocker matrix 覆盖到 manifest missing、dependency invalid、
+    source roots missing 与 lock missing。
+  - `TPackageLockTruth` 仍只根据 canonical `nextpas.lock` 是否存在投影 `ready|missing`，
+    无法区分 lockfile 内容无效与 lockfile 缺失。
+- Actions taken:
+  - 新增 `compiler/frontend/np_package_lock.pas`，只读解析最小 TOML v1：
+    `[lockfile] format-version = 1` 与 `[[package]] name/version`。
+  - 将 `TPackageLockTruth` 扩展为 `missing|ready|invalid`，并携带 format version、entry count、
+    entries、issue count 与 issues。
+  - 将 install-plan blocker 顺序扩展为 lock invalid 优先于 lock missing；无效 lockfile 会投影
+    `package-install-plan-blocker-code=package-lock-invalid`。
+  - 扩展 package projection context、line output 与 command envelope，新增
+    `package-lock-format-version`、`package-lock-entry-count`、`package-lock-entries`、
+    `package-lock-issue-count` 与 `package-lock-issues`。
+  - 新增 `package_lock_detail` 与 `package_lock_invalid` fixtures，并把既有 ready lock fixtures
+    升级为最小 v1 TOML。
+  - 同步 package workflow、workspace file、developer tooling、stage0 driver、tools README、
+    task_plan 与 findings。
+- Verification:
+  - RED：新增 gates 后，fresh `bash build/verify_local.sh` 失败在
+    `missing-stage0-pkg-lock-detail-format-version`，确认测试先捕捉到了缺失字段。
+  - GREEN：实现后 fresh `bash build/verify_local.sh` 通过，最终输出
+    `stage0PkgLockDetailCheck=pass`、`stage0PkgPlanLockInvalidCheck=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+
 ## Session: 2026-05-25 (Batch 55 package plan blocker matrix gates)
 
 - **Status:** completed

@@ -220,6 +220,14 @@ type
     WorkflowStatus: string;
     ManifestStatus: string;
     LockStatus: string;
+    LockFormatVersion: LongInt;
+    HasLockFormatVersion: Boolean;
+    LockEntryCount: LongInt;
+    HasLockEntryCount: Boolean;
+    LockEntriesJson: string;
+    LockIssueCount: LongInt;
+    HasLockIssueCount: Boolean;
+    LockIssuesJson: string;
     InstallPlanStatus: string;
     InstallPlanBlockerCode: string;
     InstallPlanBlockerMessage: string;

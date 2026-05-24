@@ -685,6 +685,28 @@ begin
     AContext.ManifestStatus
   );
   AppendJsonStringField(AFields, 'packageLockStatus', AContext.LockStatus);
+  AppendJsonIntegerField(
+    AFields,
+    'packageLockFormatVersion',
+    AContext.LockFormatVersion,
+    AContext.HasLockFormatVersion
+  );
+  AppendJsonIntegerField(
+    AFields,
+    'packageLockEntryCount',
+    AContext.LockEntryCount,
+    AContext.HasLockEntryCount
+  );
+  if AContext.LockEntriesJson <> '' then
+    AppendJsonField(AFields, 'packageLockEntries', AContext.LockEntriesJson);
+  AppendJsonIntegerField(
+    AFields,
+    'packageLockIssueCount',
+    AContext.LockIssueCount,
+    AContext.HasLockIssueCount
+  );
+  if AContext.LockIssuesJson <> '' then
+    AppendJsonField(AFields, 'packageLockIssues', AContext.LockIssuesJson);
   AppendJsonStringField(
     AFields,
     'packageInstallPlanStatus',

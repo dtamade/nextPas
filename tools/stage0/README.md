@@ -246,7 +246,12 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 - `package-manifest-status=ready|missing`
 - `workspace-descriptor-path=<path>`（有值时）
 - `package-manifest-path=<path>`（有值时）
-- `package-lock-status=ready|missing`
+- `package-lock-status=missing|ready|invalid`
+- `package-lock-format-version=<version>`（有值时）
+- `package-lock-entry-count=<count>`
+- `package-lock-entries=<json-array>`
+- `package-lock-issue-count=<count>`
+- `package-lock-issues=<json-array>`
 - `package-workflow-manifest-path=<path>`
 - `package-root-path=<path>`
 - `package-name=<name>`
@@ -268,17 +273,18 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 - `package-install-plan-blocker-message=<message>`（有 blocker 时）
 
 这条 surface 当前不是完整 package manager，也不执行 fetch、install、dependency resolution
-或 lockfile write。它只把 `WorkspaceModel` 与 `PackageManifestInfo` 已经拥有的
-package manifest truth 投影为只读 package workflow 结果；`pkg graph` 还会把同一份 truth
+或 lockfile write。它只把 `WorkspaceModel`、`PackageManifestInfo` 与最小 `nextpas.lock` v1
+read-only parser 已经拥有的 truth 投影为只读 package workflow 结果；`pkg graph` 还会把同一份 truth
 展开成 root node、declared-dependency nodes 与 `declared-dependency` edges。
 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
 lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid blocked
-path 与 source-roots-missing blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
+path、source-roots-missing blocked path 与 invalid-lock blocked path；`pkg inspect / pkg graph` promotion gate 继续覆盖
 package manifest root 与 workspace descriptor root 解析到 member
 package 的 ready 路径，并冻结 `package-source-roots` / `packageSourceRoots`、
-`package-dependencies` / `packageDependencies` 明细，以及 dependency requirement validation
-status / issue detail，避免 `pkg inspect`、`pkg plan`、`pkg graph` 和 `doctor` 对 workspace
-membership、source roots 或 install-plan blocker 形成多套解释。
+`package-dependencies` / `packageDependencies` 明细、lockfile format/entry/issue detail，以及
+dependency requirement validation status / issue detail，避免 `pkg inspect`、`pkg plan`、
+`pkg graph` 和 `doctor` 对 workspace membership、source roots、lockfile validity 或
+install-plan blocker 形成多套解释。
 
 在 `Batch 3/4/5/6/7` 之后，`stage0 build` 还会额外投影最小 compiler kernel + syntax /
 resolution / sema / MIR / backend / toolchain skeleton：
@@ -857,7 +863,8 @@ install-plan preflight 样本、package-free 临时 workspace 下的 `nextpas pk
 manifest-missing missing preflight 样本、malformed dependency fixture 下的
 `nextpas pkg plan --workspace ...` dependency-invalid blocked preflight 样本、manifest/lock ready
 但 source roots 为空的 `nextpas pkg plan --workspace ...` source-roots-missing blocked preflight
-样本、workspace member fixture 下的
+样本、invalid lock fixture 下的 `nextpas pkg plan --workspace ...` lock-invalid blocked preflight
+样本、package lock detail fixture 下的 `nextpas pkg inspect --workspace ...` lock detail 样本、workspace member fixture 下的
 `nextpas pkg graph --workspace ...` 正向 package graph 样本、裸 `nextpas pkg`，冻结
 `environment-readiness=incomplete`、
 `environment-status=incomplete`、`runtime-sdk-status=missing`、
@@ -876,16 +883,20 @@ manifest-missing missing preflight 样本、malformed dependency fixture 下的
 `query-scopes=<json-array>`、`query-types=<json-array>`、
 `stage0QueryCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
-`package-lock-status=ready|missing`、`package-workflow-manifest-path=<path>`、
+`package-lock-status=missing|ready|invalid`、`package-lock-format-version=<version>`、
+`package-lock-entry-count=<count>`、`package-lock-entries=<json-array>`、
+`package-lock-issue-count=<count>`、`package-lock-issues=<json-array>`、
+`package-workflow-manifest-path=<path>`、
 `package-root-path=<path>`、`package-name=<name>`、`package-lockfile-path=<path>`、
 `package-source-root-count=<count>`、`package-source-roots=<json-array>`、
 `package-dependency-validation-status=valid|invalid|missing`、
 `package-install-plan-status=ready|blocked|missing`、
 `package-install-plan-blocker-code` /
 `package-install-plan-blocker-message`、
-`stage0PkgCheck=pass`、`stage0PkgPlanCheck=pass`、`stage0PkgPlanBlockedCheck=pass`、
+`stage0PkgCheck=pass`、`stage0PkgLockDetailCheck=pass`、`stage0PkgPlanCheck=pass`、`stage0PkgPlanBlockedCheck=pass`、
 `stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanDependencyBlockedCheck=pass`、
-`stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanInvalidArgumentsCheck=pass`、
+`stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanLockInvalidCheck=pass`、
+`stage0PkgPlanInvalidArgumentsCheck=pass`、
 `stage0PkgWorkspaceMemberCheck=pass` 与
 `stage0PkgDeclaredDependenciesCheck=pass`、`stage0PkgGraphCheck=pass`、
 `stage0PkgGraphInvalidArgumentsCheck=pass`、

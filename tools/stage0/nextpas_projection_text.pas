@@ -920,6 +920,34 @@ begin
     'package-lock-status',
     AContext.LockStatus
   );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-lock-format-version',
+    AContext.LockFormatVersion,
+    AContext.HasLockFormatVersion
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-lock-entry-count',
+    AContext.LockEntryCount,
+    AContext.HasLockEntryCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-lock-entries',
+    AContext.LockEntriesJson
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
+    'package-lock-issue-count',
+    AContext.LockIssueCount,
+    AContext.HasLockIssueCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-lock-issues',
+    AContext.LockIssuesJson
+  );
   WriteProjectionTextIfPresent(
     UseStdErr,
     'package-install-plan-status',

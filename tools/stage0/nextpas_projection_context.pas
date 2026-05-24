@@ -7,7 +7,7 @@ interface
 uses
   SysUtils, nextpas_projection_types, nextpas_json_helpers,
   np_compilation_session, np_workspace_model, np_package_workflow,
-  np_package_manifest,
+  np_package_manifest, np_package_lock,
   np_toolchain_profiles, target_config;
 
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
@@ -183,6 +183,71 @@ begin
       EntryFields,
       'message',
       JsonString(AValues[Index].Message)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
+function BuildJsonPackageLockEntryArray(
+  const AValues: array of TPackageLockEntryInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'name',
+      JsonString(AValues[Index].Name)
+    );
+    AppendJsonField(
+      EntryFields,
+      'version',
+      JsonString(AValues[Index].Version)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
+function BuildJsonPackageLockIssueArray(
+  const AValues: array of TPackageLockIssueInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'code',
+      JsonString(AValues[Index].Code)
+    );
+    AppendJsonField(
+      EntryFields,
+      'message',
+      JsonString(AValues[Index].Message)
+    );
+    AppendJsonField(
+      EntryFields,
+      'lineText',
+      JsonString(AValues[Index].LineText)
     );
     EntryJson := EntryJson + '{' + EntryFields + '}';
   end;
@@ -521,6 +586,14 @@ begin
   AContext.WorkflowStatus := '';
   AContext.ManifestStatus := '';
   AContext.LockStatus := '';
+  AContext.LockFormatVersion := 0;
+  AContext.HasLockFormatVersion := False;
+  AContext.LockEntryCount := 0;
+  AContext.HasLockEntryCount := False;
+  AContext.LockEntriesJson := '';
+  AContext.LockIssueCount := 0;
+  AContext.HasLockIssueCount := False;
+  AContext.LockIssuesJson := '';
   AContext.InstallPlanStatus := '';
   AContext.InstallPlanBlockerCode := '';
   AContext.InstallPlanBlockerMessage := '';
@@ -796,6 +869,18 @@ begin
   AContext.WorkflowStatus := AWorkflowTruth.Status;
   AContext.ManifestStatus := AWorkflowTruth.ManifestTruth.Status;
   AContext.LockStatus := AWorkflowTruth.LockTruth.Status;
+  AContext.LockFormatVersion := AWorkflowTruth.LockTruth.FormatVersion;
+  AContext.HasLockFormatVersion := AWorkflowTruth.LockTruth.FormatVersion > 0;
+  AContext.LockEntryCount := AWorkflowTruth.LockTruth.EntryCount;
+  AContext.HasLockEntryCount := AWorkflowTruth.LockTruth.Status <> '';
+  AContext.LockEntriesJson := BuildJsonPackageLockEntryArray(
+    AWorkflowTruth.LockTruth.Entries
+  );
+  AContext.LockIssueCount := AWorkflowTruth.LockTruth.IssueCount;
+  AContext.HasLockIssueCount := AWorkflowTruth.LockTruth.Status <> '';
+  AContext.LockIssuesJson := BuildJsonPackageLockIssueArray(
+    AWorkflowTruth.LockTruth.Issues
+  );
   AContext.InstallPlanStatus := AWorkflowTruth.InstallPlanTruth.Status;
   AContext.InstallPlanBlockerCode :=
     AWorkflowTruth.InstallPlanTruth.BlockerCode;

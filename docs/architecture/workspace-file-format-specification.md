@@ -142,9 +142,11 @@ nextPas 在这里先冻结一个明确立场：
 
 当前仓库里的最小真实落点已经先把 lockfile owner/path 作为 typed truth 暴露出来：
 `compiler/frontend/np_package_workflow.pas` 现阶段会把 workspace-scoped canonical
-`nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，并根据文件是否存在投影
-`status=ready|missing`。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，
-对应的读写、resolver snapshot 与 atomic replace 仍未开始实现。
+`nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，并通过
+`compiler/frontend/np_package_lock.pas` 读取最小 v1 TOML skeleton，投影
+`status=missing|ready|invalid`、format version、package entries 与 validation issues。也就是说，
+文件层 ownership 已经先收口成 compiler-owned truth，对应的写入、resolver snapshot 与 atomic
+replace 仍未开始实现。
 
 ## root discovery 必须 deterministic，而且不能靠全树重扫
 
@@ -422,8 +424,8 @@ nextPas 现在不需要一次把整套 package grammar 全锁死，但有几条�
 - lockfile 不拥有 workspace default target，不拥有 IDE state，也不持有 mirror UI 偏好
 
 当前这条 ownership 也已经先在最小 package workflow skeleton 里落成 code-level truth：
-只要调用方给出 workspace root，就能稳定得到 canonical `nextpas.lock` 路径；但这批不会读取、
-创建或改写 lockfile，本质上仍是 non-executing provenance surface。
+只要调用方给出 workspace root，就能稳定得到 canonical `nextpas.lock` 路径，并只读解析最小
+v1 skeleton；但这批不会创建、改写或重写 lockfile，本质上仍是 non-executing provenance surface。
 
 这条边界是为了保证：
 
@@ -435,52 +437,27 @@ nextPas 现在不需要一次把整套 package grammar 全锁死，但有几条�
 
 既然 `nextpas.lock` 是 machine-owned replay point，它就不能只剩“以后 resolver 自己知道怎么写”。
 
-因此 nextPas 当前推荐一份最小、deterministic 的 lockfile skeleton：
+因此 nextPas 当前先落地一份最小、deterministic 的 lockfile v1 skeleton：
 
 ```toml
-schema_version = 1
+[lockfile]
+format-version = 1
 
-[[target_snapshots]]
-target = "linux-x86_64"
-
-[[target_snapshots.packages]]
-name = "nextpas.ui.controls"
-version = "0.1.0"
-declared_provenance = { kind = "workspace" }
-source = "workspace"
-manifest_path = "packages/ui/nextpas.package.toml"
-manifest_digest = "sha256:8c7e..."
-content_locator = "workspace:packages/ui"
-content_digest = "sha256:3f20..."
-dependencies = [
-  { name = "nextpas.ui.runtime", requirement = ">=0.1.0, <0.2.0", selected = "0.1.0" },
-  { name = "nextpas.graphics", requirement = ">=0.1.0", selected = "0.1.1" },
-]
-
-[[target_snapshots.packages]]
+[[package]]
 name = "nextpas.graphics"
-version = "0.1.1"
-declared_provenance = { kind = "registry", registry = "default" }
-source = "registry:default"
-content_locator = "registry+https://packages.nextpas.dev/nextpas.graphics/0.1.1"
-content_digest = "sha256:1a2b..."
+version = "0.1.0"
 ```
 
 这份 skeleton 当前先冻结这些 ownership：
 
-- `schema_version`
+- `lockfile.format-version`
   - machine-owned grammar version，不是 package version
-- `target_snapshots[*].target`
-  - 当前这次 resolution snapshot 的 target key；它不是 workspace default target owner
-- `target_snapshots.packages[*].name` / `version`
+- `package[*].name` / `version`
   - resolved package identity 与 selected version
-- `declared_provenance`
-  - manifest source hint 的 machine-owned projection，方便解释 declaration 与 resolved result 的差异
-- `source` / `manifest_path` / `manifest_digest` / `content_locator` / `content_digest`
-  - provenance 与 replay evidence；它们解释“这次到底解析到了什么内容”
-- `dependencies[*].requirement` / `selected`
-  - 把 author-declared requirement 与 resolver-selected version 并列保存，方便 `doctor`、CI replay
-    和 IDE explainability
+
+target snapshots、declared provenance、source/content digest 与 dependency selected version 仍是
+后续 resolver / lock writer 应该补进来的 replay evidence；Batch 56 只读解析当前最小 skeleton，
+让 tooling 可以诚实区分 missing、ready 与 invalid。
 
 这里继续明确不允许什么：
 
