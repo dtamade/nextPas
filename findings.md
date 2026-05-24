@@ -10,6 +10,15 @@
 
 ## Research Findings
 
+- `env clean` 现在是一个真正的 workspace-local maintenance surface：它只删除
+  `<workspace>/.nextpas/env/selections/<target>.toml` 与
+  `<workspace>/.nextpas/env/resolution/<target>.toml`，并通过
+  `env-clean-status`、`env-clean-change`、`env-clean-selection-path`、
+  `env-clean-resolution-path` 与 `env-clean-removed-count` 投影结果。
+- `env clean` 的 repeat 行为已经被收口为 `unchanged` / `0`，不会因为文件已经不存在而重复报
+  `removed`；同时 `--toolchain-binding` 也被确认为 invalid-option 边界。
+- fresh `bash build/verify_local.sh` 已通过，说明 Batch 51 的 cleanup contract、repeat contract
+  与 invalid-arguments contract 都已经进入正式 promotion path。
 - `env use` 现在已经是真实 mutation surface：它把 workspace-local preferred binding 写进
   `<workspace>/.nextpas/env/selections/<target>.toml`，并把 selection 结果投影到 line-based
   output 与 `command-envelope=<json>`。

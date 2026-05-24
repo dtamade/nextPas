@@ -166,6 +166,12 @@ type
     ResolutionPath: string;
     ResolutionStatus: string;
     SyncChange: string;
+    CleanSelectionPath: string;
+    CleanResolutionPath: string;
+    CleanStatus: string;
+    CleanChange: string;
+    CleanRemovedCount: LongInt;
+    HasCleanRemovedCount: Boolean;
     ToolchainBindingPath: string;
     DistributionBinDir: string;
     DistributionLibDir: string;

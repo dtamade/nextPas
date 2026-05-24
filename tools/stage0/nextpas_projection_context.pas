@@ -369,6 +369,12 @@ begin
   AContext.ResolutionPath := '';
   AContext.ResolutionStatus := '';
   AContext.SyncChange := '';
+  AContext.CleanSelectionPath := '';
+  AContext.CleanResolutionPath := '';
+  AContext.CleanStatus := '';
+  AContext.CleanChange := '';
+  AContext.CleanRemovedCount := 0;
+  AContext.HasCleanRemovedCount := False;
   AContext.ToolchainBindingPath := '';
   AContext.DistributionBinDir := '';
   AContext.DistributionLibDir := '';

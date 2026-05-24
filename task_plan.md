@@ -15,6 +15,44 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-24 Batch 51 Env Clean Workspace-Local Cache Cleanup
+
+### Goal
+
+把 `env` family 的最小维护面继续收口到 workspace-local cleanup：
+
+- 新增 `nextpas env clean --target linux-x86_64 --workspace <root>`
+- `env clean` 只删除 `<workspace>/.nextpas/env/selections/<target>.toml` 与
+  `<workspace>/.nextpas/env/resolution/<target>.toml`
+- 输出与 `command-envelope=<json>` 必须暴露 cleanup path / status / change /
+  removed-count，方便 CLI、IDE 与 automation 判断清理范围
+
+### Architecture Decision
+
+本批次只清理 workspace-local selection / resolution sidecar，不下载、不解包、不安装 runtime SDK，
+不改写 workspace descriptor、package manifest、lockfile 或公开 install result。`env clean` 是显式
+maintenance surface，不是 `env gc`，也不承诺清掉更广义的 metadata/archive/staging bucket。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 确认 `env clean` 只接受 `--target` 与必须的 `--workspace`
+- [x] 实现 `env clean` parser、workspace-local selection/resolution 删除与 line / envelope 投影
+- [x] 扩展 `build/verify_local.sh`，覆盖首次 removed、二次 unchanged 与 invalid-arguments
+- [x] 同步 stage0 / developer tooling / workspace file / distribution specs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Non-goals
+
+- 不做 `env gc`
+- 不下载、不解包、不安装 runtime SDK
+- 不改写 workspace descriptor、package manifest、lockfile
+- 不删除 `units/`、`lib/`、`share/` 或公开 install result
+
 ## Addendum: 2026-05-24 Batch 50 Env Sync Workspace Resolution Cache
 
 ### Goal

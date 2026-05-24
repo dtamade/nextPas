@@ -564,6 +564,8 @@ FPC 的 `.pri`、`fppkg.cfg`、generated manifest 和 package-specific config fi
     派生结果
   - 当前 `stage0 env sync` 已先落地 workspace-local resolution sidecar：
     `env/resolution/<target>.toml`
+- 当前 `stage0 env clean` 先收口 workspace-local `env/selections/` 与 `env/resolution/` 两个 sidecar
+  bucket，不碰 descriptor / manifest / lockfile
 
 这里故意只推荐 bucket，不新增新的 persisted truth object：
 
@@ -637,6 +639,8 @@ cleanability 写清楚。
 - `env/archives/` 虽然仍然 rebuildable，但下载成本更高，因此默认应比 metadata/resolution 更保守地保留
 - `env/selections/` 必须保留当前 active selection；旧 selection snapshot 只有在确认不再被 workspace
   或 user-level choice 引用时，才可被显式清理或保守回收
+- 当前 `stage0 env clean` 先只清 `env/selections/` 与 `env/resolution/`；更广义的 metadata/archive/staging
+  回收仍留给 future gc 或后续 maintenance 扩展
 - 无论采用什么目录名，公开 install result 与 shared persisted truth 都不是 `env` clean/gc 的默认目标
 
 这条边界对高性能也很重要：只有把“能删掉再重来”的状态单独收口，workspace reload、CI cache、

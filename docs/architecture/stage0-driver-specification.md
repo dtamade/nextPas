@@ -19,6 +19,8 @@ nextpas test --list-groups [--workspace <root>]
 nextpas test --filter <group> [--workspace <root>]
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>
+nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>
+nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
@@ -85,8 +87,8 @@ nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-bindin
 
 第一阶段当前除了这组路径之外，不承诺更多子命令，也不承诺泛化的命令树。
 
-这同样意味着：第一阶段除了 `env status/use/sync` 与只读 `doctor` 之外，仍不承诺
-`env bootstrap`、runtime SDK install、download/materialize 或其他更深的 environment
+这同样意味着：第一阶段除了 `env status/use/sync/clean` 与只读 `doctor` 之外，仍不承诺
+`env bootstrap`、runtime SDK install、download/materialize、`env gc` 或其他更深的 environment
 management verb。但 future 如果补上这些能力，它们也必须继续挂在统一 `nextpas` 产品壳下，
 复用同一套 parser、global options 与 result envelope，而不是另外长出一个 installer 或
 channel CLI 世界。
@@ -138,7 +140,7 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 组成                       | 第一阶段职责                                                                     |
 | -------------------------- | -------------------------------------------------------------------------------- |
-| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status/use/sync` 投影或更新 target/binding/distribution/runtime selection 与 resolution state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth（含 source roots 与 declared dependencies） |
+| `tools/stage0/nextpas.pas` | 解析公开命令、为 `build` 加载 shared workspace model / target facts / toolchain、为 `test` thin-wrap 现有 harness、为 `env status/use/sync/clean` 投影或更新 target/binding/distribution/runtime selection、resolution 与 sidecar cleanup state、为 `doctor` 投影最小只读健康检查、为 `query symbols` 投影 compilation session 的最小语义查询结果、为 `pkg inspect` 投影只读 package workflow truth（含 source roots 与 declared dependencies） |
 | `tools/stage0/README.md`   | 说明用法、退出码、范围约束和当前不支持的事项                                     |
 | `examples/smoke/hello.pas` | 作为规范输入，证明驱动路径真实可走通                                             |
 
@@ -157,15 +159,15 @@ open document overlay、incremental invalidation 或 IDE integration。
 
 | 行为     | 要求                                                                                                      |
 | -------- | --------------------------------------------------------------------------------------------------------- |
-| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`、`nextpas env sync --target linux-x86_64 [--toolchain-binding ...] --workspace ...`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas pkg inspect --workspace ... --target linux-x86_64 [--toolchain-binding ...]` |
+| 成功路径 | 能处理 `nextpas build <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...] [--unit-root ...] [--out-dir ...]`、`nextpas test --list-groups|--filter <group> [--workspace ...]`、`nextpas env status --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`、`nextpas env sync --target linux-x86_64 [--toolchain-binding ...] --workspace ...`、`nextpas env clean --target linux-x86_64 --workspace ...`、`nextpas doctor --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]`、`nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding ...] [--workspace ...]` 与 `nextpas pkg inspect --workspace ... --target linux-x86_64 [--toolchain-binding ...]` |
 | 宿主关系 | 由 FreePascal 负责把驱动入口编译成可执行程序                                                              |
-| 输出语义 | `build`、`test --filter <group|smoke>`、`env status/use/sync`、`doctor`、`query symbols` 与 `pkg inspect` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
+| 输出语义 | `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect` 都要给出清晰、可留证的结果，并投影 `command-envelope=<json>` |
 | 未知命令 | 以非零状态退出，并打印清晰的 `unsupported-command` 消息                                                   |
 
 这组行为既是任务 9 的验收接口，也是后续 `build/verify_local.sh` 与 Linux CI
 会依赖的控制面。
 
-## `stage0 env status/use/sync` 只触碰 environment state
+## `stage0 env status/use/sync/clean` 只触碰 environment state
 
 `env status` 当前是 `stage0` 上最小、只读的 environment surface。它的职责边界固定如下：
 
@@ -197,6 +199,14 @@ open document overlay、incremental invalidation 或 IDE integration。
 - 只写 `<workspace>/.nextpas/env/resolution/<target>.toml`，记录当前解析出的 binding、distribution、runtime SDK readiness 与 selection 输入
 - 通过 `env-resolution-path`、`env-resolution-status` 与 `env-sync-change` 公开 resolution sidecar 和本次 delta
 - 不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest、lockfile 或 selection sidecar
+
+`env clean` 当前是 `stage0` 上最小的 environment maintenance surface。它的职责边界固定如下：
+
+- 只接受 `--target` 与必须的 `--workspace`
+- 只清理 workspace-local selection sidecar 与 resolution sidecar
+- 只删除 `<workspace>/.nextpas/env/selections/<target>.toml` 与 `<workspace>/.nextpas/env/resolution/<target>.toml`
+- 通过 `env-clean-status`、`env-clean-change`、`env-clean-selection-path`、`env-clean-resolution-path` 与 `env-clean-removed-count` 公开本次 cleanup 的触达范围
+- 不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest、lockfile 或公开 install result
 
 ## `stage0 doctor` 提供最小只读 health inspection
 

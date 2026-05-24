@@ -2,7 +2,7 @@
 
 `tools/` 用于放置 nextPas 面向开发者的工具入口。nextPas 的长期目标是一整套开发环境，
 所以这里最终不会只承载一个 compiler wrapper。第一阶段先从一个受约束的
-FreePascal 托管 `stage0` 驱动开始，先公开 `build`、最小 `test`、`env status/use/sync`、
+FreePascal 托管 `stage0` 驱动开始，先公开 `build`、最小 `test`、`env status/use/sync/clean`、
 最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，而不是从大而全的工具集开始。
 
 这里的结构原则明确参考 Rust / Go 一类现代工具链的长处：公开命令入口尽量薄，共享核心能力尽量
@@ -31,6 +31,7 @@ nextpas test --filter <group>
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>
 nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>
+nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]

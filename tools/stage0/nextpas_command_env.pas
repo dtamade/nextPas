@@ -29,6 +29,12 @@ procedure RunEnvSync(
   const ToolchainBindingOverride: string;
   const WorkspaceOverride: string
 );
+procedure RunEnvClean(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
 
 implementation
 
@@ -97,6 +103,18 @@ begin
     Exit('true');
 
   Result := 'false';
+end;
+
+function RemoveFileIfExists(const FilePath: string): Boolean;
+begin
+  Result := False;
+  if not FileExists(FilePath) then
+    Exit(False);
+
+  if not DeleteFile(FilePath) then
+    raise Exception.Create('env-clean-remove-failed: ' + FilePath);
+
+  Result := True;
 end;
 
 procedure CaptureWorkspaceSelectionContext(
@@ -599,6 +617,105 @@ begin
     False
   );
   WriteLn('human-summary=environment synchronized');
+end;
+
+procedure RunEnvClean(
+  var AState: TNextPasState;
+  const TargetName: string;
+  const ToolchainBindingOverride: string;
+  const WorkspaceOverride: string
+);
+var
+  TargetConfig: TTargetConfig;
+  CleanSelectionPath: string;
+  CleanResolutionPath: string;
+  RemovedCount: LongInt;
+  Summary: string;
+begin
+  AState.BuildContext.TargetName := TargetName;
+  if WorkspaceOverride = '' then
+    Fail(AState, 'missing-required-option: --workspace', True);
+  if ToolchainBindingOverride <> '' then
+    Fail(AState, 'unknown-option: --toolchain-binding', True);
+
+  CaptureWorkspaceSelectionContext(AState, TargetName, WorkspaceOverride);
+
+  try
+    TargetConfig := LoadTargetConfig(
+      TargetName,
+      ParamStr(0)
+    );
+  except
+    on E: ETargetConfigError do
+      Fail(AState, E.Message);
+  end;
+
+  AState.BuildContext.TargetConfigPath := TargetConfig.ConfigPath;
+  AState.BuildContext.CompilerName := TargetConfig.CompilerExecutable;
+  CaptureToolchainProjectionFromTargetConfig(
+    AState.ToolchainProjection,
+    TargetConfig
+  );
+  CaptureEnvironmentProjectionFromTargetConfig(
+    AState.EnvironmentProjection,
+    TargetConfig
+  );
+
+  CleanSelectionPath := AState.EnvironmentProjection.SelectionPath;
+  CleanResolutionPath := EnvResolutionPath(
+    AState.BuildContext.ArtifactRootPath,
+    TargetName
+  );
+  RemovedCount := 0;
+
+  try
+    if RemoveFileIfExists(CleanSelectionPath) then
+      Inc(RemovedCount);
+    if RemoveFileIfExists(CleanResolutionPath) then
+      Inc(RemovedCount);
+  except
+    on E: Exception do
+      Fail(AState, E.Message);
+  end;
+
+  AState.EnvironmentProjection.CleanSelectionPath := CleanSelectionPath;
+  AState.EnvironmentProjection.CleanResolutionPath := CleanResolutionPath;
+  AState.EnvironmentProjection.CleanStatus := 'ready';
+  if RemovedCount > 0 then
+    AState.EnvironmentProjection.CleanChange := 'removed'
+  else
+    AState.EnvironmentProjection.CleanChange := 'unchanged';
+  AState.EnvironmentProjection.CleanRemovedCount := RemovedCount;
+  AState.EnvironmentProjection.HasCleanRemovedCount := True;
+
+  if RemovedCount > 0 then
+    Summary := 'environment cache cleaned'
+  else
+    Summary := 'environment cache already clean';
+
+  WriteLn('mode=env');
+  WriteLn('command=env');
+  WriteLn('selector=clean');
+  WriteLn('target=', TargetName);
+  WriteLn('target-config=', TargetConfig.ConfigPath);
+  WriteLn('compiler=', TargetConfig.CompilerExecutable);
+  PrintBuildContextProjection(False, AState.BuildContext);
+  PrintToolchainProjectionFields(False, AState.ToolchainProjection);
+  PrintEnvironmentProjectionFields(False, AState.EnvironmentProjection);
+  WriteLn('status=success');
+  WriteLn('result=success');
+  WriteLn('command-outcome=success');
+  PrintCommandEnvelope(
+    AState,
+    ExitSuccessCode,
+    'clean',
+    'success',
+    'success',
+    '',
+    Summary,
+    False
+  );
+  WriteLn('human-summary=', Summary);
 end;
 
 end.

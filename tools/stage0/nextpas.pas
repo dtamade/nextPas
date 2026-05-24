@@ -106,7 +106,7 @@ begin
     if ParamCount < 3 then
       Fail(State, 'invalid-arguments', True);
     if (ParamStr(2) <> 'status') and (ParamStr(2) <> 'use') and
-      (ParamStr(2) <> 'sync') then
+      (ParamStr(2) <> 'sync') and (ParamStr(2) <> 'clean') then
       Fail(State, 'invalid-arguments', True);
 
     State.SelectorName := ParamStr(2);
@@ -114,6 +114,32 @@ begin
     ToolchainBindingOverride := '';
     WorkspaceOverride := '';
     Index := 3;
+    if State.SelectorName = 'clean' then
+    begin
+      while Index <= ParamCount do
+      begin
+        OptionName := ParamStr(Index);
+        if (OptionName <> '--target') and (OptionName <> '--workspace') then
+          Fail(State, 'unknown-option: ' + OptionName, True);
+        if Index = ParamCount then
+          Fail(State, 'invalid-arguments', True);
+        Inc(Index);
+        if OptionName = '--target' then
+        begin
+          if TargetName <> '' then
+            Fail(State, 'duplicate-option: --target', True);
+          TargetName := ParamStr(Index);
+        end
+        else
+        begin
+          if WorkspaceOverride <> '' then
+            Fail(State, 'duplicate-option: --workspace', True);
+          WorkspaceOverride := ParamStr(Index);
+        end;
+        Inc(Index);
+      end;
+    end
+    else
     while Index <= ParamCount do
     begin
       OptionName := ParamStr(Index);
@@ -158,6 +184,13 @@ begin
       )
     else if State.SelectorName = 'use' then
       RunEnvUse(
+        State,
+        TargetName,
+        ToolchainBindingOverride,
+        WorkspaceOverride
+      )
+    else if State.SelectorName = 'clean' then
+      RunEnvClean(
         State,
         TargetName,
         ToolchainBindingOverride,

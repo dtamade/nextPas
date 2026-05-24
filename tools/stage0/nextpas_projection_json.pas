@@ -566,6 +566,20 @@ begin
     AContext.ResolutionStatus
   );
   AppendJsonStringField(AFields, 'envSyncChange', AContext.SyncChange);
+  AppendJsonStringField(AFields, 'envCleanSelectionPath', AContext.CleanSelectionPath);
+  AppendJsonStringField(
+    AFields,
+    'envCleanResolutionPath',
+    AContext.CleanResolutionPath
+  );
+  AppendJsonStringField(AFields, 'envCleanStatus', AContext.CleanStatus);
+  AppendJsonStringField(AFields, 'envCleanChange', AContext.CleanChange);
+  AppendJsonIntegerField(
+    AFields,
+    'envCleanRemovedCount',
+    AContext.CleanRemovedCount,
+    AContext.HasCleanRemovedCount
+  );
   AppendJsonStringField(
     AFields,
     'toolchainBindingPath',

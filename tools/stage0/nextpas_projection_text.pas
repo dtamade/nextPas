@@ -723,6 +723,32 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'env-clean-status',
+    AContext.CleanStatus
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-clean-change',
+    AContext.CleanChange
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-clean-selection-path',
+    AContext.CleanSelectionPath
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'env-clean-resolution-path',
+    AContext.CleanResolutionPath
+  );
+  if AContext.HasCleanRemovedCount then
+    WriteProjectionTextIfPresent(
+      UseStdErr,
+      'env-clean-removed-count',
+      IntToStr(AContext.CleanRemovedCount)
+    );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'toolchain-binding-path',
     AContext.ToolchainBindingPath
   );

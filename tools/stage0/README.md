@@ -1,7 +1,7 @@
 # nextPas tools/stage0/
 
 `tools/stage0/` 承接 nextPas 第一阶段最小但真实的命令行控制面。这里现在公开
-`build`、最小 `test`、`env status/use/sync`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，
+`build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，
 但仍不假装已经是完整工具链前端。
 
 如果你要看冻结后的边界，先读
@@ -20,6 +20,7 @@ nextpas test --filter <group> [--workspace <root>]
 nextpas env status --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>
 nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>
+nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
@@ -77,6 +78,8 @@ NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   env status --target linux-x86_64 --workspace "$PWD"
 NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
   env sync --target linux-x86_64 --workspace "$PWD"
+NEXTPAS_REPO_ROOT="$PWD" ./.sisyphus/tmp/stage0-bootstrap/nextpas \
+  env clean --target linux-x86_64 --workspace "$PWD"
 ```
 
 Then:
@@ -110,16 +113,17 @@ Then:
 `test` 则只做最小参数解析后 thin-wrap 到 `tests/run_all_tests.sh` 与
 `tests/harness/runner.pas`，`env status` 则解析 target / binding / distribution /
 runtime state，`env use` 只更新 workspace-local selection sidecar，`env sync` 则刷新
-workspace-local resolution sidecar，不下载或安装环境，
+workspace-local resolution sidecar，`env clean` 则清理 workspace-local selection /
+resolution sidecar，不下载或安装环境，
 `doctor` 则复用同一批 environment truth 做只读健康检查，
 `query symbols` 则复用 compilation session 的 syntax / resolution / semantic truth 做只读 symbol 查询，
 `pkg inspect` 则复用 workspace model 与 package manifest truth 做只读 package workflow 投影。
-其中 `build`、`test --filter <group|smoke>`、`env status/use/sync`、`doctor`、`query symbols` 与 `pkg inspect`
+其中 `build`、`test --filter <group|smoke>`、`env status/use/sync/clean`、`doctor`、`query symbols` 与 `pkg inspect`
 的执行路径都会额外输出一条
 `command-envelope=<json>`。这些 key/value 现在至少会对齐这些公共字段：
 
 - `command=build|test|env|doctor|query|pkg`
-- `selector=build|test|group|smoke|status|use|sync|doctor|symbols|inspect`
+- `selector=build|test|group|smoke|status|use|sync|clean|doctor|symbols|inspect`
 - `status=success|failure`
 - `result=success|failure`
 - `command-outcome=success|failure`
@@ -164,6 +168,17 @@ workspace-local resolution sidecar，不下载或安装环境，
   `env-sync-change=materialized|updated|unchanged`
 - 它不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest、lockfile
   或 selection sidecar
+
+`env clean` 当前只支持 workspace-local selection / resolution sidecar cleanup：
+
+- 只接受 `--target` 与必须的 `--workspace`
+- 只删除 `<workspace>/.nextpas/env/selections/<target>.toml` 与
+  `<workspace>/.nextpas/env/resolution/<target>.toml`
+- 输出会额外投影 `env-clean-status`、`env-clean-change`、
+  `env-clean-selection-path`、`env-clean-resolution-path` 与
+  `env-clean-removed-count`
+- 它不下载、不解包、不安装 runtime SDK，也不修改 workspace descriptor、package manifest、lockfile
+  或公开 install result
 
 这条 surface 当前故意把“状态解析 / selection 切换”和“健康诊断”分开：即使 runtime 仍然缺失，
 `env status` 也会保持 `status=success` / `result=success`，并把未就绪事实放进
@@ -400,12 +415,12 @@ detail、scope side table 与 type side table 作为当前最小查询结果投�
 
 ## 退出码与失败语义
 
-- `0`：命令输入合法，且 `build`、`test`、`env status`、`doctor` 或 `query symbols`
+- `0`：命令输入合法，且 `build`、`test`、`env status/use/sync/clean`、`doctor` 或 `query symbols`
   的真实执行路径成功完成
 - `1`：参数不合法、命令不受支持、目标不受支持、源文件缺失、syntax / resolution / sema 提前失败，或 `test` / toolchain 底层执行失败
 
-当前 `env status` 与只读 `doctor` 不会因为 environment 仍不完整就退出失败；这类事实继续通过
-`environment-readiness` / `environment-status` / `runtime-sdk-status` /
+当前 `env status`、`env clean` 与只读 `doctor` 不会因为 environment 仍不完整就退出失败；
+这类事实继续通过 `environment-readiness` / `environment-status` / `runtime-sdk-status` /
 `toolchain-binding-status` / `distribution-status` / `runtime-libc-present` 以及
 `doctor-status` 表达。
 
@@ -809,7 +824,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、
 临时 workspace 下的 `nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`
 和 `nextpas env status --target linux-x86_64 --workspace ...`、同一 workspace 下的
-`nextpas env sync --target linux-x86_64 --workspace ...`、裸
+`nextpas env sync --target linux-x86_64 --workspace ...`、
+`nextpas env clean --target linux-x86_64 --workspace ...`、裸
 `nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
 与 package manifest fixture、workspace member fixture 下的 `nextpas doctor --workspace ...`
 正向 package workspace 样本、裸 `nextpas doctor`、
@@ -822,7 +838,9 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `runtime-libc-present=false`、`toolchain-binding-status=ready`、
 `distribution-status=incomplete|ready`、`env-selection-status=updated|ready`、
 `env-resolution-status=ready`、`env-sync-change=materialized|unchanged`、
-`stage0EnvStatusCheck=pass`、`stage0EnvUseCheck=pass`、`stage0EnvSyncCheck=pass`
+`env-clean-status=ready`、`env-clean-change=removed|unchanged`、
+`stage0EnvStatusCheck=pass`、`stage0EnvUseCheck=pass`、`stage0EnvSyncCheck=pass`、
+`stage0EnvCleanCheck=pass`、`stage0EnvCleanRepeatCheck=pass`
 与 `stage0EnvInvalidArgumentsCheck=pass`、`stage0DoctorCheck=pass`、
 `stage0DoctorPackageWorkspaceCheck=pass`、`stage0DoctorWorkspaceMemberCheck=pass` 与
 `stage0DoctorDeclaredDependenciesCheck=pass`、`stage0DoctorMalformedDependenciesCheck=pass`、
@@ -848,8 +866,8 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 
 ## 这里现在不做什么
 
-- 除了 `env status/use/sync` 与只读 `doctor` 之外，不承诺更深的 environment mutation verbs，例如
-  `env bootstrap`、download/unpack/install 或 `env clean`。
+- 除了 `env status/use/sync/clean` 与只读 `doctor` 之外，不承诺更深的 environment mutation verbs，例如
+  `env bootstrap`、download/unpack/install 或 `env gc`。
 - `query symbols` 当前只是 compilation-session-backed 的最小 CLI 查询，不承诺完整
   language service、LSP 或 IDE 集成。
 - `pkg inspect` 当前只是 workspace-model-backed 的最小只读投影，不承诺完整

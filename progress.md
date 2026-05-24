@@ -26,6 +26,31 @@
   - 修复 `build/verify_local.sh` 里 `ENV_RESOLUTION_PATH` 的临时变量缺口，并 fresh
     `bash build/verify_local.sh` 通过，确认 `env sync` gate 的 materialized/unchanged 路径都已收口。
 
+## Session: 2026-05-24 (Batch 51 env clean workspace-local cache cleanup)
+
+- **Status:** completed
+- Objective:
+  - 把 `env` family 的最小维护面继续收口到 workspace-local cleanup，让 `env clean` 只删除
+    `<workspace>/.nextpas/env/selections/<target>.toml` 与
+    `<workspace>/.nextpas/env/resolution/<target>.toml`，并在输出与 envelope 中暴露
+    cleanup path / status / change / removed-count。
+- Baseline:
+  - Batch 50 已经把 `env sync` 收口到 workspace-local resolution cache。
+  - 现有 `env clean` 还不存在，`build/verify_local.sh` 也还没有对 cleanup contract 做正式 gate。
+- Actions taken:
+  - 在 `tools/stage0/nextpas.pas` 与 `tools/stage0/nextpas_command_env.pas` 增加
+    `nextpas env clean` parser、workspace-local sidecar 删除逻辑，以及 `removed|unchanged` 的
+    deterministic 结果计算。
+  - 扩展 `TEnvironmentProjectionContext`、line-based output 与 command envelope，新增
+    `env-clean-path` 族字段：`env-clean-status`、`env-clean-change`、
+    `env-clean-selection-path`、`env-clean-resolution-path` 与 `env-clean-removed-count`。
+  - 扩展 `build/verify_local.sh`，覆盖首次 removed、二次 unchanged 与 `--toolchain-binding`
+    的 invalid-arguments contract。
+  - 同步 stage0 / developer tooling / workspace file / distribution specs 与持续记录。
+  - fresh `bash build/verify_local.sh` 已通过，确认 `stage0EnvCleanCheck=pass`、
+    `stage0EnvCleanRepeatCheck=pass`、`stage0EnvCleanInvalidArgumentsCheck=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+
 ## Session: 2026-05-24 (Batch 49 env use workspace selection sidecar)
 
 ## Session: 2026-05-24 (Batch 49 env use workspace selection sidecar)

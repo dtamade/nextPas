@@ -228,19 +228,20 @@ nextPas 真正追求的不是“命令少”，而是“命令多了以后仍然
 - `use` 负责“改变选择”
 - `status` 负责“陈述现状”
 
-nextPas 现在不需要更大的 `env` 命令树。只有当这些动作已经无法覆盖长期环境控制面时，
-才值得讨论更大的扩展。
+nextPas 现在不需要更大的 `env` 命令树。维护类动作即使出现，也只能保持在下面的
+`clean` / `gc` 边界内。
 
-## 如果 future 真的需要 maintenance verbs，只推荐 `clean` 和 `gc`
+## `env clean` 已经是最小 maintenance verb，`gc` 仍然单独保留
 
 当环境控制面长到一定阶段，确实可能需要维护类动作。但 nextPas 也不接受把它们做成一团模糊的
 “重装脚本合集”。
 
 因此 nextPas 继续冻结：
 
-- 核心 `env` surface 仍然先以 `bootstrap`、`sync`、`use`、`status` 为主
-- 如果 future 确实需要 maintenance verbs，推荐只增加 `clean` 与 `gc`
-- `clean` 负责显式清理 rebuildable env-local cache 或 activation sidecar
+- 长期核心 `env` surface 以 `bootstrap`、`sync`、`use`、`status`、`clean` 为主；当前 stage0 已落地
+  `status`、`use`、`sync`、`clean` 的最小面
+- 如果 future 确实需要更强的自动回收，只增加 `gc`
+- `clean` 负责显式清理 workspace-local selection sidecar 与 resolution cache 这类可重建 env-local state
 - `gc` 负责保守回收当前 active selection 已不再引用的 env-owned artifact
 
 它们的职责必须继续保持分开：
@@ -259,9 +260,7 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 因此 nextPas 要求：
 
-- `env clean` 只能清理 rebuildable env-owned artifact，例如 distribution metadata cache、
-  downloaded archive cache、environment resolution cache、activation / selection sidecar、
-  unpacked staging 和等价 machine-local sidecar
+- `env clean` 当前先只清理 workspace-local selection / resolution sidecar 这类明确可重建的 env-owned state
 - `env gc` 只能回收当前 channel/distribution/binding/runtime selection 已不再引用的 env-owned artifact
 - 二者都不能默认删除 source roots、workspace descriptor、package manifest、lockfile
 - 二者都不能默认删除公开 install result，例如 `units/<target>/`、`lib/`、`share/` 下的正式可见结果
@@ -303,7 +302,7 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 - 如果能够 cheap to compute，也应表达 reclaimed storage summary 或等价结果摘要
 - 如果因为 scope 非法、artifact 正在使用或 selection 约束不允许删除而失败，仍然走统一 diagnostics/result contract
 
-这条规则能保证 future `env clean` / `env gc` 对 CLI、IDE、automation 和 CI 来说都是同一种可消费对象。
+这条规则能保证当前 `env clean` 和 future `env gc` 对 CLI、IDE、automation 和 CI 来说都是同一种可消费对象。
 
 ## `env status` 不是 `doctor`，`env use` 也不是 package resolver
 
@@ -318,11 +317,11 @@ nextPas 不应同时长出 `purge`、`repair-cache`、`vacuum`、`reinstall-ever
 
 这条分工的意义是：CLI、IDE、CI 和 automation 都能精确知道自己消费的是“状态”“诊断”还是“解析结果”。
 
-## stage0 现在已公开 `build`、最小 `test`、`env status/use/sync`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
+## stage0 现在已公开 `build`、最小 `test`、`env status/use/sync/clean`、最小 `doctor`、最小 `query symbols` 与只读 `pkg inspect`，但不能阻断 future tools
 
 `stage0-driver-specification.md` 已经明确：当前仓库已经公开
 `nextpas build <source> --target linux-x86_64`，并把最小 harness-backed `test` surface、
-`env status/use/sync` surface、最小 `doctor` health inspection、最小 `query symbols`
+`env status/use/sync/clean` surface、最小 `doctor` health inspection、最小 `query symbols`
 semantic projection 与只读 `pkg inspect` package workflow projection 收进同一个 `nextpas` 产品壳。
 
 这条最小范围必须保留，但 nextPas 同时冻结：
@@ -330,8 +329,8 @@ semantic projection 与只读 `pkg inspect` package workflow projection 收进�
 - 未来的 richer `pkg`、`fmt`、`doc`、richer `env`、richer `doctor`、richer `query` 不应再开辟另一套产品命令名
 - `stage0` 当前是最小成功路径，不是长期 command architecture 的终点
 - 当前 command parser、global options、result envelope 都应朝 future unified surface 收敛
-- 当前 `env status/use/sync` 只是最小 environment state projection、workspace-local selection
-  mutation 与 workspace-local resolution cache mutation，不等于 `env bootstrap`、download/unpack/install
+- 当前 `env status/use/sync/clean` 只是最小 environment state projection、workspace-local selection
+  mutation、workspace-local resolution cache mutation 与 selection/resolution sidecar cleanup，不等于 `env bootstrap`、download/unpack/install
   或完整 runtime SDK materialization；当前 `doctor`
   已经有最小 structured finding contract，但不等于完整
   package/workspace coherence taxonomy
@@ -452,10 +451,11 @@ FPC 的独立工具生态说明了一个长期问题：一旦每个工具都有�
 公开 `nextpas test --filter <group>` / `--filter smoke`，并新增只读
 `nextpas env status --target linux-x86_64 [--toolchain-binding <id>]`、workspace-local
 `nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root>`、
-`nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>` 与
+`nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>`、
+`nextpas env clean --target linux-x86_64 --workspace <root>` 与
 `nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，以及
 `nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]`，所以 `build`、
-`test`、最小 `env` state/selection/resolution projection、最小 `doctor` health inspection 与最小 `query`
+`test`、最小 `env` state/selection/resolution/cleanup projection、最小 `doctor` health inspection 与最小 `query`
 semantic projection、只读 `pkg inspect` package workflow projection 六类公开命令面都已经不再依赖 shell 调用方从纯文本里猜测
 结果对象。
 
@@ -500,6 +500,11 @@ preferred binding selection。
 binding、distribution 与 runtime readiness 写成 machine-local resolution cache，并用
 `envSyncChange` 表达本次是 `materialized`、`updated` 还是 `unchanged`；它仍不下载、不解包、不安装 runtime SDK，
 也不修改 selection、descriptor、manifest 或 lockfile。
+`nextpas env clean --target <target> --workspace <root>` 则只删除 workspace-local
+`env/selections/<target>.toml` 与 `env/resolution/<target>.toml`，并用
+`envCleanStatus`、`envCleanChange`、`envCleanSelectionPath`、
+`envCleanResolutionPath` 与 `envCleanRemovedCount` 表达 cleanup 结果；它仍不删除
+workspace descriptor、package manifest、lockfile 或公开 install result。
 
 ## `doctor` 必须是正式能力，不是 support 脚本
 
