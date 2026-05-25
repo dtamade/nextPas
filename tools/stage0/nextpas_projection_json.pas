@@ -665,6 +665,8 @@ begin
     AppendJsonField(AFields, 'querySymbols', AContext.SymbolsJson);
   if AContext.BindingsJson <> '' then
     AppendJsonField(AFields, 'queryBindings', AContext.BindingsJson);
+  if AContext.DefinitionsJson <> '' then
+    AppendJsonField(AFields, 'queryDefinitions', AContext.DefinitionsJson);
   if AContext.ScopesJson <> '' then
     AppendJsonField(AFields, 'queryScopes', AContext.ScopesJson);
   if AContext.TypesJson <> '' then

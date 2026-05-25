@@ -185,9 +185,13 @@ nextPas language service 至少要把这些查询族写成正式表面：
 procedure/function call occurrence 可以绑定到 root callable 或唯一 imported-unit callable 的
 `SymbolId`。`query symbols` 会把这份 side table 作为 `query-bindings=<json-array>` 与
 `command-envelope=<json>.result.queryBindings` 投影出来，最小字段为 `bindingId`、`kind`、
-`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。这为后续 references / hover /
-go-to-definition 提供 compiler-owned truth，但当前 `query symbols` 仍不承诺完整 LSP、
-selector/member binding、open document overlay 或 incremental invalidation。
+`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。同一条 query surface 还会把
+`targetSymbolId` join 回 session-owned symbol/unit truth，投影
+`query-definitions=<json-array>` 与 `command-envelope=<json>.result.queryDefinitions`；
+当前最小字段包含 binding id/kind/name/offset 与 target symbol name/kind/owner unit/source
+path/byte offset。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，
+但当前 `query symbols` 仍不承诺完整 LSP、selector/member binding、open document overlay 或
+incremental invalidation。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

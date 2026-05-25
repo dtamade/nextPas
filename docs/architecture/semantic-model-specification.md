@@ -71,14 +71,17 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 - `tools/stage0/nextpas.pas`
   - 把 `semantic-status`、`symbol-count`、`type-count`、`typed-hir-node-count`、
     `runtime-contract-count` 和 `typed-hir-root-name` 投影到 command envelope
-  - `query symbols` 还会把同一份 binding table 投影成 `query-bindings` / `queryBindings`
+  - `query symbols` 还会把同一份 binding table 投影成 `query-bindings` / `queryBindings`，
+    并把 binding target metadata 投影成 `query-definitions` / `queryDefinitions`
 
 这套最小骨架当前故意只承诺三件事：
 
 - symbol graph 先表达 unit-level symbol identity 与最小 callable symbol identity
 - binding table 先表达 root source 中 procedure/function call occurrence 到 callable `SymbolId` 的绑定；
   当前已覆盖 root callable、arg-count overload 消歧与唯一 imported-unit callable target，并通过
-  `query-bindings` / `queryBindings` 暴露给 CLI 与 future language-service adapter
+  `query-bindings` / `queryBindings` 暴露给 CLI 与 future language-service adapter；同一份
+  session-owned model 还会把 target symbol/unit metadata 投影成 `query-definitions` /
+  `queryDefinitions`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

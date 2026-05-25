@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 62` 为准。
+以最新完成的 `Batch 63` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -40,6 +40,7 @@
   `stage0DoctorWorkspaceMemberCheck=pass`、
   `stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass`、
+  `stage0QueryDefinitionsCheck=pass`、
   `stage0QueryInvalidArgumentsCheck=pass`、
   `stage0PkgCheck=pass`、`stage0PkgPlanCheck=pass`、
   `stage0PkgPlanBlockedCheck=pass`、`stage0PkgPlanMissingCheck=pass`、
@@ -67,6 +68,7 @@
   package workspace 不会误报 `doctor.package-workspace-missing`，`query symbols` 也已投影
   `analysisSource=compilation-session`、`queryResultCount`、session-owned symbol detail
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryBindings`、
+  `queryDefinitions`、
   `queryScopes` / `queryTypes` side tables，`pkg inspect / pkg plan / pkg graph` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
   `packageSourceRoots`、`packageDependencyCount`、`packageDependencies`、
@@ -91,9 +93,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 62：query binding projection。
+- 当前 rolling window 已推进到 Batch 63：query definition target projection。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 62` 已完成。
+- `Batch 1` 到 `Batch 63` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -140,8 +142,11 @@
   dependency intent 通过 `package-dependency-validation-status`、
   `package-dependency-issue-count`、`package-dependency-issues` 与 envelope camelCase 字段
   在 `doctor` / `pkg inspect` 中可见、可解释，避免 IDE、CI 或 automation 消费不可信的
-  package declaration。下一步优先继续 richer package workflow / richer query / richer env
-  action 中最高价值的真实功能切片。
+  package declaration。`Batch 62` / `Batch 63` 已把 semantic binding table 继续公开成 `queryBindings`，并把
+  binding target metadata 公开成 `queryDefinitions`，让 CLI、automation 与 future IDE adapter
+  可以直接消费 source occurrence -> definition target truth，而不需要在 query 之外重扫源码或维护
+  第二套 lookup。下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
+  真实功能切片。
 
 ## 执行规则
 

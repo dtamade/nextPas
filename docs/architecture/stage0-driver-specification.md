@@ -256,16 +256,21 @@ valid lockfile 与 manifest package name/version 不一致时会停在 `package-
 - 真实 query 摘要通过 `query-kind=symbols`、`query-status=success`、
   `analysis-source=compilation-session`、`query-result-count=<count>` 与
   `query-symbols=<json-array>` / `query-bindings=<json-array>` /
+  `query-definitions=<json-array>` /
   `query-scopes=<json-array>` /
   `query-types=<json-array>` 投影
 - `command-envelope=<json>.result` 同步保留 `queryKind`、`queryStatus`、`analysisSource`、
-  `queryResultCount`、`querySymbols`、`queryBindings`、`queryScopes` 与 `queryTypes`
+  `queryResultCount`、`querySymbols`、`queryBindings`、`queryDefinitions`、`queryScopes` 与
+  `queryTypes`
 - `querySymbols` 必须来自同一份 `TCompilationSession` / `TSemanticModel`，当前条目至少包含
   `symbolId`、`name`、`kind`、`ownerUnitId`、可解析时的 `ownerUnitName`、`scopeId`、
   可解析时的 `scopeKind` / `scopeName` / `scopeParentId`、`typeId`、
   可解析时的 `typeName` / `typeKind` / `typeParentId` 和 `byteOffset`
 - `queryBindings` 必须来自同一份 `TSemanticModel` binding table，当前条目至少包含
   `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`
+- `queryDefinitions` 必须由同一份 `TCompilationSession` 将 binding target id join 回
+  `TSemanticModel` / `TUnitGraph`，当前条目至少包含 binding id/kind/name/offset 与 target
+  symbol id/name/kind/owner unit/source path/offset
 - `queryScopes` / `queryTypes` 必须同样来自同一份 `TSemanticModel`，作为 `scopeId` /
   `typeId` 的 normalized side tables，而不是由 CLI 重新推导
 

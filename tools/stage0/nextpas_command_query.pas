@@ -114,6 +114,7 @@ begin
     AState.QueryProjection.HasResultCount := True;
     AState.QueryProjection.SymbolsJson := Session.SymbolsJson;
     AState.QueryProjection.BindingsJson := Session.BindingsJson;
+    AState.QueryProjection.DefinitionsJson := Session.DefinitionsJson;
     AState.QueryProjection.ScopesJson := Session.ScopesJson;
     AState.QueryProjection.TypesJson := Session.TypesJson;
 

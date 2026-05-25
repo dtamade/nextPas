@@ -210,6 +210,7 @@ type
     function SymbolCount: LongInt;
     function SymbolsJson: string;
     function BindingsJson: string;
+    function DefinitionsJson: string;
     function ScopeCount: LongInt;
     function ScopesJson: string;
     function TypeCount: LongInt;
@@ -1683,6 +1684,80 @@ begin
     Result := Result + '{' + Fields + '}';
   end;
   Result := Result + ']';
+end;
+
+function TCompilationSession.DefinitionsJson: string;
+var
+  Binding: TSemanticBinding;
+  EntryJson: string;
+  Fields: string;
+  Index: LongInt;
+  TargetSymbol: TSemanticSymbol;
+  TargetUnit: TResolvedUnit;
+begin
+  if FSemanticModel = nil then
+    Exit('[]');
+
+  EntryJson := '';
+  for Index := 0 to FSemanticModel.BindingCount - 1 do
+  begin
+    Binding := FSemanticModel.BindingAt(Index);
+    if (Binding.TargetSymbolId <= 0) or
+      (Binding.TargetSymbolId > FSemanticModel.SymbolCount) then
+      Continue;
+
+    TargetSymbol := FSemanticModel.SymbolAt(Binding.TargetSymbolId - 1);
+    if TargetSymbol.SymbolId <> Binding.TargetSymbolId then
+      Continue;
+
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+
+    Fields := '';
+    AppendJsonIntegerField(Fields, 'bindingId', Binding.BindingId, True);
+    AppendJsonStringField(Fields, 'bindingKind', Binding.Kind);
+    AppendJsonStringField(Fields, 'bindingName', Binding.Name);
+    AppendJsonStringField(Fields, 'bindingOwnerUnitId', Binding.OwnerUnitId);
+    AppendJsonIntegerField(
+      Fields,
+      'bindingByteOffset',
+      Binding.ByteOffset,
+      True
+    );
+    AppendJsonIntegerField(
+      Fields,
+      'targetSymbolId',
+      Binding.TargetSymbolId,
+      True
+    );
+    AppendJsonStringField(Fields, 'targetName', TargetSymbol.Name);
+    AppendJsonStringField(Fields, 'targetKind', TargetSymbol.Kind);
+    AppendJsonStringField(
+      Fields,
+      'targetOwnerUnitId',
+      TargetSymbol.OwnerUnitId
+    );
+    if (FUnitGraph <> nil) and
+      FUnitGraph.FindUnit(TargetSymbol.OwnerUnitId, TargetUnit) then
+    begin
+      AppendJsonStringField(
+        Fields,
+        'targetOwnerUnitName',
+        TargetUnit.CanonicalName
+      );
+      AppendJsonStringField(Fields, 'targetSourcePath', TargetUnit.SourcePath);
+    end;
+    AppendJsonIntegerField(
+      Fields,
+      'targetByteOffset',
+      TargetSymbol.ByteOffset,
+      True
+    );
+
+    EntryJson := EntryJson + '{' + Fields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
 end;
 
 function TCompilationSession.ScopeCount: LongInt;

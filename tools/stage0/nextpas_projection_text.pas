@@ -899,6 +899,11 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'query-definitions',
+    AContext.DefinitionsJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'query-scopes',
     AContext.ScopesJson
   );

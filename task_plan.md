@@ -15,6 +15,71 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 63 Query Definition Target Projection
+
+### Goal
+
+把 Batch 62 已经公开的 `query-bindings` 从“source occurrence -> target symbol id”
+继续推进到可直接消费的 definition target metadata：CLI、automation 与 future
+language-service adapter 不应为了 go-to-definition / hover 自己再用 `targetSymbolId`
+回扫 `querySymbols` 或重读源码。
+
+本批次新增并冻结：
+
+- `TCompilationSession.DefinitionsJson`
+- line-based `query-definitions=<json-array>`
+- envelope `queryDefinitions`
+- `stage0QueryDefinitionsCheck`
+
+### Architecture Decision
+
+query definition projection 继续归属于 compilation-session-backed query surface：
+
+- `TSemanticModel` 仍持有 binding 与 symbol truth；`TCompilationSession` 只在同一份 model 内把
+  `TargetSymbolId` join 到目标 `TSemanticSymbol`
+- `TUnitGraph` 只用于补 target owner unit name 与 source path，`stage0` CLI 不重扫源码、不解析
+  build output、不维护第二套 semantic lookup
+- `query-definitions` 与 `query-bindings`、`query-symbols`、`query-scopes`、`query-types`
+  同属只读 semantic query projection，不执行 MIR、backend 或 toolchain
+- 每个 definition 条目公开稳定最小字段：binding id/kind/name/owner/offset 与 target
+  symbol id/name/kind/owner/source path/offset
+- 本批次不新增完整 language service session、不做 references/rename/completion，也不扩展
+  selector/member access binding 或 type-based overload resolution
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `stage0-query-definitions-check`，要求 `query-definitions` 与
+      `queryDefinitions` 同时投影 binding target metadata
+- [x] 在 `TCompilationSession` 中从 session-owned `TSemanticModel.BindingAt(...)` /
+      `SymbolAt(...)` 暴露 `DefinitionsJson`
+- [x] 扩展 query projection context、line output 与 envelope mirror
+- [x] focused probe 确认 `hello_with_units.pas` 的 `SayHello` call definition target 已投影
+- [x] 同步 language service / semantic model / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh verification 先失败在 `missing-stage0-query-definitions-detail`
+- GREEN focused: `nextpas query symbols examples/smoke/hello_with_units.pas ...` 输出
+  `query-definitions=[{"bindingId":1,"bindingKind":"call","bindingName":"SayHello",...}]`，
+  且 envelope 同步带上 `queryDefinitions`
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0-query-definitions-check=pass`、`stage0QueryDefinitionsCheck":"pass"` 与
+  `verify-local=pass`
+
+### Non-goals
+
+- 不实现 selector/member access binding
+- 不实现 bare identifier function-reference binding
+- 不实现完整 type-based overload resolution
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 62 Query Binding Projection
 
 ### Goal

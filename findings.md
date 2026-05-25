@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- `nextpas query symbols` 现在会把 binding target definition metadata 作为
+  `query-definitions=<json-array>` 与 envelope `queryDefinitions` 投影出来；该 JSON 由
+  `TCompilationSession.DefinitionsJson` 从同一份 `TSemanticModel` 的 binding table 与 symbol graph
+  派生。
+- RED gate 已证明旧 query surface 缺少 definition target projection：fresh verification 失败在
+  `missing-stage0-query-definitions-detail`；focused GREEN probe 已确认
+  `hello_with_units.pas` 的 `SayHello` call definition target 投影为
+  `targetName=SayHello`、`targetKind=procedure`、`targetOwnerUnitName=Stage0Greeter`、
+  `targetSourcePath=.../units/linux-x86_64/Stage0Greeter.pas` 与 `targetByteOffset=32`。
+- query definition projection 仍是 compilation-session-backed 只读 semantic query；它不新增
+  `LanguageServiceSession`，不执行 MIR/backend/toolchain，也不扩展 selector/member access、
+  bare function-reference binding、references、rename 或 completion。
 - `nextpas query symbols` 现在正在接入 `TSemanticModel` 的 binding side table：计划公开
   `query-bindings=<json-array>` 与 envelope `queryBindings`，条目字段直接来自
   `TSemanticBinding` 的 `bindingId/kind/name/ownerUnitId/byteOffset/targetSymbolId`。

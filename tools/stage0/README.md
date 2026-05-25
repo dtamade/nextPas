@@ -226,6 +226,7 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 - `query-result-count=<count>`
 - `query-symbols=<json-array>`
 - `query-bindings=<json-array>`
+- `query-definitions=<json-array>`
 - `query-scopes=<json-array>`
 - `query-types=<json-array>`
 
@@ -239,6 +240,9 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 `scopeId` / `typeId` 回查 scope 与 type truth，而不需要重扫源码或解析 build output。
 `query-bindings` 是同一份 semantic binding table 的结构化 mirror，当前每个条目至少包含
 `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。
+`query-definitions` 继续把这些 binding 的 target symbol id join 回同一份 semantic
+symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset 与 target
+symbol id/name/kind/owner unit/source path/offset。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
@@ -895,8 +899,9 @@ preflight 样本、package lock detail fixture 下的 `nextpas pkg inspect --wor
 `stage0DoctorInvalidArgumentsCheck=pass`、
 `query-kind=symbols`、
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
-`query-bindings=<json-array>`、`query-scopes=<json-array>`、`query-types=<json-array>`、
-`stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass` 与
+`query-bindings=<json-array>`、`query-definitions=<json-array>`、
+`query-scopes=<json-array>`、`query-types=<json-array>`、
+`stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass`、`stage0QueryDefinitionsCheck=pass` 与
 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
 `package-lock-status=missing|ready|invalid`、`package-lock-format-version=<version>`、

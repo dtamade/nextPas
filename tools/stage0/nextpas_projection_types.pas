@@ -213,6 +213,7 @@ type
     HasResultCount: Boolean;
     SymbolsJson: string;
     BindingsJson: string;
+    DefinitionsJson: string;
     ScopesJson: string;
     TypesJson: string;
   end;

@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 63 query definition target projection)
+
+- **Status:** completed
+- Objective:
+  - 把 `query-bindings` 中的 `targetSymbolId` join 到同一份 semantic model 的 target symbol
+    metadata，形成 line-based `query-definitions` 与 envelope `queryDefinitions`。
+- Baseline:
+  - Batch 62 已经公开 call binding side table，但调用方仍需自己把 `targetSymbolId` 回查到
+    symbol/unit metadata。
+  - 当前更高价值切片是补齐 go-to-definition/hover 所需的 definition target detail，同时继续守住
+    compilation-session-backed 只读 query 边界。
+- Actions taken:
+  - 在 `build/verify_local.sh` 新增 `stage0-query-definitions-check` RED gate，要求
+    `hello_with_units.pas` 输出 `SayHello` call 的 target procedure metadata，并把
+    `stage0QueryDefinitionsCheck` 纳入 verify-local envelope。
+  - RED 已确认旧实现失败在 `missing-stage0-query-definitions-detail`。
+  - 在 `compiler/frontend/np_compilation_session.pas` 中新增 `DefinitionsJson`，从
+    `FSemanticModel.BindingAt(...)` 读取 binding，并用 `SymbolAt(TargetSymbolId - 1)` /
+    `TUnitGraph.FindUnit(...)` 补出 target symbol 与 owner unit/source path detail。
+  - 扩展 `TQueryProjectionContext`、clear helper、line-based text projection、JSON envelope
+    projection 与 `RunQuerySymbols(...)`，让 `query-definitions` / `queryDefinitions` 复用同一份
+    session-owned JSON。
+  - Focused probe 已确认 `query symbols examples/smoke/hello_with_units.pas ...` 输出
+    `query-definitions=[{"bindingId":1,"bindingKind":"call","bindingName":"SayHello","bindingOwnerUnitId":"hellowithunits","bindingByteOffset":56,"targetSymbolId":1,"targetName":"SayHello","targetKind":"procedure","targetOwnerUnitId":"stage0greeter","targetOwnerUnitName":"Stage0Greeter","targetSourcePath":".../Stage0Greeter.pas","targetByteOffset":32}]`。
+- Verification:
+  - Focused：stage0 driver 重新编译通过；focused query 输出 line/envelope 两层 definition target
+    projection，且 MIR / backend / toolchain 继续为 `deferred`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `stage0-query-definitions-check=pass`、`stage0QueryDefinitionsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 范围集中在 query projection、verify gate 与本批文档/持续记录。
+  - 仍保持 query 只读；不执行 MIR、backend、toolchain，也不新增完整 language service。
+
 ## Session: 2026-05-26 (Batch 62 query binding projection)
 
 - **Status:** completed
