@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 60 给 `nextpas.lock` snapshot skeleton 增加了最小一致性校验：snapshot `selection`
+  必须匹配某个 lock entry 的 `name@version`，否则投影
+  `package.lock.snapshot-selection-unmatched`。
+- `compiler/frontend/np_package_lock.pas` 现在还会把非 `sha256:` digest shape 与重复 snapshot
+  target 标成 lock issues；这些仍然只是 parser-side read-only validation，不触发 resolver、
+  fetch/install 或 lockfile write。
+- `tests/fixtures/package_lock_snapshot_invalid` 固定了 lock entry `0.1.0` 但 snapshot selection
+  指向 `0.2.0` 的边界；fresh verification 已确认该路径进入
+  `package-lock-status=invalid` 与 `package-lock-invalid` blocker。
+- `build/verify_local.sh` 已新增 `stage0PkgPlanLockSnapshotInvalidCheck=pass`，用于冻结 snapshot
+  consistency invalid path。
 - Batch 59 把 `nextpas.lock` 的最小 v1 只读 parser 从 `[[package]] name/version` 扩展到
   `[[snapshot]] target/provenance/digest/selection` skeleton。
 - `TPackageLockTruth` 现在会携带 snapshot count 与 snapshots，stage0 line output 公开

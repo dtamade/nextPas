@@ -3,6 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 60 package lock snapshot consistency)
+
+- **Status:** completed
+- Objective:
+  - 把 `nextpas.lock` 的 snapshot skeleton 从字段投影推进到最小一致性校验，让只读 preflight
+    能识别 snapshot selection 指向不存在 lock entry 的情况。
+- Baseline:
+  - Batch 59 已经能解析并投影 `[[snapshot]] target/provenance/digest/selection`。
+  - parser 仍只校验字段存在性，`selection = "name@version"` 即使不匹配任何
+    `[[package]] name/version` 也会被误判为 ready。
+- Actions taken:
+  - 新增 `tests/fixtures/package_lock_snapshot_invalid`，固定 package entry 为
+    `tests.package-lock-snapshot-invalid@0.1.0`，snapshot selection 为
+    `tests.package-lock-snapshot-invalid@0.2.0`。
+  - 扩展 `build/verify_local.sh`，新增 `stage0-pkg-plan-lock-snapshot-invalid-check` 与
+    final envelope `stage0PkgPlanLockSnapshotInvalidCheck`。
+  - 在 `compiler/frontend/np_package_lock.pas` 中增加 snapshot parser-side consistency validation：
+    selection 必须匹配 lock entry、digest 必须是 `sha256:` shape、target 不能重复。
+- Verification:
+  - RED：fresh `bash build/verify_local.sh` 先失败在
+    `missing-stage0-pkg-plan-lock-snapshot-invalid-lock-status`，确认旧行为误判 ready。
+  - GREEN：fresh `bash build/verify_local.sh` 已通过，新增 fixture 投影
+    `package.lock.snapshot-selection-unmatched`，并停在 `package-lock-invalid`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `stage0PkgPlanLockSnapshotInvalidCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - `git diff --check` 通过；diff 范围集中在 lock parser、package verify gate、一个新增 fixture
+    以及对应文档/持续记录。
+
 ## Session: 2026-05-25 (Batch 59 package lock snapshot skeleton)
 
 - **Status:** completed

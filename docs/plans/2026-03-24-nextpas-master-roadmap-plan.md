@@ -82,14 +82,14 @@
   `packageLockfilePath`；`pkg plan` 当前还直接覆盖 package manifest ready path、
   workspace member lock-missing blocked path、package-free manifest-missing missing path、
   malformed dependency invalid blocked path 与 manifest/lock ready 但 source-roots missing
-  blocked path、invalid lockfile blocked path、manifest-lock out-of-sync blocked path 及其
-  expected/actual detail；workspace member fixture 也已让
+  blocked path、invalid lockfile blocked path、snapshot selection invalid blocked path、
+  manifest-lock out-of-sync blocked path 及其 expected/actual detail；workspace member fixture 也已让
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 59：package lock snapshot skeleton。
+- 当前 rolling window 已推进到 Batch 60：package lock snapshot consistency。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 59` 已完成。
+- `Batch 1` 到 `Batch 60` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持

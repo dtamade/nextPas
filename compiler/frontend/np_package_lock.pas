@@ -156,6 +156,85 @@ begin
   AppendPackageLockIssueInfo(AInfo.Issues, Issue);
 end;
 
+function PackageLockIdentity(
+  const AEntry: TPackageLockEntryInfo
+): string;
+begin
+  Result := AEntry.Name + '@' + AEntry.Version;
+end;
+
+function PackageLockEntrySelectionExists(
+  const AEntries: array of TPackageLockEntryInfo;
+  const ASelection: string
+): Boolean;
+var
+  EntryIndex: LongInt;
+begin
+  for EntryIndex := 0 to Length(AEntries) - 1 do
+    if PackageLockIdentity(AEntries[EntryIndex]) = ASelection then
+      Exit(True);
+
+  Result := False;
+end;
+
+function PackageLockSnapshotTargetExistsBefore(
+  const ASnapshots: array of TPackageLockSnapshotInfo;
+  const ACurrentIndex: LongInt
+): Boolean;
+var
+  SnapshotIndex: LongInt;
+begin
+  if (ACurrentIndex < 0) or (ACurrentIndex >= Length(ASnapshots)) then
+    Exit(False);
+
+  for SnapshotIndex := 0 to ACurrentIndex - 1 do
+    if (Trim(ASnapshots[SnapshotIndex].Target) <> '') and
+      (ASnapshots[SnapshotIndex].Target = ASnapshots[ACurrentIndex].Target) then
+      Exit(True);
+
+  Result := False;
+end;
+
+function PackageLockSnapshotDigestHasKnownShape(const ADigest: string): Boolean;
+begin
+  Result := (Trim(ADigest) = '') or (Pos('sha256:', ADigest) = 1);
+end;
+
+procedure ValidatePackageLockSnapshots(var AInfo: TPackageLockInfo);
+var
+  SnapshotIndex: LongInt;
+  Snapshot: TPackageLockSnapshotInfo;
+begin
+  for SnapshotIndex := 0 to Length(AInfo.Snapshots) - 1 do
+  begin
+    Snapshot := AInfo.Snapshots[SnapshotIndex];
+    if PackageLockSnapshotTargetExistsBefore(AInfo.Snapshots, SnapshotIndex) then
+      AddPackageLockIssue(
+        AInfo,
+        'package.lock.snapshot-target-duplicate',
+        'package lockfile snapshot target is duplicated',
+        Snapshot.Target
+      );
+
+    if not PackageLockSnapshotDigestHasKnownShape(Snapshot.Digest) then
+      AddPackageLockIssue(
+        AInfo,
+        'package.lock.snapshot-digest-invalid',
+        'package lockfile snapshot digest must use sha256 scheme',
+        Snapshot.Digest
+      );
+
+    if (Trim(Snapshot.Selection) <> '') and
+      (not PackageLockEntrySelectionExists(AInfo.Entries, Snapshot.Selection)) then
+      AddPackageLockIssue(
+        AInfo,
+        'package.lock.snapshot-selection-unmatched',
+        'package lockfile snapshot selection does not match any package entry',
+        Snapshot.Selection
+      );
+  end;
+end;
+
 function LoadPackageLockInfo(const ALockfilePath: string): TPackageLockInfo;
 var
   CurrentEntry: TPackageLockEntryInfo;
@@ -384,6 +463,8 @@ begin
       'package lockfile format-version is missing',
       ''
     );
+
+  ValidatePackageLockSnapshots(Result);
 
   if Length(Result.Issues) > 0 then
     Result.Status := 'invalid'

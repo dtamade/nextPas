@@ -15,6 +15,59 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 60 Package Lock Snapshot Consistency
+
+### Goal
+
+把 Batch 59 已公开的 `[[snapshot]]` skeleton 从“字段可见”推进到“最小一致性可信”：
+`nextpas.lock` 仍然只读，但 snapshot replay shape 不能再声明一个 lock entries 中不存在的
+selection。
+
+本批次新增并冻结：
+
+- `package.lock.snapshot-selection-unmatched`
+- `stage0PkgPlanLockSnapshotInvalidCheck`
+- `tests/fixtures/package_lock_snapshot_invalid`
+
+### Architecture Decision
+
+本批次仍只在 lockfile v1 parser 内做 read-only validation：
+
+- snapshot `selection` 必须匹配某个 `[[package]] name/version` 组合，即 `name@version`
+- snapshot `digest` 目前只接受 `sha256:` scheme；空 digest 仍沿用 Batch 59 的 missing issue
+- 同一 lockfile 内重复 snapshot target 会被标成 invalid issue
+- 所有问题都进入 `package-lock-status=invalid` 与 `package-lock-invalid` preflight blocker
+- 不做 resolver、version solving、target selection、fetch/install 或 lockfile write
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 snapshot invalid fixture 与 `stage0PkgPlanLockSnapshotInvalidCheck`
+- [x] 实现 snapshot selection / digest / target 的最小 parser-side consistency validation
+- [x] GREEN：focused fresh `bash build/verify_local.sh` 确认新增 gate 通过
+- [x] 同步 package workflow / workspace file / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh verification 必须先失败在
+  `missing-stage0-pkg-plan-lock-snapshot-invalid-lock-status`
+- GREEN: `tests/fixtures/package_lock_snapshot_invalid` 必须投影
+  `package.lock.snapshot-selection-unmatched`，并停在 `package-lock-invalid`
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0PkgPlanLockSnapshotInvalidCheck=pass`
+
+### Non-goals
+
+- 不做 dependency resolver 或 version solving
+- 不选择或执行 target snapshot
+- 不联网，不 fetch，不 install
+- 不写入、重写或 migrate `nextpas.lock`
+
 ## Addendum: 2026-05-25 Batch 59 Package Lock Snapshot Skeleton
 
 ### Goal

@@ -1,0 +1,12 @@
+[lockfile]
+format-version = 1
+
+[[package]]
+name = "tests.package-lock-snapshot-invalid"
+version = "0.1.0"
+
+[[snapshot]]
+target = "linux-x86_64"
+provenance = "manifest:tests.package-lock-snapshot-invalid"
+digest = "sha256:package-lock-snapshot-invalid"
+selection = "tests.package-lock-snapshot-invalid@0.2.0"

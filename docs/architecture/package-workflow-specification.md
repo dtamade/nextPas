@@ -148,7 +148,8 @@ lockfile v1 只读 parser。这批 reality 先冻结四件事：
   package version 与 source root count
 - lock truth 当前冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否缺失、是否符合
   最小 v1 grammar 投影 `status=missing|ready|invalid`，同时公开 format version、package entries、
-  resolver snapshot skeleton 与 validation issues
+  resolver snapshot skeleton 与 validation issues；snapshot selection / digest / target 的最小一致性
+  也属于 lock truth validation，而不是 resolver 执行
 - install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
   与必要的 blocker code/message；lockfile invalid 会在 lock missing 之前阻塞为
   `package-lock-invalid`，lockfile valid 但没有匹配 manifest package name/version 时会阻塞为
@@ -349,8 +350,9 @@ selection = "nextpas.graphics@0.1.0"
 
 这份 skeleton 只让 `pkg inspect` / `pkg plan` 区分 missing、ready 和 invalid，并能解释
 invalid 的具体 issue。当前 `[[snapshot]]` 只读读取 target、provenance、digest 与 selection
-四个 replay 字段；缺字段会让 lockfile 进入 `invalid`，但 snapshot 仍是 skeleton，不执行 resolver，
-也不生成或改写 lockfile。
+四个 replay 字段；缺字段、selection 不匹配任何 `[[package]] name/version`、重复 target 或
+非 `sha256:` digest shape 都会让 lockfile 进入 `invalid`。这些仍然只是 skeleton validation，
+不执行 resolver，也不生成或改写 lockfile。
 
 ## fetched source roots、build roots、cache roots、install roots 必须各自有正式语义
 
@@ -555,7 +557,8 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   manifest status、workflow manifest path、package root、package name、lock status、canonical
   lockfile path、lock format / entry / snapshot / issue detail、source root count、source roots
   JSON 明细、declared dependency count / dependencies JSON 明细、install plan status 与 install
-  plan blocker code/message；其中 `pkg plan`
+  plan blocker code/message；其中 invalid snapshot skeleton 会先停在 `package-lock-invalid`，
+  `pkg plan`
   在 out-of-sync blocker 上还会投影 expected package 与 lock entries detail，并且
   是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
   root node、declared-dependency nodes 与 `declared-dependency` edges

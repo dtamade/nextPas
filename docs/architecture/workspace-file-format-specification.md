@@ -145,7 +145,8 @@ nextPas 在这里先冻结一个明确立场：
 `nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，并通过
 `compiler/frontend/np_package_lock.pas` 读取最小 v1 TOML skeleton，投影
 `status=missing|ready|invalid`、format version、package entries、snapshot skeleton 与 validation
-issues。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的写入和 atomic
+issues。snapshot selection / digest / target 的最小一致性校验也属于这份只读 truth，不会触发
+resolver 或 lockfile write。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的写入和 atomic
 replace 仍未开始实现。
 
 ## root discovery 必须 deterministic，而且不能靠全树重扫
@@ -461,7 +462,8 @@ selection = "nextpas.graphics@0.1.0"
 - `package[*].name` / `version`
   - resolved package identity 与 selected version
 - `snapshot[*].target` / `provenance` / `digest` / `selection`
-  - target-sensitive replay skeleton；缺字段会让 lockfile invalid，但这仍不是完整 resolver output
+  - target-sensitive replay skeleton；缺字段、selection 不匹配 `package[*].name@version`、
+    重复 target 或非 `sha256:` digest shape 会让 lockfile invalid，但这仍不是完整 resolver output
 
 更完整的 dependency selected-version graph、content locator 细节与 resolver decision transcript
 仍是后续 resolver / lock writer 应该补进来的 replay evidence；当前只读 preflight 先解析最小
