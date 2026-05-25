@@ -1,7 +1,40 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-25 记录为准。
+2026-05-26 记录为准。
+
+## Session: 2026-05-26 (Semantic call binding contract)
+
+- **Status:** completed
+- Objective:
+  - 为 downstream LSP / language-service adapter 暴露第一条 source-addressable callable binding
+    truth，让 root call occurrence 能绑定到 callable semantic symbol id。
+- Baseline:
+  - `TSemanticModel` 已经有 semantic symbols、types、scopes 和 typed HIR，但没有 reference/call
+    binding side table。
+  - FPDev LSP 已能消费 declaration/type/uses semantic ids，但 call occurrence 仍缺 compiler-owned
+    binding surface。
+- Actions taken:
+  - 在 `compiler/sema/np_semantic_model.pas` 中新增 `TSemanticBinding` 与
+    `AddBinding(...)` / `BindingCount` / `BindingAt(...)`。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 中新增 call binding seeding：遍历 root AST 的
+    `gnkProcedureCallStatement` 与 `gnkFunctionCall`，绑定到现有 callable declaration symbol id。
+  - 为 overload call binding 增加 argument-count 选择，并跳过同 source offset 的 wrapper
+    function-call child，避免重复 binding。
+  - 新增 `tests/semantic/test_semantic_call_bindings.pas`，覆盖普通 procedure/function call 与
+    overloaded procedure call target symbol id。
+  - 扩展 `build/verify_local.sh`，新增 `semantic-call-bindings-check`，并将
+    `semanticCallBindingsCheck` 纳入最终 verify-local command envelope。
+- Verification:
+  - RED：focused test 先失败于旧实现只产生一条 overload binding，随后暴露 wrapper duplicate
+    会产生三条 binding。
+  - GREEN：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - diff 范围集中在 semantic model/analyzer、focused semantic test 与 verify gate。
+  - 当前 contract 是 root call binding；selector/member/imported-unit call binding 仍需下一批继续。
 
 ## Session: 2026-05-25 (Batch 60 package lock snapshot consistency)
 

@@ -90,10 +90,20 @@ type
     function HasOverload(const AName: string): Boolean;
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+    function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
+    function IsWrappedCallChild(
+      const AParent: TGreenNode;
+      const AChild: TGreenNode
+    ): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
     procedure RestoreCallArgs(const ASnapshots: TParamSnapshots);
+    function CallableSymbolIdForDeclaration(const ADecl: TGreenNode): LongInt;
+    procedure RegisterCallBinding(const ACallNode: TGreenNode;
+      const ADecl: TGreenNode);
+    procedure SeedCallBindings;
+    procedure SeedCallBindingsInNode(const ANode: TGreenNode);
     function DuplicateImportName: string;
     procedure EmitSemaError(
       const ACode: string;
@@ -749,6 +759,49 @@ begin
   Result := False;
 end;
 
+function TSemanticAnalyzer.CallArgumentCount(const ACallNode: TGreenNode): LongInt;
+var
+  InnerCall: TGreenNode;
+begin
+  Result := 0;
+  if ACallNode = nil then
+    Exit;
+
+  if ACallNode.NodeKind = gnkFunctionCall then
+  begin
+    if ACallNode.ChildCount > 0 then
+      Result := ACallNode.ChildCount - 1;
+    Exit;
+  end;
+
+  if ACallNode.NodeKind = gnkProcedureCallStatement then
+  begin
+    if (ACallNode.ChildCount = 1) and
+      (ACallNode.ChildAt(0) <> nil) and
+      (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    begin
+      InnerCall := ACallNode.ChildAt(0);
+      if InnerCall.ChildCount > 0 then
+        Result := InnerCall.ChildCount - 1;
+      Exit;
+    end;
+
+    Result := ACallNode.ChildCount;
+  end;
+end;
+
+function TSemanticAnalyzer.IsWrappedCallChild(
+  const AParent: TGreenNode;
+  const AChild: TGreenNode
+): Boolean;
+begin
+  Result := (AParent <> nil) and (AChild <> nil) and
+    (AParent.NodeKind = gnkProcedureCallStatement) and
+    (AChild.NodeKind = gnkFunctionCall) and
+    (AParent.ByteOffset = AChild.ByteOffset) and
+    SameText(AParent.Text, AChild.Text);
+end;
+
 function TSemanticAnalyzer.BindCallArgs(const ADecl: TGreenNode;
   const ACallNode: TGreenNode;
   const ANameSkip: LongInt): TParamSnapshots;
@@ -807,6 +860,94 @@ begin
     else
       FModel.RemoveVarInitValue(ASnapshots[Index].Name);
   end;
+end;
+
+function TSemanticAnalyzer.CallableSymbolIdForDeclaration(
+  const ADecl: TGreenNode
+): LongInt;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  if ADecl = nil then
+    Exit;
+
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if (Symbol.ByteOffset = ADecl.ByteOffset) and
+      SameText(Symbol.Name, ADecl.Text) and
+      (SameText(Symbol.Kind, 'procedure') or
+       SameText(Symbol.Kind, 'function') or
+       SameText(Symbol.Kind, 'method')) then
+      Exit(Symbol.SymbolId);
+  end;
+end;
+
+procedure TSemanticAnalyzer.RegisterCallBinding(
+  const ACallNode: TGreenNode;
+  const ADecl: TGreenNode
+);
+var
+  SymbolId: LongInt;
+begin
+  if (ACallNode = nil) or (ADecl = nil) then
+    Exit;
+
+  SymbolId := CallableSymbolIdForDeclaration(ADecl);
+  if SymbolId <= 0 then
+    Exit;
+
+  FModel.AddBinding(
+    'call',
+    ACallNode.Text,
+    NormalizeUnitIdentity(FUnitGraph.RootName),
+    ACallNode.ByteOffset,
+    SymbolId
+  );
+end;
+
+procedure TSemanticAnalyzer.SeedCallBindingsInNode(const ANode: TGreenNode);
+var
+  BodyNode: TGreenNode;
+  Child: TGreenNode;
+  DeclNode: TGreenNode;
+  Index: LongInt;
+begin
+  if ANode = nil then
+    Exit;
+
+  if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
+  begin
+    if HasOverload(ANode.Text) then
+    begin
+      if LookupOverload(
+        ANode.Text,
+        CallArgumentCount(ANode),
+        BodyNode,
+        DeclNode
+      ) then
+        RegisterCallBinding(ANode, DeclNode);
+    end
+    else if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
+      RegisterCallBinding(ANode, DeclNode);
+  end;
+
+  for Index := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(Index);
+    if (Child <> nil) and not IsWrappedCallChild(ANode, Child) then
+      SeedCallBindingsInNode(Child);
+  end;
+end;
+
+procedure TSemanticAnalyzer.SeedCallBindings;
+begin
+  if (FRootAst = nil) or (FRootAst.RootNode = nil) then
+    Exit;
+
+  SeedCallBindingsInNode(FRootAst.RootNode);
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
@@ -1820,6 +1961,7 @@ begin
   SeedDeclarations;
   SeedImportedUnitBodies;
   AssignScopesToSymbols;
+  SeedCallBindings;
   CheckDuplicateDeclarations;
   CheckUndeclaredIdentifiers;
   CheckTypeMismatches;

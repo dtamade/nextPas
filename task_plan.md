@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Semantic Call Binding Contract
+
+### Goal
+
+为 FPDev LSP 和后续 language-service 工作暴露第一条 source-addressable callable binding
+truth：semantic model 不只告诉调用方“有哪些 callable symbol”，还要能说明 root source 中
+某个 procedure/function call occurrence 绑定到了哪个 callable semantic symbol。
+
+本批次新增并冻结：
+
+- `TSemanticBinding`
+- root procedure/function call binding -> callable `SymbolId`
+- overload arg-count 消歧
+- `semantic-call-bindings-check`
+- verify-local envelope `semanticCallBindingsCheck`
+
+### Architecture Decision
+
+binding contract 归属于 `TSemanticModel`：
+
+- analyzer 负责从已有 callable body registry 生成 binding
+- model 持有稳定 identity：binding kind、name、owner unit id、byte offset、target symbol id
+- downstream LSP/query/IDE adapter 只消费 model truth，不重扫源码、不自建 parser/type checker
+- wrapper `procedure-call-statement -> function-call` AST 只产生一条 binding，避免同一 source offset
+  被重复绑定
+
+本批次仍只承诺 root source call binding。selector/member access、imported unit call binding、
+bare identifier function-reference binding、完整 overload/type-based resolution 不在本批次内。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `tests/semantic/test_semantic_call_bindings.pas`
+- [x] 扩展 `TSemanticModel`，新增 `TSemanticBinding` 与 add/read API
+- [x] 扩展 `TSemanticAnalyzer`，在 scope assignment 后生成 call bindings
+- [x] 对 overloaded procedure call 使用 argument count 选择 target declaration
+- [x] 对 wrapper call AST 去重，避免同一 `Pick(1)` 产生两条 binding
+- [x] 新增 `semantic-call-bindings-check` 并纳入 verify-local envelope
+- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
+- [x] 同步持续记录并提交
+
+### Verification
+
+- RED: focused test 必须先暴露旧实现无法正确处理 overload binding
+- GREEN: focused test 输出 `semantic-call-bindings-status=pass`
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"` 与
+  `verify-local=pass`
+
+### Non-goals
+
+- 不新增 standalone language service session
+- 不实现 selector/member access binding
+- 不实现 imported unit call occurrence binding
+- 不把 name-only fallback 包装成 semantic binding truth
+
 ## Addendum: 2026-05-25 Batch 60 Package Lock Snapshot Consistency
 
 ### Goal

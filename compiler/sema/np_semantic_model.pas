@@ -32,6 +32,15 @@ type
     Operand: string;
   end;
 
+  TSemanticBinding = record
+    BindingId: LongInt;
+    Kind: string;
+    Name: string;
+    OwnerUnitId: string;
+    ByteOffset: LongInt;
+    TargetSymbolId: LongInt;
+  end;
+
   TRuntimeContract = record
     ContractId: LongInt;
     Name: string;
@@ -92,6 +101,7 @@ type
     FTypes: array of TSemanticType;
     FScopes: array of TSemanticScope;
     FTypedHirNodes: array of TTypedHirNode;
+    FBindings: array of TSemanticBinding;
     FRuntimeContracts: array of TRuntimeContract;
     FForeignProcedureBindings: array of TSemanticForeignProcedureBinding;
     FLibraryRequests: array of TSemanticLibraryRequest;
@@ -130,6 +140,13 @@ type
       const ATypeId: LongInt;
       const AOperand: string
     ): LongInt;
+    function AddBinding(
+      const AKind: string;
+      const AName: string;
+      const AOwnerUnitId: string;
+      const AByteOffset: LongInt;
+      const ATargetSymbolId: LongInt
+    ): LongInt;
     function AddRuntimeContract(const AName: string): LongInt;
     function AddForeignProcedureBinding(
       const APascalName: string;
@@ -152,6 +169,8 @@ type
     function TypeAt(const AIndex: LongInt): TSemanticType;
     function TypedHirNodeCount: LongInt;
     function TypedHirNodeAt(const AIndex: LongInt): TTypedHirNode;
+    function BindingCount: LongInt;
+    function BindingAt(const AIndex: LongInt): TSemanticBinding;
     function RuntimeContractCount: LongInt;
     function ForeignProcedureBindingCount: LongInt;
     function ForeignProcedureBindingAt(
@@ -384,6 +403,27 @@ begin
   Result := FTypedHirNodes[NextIndex].HirNodeId;
 end;
 
+function TSemanticModel.AddBinding(
+  const AKind: string;
+  const AName: string;
+  const AOwnerUnitId: string;
+  const AByteOffset: LongInt;
+  const ATargetSymbolId: LongInt
+): LongInt;
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(FBindings);
+  SetLength(FBindings, NextIndex + 1);
+  FBindings[NextIndex].BindingId := NextIndex + 1;
+  FBindings[NextIndex].Kind := AKind;
+  FBindings[NextIndex].Name := AName;
+  FBindings[NextIndex].OwnerUnitId := AOwnerUnitId;
+  FBindings[NextIndex].ByteOffset := AByteOffset;
+  FBindings[NextIndex].TargetSymbolId := ATargetSymbolId;
+  Result := FBindings[NextIndex].BindingId;
+end;
+
 function TSemanticModel.AddRuntimeContract(const AName: string): LongInt;
 var
   NextIndex: SizeInt;
@@ -525,6 +565,27 @@ begin
   end;
 
   Result := FTypedHirNodes[AIndex];
+end;
+
+function TSemanticModel.BindingCount: LongInt;
+begin
+  Result := Length(FBindings);
+end;
+
+function TSemanticModel.BindingAt(const AIndex: LongInt): TSemanticBinding;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FBindings)) then
+  begin
+    Result.BindingId := 0;
+    Result.Kind := '';
+    Result.Name := '';
+    Result.OwnerUnitId := '';
+    Result.ByteOffset := 0;
+    Result.TargetSymbolId := 0;
+    Exit;
+  end;
+
+  Result := FBindings[AIndex];
 end;
 
 function TSemanticModel.RuntimeContractCount: LongInt;

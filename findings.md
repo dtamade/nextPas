@@ -10,6 +10,23 @@
 
 ## Research Findings
 
+- `TSemanticModel` 现在新增 `TSemanticBinding` side table，用于表达 source-addressable binding
+  truth：当前最小字段为 binding id、kind、name、owner unit id、source byte offset 与 target
+  semantic symbol id。
+- `TSemanticAnalyzer` 现在会在 `AssignScopesToSymbols` 后生成 root procedure/function call
+  bindings；这条路径复用已有 callable body registry 和 semantic symbols，不让 downstream adapter
+  自行猜 symbol。
+- overloaded procedure call binding 现在使用 call argument count 选择 target declaration；focused
+  test 已覆盖 `Pick;` 与 `Pick(1);` 分别绑定到 0 参数与 1 参数 overload。
+- parser 目前会把某些 `Pick(1);` 表达成 wrapper `gnkProcedureCallStatement` 内含同 offset
+  `gnkFunctionCall`；semantic binding walker 会跳过这种 wrapper child，避免同一个 source
+  occurrence 产生重复 binding。
+- `tests/semantic/test_semantic_call_bindings.pas` 已覆盖 procedure call、function call 与 overloaded
+  procedure call；`build/verify_local.sh` 已新增 `semantic-call-bindings-check=pass`，最终
+  verify-local envelope 也投影 `semanticCallBindingsCheck":"pass"`。
+- 本批次仍只承诺 root source call binding。selector/member access、imported unit call binding、
+  bare identifier function-reference binding 与完整 type-based overload resolution 仍是后续
+  language-service contract 工作，不能被 downstream 包装成已完成。
 - Batch 60 给 `nextpas.lock` snapshot skeleton 增加了最小一致性校验：snapshot `selection`
   必须匹配某个 lock entry 的 `name@version`，否则投影
   `package.lock.snapshot-selection-unmatched`。
