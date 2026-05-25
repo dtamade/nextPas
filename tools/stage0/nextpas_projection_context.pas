@@ -628,6 +628,7 @@ begin
   AContext.ResultCount := 0;
   AContext.HasResultCount := False;
   AContext.SymbolsJson := '';
+  AContext.BindingsJson := '';
   AContext.ScopesJson := '';
   AContext.TypesJson := '';
 end;

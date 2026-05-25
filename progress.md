@@ -3,6 +3,38 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 62 query binding projection)
+
+- **Status:** completed
+- Objective:
+  - 把 `TSemanticModel` 已有的 call binding side table 暴露到 `nextpas query symbols`，形成
+    line-based `query-bindings` 与 envelope `queryBindings`。
+- Baseline:
+  - Batch 61 已经让 root source 中调用 imported unit callable 时绑定到 imported callable
+    `SymbolId`。
+  - `query symbols` 已有 `querySymbols` / `queryScopes` / `queryTypes`，但还没有公开
+    `TSemanticBinding`，downstream adapter 仍无法直接消费 call occurrence binding truth。
+- Actions taken:
+  - 在 `build/verify_local.sh` 新增 `stage0-query-bindings-check` RED gate，要求
+    `hello_with_units.pas` 输出 `SayHello` call binding，并把
+    `stage0QueryBindingsCheck` 纳入 verify-local envelope。
+  - RED 已确认旧实现失败在 `missing-stage0-query-bindings-detail`。
+  - 在 `compiler/frontend/np_compilation_session.pas` 中新增 `BindingsJson`，从
+    `FSemanticModel.BindingAt(...)` 生成最小 binding JSON。
+  - 扩展 `TQueryProjectionContext`、clear helper、line-based text projection、JSON envelope
+    projection 与 `RunQuerySymbols(...)`，让 `query-bindings` / `queryBindings` 复用同一份
+    session-owned JSON。
+  - Focused probe 已确认 `query symbols examples/smoke/hello_with_units.pas ...` 输出
+    `query-bindings=[{"bindingId":1,"kind":"call","name":"SayHello","ownerUnitId":"hellowithunits","byteOffset":56,"targetSymbolId":1}]`。
+- Verification:
+  - Focused：stage0 driver 重新编译通过；focused query 输出 line/envelope 两层 binding projection。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `stage0-query-bindings-check=pass`、`stage0QueryBindingsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 范围集中在 query projection、verify gate 与本批文档/持续记录。
+  - 仍保持 query 只读；不执行 MIR、backend、toolchain，也不新增完整 language service。
+
 ## Session: 2026-05-26 (Batch 61 target snapshot + imported call binding closure)
 
 - **Status:** completed

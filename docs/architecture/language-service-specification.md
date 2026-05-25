@@ -183,9 +183,11 @@ nextPas language service 至少要把这些查询族写成正式表面：
 `LanguageServiceSession`、open document overlay、incremental invalidation 或 protocol adapter。
 同一条 semantic model 现在还拥有最小 `TSemanticBinding` side table：root source 中的
 procedure/function call occurrence 可以绑定到 root callable 或唯一 imported-unit callable 的
-`SymbolId`。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，但当前
-`query symbols` 仍不承诺完整 LSP、selector/member binding、open document overlay 或 incremental
-invalidation。
+`SymbolId`。`query symbols` 会把这份 side table 作为 `query-bindings=<json-array>` 与
+`command-envelope=<json>.result.queryBindings` 投影出来，最小字段为 `bindingId`、`kind`、
+`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。这为后续 references / hover /
+go-to-definition 提供 compiler-owned truth，但当前 `query symbols` 仍不承诺完整 LSP、
+selector/member binding、open document overlay 或 incremental invalidation。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

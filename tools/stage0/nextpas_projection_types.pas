@@ -212,6 +212,7 @@ type
     ResultCount: LongInt;
     HasResultCount: Boolean;
     SymbolsJson: string;
+    BindingsJson: string;
     ScopesJson: string;
     TypesJson: string;
   end;

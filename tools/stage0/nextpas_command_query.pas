@@ -113,6 +113,7 @@ begin
     AState.QueryProjection.ResultCount := Session.SymbolCount;
     AState.QueryProjection.HasResultCount := True;
     AState.QueryProjection.SymbolsJson := Session.SymbolsJson;
+    AState.QueryProjection.BindingsJson := Session.BindingsJson;
     AState.QueryProjection.ScopesJson := Session.ScopesJson;
     AState.QueryProjection.TypesJson := Session.TypesJson;
 

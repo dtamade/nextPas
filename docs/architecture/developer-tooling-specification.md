@@ -562,7 +562,10 @@ semantic query 是 developer tooling 和 language service 的交界面。nextPas
 metadata，方便 CLI、automation 与 future IDE adapter 直接消费，而不需要重扫源码或解析
 build output。`queryScopes[]` 与 `queryTypes[]` 则把同一份 `TSemanticModel` 的 scope/type
 graph 作为 normalized side tables 同步投影进 line output 与 result envelope，避免调用方在
-`querySymbols[]` 之外维护第二套 `scopeId` / `typeId` lookup。
+`querySymbols[]` 之外维护第二套 `scopeId` / `typeId` lookup。`queryBindings[]` 则把同一份
+`TSemanticModel` 的 source occurrence binding table 公开给 CLI、automation 与 future IDE
+adapter；当前最小条目包含 `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与
+`targetSymbolId`。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
 

@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 62 Query Binding Projection
+
+### Goal
+
+把 Batch 61 已经进入 `TSemanticModel` 的 call binding truth 公开到
+`nextpas query symbols`，让 CLI、automation 与 future language-service adapter 可以直接消费
+source occurrence -> semantic symbol 的绑定关系，而不是重扫源码或自己猜名字解析。
+
+本批次新增并冻结：
+
+- `TCompilationSession.BindingsJson`
+- line-based `query-bindings=<json-array>`
+- envelope `queryBindings`
+- `stage0QueryBindingsCheck`
+
+### Architecture Decision
+
+query binding projection 继续归属于 compilation-session-backed query surface：
+
+- `TSemanticModel` 仍是 binding truth owner；`stage0` 只透传 `TCompilationSession` 生成的 JSON。
+- `query-bindings` 与 `query-symbols`、`query-scopes`、`query-types` 同属只读 semantic query
+  projection，不执行 MIR、backend 或 toolchain。
+- 每个 binding 条目先公开稳定最小字段：`bindingId`、`kind`、`name`、`ownerUnitId`、
+  `byteOffset`、`targetSymbolId`。
+- 本批次不新增完整 language service session、不做 references/rename/completion，也不扩展
+  selector/member access binding 或 type-based overload resolution。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `stage0-query-bindings-check`，要求 `query-bindings` 与 `queryBindings`
+- [x] 在 `TCompilationSession` 中从 session-owned `TSemanticModel.BindingAt(...)` 暴露
+      `BindingsJson`
+- [x] 扩展 query projection context、line output 与 envelope mirror
+- [x] focused probe 确认 `hello_with_units.pas` 的 `SayHello` call binding 已投影
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 同步 language service / semantic model / stage0 tooling docs 与持续记录
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh verification 先失败在 `missing-stage0-query-bindings-detail`
+- GREEN focused: `nextpas query symbols examples/smoke/hello_with_units.pas ...` 输出
+  `query-bindings=[{"bindingId":1,"kind":"call","name":"SayHello",...}]`，且 envelope 同步带上
+  `queryBindings`
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0-query-bindings-check=pass`、`stage0QueryBindingsCheck":"pass"` 与 `verify-local=pass`
+
+### Non-goals
+
+- 不实现 selector/member access binding
+- 不实现 bare identifier function-reference binding
+- 不实现完整 type-based overload resolution
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 61 Target Snapshot and Imported Call Binding Closure
 
 ### Goal

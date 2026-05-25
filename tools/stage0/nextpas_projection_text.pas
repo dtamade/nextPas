@@ -894,6 +894,11 @@ begin
   );
   WriteProjectionTextIfPresent(
     UseStdErr,
+    'query-bindings',
+    AContext.BindingsJson
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
     'query-scopes',
     AContext.ScopesJson
   );

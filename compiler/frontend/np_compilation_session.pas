@@ -209,6 +209,7 @@ type
     function UnitGraphRootName: string;
     function SymbolCount: LongInt;
     function SymbolsJson: string;
+    function BindingsJson: string;
     function ScopeCount: LongInt;
     function ScopesJson: string;
     function TypeCount: LongInt;
@@ -1644,6 +1645,40 @@ begin
       Symbol.ParamCount >= 0
     );
     AppendJsonIntegerField(Fields, 'byteOffset', Symbol.ByteOffset, True);
+
+    Result := Result + '{' + Fields + '}';
+  end;
+  Result := Result + ']';
+end;
+
+function TCompilationSession.BindingsJson: string;
+var
+  Binding: TSemanticBinding;
+  Fields: string;
+  Index: LongInt;
+begin
+  if FSemanticModel = nil then
+    Exit('[]');
+
+  Result := '[';
+  for Index := 0 to FSemanticModel.BindingCount - 1 do
+  begin
+    if Index > 0 then
+      Result := Result + ',';
+
+    Binding := FSemanticModel.BindingAt(Index);
+    Fields := '';
+    AppendJsonIntegerField(Fields, 'bindingId', Binding.BindingId, True);
+    AppendJsonStringField(Fields, 'kind', Binding.Kind);
+    AppendJsonStringField(Fields, 'name', Binding.Name);
+    AppendJsonStringField(Fields, 'ownerUnitId', Binding.OwnerUnitId);
+    AppendJsonIntegerField(Fields, 'byteOffset', Binding.ByteOffset, True);
+    AppendJsonIntegerField(
+      Fields,
+      'targetSymbolId',
+      Binding.TargetSymbolId,
+      True
+    );
 
     Result := Result + '{' + Fields + '}';
   end;

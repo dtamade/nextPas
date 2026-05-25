@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- `nextpas query symbols` 现在正在接入 `TSemanticModel` 的 binding side table：计划公开
+  `query-bindings=<json-array>` 与 envelope `queryBindings`，条目字段直接来自
+  `TSemanticBinding` 的 `bindingId/kind/name/ownerUnitId/byteOffset/targetSymbolId`。
+- RED gate 已证明旧 query surface 缺少 binding projection：fresh verification 失败在
+  `missing-stage0-query-bindings-detail`；focused GREEN probe 已确认
+  `hello_with_units.pas` 的 `SayHello` call occurrence 投影为
+  `targetSymbolId=1` 的 call binding。
+- query binding projection 仍是 compilation-session-backed 只读 semantic query；它不新增
+  `LanguageServiceSession`，不执行 MIR/backend/toolchain，也不扩展 selector/member access 或
+  type-based overload resolution。
 - Root source call binding 现在已经覆盖 imported unit callable 的最小边界：`SeedImportedUnitBodies`
   会解析 resolved imported units，并为 imported procedure/function declarations seed owner-aware
   callable symbols；`RegisterProcedureBody` 同步保存 owner unit id。
