@@ -701,6 +701,14 @@ begin
     AppendJsonField(AFields, 'packageLockEntries', AContext.LockEntriesJson);
   AppendJsonIntegerField(
     AFields,
+    'packageLockSnapshotCount',
+    AContext.LockSnapshotCount,
+    AContext.HasLockSnapshotCount
+  );
+  if AContext.LockSnapshotsJson <> '' then
+    AppendJsonField(AFields, 'packageLockSnapshots', AContext.LockSnapshotsJson);
+  AppendJsonIntegerField(
+    AFields,
     'packageLockIssueCount',
     AContext.LockIssueCount,
     AContext.HasLockIssueCount

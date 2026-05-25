@@ -220,6 +220,46 @@ begin
   Result := '[' + EntryJson + ']';
 end;
 
+function BuildJsonPackageLockSnapshotArray(
+  const AValues: array of TPackageLockSnapshotInfo
+): string;
+var
+  EntryFields: string;
+  EntryJson: string;
+  Index: LongInt;
+begin
+  EntryJson := '';
+  for Index := 0 to Length(AValues) - 1 do
+  begin
+    if EntryJson <> '' then
+      EntryJson := EntryJson + ',';
+    EntryFields := '';
+    AppendJsonField(
+      EntryFields,
+      'target',
+      JsonString(AValues[Index].Target)
+    );
+    AppendJsonField(
+      EntryFields,
+      'provenance',
+      JsonString(AValues[Index].Provenance)
+    );
+    AppendJsonField(
+      EntryFields,
+      'digest',
+      JsonString(AValues[Index].Digest)
+    );
+    AppendJsonField(
+      EntryFields,
+      'selection',
+      JsonString(AValues[Index].Selection)
+    );
+    EntryJson := EntryJson + '{' + EntryFields + '}';
+  end;
+
+  Result := '[' + EntryJson + ']';
+end;
+
 function BuildJsonPackageIdentity(
   const AName: string;
   const AVersion: string
@@ -604,6 +644,9 @@ begin
   AContext.LockEntryCount := 0;
   AContext.HasLockEntryCount := False;
   AContext.LockEntriesJson := '';
+  AContext.LockSnapshotCount := 0;
+  AContext.HasLockSnapshotCount := False;
+  AContext.LockSnapshotsJson := '';
   AContext.LockIssueCount := 0;
   AContext.HasLockIssueCount := False;
   AContext.LockIssuesJson := '';
@@ -890,6 +933,11 @@ begin
   AContext.HasLockEntryCount := AWorkflowTruth.LockTruth.Status <> '';
   AContext.LockEntriesJson := BuildJsonPackageLockEntryArray(
     AWorkflowTruth.LockTruth.Entries
+  );
+  AContext.LockSnapshotCount := AWorkflowTruth.LockTruth.SnapshotCount;
+  AContext.HasLockSnapshotCount := AWorkflowTruth.LockTruth.Status <> '';
+  AContext.LockSnapshotsJson := BuildJsonPackageLockSnapshotArray(
+    AWorkflowTruth.LockTruth.Snapshots
   );
   AContext.LockIssueCount := AWorkflowTruth.LockTruth.IssueCount;
   AContext.HasLockIssueCount := AWorkflowTruth.LockTruth.Status <> '';

@@ -939,6 +939,17 @@ begin
   );
   WriteProjectionIntegerWhenEnabled(
     UseStdErr,
+    'package-lock-snapshot-count',
+    AContext.LockSnapshotCount,
+    AContext.HasLockSnapshotCount
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'package-lock-snapshots',
+    AContext.LockSnapshotsJson
+  );
+  WriteProjectionIntegerWhenEnabled(
+    UseStdErr,
     'package-lock-issue-count',
     AContext.LockIssueCount,
     AContext.HasLockIssueCount

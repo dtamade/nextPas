@@ -144,8 +144,8 @@ nextPas 在这里先冻结一个明确立场：
 `compiler/frontend/np_package_workflow.pas` 现阶段会把 workspace-scoped canonical
 `nextpas.lock` 路径投影成 `TPackageLockTruth.LockfilePath`，并通过
 `compiler/frontend/np_package_lock.pas` 读取最小 v1 TOML skeleton，投影
-`status=missing|ready|invalid`、format version、package entries 与 validation issues。也就是说，
-文件层 ownership 已经先收口成 compiler-owned truth，对应的写入、resolver snapshot 与 atomic
+`status=missing|ready|invalid`、format version、package entries、snapshot skeleton 与 validation
+issues。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的写入和 atomic
 replace 仍未开始实现。
 
 ## root discovery 必须 deterministic，而且不能靠全树重扫
@@ -446,6 +446,12 @@ format-version = 1
 [[package]]
 name = "nextpas.graphics"
 version = "0.1.0"
+
+[[snapshot]]
+target = "linux-x86_64"
+provenance = "manifest:nextpas.graphics"
+digest = "sha256:..."
+selection = "nextpas.graphics@0.1.0"
 ```
 
 这份 skeleton 当前先冻结这些 ownership：
@@ -454,9 +460,11 @@ version = "0.1.0"
   - machine-owned grammar version，不是 package version
 - `package[*].name` / `version`
   - resolved package identity 与 selected version
+- `snapshot[*].target` / `provenance` / `digest` / `selection`
+  - target-sensitive replay skeleton；缺字段会让 lockfile invalid，但这仍不是完整 resolver output
 
-target snapshots、declared provenance、source/content digest 与 dependency selected version 仍是
-后续 resolver / lock writer 应该补进来的 replay evidence；当前只读 preflight 先解析最小
+更完整的 dependency selected-version graph、content locator 细节与 resolver decision transcript
+仍是后续 resolver / lock writer 应该补进来的 replay evidence；当前只读 preflight 先解析最小
 skeleton，并要求 manifest package name/version 能在 lock entries 中找到同名同版本项，让 tooling
 可以诚实区分 missing、ready、invalid 与 out-of-sync。
 

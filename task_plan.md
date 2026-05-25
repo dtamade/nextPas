@@ -15,6 +15,62 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-25 Batch 59 Package Lock Snapshot Skeleton
+
+### Goal
+
+把 `nextpas.lock` 的只读 detail 从 package entries 继续推进到最小 resolver snapshot
+skeleton，让 CLI / IDE / automation 能看到 target-sensitive replay shape 的第一层事实，
+但仍不执行 resolver、version solving、fetch/install 或 lockfile write：
+
+- `package-lock-snapshot-count`
+- `package-lock-snapshots`
+- envelope `packageLockSnapshotCount`
+- envelope `packageLockSnapshots`
+
+### Architecture Decision
+
+本批次只扩展 lockfile v1 的只读 parser 和 projection：
+
+- `[[snapshot]]` 是 resolver snapshot 的最小可解释骨架，当前只读取
+  `target`、`provenance`、`digest` 与 `selection`
+- snapshot detail 只进入 package lock truth，不改变 install-plan preflight 的 ready /
+  blocked / missing 判定
+- 缺少 snapshot 的现有 v1 lockfile 仍然合法；有 `[[snapshot]]` 但缺必需字段时才进入
+  `package-lock-invalid`
+- `pkg inspect`、`pkg plan`、`pkg graph` 与 `doctor` 继续消费同一份
+  `TPackageWorkflowTruth`
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `stage0PkgLockSnapshotCheck`，要求 lock snapshot count/detail line 与 envelope
+- [x] 扩展 `np_package_lock.pas` 只读解析 `[[snapshot]]`
+- [x] 扩展 package workflow truth 与 stage0 text/json projection
+- [x] GREEN：focused rerun 确认 lock detail fixture 输出 snapshot，且现有 ready path 不被阻塞
+- [x] 同步 package workflow / workspace file / stage0 tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh verification 必须先失败在缺少
+  `package-lock-snapshot-count` / `package-lock-snapshots`
+- GREEN: `tests/fixtures/package_lock_detail` 必须投影一个
+  `target=linux-x86_64` 的 snapshot detail
+- final: fresh `bash build/verify_local.sh` 必须通过，并确认
+  `stage0PkgLockSnapshotCheck=pass`
+
+### Non-goals
+
+- 不做 dependency resolver 或 version solving
+- 不联网，不 fetch，不 install
+- 不写入、重写或 migrate `nextpas.lock`
+- 不把 snapshot skeleton 扩成完整 lock writer grammar
+
 ## Addendum: 2026-05-25 Batch 58 Manifest-Lock Mismatch Detail
 
 ### Goal

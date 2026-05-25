@@ -75,7 +75,8 @@
   `packageLockStatus` 现在根据 canonical lockfile 是否缺失、
   是否是最小 v1 valid lockfile 投影 `missing|ready|invalid`，并同步公开
   `packageLockFormatVersion`、`packageLockEntryCount`、`packageLockEntries`、
-  `packageLockIssueCount` 与 `packageLockIssues`；`packageInstallPlanStatus` 继续作为只读 preflight truth，投影
+  `packageLockSnapshotCount`、`packageLockSnapshots`、`packageLockIssueCount` 与
+  `packageLockIssues`；`packageInstallPlanStatus` 继续作为只读 preflight truth，投影
   `ready|blocked|missing` 并在有阻塞时公开 blocker 详情；并继续冻结
   `packageWorkflowManifestPath`、`packageRootPath`、`packageName`、`packageLockStatus` 与
   `packageLockfilePath`；`pkg plan` 当前还直接覆盖 package manifest ready path、
@@ -86,9 +87,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 58：manifest-lock mismatch detail。
+- 当前 rolling window 已推进到 Batch 59：package lock snapshot skeleton。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 58` 已完成。
+- `Batch 1` 到 `Batch 59` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持

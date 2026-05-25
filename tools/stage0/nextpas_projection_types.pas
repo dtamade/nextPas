@@ -225,6 +225,9 @@ type
     LockEntryCount: LongInt;
     HasLockEntryCount: Boolean;
     LockEntriesJson: string;
+    LockSnapshotCount: LongInt;
+    HasLockSnapshotCount: Boolean;
+    LockSnapshotsJson: string;
     LockIssueCount: LongInt;
     HasLockIssueCount: Boolean;
     LockIssuesJson: string;

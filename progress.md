@@ -3,6 +3,45 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-25 记录为准。
 
+## Session: 2026-05-25 (Batch 59 package lock snapshot skeleton)
+
+- **Status:** completed
+- Objective:
+  - 把 `nextpas.lock` 的只读 detail 从 package entries 推进到最小 resolver snapshot skeleton，
+    让 CLI / IDE / automation 能看到 target/provenance/digest/selection replay shape。
+- Baseline:
+  - Batch 58 已经能解释 manifest-lock mismatch，但 lock parser 仍只读取
+    `[lockfile] format-version = 1` 与 `[[package]] name/version`。
+  - package workflow 仍必须保持 read-only / non-executing，不打开 resolver、fetch/install
+    或 lockfile write。
+- Actions taken:
+  - 在 `task_plan.md` 顶部新增 Batch 59 addendum，明确目标、non-goals 与 promotion gate。
+  - 扩展 `build/verify_local.sh`，新增 `stage0-pkg-lock-snapshot-check`，要求 lock detail fixture
+    输出 `package-lock-snapshot-count` / `package-lock-snapshots` 及 envelope mirror。
+  - 扩展 `tests/fixtures/package_lock_detail/nextpas.lock`，加入一个
+    `target=linux-x86_64` 的 `[[snapshot]]` happy path。
+  - 扩展 `compiler/frontend/np_package_lock.pas`，只读解析 `[[snapshot]]` 的
+    `target`、`provenance`、`digest` 与 `selection`，并在缺字段时产出 lock issue。
+  - 扩展 `TPackageLockTruth` 与 stage0 projection context/text/json，把 snapshot count/detail
+    接进 line-based output 与 `command-envelope=<json>.result`。
+  - 将 `tests/fixtures/package_lock_invalid/nextpas.lock` 改成 snapshot digest missing 负向样本，
+    冻结 `package.lock.snapshot-digest-missing` 与 `package-lock-invalid` blocker。
+  - 同步 `docs/architecture/package-workflow-specification.md`、
+    `docs/architecture/workspace-file-format-specification.md`、`tools/stage0/README.md`、
+    master roadmap plan、`findings.md` 与本文件。
+- Verification:
+  - RED：fresh `bash build/verify_local.sh` 失败在
+    `missing-stage0-pkg-lock-detail-snapshot-count`。
+  - Focused GREEN：`pkg inspect --workspace tests/fixtures/package_lock_detail --target linux-x86_64`
+    已输出 snapshot count/detail，且 install plan 仍为 ready。
+  - Focused invalid path：`pkg plan --workspace tests/fixtures/package_lock_invalid --target linux-x86_64`
+    已输出 `package.lock.snapshot-digest-missing` 并停在 `package-lock-invalid`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `stage0PkgLockSnapshotCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+  - Note：一次 full verify 曾在高系统负载下失败于
+    `lexer-bench-throughput-below-minimum`；未修改 lexer 或 bench 阈值，随后 fresh rerun 已通过。
+
 ## Session: 2026-05-25 (Batch 58 manifest-lock mismatch detail)
 
 - **Status:** completed

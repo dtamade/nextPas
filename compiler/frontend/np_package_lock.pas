@@ -15,6 +15,15 @@ type
 
   TPackageLockEntryInfoArray = array of TPackageLockEntryInfo;
 
+  TPackageLockSnapshotInfo = record
+    Target: string;
+    Provenance: string;
+    Digest: string;
+    Selection: string;
+  end;
+
+  TPackageLockSnapshotInfoArray = array of TPackageLockSnapshotInfo;
+
   TPackageLockIssueInfo = record
     Code: string;
     Message: string;
@@ -28,6 +37,7 @@ type
     LockfilePath: string;
     FormatVersion: LongInt;
     Entries: TPackageLockEntryInfoArray;
+    Snapshots: TPackageLockSnapshotInfoArray;
     Issues: TPackageLockIssueInfoArray;
   end;
 
@@ -55,6 +65,18 @@ end;
 procedure AppendPackageLockIssueInfo(
   var AValues: TPackageLockIssueInfoArray;
   const AValue: TPackageLockIssueInfo
+);
+var
+  NextIndex: SizeInt;
+begin
+  NextIndex := Length(AValues);
+  SetLength(AValues, NextIndex + 1);
+  AValues[NextIndex] := AValue;
+end;
+
+procedure AppendPackageLockSnapshotInfo(
+  var AValues: TPackageLockSnapshotInfoArray;
+  const AValue: TPackageLockSnapshotInfo
 );
 var
   NextIndex: SizeInt;
@@ -137,6 +159,7 @@ end;
 function LoadPackageLockInfo(const ALockfilePath: string): TPackageLockInfo;
 var
   CurrentEntry: TPackageLockEntryInfo;
+  CurrentSnapshot: TPackageLockSnapshotInfo;
   CurrentSection: string;
   FormatVersionFound: Boolean;
   Key: string;
@@ -148,11 +171,20 @@ var
   StringValue: string;
   Value: string;
   WithinPackageEntry: Boolean;
+  WithinSnapshotEntry: Boolean;
 
   procedure ClearCurrentEntry;
   begin
     CurrentEntry.Name := '';
     CurrentEntry.Version := '';
+  end;
+
+  procedure ClearCurrentSnapshot;
+  begin
+    CurrentSnapshot.Target := '';
+    CurrentSnapshot.Provenance := '';
+    CurrentSnapshot.Digest := '';
+    CurrentSnapshot.Selection := '';
   end;
 
   procedure FinalizeCurrentEntry;
@@ -180,6 +212,51 @@ var
     WithinPackageEntry := False;
   end;
 
+  procedure FinalizeCurrentSnapshot;
+  begin
+    if not WithinSnapshotEntry then
+      Exit;
+
+    if Trim(CurrentSnapshot.Target) = '' then
+      AddPackageLockIssue(
+        Result,
+        'package.lock.snapshot-target-missing',
+        'package lockfile snapshot target is missing',
+        ''
+      );
+    if Trim(CurrentSnapshot.Provenance) = '' then
+      AddPackageLockIssue(
+        Result,
+        'package.lock.snapshot-provenance-missing',
+        'package lockfile snapshot provenance is missing',
+        ''
+      );
+    if Trim(CurrentSnapshot.Digest) = '' then
+      AddPackageLockIssue(
+        Result,
+        'package.lock.snapshot-digest-missing',
+        'package lockfile snapshot digest is missing',
+        ''
+      );
+    if Trim(CurrentSnapshot.Selection) = '' then
+      AddPackageLockIssue(
+        Result,
+        'package.lock.snapshot-selection-missing',
+        'package lockfile snapshot selection is missing',
+        ''
+      );
+
+    AppendPackageLockSnapshotInfo(Result.Snapshots, CurrentSnapshot);
+    ClearCurrentSnapshot;
+    WithinSnapshotEntry := False;
+  end;
+
+  procedure FinalizeCurrentLockEntries;
+  begin
+    FinalizeCurrentEntry;
+    FinalizeCurrentSnapshot;
+  end;
+
 begin
   Result.Status := 'missing';
   if Trim(ALockfilePath) <> '' then
@@ -188,6 +265,7 @@ begin
     Result.LockfilePath := '';
   Result.FormatVersion := 0;
   SetLength(Result.Entries, 0);
+  SetLength(Result.Snapshots, 0);
   SetLength(Result.Issues, 0);
 
   if (Result.LockfilePath = '') or (not FileExists(Result.LockfilePath)) then
@@ -196,7 +274,9 @@ begin
   CurrentSection := '';
   FormatVersionFound := False;
   WithinPackageEntry := False;
+  WithinSnapshotEntry := False;
   ClearCurrentEntry;
+  ClearCurrentSnapshot;
 
   Lines := TStringList.Create;
   try
@@ -210,24 +290,33 @@ begin
 
       if LineText = '[lockfile]' then
       begin
-        FinalizeCurrentEntry;
+        FinalizeCurrentLockEntries;
         CurrentSection := 'lockfile';
         Continue;
       end;
 
       if LineText = '[[package]]' then
       begin
-        FinalizeCurrentEntry;
+        FinalizeCurrentLockEntries;
         CurrentSection := 'package';
         WithinPackageEntry := True;
         ClearCurrentEntry;
         Continue;
       end;
 
+      if LineText = '[[snapshot]]' then
+      begin
+        FinalizeCurrentLockEntries;
+        CurrentSection := 'snapshot';
+        WithinSnapshotEntry := True;
+        ClearCurrentSnapshot;
+        Continue;
+      end;
+
       if (Length(LineText) >= 2) and (LineText[1] = '[') and
         (LineText[Length(LineText)] = ']') then
       begin
-        FinalizeCurrentEntry;
+        FinalizeCurrentLockEntries;
         CurrentSection := '';
         Continue;
       end;
@@ -264,11 +353,26 @@ begin
         if (Key = 'name') and TryParseTomlStringLiteral(Value, StringValue) then
           CurrentEntry.Name := StringValue
         else if (Key = 'version') and
-          TryParseTomlStringLiteral(Value, StringValue) then
+            TryParseTomlStringLiteral(Value, StringValue) then
           CurrentEntry.Version := StringValue;
       end;
+
+      if (CurrentSection = 'snapshot') and WithinSnapshotEntry then
+      begin
+        if (Key = 'target') and TryParseTomlStringLiteral(Value, StringValue) then
+          CurrentSnapshot.Target := StringValue
+        else if (Key = 'provenance') and
+          TryParseTomlStringLiteral(Value, StringValue) then
+          CurrentSnapshot.Provenance := StringValue
+        else if (Key = 'digest') and
+          TryParseTomlStringLiteral(Value, StringValue) then
+          CurrentSnapshot.Digest := StringValue
+        else if (Key = 'selection') and
+          TryParseTomlStringLiteral(Value, StringValue) then
+          CurrentSnapshot.Selection := StringValue;
+      end;
     end;
-    FinalizeCurrentEntry;
+    FinalizeCurrentLockEntries;
   finally
     Lines.Free;
   end;
@@ -307,6 +411,7 @@ begin
         AInfo.LockfilePath := '';
       AInfo.FormatVersion := 0;
       SetLength(AInfo.Entries, 0);
+      SetLength(AInfo.Snapshots, 0);
       SetLength(AInfo.Issues, 0);
       AErrorText := E.Message;
       Result := False;

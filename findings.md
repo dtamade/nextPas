@@ -10,6 +10,19 @@
 
 ## Research Findings
 
+- Batch 59 把 `nextpas.lock` 的最小 v1 只读 parser 从 `[[package]] name/version` 扩展到
+  `[[snapshot]] target/provenance/digest/selection` skeleton。
+- `TPackageLockTruth` 现在会携带 snapshot count 与 snapshots，stage0 line output 公开
+  `package-lock-snapshot-count` 与 `package-lock-snapshots`，command envelope 公开
+  `packageLockSnapshotCount` 与 `packageLockSnapshots`。
+- `tests/fixtures/package_lock_detail` 现在固定一个 `target=linux-x86_64` 的 snapshot happy path；
+  focused probe 已确认 `pkg inspect` 同时输出 snapshot detail，且 `package-install-plan-status`
+  仍保持 `ready`。
+- `tests/fixtures/package_lock_invalid` 现在固定 `[[snapshot]]` 缺 `digest` 的 invalid path；
+  focused probe 已确认该路径投影 `package.lock.snapshot-digest-missing`，并让 `pkg plan`
+  停在 `package-lock-invalid` blocker。
+- Batch 59 仍然不做 resolver、version solving、fetch/install、lockfile write 或 lockfile migration；
+  snapshot skeleton 只是 machine-owned replay shape 的只读投影。
 - `package-lock-out-of-sync` blocker 现在有独立 mismatch detail：line output 公开
   `package-install-plan-blocker-expected-package` 与
   `package-install-plan-blocker-lock-entries`，command envelope 公开对应 camelCase 字段。

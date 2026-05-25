@@ -147,8 +147,8 @@ lockfile v1 只读 parser。这批 reality 先冻结四件事：
 - manifest truth 可以如实投影 `ready|missing`、manifest path、package root、package name、
   package version 与 source root count
 - lock truth 当前冻结 canonical path `<workspace>/nextpas.lock`，并根据文件是否缺失、是否符合
-  最小 v1 grammar 投影 `status=missing|ready|invalid`，同时公开 format version、package entries
-  与 validation issues
+  最小 v1 grammar 投影 `status=missing|ready|invalid`，同时公开 format version、package entries、
+  resolver snapshot skeleton 与 validation issues
 - install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
   与必要的 blocker code/message；lockfile invalid 会在 lock missing 之前阻塞为
   `package-lock-invalid`，lockfile valid 但没有匹配 manifest package name/version 时会阻塞为
@@ -339,11 +339,18 @@ format-version = 1
 [[package]]
 name = "nextpas.graphics"
 version = "0.1.0"
+
+[[snapshot]]
+target = "linux-x86_64"
+provenance = "manifest:nextpas.graphics"
+digest = "sha256:..."
+selection = "nextpas.graphics@0.1.0"
 ```
 
 这份 skeleton 只让 `pkg inspect` / `pkg plan` 区分 missing、ready 和 invalid，并能解释
-invalid 的具体 issue；target snapshot、provenance、digest 和 dependency selection 仍属于后续
-resolver / lock writer 批次。
+invalid 的具体 issue。当前 `[[snapshot]]` 只读读取 target、provenance、digest 与 selection
+四个 replay 字段；缺字段会让 lockfile 进入 `invalid`，但 snapshot 仍是 skeleton，不执行 resolver，
+也不生成或改写 lockfile。
 
 ## fetched source roots、build roots、cache roots、install roots 必须各自有正式语义
 
@@ -546,8 +553,9 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   - 当前最小 reality 已落地 non-executing package workflow truth skeleton 与只读 `pkg inspect / pkg plan / pkg graph` surface
 - `pkg inspect / pkg plan / pkg graph` 复用 `WorkspaceModel` 与 `PackageManifestInfo`，投影 package workflow status、
   manifest status、workflow manifest path、package root、package name、lock status、canonical
-  lockfile path、source root count、source roots JSON 明细、declared dependency count /
-  dependencies JSON 明细、install plan status 与 install plan blocker code/message；其中 `pkg plan`
+  lockfile path、lock format / entry / snapshot / issue detail、source root count、source roots
+  JSON 明细、declared dependency count / dependencies JSON 明细、install plan status 与 install
+  plan blocker code/message；其中 `pkg plan`
   在 out-of-sync blocker 上还会投影 expected package 与 lock entries detail，并且
   是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
   root node、declared-dependency nodes 与 `declared-dependency` edges

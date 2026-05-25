@@ -29,6 +29,8 @@ type
     FormatVersion: LongInt;
     EntryCount: LongInt;
     Entries: TPackageLockEntryInfoArray;
+    SnapshotCount: LongInt;
+    Snapshots: TPackageLockSnapshotInfoArray;
     IssueCount: LongInt;
     Issues: TPackageLockIssueInfoArray;
   end;
@@ -318,6 +320,8 @@ begin
   Result.LockTruth.FormatVersion := LockInfo.FormatVersion;
   Result.LockTruth.EntryCount := Length(LockInfo.Entries);
   Result.LockTruth.Entries := LockInfo.Entries;
+  Result.LockTruth.SnapshotCount := Length(LockInfo.Snapshots);
+  Result.LockTruth.Snapshots := LockInfo.Snapshots;
   Result.LockTruth.IssueCount := Length(LockInfo.Issues);
   Result.LockTruth.Issues := LockInfo.Issues;
 
