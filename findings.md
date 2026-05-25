@@ -10,6 +10,25 @@
 
 ## Research Findings
 
+- Root source call binding 现在已经覆盖 imported unit callable 的最小边界：`SeedImportedUnitBodies`
+  会解析 resolved imported units，并为 imported procedure/function declarations seed owner-aware
+  callable symbols；`RegisterProcedureBody` 同步保存 owner unit id。
+- `LookupCallBindingDeclaration` 当前采用保守绑定规则：root callable 优先；如果 root 没有唯一匹配，
+  imported callable 也必须只有一个同名同参数数目的匹配才会成为 binding target。
+- `tests/semantic/test_semantic_call_bindings.pas` 现在覆盖 `Help;` 调用绑定到 `Helper` unit 的 callable
+  symbol，同时用 `Holder.Help := 1` 固定 selector/member access 不应误注册为 imported call binding。
+- owner-aware imported callable symbols 让 `examples/smoke/hello_with_units.pas` 的 semantic smoke
+  `symbol-count` 从 4 变成 6；这是 imported callable truth 进入 semantic model 的结果，不是
+  verifier 假绿。
+- `pkg plan` 现在会在 lockfile valid、manifest-lock identity match 之后继续检查 target snapshot：
+  如果 lockfile 已有 `[[snapshot]]` 集合但没有 requested target，install plan 会 blocked 为
+  `package-lock-target-snapshot-missing`。
+- `tests/fixtures/package_lock_target_snapshot_missing` 固定了 lock entry 与 manifest identity 匹配、
+  lock status ready、但 snapshot target 只有 `linux-aarch64` 的边界；fresh verification 已确认
+  `linux-x86_64` 请求会停在 target snapshot missing blocker。
+- target snapshot missing 仍是 read-only preflight：它不让 lockfile invalid，也不触发 resolver、
+  version solving、fetch/install、lockfile rewrite 或 migration。没有 snapshot 的既有最小 v1
+  lockfile 继续兼容 ready path。
 - `TSemanticModel` 现在新增 `TSemanticBinding` side table，用于表达 source-addressable binding
   truth：当前最小字段为 binding id、kind、name、owner unit id、source byte offset 与 target
   semantic symbol id。
@@ -24,8 +43,9 @@
 - `tests/semantic/test_semantic_call_bindings.pas` 已覆盖 procedure call、function call 与 overloaded
   procedure call；`build/verify_local.sh` 已新增 `semantic-call-bindings-check=pass`，最终
   verify-local envelope 也投影 `semanticCallBindingsCheck":"pass"`。
-- 本批次仍只承诺 root source call binding。selector/member access、imported unit call binding、
-  bare identifier function-reference binding 与完整 type-based overload resolution 仍是后续
+- 当前 binding contract 已承诺 root source 中普通 procedure/function call、overload arg-count
+  消歧与 imported unit callable binding；selector/member access、bare identifier function-reference
+  binding 与完整 type-based overload resolution 仍是后续
   language-service contract 工作，不能被 downstream 包装成已完成。
 - Batch 60 给 `nextpas.lock` snapshot skeleton 增加了最小一致性校验：snapshot `selection`
   必须匹配某个 lock entry 的 `name@version`，否则投影

@@ -17,6 +17,7 @@ type
     Name: string;
     Body: TGreenNode;
     Decl: TGreenNode;
+    OwnerUnitId: string;
   end;
 
   TParamSnapshot = record
@@ -77,9 +78,13 @@ type
     procedure EmitBlockLabel(const ALabel: string);
     procedure EmitGotoLabel(const ALabel: string);
     procedure RegisterProcedureBody(const AName: string;
-      const ABody: TGreenNode; const ADecl: TGreenNode);
+      const ABody: TGreenNode; const ADecl: TGreenNode;
+      const AOwnerUnitId: string);
     function LookupProcedureBody(const AName: string;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+    function LookupCallBindingDeclaration(const AName: string;
+      const AArgCount: LongInt; out ABody: TGreenNode;
+      out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
@@ -99,9 +104,11 @@ type
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
     procedure RestoreCallArgs(const ASnapshots: TParamSnapshots);
-    function CallableSymbolIdForDeclaration(const ADecl: TGreenNode): LongInt;
+    function EnsureUnitScope(const AOwnerUnitId: string): LongInt;
+    function CallableSymbolIdForDeclaration(const ADecl: TGreenNode;
+      const AOwnerUnitId: string): LongInt;
     procedure RegisterCallBinding(const ACallNode: TGreenNode;
-      const ADecl: TGreenNode);
+      const ADecl: TGreenNode; const AOwnerUnitId: string);
     procedure SeedCallBindings;
     procedure SeedCallBindingsInNode(const ANode: TGreenNode);
     function DuplicateImportName: string;
@@ -645,6 +652,7 @@ begin
         if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
           Continue;
         TypeName := '';
+        TypeChild := nil;
         if ParamChild.ChildCount > 0 then
         begin
           TypeChild := ParamChild.ChildAt(0);
@@ -688,7 +696,8 @@ begin
 end;
 
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
-  const ABody: TGreenNode; const ADecl: TGreenNode);
+  const ABody: TGreenNode; const ADecl: TGreenNode;
+  const AOwnerUnitId: string);
 var
   Index: LongInt;
   NextIndex: SizeInt;
@@ -696,13 +705,15 @@ var
 begin
   Sig := GetParamSignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
+    if SameText(FProcedureBodies[Index].Name, AName) and
+      SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
       ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
       if ExistingSig = Sig then
       begin
         FProcedureBodies[Index].Body := ABody;
         FProcedureBodies[Index].Decl := ADecl;
+        FProcedureBodies[Index].OwnerUnitId := AOwnerUnitId;
         Exit;
       end;
     end;
@@ -711,6 +722,7 @@ begin
   FProcedureBodies[NextIndex].Name := AName;
   FProcedureBodies[NextIndex].Body := ABody;
   FProcedureBodies[NextIndex].Decl := ADecl;
+  FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -757,6 +769,65 @@ begin
       Exit(True);
     end;
   Result := False;
+end;
+
+function TSemanticAnalyzer.LookupCallBindingDeclaration(
+  const AName: string;
+  const AArgCount: LongInt;
+  out ABody: TGreenNode;
+  out ADecl: TGreenNode;
+  out AOwnerUnitId: string
+): Boolean;
+var
+  Index: LongInt;
+  ImportedMatchCount: LongInt;
+  ImportedMatchIndex: LongInt;
+  RootMatchCount: LongInt;
+  RootMatchIndex: LongInt;
+  RootOwnerUnitId: string;
+begin
+  ABody := nil;
+  ADecl := nil;
+  AOwnerUnitId := '';
+  ImportedMatchCount := 0;
+  ImportedMatchIndex := -1;
+  RootMatchCount := 0;
+  RootMatchIndex := -1;
+  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, AName) and
+      (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) then
+    begin
+      if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) then
+      begin
+        RootMatchIndex := Index;
+        Inc(RootMatchCount);
+      end
+      else
+      begin
+        ImportedMatchIndex := Index;
+        Inc(ImportedMatchCount);
+      end;
+    end;
+
+  if RootMatchCount > 1 then
+    Exit(False);
+  if RootMatchCount = 1 then
+  begin
+    ABody := FProcedureBodies[RootMatchIndex].Body;
+    ADecl := FProcedureBodies[RootMatchIndex].Decl;
+    AOwnerUnitId := FProcedureBodies[RootMatchIndex].OwnerUnitId;
+    Exit(True);
+  end;
+
+  if ImportedMatchCount <> 1 then
+    Exit(False);
+
+  ABody := FProcedureBodies[ImportedMatchIndex].Body;
+  ADecl := FProcedureBodies[ImportedMatchIndex].Decl;
+  AOwnerUnitId := FProcedureBodies[ImportedMatchIndex].OwnerUnitId;
+  Result := True;
 end;
 
 function TSemanticAnalyzer.CallArgumentCount(const ACallNode: TGreenNode): LongInt;
@@ -862,32 +933,107 @@ begin
   end;
 end;
 
-function TSemanticAnalyzer.CallableSymbolIdForDeclaration(
-  const ADecl: TGreenNode
+function TSemanticAnalyzer.EnsureUnitScope(
+  const AOwnerUnitId: string
 ): LongInt;
 var
   Index: LongInt;
+  Scope: TSemanticScope;
+begin
+  Result := 0;
+  if Trim(AOwnerUnitId) = '' then
+    Exit;
+
+  for Index := 0 to FModel.ScopeCount - 1 do
+  begin
+    Scope := FModel.ScopeAt(Index);
+    if (Scope.Kind = skUnit) and
+      SameText(NormalizeUnitIdentity(Scope.Name), AOwnerUnitId) then
+      Exit(Scope.ScopeId);
+  end;
+
+  Result := FModel.AddScope(skUnit, AOwnerUnitId, 1);
+end;
+
+function TSemanticAnalyzer.CallableSymbolIdForDeclaration(
+  const ADecl: TGreenNode;
+  const AOwnerUnitId: string
+): LongInt;
+var
+  Child: TGreenNode;
+  ExpectedKind: string;
+  Index: LongInt;
+  ParamCount: LongInt;
   Symbol: TSemanticSymbol;
+  TypeId: LongInt;
 begin
   Result := 0;
   if ADecl = nil then
     Exit;
+
+  if Pos('.', ADecl.Text) > 0 then
+    Exit;
+
+  if ADecl.NodeKind = gnkFunctionDecl then
+    ExpectedKind := 'function'
+  else if ADecl.NodeKind = gnkProcedureDecl then
+    ExpectedKind := 'procedure'
+  else
+    ExpectedKind := '';
+  ParamCount := CountDeclParams(ADecl);
+
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Name, ADecl.Text) and
+      ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
+      ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind)) and
+      (Symbol.ParamCount = ParamCount) then
+      Exit(Symbol.SymbolId);
+  end;
 
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
     if (Symbol.ByteOffset = ADecl.ByteOffset) and
       SameText(Symbol.Name, ADecl.Text) and
+      ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
       (SameText(Symbol.Kind, 'procedure') or
        SameText(Symbol.Kind, 'function') or
        SameText(Symbol.Kind, 'method')) then
       Exit(Symbol.SymbolId);
   end;
+
+  if (ExpectedKind = '') or (AOwnerUnitId = '') then
+    Exit;
+
+  TypeId := 0;
+  if ADecl.NodeKind = gnkFunctionDecl then
+    for Index := 0 to ADecl.ChildCount - 1 do
+    begin
+      Child := ADecl.ChildAt(Index);
+      if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+      begin
+        TypeId := ResolveTypeId(Child.Text);
+        Break;
+      end;
+    end;
+
+  Result := FModel.AddSymbol(
+    ADecl.Text,
+    ExpectedKind,
+    AOwnerUnitId,
+    TypeId,
+    ADecl.ByteOffset
+  );
+  FModel.SetSymbolParamCount(Result, ParamCount);
+  FModel.SetSymbolScope(Result, EnsureUnitScope(AOwnerUnitId));
 end;
 
 procedure TSemanticAnalyzer.RegisterCallBinding(
   const ACallNode: TGreenNode;
-  const ADecl: TGreenNode
+  const ADecl: TGreenNode;
+  const AOwnerUnitId: string
 );
 var
   SymbolId: LongInt;
@@ -895,7 +1041,7 @@ begin
   if (ACallNode = nil) or (ADecl = nil) then
     Exit;
 
-  SymbolId := CallableSymbolIdForDeclaration(ADecl);
+  SymbolId := CallableSymbolIdForDeclaration(ADecl, AOwnerUnitId);
   if SymbolId <= 0 then
     Exit;
 
@@ -914,24 +1060,22 @@ var
   Child: TGreenNode;
   DeclNode: TGreenNode;
   Index: LongInt;
+  OwnerUnitId: string;
 begin
   if ANode = nil then
     Exit;
 
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
-    if HasOverload(ANode.Text) then
-    begin
-      if LookupOverload(
+    if Pos('.', ANode.Text) = 0 then
+      if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
         BodyNode,
-        DeclNode
+        DeclNode,
+        OwnerUnitId
       ) then
-        RegisterCallBinding(ANode, DeclNode);
-    end
-    else if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) then
-      RegisterCallBinding(ANode, DeclNode);
+        RegisterCallBinding(ANode, DeclNode, OwnerUnitId);
   end;
 
   for Index := 0 to ANode.ChildCount - 1 do
@@ -2127,7 +2271,7 @@ begin
     end
     else if Child.NodeKind = gnkBeginBlock then
     begin
-      RegisterProcedureBody(ANode.Text, Child, ANode);
+      RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
       Break;
     end;
   end;
@@ -2188,7 +2332,7 @@ begin
     end
     else if Child.NodeKind = gnkBeginBlock then
     begin
-      RegisterProcedureBody(ANode.Text, Child, ANode);
+      RegisterProcedureBody(ANode.Text, Child, ANode, AOwnerUnitId);
       Break;
     end;
   end;
@@ -5500,7 +5644,77 @@ end;
 
 procedure TSemanticAnalyzer.SeedImportedUnitBodies;
 
-  procedure RegisterBodiesInNode(const ANode: TGreenNode);
+  procedure SeedImportedCallableSymbol(
+    const ANode: TGreenNode;
+    const AOwnerUnitId: string;
+    const AUnitScopeId: LongInt
+  );
+  var
+    Child: TGreenNode;
+    ChildIndex: LongInt;
+    KindName: string;
+    ParamCount: LongInt;
+    ScopeId: LongInt;
+    Symbol: TSemanticSymbol;
+    SymbolId: LongInt;
+    SymbolIndex: LongInt;
+    TypeId: LongInt;
+  begin
+    if (ANode = nil) or (Trim(AOwnerUnitId) = '') or
+      (Trim(ANode.Text) = '') or (Pos('.', ANode.Text) > 0) then
+      Exit;
+
+    if ANode.NodeKind = gnkFunctionDecl then
+      KindName := 'function'
+    else if ANode.NodeKind = gnkProcedureDecl then
+      KindName := 'procedure'
+    else
+      Exit;
+
+    ParamCount := CountDeclParams(ANode);
+    for SymbolIndex := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(SymbolIndex);
+      if SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
+        SameText(Symbol.Name, ANode.Text) and
+        SameText(Symbol.Kind, KindName) and
+        (Symbol.ParamCount = ParamCount) then
+        Exit;
+    end;
+
+    TypeId := 0;
+    if ANode.NodeKind = gnkFunctionDecl then
+      for ChildIndex := 0 to ANode.ChildCount - 1 do
+      begin
+        Child := ANode.ChildAt(ChildIndex);
+        if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
+        begin
+          TypeId := ResolveTypeId(Child.Text);
+          Break;
+        end;
+      end;
+
+    SymbolId := FModel.AddSymbol(
+      ANode.Text,
+      KindName,
+      AOwnerUnitId,
+      TypeId,
+      ANode.ByteOffset
+    );
+    FModel.SetSymbolParamCount(SymbolId, ParamCount);
+
+    if AUnitScopeId > 0 then
+      ScopeId := AUnitScopeId
+    else
+      ScopeId := EnsureUnitScope(AOwnerUnitId);
+    if ScopeId > 0 then
+      FModel.SetSymbolScope(SymbolId, ScopeId);
+  end;
+
+  procedure RegisterBodiesInNode(
+    const ANode: TGreenNode;
+    const AOwnerUnitId: string
+  );
   var
     ChildIdx, BodyIdx: LongInt;
     Child, BodyChild: TGreenNode;
@@ -5515,23 +5729,25 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       if (Child.NodeKind = gnkProcedureDecl) or
         (Child.NodeKind = gnkFunctionDecl) then
       begin
+        SeedImportedCallableSymbol(Child, AOwnerUnitId, 0);
         for BodyIdx := 0 to Child.ChildCount - 1 do
         begin
           BodyChild := Child.ChildAt(BodyIdx);
           if (BodyChild <> nil) and (BodyChild.NodeKind = gnkBeginBlock) then
           begin
-            RegisterProcedureBody(Child.Text, BodyChild, Child);
+            RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
             Break;
           end;
         end;
       end
       else if (Child.NodeKind = gnkInterfaceSection) or
         (Child.NodeKind = gnkImplementationSection) then
-        RegisterBodiesInNode(Child);
+        RegisterBodiesInNode(Child, AOwnerUnitId);
     end;
   end;
 
 var
+  OwnerUnitId: string;
   Index: LongInt;
   ResolvedUnit: TResolvedUnit;
   SourceText, Line: string;
@@ -5574,7 +5790,12 @@ begin
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
       if (UnitTree <> nil) and UnitTree.IsValid and
         (UnitTree.RootNode <> nil) then
-        RegisterBodiesInNode(UnitTree.RootNode)
+      begin
+        OwnerUnitId := ResolvedUnit.UnitId;
+        if OwnerUnitId = '' then
+          OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
+        RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
+      end
       else if UnitTree <> nil then
         UnitTree.Free;
       UnitLexer.Free;

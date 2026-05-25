@@ -3,6 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 61 target snapshot + imported call binding closure)
+
+- **Status:** completed
+- Objective:
+  - 收口两个 live blocker：root source 调用 imported unit callable 时必须能绑定到 imported
+    callable symbol；`pkg plan` 在 lockfile 已有 snapshot 集合但缺当前 target snapshot 时必须
+    给出明确 blocked preflight。
+- Baseline:
+  - Batch 60 已经验证 snapshot selection / digest / duplicate-target consistency，但 install plan
+    仍没有检查 requested target 是否存在 snapshot。
+  - Semantic call binding contract 已覆盖 root callable 与 overload arg-count，但 imported unit call
+    binding 原先仍是下一批边界。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，新增 temporary imported unit fixture，
+    覆盖 `Help;` 绑定到 `Helper` unit 的 callable symbol，并确认 `Holder.Help` 不产生重复误绑。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 中为 procedure body registry 增加 owner unit id，
+    为 imported unit declarations 预先 seed callable symbols / unit scope，并让 binding lookup
+    优先 root callable、再接受唯一 imported callable。
+  - 修正 `GetParamSignature(...)` 的 `TypeChild := nil` guard，避免 imported declaration 参数签名抽取
+    读取未初始化引用。
+  - 新增 `tests/fixtures/package_lock_target_snapshot_missing`，固定 lockfile 中只有
+    `linux-aarch64` snapshot，而 verification 以 `linux-x86_64` 请求 plan。
+  - 扩展 `BuildPackageWorkflowTruthFromWorkspaceModel(...)` 和 install-plan truth，让 valid lockfile
+    在 snapshot 集合缺 requested target 时阻塞为 `package-lock-target-snapshot-missing`。
+  - 扩展 `build/verify_local.sh`，新增 `stage0-pkg-plan-lock-target-snapshot-missing-check` 与最终
+    envelope `stage0PkgPlanLockTargetSnapshotMissingCheck`，并把 semantic smoke `symbol-count`
+    更新到 imported callable truth 的真实值 `6`。
+- Verification:
+  - Fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`stage0PkgPlanLockTargetSnapshotMissingCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - diff 范围集中在 semantic analyzer/focused semantic test、package workflow target-aware
+    install-plan preflight、新 fixture、verify gate 与对应文档/持续记录。
+  - package workflow 仍保持 read-only/non-executing；没有 resolver、fetch/install 或 lockfile writer。
+
 ## Session: 2026-05-26 (Semantic call binding contract)
 
 - **Status:** completed
@@ -34,7 +70,8 @@
     `verify-local=pass` 与 `human-summary=local verification passed`。
 - Review:
   - diff 范围集中在 semantic model/analyzer、focused semantic test 与 verify gate。
-  - 当前 contract 是 root call binding；selector/member/imported-unit call binding 仍需下一批继续。
+  - 该批 contract 当时只覆盖 root call binding；Batch 61 已把 imported-unit call binding
+    作为 follow-up 收口，selector/member access 仍需后续继续。
 
 ## Session: 2026-05-25 (Batch 60 package lock snapshot consistency)
 

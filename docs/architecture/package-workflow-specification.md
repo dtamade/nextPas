@@ -153,7 +153,9 @@ lockfile v1 只读 parser。这批 reality 先冻结四件事：
 - install plan truth 当前只负责 preflight，只读投影 `status=ready|blocked|missing`
   与必要的 blocker code/message；lockfile invalid 会在 lock missing 之前阻塞为
   `package-lock-invalid`，lockfile valid 但没有匹配 manifest package name/version 时会阻塞为
-  `package-lock-out-of-sync`，并携带 expected manifest package identity 与 actual lock entries
+  `package-lock-out-of-sync`，并携带 expected manifest package identity 与 actual lock entries；
+  lockfile valid 且 manifest-lock identity 匹配后，如果 lockfile 已有 snapshot 集合但没有当前
+  target snapshot，则阻塞为 `package-lock-target-snapshot-missing`
 - 这批刻意不执行 registry lookup、fetch、dependency solver、install placement 或 lockfile write
 
 ## repository、registry、source、mirror 必须分角色，而不是混成一个词
@@ -352,7 +354,10 @@ selection = "nextpas.graphics@0.1.0"
 invalid 的具体 issue。当前 `[[snapshot]]` 只读读取 target、provenance、digest 与 selection
 四个 replay 字段；缺字段、selection 不匹配任何 `[[package]] name/version`、重复 target 或
 非 `sha256:` digest shape 都会让 lockfile 进入 `invalid`。这些仍然只是 skeleton validation，
-不执行 resolver，也不生成或改写 lockfile。
+不执行 resolver，也不生成或改写 lockfile。`pkg plan` 进一步把 target-sensitive replay shape
+纳入 install-plan preflight：如果 valid lockfile 已经声明了 snapshot 集合，却没有 requested target
+对应的 snapshot，则 install plan blocked 为 `package-lock-target-snapshot-missing`；完全没有
+snapshot 的既有最小 v1 lockfile 仍按兼容 ready path 处理。
 
 ## fetched source roots、build roots、cache roots、install roots 必须各自有正式语义
 
@@ -558,8 +563,8 @@ nextPas 的 package manager 不只是 CLI 需求。长期 IDE、future automatio
   lockfile path、lock format / entry / snapshot / issue detail、source root count、source roots
   JSON 明细、declared dependency count / dependencies JSON 明细、install plan status 与 install
   plan blocker code/message；其中 invalid snapshot skeleton 会先停在 `package-lock-invalid`，
-  `pkg plan`
-  在 out-of-sync blocker 上还会投影 expected package 与 lock entries detail，并且
+  valid lockfile 缺 requested target snapshot 会停在 `package-lock-target-snapshot-missing`，
+  `pkg plan` 在 out-of-sync blocker 上还会投影 expected package 与 lock entries detail，并且
   是 install plan preflight 的专用只读面，`pkg graph` 还会把同一份 truth 进一步展开成
   root node、declared-dependency nodes 与 `declared-dependency` edges
   - 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member

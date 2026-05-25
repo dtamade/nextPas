@@ -196,11 +196,26 @@ end;
 function BuildPackageInstallPlanTruth(
   const AManifestTruth: TPackageManifestTruth;
   const ALockTruth: TPackageLockTruth;
-  const AWorkspaceRootPath: string
+  const AWorkspaceRootPath: string;
+  const ATargetId: string
 ): TPackageInstallPlanTruth;
 var
   LockEntryIndex: LongInt;
   LockMatchesManifest: Boolean;
+
+  function LockHasSnapshotForTarget: Boolean;
+  var
+    SnapshotIndex: LongInt;
+  begin
+    if Trim(ATargetId) = '' then
+      Exit(True);
+
+    for SnapshotIndex := 0 to Length(ALockTruth.Snapshots) - 1 do
+      if SameText(ALockTruth.Snapshots[SnapshotIndex].Target, ATargetId) then
+        Exit(True);
+
+    Result := False;
+  end;
 begin
   Result.Status := 'missing';
   Result.WorkspaceRootPath := AWorkspaceRootPath;
@@ -258,6 +273,12 @@ begin
   if not LockMatchesManifest then
     Exit;
 
+  Result.BlockerCode := 'package-lock-target-snapshot-missing';
+  Result.BlockerMessage :=
+    'canonical package lockfile has no snapshot for requested target';
+  if (ALockTruth.SnapshotCount > 0) and (not LockHasSnapshotForTarget) then
+    Exit;
+
   Result.Status := 'ready';
   Result.BlockerCode := '';
   Result.BlockerMessage := '';
@@ -277,9 +298,10 @@ begin
   );
 end;
 
-function BuildPackageWorkflowTruth(
+function BuildPackageWorkflowTruthForTarget(
   const AManifestInfo: TPackageManifestInfo;
-  const AWorkspaceRootPath: string
+  const AWorkspaceRootPath: string;
+  const ATargetId: string
 ): TPackageWorkflowTruth;
 var
   LockInfo: TPackageLockInfo;
@@ -328,7 +350,8 @@ begin
   Result.InstallPlanTruth := BuildPackageInstallPlanTruth(
     Result.ManifestTruth,
     Result.LockTruth,
-    WorkspaceRootPath
+    WorkspaceRootPath,
+    ATargetId
   );
   Result.GraphTruth := BuildPackageGraphTruth(Result.ManifestTruth);
 
@@ -341,6 +364,18 @@ begin
     Result.Status := 'ready'
   else
     Result.Status := 'missing';
+end;
+
+function BuildPackageWorkflowTruth(
+  const AManifestInfo: TPackageManifestInfo;
+  const AWorkspaceRootPath: string
+): TPackageWorkflowTruth;
+begin
+  Result := BuildPackageWorkflowTruthForTarget(
+    AManifestInfo,
+    AWorkspaceRootPath,
+    ''
+  );
 end;
 
 function BuildPackageWorkflowTruthFromWorkspaceModel(
@@ -371,9 +406,10 @@ begin
   end;
 
   if AWorkspaceModel <> nil then
-    Result := BuildPackageWorkflowTruth(
+    Result := BuildPackageWorkflowTruthForTarget(
       ManifestInfo,
-      AWorkspaceModel.WorkspaceRootPath
+      AWorkspaceModel.WorkspaceRootPath,
+      AWorkspaceModel.ResolvedTargetId
     )
   else
     Result := BuildPackageWorkflowTruth(ManifestInfo, '');

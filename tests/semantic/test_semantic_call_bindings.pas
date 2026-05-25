@@ -53,6 +53,135 @@ begin
   end;
 end;
 
+procedure WriteTextFile(const APath: string; const AText: string);
+var
+  F: Text;
+begin
+  ForceDirectories(ExtractFileDir(APath));
+  Assign(F, APath);
+  Rewrite(F);
+  try
+    Write(F, AText);
+  finally
+    Close(F);
+  end;
+end;
+
+function SymbolOwnerUnitById(
+  const AModel: TSemanticModel;
+  const ASymbolId: LongInt
+): string;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := '';
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if Symbol.SymbolId = ASymbolId then
+      Exit(Symbol.OwnerUnitId);
+  end;
+end;
+
+procedure CheckImportedUnitCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingTarget: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-call-' + IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'helper.pas';
+  RootSourceText :=
+    'program ImportedCalls;' + LineEnding +
+    'uses Helper;' + LineEnding +
+    'type' + LineEnding +
+    '  THolder = record' + LineEnding +
+    '    Help: Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Holder: THolder;' + LineEnding +
+    'begin' + LineEnding +
+    '  Help;' + LineEnding +
+    '  Holder.Help := 1;' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Helper;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Help;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Help;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('ImportedCalls', '', ruoRootSource, '', 'program', 1)
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Helper', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-imported-call-diagnostics');
+    if Model = nil then
+      Fail('missing-imported-call-semantic-model');
+
+    BindingTarget := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'call') and
+        SameText(Binding.Name, 'Help') then
+      begin
+        if BindingTarget <> 0 then
+          Fail('duplicate-imported-call-binding');
+        BindingTarget := Binding.TargetSymbolId;
+      end;
+    end;
+
+    if BindingTarget <= 0 then
+      Fail('missing-imported-call-binding');
+    if not SameText(SymbolOwnerUnitById(Model, BindingTarget), 'helper') then
+      Fail('imported-call-binding-target-owner-mismatch');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -208,6 +337,7 @@ begin
       Fail('function-call-binding-target-mismatch');
 
     CheckOverloadBindings;
+    CheckImportedUnitCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

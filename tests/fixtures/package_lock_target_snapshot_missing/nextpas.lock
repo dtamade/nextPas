@@ -1,0 +1,12 @@
+[lockfile]
+format-version = 1
+
+[[package]]
+name = "tests.package-lock-target-snapshot-missing"
+version = "0.1.0"
+
+[[snapshot]]
+target = "linux-aarch64"
+provenance = "manifest:tests.package-lock-target-snapshot-missing"
+digest = "sha256:package-lock-target-snapshot-missing"
+selection = "tests.package-lock-target-snapshot-missing@0.1.0"

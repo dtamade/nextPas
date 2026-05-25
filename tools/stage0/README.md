@@ -281,7 +281,9 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 read-only parser 已经拥有的 truth 投影为只读 package workflow 结果。当前 lock parser 也会读取
 `[[snapshot]]` 的 `target`、`provenance`、`digest` 与 `selection` skeleton；缺字段会让
 `package-lock-status=invalid`，selection 不匹配 lock entry、重复 target 或非 `sha256:` digest
-shape 也会投影为 lock issues，但不会触发 resolver 或写回 lockfile。`pkg graph` 还会把同一份 truth
+shape 也会投影为 lock issues，但不会触发 resolver 或写回 lockfile。valid lockfile 如果已经有
+snapshot 集合但没有当前 requested target snapshot，`pkg plan` 会只读 blocked 为
+`package-lock-target-snapshot-missing`。`pkg graph` 还会把同一份 truth
 展开成 root node、declared-dependency nodes 与 `declared-dependency` edges。
 当前 `pkg plan` promotion gate 直接覆盖 package manifest ready path、workspace member
 lock-missing blocked path、package-free manifest-missing missing path、dependency-invalid blocked
@@ -910,6 +912,7 @@ preflight 样本、package lock detail fixture 下的 `nextpas pkg inspect --wor
 `stage0PkgPlanMissingCheck=pass`、`stage0PkgPlanDependencyBlockedCheck=pass`、
 `stage0PkgPlanSourceRootsBlockedCheck=pass`、`stage0PkgPlanLockInvalidCheck=pass`、
 `stage0PkgPlanLockSnapshotInvalidCheck=pass`、
+`stage0PkgPlanLockTargetSnapshotMissingCheck=pass`、
 `stage0PkgPlanLockOutOfSyncCheck=pass`、
 `stage0PkgPlanInvalidArgumentsCheck=pass`、
 `stage0PkgWorkspaceMemberCheck=pass` 与

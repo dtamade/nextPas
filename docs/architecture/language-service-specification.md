@@ -181,6 +181,11 @@ nextPas language service 至少要把这些查询族写成正式表面：
 与 `query-result-count=<count>` 投影到 line-based output 和 `command-envelope=<json>`。
 这里的 `analysis-source` 必须保持为 `compilation-session`，因为当前还没有正式
 `LanguageServiceSession`、open document overlay、incremental invalidation 或 protocol adapter。
+同一条 semantic model 现在还拥有最小 `TSemanticBinding` side table：root source 中的
+procedure/function call occurrence 可以绑定到 root callable 或唯一 imported-unit callable 的
+`SymbolId`。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，但当前
+`query symbols` 仍不承诺完整 LSP、selector/member binding、open document overlay 或 incremental
+invalidation。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

@@ -52,6 +52,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 | ------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
 | symbol graph | 表达声明、定义、导出、引用和重载集合                             | 避免名字绑定继续依赖原始字符串查找                                 |
 | type graph   | 表达 canonical type、alias、composite type 与 callable signature | 避免每个阶段各自复制一套类型判断                                   |
+| binding table | 表达 source occurrence 到 semantic symbol 的绑定                 | 让 language service / query / IDE 不用重扫源码或自建名字解析        |
 | `Typed HIR`  | 表达已经绑定且带类型的语义节点                                   | 让 lowering 和 runtime handshake 消费显式语义，而不是消费 AST 惯性 |
 
 这三者可以共享 arena、interner 和会话缓存，但不应该重新退化成“有一棵 AST，剩下靠注释和 side table”。
@@ -62,9 +63,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 落成真实实体：
 
 - `compiler/sema/np_semantic_model.pas`
-  - 先固定 symbol/type/typed-hir/runtime-contract count、root name 与 semantic status
+  - 先固定 symbol/type/binding/typed-hir/runtime-contract count、root name 与 semantic status
 - `compiler/sema/np_semantic_analyzer.pas`
-  - 先固定 builtin canonical type、resolved unit symbol、runtime contract seed 与 duplicate import failure
+  - 先固定 builtin canonical type、resolved unit symbol、call binding、runtime contract seed 与 duplicate import failure
 - `compiler/frontend/np_compilation_session.pas`
   - 真实拥有 semantic model，并在 `ResolveUnits` 之后调用 `AnalyzeSemantics`
 - `tools/stage0/nextpas.pas`
@@ -73,7 +74,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 
 这套最小骨架当前故意只承诺三件事：
 
-- symbol graph 先只表达 unit-level symbol identity
+- symbol graph 先表达 unit-level symbol identity 与最小 callable symbol identity
+- binding table 先表达 root source 中 procedure/function call occurrence 到 callable `SymbolId` 的绑定；
+  当前已覆盖 root callable、arg-count overload 消歧与唯一 imported-unit callable target
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

@@ -15,6 +15,76 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 61 Target Snapshot and Imported Call Binding Closure
+
+### Goal
+
+把上一批已经暴露出来的两条真实边界一起收口：
+
+- semantic binding 不再只覆盖 root unit 内声明的 callable，root source 中调用 imported unit
+  的 procedure/function 时也要能绑定到 imported unit 拥有的 callable semantic symbol。
+- `pkg plan` 在 canonical `nextpas.lock` 已经带有 target-sensitive `[[snapshot]]` skeleton 时，
+  不能把“没有当前 target snapshot”的 lockfile 误判成 install-plan ready。
+
+本批次新增并冻结：
+
+- imported unit call occurrence -> imported callable `SymbolId`
+- owner-aware callable body registry / callable symbol seeding
+- `package-lock-target-snapshot-missing`
+- `stage0PkgPlanLockTargetSnapshotMissingCheck`
+- `tests/fixtures/package_lock_target_snapshot_missing`
+
+### Architecture Decision
+
+semantic follow-up 继续归属于 `TSemanticModel` / `TSemanticAnalyzer`：
+
+- imported unit bodies 只作为 compiler-owned semantic truth 输入，不让 LSP/query/IDE adapter
+  自行解析 imported source。
+- imported callable symbol 必须带 owner unit id，并挂到对应 unit scope；root callable 优先，
+  imported callable 只有唯一匹配时才作为 binding target。
+- selector/member access 继续排除，避免把 `Holder.Help` 误绑定成 imported procedure call。
+
+package workflow follow-up 继续保持 read-only preflight：
+
+- `BuildPackageWorkflowTruthFromWorkspaceModel(...)` 把 resolved target id 传入 install-plan truth。
+- lockfile valid 且 manifest-lock identity 匹配后，如果 lockfile 已有 snapshot 集合但没有当前
+  target snapshot，`pkg plan` 阻塞为 `package-lock-target-snapshot-missing`。
+- 没有 `[[snapshot]]` 的既有最小 v1 lockfile 继续兼容 ready path；本批次不执行 resolver、
+  version solving、fetch/install、lockfile write 或 migration。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 semantic call binding focused test，覆盖 imported unit `Help;`
+- [x] 在 semantic analyzer 中为 imported unit callable 补 owner-aware body/symbol registration
+- [x] 修正参数签名抽取中的 `TypeChild` nil guard，避免 imported body seeding 触发未初始化访问
+- [x] RED：新增 target snapshot missing fixture 与 `stage0PkgPlanLockTargetSnapshotMissingCheck`
+- [x] 在 package workflow install-plan truth 中加入 target snapshot preflight blocker
+- [x] 调整 semantic smoke symbol count 到 owner-aware imported callable truth 的真实值
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 同步 package workflow / workspace file / semantic / stage0 tooling docs 与持续记录
+- [x] 简短 review 后提交
+
+### Verification
+
+- focused semantic test 输出 `semantic-call-bindings-status=pass`
+- target snapshot missing fixture 输出 `package-install-plan-status=blocked`、
+  `package-install-plan-blocker-code=package-lock-target-snapshot-missing` 与
+  `package-install-plan-blocker-message=canonical package lockfile has no snapshot for requested target`
+- final: fresh `bash build/verify_local.sh` 通过，并确认
+  `semantic-call-bindings-check=pass`、`stage0PkgPlanLockTargetSnapshotMissingCheck":"pass"` 与
+  `verify-local=pass`
+
+### Non-goals
+
+- 不实现 selector/member access binding
+- 不实现 bare identifier function-reference binding
+- 不实现完整 type-based overload resolution
+- 不执行 package resolver、version solving、fetch/install 或 lockfile write
+
 ## Addendum: 2026-05-26 Semantic Call Binding Contract
 
 ### Goal

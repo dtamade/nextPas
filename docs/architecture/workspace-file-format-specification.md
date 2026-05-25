@@ -146,7 +146,9 @@ nextPas 在这里先冻结一个明确立场：
 `compiler/frontend/np_package_lock.pas` 读取最小 v1 TOML skeleton，投影
 `status=missing|ready|invalid`、format version、package entries、snapshot skeleton 与 validation
 issues。snapshot selection / digest / target 的最小一致性校验也属于这份只读 truth，不会触发
-resolver 或 lockfile write。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的写入和 atomic
+resolver 或 lockfile write；当 valid lockfile 已经声明 snapshot 集合但缺 requested target
+snapshot 时，install-plan preflight 会 blocked 为 `package-lock-target-snapshot-missing`，而不是
+把 lockfile 标成 invalid。也就是说，文件层 ownership 已经先收口成 compiler-owned truth，对应的写入和 atomic
 replace 仍未开始实现。
 
 ## root discovery 必须 deterministic，而且不能靠全树重扫
@@ -467,7 +469,8 @@ selection = "nextpas.graphics@0.1.0"
 
 更完整的 dependency selected-version graph、content locator 细节与 resolver decision transcript
 仍是后续 resolver / lock writer 应该补进来的 replay evidence；当前只读 preflight 先解析最小
-skeleton，并要求 manifest package name/version 能在 lock entries 中找到同名同版本项，让 tooling
+skeleton，并要求 manifest package name/version 能在 lock entries 中找到同名同版本项；如果
+lockfile 已经有 target-sensitive snapshots，还要求 requested target 能找到对应 snapshot，让 tooling
 可以诚实区分 missing、ready、invalid 与 out-of-sync。
 
 这里继续明确不允许什么：
