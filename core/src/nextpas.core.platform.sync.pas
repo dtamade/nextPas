@@ -136,11 +136,6 @@ var
   GPosixWaitBucketsState: Int32 = 0;
   GPosixWaitBucketsInitResult: Int32 = 0;
 
-function platform_posix_errno: Int32; inline;
-begin
-  Result := platform_errno_location^;
-end;
-
 function platform_posix_map_error(const ACode: Int32): Int32; inline;
 begin
   case ACode of
@@ -160,7 +155,7 @@ begin
   if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @ATime) = 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno);
+    Result := platform_posix_map_error(platform_posix_errno_value);
 end;
 
 procedure platform_posix_add_timeout(var ATime: timespec; const ANanoseconds: UInt64); inline;
@@ -638,7 +633,7 @@ begin
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno);
+    Result := platform_posix_map_error(platform_posix_errno_value);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
@@ -654,7 +649,7 @@ begin
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno);
+    Result := platform_posix_map_error(platform_posix_errno_value);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
@@ -670,7 +665,7 @@ begin
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno);
+    Result := platform_posix_map_error(platform_posix_errno_value);
 end;
 {$ENDIF}
 {$ENDIF}

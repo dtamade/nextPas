@@ -1411,3 +1411,17 @@
 - 下一轮最自然的 platform 方向，不是再回头碰 stopwatch 一类 L1 time API，而是继续审计
   `platform.time` / `platform.sync` 剩余的 host capability / wait semantics owner truth，
   尤其是 Windows 与 Darwin 的 residual policy token。
+
+## 2026-05-27 Follow-up Findings 2
+
+- `platform_errno_location` 的 external binding 虽然早已沉到 `linux/darwin/android/freebsd/unix`
+  各自 ffi owner，但这还不等于 errno read ownership 已完全收口；如果 consumer 还在自己写
+  `platform_errno_location^`，那“当前 errno 值怎么读”的 ABI 细节仍在实现层泄漏。
+- `platform.thread` 与 `platform.sync` 现在都改为消费 host-owned
+  `platform_posix_errno_value`，不再自己解引用 errno storage。
+- `linux/darwin/android/freebsd/unix` ffi 单元现在统一拥有 errno location binding 与 errno value
+  helper 两层 truth；consumer 只继续拥有 retry / timeout / error mapping policy。
+- 这批 focused gate 现在不只冻结 `EINTR` token 或 errno symbol binding 的存在，还额外防回归
+  consumer 直接写 `platform_errno_location^`。
+- 这一步让 POSIX errno truth 的 owner boundary 比之前更完整：shared `posix.ffi` 仍只保留
+  shared ABI，per-host errno binding 与 errno read helper 都继续留在各 host ffi owner。

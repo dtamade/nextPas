@@ -6195,3 +6195,65 @@ Completed; verification passed.
 - 这批不改 Windows wait API 的 public contract
 - 这批不声称 macOS / FreeBSD / Android 已有新增 runtime evidence
 - 这批不继续扩 `platform.time` / `platform.sync` 的下一轮 ownerization 目标
+
+## Addendum: 2026-05-27 Platform POSIX Errno Read Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 POSIX errno 读取语义从 `platform.thread` / `platform.sync` 的 consumer 实现层下沉到
+host-owned ffi owner，让“当前 errno 值怎么读”不再散落在平台实现单元里。
+
+### Current Gap
+
+- `linux/darwin/android/freebsd/unix` ffi 单元已经拥有 `platform_errno_location` 外部符号绑定，
+  但 `platform.thread` 与 `platform.sync` 仍各自本地解引用 errno storage。
+- 这让 errno symbol binding 已经 host-owned，但 errno value read 仍停在 consumer 层，owner boundary
+  还差半步。
+
+### Architecture Decision
+
+- `platform_errno_location` 的绑定继续留在各 host ffi owner。
+- 基于该绑定读取当前 errno 的 helper 也继续归各 host ffi owner，因此 consumer 只消费
+  `platform_posix_errno_value`，不直接写 `platform_errno_location^`。
+- 这批只收紧 owner boundary，不改 `platform.thread` / `platform.sync` public API，也不宣称新增
+  Darwin / FreeBSD / Android runtime evidence。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `linux/darwin/android/freebsd/unix` ffi，补齐 `platform_posix_errno_value`
+- [x] 让 `platform.thread` 改为消费 host-owned errno value helper
+- [x] 让 `platform.sync` 改为消费 host-owned errno value helper
+- [x] 扩充 `test_platform_thread_host_ffi_surface`
+- [x] 扩充 `test_platform_sync_host_ffi_surface`
+- [x] 运行 focused tests
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose Linux errno value helper for retryable nanosleep`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose Linux errno value helper for sync`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不新增宿主 ABI externals
+- 这批不修改 `platform.time`
+- 这批不把 POSIX error-code 到 nextPas error-code 的映射再下沉到 ffi

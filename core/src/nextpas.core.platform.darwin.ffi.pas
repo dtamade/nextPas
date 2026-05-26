@@ -32,9 +32,15 @@ function mach_absolute_time: UInt64; cdecl; external 'c' name 'mach_absolute_tim
 function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; external 'c' name 'mach_timebase_info';
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
+function platform_posix_errno_value: Int32; inline;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32;
 
 implementation
+
+function platform_posix_errno_value: Int32; inline;
+begin
+  Result := platform_errno_location^;
+end;
 
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32;
 begin

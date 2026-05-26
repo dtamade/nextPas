@@ -794,6 +794,12 @@ shared `posix.ffi` 或实现层条件编译里。
 `EINTR` 这样的 retryable errno token 必须由各宿主 FFI owner 提供，`platform.thread` 等实现单元只消费
 这些 host-owned token，而不是把“所有 Unix 都按同一个 errno 编号重试”写死在实现里。
 
+不仅 errno token 要按宿主 owner，下层“当前 errno 值怎么读”这件事本身也属于 host ABI truth。
+`platform_errno_location` 这类外部符号绑定与基于它读取当前 errno 的 helper，都应放进
+`linux/darwin/android/freebsd/unix` 等 host ffi owner 单元；`platform.thread`、
+`platform.sync` 等 consumer 只消费 `platform_posix_errno_value` 这类 helper，不直接在实现层
+解引用 errno storage。
+
 ### `platform.time` 的边界
 
 `nextpas.core.platform.time` 只提供系统时钟源和平台换算工具，例如 monotonic clock、

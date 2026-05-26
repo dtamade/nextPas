@@ -11,6 +11,14 @@ const
   SYNC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
   LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
+  DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
+  DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
+  ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
+  ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
+  FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
+  FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
+  UNIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.ffi.pas';
+  UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
 
@@ -54,10 +62,18 @@ procedure TestPlatformSyncUsesHostFFISurface;
 var
   LSyncSource: string;
   LLinuxSource: string;
+  LDarwinSource: string;
+  LAndroidSource: string;
+  LFreeBSDSource: string;
+  LUnixSource: string;
   LWindowsSource: string;
 begin
   LSyncSource := ReadSourceFile(ResolveSourcePath(SYNC_SOURCE_PATH_FROM_TEST, SYNC_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
+  LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LLinuxSource, 'function linux_syscall',
@@ -68,6 +84,17 @@ begin
     'linux.ffi must expose FUTEX_WAIT');
   CheckTokenPresent(LLinuxSource, 'futex_wake',
     'linux.ffi must expose FUTEX_WAKE');
+  CheckTokenPresent(LLinuxSource, 'platform_posix_errno_value',
+    'linux.ffi must expose Linux errno value helper for sync');
+
+  CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
+    'darwin.ffi must expose Darwin errno value helper for sync');
+  CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
+    'android.ffi must expose Android errno value helper for sync');
+  CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
+    'freebsd.ffi must expose FreeBSD errno value helper for sync');
+  CheckTokenPresent(LUnixSource, 'platform_posix_errno_value',
+    'unix.ffi must expose generic Unix errno value helper for sync');
 
   CheckTokenPresent(LWindowsSource, 'waitonaddress',
     'windows.ffi must expose WaitOnAddress');
@@ -97,8 +124,8 @@ begin
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.unix.ffi',
     'platform.sync must use unix.ffi for generic Unix host-owned errno/clock ids');
 
-  CheckTokenPresent(LSyncSource, 'platform_errno_location',
-    'platform.sync must consume host-owned errno bindings');
+  CheckTokenPresent(LSyncSource, 'platform_posix_errno_value',
+    'platform.sync must consume host-owned errno value helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_normal_kind',
     'platform.sync must consume host-owned pthread mutex normal numbering');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_recursive_kind',
@@ -125,6 +152,8 @@ begin
     'platform.sync must consume Windows last-error conversion through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_last_error_is_timeout',
     'platform.sync must consume Windows timeout-result semantics through windows.ffi');
+  Check(Pos('platform_errno_location^', LSyncSource) = 0,
+    'platform.sync must not dereference errno storage directly in the consumer');
   Check(Pos('getlasterror', LSyncSource) = 0,
     'platform.sync must not call GetLastError directly in the Windows consumer');
   Check(Pos('error_timeout', LSyncSource) = 0,

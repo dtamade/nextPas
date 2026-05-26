@@ -4716,3 +4716,29 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`：pass
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`：pass
 - `bash build/verify_local.sh`（platform windows wait/error ownerization batch）：pass
+
+### Phase 2: Platform POSIX Errno Read Owner Boundary Closure
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface` 改成 RED，要求各 host ffi owner 继续暴露
+    `platform_posix_errno_value`，并禁止 consumer 再直接写 `platform_errno_location^`。
+  - `linux/darwin/android/freebsd/unix` ffi 单元统一新增
+    `platform_posix_errno_value` inline helper，把“当前 errno 值怎么读”继续收回 host-owned
+    ffi owner。
+  - `core/src/nextpas.core.platform.thread.pas` 删除本地 `platform_posix_errno` helper，
+    `nanosleep` retry 路径改为消费 `platform_posix_errno_value`。
+  - `core/src/nextpas.core.platform.sync.pas` 删除本地 `platform_posix_errno` helper，
+    pthread condvar / wait fallback 的 errno 读取统一改为消费
+    `platform_posix_errno_value`。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 errno value read 也归 host ffi owner 的规则写实。
+  - 重新运行 focused tests 与 fresh `bash build/verify_local.sh`，确认收口后主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`（errno value ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`（errno value ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（errno value ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（errno value ownerization）：pass

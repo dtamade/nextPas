@@ -80,6 +80,8 @@ begin
     'linux.ffi must expose Linux EINTR for retryable nanosleep');
   CheckTokenPresent(LLinuxSource, 'platform_errno_location',
     'linux.ffi must expose Linux errno binding for retryable nanosleep');
+  CheckTokenPresent(LLinuxSource, 'platform_posix_errno_value',
+    'linux.ffi must expose Linux errno value helper for retryable nanosleep');
 
   CheckTokenPresent(LAndroidSource, 'function gettid',
     'android.ffi must expose Android native thread id ABI');
@@ -89,6 +91,8 @@ begin
     'android.ffi must expose Android EINTR for retryable nanosleep');
   CheckTokenPresent(LAndroidSource, 'platform_errno_location',
     'android.ffi must expose Android errno binding for retryable nanosleep');
+  CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
+    'android.ffi must expose Android errno value helper for retryable nanosleep');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
     'darwin.ffi must expose macOS native thread id ABI');
@@ -96,12 +100,16 @@ begin
     'darwin.ffi must expose Darwin EINTR for retryable nanosleep');
   CheckTokenPresent(LDarwinSource, 'platform_errno_location',
     'darwin.ffi must expose Darwin errno binding for retryable nanosleep');
+  CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
+    'darwin.ffi must expose Darwin errno value helper for retryable nanosleep');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_eintr',
     'freebsd.ffi must expose FreeBSD EINTR for retryable nanosleep');
   CheckTokenPresent(LFreeBSDSource, 'platform_errno_location',
     'freebsd.ffi must expose FreeBSD errno binding for retryable nanosleep');
+  CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
+    'freebsd.ffi must expose FreeBSD errno value helper for retryable nanosleep');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
   CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',
@@ -119,8 +127,10 @@ begin
     'platform.thread must use FreeBSD native thread id ABI');
   CheckTokenPresent(LThreadSource, 'platform_posix_eintr',
     'platform.thread must use host-owned EINTR token for nanosleep retry semantics');
-  CheckTokenPresent(LThreadSource, 'platform_errno_location',
-    'platform.thread must use host-owned errno binding for nanosleep retry semantics');
+  CheckTokenPresent(LThreadSource, 'platform_posix_errno_value',
+    'platform.thread must use host-owned errno value helper for nanosleep retry semantics');
+  Check(Pos('platform_errno_location^', LThreadSource) = 0,
+    'platform.thread must not dereference errno storage directly in the consumer');
   CheckTokenPresent(LThreadSource, 'windows_sleep_ns_to_ms',
     'platform.thread must consume Windows sleep timeout conversion through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_last_error_i32',

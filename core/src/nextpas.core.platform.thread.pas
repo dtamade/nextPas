@@ -45,11 +45,6 @@ type
     Thread: pthread_t;
   end;
 
-function platform_posix_errno: Int32; inline;
-begin
-  Result := platform_errno_location^;
-end;
-
 { Thread lifecycle }
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
@@ -143,7 +138,7 @@ begin
 
   while nanosleep(@LReq, @LRem) <> 0 do
   begin
-    if platform_posix_errno <> PLATFORM_POSIX_EINTR then
+    if platform_posix_errno_value <> PLATFORM_POSIX_EINTR then
       Break;
     LReq := LRem;
   end;

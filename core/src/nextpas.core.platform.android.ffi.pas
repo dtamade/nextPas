@@ -24,8 +24,14 @@ const
 
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno';
 function gettid: Int32; cdecl; external 'c' name 'gettid';
+function platform_posix_errno_value: Int32; inline;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
 
 implementation
+
+function platform_posix_errno_value: Int32; inline;
+begin
+  Result := platform_errno_location^;
+end;
 
 end.
