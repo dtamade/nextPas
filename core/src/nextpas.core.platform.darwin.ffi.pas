@@ -8,6 +8,22 @@ uses
   nextpas.core.platform.posix.ffi;
 
 type
+  TPlatformPThreadTokenAlign = record
+    Value: pthread_t;
+  end;
+
+  TPlatformPThreadMutexAlign = record
+    Value: pthread_mutex_t;
+  end;
+
+  TPlatformPThreadRwLockAlign = record
+    Value: pthread_rwlock_t;
+  end;
+
+  TPlatformPThreadCondVarAlign = record
+    Value: pthread_cond_t;
+  end;
+
   mach_timebase_info_data_t = record
     numer: UInt32;
     denom: UInt32;

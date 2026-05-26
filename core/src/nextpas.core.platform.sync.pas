@@ -34,6 +34,29 @@ uses
   nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
+type
+  {$IFDEF NEXTPAS_UNIX}
+  TPlatformMutexAlign = TPlatformPThreadMutexAlign;
+  TPlatformRwLockAlign = TPlatformPThreadRwLockAlign;
+  TPlatformCondVarAlign = TPlatformPThreadCondVarAlign;
+  {$ELSEIF defined(NEXTPAS_WINDOWS)}
+  TPlatformMutexAlign = TPlatformWindowsMutexAlign;
+  TPlatformRwLockAlign = TPlatformWindowsRwLockAlign;
+  TPlatformCondVarAlign = TPlatformWindowsCondVarAlign;
+  {$ELSE}
+  TPlatformMutexAlign = record
+    Value: PtrUInt;
+  end;
+
+  TPlatformRwLockAlign = record
+    Value: PtrUInt;
+  end;
+
+  TPlatformCondVarAlign = record
+    Value: PtrUInt;
+  end;
+  {$ENDIF}
+
 const
   {$IFDEF NEXTPAS_UNIX}
   PLATFORM_MUTEX_SIZE   = PLATFORM_PTHREAD_MUTEX_SIZE;
@@ -52,19 +75,19 @@ const
 type
   TPlatformMutex = record
     case Integer of
-      0: (FAlign: UInt64);
+      0: (FAlign: TPlatformMutexAlign);
       1: (FOpaque: array[0..PLATFORM_MUTEX_SIZE - 1] of Byte);
   end;
 
   TPlatformRwLock = record
     case Integer of
-      0: (FAlign: UInt64);
+      0: (FAlign: TPlatformRwLockAlign);
       1: (FOpaque: array[0..PLATFORM_RWLOCK_SIZE - 1] of Byte);
   end;
 
   TPlatformCondVar = record
     case Integer of
-      0: (FAlign: UInt64);
+      0: (FAlign: TPlatformCondVarAlign);
       1: (FOpaque: array[0..PLATFORM_CONDVAR_SIZE - 1] of Byte);
   end;
 

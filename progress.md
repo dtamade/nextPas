@@ -5041,3 +5041,68 @@ Hello from nextPas!
   - Full:
     - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`
+
+### Phase 12: Platform ABI Alignment Carrier Ownership
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 先核对 live truth：当前收口仍直接发生在 `main` worktree；旧
+    `codex/platform-time-integration @ 02be065` 依旧未并入 `main`，这轮 alignment ownerization
+    不能被误记成旧 worktree 已合。
+  - 先把 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface` 扩成新的 RED gate，要求：
+    - `linux/android/darwin/freebsd/unix.ffi` 暴露
+      `TPlatformPThreadTokenAlign`、
+      `TPlatformPThreadMutexAlign`、
+      `TPlatformPThreadRwLockAlign`、
+      `TPlatformPThreadCondVarAlign`
+    - `windows.ffi` 暴露
+      `TPlatformWindowsMutexAlign`、
+      `TPlatformWindowsRwLockAlign`、
+      `TPlatformWindowsCondVarAlign`
+    - `platform.thread` / `platform.sync` 必须消费这些 align carrier，且不能继续在 consumer 里保留
+      `FAlign: PtrUInt` / `FAlign: UInt64`
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、`android.ffi.pas`、`darwin.ffi.pas`、
+    `freebsd.ffi.pas`、`unix.ffi.pas` 统一新增 pthread token / mutex / rwlock / condvar
+    align carrier type；`core/src/nextpas.core.platform.windows.ffi.pas` 新增 Windows mutex /
+    rwlock / condvar align carrier type。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Unix state record 改成消费
+    `TPlatformPThreadTokenAlign`，让 pthread token 对齐事实继续由 host ffi owner 承载，而不是
+    让 consumer 用 `PtrUInt` 猜。
+  - `core/src/nextpas.core.platform.sync.pas` 新增
+    `TPlatformMutexAlign` / `TPlatformRwLockAlign` / `TPlatformCondVarAlign` host alias，并让
+    `TPlatformMutex` / `TPlatformRwLock` / `TPlatformCondVar` 的 variant record 直接消费这些
+    ownerized align carrier，不再在 consumer interface 里写 `UInt64` 对齐占位。
+  - `core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr`
+    追加 Linux native embedding alignment proof，把 nextPas opaque storage 的 field offset 与
+    native `pthread_mutex_t` / `pthread_rwlock_t` / `pthread_cond_t` 对照起来。
+  - `build/verify_local.sh` 的 `core-platform-sync-size` summary pattern 从
+    `4 total, 4 passed` 更新到 `5 total, 5 passed`，让主门跟新的 focused gate 保持一致。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`，
+    把“ABI alignment truth 归 host ffi owner”这条规则写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose Linux pthread token align carrier type: tplatformpthreadtokenalign`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose pthread mutex align carrier type for sync: tplatformpthreadmutexalign`
+    - 首轮 `bash build/verify_local.sh` 初始失败在
+      `missing-core-platform-sync-size-pass-summary`，根因是
+      `test_platform_sync_sizes` 新增 Linux native alignment case 后 summary 已变成
+      `5 total, 5 passed`
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - Win64 compile-only:
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`

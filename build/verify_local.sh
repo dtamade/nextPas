@@ -4615,7 +4615,7 @@ if ! "$CORE_PLATFORM_SYNC_SIZE_BINARY" >>"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1;
   fail 'core-platform-sync-size-run-failed'
 fi
 cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
 printf 'core-platform-sync-size-check=pass\n'
 
 printf 'core-platform-sync-win64-check=running\n'

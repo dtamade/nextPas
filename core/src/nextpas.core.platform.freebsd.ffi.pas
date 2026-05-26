@@ -7,6 +7,23 @@ interface
 uses
   nextpas.core.platform.posix.ffi;
 
+type
+  TPlatformPThreadTokenAlign = record
+    Value: pthread_t;
+  end;
+
+  TPlatformPThreadMutexAlign = record
+    Value: pthread_mutex_t;
+  end;
+
+  TPlatformPThreadRwLockAlign = record
+    Value: pthread_rwlock_t;
+  end;
+
+  TPlatformPThreadCondVarAlign = record
+    Value: pthread_cond_t;
+  end;
+
 const
   PLATFORM_CLOCK_REALTIME_ID = Int32(0);
   PLATFORM_CLOCK_MONOTONIC_ID = Int32(4);

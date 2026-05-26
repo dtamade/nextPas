@@ -42,7 +42,7 @@ type
   PPosixThreadState = ^TPosixThreadState;
   TPosixThreadState = record
     case Integer of
-      0: (FAlign: PtrUInt);
+      0: (FAlign: TPlatformPThreadTokenAlign);
       1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
   end;
 

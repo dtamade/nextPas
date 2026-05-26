@@ -1608,3 +1608,30 @@
   修正后，这条 gate 也开始和新的 owner boundary 对齐。
 - focused tests、Win64 compile-only 与第二轮 fresh `bash build/verify_local.sh` 都已通过，
   说明这批 ABI size-token ownerization 没把行为测试、跨平台 compile-only 或仓库级主门打坏。
+
+## 2026-05-27 Follow-up Findings 12
+
+- ABI size truth 收回 host ffi owner 之后，`platform.thread` / `platform.sync` 里其实还留着一层更隐蔽
+  的 consumer-side 假设：`FAlign: PtrUInt` 和 `FAlign: UInt64`。它们在 Linux x86_64 上碰巧能过，
+  但不该继续代表 Darwin / FreeBSD / Android pthread token，或 Windows `SRWLOCK` /
+  `CONDITION_VARIABLE` 的真实对齐契约。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 统一继续拥有
+  `TPlatformPThreadTokenAlign`、`TPlatformPThreadMutexAlign`、
+  `TPlatformPThreadRwLockAlign`、`TPlatformPThreadCondVarAlign`；`windows.ffi` 继续拥有
+  `TPlatformWindowsMutexAlign`、`TPlatformWindowsRwLockAlign`、
+  `TPlatformWindowsCondVarAlign`。
+- `platform.thread` 的 Unix consumer 现在通过 host-owned `TPlatformPThreadTokenAlign` 继承 pthread
+  token 的宿主对齐，而不是继续用 `PtrUInt` 做“差不多”的占位；这让 pthread token 的 size 和
+  alignment truth 都回到了同一个 ffi owner 边界。
+- `platform.sync` 现在通过 `TPlatformMutexAlign` / `TPlatformRwLockAlign` /
+  `TPlatformCondVarAlign` alias 消费 host-owned align carrier type，不再在 public opaque storage
+  contract 里保留 `UInt64` 级别的 consumer 猜测。
+- `test_platform_sync_sizes` 现在不只检查 opaque storage 足够大，还会在 Linux 主机上把 nextPas
+  record 的嵌入偏移量和 native `pthread_mutex_t` / `pthread_rwlock_t` / `pthread_cond_t`
+  做对照；这给了我们一条 runtime proof，证明新的 ownerization 至少没有把 Linux native ABI
+  embedding 对齐打坏。
+- 首轮 full verify 的真实失败不是行为回归，而是 `build/verify_local.sh` 还在要求旧的
+  `4 total, 4 passed` summary；修正为 `5 total, 5 passed` 后，fresh `verify-local` 已再次通过。
+- 当前证据边界仍要诚实：这批新增了 Linux runtime alignment proof 和 Win64 compile-only，但还没新增
+  Darwin / FreeBSD / Android runtime 或 cross-compile 对齐证据，所以这些宿主目前仍主要由
+  source-surface contract 覆盖。

@@ -802,6 +802,14 @@ shared `posix.ffi` 或实现层条件编译里。
 这些 host-owned size token，不直接在 consumer 里再次写 `SizeOf(pthread_*_t)`、
 `SizeOf(SRWLOCK)` 或 `SizeOf(CONDITION_VARIABLE)`。
 
+同样，opaque storage / handle wrapper 的 ABI alignment truth 也属于 host ffi owner，而不是
+consumer 自己拿 `PtrUInt`、`UInt64` 之类 generic scalar 去猜。像
+`TPlatformPThreadTokenAlign`、`TPlatformPThreadMutexAlign`、`TPlatformPThreadRwLockAlign`、
+`TPlatformPThreadCondVarAlign`、`TPlatformWindowsMutexAlign` 这类 host-owned align carrier type，
+应该由对应 `*.ffi` 单元显式暴露；`platform.thread`、`platform.sync` 等 consumer 只通过 variant
+record 消费这些 carrier type，把宿主原生对齐要求继承进 nextPas 自己的 opaque storage contract，
+而不是在实现层保留 `FAlign: PtrUInt`、`FAlign: UInt64` 这类近似占位。
+
 不仅 errno token 要按宿主 owner，下层“当前 errno 值怎么读”这件事本身也属于 host ABI truth。
 `platform_errno_location` 这类外部符号绑定与基于它读取当前 errno 的 helper，都应放进
 `linux/darwin/android/freebsd/unix` 等 host ffi owner 单元；`platform.thread`、

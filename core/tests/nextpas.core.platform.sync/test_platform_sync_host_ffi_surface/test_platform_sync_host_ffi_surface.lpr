@@ -66,6 +66,12 @@ begin
     AHostLabel + ' must expose pthread rwlock storage size for sync');
   CheckTokenPresent(ASource, 'platform_pthread_condvar_size',
     AHostLabel + ' must expose pthread condvar storage size for sync');
+  CheckTokenPresent(ASource, 'tplatformpthreadmutexalign',
+    AHostLabel + ' must expose pthread mutex align carrier type for sync');
+  CheckTokenPresent(ASource, 'tplatformpthreadrwlockalign',
+    AHostLabel + ' must expose pthread rwlock align carrier type for sync');
+  CheckTokenPresent(ASource, 'tplatformpthreadcondvaralign',
+    AHostLabel + ' must expose pthread condvar align carrier type for sync');
   CheckTokenPresent(ASource, 'platform_pthread_timeout_clock_now',
     AHostLabel + ' must expose pthread timeout clock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init',
@@ -215,6 +221,12 @@ begin
     'windows.ffi must expose Windows rwlock storage size for sync');
   CheckTokenPresent(LWindowsSource, 'platform_windows_condvar_size',
     'windows.ffi must expose Windows condvar storage size for sync');
+  CheckTokenPresent(LWindowsSource, 'tplatformwindowsmutexalign',
+    'windows.ffi must expose Windows mutex align carrier type for sync');
+  CheckTokenPresent(LWindowsSource, 'tplatformwindowsrwlockalign',
+    'windows.ffi must expose Windows rwlock align carrier type for sync');
+  CheckTokenPresent(LWindowsSource, 'tplatformwindowscondvaralign',
+    'windows.ffi must expose Windows condvar align carrier type for sync');
 
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
     'platform.sync must use linux.ffi for Linux futex bindings');
@@ -337,6 +349,12 @@ begin
     'platform.sync must consume host-owned Windows rwlock storage size');
   CheckTokenPresent(LSyncSource, 'platform_windows_condvar_size',
     'platform.sync must consume host-owned Windows condvar storage size');
+  CheckTokenPresent(LSyncSource, 'tplatformmutexalign',
+    'platform.sync must consume host-owned mutex align carrier type');
+  CheckTokenPresent(LSyncSource, 'tplatformrwlockalign',
+    'platform.sync must consume host-owned rwlock align carrier type');
+  CheckTokenPresent(LSyncSource, 'tplatformcondvaralign',
+    'platform.sync must consume host-owned condvar align carrier type');
   Check(Pos('platform_posix_errno_value', LSyncSource) = 0,
     'platform.sync must not keep raw errno helper usage in the Unix consumer');
   Check(Pos('platform_errno_location^', LSyncSource) = 0,
@@ -415,6 +433,8 @@ begin
     'platform.sync must not size raw SRWLOCK storage in the Windows consumer');
   Check(Pos('sizeof(condition_variable)', LSyncSource) = 0,
     'platform.sync must not size raw CONDITION_VARIABLE storage in the Windows consumer');
+  Check(Pos('falign: uint64', LSyncSource) = 0,
+    'platform.sync must not keep a generic UInt64 align fallback in the consumer');
   Check(Pos('initializesrwlock', LSyncSource) = 0,
     'platform.sync must not call InitializeSRWLock directly in the Windows consumer');
   Check(Pos('acquiresrwlockexclusive', LSyncSource) = 0,

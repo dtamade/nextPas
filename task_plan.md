@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Windows Timeout Conversion FFI Ownership；并行收口包含
-Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform ABI Alignment Carrier Ownership；并行收口包含
+Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -6869,3 +6869,89 @@ Completed; verification passed.
 - 这批不新增 Darwin / FreeBSD / Android runtime 证据
 - 这批不改 `platform.thread` / `platform.sync` public API
 - 这批不把 ABI shape 本身从 shared `posix.ffi` 搬走；搬走的是 consumer 里的 size truth
+
+## Addendum: 2026-05-27 Platform ABI Alignment Carrier Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` / `platform.sync` consumer 里残留的 raw ABI alignment truth 收回
+host ffi owner，让“谁拥有 raw ABI type，谁就拥有由它派生出来的 alignment carrier”这条边界和
+上一轮的 size-token ownerization 一起闭合。
+
+### Current Gap
+
+- 前一轮已经把 opaque storage 的 size truth 收回 host ffi owner，但 `platform.thread` 的 Unix
+  state record 仍用 `FAlign: PtrUInt` 继承对齐，`platform.sync` 的 public opaque storage 仍用
+  `FAlign: UInt64` 近似对齐。
+- 这些 generic scalar 在 Linux x86_64 上碰巧没炸，不代表 owner boundary 正确；Darwin /
+  FreeBSD / Android / Windows 的 native pthread 或 SRWLOCK / CONDITION_VARIABLE 对齐事实，
+  仍不该由 consumer 继续硬猜。
+- `test_platform_thread_host_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 之前也还没有
+  source-surface gate 明确冻结 “align carrier type 必须由 host ffi owner 暴露并被 consumer
+  消费” 这条契约。
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 统一继续拥有：
+  - `TPlatformPThreadTokenAlign`
+  - `TPlatformPThreadMutexAlign`
+  - `TPlatformPThreadRwLockAlign`
+  - `TPlatformPThreadCondVarAlign`
+- `windows.ffi` 继续拥有：
+  - `TPlatformWindowsMutexAlign`
+  - `TPlatformWindowsRwLockAlign`
+  - `TPlatformWindowsCondVarAlign`
+- `platform.thread` 的 Unix consumer 继续保留 nextPas 自己的 opaque byte storage，但通过
+  host-owned `TPlatformPThreadTokenAlign` 继承 pthread token 的宿主对齐，而不再保留
+  `FAlign: PtrUInt`。
+- `platform.sync` 继续保留 nextPas 的 public opaque storage contract、error mapping 与 wait
+  policy，但 `TPlatformMutex` / `TPlatformRwLock` / `TPlatformCondVar` 的 variant-record 对齐分支
+  只消费 host-owned align carrier type，不再保留 `FAlign: UInt64` 这种 consumer-side 猜测。
+- 这批不扩到新的 public API；收紧的是 ABI ownership 边界与 source-surface guard。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 thread/sync host ffi surface tests，先把 align-carrier owner boundary 打成 RED
+- [x] 在 POSIX host ffi / windows.ffi 暴露 host-owned align carrier type
+- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 align carrier
+- [x] 在 Linux `test_platform_sync_sizes` 补一条 native embedding alignment 对照 proof
+- [x] 修正 `build/verify_local.sh` 对 `test_platform_sync_sizes` summary 的 stale 断言
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `tplatformpthreadtokenalign`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `tplatformpthreadmutexalign`
+  - 首轮 `bash build/verify_local.sh` 初始失败在 stale
+    `missing-core-platform-sync-size-pass-summary`，根因是
+    `test_platform_sync_sizes` summary 已从 `4 total, 4 passed` 变成 `5 total, 5 passed`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 ... test_platform_thread.lpr`
+  - `fpc -Twin64 ... test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
+
+### Non-goals
+
+- 这批不新增 Darwin / FreeBSD / Android runtime 证据
+- 这批不改 `platform.thread` / `platform.sync` public API
+- 这批不把 deadline arithmetic、errno mapping 或 wait policy 挪进 ffi；收回的是 raw ABI alignment truth

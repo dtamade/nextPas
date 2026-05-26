@@ -30,6 +30,17 @@ type
   end;
 
   TWinThreadStartRoutine = function(lpThreadParameter: Pointer): DWORD; stdcall;
+  TPlatformWindowsMutexAlign = record
+    Value: SRWLOCK;
+  end;
+
+  TPlatformWindowsRwLockAlign = record
+    Value: SRWLOCK;
+  end;
+
+  TPlatformWindowsCondVarAlign = record
+    Value: CONDITION_VARIABLE;
+  end;
 
 const
   INFINITE = DWORD($FFFFFFFF);
