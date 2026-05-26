@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 70 把 Batch 69 的 member-call identity 风险收窄到 owner-aware/type-id-aware 路径：
+  root/imported unit 同时声明同名 class（例如 `TWorker`）时，root variable receiver 的
+  `Worker.Add(...)` 现在必须先消费变量 symbol 上的稳定 `TypeId`，再通过该 type symbol 的
+  owner unit 限定 `TClass.Method` target。
+- type resolution 现在在可获得 owner unit 的声明期优先匹配同 owner 的 `type` symbol；若当前
+  owner 没有匹配，只接受全模型唯一同名 type candidate，跨 owner 同名冲突时保守返回 0，
+  避免继续依赖 `FindTypeByName(...)` 的第一个同名 type。
+- member target lookup 同时要求 method symbol 与 procedure body declaration 的 owner unit
+  与 receiver type symbol 对齐；这仍不是 inherited lookup、visibility checking、record/property
+  receiver、runtime constructor lowering、virtual dispatch 或 type-based overload resolution。
 - Batch 69 继续把 `member-call` 正向边界推进到 class method body 内的 `Self` receiver：
   `Self.SetValue(9)` 现在会把 `SetValue` 注册为 `member-call`，并指向当前 method context
   提供的 `TWorker.SetValue` method symbol。

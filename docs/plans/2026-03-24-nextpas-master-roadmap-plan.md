@@ -160,11 +160,13 @@
   binding truth。`Batch 68` 再补上已声明 class type-name receiver 的 constructor-like
   member call，让 `TWorker.Create(42)` 绑定到 `TWorker.Create` method symbol。`Batch 69`
   继续补上 class method body 内的 `Self.SetValue(9)`，并让 root source 中 imported class type
-  variable receiver 的 direct member call 消费同一份 imported type/method symbol truth；完整
+  variable receiver 的 direct member call 消费同一份 imported type/method symbol truth。`Batch 70`
+  修正 root/imported 同名 class 的 owner boundary，让 receiver 从变量 `TypeId` 找回 type
+  symbol owner，并只在该 owner 下选择 `TClass.Method` target；完整
   selector/member lookup、inherited lookup、visibility checking、runtime constructor lowering 与
   type-based dispatch 仍保持 deferred。
-  下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
-  真实功能切片。
+  下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
+  richer query / richer env action 中最高价值的产品切片。
 
 ## 执行规则
 

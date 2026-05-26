@@ -15,6 +15,62 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 70 Owner-aware Member Receiver Binding
+
+### Goal
+
+修正 Batch 69 留下的 owner boundary 风险：当 root source 与 imported unit 同时声明同名 class
+（例如都叫 `TWorker`）时，root variable receiver 的 `Worker.Add(...)` 必须绑定到该变量真实
+`TypeId` 对应 owner unit 下的 `TWorker.Add`，不能因为 imported type/method 先 seed 而误绑到
+imported `Worker.TWorker.Add`。
+
+本批次新增并冻结：
+
+- root declaration type resolution 对同名 imported/root class 保持 owner-aware 优先级。
+- member receiver lookup 返回稳定 `TypeId`，target lookup 通过 type symbol owner + class name
+  选择 method symbol，而不是只靠 `TClass.Method` 字符串的第一个匹配。
+- focused semantic regression 覆盖 root/imported 同名 class 的 direct member function call。
+
+### Architecture Decision
+
+这是 member-call binding 的 identity 修补，不是完整 member resolver：
+
+- root owner unit 中同名 type 优先于 imported unit；若只有一个 imported candidate，则仍可解析。
+- target method 必须与 receiver type symbol 的 owner unit 对齐。
+- 本批不实现 inherited lookup、visibility rules、record/property/array/deref receiver、runtime
+  constructor lowering、virtual dispatch 或 type-based overload。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 root/imported 同名 `TWorker` focused semantic regression，确认旧实现误绑 imported
+      method symbol
+- [x] 让 type resolution 对当前 owner unit 优先，并在 ambiguity 时保守失败
+- [x] 让 member receiver / target lookup 走 `TypeId` + owner unit，而不是裸 class name
+- [x] focused semantic test 转绿
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 曾失败在 `semantic-call-bindings-failure=missing-owner-aware-member-call-binding`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- Fresh full verification: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `stage0-query-member-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`
+
+### Non-goals
+
+- 不实现 inherited member lookup / visibility checking
+- 不实现完整 overload/type dispatch 或 virtual/override dispatch
+- 不实现 record method、property accessor、array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 69 Self / Imported Member Receiver Binding
 
 ### Goal

@@ -196,8 +196,9 @@ overlay 或 incremental invalidation。`Holder.Help();` 这类 qualified selecto
 class variable receiver 的 method statement call、表达式参数里的 direct member function call，
 class method body 内的 `Self` receiver、已声明 class type-name receiver 的 constructor-like
 member call，以及 imported unit 中声明的 class type 作为 root variable type 时的 direct member
-call，并以 `member-call` 指向 `TClass.Method` method symbol。带参数 call 只用同名 method
-body declaration 的 argument count 做唯一匹配。inherited lookup、visibility checking、
+call，并以 `member-call` 指向 `TClass.Method` method symbol；root/imported unit 同名 class
+场景下，receiver 会沿变量 `TypeId` 回到对应 type symbol owner，再按 owner 限定 target
+method。带参数 call 只用同名 method body declaration 的 argument count 做唯一匹配。inherited lookup、visibility checking、
 property accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
 virtual/override dispatch 与 type-based overload resolution 仍然 deferred。
 

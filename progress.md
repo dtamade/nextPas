@@ -3,6 +3,43 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 70 owner-aware member receiver binding)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 69 暴露出的 member-call identity 风险从裸 class-name lookup 提升到
+    owner-aware/type-id-aware lookup，避免 root/imported 同名 class 时误绑 method target。
+- Baseline:
+  - Batch 69 已能把 imported class type seed 进 `TSemanticModel`，但 imported type/method 会先于
+    root declarations 出现。
+  - 当前 root variable 的 type resolution 与 member target lookup 仍主要通过 type/class name
+    字符串命中第一个 candidate；同名 `TWorker` 跨 owner unit 时存在误绑风险。
+- Actions taken:
+  - 本批先写 focused RED，构造 root/imported 都声明 `TWorker.Add` 的场景，要求 root variable
+    receiver 绑定到 root owner unit 的 `TWorker.Add`。
+  - `ResolveTypeIdForOwner(...)` 现在先按当前 owner unit 查同名 type symbol；若当前 owner
+    没有匹配，则只接受全模型唯一 type candidate，跨 owner 同名冲突时保守失败。
+  - member receiver lookup 不再回传 class name 字符串，而是回传变量或 type-name receiver
+    的稳定 `TypeId`；target method lookup 再用 type symbol 的 owner unit 限定
+    `TClass.Method` symbol 与 body declaration。
+  - 声明期可携带 owner 的 type resolution 调用点已切到 owner-aware 路径，包括 var/function
+    return、record/class field、class parent、imported callable return type 等。
+  - 同步 semantic model / language service / developer tooling / stage0 docs，明确当前只修
+    owner-aware identity，不声明完整 member resolver。
+- Verification:
+  - RED: focused semantic test 曾失败在
+    `semantic-call-bindings-failure=missing-owner-aware-member-call-binding`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+    `stage0-query-member-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass`
+    与 `human-summary=local verification passed`。
+- Review:
+  - 本批只收 owner-aware identity，不展开 inherited lookup、visibility、record/property receiver
+    或完整 overload/type dispatch。
+  - 复盘：这轮把 Batch 69 的 imported/root 同名风险压回 semantic model identity，没有扩大为
+    runtime constructor lowering 或完整 Pascal member resolver；后续应优先推进 member binding
+    的 typed argument / inherited lookup 设计，而不是再堆字符串规则。
+
 ## Session: 2026-05-26 (Batch 69 self/imported member receiver binding)
 
 - **Status:** completed

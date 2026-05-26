@@ -90,8 +90,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   （例如 `TWorker.Create(42)`），以 `member-call` binding 指向已声明的 `TClass.Method`
   method symbol。root source 变量的 type id 也可以来自 imported project/source unit 中已 seed
   的 class type，因此 `uses Worker; var Worker: TWorker;` 后的 direct member call 可绑定到
-  imported `TWorker.Add` method symbol。带参数 method call 只使用同名 `TClass.Method`
-  body declaration 的 argument count 做唯一匹配；完整 member lookup、inherited lookup、
+  imported `TWorker.Add` method symbol；当 root 与 imported unit 同时声明同名 class 时，
+  variable receiver 会使用变量 symbol 上的 `TypeId`，target lookup 再按该 type symbol 的
+  owner unit 限定 `TClass.Method`，避免继续靠第一个同名 class/method 字符串匹配。带参数
+  method call 只使用同名 `TClass.Method` body declaration 的 argument count 做唯一匹配；完整 member lookup、inherited lookup、
   visibility checking、property accessor、record method、array/deref receiver、runtime
   constructor allocation/lowering、virtual/override dispatch 与 type-based overload resolution
   仍未完成

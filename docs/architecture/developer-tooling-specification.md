@@ -575,8 +575,9 @@ receiver 的 method statement call（例如 `Worker.Run;` / `Worker.Run();` /
 `Halt(Worker.Add(1, 2));`）、class method body 内的 `Self.SetValue(9)`、已声明 class
 type-name receiver 的 constructor-like member call（例如 `TWorker.Create(42)`），以及
 imported class type 作为 root variable type 时的 direct member call，会绑定到
-`TClass.Method` method symbol。带参数 method call 只用同名 method body declaration 的
-argument count 做唯一匹配。完整 member lookup、inherited lookup、visibility checking、
+`TClass.Method` method symbol；若 root 与 imported unit 都声明同名 class，receiver binding
+会从变量 symbol 的 `TypeId` 找回 type symbol owner，并只在该 owner 下选择 method target。
+带参数 method call 只用同名 method body declaration 的 argument count 做唯一匹配。完整 member lookup、inherited lookup、visibility checking、
 property accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
 virtual/override dispatch 与 type-based overload resolution 仍不属于当前 query contract。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式

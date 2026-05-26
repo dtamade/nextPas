@@ -108,13 +108,17 @@ type
       out AMemberOffset: LongInt;
       out AArgCount: LongInt
     ): Boolean;
-    function TypeNameForVariable(const AName: string): string;
-    function TypeNameForMemberReceiver(
+    function TypeIdForVariable(const AName: string): LongInt;
+    function TypeIdForMemberReceiver(
       const AName: string;
       const ACurrentMethodClass: string
-    ): string;
-    function MethodSymbolIdForClassMember(
-      const AClassName: string;
+    ): LongInt;
+    function TypeSymbolForTypeId(
+      const ATypeId: LongInt;
+      out ASymbol: TSemanticSymbol
+    ): Boolean;
+    function MethodSymbolIdForClassTypeMember(
+      const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt
     ): LongInt;
@@ -171,6 +175,10 @@ type
     procedure SeedForeignProcedureBindings;
     procedure SeedRuntimeContracts;
     function ResolveTypeId(const ATypeName: string): LongInt;
+    function ResolveTypeIdForOwner(
+      const ATypeName: string;
+      const APreferredOwnerUnitId: string
+    ): LongInt;
     function FindSymbolByName(const AName: string): LongInt;
     procedure ProcessVarSection(const ANode: TGreenNode;
       const AOwnerUnitId: string);
@@ -1002,12 +1010,12 @@ begin
   Result := (AReceiverName <> '') and (AMemberName <> '');
 end;
 
-function TSemanticAnalyzer.TypeNameForVariable(const AName: string): string;
+function TSemanticAnalyzer.TypeIdForVariable(const AName: string): LongInt;
 var
   Index: LongInt;
   Symbol: TSemanticSymbol;
 begin
-  Result := '';
+  Result := 0;
   if AName = '' then
     Exit;
 
@@ -1016,44 +1024,66 @@ begin
     Symbol := FModel.SymbolAt(Index);
     if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, 'variable') and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
-      Exit(FModel.TypeAt(Symbol.TypeId - 1).Name);
+      Exit(Symbol.TypeId);
   end;
 end;
 
-function TSemanticAnalyzer.TypeNameForMemberReceiver(
+function TSemanticAnalyzer.TypeIdForMemberReceiver(
   const AName: string;
   const ACurrentMethodClass: string
-): string;
-var
-  Index: LongInt;
-  Symbol: TSemanticSymbol;
-  TypeId: LongInt;
+): LongInt;
 begin
-  Result := '';
+  Result := 0;
   if SameText(AName, 'Self') and (ACurrentMethodClass <> '') then
-    Exit(ACurrentMethodClass);
+    Exit(ResolveTypeIdForOwner(
+      ACurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    ));
 
-  Result := TypeNameForVariable(AName);
-  if Result <> '' then
+  Result := TypeIdForVariable(AName);
+  if Result > 0 then
     Exit;
   if AName = '' then
     Exit;
 
-  TypeId := FModel.FindTypeByName(AName);
-  if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
-    Exit;
+  Result := ResolveTypeIdForOwner(
+    AName,
+    NormalizeUnitIdentity(FUnitGraph.RootName)
+  );
+end;
 
+function TSemanticAnalyzer.TypeSymbolForTypeId(
+  const ATypeId: LongInt;
+  out ASymbol: TSemanticSymbol
+): Boolean;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  ASymbol.SymbolId := 0;
+  ASymbol.Name := '';
+  ASymbol.Kind := '';
+  ASymbol.OwnerUnitId := '';
+  ASymbol.ScopeId := 0;
+  ASymbol.TypeId := 0;
+  ASymbol.ParamCount := -1;
+  ASymbol.ByteOffset := 0;
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
+    Exit;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
-    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, 'type') and
-      (Symbol.TypeId = TypeId) then
-      Exit(FModel.TypeAt(TypeId - 1).Name);
+    if SameText(Symbol.Kind, 'type') and (Symbol.TypeId = ATypeId) then
+    begin
+      ASymbol := Symbol;
+      Exit(True);
+    end;
   end;
 end;
 
-function TSemanticAnalyzer.MethodSymbolIdForClassMember(
-  const AClassName: string;
+function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
+  const AClassTypeId: LongInt;
   const AMemberName: string;
   const AArgCount: LongInt
 ): LongInt;
@@ -1064,18 +1094,22 @@ var
   QualifiedName: string;
   Symbol: TSemanticSymbol;
   SymbolId: LongInt;
+  TypeSymbol: TSemanticSymbol;
 begin
   Result := 0;
-  if (AClassName = '') or (AMemberName = '') then
+  if (AClassTypeId <= 0) or (AMemberName = '') then
+    Exit;
+  if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
     Exit;
 
-  QualifiedName := AClassName + '.' + AMemberName;
+  QualifiedName := TypeSymbol.Name + '.' + AMemberName;
   SymbolId := 0;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
     if SameText(Symbol.Name, QualifiedName) and
-      SameText(Symbol.Kind, 'method') then
+      SameText(Symbol.Kind, 'method') and
+      SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       SymbolId := Symbol.SymbolId;
       Break;
@@ -1087,7 +1121,8 @@ begin
   BodyCandidateCount := 0;
   BodyMatchCount := 0;
   for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, QualifiedName) then
+    if SameText(FProcedureBodies[Index].Name, QualifiedName) and
+      SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       Inc(BodyCandidateCount);
       if CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount then
@@ -1115,7 +1150,7 @@ var
   MemberName: string;
   MemberOffset: LongInt;
   ReceiverName: string;
-  ReceiverTypeName: string;
+  ReceiverTypeId: LongInt;
   TargetSymbolId: LongInt;
 begin
   Result := False;
@@ -1127,15 +1162,15 @@ begin
     ArgCount
   ) then
     Exit;
-  ReceiverTypeName := TypeNameForMemberReceiver(
+  ReceiverTypeId := TypeIdForMemberReceiver(
     ReceiverName,
     ACurrentMethodClass
   );
-  if ReceiverTypeName = '' then
+  if ReceiverTypeId <= 0 then
     Exit;
 
-  TargetSymbolId := MethodSymbolIdForClassMember(
-    ReceiverTypeName,
+  TargetSymbolId := MethodSymbolIdForClassTypeMember(
+    ReceiverTypeId,
     MemberName,
     ArgCount
   );
@@ -1293,7 +1328,7 @@ begin
       Child := ADecl.ChildAt(Index);
       if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
       begin
-        TypeId := ResolveTypeId(Child.Text);
+        TypeId := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
         Break;
       end;
     end;
@@ -2450,6 +2485,21 @@ end;
 
 function TSemanticAnalyzer.ResolveTypeId(const ATypeName: string): LongInt;
 begin
+  Result := ResolveTypeIdForOwner(ATypeName, '');
+end;
+
+function TSemanticAnalyzer.ResolveTypeIdForOwner(
+  const ATypeName: string;
+  const APreferredOwnerUnitId: string
+): LongInt;
+var
+  CandidateSeen: Boolean;
+  Index: LongInt;
+  NormalizedOwnerUnitId: string;
+  PreferredMatchCount: LongInt;
+  Symbol: TSemanticSymbol;
+  UniqueTypeId: LongInt;
+begin
   if ATypeName = '' then
     Exit(0);
   if SameText(ATypeName, 'String') then
@@ -2460,6 +2510,53 @@ begin
     Exit(FModel.FindTypeByName('Double'));
   if SameText(ATypeName, 'Extended') then
     Exit(FModel.FindTypeByName('Double'));
+
+  NormalizedOwnerUnitId := NormalizeUnitIdentity(APreferredOwnerUnitId);
+  if NormalizedOwnerUnitId <> '' then
+  begin
+    PreferredMatchCount := 0;
+    UniqueTypeId := 0;
+    for Index := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(Index);
+      if SameText(Symbol.Kind, 'type') and
+        SameText(Symbol.Name, ATypeName) and
+        SameText(Symbol.OwnerUnitId, NormalizedOwnerUnitId) and
+        (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+      begin
+        Inc(PreferredMatchCount);
+        if UniqueTypeId = 0 then
+          UniqueTypeId := Symbol.TypeId
+        else if UniqueTypeId <> Symbol.TypeId then
+          Exit(0);
+      end;
+    end;
+    if PreferredMatchCount = 1 then
+      Exit(UniqueTypeId);
+    if PreferredMatchCount > 1 then
+      Exit(0);
+  end;
+
+  CandidateSeen := False;
+  UniqueTypeId := 0;
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
+      (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+    begin
+      if not CandidateSeen then
+      begin
+        CandidateSeen := True;
+        UniqueTypeId := Symbol.TypeId;
+      end
+      else if UniqueTypeId <> Symbol.TypeId then
+        Exit(0);
+    end;
+  end;
+  if CandidateSeen then
+    Exit(UniqueTypeId);
+
   Result := FModel.FindTypeByName(ATypeName);
 end;
 
@@ -2490,7 +2587,7 @@ begin
       TypeChild := Child.ChildAt(J);
       if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
       begin
-        TypeId := ResolveTypeId(TypeChild.Text);
+        TypeId := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
         Break;
       end;
     end;
@@ -2601,7 +2698,7 @@ begin
     Child := ANode.ChildAt(J);
     if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
     begin
-      TypeId := ResolveTypeId(Child.Text);
+      TypeId := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
       Break;
     end;
   end;
@@ -2695,7 +2792,7 @@ begin
       TypeChild := Child.ChildAt(J);
       if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
       begin
-        FieldTypeId := ResolveTypeId(TypeChild.Text);
+        FieldTypeId := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
         Break;
       end;
     end;
@@ -2806,7 +2903,7 @@ begin
       begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
-          FieldTypeId := ResolveTypeId(NameNode.Text);
+          FieldTypeId := ResolveTypeIdForOwner(NameNode.Text, AOwnerUnitId);
       end;
       FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
         Child.ByteOffset);
@@ -2955,7 +3052,7 @@ begin
         begin
           if TypeChild.ChildAt(0).NodeKind = gnkIdentifier then
             FModel.SetTypeParent(TypeId,
-              FModel.FindTypeByName(TypeChild.ChildAt(0).Text));
+              ResolveTypeIdForOwner(TypeChild.ChildAt(0).Text, AOwnerUnitId));
         end;
         ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
       end;
@@ -5997,7 +6094,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
         Child := ANode.ChildAt(ChildIndex);
         if (Child <> nil) and (Child.NodeKind = gnkIdentifier) then
         begin
-          TypeId := ResolveTypeId(Child.Text);
+          TypeId := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
           Break;
         end;
       end;

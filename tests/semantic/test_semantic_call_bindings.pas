@@ -36,6 +36,26 @@ begin
   end;
 end;
 
+function SymbolIdByNameKindAndOwner(
+  const AModel: TSemanticModel;
+  const AName: string;
+  const AKind: string;
+  const AOwnerUnitId: string
+): LongInt;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, AKind) and
+      SameText(Symbol.OwnerUnitId, AOwnerUnitId) then
+      Exit(Symbol.SymbolId);
+  end;
+end;
+
 function BindingTargetForName(
   const AModel: TSemanticModel;
   const AName: string
@@ -289,6 +309,137 @@ begin
       Fail('missing-imported-member-call-binding');
     if BindingCount <> 1 then
       Fail('unexpected-imported-member-call-binding-count:' +
+        IntToStr(BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckOwnerAwareImportedClassMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingCount: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  ImportedMethodSymbolId: LongInt;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootMethodSymbolId: LongInt;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-owner-aware-member-call-' + IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program OwnerAwareMemberCalls;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'function TWorker.Add(A, B: Integer): Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  Add := A + B;' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Halt(Worker.Add(1, 2));' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'function TWorker.Add(A, B: Integer): Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  Add := A - B;' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('OwnerAwareMemberCalls', '', ruoRootSource, '', 'program', 1)
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-owner-aware-member-call-diagnostics');
+    if Model = nil then
+      Fail('missing-owner-aware-member-call-semantic-model');
+
+    RootMethodSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'TWorker.Add',
+      'method',
+      'ownerawaremembercalls'
+    );
+    if RootMethodSymbolId <= 0 then
+      Fail('missing-owner-aware-root-member-call-method-symbol');
+    ImportedMethodSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'TWorker.Add',
+      'method',
+      'worker'
+    );
+    if ImportedMethodSymbolId <= 0 then
+      Fail('missing-owner-aware-imported-member-call-method-symbol');
+    if ImportedMethodSymbolId = RootMethodSymbolId then
+      Fail('owner-aware-member-call-method-symbols-not-distinct');
+
+    BindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Add') then
+      begin
+        Inc(BindingCount);
+        if Binding.TargetSymbolId = ImportedMethodSymbolId then
+          Fail('owner-aware-member-call-bound-imported-method');
+        if Binding.TargetSymbolId <> RootMethodSymbolId then
+          Fail('owner-aware-member-call-target-mismatch');
+        if Binding.ByteOffset <> Pos('Add(1, 2)', RootSourceText) - 1 then
+          Fail('owner-aware-member-call-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if BindingCount = 0 then
+      Fail('missing-owner-aware-member-call-binding');
+    if BindingCount <> 1 then
+      Fail('unexpected-owner-aware-member-call-binding-count:' +
         IntToStr(BindingCount));
   finally
     Model.Free;
@@ -636,6 +787,7 @@ begin
 
     CheckImportedUnitCallBinding;
     CheckImportedClassMemberCallBinding;
+    CheckOwnerAwareImportedClassMemberCallBinding;
     CheckOverloadBindings;
     CheckClassMemberCallBinding;
 
