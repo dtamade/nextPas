@@ -15,6 +15,64 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 67 Expression Member Function Binding
+
+### Goal
+
+关闭 Batch 66 留下的 expression-position member function call 断点：`Halt(Worker.Add(1, 2));`
+这类作为表达式参数出现的 direct class variable receiver method call，也应注册为 `member-call`，
+并指向 `TWorker.Add` method symbol。
+
+本批次新增并冻结：
+
+- wrapped procedure-call statement 的 inner `gnkFunctionCall` 不再整棵跳过；只跳过 wrapper
+  callee 自身，继续递归其参数表达式
+- direct class receiver method function call 在表达式位置的 `member-call` binding
+- `query symbols` 对 expression-position `member-call` / `queryDefinitions` 的 stage0 gate
+- focused semantic regression，证明 `Halt(Worker.Add(1, 2));` 可被 compiler-owned binding table 消费
+
+### Architecture Decision
+
+这仍是 `TSemanticAnalyzer` binding seeding 的渐进增强，而不是完整 member resolver：
+
+- 重用 Batch 65/66 的 receiver variable type lookup、`TClass.Method` symbol lookup 与 arity matching。
+- wrapper child 处理只影响 binding walker 的遍历策略：避免对同 offset wrapper call 重复注册，同时不丢失参数里的嵌套 call。
+- 表达式位置只承诺 direct variable receiver 的 dot-access method function call。
+- constructor call、record/property/array/deref receiver、virtual/override dispatch 与 type-based overload
+  resolution 继续保持 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入
+      `Halt(Worker.Add(1, 2));`
+- [x] 修正 `SeedCallBindingsInNode(...)` 对 wrapped function-call child 的参数遍历
+- [x] focused semantic call binding test 转绿
+- [x] 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+      `stage0-query-member-call-bindings-check`
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 先失败在 `semantic-call-bindings-failure=missing-member-function-expression-binding`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- final: fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `stage0-query-member-call-bindings-check=pass`、`stage0QueryMemberCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`
+
+### Non-goals
+
+- 不实现完整 type-based overload resolution
+- 不实现 constructor binding
+- 不实现 virtual/override dispatch、record method、property accessor、array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 66 Member Call Argument Arity
 
 ### Goal

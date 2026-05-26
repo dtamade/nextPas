@@ -1289,6 +1289,7 @@ end;
 
 procedure TSemanticAnalyzer.SeedCallBindingsInNode(const ANode: TGreenNode);
 var
+  ArgIndex: LongInt;
   BodyNode: TGreenNode;
   Child: TGreenNode;
   DeclNode: TGreenNode;
@@ -1316,7 +1317,15 @@ begin
   for Index := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(Index);
-    if (Child <> nil) and not IsWrappedCallChild(ANode, Child) then
+    if Child = nil then
+      Continue;
+    if IsWrappedCallChild(ANode, Child) then
+    begin
+      for ArgIndex := 1 to Child.ChildCount - 1 do
+        SeedCallBindingsInNode(Child.ChildAt(ArgIndex));
+      Continue;
+    end;
+    if Child <> nil then
       SeedCallBindingsInNode(Child);
   end;
 end;

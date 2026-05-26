@@ -3,6 +3,37 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 67 expression member function binding)
+
+- **Status:** completed
+- Objective:
+  - 把 direct class variable receiver 的 `member-call` 继续推进到 expression-position member
+    function call，让 `Halt(Worker.Add(1, 2));` 绑定到 `TWorker.Add` method symbol。
+- Baseline:
+  - Batch 66 已能绑定 statement 位置的 `Worker.SetValue(7);`。
+  - 旧 walker 为避免 `Pick(1);` 这类 wrapper duplicate，直接跳过同 offset wrapped
+    `gnkFunctionCall` child，导致参数表达式里的 `Worker.Add(...)` 也不会被递归扫描。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入 `TWorker.Add` 与
+    `Halt(Worker.Add(1, 2));`，并固定 `Add(1, 2)` 的 byte offset。
+  - RED focused test 已确认旧实现失败在
+    `semantic-call-bindings-failure=missing-member-function-expression-binding`。
+  - `SeedCallBindingsInNode(...)` 现在遇到 wrapped call child 时只跳过 wrapper callee 本身，
+    继续递归 child 的参数表达式，避免重复 binding 同时保留嵌套 call truth。
+  - 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+    `stage0-query-member-call-bindings-check`，要求 `query-bindings` / `queryDefinitions`
+    同步公开 expression-position `Add` member-call。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+    `stage0QueryMemberCallBindingsCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - final diff review 通过：改动只扩展 wrapped call traversal 的参数递归、focused/stage0
+    gates 与同一批次的规格/进度记录；没有引入新的 FPDev 侧 parser/type checker，也没有扩大
+    member lookup 到 constructor、virtual dispatch 或 type-based overload。
+
 ## Session: 2026-05-26 (Batch 66 member call argument arity)
 
 - **Status:** completed

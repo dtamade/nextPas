@@ -293,6 +293,9 @@ var
   MemberBindingCount: LongInt;
   MethodSymbolId: LongInt;
   Model: TSemanticModel;
+  AddBindingCount: LongInt;
+  AddOffset: LongInt;
+  AddSymbolId: LongInt;
   SetValueBindingCount: LongInt;
   SetValueOffset: LongInt;
   SetValueSymbolId: LongInt;
@@ -306,12 +309,17 @@ begin
     '  TWorker = class' + LineEnding +
     '    procedure Run;' + LineEnding +
     '    procedure SetValue(Value: Integer);' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
     '  end;' + LineEnding +
     'procedure TWorker.Run;' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
     'procedure TWorker.SetValue(Value: Integer);' + LineEnding +
     'begin' + LineEnding +
+    'end;' + LineEnding +
+    'function TWorker.Add(A, B: Integer): Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  Add := A + B;' + LineEnding +
     'end;' + LineEnding +
     'var' + LineEnding +
     '  Worker: TWorker;' + LineEnding +
@@ -320,6 +328,7 @@ begin
     '  Worker.Run();' + LineEnding +
     '  Worker.SetValue(7);' + LineEnding +
     '  Worker.SetValue;' + LineEnding +
+    '  Halt(Worker.Add(1, 2));' + LineEnding +
     'end.' + LineEnding;
 
   Diagnostics := TDiagnosticsSink.CreateDefault;
@@ -349,8 +358,13 @@ begin
     );
     if SetValueSymbolId <= 0 then
       Fail('missing-member-call-argument-method-symbol');
+    AddSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Add', 'method');
+    if AddSymbolId <= 0 then
+      Fail('missing-member-function-expression-method-symbol');
 
     MemberBindingCount := 0;
+    AddBindingCount := 0;
+    AddOffset := Pos('Add(1, 2)', SourceText) - 1;
     SetValueBindingCount := 0;
     SetValueOffset := Pos('SetValue(7)', SourceText) - 1;
     for Index := 0 to Model.BindingCount - 1 do
@@ -372,6 +386,16 @@ begin
         if Binding.ByteOffset <> SetValueOffset then
           Fail('member-call-argument-binding-offset-mismatch:' +
             IntToStr(Binding.ByteOffset));
+      end
+      else if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Add') then
+      begin
+        Inc(AddBindingCount);
+        if Binding.TargetSymbolId <> AddSymbolId then
+          Fail('member-function-expression-binding-target-mismatch');
+        if Binding.ByteOffset <> AddOffset then
+          Fail('member-function-expression-binding-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
       end;
     end;
     if MemberBindingCount = 0 then
@@ -384,6 +408,11 @@ begin
     if SetValueBindingCount <> 1 then
       Fail('unexpected-member-call-argument-binding-count:' +
         IntToStr(SetValueBindingCount));
+    if AddBindingCount = 0 then
+      Fail('missing-member-function-expression-binding');
+    if AddBindingCount <> 1 then
+      Fail('unexpected-member-function-expression-binding-count:' +
+        IntToStr(AddBindingCount));
   finally
     Model.Free;
     Analyzer.Free;

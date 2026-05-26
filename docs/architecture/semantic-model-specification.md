@@ -84,11 +84,12 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `queryDefinitions`。带 selector/member 的 qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
-  `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`），以 `member-call` binding
+  `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`）以及表达式参数里的 direct
+  member function call（例如 `Halt(Worker.Add(1, 2));`），以 `member-call` binding
   指向已声明的 `TClass.Method` method symbol。带参数 method call 只使用同名
   `TClass.Method` body declaration 的 argument count 做唯一匹配；完整 member lookup、
-  property accessor、record method、array/deref receiver、expression-position member function
-  call、virtual/override dispatch 与 type-based overload resolution 仍未完成
+  property accessor、record method、array/deref receiver、constructor binding、virtual/override
+  dispatch 与 type-based overload resolution 仍未完成
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

@@ -72,7 +72,8 @@
   与可读 owner/scope/type metadata，并同步投影 session-owned `queryBindings`、
   `queryDefinitions`、
   `queryScopes` / `queryTypes` side tables，并已把 direct class variable receiver 的
-  argument-count matched method statement call 推进成 `member-call` binding，`pkg inspect / pkg plan / pkg graph` 也已投影
+  argument-count matched method statement call 和 expression-position member function call
+  推进成 `member-call` binding，`pkg inspect / pkg plan / pkg graph` 也已投影
   `packageWorkflowStatus`、`packageManifestStatus`、`packageSourceRootCount`、
   `packageSourceRoots`、`packageDependencyCount`、`packageDependencies`、
   `packageDependencyValidationStatus`、`packageDependencyIssueCount`、`packageDependencyIssues`、
@@ -96,9 +97,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 66：member call argument arity。
+- 当前 rolling window 已推进到 Batch 67：expression member function binding。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 66` 已完成。
+- `Batch 1` 到 `Batch 67` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -153,8 +154,10 @@
   `Batch 65` 补上第一条正向 member binding：direct class variable receiver 的零参数
   method call 会作为 `member-call` 指向 `TClass.Method` method symbol。`Batch 66` 继续把这条
   contract 推进到 argument-count matched method statement call，并用 stage0 query gate 固定
-  `member-call` / `queryDefinitions` truth；完整 selector/member lookup、expression-position
-  member function call 与 type-based dispatch 仍保持 deferred。
+  `member-call` / `queryDefinitions` truth。`Batch 67` 修正 wrapped call traversal，让
+  `Halt(Worker.Add(1, 2));` 这类表达式参数里的 direct member function call 也进入同一份
+  binding truth；完整 selector/member lookup、constructor binding 与 type-based dispatch 仍保持
+  deferred。
   下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
   真实功能切片。
 

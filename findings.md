@@ -10,6 +10,15 @@
 
 ## Research Findings
 
+- Batch 67 关闭 expression-position member function call 的第一条正向边界：
+  `Halt(Worker.Add(1, 2));` 现在会把参数表达式里的 `Worker.Add(...)` 注册为 `member-call`，
+  并指向 `TWorker.Add` method symbol。
+- 真实缺口不在 method lookup，而在 binding walker 的 wrapper skip：为避免
+  `gnkProcedureCallStatement` 包住同 offset `gnkFunctionCall` 时重复注册，旧实现整棵跳过 wrapped
+  child，连参数里的嵌套 call 也一起跳过。
+- 新策略是只跳过 wrapper callee 自身，继续递归 wrapped function-call 的参数表达式；这保留 Batch 60
+  以来的 duplicate binding guard，同时让 expression-position direct member function call 进入
+  compiler-owned binding truth。
 - Batch 66 把 `member-call` 从零参数 direct class receiver 推进到参数个数匹配：`Worker.SetValue(7);`
   现在会绑定到 `TWorker.SetValue` method symbol，缺参 `Worker.SetValue;` 不会再因为 method name
   match 被误注册。
@@ -20,8 +29,9 @@
   `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 固定 `query-bindings` /
   `queryDefinitions` 中的 `member-call` truth，并确认 query surface 仍保持 MIR/backend/toolchain
   deferred。
-- expression-position member function call（例如 `Halt(M.Add(1, 2))`）当前不会被本批纳入 binding
-  contract；focused probe 已显示这类形态还需要后续 AST/member expression binding 设计。
+- 更复杂的 expression-position member binding 仍保持 deferred：当前只承诺 direct class variable
+  receiver 的 `Halt(Worker.Add(1, 2))` 形态；constructor、record/property、array/deref receiver、
+  virtual dispatch 与 type-based overload 还需要后续 AST/member expression binding 设计。
 - Batch 65 把 selector/member binding 从“只排除误绑定”推进到第一条正向 truth：root source
   中 direct class variable receiver 的零参数 class method call（`Worker.Run;` 与
   `Worker.Run();`）现在会注册 `member-call` binding，并指向 `TWorker.Run` 的 `method`

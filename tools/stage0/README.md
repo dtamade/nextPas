@@ -245,9 +245,9 @@ symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset �
 symbol id/name/kind/owner unit/source path/offset。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
-`Worker.SetValue(7);` 这类带参数调用。完整 member lookup、expression-position member
-function call、virtual dispatch 与 type-based overload resolution 仍属于后续 language-service /
-semantic model 工作。
+`Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
+direct member function call。完整 member lookup、constructor binding、virtual dispatch 与
+type-based overload resolution 仍属于后续 language-service / semantic model 工作。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
