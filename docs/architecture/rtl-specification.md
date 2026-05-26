@@ -111,12 +111,13 @@ target-installed `units/linux-x86_64/System.pas`，普通 `class` 默认继承 `
 contract 记录 nil guard 与 heap release intent；HIR builder 已把该 contract 保留为
 `np.system.object_free` intrinsic marker，带 receiver pointer 与 effective `Destroy` target；
 匹配的后续 `Destroy` lowering 会标记为 `np.system.object_free.destroy` owned marker。
+LLVM HIR emitter 已把这组 marker 降成真实 receiver nil branch，让 `Destroy` call 只在非空分支执行。
 这个 source-backed truth 现在不再依赖用户显式写 `uses System`；但 implicit runtime 仍保持
 `OriginClass=implicit-runtime`，backend extra assemble/link 不会因此自动把 `System.pas`
 加进每个 program。显式 `uses System` 仍会继续解析真实源码，并可把 implicit runtime 节点升级为
 explicit source provenance。长期方向仍然不是在语义层硬编码更多名字，而是让 nextPas-owned
-`System` 继续提供真实 lifetime helper，把 object-free HIR markers 接到 nil branch、
-allocator free、unit init/fini 等运行期能力。
+`System` 继续提供真实 lifetime helper，把 object-free HIR markers 接到 allocator free、
+unit init/fini 等运行期能力。
 
 这里的运行时规范与 `Source syntax`、`Core semantics` 互相配合，但不互相替代。
 语法和核心语义决定程序“被如何理解”，RTL 决定这些程序在运行期“如何表现”。

@@ -30,6 +30,7 @@ type
     FPendingParamLlvmIdx: LongInt;
     FPendingObjectFreeDestroyName: string;
     FPendingObjectFreeReceiverName: string;
+    FPendingObjectFreeReceiverValue: THIRValueId;
     FSretValueId: THIRValueId;
 
     FAllocaNames: array of string;
@@ -158,6 +159,7 @@ begin
   FPendingParamLlvmIdx := 0;
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
+  FPendingObjectFreeReceiverValue := 0;
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
   SetLength(FRecordAllocaSlots, 0);
@@ -1746,7 +1748,7 @@ var
   TabPos: LongInt;
   FuncName, Rest, ArgBlob, StrVarName: string;
   FirstArgBlob, FirstArgName: string;
-  ArgValue, PtrVal, LenVal: THIRValueId;
+  ArgValue, PtrVal, LenVal, ObjectFreeReceiverValue: THIRValueId;
   ArgOps: array of THIROperand;
   ArgCount: LongInt;
   OwnsObjectFreeDestroy: Boolean;
@@ -1763,8 +1765,29 @@ begin
     Rest := '';
   end;
 
-  ArgCount := 0;
   FirstArgBlob := '';
+  if Rest <> '' then
+  begin
+    TabPos := Pos(#9, Rest);
+    if TabPos > 0 then
+      FirstArgBlob := Copy(Rest, 1, TabPos - 1)
+    else
+      FirstArgBlob := Rest;
+  end;
+  FirstArgName := ExtractVarOperandName(FirstArgBlob);
+  OwnsObjectFreeDestroy := (FPendingObjectFreeDestroyName <> '') and
+    (FPendingObjectFreeReceiverValue <> 0) and
+    SameText(FuncName, FPendingObjectFreeDestroyName) and
+    SameText(FirstArgName, FPendingObjectFreeReceiverName);
+  ObjectFreeReceiverValue := FPendingObjectFreeReceiverValue;
+  if FPendingObjectFreeDestroyName <> '' then
+  begin
+    FPendingObjectFreeDestroyName := '';
+    FPendingObjectFreeReceiverName := '';
+    FPendingObjectFreeReceiverValue := 0;
+  end;
+
+  ArgCount := 0;
   SetLength(ArgOps, 0);
   while Rest <> '' do
   begin
@@ -1779,9 +1802,13 @@ begin
       ArgBlob := Rest;
       Rest := '';
     end;
-    if FirstArgBlob = '' then
-      FirstArgBlob := ArgBlob;
-    if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strvar ') then
+    if OwnsObjectFreeDestroy and (ArgCount = 0) then
+    begin
+      SetLength(ArgOps, ArgCount + 1);
+      ArgOps[ArgCount] := MakeTypedOperand(ObjectFreeReceiverValue, GetPtrType);
+      Inc(ArgCount);
+    end
+    else if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strvar ') then
     begin
       StrVarName := Copy(ArgBlob, 8, Length(ArgBlob));
       if (Length(StrVarName) > 0) and (StrVarName[Length(StrVarName)] = #10) then
@@ -1852,16 +1879,6 @@ begin
     end;
   end;
 
-  FirstArgName := ExtractVarOperandName(FirstArgBlob);
-  OwnsObjectFreeDestroy := (FPendingObjectFreeDestroyName <> '') and
-    SameText(FuncName, FPendingObjectFreeDestroyName) and
-    SameText(FirstArgName, FPendingObjectFreeReceiverName);
-  if FPendingObjectFreeDestroyName <> '' then
-  begin
-    FPendingObjectFreeDestroyName := '';
-    FPendingObjectFreeReceiverName := '';
-  end;
-
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   if OwnsObjectFreeDestroy then
@@ -1888,6 +1905,7 @@ begin
   ReceiverName := '';
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
+  FPendingObjectFreeReceiverValue := 0;
   Rest := ANode.Operand;
   while Rest <> '' do
   begin
@@ -1939,6 +1957,7 @@ begin
   begin
     FPendingObjectFreeDestroyName := DestroyName;
     FPendingObjectFreeReceiverName := ReceiverName;
+    FPendingObjectFreeReceiverValue := ReceiverPtr;
   end;
 end;
 
@@ -3199,6 +3218,7 @@ begin
   begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
+    FPendingObjectFreeReceiverValue := 0;
   end;
 
   if (ANode.Kind = 'var-decl-runtime') or

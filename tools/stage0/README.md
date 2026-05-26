@@ -262,7 +262,8 @@ class method，并把 `Child.Touch` 这类 inherited call 投影到 parent metho
 `Obj.Free` lowering 到当前有效 `Destroy` runtime call；同一 lowering 还会产生
 `np.system.object_free` contract，记录 nil guard 与 heap release intent，并由 HIR builder
 保留为同名 intrinsic marker，匹配的后续 `Destroy` lowering 会被标记为
-`np.system.object_free.destroy` owned marker。这仍不是实际 backend nil branch、allocator free
+`np.system.object_free.destroy` owned marker。LLVM HIR emitter 已把这组 marker lowering 成
+receiver nil branch，让 `Destroy` call 只在非空分支执行；这仍不是 allocator free
 或动态 virtual dispatch runtime。完整 member resolver、visibility checking、runtime
 constructor lowering、完整 virtual dispatch 与 type-based overload resolution仍属于后续
 language-service / semantic model 工作。class method overload 目前只按

@@ -20,6 +20,19 @@
   detach/self/TLS/nanosleep/sched_yield/sysconf 声明。
 - 本批刻意不混入独立 `platform.time` hardening commit；`windows.ffi` 只保留 thread/TLS/yield/sleep/
   cpu-count 所需 ABI，后续 time 合并时再追加 QueryPerformance/FileTime 等 time-only FFI。
+- Batch 94 把 object-free lifecycle contract 推进到 LLVM HIR emitter：`np.system.object_free`
+  现在会生成 receiver pointer 的 `icmp eq ptr ..., null` 与 conditional branch；匹配的
+  `np.system.object_free.destroy` call 位于 `objectfree.destroy.*` 非空分支，并在调用后汇合到
+  `objectfree.end.*`。
+- 新 focused RED 固定旧行为缺口：Batch 92 的 LLVM emitter 只保留 owned destroy ordinary call，
+  因此失败在 `missing-object-free-llvm-null-check`。
+- 初次 guarded emitter 实现暴露 builder 侧 receiver reload 缺口：owned destroy 前的额外 load 会让
+  guard 提前关闭；修正后 `THIRBuilder` 会复用 object-free marker 已解析出的 receiver pointer。
+- 修正后 focused test 输出 `hir-object-free-contract-status=pass`；fresh full verify 已输出
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 这个切片已经有真实 LLVM nil branch，但仍不是完整对象释放：allocator free、完整 dynamic dispatch
+  runtime、implicit `System.pas` 自动 assemble/link 与完整 `System` 平替仍未完成。
 - Batch 92 把 `np.system.object_free` 与紧随的 effective `Destroy` 连接成 HIR lifecycle group：
   匹配 receiver/destroy target 的后续 `call-runtime` 现在会成为 `hikIntrinsic` /
   `np.system.object_free.destroy`，而不是裸 `hikCall @TObject.Destroy`。

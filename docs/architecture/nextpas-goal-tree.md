@@ -244,14 +244,16 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   heap release intent。`THIRBuilder` 已把该 contract 投影成 HIR `np.system.object_free`
   intrinsic marker，保留 receiver pointer 与 effective `Destroy` target；紧随其后的匹配
   `Destroy` lowering 会标记成 `np.system.object_free.destroy` owned marker，而不是裸
-  ordinary call。显式 `uses System` 仍可升级到 explicit source provenance。
+  ordinary call。LLVM HIR emitter 已把这个 lifecycle group lowering 成 receiver nil branch，
+  让 `Destroy` call 位于非空 `objectfree.destroy.*` 分支并汇合到 `objectfree.end.*`。
+  显式 `uses System` 仍可升级到 explicit source provenance。
 - 新 `core/` 已开始 L0/L1 基础设施。
 - 当前协作边界：core 由 core 负责人写，非 core 批次不直接修改 `core/`。
 
 下一步证据：
 
 - 继续扩展 `System` source truth：把 `np.system.object_free` / `np.system.object_free.destroy`
-  接到真实 nil branch、allocator free 与 backend/runtime helper，并推进 unit init/fini。
+  接到 allocator free、完整 dynamic dispatch 与 backend/runtime helper，并推进 unit init/fini。
 - compiler/tooling 侧只提出 core 需求和 integration contract。
 - 需要 core 改动时，先形成 review/suggestion，不直接落 core 代码。
 

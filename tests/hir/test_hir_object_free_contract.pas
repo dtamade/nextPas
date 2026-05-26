@@ -4,18 +4,21 @@ program test_hir_object_free_contract;
 
 uses
   SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_verifier;
+  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
 
 var
   SemaModel: TSemanticModel;
   Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
   Verifier: THIRVerifier;
   Func: THIRFunction;
   Instr: THIRInstr;
   OperandType: THIRTypeRec;
+  LlvmText: string;
   FoundContract: Boolean;
   FoundOwnedDestroy: Boolean;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
+  NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, EndLabelPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -23,9 +26,22 @@ begin
   Halt(1);
 end;
 
+function FindAfter(const ANeedle, AText: string; AStart: LongInt): LongInt;
+var
+  Offset: LongInt;
+begin
+  if AStart < 1 then
+    AStart := 1;
+  Offset := Pos(ANeedle, Copy(AText, AStart, MaxInt));
+  if Offset = 0 then
+    Exit(0);
+  Result := AStart + Offset - 1;
+end;
+
 begin
   SemaModel := TSemanticModel.Create;
   Builder := nil;
+  Emitter := nil;
   Verifier := nil;
   try
     SemaModel.AddTypedHirNode('var-decl-ptr-runtime', 'Worker', 0, 0, 'Worker');
@@ -109,9 +125,36 @@ begin
     if not FoundOwnedDestroy then
       Fail('missing-object-free-owned-destroy-intrinsic');
 
+    Emitter := THIRLlvmEmitter.Create(Builder.Module);
+    Emitter.EmitModule;
+    LlvmText := Emitter.AsText;
+    NullCheckPos := Pos('%objectfree.isnull.', LlvmText);
+    if NullCheckPos = 0 then
+      Fail('missing-object-free-llvm-null-check');
+    if Pos(' = icmp eq ptr ', LlvmText) = 0 then
+      Fail('missing-object-free-llvm-icmp-eq-ptr');
+    BranchPos := FindAfter('br i1 %objectfree.isnull.', LlvmText, NullCheckPos);
+    if BranchPos = 0 then
+      Fail('missing-object-free-llvm-conditional-branch');
+    DestroyLabelPos := FindAfter(LineEnding + 'objectfree.destroy.', LlvmText,
+      BranchPos);
+    if DestroyLabelPos = 0 then
+      Fail('missing-object-free-llvm-destroy-label');
+    DestroyCallPos := FindAfter('@TObject.Destroy', LlvmText, DestroyLabelPos);
+    if DestroyCallPos = 0 then
+      Fail('missing-object-free-llvm-destroy-call');
+    EndLabelPos := FindAfter(LineEnding + 'objectfree.end.', LlvmText,
+      DestroyCallPos);
+    if EndLabelPos = 0 then
+      Fail('missing-object-free-llvm-end-label-after-destroy');
+    if not ((NullCheckPos < BranchPos) and (BranchPos < DestroyLabelPos) and
+      (DestroyLabelPos < DestroyCallPos) and (DestroyCallPos < EndLabelPos)) then
+      Fail('object-free-llvm-guard-order');
+
     WriteLn('hir-object-free-contract-status=pass');
   finally
     Verifier.Free;
+    Emitter.Free;
     Builder.Free;
     SemaModel.Free;
   end;

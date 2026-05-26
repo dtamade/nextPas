@@ -3,6 +3,9 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+当前最新本轮为 Batch 94 object-free LLVM nil guard；Batch 93 platform.thread FFI boundary
+是并行 platform/core 工作流保留下来的已完成记录。
+
 ## Session: 2026-05-26 (Batch 93 platform.thread FFI boundary)
 
 - **Status:** completed; verification passed
@@ -36,6 +39,35 @@
   - 本批只固定 low-level platform.thread ABI 边界；Windows 运行行为仍需要真实 Windows 主机或 CI 补证。
   - POSIX pthread opaque 类型仍需后续按 macOS/FreeBSD/Android ABI 做独立 compile gates；
     当前 Linux focused gate 和 Win64 compile gate 已覆盖本批最危险路径。
+
+## Session: 2026-05-26 (Batch 94 object-free LLVM nil guard)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 92 的 `np.system.object_free` / `np.system.object_free.destroy` HIR lifecycle group
+    推进到 LLVM HIR emitter：`Destroy` call 必须受 receiver nil guard 保护。
+- Baseline:
+  - Batch 92 只让 owned destroy marker 复用 ordinary call lowering；LLVM 文本仍是无条件
+    `@TObject.Destroy` call，没有 `nil` branch。
+  - 初次实现 guard 时暴露一个更低层问题：`ProcessCallRuntime(...)` 会为 owned destroy 重新
+    load receiver，导致 emitter 在这条普通 load 前提前关闭 guard，析构 call 跑到 end label 后。
+- Actions taken:
+  - 扩展 focused HIR test：在 HIR marker 断言之外，实例化 `THIRLlvmEmitter`，要求输出
+    `%objectfree.isnull.* = icmp eq ptr ... null`、`br i1`、`objectfree.destroy.*` 与
+    `objectfree.end.*`，并验证顺序为 null-check -> branch -> destroy label -> Destroy call -> end label。
+  - `THIRBuilder` 记录 pending object-free receiver pointer；匹配的 owned destroy 直接复用该
+    pointer operand，不再生成额外 receiver reload。
+  - `THIRLlvmEmitter` 新增 object-free guard state：`np.system.object_free` 打开非空分支，
+    `np.system.object_free.destroy` 发出 call 后关闭到 end label；terminator 前会防御性关闭未消费 guard。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-llvm-null-check`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批首次实现真实 LLVM nil branch，但仍没有 allocator free、完整 dynamic dispatch runtime、
+    implicit `System.pas` backend/link 接管或完整 `System` 平替。
+  - 本轮没有修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 92 object-free owned destroy HIR marker)
 

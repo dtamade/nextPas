@@ -21,6 +21,9 @@ type
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
     FIsCheckCounter: LongInt;
+    FObjectFreeCounter: LongInt;
+    FPendingObjectFreeActive: Boolean;
+    FPendingObjectFreeEndLabel: string;
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
@@ -29,6 +32,9 @@ type
     function IsSretFunction(const AName: string): Boolean;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitCallInstr(const AInstr: THIRInstr);
+    procedure ClosePendingObjectFreeGuard;
+    procedure EmitObjectFreeGuardStart(const AInstr: THIRInstr);
+    procedure EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
@@ -57,6 +63,9 @@ begin
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FIsCheckCounter := 0;
+  FObjectFreeCounter := 0;
+  FPendingObjectFreeActive := False;
+  FPendingObjectFreeEndLabel := '';
   SetLength(FLines, 0);
 end;
 
@@ -120,11 +129,51 @@ begin
   Emit(Op);
 end;
 
+procedure THIRLlvmEmitter.ClosePendingObjectFreeGuard;
+begin
+  if not FPendingObjectFreeActive then
+    Exit;
+  Emit('  br label %' + FPendingObjectFreeEndLabel);
+  Emit(FPendingObjectFreeEndLabel + ':');
+  FPendingObjectFreeActive := False;
+  FPendingObjectFreeEndLabel := '';
+end;
+
+procedure THIRLlvmEmitter.EmitObjectFreeGuardStart(const AInstr: THIRInstr);
+var
+  CounterText: string;
+  DestroyLabel: string;
+begin
+  if Length(AInstr.Operands) < 1 then
+    Exit;
+
+  Inc(FObjectFreeCounter);
+  CounterText := IntToStr(FObjectFreeCounter);
+  DestroyLabel := 'objectfree.destroy.' + CounterText;
+  FPendingObjectFreeEndLabel := 'objectfree.end.' + CounterText;
+  Emit('  %objectfree.isnull.' + CounterText + ' = icmp eq ptr ' +
+    ValueRef(AInstr.Operands[0].ValueId) + ', null');
+  Emit('  br i1 %objectfree.isnull.' + CounterText + ', label %' +
+    FPendingObjectFreeEndLabel + ', label %' + DestroyLabel);
+  Emit(DestroyLabel + ':');
+  FPendingObjectFreeActive := True;
+end;
+
+procedure THIRLlvmEmitter.EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
+begin
+  EmitCallInstr(AInstr);
+  ClosePendingObjectFreeGuard;
+end;
+
 procedure THIRLlvmEmitter.EmitInstr(const AInstr: THIRInstr);
 var
   LlvmType, Op: string;
   I: LongInt;
 begin
+  if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
+    SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy')) then
+    ClosePendingObjectFreeGuard;
+
   LlvmType := TypeToLlvm(AInstr.TypeId);
 
   case AInstr.Kind of
@@ -232,8 +281,10 @@ begin
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
-      else if AInstr.IntrinsicName = 'np.system.object_free.destroy' then
-        EmitCallInstr(AInstr)
+      else if SameText(AInstr.IntrinsicName, 'np.system.object_free') then
+        EmitObjectFreeGuardStart(AInstr)
+      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') then
+        EmitObjectFreeOwnedDestroy(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
@@ -541,6 +592,7 @@ var
   RetTy: string;
   T: THIRTypeRec;
 begin
+  ClosePendingObjectFreeGuard;
   case ATerm.Kind of
     htkReturn:
       if ATerm.ReturnValue = 0 then
@@ -640,6 +692,9 @@ begin
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
+  FObjectFreeCounter := 0;
+  FPendingObjectFreeActive := False;
+  FPendingObjectFreeEndLabel := '';
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "x86_64-unknown-linux-gnu"');
   Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');

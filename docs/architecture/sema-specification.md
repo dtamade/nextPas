@@ -120,8 +120,8 @@ sema 必须能在编译期求值以下常量表达式：
   `Free` 会绑定到真实 `TObject.Free`；缺少 source-backed System truth、或
   alias/generic specialization/record-like receiver 等没有 class layout truth 的类型继续 deferred）
   no-fold typed HIR 中的 `object-free-runtime` 只表达 `Free` 的 compound lifecycle contract；
-  `THIRBuilder` 会把它保留为 HIR `np.system.object_free` intrinsic marker，但这仍不是 backend
-  已经生成真实 nil branch 或 allocator free 的证据。
+  `THIRBuilder` 会把它保留为 HIR `np.system.object_free` intrinsic marker，LLVM HIR emitter
+  会把该 marker 与匹配 owned destroy 降成 receiver nil branch，但这仍不是 allocator free 已完成的证据。
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧

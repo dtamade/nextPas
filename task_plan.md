@@ -15,6 +15,9 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+当前最新本轮为 Batch 94 Object-free LLVM Nil Guard；Batch 93 Platform Thread FFI Boundary 是
+并行 platform/core 工作流保留下来的已完成记录。
+
 ## Addendum: 2026-05-26 Batch 93 Platform Thread FFI Boundary
 
 ### Goal
@@ -62,6 +65,62 @@ Completed.
 - 不声明 Windows runtime 行为已在真实 Windows 主机运行验证；本批只做 Win64 compile-only。
 - 不合并独立 `platform.time` worktree 的 hardening commit。
 - 不引入完整 thread pool、scheduler 或 async runtime 设计。
+
+## Addendum: 2026-05-26 Batch 94 Object-free LLVM Nil Guard
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 `np.system.object_free` 从 HIR lifecycle marker 推进到
+LLVM HIR emitter 可见的真实 nil guard：
+
+- `np.system.object_free` 必须在 LLVM 文本中生成 receiver pointer 的 `icmp eq ptr ..., null`
+  和 conditional branch。
+- `np.system.object_free.destroy` 必须落在非空 `objectfree.destroy.*` 分支内，并在析构后
+  汇合到 `objectfree.end.*`。
+- owned destroy 必须复用 object-free contract 已解析的 receiver pointer，避免 guard 与析构
+  call 之间出现额外 receiver reload，把 call 挤出非空分支。
+- 本批只实现 nil branch 与 owned destroy call enclosure；不声明 allocator free、完整 dynamic
+  dispatch runtime、implicit `System.pas` 自动 assemble/link 或完整 `System` 平替已完成。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+object-free 的 backend-facing contract 现在分两层落地：
+
+- `THIRBuilder.ProcessObjectFreeRuntime(...)` 仍负责把 semantic contract 投影为
+  `np.system.object_free` marker，并记录 pending destroy 名称、receiver 名称和 receiver pointer。
+- 紧随的匹配 `call-runtime <Destroy>` 被改写为 `np.system.object_free.destroy` owned marker，
+  且直接复用 pending receiver pointer，不再重复生成 receiver load。
+- `THIRLlvmEmitter` 在看到 `np.system.object_free` 时打开 `objectfree.destroy.*` /
+  `objectfree.end.*` guard，在 owned destroy call 后关闭 guard；普通 call lowering 继续复用统一
+  `EmitCallInstr(...)`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：LLVM output 必须包含 object-free null check / conditional branch / destroy-end labels
+- [x] 实现 builder receiver pointer reuse，保证 owned destroy call 位于 guard 内
+- [x] 实现 `THIRLlvmEmitter` object-free guard start / close
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-llvm-null-check`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 92 Object-free Owned Destroy HIR Marker
 

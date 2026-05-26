@@ -71,11 +71,12 @@ no-fold typed HIR 现在还会复制隐式 `TObject` 父类的 VMT slot/function
 contract，记录 receiver、effective `Destroy`、nil guard 和 heap release intent。
 `THIRBuilder` 已把这个 contract 保留为 HIR `np.system.object_free` intrinsic marker，
 带 receiver pointer operand 和 effective `Destroy` target；紧随其后的匹配 `Destroy`
-lowering 会成为 `np.system.object_free.destroy` owned marker，LLVM HIR emitter 目前仍把它
-降成现有 call。它仍不是完整 `System` 重写，也没有把 implicit runtime 改成自动编译/链接
-`System.pas`；backend 仍把 implicit runtime 排除在额外 assemble/link 之外。后续应在这个
-source-backed 边界上把 object-free HIR marker 接到真实 nil branch、allocator free 和
-backend/runtime helper，并继续扩展 unit init/fini、helper 和 lowering。
+lowering 会成为 `np.system.object_free.destroy` owned marker，LLVM HIR emitter 会把这组 marker
+降成 receiver nil branch：nil receiver 直接汇合到 `objectfree.end.*`，非 nil receiver 进入
+`objectfree.destroy.*` 后调用 effective `Destroy`。它仍不是完整 `System` 重写，也没有把
+implicit runtime 改成自动编译/链接 `System.pas`；backend 仍把 implicit runtime 排除在额外
+assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、
+dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 
