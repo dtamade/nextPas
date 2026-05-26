@@ -53,7 +53,8 @@ function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
-function platform_rwlock_unlock(var ARwLock: TPlatformRwLock): Int32;
+function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
+function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 
 { CondVar }
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
@@ -162,7 +163,12 @@ begin
   Result := pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]);
 end;
 
-function platform_rwlock_unlock(var ARwLock: TPlatformRwLock): Int32;
+function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
+begin
+  Result := pthread_rwlock_unlock(@ARwLock.FOpaque[0]);
+end;
+
+function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
   Result := pthread_rwlock_unlock(@ARwLock.FOpaque[0]);
 end;
@@ -359,7 +365,13 @@ begin
     Result := 16;
 end;
 
-function platform_rwlock_unlock(var ARwLock: TPlatformRwLock): Int32;
+function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
+begin
+  ReleaseSRWLockShared(@ARwLock.FOpaque[0]);
+  Result := 0;
+end;
+
+function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
   ReleaseSRWLockExclusive(@ARwLock.FOpaque[0]);
   Result := 0;
@@ -461,7 +473,8 @@ function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32; begin Resu
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
-function platform_rwlock_unlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
+function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
+function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32; begin Result := -1; end;
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32; begin Result := -1; end;
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32; begin Result := -1; end;
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32; begin Result := -1; end;

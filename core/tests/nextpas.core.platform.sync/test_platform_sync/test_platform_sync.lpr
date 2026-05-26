@@ -56,14 +56,56 @@ begin
   LRet := platform_rwlock_rdlock(LRwLock);
   CheckEqual(Int64(0), Int64(LRet), 'rdlock');
 
-  LRet := platform_rwlock_unlock(LRwLock);
-  CheckEqual(Int64(0), Int64(LRet), 'unlock rd');
+  LRet := platform_rwlock_rdunlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'rdunlock');
 
   LRet := platform_rwlock_wrlock(LRwLock);
   CheckEqual(Int64(0), Int64(LRet), 'wrlock');
 
-  LRet := platform_rwlock_unlock(LRwLock);
-  CheckEqual(Int64(0), Int64(LRet), 'unlock wr');
+  LRet := platform_rwlock_wrunlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'wrunlock');
+
+  LRet := platform_rwlock_destroy(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'destroy');
+end;
+
+procedure TestRwLockWriteBlockedByReader;
+var
+  LRwLock: TPlatformRwLock;
+  LRet: Int32;
+begin
+  LRet := platform_rwlock_init(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'init');
+
+  LRet := platform_rwlock_rdlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'rdlock');
+
+  LRet := platform_rwlock_trywrlock(LRwLock);
+  Check(LRet <> 0, 'trywrlock should fail while read lock is held');
+
+  LRet := platform_rwlock_rdunlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'rdunlock');
+
+  LRet := platform_rwlock_destroy(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'destroy');
+end;
+
+procedure TestRwLockReadBlockedByWriter;
+var
+  LRwLock: TPlatformRwLock;
+  LRet: Int32;
+begin
+  LRet := platform_rwlock_init(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'init');
+
+  LRet := platform_rwlock_wrlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'wrlock');
+
+  LRet := platform_rwlock_tryrdlock(LRwLock);
+  Check(LRet <> 0, 'tryrdlock should fail while write lock is held');
+
+  LRet := platform_rwlock_wrunlock(LRwLock);
+  CheckEqual(Int64(0), Int64(LRet), 'wrunlock');
 
   LRet := platform_rwlock_destroy(LRwLock);
   CheckEqual(Int64(0), Int64(LRet), 'destroy');
@@ -121,6 +163,8 @@ begin
   T.Run('Mutex basic', @TestMutexBasic);
   T.Run('Mutex trylock', @TestMutexTryLock);
   T.Run('RwLock basic', @TestRwLockBasic);
+  T.Run('RwLock write blocked by reader', @TestRwLockWriteBlockedByReader);
+  T.Run('RwLock read blocked by writer', @TestRwLockReadBlockedByWriter);
   T.Run('CondVar basic', @TestCondVarBasic);
   T.Run('Address wait', @TestAddressWait);
   T.Summary;
