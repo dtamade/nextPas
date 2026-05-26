@@ -110,6 +110,8 @@ end;
 
 function TextContains(const AValue, ASubStr: string): Boolean;
 begin
+  if Length(ASubStr) = 0 then
+    Exit(True);
   Result := Pos(ASubStr, AValue) > 0;
 end;
 
@@ -119,7 +121,7 @@ function TextSplit(const AValue, ADelimiter: string): TStringArray;
 var
   LPos, LStart, LDelimLen, LCount, LCapacity: Integer;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   LDelimLen := Length(ADelimiter);
   if LDelimLen = 0 then
   begin
@@ -269,7 +271,9 @@ function TextIndexOf(const AValue, ASubStr: string): Integer;
 begin
   Result := Pos(ASubStr, AValue);
   if Result > 0 then
-    Dec(Result);
+    Dec(Result)
+  else
+    Result := -1;
 end;
 
 function TextLastIndexOf(const AValue, ASubStr: string): Integer;

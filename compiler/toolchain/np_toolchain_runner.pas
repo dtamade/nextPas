@@ -326,6 +326,49 @@ begin
     );
 end;
 
+procedure DeleteFilesMatching(
+  const ADirectory: string;
+  const APattern: string
+);
+var
+  CandidatePath: string;
+  DirectoryPath: string;
+  Search: TSearchRec;
+begin
+  if Trim(ADirectory) = '' then
+    Exit;
+
+  DirectoryPath := IncludeTrailingPathDelimiter(ExpandFileName(ADirectory));
+  if not DirectoryExists(DirectoryPath) then
+    Exit;
+
+  if FindFirst(DirectoryPath + APattern, faAnyFile, Search) <> 0 then
+    Exit;
+  try
+    repeat
+      if (Search.Attr and faDirectory) = 0 then
+      begin
+        CandidatePath := DirectoryPath + Search.Name;
+        DeleteFile(CandidatePath);
+      end;
+    until FindNext(Search) <> 0;
+  finally
+    FindClose(Search);
+  end;
+end;
+
+procedure CleanHostCompilerScratchOutputs(const AStep: TToolInvocationStep);
+begin
+  if not SameText(AStep.ToolRole, 'host-compiler') then
+    Exit;
+
+  DeleteFilesMatching(AStep.WorkingDirectory, '*.ppu');
+  DeleteFilesMatching(AStep.WorkingDirectory, '*.o');
+  DeleteFilesMatching(AStep.WorkingDirectory, '*.s');
+  DeleteFilesMatching(AStep.WorkingDirectory, '*_link.res');
+  DeleteFilesMatching(AStep.WorkingDirectory, '*_ppas.sh');
+end;
+
 function ExecuteStep(
   const AStep: TToolInvocationStep;
   const AResolvedPath: string
@@ -463,6 +506,7 @@ begin
     ResolvedPath := '';
     try
       EnsureStepDirectories(Step);
+      CleanHostCompilerScratchOutputs(Step);
       MaterializeSidecars(Step, ExecutedSidecars);
       ResolvedPath := ResolveExecutablePath(Step, AExecutableSearchPath);
       ExitCodeValue := ExecuteStep(Step, ResolvedPath);
