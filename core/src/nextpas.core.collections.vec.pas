@@ -7,65 +7,108 @@ interface
 uses
   SysUtils,
   nextpas.core.errors,
+  nextpas.core.mem.intf,
   nextpas.core.collections.base;
 
 type
-  generic TVec<T> = record
-  private
-    FItems: array of T;
-    FCount: SizeUInt;
-    procedure Grow;
-    procedure EnsureCapacity(const AMinCapacity: SizeUInt);
-    function GetItem(const AIndex: SizeUInt): T; inline;
-    procedure SetItem(const AIndex: SizeUInt; const AValue: T); inline;
-  public
-    procedure Init;
-    procedure Done;
-    procedure Clear;
+  generic IVec<T> = interface
+    ['{A1B2C3D4-0001-0001-0001-000000000001}']
+    function GetCount: SizeUInt;
+    function GetCapacity: SizeUInt;
+    function GetItem(const AIndex: SizeUInt): T;
+    procedure SetItem(const AIndex: SizeUInt; const AValue: T);
 
     function Add(const AValue: T): SizeUInt;
     procedure Insert(const AIndex: SizeUInt; const AValue: T);
     procedure Delete(const AIndex: SizeUInt);
     procedure DeleteSwap(const AIndex: SizeUInt);
     function Pop: T;
+    procedure Clear;
 
     procedure Reserve(const ACapacity: SizeUInt);
     procedure Shrink;
 
     function Contains(const AValue: T): Boolean;
     function IndexOf(const AValue: T): Int64;
+    function IsEmpty: Boolean;
 
     function ToArray: specialize TArray<T>;
-    function Clone: specialize TVec<T>;
-
-    function GetCount: SizeUInt; inline;
-    function GetCapacity: SizeUInt; inline;
-    function IsEmpty: Boolean; inline;
 
     property Items[const AIndex: SizeUInt]: T read GetItem write SetItem; default;
     property Count: SizeUInt read GetCount;
     property Capacity: SizeUInt read GetCapacity;
   end;
 
+  generic TVec<T> = class(TInterfacedObject, specialize IVec<T>)
+  private
+    FItems: array of T;
+    FCount: SizeUInt;
+    FAllocator: IAllocator;
+    procedure Grow;
+  public
+    constructor Create; overload;
+    constructor Create(const ACapacity: SizeUInt); overload;
+    constructor Create(const ACapacity: SizeUInt; const AAllocator: IAllocator); overload;
+    destructor Destroy; override;
+
+    function GetCount: SizeUInt;
+    function GetCapacity: SizeUInt;
+    function GetItem(const AIndex: SizeUInt): T;
+    procedure SetItem(const AIndex: SizeUInt; const AValue: T);
+
+    function Add(const AValue: T): SizeUInt;
+    procedure Insert(const AIndex: SizeUInt; const AValue: T);
+    procedure Delete(const AIndex: SizeUInt);
+    procedure DeleteSwap(const AIndex: SizeUInt);
+    function Pop: T;
+    procedure Clear;
+
+    procedure Reserve(const ACapacity: SizeUInt);
+    procedure Shrink;
+
+    function Contains(const AValue: T): Boolean;
+    function IndexOf(const AValue: T): Int64;
+    function IsEmpty: Boolean;
+
+    function ToArray: specialize TArray<T>;
+
+    property Allocator: IAllocator read FAllocator;
+  end;
+
 implementation
 
 { TVec<T> }
 
-procedure TVec.Init;
+constructor TVec.Create;
 begin
-  FItems := nil;
+  inherited Create;
   FCount := 0;
+  FAllocator := nil;
 end;
 
-procedure TVec.Done;
+constructor TVec.Create(const ACapacity: SizeUInt);
 begin
-  FItems := nil;
+  inherited Create;
   FCount := 0;
+  FAllocator := nil;
+  if ACapacity > 0 then
+    SetLength(FItems, ACapacity);
 end;
 
-procedure TVec.Clear;
+constructor TVec.Create(const ACapacity: SizeUInt; const AAllocator: IAllocator);
 begin
+  inherited Create;
   FCount := 0;
+  FAllocator := AAllocator;
+  if ACapacity > 0 then
+    SetLength(FItems, ACapacity);
+end;
+
+destructor TVec.Destroy;
+begin
+  FItems := nil;
+  FAllocator := nil;
+  inherited;
 end;
 
 procedure TVec.Grow;
@@ -82,23 +125,27 @@ begin
   SetLength(FItems, LNewCap);
 end;
 
-procedure TVec.EnsureCapacity(const AMinCapacity: SizeUInt);
+function TVec.GetCount: SizeUInt;
 begin
-  if AMinCapacity > SizeUInt(Length(FItems)) then
-    SetLength(FItems, AMinCapacity);
+  Result := FCount;
+end;
+
+function TVec.GetCapacity: SizeUInt;
+begin
+  Result := SizeUInt(Length(FItems));
 end;
 
 function TVec.GetItem(const AIndex: SizeUInt): T;
 begin
   if AIndex >= FCount then
-    raise EIndexOutOfRangeError.CreateFmt('TVec: index %d out of range [0..%d]', [AIndex, FCount - 1]);
+    raise EIndexOutOfRangeError.CreateFmt('IVec: index %d out of range [0..%d]', [AIndex, FCount - 1]);
   Result := FItems[AIndex];
 end;
 
 procedure TVec.SetItem(const AIndex: SizeUInt; const AValue: T);
 begin
   if AIndex >= FCount then
-    raise EIndexOutOfRangeError.CreateFmt('TVec: index %d out of range [0..%d]', [AIndex, FCount - 1]);
+    raise EIndexOutOfRangeError.CreateFmt('IVec: index %d out of range [0..%d]', [AIndex, FCount - 1]);
   FItems[AIndex] := AValue;
 end;
 
@@ -116,7 +163,7 @@ var
   LI: SizeUInt;
 begin
   if AIndex > FCount then
-    raise EIndexOutOfRangeError.CreateFmt('TVec.Insert: index %d out of range [0..%d]', [AIndex, FCount]);
+    raise EIndexOutOfRangeError.CreateFmt('IVec.Insert: index %d out of range [0..%d]', [AIndex, FCount]);
   if FCount >= SizeUInt(Length(FItems)) then
     Grow;
   LI := FCount;
@@ -134,7 +181,7 @@ var
   LI: SizeUInt;
 begin
   if AIndex >= FCount then
-    raise EIndexOutOfRangeError.CreateFmt('TVec.Delete: index %d out of range [0..%d]', [AIndex, FCount - 1]);
+    raise EIndexOutOfRangeError.CreateFmt('IVec.Delete: index %d out of range [0..%d]', [AIndex, FCount - 1]);
   for LI := AIndex to FCount - 2 do
     FItems[LI] := FItems[LI + 1];
   Dec(FCount);
@@ -144,7 +191,7 @@ end;
 procedure TVec.DeleteSwap(const AIndex: SizeUInt);
 begin
   if AIndex >= FCount then
-    raise EIndexOutOfRangeError.CreateFmt('TVec.DeleteSwap: index %d out of range [0..%d]', [AIndex, FCount - 1]);
+    raise EIndexOutOfRangeError.CreateFmt('IVec.DeleteSwap: index %d out of range [0..%d]', [AIndex, FCount - 1]);
   Dec(FCount);
   if AIndex <> FCount then
     FItems[AIndex] := FItems[FCount];
@@ -154,10 +201,15 @@ end;
 function TVec.Pop: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperationError.Create('TVec.Pop: empty');
+    raise EInvalidOperationError.Create('IVec.Pop: empty');
   Dec(FCount);
   Result := FItems[FCount];
   FItems[FCount] := Default(T);
+end;
+
+procedure TVec.Clear;
+begin
+  FCount := 0;
 end;
 
 procedure TVec.Reserve(const ACapacity: SizeUInt);
@@ -192,6 +244,11 @@ begin
   Result := -1;
 end;
 
+function TVec.IsEmpty: Boolean;
+begin
+  Result := FCount = 0;
+end;
+
 function TVec.ToArray: specialize TArray<T>;
 var
   LI: SizeUInt;
@@ -199,31 +256,6 @@ begin
   SetLength(Result, FCount);
   for LI := 0 to FCount - 1 do
     Result[LI] := FItems[LI];
-end;
-
-function TVec.Clone: specialize TVec<T>;
-var
-  LI: SizeUInt;
-begin
-  Result.Init;
-  Result.Reserve(FCount);
-  for LI := 0 to FCount - 1 do
-    Result.Add(FItems[LI]);
-end;
-
-function TVec.GetCount: SizeUInt;
-begin
-  Result := FCount;
-end;
-
-function TVec.GetCapacity: SizeUInt;
-begin
-  Result := SizeUInt(Length(FItems));
-end;
-
-function TVec.IsEmpty: Boolean;
-begin
-  Result := FCount = 0;
 end;
 
 end.
