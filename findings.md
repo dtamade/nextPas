@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 65 把 selector/member binding 从“只排除误绑定”推进到第一条正向 truth：root source
+  中 direct class variable receiver 的零参数 class method call（`Worker.Run;` 与
+  `Worker.Run();`）现在会注册 `member-call` binding，并指向 `TWorker.Run` 的 `method`
+  semantic symbol。
+- member-call binding 不复用 `RegisterClassVar(...)` 这类后端 runtime lowering 副表；receiver
+  类型来自已 seed 的 `variable` symbol 的 `TypeId`，target 来自同一份 `TSemanticModel` 中的
+  `TClass.Method` / `method` symbol。
+- Batch 65 仍不声明完整 selector/member lookup：非零参 class method、overload/type-based
+  dispatch、virtual/override dispatch、record method、property accessor、array/deref receiver 与
+  constructor binding 都继续保持 deferred。
 - Selector/member statement call 的真实风险点已经被 Batch 64 RED 抓住：`Holder.Help();`
   会被 parser 表达成 procedure-call statement 包住 qualified `gnkFunctionCall`，旧
   `SeedCallBindingsInNode(...)` 会继续按 name-only `Help` + 0 参数查找，进而误绑定到 imported

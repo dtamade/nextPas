@@ -190,10 +190,12 @@ procedure/function call occurrence 可以绑定到 root callable 或唯一 impor
 `query-definitions=<json-array>` 与 `command-envelope=<json>.result.queryDefinitions`；
 当前最小字段包含 binding id/kind/name/offset 与 target symbol name/kind/owner unit/source
 path/byte offset。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，
-但当前 `query symbols` 仍不承诺完整 LSP、selector/member binding、open document overlay 或
-incremental invalidation。`Holder.Help();` 这类 qualified selector/member call 会被当前
-name-only binding pass 显式排除，直到 member lookup 与 type-based dispatch 成为
-compiler-owned semantic truth。
+但当前 `query symbols` 仍不承诺完整 LSP、完整 selector/member binding、open document
+overlay 或 incremental invalidation。`Holder.Help();` 这类 qualified selector/member call
+会被当前 name-only binding pass 显式排除；第一条正向 selector/member truth 只覆盖 direct
+class variable receiver 的零参数 method call，并以 `member-call` 指向 `TClass.Method`
+method symbol。property accessor、record method、array/deref receiver、virtual/override
+dispatch 与 type-based overload resolution 仍然 deferred。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

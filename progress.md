@@ -3,6 +3,38 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 65 class member call binding foundation)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 64 的 selector/member 误绑定防线推进成第一条正向 member binding：direct class
+    variable receiver 的零参数 class method call 应进入 `TSemanticModel` binding table，并指向
+    `TClass.Method` method symbol。
+- Baseline:
+  - Batch 64 已保证 `Holder.Help();` 不再被 name-only lookup 误绑定到 imported bare `Help`。
+  - 旧实现没有任何 selector/member 正向 binding，`Worker.Run;` 无法成为 go-to-definition 可消费的
+    source occurrence truth。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，新增 class fixture，覆盖
+    `Worker.Run;` 与 `Worker.Run();` 两种零参数 member call，并要求产生两条 `member-call`
+    binding，target 均为 `TWorker.Run` 的 `method` symbol。
+  - RED focused test 已确认旧实现失败在 `semantic-call-bindings-failure=missing-member-call-binding`。
+  - 在 `TSemanticAnalyzer` 中新增 direct member call 抽取、receiver variable type lookup、
+    `TClass.Method` method symbol lookup 与 `member-call` binding 注册。
+  - 该路径从 `TSemanticModel` 已有 `variable` symbol 的 `TypeId` 读取 receiver 类型，不依赖
+    backend/runtime lowering 用的 `RegisterClassVar(...)` 副表。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+    `stage0QueryBindingsCheck":"pass"`、`stage0QueryDefinitionsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 仍聚焦 semantic analyzer、focused semantic test 与规格/持续记录。
+  - 本批只承诺 direct class variable receiver 的零参数 class method call；完整 member lookup、
+    overload/type dispatch、virtual/override dispatch、record/property/array/deref receiver 仍未完成。
+  - `git diff --check` 已通过；项目卫生检查未发现需要提交的生成物。
+
 ## Session: 2026-05-26 (Batch 64 selector call binding guard)
 
 - **Status:** completed

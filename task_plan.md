@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 65 Class Member Call Binding Foundation
+
+### Goal
+
+把 Batch 64 的 selector/member 误绑定防线推进成第一条正向 member binding truth：当 root
+source 中已有 class type、class method declaration 和同类型变量时，`Worker.Run;` 这类
+无参数 class method call 应进入 `TSemanticModel` binding table，并指向 `TWorker.Run` method
+semantic symbol。
+
+本批次新增并冻结：
+
+- class receiver variable -> declared class type 的最小 lookup
+- dot-access method callee -> `TClass.Method` semantic symbol binding
+- `member-call` binding kind，用于区别 bare procedure/function `call`
+- focused semantic regression，证明 selector/member binding 不再只是“排除误绑”
+
+### Architecture Decision
+
+member call binding 继续归属于 `TSemanticAnalyzer`，但不借助 imported bare callable lookup：
+
+- receiver 的类型先从已 seed 的 root `variable` symbol + `TypeId` 读取，不依赖后端 runtime
+  lowering 的 `RegisterClassVar(...)` 副表。
+- target 只接受当前 semantic model 已声明的 `method` symbol，名字为 `TClass.Method`。
+- 本批次只覆盖直接变量 receiver 的 dot-access class method call；record field、property、
+  array/deref receiver、constructor dispatch、override/virtual dispatch 和 overload/type-based
+  resolution 继续保持 deferred。
+- `query-bindings` / `query-definitions` 复用既有 projection，不新增 language-service session。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `tests/semantic/test_semantic_call_bindings.pas`，要求 `Worker.Run;`
+      产生 `member-call` binding 并指向 `TWorker.Run`
+- [x] 在 `TSemanticAnalyzer` 中实现 direct class variable receiver 的 method symbol lookup
+- [x] focused semantic call binding test 转绿
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已先失败在 `missing-member-call-binding`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- final: fresh `bash build/verify_local.sh` 已通过，并确认
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `stage0QueryBindingsCheck":"pass"`、`stage0QueryDefinitionsCheck":"pass"` 与
+  `verify-local=pass`
+
+### Non-goals
+
+- 不实现完整 selector/member access binding
+- 不实现 class method overload / virtual dispatch / override dispatch
+- 不实现 record method、property accessor、array/deref receiver 或 constructor binding
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 64 Selector Call Binding Guard
 
 ### Goal

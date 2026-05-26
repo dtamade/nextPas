@@ -101,6 +101,19 @@ type
       const AChild: TGreenNode
     ): Boolean;
     function IsQualifiedCallNode(const ACallNode: TGreenNode): Boolean;
+    function ExtractDirectMemberCall(
+      const ACallNode: TGreenNode;
+      out AReceiverName: string;
+      out AMemberName: string;
+      out AMemberOffset: LongInt;
+      out AArgCount: LongInt
+    ): Boolean;
+    function TypeNameForVariable(const AName: string): string;
+    function MethodSymbolIdForClassMember(
+      const AClassName: string;
+      const AMemberName: string
+    ): LongInt;
+    function TryRegisterMemberCallBinding(const ACallNode: TGreenNode): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
@@ -914,6 +927,152 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.ExtractDirectMemberCall(
+  const ACallNode: TGreenNode;
+  out AReceiverName: string;
+  out AMemberName: string;
+  out AMemberOffset: LongInt;
+  out AArgCount: LongInt
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+  DotNode: TGreenNode;
+  InnerCallNode: TGreenNode;
+  MemberNode: TGreenNode;
+  ReceiverNode: TGreenNode;
+begin
+  Result := False;
+  AReceiverName := '';
+  AMemberName := '';
+  AMemberOffset := 0;
+  AArgCount := 0;
+  if (ACallNode = nil) or
+    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
+    (ACallNode.ChildCount = 0) then
+    Exit;
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if CalleeNode = nil then
+    Exit;
+
+  DotNode := nil;
+  InnerCallNode := nil;
+  if CalleeNode.NodeKind = gnkDotAccess then
+    DotNode := CalleeNode
+  else if (CalleeNode.NodeKind = gnkFunctionCall) and
+    SameText(ACallNode.Text, CalleeNode.Text) and
+    (CalleeNode.ChildCount > 0) and
+    (CalleeNode.ChildAt(0) <> nil) and
+    (CalleeNode.ChildAt(0).NodeKind = gnkDotAccess) then
+  begin
+    DotNode := CalleeNode.ChildAt(0);
+    InnerCallNode := CalleeNode;
+  end;
+
+  if (DotNode = nil) or (DotNode.ChildCount < 2) then
+    Exit;
+
+  ReceiverNode := DotNode.ChildAt(0);
+  MemberNode := DotNode.ChildAt(1);
+  if (ReceiverNode = nil) or (MemberNode = nil) or
+    (ReceiverNode.NodeKind <> gnkIdentifier) or
+    (MemberNode.NodeKind <> gnkIdentifier) then
+    Exit;
+
+  AReceiverName := ReceiverNode.Text;
+  AMemberName := MemberNode.Text;
+  AMemberOffset := MemberNode.ByteOffset;
+  if ACallNode.NodeKind = gnkFunctionCall then
+    AArgCount := ACallNode.ChildCount - 1
+  else if InnerCallNode <> nil then
+    AArgCount := InnerCallNode.ChildCount - 1
+  else
+    AArgCount := 0;
+  Result := (AReceiverName <> '') and (AMemberName <> '');
+end;
+
+function TSemanticAnalyzer.TypeNameForVariable(const AName: string): string;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := '';
+  if AName = '' then
+    Exit;
+
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, 'variable') and
+      (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+      Exit(FModel.TypeAt(Symbol.TypeId - 1).Name);
+  end;
+end;
+
+function TSemanticAnalyzer.MethodSymbolIdForClassMember(
+  const AClassName: string;
+  const AMemberName: string
+): LongInt;
+var
+  Index: LongInt;
+  QualifiedName: string;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  if (AClassName = '') or (AMemberName = '') then
+    Exit;
+
+  QualifiedName := AClassName + '.' + AMemberName;
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Name, QualifiedName) and
+      SameText(Symbol.Kind, 'method') then
+      Exit(Symbol.SymbolId);
+  end;
+end;
+
+function TSemanticAnalyzer.TryRegisterMemberCallBinding(
+  const ACallNode: TGreenNode
+): Boolean;
+var
+  ArgCount: LongInt;
+  MemberName: string;
+  MemberOffset: LongInt;
+  ReceiverName: string;
+  ReceiverTypeName: string;
+  TargetSymbolId: LongInt;
+begin
+  Result := False;
+  if not ExtractDirectMemberCall(
+    ACallNode,
+    ReceiverName,
+    MemberName,
+    MemberOffset,
+    ArgCount
+  ) then
+    Exit;
+  if ArgCount <> 0 then
+    Exit;
+
+  ReceiverTypeName := TypeNameForVariable(ReceiverName);
+  if ReceiverTypeName = '' then
+    Exit;
+
+  TargetSymbolId := MethodSymbolIdForClassMember(ReceiverTypeName, MemberName);
+  if TargetSymbolId <= 0 then
+    Exit;
+
+  FModel.AddBinding(
+    'member-call',
+    MemberName,
+    NormalizeUnitIdentity(FUnitGraph.RootName),
+    MemberOffset,
+    TargetSymbolId
+  );
+  Result := True;
+end;
+
 function TSemanticAnalyzer.BindCallArgs(const ADecl: TGreenNode;
   const ACallNode: TGreenNode;
   const ANameSkip: LongInt): TParamSnapshots;
@@ -1108,7 +1267,9 @@ begin
 
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
-    if (not IsQualifiedCallNode(ANode)) and (Pos('.', ANode.Text) = 0) then
+    if IsQualifiedCallNode(ANode) then
+      TryRegisterMemberCallBinding(ANode)
+    else if Pos('.', ANode.Text) = 0 then
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),

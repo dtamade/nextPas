@@ -282,6 +282,86 @@ begin
   end;
 end;
 
+procedure CheckClassMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  MemberBindingCount: LongInt;
+  MethodSymbolId: LongInt;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program ClassMemberCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Run;' + LineEnding +
+    '  Worker.Run();' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-member-call-diagnostics');
+    if Model = nil then
+      Fail('missing-member-call-semantic-model');
+
+    MethodSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Run', 'method');
+    if MethodSymbolId <= 0 then
+      Fail('missing-member-call-method-symbol');
+
+    MemberBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Run') then
+      begin
+        Inc(MemberBindingCount);
+        if Binding.TargetSymbolId <> MethodSymbolId then
+          Fail('member-call-binding-target-mismatch');
+      end;
+    end;
+    if MemberBindingCount = 0 then
+      Fail('missing-member-call-binding');
+    if MemberBindingCount <> 2 then
+      Fail('unexpected-member-call-binding-count:' +
+        IntToStr(MemberBindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -343,6 +423,7 @@ begin
 
     CheckOverloadBindings;
     CheckImportedUnitCallBinding;
+    CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
