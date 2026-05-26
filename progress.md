@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform time windows math helper boundary；并行收口包含
+当前最新本轮为 platform thread shared POSIX helper ownership；并行收口包含
+platform time windows math helper boundary；
 platform sync windows timeout result ffi ownership、
 platform sync POSIX helper ffi ownership、platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
@@ -17,6 +18,68 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform thread shared POSIX helper ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform.thread` 相关 truly shared POSIX pthread glue 从 `linux/android/darwin/freebsd/unix.ffi`
+    内部重复实现收回到 `nextpas.core.platform.posix.ffi`，让 host ffi 继续只保留宿主 truth。
+- Baseline:
+  - 现状虽然已经没有 consumer 级 raw `pthread_*` 泄漏，但 `pthread_self` token 投影、
+    `pthread_create/join/detach`、`sched_yield`、TLS key 读写、`sysconf` 正数投影与
+    `nanosleep` retry loop 仍在 5 个 POSIX host ffi 里几乎逐份复制。
+  - 这说明 owner boundary 已经对了，但 shared-vs-host 拆分还不够彻底；shared `posix.ffi`
+    还缺一层真正共享的 thread glue。
+- Actions taken:
+  - 先把 `test_platform_posix_ffi_surface` 扩成 RED gate，要求 `posix.ffi` 显式暴露：
+    - `platform_posix_thread_self_token_u64`
+    - `platform_posix_sysconf_positive_i32`
+    - `platform_posix_pthread_create/join/detach_handle`
+    - `platform_posix_pthread_yield`
+    - `platform_posix_pthread_sleep_ns`
+    - `platform_posix_pthread_tls_create/destroy/set/get`
+  - 再把 `test_platform_thread_host_ffi_surface` 扩成 RED gate，要求
+    `linux/android/darwin/freebsd/unix.ffi` 明确委托这些 shared helper。
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增上述 shared pthread/thread helper，把
+    `pthread_self`、`pthread_create/join/detach`、`sched_yield`、TLS key 读写、`sysconf` 正数投影、
+    `nanosleep` retry loop 收成 shared owner。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    改为委托 shared helper，只继续保留 errno binding、`PLATFORM_POSIX_EINTR`、
+    `_SC_NPROCESSORS_ONLN` 与 native thread id ABI。
+  - `core/docs/design-conventions.md` 追加规则：shared `posix.ffi` 可以拥有 truly shared pthread glue，
+    host ffi 不要继续复制。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在
+      `posix.ffi must expose shared pthread self-token projection for platform.thread host owners`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate pthread self-token projection to shared posix.ffi`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+      `corePlatformThreadHostFfiSurfaceCheck":"pass"`、
+      `corePlatformThreadCheck":"pass"`、
+      `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+      `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批把“host ffi 里仍有 shared glue duplication”这层债也关掉了：现在 shared `posix.ffi`
+    不只拥有 ABI 形状和 `timespec` 算术，也拥有 truly shared pthread/thread glue。
+  - `platform.thread` consumer 仍然只吃 host ffi 名称，所以 public surface 和 host selection 没被改乱；
+    我们收的是 owner boundary，不是改接口。
 
 ## Session: 2026-05-27 (platform.time windows math helper boundary)
 

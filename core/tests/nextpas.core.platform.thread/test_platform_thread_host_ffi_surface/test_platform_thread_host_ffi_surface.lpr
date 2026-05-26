@@ -58,6 +58,32 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckSharedPosixThreadDelegation(const ASource, AHostLabel: string);
+begin
+  CheckTokenPresent(ASource, 'platform_posix_thread_self_token_u64',
+    AHostLabel + ' must delegate pthread self-token projection to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_sysconf_positive_i32',
+    AHostLabel + ' must delegate sysconf positive projection to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_create_handle',
+    AHostLabel + ' must delegate pthread create glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_join_handle',
+    AHostLabel + ' must delegate pthread join glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_detach_handle',
+    AHostLabel + ' must delegate pthread detach glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_yield',
+    AHostLabel + ' must delegate pthread yield glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_sleep_ns',
+    AHostLabel + ' must delegate pthread sleep glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_tls_create',
+    AHostLabel + ' must delegate pthread TLS create glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_tls_destroy',
+    AHostLabel + ' must delegate pthread TLS destroy glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_tls_set',
+    AHostLabel + ' must delegate pthread TLS set glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_tls_get',
+    AHostLabel + ' must delegate pthread TLS get glue to shared posix.ffi');
+end;
+
 procedure TestPlatformThreadUsesHostThreadIdFFI;
 var
   LThreadSource: string;
@@ -114,6 +140,7 @@ begin
     'linux.ffi must expose Linux pthread token storage size');
   CheckTokenPresent(LLinuxSource, 'tplatformpthreadtokenalign',
     'linux.ffi must expose Linux pthread token align carrier type');
+  CheckSharedPosixThreadDelegation(LLinuxSource, 'linux.ffi');
 
   CheckTokenPresent(LAndroidSource, 'function gettid',
     'android.ffi must expose Android native thread id ABI');
@@ -153,6 +180,7 @@ begin
     'android.ffi must expose Android pthread token storage size');
   CheckTokenPresent(LAndroidSource, 'tplatformpthreadtokenalign',
     'android.ffi must expose Android pthread token align carrier type');
+  CheckSharedPosixThreadDelegation(LAndroidSource, 'android.ffi');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
     'darwin.ffi must expose macOS native thread id ABI');
@@ -190,6 +218,7 @@ begin
     'darwin.ffi must expose Darwin pthread token storage size');
   CheckTokenPresent(LDarwinSource, 'tplatformpthreadtokenalign',
     'darwin.ffi must expose Darwin pthread token align carrier type');
+  CheckSharedPosixThreadDelegation(LDarwinSource, 'darwin.ffi');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_eintr',
@@ -226,6 +255,7 @@ begin
     'freebsd.ffi must expose FreeBSD pthread token storage size');
   CheckTokenPresent(LFreeBSDSource, 'tplatformpthreadtokenalign',
     'freebsd.ffi must expose FreeBSD pthread token align carrier type');
+  CheckSharedPosixThreadDelegation(LFreeBSDSource, 'freebsd.ffi');
   CheckTokenPresent(LUnixSource, 'platform_thread_self_token_u64',
     'unix.ffi must expose generic Unix thread self token helper');
   CheckTokenPresent(LUnixSource, 'platform_native_thread_id_u64',
@@ -254,6 +284,7 @@ begin
     'unix.ffi must expose generic Unix pthread token storage size');
   CheckTokenPresent(LUnixSource, 'tplatformpthreadtokenalign',
     'unix.ffi must expose generic Unix pthread token align carrier type');
+  CheckSharedPosixThreadDelegation(LUnixSource, 'unix.ffi');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
   CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',

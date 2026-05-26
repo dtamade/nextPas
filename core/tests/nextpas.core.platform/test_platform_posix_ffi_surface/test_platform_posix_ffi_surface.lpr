@@ -84,6 +84,28 @@ begin
     'posix.ffi must expose shared timespec deadline arithmetic for platform consumers');
   CheckTokenPresent(LSource, 'platform_posix_timespec_remaining_ns_u64',
     'posix.ffi must expose shared timespec remaining-time arithmetic for platform consumers');
+  CheckTokenPresent(LSource, 'platform_posix_thread_self_token_u64',
+    'posix.ffi must expose shared pthread self-token projection for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_sysconf_positive_i32',
+    'posix.ffi must expose shared positive sysconf projection for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_create_handle',
+    'posix.ffi must expose shared pthread create helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_join_handle',
+    'posix.ffi must expose shared pthread join helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_detach_handle',
+    'posix.ffi must expose shared pthread detach helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_yield',
+    'posix.ffi must expose shared pthread yield helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_sleep_ns',
+    'posix.ffi must expose shared pthread sleep helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_tls_create',
+    'posix.ffi must expose shared pthread TLS create helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_tls_destroy',
+    'posix.ffi must expose shared pthread TLS destroy helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_tls_set',
+    'posix.ffi must expose shared pthread TLS set helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_tls_get',
+    'posix.ffi must expose shared pthread TLS get helper for platform.thread host owners');
   CheckTokenAbsent(LSource, 'pthread_mutex_errorcheck',
     'posix.ffi must not keep per-host pthread mutex kind numbering');
   CheckTokenAbsent(LSource, 'pthread_mutex_recursive',

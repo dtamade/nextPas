@@ -793,6 +793,12 @@ time、sync ABI 应尽量统一沉到 `nextpas.core.platform.windows.ffi`，Linu
 policy token，必须下沉到各自 `linux/darwin/android/freebsd/unix` FFI owner 单元，不要继续塞在
 shared `posix.ffi` 或实现层条件编译里。
 
+但 shared `posix.ffi` 也不该被收窄成“只能放 raw externals”。像 `pthread_self` token 投影、
+`pthread_create/join/detach`、`sched_yield`、TLS key 读写、`sysconf` 正数投影这类在 POSIX 宿主间
+语义完全共享的 thread glue，应直接在 `posix.ffi` 形成单一事实源；各 host ffi 只保留 errno
+binding、`EINTR`、`_SC_NPROCESSORS_ONLN`、native thread id ABI 这类宿主 truth，再把 shared helper
+委托出去。
+
 同样，`nanosleep` 这类 shared POSIX ABI 的 retry/error 语义也不能由实现层凭空假设。像
 `EINTR` 这样的 retryable errno token 必须由各宿主 FFI owner 提供，`platform.thread` 等实现单元只消费
 这些 host-owned token，而不是把“所有 Unix 都按同一个 errno 编号重试”写死在实现里。

@@ -57,8 +57,13 @@
   symbol binding 已经不应继续留在这里。
 - shared `posix.ffi` 不必被收窄成“只能放 raw external 声明”；只要语义在 POSIX 宿主间完全共享，
   它也应该拥有单一事实源级别的 helper。当前已经明确收口的包括
-  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns` 与
-  `platform_posix_timespec_remaining_ns_u64`。
+  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns`、
+  `platform_posix_timespec_remaining_ns_u64`、`platform_posix_thread_self_token_u64`、
+  `platform_posix_sysconf_positive_i32`、
+  `platform_posix_pthread_create/join/detach_handle`、
+  `platform_posix_pthread_yield`、
+  `platform_posix_pthread_sleep_ns` 与
+  `platform_posix_pthread_tls_create/destroy/set/get`。
 - `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
   `linux/android/darwin/freebsd/unix.ffi` 统一暴露
   `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。
@@ -116,6 +121,11 @@
   `core-platform-thread-host-ffi-surface-check=pass` /
   `corePlatformThreadHostFfiSurfaceCheck":"pass"` 纳入 official verification envelope；因此这批
   不只是局部测试过，而是已经进入仓库级回归面。
+- `linux/android/darwin/freebsd/unix.ffi` 现在不再各自复制 `pthread_self` token 投影、
+  `pthread_create/join/detach`、`sched_yield`、TLS key 读写、`sysconf` 正数投影与 `nanosleep`
+  retry loop；这些 truly shared POSIX thread glue 已统一委托给 `nextpas.core.platform.posix.ffi`，
+  host ffi 继续只保留 errno binding、`PLATFORM_POSIX_EINTR`、`_SC_NPROCESSORS_ONLN` 与
+  native thread id ABI。
 - `platform.sync` 的 Windows ABI 现在也并入统一 `nextpas.core.platform.windows.ffi`：
   `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 与 `GetLastError` 不再留在
   `nextpas.core.platform.sync.windows.ffi` 这种按模块切碎的 FFI 单元里。

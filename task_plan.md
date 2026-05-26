@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Time Windows Math Helper Boundary；并行收口包含
+当前最新本轮为 Platform Thread Shared POSIX Helper Ownership；并行收口包含
+Platform Time Windows Math Helper Boundary；
 Platform Sync Windows Timeout Result FFI Ownership、
 Platform Sync POSIX Helper FFI Ownership、Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
@@ -28,6 +29,84 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Thread Shared POSIX Helper Ownership
+
+### Goal
+
+继续把 `platform.thread` 相关的 shared POSIX glue 从各 host ffi 内部复制收回到 shared owner：
+
+- `pthread_self` token 投影、`pthread_create/join/detach`、`sched_yield`、TLS key 读写、
+  `sysconf` 正数投影不再在 `linux/android/darwin/freebsd/unix.ffi` 各写一份
+- `nanosleep` 的 request 组装与 retry loop 继续留在 FFI 层，但 shared 逻辑下沉到 `posix.ffi`
+- host ffi 继续保留 errno binding、`EINTR`、`_SC_NPROCESSORS_ONLN` 与 native thread id ABI
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 本轮新增 shared thread helper：
+  `platform_posix_thread_self_token_u64`、
+  `platform_posix_sysconf_positive_i32`、
+  `platform_posix_pthread_create_handle`、
+  `platform_posix_pthread_join_handle`、
+  `platform_posix_pthread_detach_handle`、
+  `platform_posix_pthread_yield`、
+  `platform_posix_pthread_sleep_ns`、
+  `platform_posix_pthread_tls_create/destroy/set/get`。
+- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给 `platform.thread`
+  消费，但其实现改为委托 shared `posix.ffi` helper。
+- `platform.thread` public API、宿主选择方式与 native thread id contract 不变；这批只收口
+  shared-vs-host ownership。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared pthread/thread helper
+- [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 POSIX host ffi 委托 shared `posix.ffi`
+- [x] 在 `posix.ffi` 实现 shared pthread/thread helper
+- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
+- [x] focused：`test_platform_posix_ffi_surface` / `test_platform_thread_host_ffi_surface` /
+  `test_platform_thread` / `test_platform_sync_host_ffi_surface` /
+  `test_platform_sync` / `test_platform_simulated_host_compile_matrix` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在
+    `posix.ffi must expose shared pthread self-token projection for platform.thread host owners`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate pthread self-token projection to shared posix.ffi`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+    `corePlatformThreadHostFfiSurfaceCheck":"pass"`、
+    `corePlatformThreadCheck":"pass"`、
+    `corePlatformSimulatedHostCompileMatrixCheck":"pass"` 与
+    `verify-local=pass` / `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不改 `platform.thread` public API
+- 这批不把 `platform.time` / `platform.sync` 的 shared POSIX wrapper 一次性全部收口
+- 这批不把 compile-only 证据包装成 Darwin / Android / FreeBSD 的 runtime truth
 
 ## Addendum: 2026-05-27 Platform Time Windows Math Helper Boundary
 

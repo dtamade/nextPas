@@ -91,9 +91,6 @@ function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32
 
 implementation
 
-type
-  PPThreadToken = ^pthread_t;
-
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_errno_location^;
@@ -101,7 +98,7 @@ end;
 
 function platform_thread_self_token_u64: UInt64; inline;
 begin
-  Result := UInt64(PtrUInt(pthread_self));
+  Result := platform_posix_thread_self_token_u64;
 end;
 
 function platform_native_thread_id_u64: UInt64; inline;
@@ -110,81 +107,53 @@ begin
 end;
 
 function platform_cpu_count_i32: Int32; inline;
-var
-  LResult: PtrInt;
 begin
-  LResult := sysconf(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
-  if LResult < 1 then
-    Result := 1
-  else
-    Result := Int32(LResult);
+  Result := platform_posix_sysconf_positive_i32(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
 end;
 
 function platform_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
 begin
-  Result := pthread_create(AThreadStorage, nil, TPThreadStartRoutine(AStartRoutine), AArgument);
+  Result := platform_posix_pthread_create_handle(AThreadStorage, AStartRoutine, AArgument);
 end;
 
 function platform_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
 begin
-  Result := pthread_join(PPThreadToken(AThreadStorage)^, ARetVal);
+  Result := platform_posix_pthread_join_handle(AThreadStorage, ARetVal);
 end;
 
 function platform_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
 begin
-  Result := pthread_detach(PPThreadToken(AThreadStorage)^);
+  Result := platform_posix_pthread_detach_handle(AThreadStorage);
 end;
 
 procedure platform_pthread_yield; inline;
 begin
-  sched_yield;
+  platform_posix_pthread_yield;
 end;
 
 procedure platform_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
-var
-  LReq: timespec;
-  LRem: timespec;
 begin
-  if ANanoseconds = 0 then
-    Exit;
-
-  LReq.tv_sec := ANanoseconds div 1000000000;
-  LReq.tv_nsec := ANanoseconds mod 1000000000;
-  LRem.tv_sec := 0;
-  LRem.tv_nsec := 0;
-
-  while nanosleep(@LReq, @LRem) <> 0 do
-  begin
-    if platform_posix_errno_value <> PLATFORM_POSIX_EINTR then
-      Break;
-    LReq := LRem;
-  end;
+  platform_posix_pthread_sleep_ns(ANanoseconds, platform_errno_location, PLATFORM_POSIX_EINTR);
 end;
 
 function platform_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
-var
-  LKey: pthread_key_t;
 begin
-  Result := pthread_key_create(@LKey, nil);
-  if Result = 0 then
-    AKey := PtrUInt(LKey)
-  else
-    AKey := 0;
+  Result := platform_posix_pthread_tls_create(AKey);
 end;
 
 function platform_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
 begin
-  Result := pthread_key_delete(pthread_key_t(AKey));
+  Result := platform_posix_pthread_tls_destroy(AKey);
 end;
 
 function platform_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
 begin
-  Result := pthread_setspecific(pthread_key_t(AKey), AValue);
+  Result := platform_posix_pthread_tls_set(AKey, AValue);
 end;
 
 function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 begin
-  Result := pthread_getspecific(pthread_key_t(AKey));
+  Result := platform_posix_pthread_tls_get(AKey);
 end;
 
 function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;

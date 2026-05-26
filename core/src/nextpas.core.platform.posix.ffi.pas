@@ -163,6 +163,23 @@ procedure platform_posix_timespec_add_ns(var ATime: timespec; const ANanoseconds
 function platform_posix_timespec_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   const ANow: PTimeSpec): UInt64; inline;
+function platform_posix_thread_self_token_u64: UInt64; inline;
+function platform_posix_sysconf_positive_i32(const AName: Int32): Int32; inline;
+function platform_posix_pthread_create_handle(
+  AThreadStorage: Pointer;
+  const AStartRoutine: Pointer;
+  const AArgument: Pointer): Int32; inline;
+function platform_posix_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+function platform_posix_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+procedure platform_posix_pthread_yield; inline;
+procedure platform_posix_pthread_sleep_ns(
+  const ANanoseconds: UInt64;
+  const AErrnoLocation: PInt32;
+  const AEintr: Int32); inline;
+function platform_posix_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
+function platform_posix_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
+function platform_posix_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+function platform_posix_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
@@ -210,6 +227,9 @@ implementation
 
 const
   PLATFORM_POSIX_NANOSECONDS_PER_SECOND = UInt64(1000000000);
+
+type
+  PPThreadToken = ^pthread_t;
 
 function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
 var
@@ -259,6 +279,95 @@ begin
   if LDeadlineNs <= LNowNs then
     Exit(0);
   Result := LDeadlineNs - LNowNs;
+end;
+
+function platform_posix_thread_self_token_u64: UInt64; inline;
+begin
+  Result := UInt64(PtrUInt(pthread_self));
+end;
+
+function platform_posix_sysconf_positive_i32(const AName: Int32): Int32; inline;
+var
+  LResult: PtrInt;
+begin
+  LResult := sysconf(AName);
+  if LResult < 1 then
+    Result := 1
+  else
+    Result := Int32(LResult);
+end;
+
+function platform_posix_pthread_create_handle(
+  AThreadStorage: Pointer;
+  const AStartRoutine: Pointer;
+  const AArgument: Pointer): Int32; inline;
+begin
+  Result := pthread_create(AThreadStorage, nil, TPThreadStartRoutine(AStartRoutine), AArgument);
+end;
+
+function platform_posix_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+begin
+  Result := pthread_join(PPThreadToken(AThreadStorage)^, ARetVal);
+end;
+
+function platform_posix_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+begin
+  Result := pthread_detach(PPThreadToken(AThreadStorage)^);
+end;
+
+procedure platform_posix_pthread_yield; inline;
+begin
+  sched_yield;
+end;
+
+procedure platform_posix_pthread_sleep_ns(
+  const ANanoseconds: UInt64;
+  const AErrnoLocation: PInt32;
+  const AEintr: Int32); inline;
+var
+  LReq: timespec;
+  LRem: timespec;
+begin
+  if ANanoseconds = 0 then
+    Exit;
+
+  LReq.tv_sec := Int64(ANanoseconds div PLATFORM_POSIX_NANOSECONDS_PER_SECOND);
+  LReq.tv_nsec := Int64(ANanoseconds mod PLATFORM_POSIX_NANOSECONDS_PER_SECOND);
+  LRem.tv_sec := 0;
+  LRem.tv_nsec := 0;
+
+  while nanosleep(@LReq, @LRem) <> 0 do
+  begin
+    if (AErrnoLocation = nil) or (AErrnoLocation^ <> AEintr) then
+      Break;
+    LReq := LRem;
+  end;
+end;
+
+function platform_posix_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
+var
+  LKey: pthread_key_t;
+begin
+  Result := pthread_key_create(@LKey, nil);
+  if Result = 0 then
+    AKey := PtrUInt(LKey)
+  else
+    AKey := 0;
+end;
+
+function platform_posix_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
+begin
+  Result := pthread_key_delete(pthread_key_t(AKey));
+end;
+
+function platform_posix_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+begin
+  Result := pthread_setspecific(pthread_key_t(AKey), AValue);
+end;
+
+function platform_posix_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
+begin
+  Result := pthread_getspecific(pthread_key_t(AKey));
 end;
 
 end.
