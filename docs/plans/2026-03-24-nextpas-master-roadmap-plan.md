@@ -156,8 +156,9 @@
   contract 推进到 argument-count matched method statement call，并用 stage0 query gate 固定
   `member-call` / `queryDefinitions` truth。`Batch 67` 修正 wrapped call traversal，让
   `Halt(Worker.Add(1, 2));` 这类表达式参数里的 direct member function call 也进入同一份
-  binding truth；完整 selector/member lookup、constructor binding 与 type-based dispatch 仍保持
-  deferred。
+  binding truth。`Batch 68` 再补上已声明 class type-name receiver 的 constructor-like
+  member call，让 `TWorker.Create(42)` 绑定到 `TWorker.Create` method symbol；完整
+  selector/member lookup、runtime constructor lowering 与 type-based dispatch 仍保持 deferred。
   下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
   真实功能切片。
 

@@ -2,10 +2,15 @@ program QueryMemberCallBindings;
 
 type
   TWorker = class
+    constructor Create(Value: Integer);
     procedure Run;
     procedure SetValue(Value: Integer);
     function Add(A, B: Integer): Integer;
   end;
+
+constructor TWorker.Create(Value: Integer);
+begin
+end;
 
 procedure TWorker.Run;
 begin
@@ -24,6 +29,7 @@ var
   Worker: TWorker;
 
 begin
+  Worker := TWorker.Create(42);
   Worker.Run;
   Worker.SetValue(7);
   Worker.SetValue;

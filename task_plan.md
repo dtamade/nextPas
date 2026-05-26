@@ -15,6 +15,71 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 68 Constructor Class Receiver Binding
+
+### Goal
+
+关闭 Batch 67 留下的 constructor / class type-name receiver 断点：`TWorker.Create(42)`
+这类以已声明 class type 名作为 receiver 的 direct member call，也应注册为 `member-call`，
+并指向 class declaration 产生的 `TWorker.Create` method symbol。
+
+本批次新增并冻结：
+
+- direct member-call receiver lookup 先使用变量 receiver 类型；若 receiver 不是变量，再只允许回落到
+  已声明的 `type` symbol
+- `TWorker.Create(42)` 的 `member-call` binding 与 `queryDefinitions` target projection
+- focused semantic regression，证明 class type-name receiver 可被 compiler-owned binding table 消费
+- stage0 query gate，证明 CLI-facing query surface 同步公开 constructor receiver binding truth
+
+### Architecture Decision
+
+这仍是 `TSemanticAnalyzer` binding seeding 的渐进增强，而不是完整 constructor 或 member resolver：
+
+- receiver fallback 只接受同一份 `TSemanticModel` 中已声明的 `type` symbol，不从文本猜 class 名。
+- target lookup 继续复用 Batch 66 的 `TClass.Method` method symbol 与 body declaration argument count
+  matching。
+- binding kind 继续使用 `member-call`，让 query consumer 通过同一份 binding/definition projection
+  消费 source occurrence truth。
+- 本批不实现 runtime object allocation、constructor lowering、完整 static class method semantics、
+  full overload/type dispatch、virtual dispatch、record/property/array/deref receiver 或完整 member resolver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入
+      `Worker := TWorker.Create(42);`
+- [x] 在 `TSemanticAnalyzer` 中实现 member receiver 的 declared type fallback
+- [x] focused semantic call binding test 转绿
+- [x] 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+      `stage0-query-member-call-bindings-check`
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已先失败在 `semantic-call-bindings-failure=missing-member-constructor-binding`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- focused query probe: `query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas`
+  已输出 `Create` 的 `member-call` / `queryDefinitions`，target 为 `TWorker.Create` 的 `method`
+  symbol
+- final: fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `stage0-query-member-call-bindings-check=pass`、
+  `stage0QueryMemberCallBindingsCheck":"pass"`、`smoke-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`
+
+### Non-goals
+
+- 不实现 runtime constructor allocation / lowering / initialization semantics
+- 不实现完整 static class method semantics
+- 不实现完整 type-based overload resolution
+- 不实现 virtual/override dispatch、record method、property accessor、array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 67 Expression Member Function Binding
 
 ### Goal

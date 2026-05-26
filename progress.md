@@ -3,6 +3,46 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 68 constructor class receiver binding)
+
+- **Status:** completed
+- Objective:
+  - 把 direct member-call receiver 从 class variable 继续推进到已声明 class type name，让
+    `Worker := TWorker.Create(42);` 绑定到 `TWorker.Create` method symbol。
+- Baseline:
+  - Batch 67 已能绑定 variable receiver 的 statement / expression-position member calls。
+  - 旧实现只通过 `TypeNameForVariable(...)` 解析 receiver，`TWorker` 作为 type symbol 时不会进入
+    `MethodSymbolIdForClassMember(...)`。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入 constructor declaration/body 与
+    `Worker := TWorker.Create(42);`，并固定 `Create(42)` 的 byte offset。
+  - RED focused test 已确认旧实现失败在
+    `semantic-call-bindings-failure=missing-member-constructor-binding`。
+  - `TSemanticAnalyzer` 新增 member receiver resolver：先保留 variable receiver 类型优先级，
+    再保守回落到同一份 semantic model 中已声明的 `type` symbol。
+  - 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+    `stage0-query-member-call-bindings-check`，要求 `query-bindings` / `queryDefinitions`
+    同步公开 `Create` member-call。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Focused query probe 已确认 `Create` 进入 `query-bindings` / `query-definitions`，
+    target 是 `TWorker.Create` 的 `method` symbol。
+  - 收口前复查上轮 smoke blocker：曾有残留 `./tests/run_all_tests.sh --filter smoke`
+    进程；本轮接手后检查当前 semantic fixtures 与 harness artifact，旧
+    `semantic-type_mismatch_fail` 只是历史 `.sisyphus/tmp/harness` 产物，不参与当前 14 个
+    semantic fixtures。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+    `stage0QueryMemberCallBindingsCheck":"pass"`、`smoke-check=pass`、`verify-local=pass`
+    与 `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 聚焦 semantic analyzer、focused/stage0 regressions 与规格/持续记录。
+  - 本批只声明 constructor-like class type-name receiver binding；不声明 runtime allocation、
+    constructor lowering、完整 static method semantics、virtual dispatch 或 type-based overload。
+  - 复盘：这轮保持了 Batch 65-67 的渐进 member-call ownership，没有把 constructor call
+    伪装成完整对象创建语义；最新 fresh verify 已证明当前 harness 输入集合稳定，未引入 harness
+    行为修改。
+
 ## Session: 2026-05-26 (Batch 67 expression member function binding)
 
 - **Status:** completed

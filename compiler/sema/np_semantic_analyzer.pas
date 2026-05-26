@@ -109,6 +109,7 @@ type
       out AArgCount: LongInt
     ): Boolean;
     function TypeNameForVariable(const AName: string): string;
+    function TypeNameForMemberReceiver(const AName: string): string;
     function MethodSymbolIdForClassMember(
       const AClassName: string;
       const AMemberName: string;
@@ -1010,6 +1011,33 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.TypeNameForMemberReceiver(
+  const AName: string
+): string;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+  TypeId: LongInt;
+begin
+  Result := TypeNameForVariable(AName);
+  if Result <> '' then
+    Exit;
+  if AName = '' then
+    Exit;
+
+  TypeId := FModel.FindTypeByName(AName);
+  if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
+    Exit;
+
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, 'type') and
+      (Symbol.TypeId = TypeId) then
+      Exit(FModel.TypeAt(TypeId - 1).Name);
+  end;
+end;
+
 function TSemanticAnalyzer.MethodSymbolIdForClassMember(
   const AClassName: string;
   const AMemberName: string;
@@ -1084,7 +1112,7 @@ begin
     ArgCount
   ) then
     Exit;
-  ReceiverTypeName := TypeNameForVariable(ReceiverName);
+  ReceiverTypeName := TypeNameForMemberReceiver(ReceiverName);
   if ReceiverTypeName = '' then
     Exit;
 

@@ -227,6 +227,8 @@ STAGE0_PKG_MALFORMED_DEPS_WORKSPACE_OUTPUT=$(mktemp)
 STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT=$(mktemp)
 STAGE0_PKG_PLAN_MISSING_WORKSPACE=$(mktemp -d)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
+CORE_TEXT_SMOKE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_text_smoke"
+CORE_TEXT_SMOKE_BINARY="$CORE_TEXT_SMOKE_BUILD_DIR/core_text_smoke"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -462,6 +464,7 @@ cleanup() {
   rm -f "$STAGE0_PKG_INVALID_ARGUMENTS_OUTPUT"
   rm -rf "$STAGE0_PKG_PLAN_MISSING_WORKSPACE"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
+  rm -rf "$CORE_TEXT_SMOKE_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
   rm -rf "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
@@ -3802,20 +3805,18 @@ printf 'linker-failure-attribution-check=pass\n'
 
 printf 'core-text-smoke-check=running\n'
 printf 'core-text-smoke-command=fpc -Fu/home/dtamade/projects/nextPas/rtl/core/base -Fu/home/dtamade/projects/nextPas/rtl/core/text tests/rtl/core_text_smoke.pas\n'
-mkdir -p /home/dtamade/projects/nextPas/.sisyphus/tmp
-mkdir -p /home/dtamade/projects/nextPas/.sisyphus/tmp/rtl-core-text-green
-rm -f .sisyphus/tmp/core_text_smoke
+mkdir -p "$CORE_TEXT_SMOKE_BUILD_DIR"
 if ! fpc \
   -Fu/home/dtamade/projects/nextPas/rtl/core/base \
   -Fu/home/dtamade/projects/nextPas/rtl/core/text \
-  -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/rtl-core-text-green \
-  -FE/home/dtamade/projects/nextPas/.sisyphus/tmp \
+  -FU"$CORE_TEXT_SMOKE_BUILD_DIR" \
+  -FE"$CORE_TEXT_SMOKE_BUILD_DIR" \
   tests/rtl/core_text_smoke.pas >"$CORE_TEXT_SMOKE_OUTPUT" 2>&1; then
   cat "$CORE_TEXT_SMOKE_OUTPUT"
   fail 'core-text-smoke-build-failed'
 fi
 cat "$CORE_TEXT_SMOKE_OUTPUT"
-if ! /home/dtamade/projects/nextPas/.sisyphus/tmp/core_text_smoke >>"$CORE_TEXT_SMOKE_OUTPUT" 2>&1; then
+if ! "$CORE_TEXT_SMOKE_BINARY" >>"$CORE_TEXT_SMOKE_OUTPUT" 2>&1; then
   cat "$CORE_TEXT_SMOKE_OUTPUT"
   fail 'core-text-smoke-run-failed'
 fi
@@ -5057,18 +5058,33 @@ MEMBER_ADD_OFFSET=$(awk '
     offset += length($0) + 1;
   }
 ' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
+MEMBER_CREATE_OFFSET=$(awk '
+  BEGIN { offset = 0 }
+  {
+    idx = index($0, "Create(42)");
+    if (idx > 0) {
+      print offset + idx - 1;
+      exit;
+    }
+    offset += length($0) + 1;
+  }
+' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
 require_output_pattern '^query-bindings=\[.*"kind":"member-call".*"name":"Run".*"ownerUnitId":"querymembercallbindings".*"targetSymbolId":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding'
+require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding'
 require_output_pattern '^query-definitions=\[.*"bindingKind":"member-call".*"bindingName":"Run".*"targetName":"TWorker.Run".*"targetKind":"method".*"targetOwnerUnitName":"QueryMemberCallBindings"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition'
+require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition'
 require_output_pattern '^command-envelope=.*"queryBindings":\[.*"kind":"member-call".*"name":"Run".*"ownerUnitId":"querymembercallbindings".*"targetSymbolId":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding-envelope'
+require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding-envelope'
 require_output_pattern '^command-envelope=.*"queryDefinitions":\[.*"bindingKind":"member-call".*"bindingName":"Run".*"targetName":"TWorker.Run".*"targetKind":"method".*"targetOwnerUnitName":"QueryMemberCallBindings"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition-envelope'
+require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition-envelope'
 require_output_pattern '^mir-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-bindings-deferred-mir'
 require_output_pattern '^backend-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-bindings-deferred-backend'
 require_output_pattern '^toolchain-plan-status=deferred$' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-bindings-deferred-toolchain'

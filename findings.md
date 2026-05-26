@@ -10,6 +10,24 @@
 
 ## Research Findings
 
+- Batch 68 关闭 constructor / class type-name receiver 的第一条正向边界：
+  `TWorker.Create(42)` 现在会把 `Create` 注册为 `member-call`，并指向 `TWorker.Create`
+  method symbol。
+- 真实缺口不在 method symbol 生成，而在 receiver type lookup：旧实现只接受变量 receiver，
+  `TWorker` 作为已声明 type symbol 时不会进入后续 `TClass.Method` arity matching。
+- 新策略是先保留 variable receiver 类型优先级，再保守回落到同一份 `TSemanticModel` 中的
+  declared `type` symbol；这样 `Worker.Run` / `Worker.SetValue` 等变量 receiver 行为不变，
+  同时让 `TWorker.Create(42)` 进入同一份 compiler-owned binding truth。
+- `stage0-query-member-call-bindings-check` 现在同时固定 `Create` / `Run` / `SetValue` / `Add`
+  的 `member-call` 与 `queryDefinitions` truth，并继续确认 query surface 保持
+  MIR/backend/toolchain deferred。
+- 收口复查曾发现残留 `./tests/run_all_tests.sh --filter smoke` 进程；本轮接手后未保留
+  semantic fixture failure 复现条件，最新 fresh `bash build/verify_local.sh` 已确认
+  `semantic` smoke 使用当前 14 个 fixture 且全部通过。旧
+  `.sisyphus/tmp/harness/semantic-type_mismatch_fail` 目录只是历史 artifact，不参与当前 fixture
+  收集。
+- Batch 68 仍不声明 runtime constructor allocation / lowering、完整 static class method
+  semantics、full overload/type dispatch、virtual dispatch、record/property 或 array/deref receiver。
 - Batch 67 关闭 expression-position member function call 的第一条正向边界：
   `Halt(Worker.Add(1, 2));` 现在会把参数表达式里的 `Worker.Add(...)` 注册为 `member-call`，
   并指向 `TWorker.Add` method symbol。

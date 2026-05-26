@@ -296,6 +296,9 @@ var
   AddBindingCount: LongInt;
   AddOffset: LongInt;
   AddSymbolId: LongInt;
+  CreateBindingCount: LongInt;
+  CreateOffset: LongInt;
+  CreateSymbolId: LongInt;
   SetValueBindingCount: LongInt;
   SetValueOffset: LongInt;
   SetValueSymbolId: LongInt;
@@ -307,10 +310,14 @@ begin
     'program ClassMemberCalls;' + LineEnding +
     'type' + LineEnding +
     '  TWorker = class' + LineEnding +
+    '    constructor Create(Value: Integer);' + LineEnding +
     '    procedure Run;' + LineEnding +
     '    procedure SetValue(Value: Integer);' + LineEnding +
     '    function Add(A, B: Integer): Integer;' + LineEnding +
     '  end;' + LineEnding +
+    'constructor TWorker.Create(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
     'procedure TWorker.Run;' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
@@ -324,6 +331,7 @@ begin
     'var' + LineEnding +
     '  Worker: TWorker;' + LineEnding +
     'begin' + LineEnding +
+    '  Worker := TWorker.Create(42);' + LineEnding +
     '  Worker.Run;' + LineEnding +
     '  Worker.Run();' + LineEnding +
     '  Worker.SetValue(7);' + LineEnding +
@@ -361,10 +369,15 @@ begin
     AddSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Add', 'method');
     if AddSymbolId <= 0 then
       Fail('missing-member-function-expression-method-symbol');
+    CreateSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Create', 'method');
+    if CreateSymbolId <= 0 then
+      Fail('missing-member-constructor-method-symbol');
 
     MemberBindingCount := 0;
     AddBindingCount := 0;
     AddOffset := Pos('Add(1, 2)', SourceText) - 1;
+    CreateBindingCount := 0;
+    CreateOffset := Pos('Create(42)', SourceText) - 1;
     SetValueBindingCount := 0;
     SetValueOffset := Pos('SetValue(7)', SourceText) - 1;
     for Index := 0 to Model.BindingCount - 1 do
@@ -396,6 +409,16 @@ begin
         if Binding.ByteOffset <> AddOffset then
           Fail('member-function-expression-binding-offset-mismatch:' +
             IntToStr(Binding.ByteOffset));
+      end
+      else if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Create') then
+      begin
+        Inc(CreateBindingCount);
+        if Binding.TargetSymbolId <> CreateSymbolId then
+          Fail('member-constructor-binding-target-mismatch');
+        if Binding.ByteOffset <> CreateOffset then
+          Fail('member-constructor-binding-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
       end;
     end;
     if MemberBindingCount = 0 then
@@ -413,6 +436,11 @@ begin
     if AddBindingCount <> 1 then
       Fail('unexpected-member-function-expression-binding-count:' +
         IntToStr(AddBindingCount));
+    if CreateBindingCount = 0 then
+      Fail('missing-member-constructor-binding');
+    if CreateBindingCount <> 1 then
+      Fail('unexpected-member-constructor-binding-count:' +
+        IntToStr(CreateBindingCount));
   finally
     Model.Free;
     Analyzer.Free;
