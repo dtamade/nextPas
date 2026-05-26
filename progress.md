@@ -3,9 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 98 platform.time FFI boundary；Batch 97 object header ownership contract、
+当前最新本轮为 Batch 99 object header magic validation；Batch 98 platform.time FFI boundary、
+Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 99 object header magic validation)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 在不修改 `core/` 的前提下，把 `@np_object_free_release` 从“读取 object header”推进到
+    “校验 magic 并按合法/非法 header 分支”，为后续真实 allocator free 固定入口。
+- Baseline:
+  - Batch 97 已让 allocation helper 写入 16-byte header，并让 release helper 回退读取 payload
+    size 与 magic。
+  - release helper 读出 `%magic` 后仍直接 `br label %done`，没有可观察的 validation failure path。
+- Actions taken:
+  - 扩展 `test_hir_object_free_contract.pas`：要求 LLVM 文本包含
+    `%magic.ok = icmp eq i64 %magic, 1313882451`、
+    `br i1 %magic.ok, label %release, label %done`、`release:` label 和 release-to-done 汇合。
+  - `THIRLlvmEmitter.EmitObjectFreeReleaseHelper` 已在 header read 后发射 magic compare；
+    magic mismatch 直接进入 `done:`，magic match 进入当前空的 `release:` 占位块。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-release-header-magic-check`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只补 release helper 的 header magic validation branch；当前仍没有真实 allocator free、
+    diagnostics/trap failure path、core allocator 接管或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 98 platform.time FFI boundary)
 

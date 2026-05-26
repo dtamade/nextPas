@@ -20,7 +20,8 @@ var
   FoundHeapRelease: Boolean;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
   NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
-  EndLabelPos, ReleaseHelperPos: LongInt;
+  EndLabelPos, ReleaseHelperPos, MagicLoadPos, MagicCheckPos, MagicBranchPos,
+  ReleaseLabelPos, ReleaseDoneBranchPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -187,8 +188,26 @@ begin
     if FindAfter('%magicp = getelementptr i8, ptr %raw, i64 8', LlvmText,
       ReleaseHelperPos) = 0 then
       Fail('missing-object-free-release-header-magic-slot');
-    if FindAfter('%magic = load i64, ptr %magicp', LlvmText, ReleaseHelperPos) = 0 then
+    MagicLoadPos := FindAfter('%magic = load i64, ptr %magicp', LlvmText,
+      ReleaseHelperPos);
+    if MagicLoadPos = 0 then
       Fail('missing-object-free-release-header-magic-load');
+    MagicCheckPos := FindAfter(
+      '%magic.ok = icmp eq i64 %magic, 1313882451', LlvmText, MagicLoadPos);
+    if MagicCheckPos = 0 then
+      Fail('missing-object-free-release-header-magic-check');
+    MagicBranchPos := FindAfter(
+      'br i1 %magic.ok, label %release, label %done', LlvmText, MagicCheckPos);
+    if MagicBranchPos = 0 then
+      Fail('missing-object-free-release-header-magic-branch');
+    ReleaseLabelPos := FindAfter(LineEnding + 'release:', LlvmText,
+      MagicBranchPos);
+    if ReleaseLabelPos = 0 then
+      Fail('missing-object-free-release-valid-label');
+    ReleaseDoneBranchPos := FindAfter('br label %done', LlvmText,
+      ReleaseLabelPos);
+    if ReleaseDoneBranchPos = 0 then
+      Fail('missing-object-free-release-valid-joins-done');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

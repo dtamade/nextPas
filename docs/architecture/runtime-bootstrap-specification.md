@@ -78,11 +78,12 @@ branch：nil receiver 直接汇合到 `objectfree.end.*`，非 nil receiver 进�
 class allocation lowering 也已进入 `@np_object_alloc(i64 size)` helper，再由 helper 委托到底层
 `@np_alloc` 申请 16-byte header + payload；header offset 0 存 payload size，offset 8 存
 magic `1313882451`，返回值是 payload pointer。`@np_object_free_release` 会从 payload pointer
-回退读取 header。当前 object alloc/release helpers 只是最小 ownership contract。它们仍不是完整
+回退读取 header，校验 magic，并把合法 header 分到 `release:` 占位块、非法 header 直接分到
+`done:`。当前 object alloc/release helpers 只是最小 ownership contract。它们仍不是完整
 `System` 重写，也没有把
 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍把 implicit runtime 排除在额外
 assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、header validation
-failure path、dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
+diagnostics/trap、dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 

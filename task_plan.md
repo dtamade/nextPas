@@ -15,9 +15,60 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 98 Platform Time FFI Boundary；Batch 97 Object Header Ownership Contract、
+当前最新本轮为 Batch 99 Object Header Magic Validation；Batch 98 Platform Time FFI Boundary、
+Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 99 Object Header Magic Validation
+
+### Goal
+
+继续推进目标树 G3 / G1.5，在不修改 `core/` 的前提下，把 object release helper 从“读取
+header”推进到“校验 header magic 并分流”：
+
+- `@np_object_free_release` 读取 payload 前 16 bytes header 后，必须校验 magic
+  `1313882451`。
+- 合法 header 进入 `release:` 占位块，非法 header 直接汇合到 `done:`，为后续真实 allocator
+  free / diagnostics / trap 固定分支形状。
+- 本批仍不实现真实 free，不接入 `core/` allocator，不改变 object header layout。
+
+### Architecture Decision
+
+object helper 的 ownership contract 继续保持一个入口、一种 header layout：
+
+- Header layout 仍是 16 bytes：offset 0 为 payload size，offset 8 为 magic
+  `1313882451`。
+- `@np_object_free_release` 先保留 null guard，再回退到 header 并读取 size / magic。
+- magic mismatch 当前是 defensive skip：直接进入 `done:`；magic match 进入 `release:` 占位块，
+  以后 allocator free 必须挂到这个块里，避免非法 payload pointer 继续走释放路径。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：release helper 必须包含 magic compare、valid/invalid branch 和 `release:` label
+- [x] 实现 LLVM release helper magic 校验分支
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-header-magic-check`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不修改或暂存 `core/`
+- 不改变 object header layout
+- 不实现 diagnostics / trap / exception failure path
+- 不实现完整 dynamic dispatch runtime
 
 ## Addendum: 2026-05-26 Batch 98 Platform Time FFI Boundary
 

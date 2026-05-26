@@ -115,14 +115,16 @@ contract 记录 nil guard 与 heap release intent；HIR builder 已把该 contra
 这组 marker 降成真实 receiver nil branch，让 `Destroy` call 与 `@np_object_free_release`
 hook 只在非空分支执行；class allocation lowering 也已先进入 `@np_object_alloc` helper，再由
 helper 申请 16-byte header + payload，写入 payload size 与 magic 后返回 payload pointer。
-release helper 会从 payload pointer 回退读取该 header。当前 object alloc/release helpers 仍是
-最小 ownership contract，不是真实 allocator free 或完整 validation failure path。
+release helper 会从 payload pointer 回退读取该 header、校验 magic，并把合法 header 分到
+`release:` 占位块、非法 header 直接分到 `done:`。当前 object alloc/release helpers 仍是
+最小 ownership contract，不是真实 allocator free、diagnostics/trap failure path 或完整
+validation runtime。
 这个 source-backed truth 现在不再依赖用户显式写 `uses System`；但 implicit runtime 仍保持
 `OriginClass=implicit-runtime`，backend extra assemble/link 不会因此自动把 `System.pas`
 加进每个 program。显式 `uses System` 仍会继续解析真实源码，并可把 implicit runtime 节点升级为
 explicit source provenance。长期方向仍然不是在语义层硬编码更多名字，而是让 nextPas-owned
 `System` 继续提供真实 lifetime helper，把 object allocation/free helpers 接到 allocator free、
-header validation、unit init/fini 等运行期能力。
+header validation diagnostics/trap、unit init/fini 等运行期能力。
 
 这里的运行时规范与 `Source syntax`、`Core semantics` 互相配合，但不互相替代。
 语法和核心语义决定程序“被如何理解”，RTL 决定这些程序在运行期“如何表现”。

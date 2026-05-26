@@ -1017,6 +1017,9 @@ begin
   Emit('  %size = load i64, ptr %raw');
   Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  %magic = load i64, ptr %magicp');
+  Emit('  %magic.ok = icmp eq i64 %magic, 1313882451');
+  Emit('  br i1 %magic.ok, label %release, label %done');
+  Emit('release:');
   Emit('  br label %done');
   Emit('done:');
   Emit('  ret void');
