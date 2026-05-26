@@ -764,6 +764,16 @@ src/nextpas.core.platform.win32.ffi.pas   ← Win32 API（stdcall external）
 
 platform 子模块（time、sync、thread 等）只 uses 这些 FFI 文件，不 uses FPC 单元。
 
+### 框架整体依赖规则
+
+| 允许依赖 | 不允许依赖 |
+|----------|------------|
+| FPC System 单元（隐式）— nextPas 会平替 | SysUtils、Classes、Linux、PThreads、UnixType、BaseUnix、Syscall、Windows 等 FPC 库单元 |
+| 编译器内置特性（string、动态数组、interface、try/except、GetMem） | 任何 FPC 特有的库/包 |
+| 自己的 FFI 声明（cdecl/stdcall external） | |
+
+**注意：** 当前自举阶段（FPC 3.3.1 编译），部分模块暂时使用了 SysUtils（Exception、TBytes、Format 等）。这是已知的临时依赖，需要逐步替换为框架自身提供的等价实现。新代码应尽量避免引入新的 FPC 单元依赖。
+
 ---
 
 ## 19. 许可证
