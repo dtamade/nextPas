@@ -6456,6 +6456,76 @@ Completed; verification passed.
 - 这批不引入 Windows runtime-only 证据；新增的是 Win64 compile-only + fresh 主门证明
 - 这批不顺手扩到 POSIX pthread lifecycle helper ownerization
 
+## Addendum: 2026-05-27 Platform Thread POSIX Lifecycle Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` 的 POSIX pthread lifecycle / TLS / yield / sleep raw 调用从 consumer
+实现层收回当前选定宿主的 ffi owner，让 `platform.thread` 在 Unix 路径下也保持和 Windows
+路径同样干净的 owner boundary。
+
+### Current Gap
+
+- `platform.thread` 虽然已经把 Unix self token、native thread id、CPU count 和 errno read
+  helper 收回各宿主 ffi owner，但 consumer 仍直接调用 `pthread_create`、`pthread_join`、
+  `pthread_detach`、`pthread_key_*`、`sched_yield` 与 `nanosleep`。
+- 这意味着 POSIX thread handle lifecycle、TLS key 操作和 sleep retry 语义仍泄漏在
+  consumer，而不是收口到当前宿主 ffi owner。
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
+  - `platform_pthread_create_handle`
+  - `platform_pthread_join_handle`
+  - `platform_pthread_detach_handle`
+  - `platform_pthread_yield`
+  - `platform_pthread_sleep_ns`
+  - `platform_pthread_tls_create`
+  - `platform_pthread_tls_destroy`
+  - `platform_pthread_tls_set`
+  - `platform_pthread_tls_get`
+- `platform.thread` 继续保留 `TPlatformThreadHandle` public contract、`TPosixThreadState`
+  state record、join/detach 收口时机与返回值语义，但不再直接写 raw `pthread_*` /
+  `sched_yield` / `nanosleep`。
+- 这批不改 public API，不顺手扩到 `platform.sync` 的 pthread helper ownerization。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 POSIX lifecycle/TLS/yield/sleep helper owner boundary 打成 RED
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 POSIX pthread helper wrappers
+- [x] 让 `platform.thread` 的 Unix 分支改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose Linux pthread create helper: platform_pthread_create_handle`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 `platform.thread` public API
+- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
+- 这批不顺手把 `platform.sync` 的 pthread raw 调用一起抽走
+
 ## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
 
 ### Goal Node

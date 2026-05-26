@@ -4896,3 +4896,31 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（Windows lifecycle helper ownerization）：pass
 - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass
 - `bash build/verify_local.sh`（platform.thread Windows lifecycle helper ownerization batch）：pass
+
+### Phase 8: Platform Thread POSIX Lifecycle Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_thread_host_ffi_surface` 扩成新的 RED gate，要求
+    `linux/android/darwin/freebsd/unix.ffi` 暴露
+    `platform_pthread_create_handle`、`platform_pthread_join_handle`、
+    `platform_pthread_detach_handle`、`platform_pthread_yield`、
+    `platform_pthread_sleep_ns` 与 `platform_pthread_tls_*`，同时禁止
+    `platform.thread` 再直接写 raw `pthread_*` / `sched_yield` / `nanosleep`。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    统一新增 POSIX pthread lifecycle / TLS / yield / sleep helper wrapper，把 retry / errno /
+    TLS key 操作和 raw pthread 调用继续收回当前宿主 ffi owner。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Unix 分支改为消费这些 helper；consumer
+    只继续保留 `TPosixThreadState`、public API 契约与 join/detach 生命周期收口。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 POSIX pthread helper owner boundary 和证据缺口写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`（POSIX lifecycle helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（POSIX lifecycle helper ownerization）：pass
+- `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass
+- `bash build/verify_local.sh`（platform.thread POSIX lifecycle helper ownerization batch）：pass

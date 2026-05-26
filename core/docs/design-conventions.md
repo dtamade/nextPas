@@ -875,6 +875,15 @@ yield 这类宿主 helper 也应尽量继续归各自 host ffi owner。像 Windo
 `sysconf(_SC_NPROCESSORS_ONLN)` 的选择与 fallback，不应继续散落在 `platform.thread`
 consumer 里。
 
+POSIX pthread lifecycle / TLS / yield / sleep 的 raw 调用也应继续归选定宿主的 ffi owner，而不是
+留在 `platform.thread` consumer。即使 `pthread_create` / `pthread_join` / `pthread_detach`、
+`pthread_key_*`、`sched_yield`、`nanosleep` 的 ABI 形状来自 shared `posix.ffi`，真正的宿主
+retry / errno / token truth 仍然属于当前选择的 `linux/darwin/android/freebsd/unix.ffi` owner。
+优先消费 `platform_pthread_create_handle`、`platform_pthread_join_handle`、
+`platform_pthread_detach_handle`、`platform_pthread_yield`、
+`platform_pthread_sleep_ns`、`platform_pthread_tls_*` 这类 helper；`platform.thread`
+只继续保留 `TPlatformThreadHandle` 的 public contract、state record 与 join/detach 收口语义。
+
 Windows 线程生命周期相关的 raw 宿主调用也应继续归
 `nextpas.core.platform.windows.ffi` owner。像 `CreateThread`、
 `WaitForSingleObject`、`CloseHandle`、`Sleep` 与 `InterlockedDecrement`

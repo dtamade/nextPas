@@ -58,7 +58,7 @@ begin
   New(LState);
   FillChar(LState^, SizeOf(LState^), 0);
 
-  Result := pthread_create(@LState^.Thread, nil, TPThreadStartRoutine(AProc), AArg);
+  Result := platform_pthread_create_handle(@LState^.Thread, Pointer(AProc), AArg);
   if Result = 0 then
     AHandle := TPlatformThreadHandle(LState)
   else
@@ -77,7 +77,7 @@ begin
     Exit(-1);
 
   LState := PPosixThreadState(AHandle);
-  Result := pthread_join(LState^.Thread, @ARetVal);
+  Result := platform_pthread_join_handle(@LState^.Thread, @ARetVal);
   if Result = 0 then
     Dispose(LState);
 end;
@@ -90,7 +90,7 @@ begin
     Exit(-1);
 
   LState := PPosixThreadState(AHandle);
-  Result := pthread_detach(LState^.Thread);
+  Result := platform_pthread_detach_handle(@LState^.Thread);
   if Result = 0 then
     Dispose(LState);
 end;
@@ -107,55 +107,34 @@ end;
 
 procedure platform_thread_yield;
 begin
-  sched_yield;
+  platform_pthread_yield;
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
-var
-  LReq, LRem: timespec;
 begin
-  if ANanoseconds = 0 then
-    Exit;
-
-  LReq.tv_sec := ANanoseconds div 1000000000;
-  LReq.tv_nsec := ANanoseconds mod 1000000000;
-  LRem.tv_sec := 0;
-  LRem.tv_nsec := 0;
-
-  while nanosleep(@LReq, @LRem) <> 0 do
-  begin
-    if platform_posix_errno_value <> PLATFORM_POSIX_EINTR then
-      Break;
-    LReq := LRem;
-  end;
+  platform_pthread_sleep_ns(ANanoseconds);
 end;
 
 { TLS }
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
-var
-  LKey: pthread_key_t;
 begin
-  Result := pthread_key_create(@LKey, nil);
-  if Result = 0 then
-    AKey := TPlatformTLSKey(LKey)
-  else
-    AKey := 0;
+  Result := platform_pthread_tls_create(AKey);
 end;
 
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
-  Result := pthread_key_delete(pthread_key_t(AKey));
+  Result := platform_pthread_tls_destroy(AKey);
 end;
 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
 begin
-  Result := pthread_setspecific(pthread_key_t(AKey), AValue);
+  Result := platform_pthread_tls_set(AKey, AValue);
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 begin
-  Result := pthread_getspecific(pthread_key_t(AKey));
+  Result := platform_pthread_tls_get(AKey);
 end;
 
 { CPU }

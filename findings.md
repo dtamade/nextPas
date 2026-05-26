@@ -1522,3 +1522,25 @@
   `InterlockedDecrement`。
 - focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这批
   Windows lifecycle helper 下沉没有破坏 `platform.thread` 行为或仓库级主门。
+
+## 2026-05-27 Follow-up Findings 8
+
+- `platform.thread` 的 Unix 分支之前虽然已经把 self token、native thread id、CPU count、
+  errno read 等 truth 收进 host ffi owner，但 consumer 仍直接碰
+  `pthread_create`、`pthread_join`、`pthread_detach`、`pthread_key_*`、
+  `sched_yield` 与 `nanosleep`，所以 pthread lifecycle / TLS / sleep retry 这层 owner boundary
+  还是半收口状态。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 统一继续拥有
+  `platform_pthread_create_handle`、`platform_pthread_join_handle`、
+  `platform_pthread_detach_handle`、`platform_pthread_yield`、
+  `platform_pthread_sleep_ns` 与 `platform_pthread_tls_*`；`platform.thread`
+  不再直接调用 raw `pthread_*` / `sched_yield` / `nanosleep`。
+- 现在 `platform.thread` 的 Unix consumer 更接近“public contract + state consumer”：
+  它继续保留 `TPosixThreadState`、join/detach 收口时机和返回值语义，但把 pthread lifecycle、
+  TLS key 操作和 sleep retry 细节继续收回当前宿主 ffi owner。
+- `test_platform_thread_host_ffi_surface` 现在也把这条 POSIX owner boundary 冻成 source-surface
+  contract：不仅要求各宿主 ffi 文件继续暴露 helper 名称，也防回归 consumer 重新直接调用 raw
+  `pthread_*` / `sched_yield` / `nanosleep`。
+- 当前证据边界要继续诚实：这批新增了 Linux focused runtime proof 与 Win64 compile-only，
+  但没有新增 Darwin / FreeBSD / Android runtime 或 cross compile 证据，所以这些宿主目前仍主要由
+  source-surface contract 覆盖。
