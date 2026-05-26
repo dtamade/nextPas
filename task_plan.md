@@ -15,8 +15,62 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 96 Object Allocation Helper Boundary；Batch 93 Platform Thread FFI Boundary 是
+当前最新本轮为 Batch 97 Object Header Ownership Contract；Batch 93 Platform Thread FFI Boundary 是
 并行 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 97 Object Header Ownership Contract
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 96 的对象分配/释放 helper boundary 升级为最小
+object header ownership contract：
+
+- `@np_object_alloc` 必须分配 `size + 16`，写入 payload size 与 magic header，再返回 payload
+  pointer。
+- `@np_object_free_release` 必须从 payload pointer 回退到 header 并读取 size / magic，为后续真实
+  allocator free 和 ownership validation 固定入口。
+- 本批仍不实现真实 free，不改变 constructor lowering，不修改 `core/`。
+
+### Architecture Decision
+
+对象 helper 先拥有 object header 的物理布局，再逐步接 allocator：
+
+- Header layout 当前固定为 16 bytes：offset 0 存 payload size，offset 8 存 magic
+  `1313882451`。
+- `@np_object_alloc` 从底层 `@np_alloc` 申请 header + payload，返回 header 后的 object payload
+  pointer，保持 class field / VMT store 使用 payload 起点。
+- `@np_object_free_release` 仍由 object-free nil guard 后调用；helper 自身也防御性处理 null，并从
+  payload pointer 回退 16 bytes 读取 header。读取 header 只是 ownership contract 证据，还不释放。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：allocation helper 必须写 header，release helper 必须读取 header
+- [x] 实现 LLVM helper header 写入与 release header 读取
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: class alloc focused test 失败在 `missing-hir-class-alloc-header-size`；
+  object-free focused test 失败在 `missing-object-free-release-header-base`。
+- GREEN focused: focused tests 输出 `hir-class-alloc-contract-status=pass` 与
+  `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-class-alloc-contract=pass`、
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不接入 `core/` allocator 或修改 `core/`
+- 不改变 constructor lowering 或 object payload layout
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
 
 ## Addendum: 2026-05-26 Batch 96 Object Allocation Helper Boundary
 

@@ -10,6 +10,15 @@
 
 ## Research Findings
 
+- Batch 97 把 object allocation/release helper boundary 推进成最小 header ownership contract：
+  `@np_object_alloc` 现在申请 `payload size + 16`，在 header offset 0 写 payload size，在
+  offset 8 写 magic `1313882451`，再返回 payload pointer。
+- 新 focused RED 固定旧行为缺口：Batch 96 的 allocation helper 只委托 `@np_alloc(size)`，release
+  helper 仍为空，因此 class alloc test 失败在 `missing-hir-class-alloc-header-size`，object-free
+  test 失败在 `missing-object-free-release-header-base`。
+- 修正后 `@np_object_free_release` 会防御性处理 null，并从 payload pointer 回退 16 bytes 读取
+  payload size 与 magic header；这只是 ownership contract 和后续 allocator free 的入口证据，
+  还不是验证失败路径或真实 free。
 - Batch 96 把 class allocation 的 LLVM lowering 从直接 `@np_alloc` 推进到 compiler-owned
   `@np_object_alloc` helper boundary。
 - 新 focused RED 固定旧行为缺口：HIR 已有 `class_alloc` intrinsic，但 LLVM emitter 直接生成

@@ -75,8 +75,18 @@ begin
       Fail('missing-hir-class-alloc-object-helper-call');
     if Pos('define internal ptr @np_object_alloc(i64 %size)', LlvmText) = 0 then
       Fail('missing-hir-class-alloc-object-helper');
-    if Pos('call ptr @np_alloc(i64 %size)', LlvmText) = 0 then
+    if Pos('%total = add i64 %size, 16', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-header-size');
+    if Pos('%raw = call ptr @np_alloc(i64 %total)', LlvmText) = 0 then
       Fail('missing-hir-class-alloc-base-alloc-delegate');
+    if Pos('store i64 %size, ptr %raw', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-size-header-store');
+    if Pos('%magicp = getelementptr i8, ptr %raw, i64 8', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-magic-header-slot');
+    if Pos('store i64 1313882451, ptr %magicp', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-magic-header-store');
+    if Pos('%obj = getelementptr i8, ptr %raw, i64 16', LlvmText) = 0 then
+      Fail('missing-hir-class-alloc-payload-pointer');
     if Pos(' = call ptr @np_alloc(i64 %v', LlvmText) <> 0 then
       Fail('direct-hir-class-alloc-base-alloc-call');
 

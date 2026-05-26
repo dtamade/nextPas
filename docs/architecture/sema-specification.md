@@ -123,8 +123,9 @@ sema 必须能在编译期求值以下常量表达式：
   `THIRBuilder` 会把它保留为 HIR `np.system.object_free` intrinsic marker，LLVM HIR emitter
   会把该 marker、匹配 owned destroy 和 `heap-release true` release marker 降成 receiver nil
   branch；非空分支会调用 `Destroy` 后进入 `@np_object_free_release` hook。class allocation
-  lowering 也已先进入 `@np_object_alloc` helper，再委托到底层 `@np_alloc`；这些 helper 仍只是
-  object lifecycle ABI 边界，不是 allocator free 或 object header ownership 已完成的证据。
+  lowering 也已先进入 `@np_object_alloc` helper，并写入 16-byte object header；release helper
+  会从 payload pointer 回退读取该 header。这是 object lifecycle ownership contract，不是
+  allocator free 或 validation failure path 已完成的证据。
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧

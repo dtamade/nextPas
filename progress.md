@@ -3,8 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 96 object allocation helper boundary；Batch 93 platform.thread FFI boundary
+当前最新本轮为 Batch 97 object header ownership contract；Batch 93 platform.thread FFI boundary
 是并行 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 97 object header ownership contract)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 96 的 `@np_object_alloc` / `@np_object_free_release` helper boundary 推进成最小
+    object header ownership contract：alloc 写 header，release 从 payload pointer 回退读取 header。
+- Baseline:
+  - `class_alloc` 已经先进入 `@np_object_alloc`，但 helper 只是直接委托 `@np_alloc(size)`。
+  - `@np_object_free_release` 仍是空 helper，释放侧没有任何 ownership/header 证据。
+- Actions taken:
+  - 扩展 `test_hir_class_alloc_contract.pas`：要求 `@np_object_alloc` 分配 `size + 16`，写 payload
+    size 与 magic header，并返回 header 后的 payload pointer。
+  - 扩展 `test_hir_object_free_contract.pas`：要求 `@np_object_free_release` 从 object payload
+    pointer 回退 16 bytes，读取 payload size 与 magic header。
+  - `THIRLlvmEmitter` 的 object alloc/release helpers 已按该 header contract 发射 LLVM 文本。
+- Verification:
+  - RED: class alloc focused test 失败在 `missing-hir-class-alloc-header-size`；
+    object-free focused test 失败在 `missing-object-free-release-header-base`。
+  - GREEN focused: focused tests 输出 `hir-class-alloc-contract-status=pass` 与
+    `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-class-alloc-contract=pass`、
+    `hir-object-free-contract=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只建立 header ownership contract；当前仍没有真实 allocator free、core allocator 接管、
+    object header validation failure path 或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 96 object allocation helper boundary)
 

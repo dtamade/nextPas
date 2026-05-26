@@ -76,11 +76,13 @@ lowering 会成为 `np.system.object_free.destroy` owned marker；`heap-release 
 branch：nil receiver 直接汇合到 `objectfree.end.*`，非 nil receiver 进入
 `objectfree.destroy.*` 后调用 effective `Destroy`，再调用 `@np_object_free_release` hook。
 class allocation lowering 也已进入 `@np_object_alloc(i64 size)` helper，再由 helper 委托到底层
-`@np_alloc(i64 %size)`。当前 object alloc/release helpers 只是内部 ABI 边界。它们仍不是完整
+`@np_alloc` 申请 16-byte header + payload；header offset 0 存 payload size，offset 8 存
+magic `1313882451`，返回值是 payload pointer。`@np_object_free_release` 会从 payload pointer
+回退读取 header。当前 object alloc/release helpers 只是最小 ownership contract。它们仍不是完整
 `System` 重写，也没有把
 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍把 implicit runtime 排除在额外
-assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、
-object header ownership、dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
+assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、header validation
+failure path、dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 

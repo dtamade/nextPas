@@ -248,18 +248,19 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   LLVM HIR emitter 已把这个 lifecycle group lowering 成 receiver nil branch，让 `Destroy`
   call 与 `@np_object_free_release` hook 位于非空 `objectfree.destroy.*` 分支并汇合到
   `objectfree.end.*`。class allocation lowering 也已从直接 `@np_alloc` 改为先调用
-  `@np_object_alloc(i64 size)`，当前 helper 内部仍委托底层 `@np_alloc`。这些 helper 只是
-  object allocation/release ABI 边界，不是完整 object header、ownership metadata 或
-  allocator free。
+  `@np_object_alloc(i64 size)`；该 helper 当前申请 16-byte header + payload，在 header 里写
+  payload size 与 magic，再返回 payload pointer。`@np_object_free_release` 会从 payload pointer
+  回退读取 header。当前这仍只是最小 ownership contract，不是 allocator free 或完整 validation
+  failure path。
   显式 `uses System` 仍可升级到 explicit source provenance。
 - 新 `core/` 已开始 L0/L1 基础设施。
 - 当前协作边界：core 由 core 负责人写，非 core 批次不直接修改 `core/`。
 
 下一步证据：
 
-- 继续扩展 `System` source truth：把 `np_object_alloc` / `np_object_free_release` helper 接到
-  object header ownership、allocator free、完整 dynamic dispatch 与 backend/runtime helper，
-  并推进 unit init/fini。
+- 继续扩展 `System` source truth：把 `np_object_alloc` / `np_object_free_release` helper 从 header
+  ownership contract 接到 allocator free、完整 validation、完整 dynamic dispatch 与
+  backend/runtime helper，并推进 unit init/fini。
 - compiler/tooling 侧只提出 core 需求和 integration contract。
 - 需要 core 改动时，先形成 review/suggestion，不直接落 core 代码。
 

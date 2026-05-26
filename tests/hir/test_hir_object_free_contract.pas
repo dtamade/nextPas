@@ -179,6 +179,16 @@ begin
       LlvmText);
     if ReleaseHelperPos = 0 then
       Fail('missing-object-free-llvm-release-helper');
+    if FindAfter('%raw = getelementptr i8, ptr %obj, i64 -16', LlvmText,
+      ReleaseHelperPos) = 0 then
+      Fail('missing-object-free-release-header-base');
+    if FindAfter('%size = load i64, ptr %raw', LlvmText, ReleaseHelperPos) = 0 then
+      Fail('missing-object-free-release-header-size-load');
+    if FindAfter('%magicp = getelementptr i8, ptr %raw, i64 8', LlvmText,
+      ReleaseHelperPos) = 0 then
+      Fail('missing-object-free-release-header-magic-slot');
+    if FindAfter('%magic = load i64, ptr %magicp', LlvmText, ReleaseHelperPos) = 0 then
+      Fail('missing-object-free-release-header-magic-load');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally
