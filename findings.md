@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 80 把 `sema.type-mismatch` evidence 从 literal/纯表达式扩展到当前 scope 中已声明为内建
+  标量/字符串类型的变量参数：`Flag: Boolean; Pick(Flag);` 调 `Pick(Integer)` 现在会失败并且不注册
+  binding。
+- 新增 `TypeIdHasStableScalarFact(...)`，只认可 `Boolean`、整数/浮点、`Char` 与内建字符串族变量；
+  `Pointer`、`Text`、`Variant`、declared class/record/alias、成员访问、函数结果仍不作为 diagnostic
+  evidence。
+- Batch 80 新增 `type-mismatch-variable-call-check` 与 `member-type-mismatch-variable-call-check`，
+  用 dedicated fixtures 固定 bare/member 变量参数 `sema.type-mismatch` projection 与 final envelope。
 - Batch 79 把第一条可证明 type no-match 接进 call diagnostics：bare procedure/function call 与
   direct member-call 在只有 root-owned 单一 target、arity 已匹配、argument signature 来自稳定事实且与
   param signature 明确不兼容时，会发 `sema.type-mismatch`，model status 进入 `failure`，且不会注册

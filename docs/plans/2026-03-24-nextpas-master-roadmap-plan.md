@@ -201,6 +201,10 @@
   已匹配且 argument signature 来自 literal/纯表达式等稳定事实并可推断为不兼容时发
   `sema.type-mismatch`；imported target、变量/成员/函数结果相关 no-match、多 overload signature
   no-match、未知 callable/member、implicit conversion、完整 overload ranking 与完整 member resolver 继续 deferred。
+  `Batch 80` 继续把这条 evidence 扩到当前 scope 中已声明为内建标量/字符串类型的变量参数：
+  `Flag: Boolean; Pick(Flag);` 这类 root-owned 单一 target mismatch 会发 `sema.type-mismatch`，
+  但 class/record/Pointer/Text/Variant/declared alias、成员访问、函数结果、imported target 与
+  多 overload signature no-match 仍保持 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

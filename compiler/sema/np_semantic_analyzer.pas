@@ -127,6 +127,7 @@ type
       out ASymbol: TSemanticSymbol
     ): Boolean;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
+    function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
     function CallArgumentSignature(
       const ACallNode: TGreenNode;
       out ASignature: string
@@ -1036,6 +1037,8 @@ function TSemanticAnalyzer.ExpressionTypeFactIsStable(
 ): Boolean;
 var
   Index: LongInt;
+  Sym: TSemanticSymbol;
+  SymId: LongInt;
 begin
   Result := False;
   if ANode = nil then
@@ -1045,7 +1048,15 @@ begin
     gnkIntegerLiteral, gnkRealLiteral, gnkStringLiteral, gnkCharLiteral:
       Exit(True);
     gnkIdentifier:
-      Exit(SameText(ANode.Text, 'True') or SameText(ANode.Text, 'False'));
+      begin
+        if SameText(ANode.Text, 'True') or SameText(ANode.Text, 'False') then
+          Exit(True);
+        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if SymId <= 0 then
+          Exit(False);
+        Sym := FModel.SymbolAt(SymId - 1);
+        Exit(TypeIdHasStableScalarFact(Sym.TypeId));
+      end;
     gnkBinaryExpression, gnkUnaryExpression:
       begin
         for Index := 0 to ANode.ChildCount - 1 do
@@ -1328,6 +1339,37 @@ begin
   if FModel.LookupConstValue(TypeName + '$size', Dummy) then
     Exit('p');
   Result := 'i';
+end;
+
+function TSemanticAnalyzer.TypeIdHasStableScalarFact(
+  const ATypeId: LongInt
+): Boolean;
+var
+  TypeInfo: TSemanticType;
+begin
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
+    Exit;
+
+  TypeInfo := FModel.TypeAt(ATypeId - 1);
+  if not SameText(TypeInfo.Kind, 'builtin') then
+    Exit;
+
+  Result :=
+    SameText(TypeInfo.Name, 'Boolean') or
+    SameText(TypeInfo.Name, 'Integer') or
+    SameText(TypeInfo.Name, 'Byte') or
+    SameText(TypeInfo.Name, 'Word') or
+    SameText(TypeInfo.Name, 'LongInt') or
+    SameText(TypeInfo.Name, 'Int64') or
+    SameText(TypeInfo.Name, 'QWord') or
+    SameText(TypeInfo.Name, 'Single') or
+    SameText(TypeInfo.Name, 'Double') or
+    SameText(TypeInfo.Name, 'Char') or
+    SameText(TypeInfo.Name, 'AnsiString') or
+    SameText(TypeInfo.Name, 'ShortString') or
+    SameText(TypeInfo.Name, 'WideString') or
+    SameText(TypeInfo.Name, 'UnicodeString');
 end;
 
 function TSemanticAnalyzer.CallArgumentSignature(

@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 80 scalar variable call type mismatch evidence)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 79 的 `sema.type-mismatch` evidence 从 literal/纯表达式推进到当前 scope 中已声明为
+    内建标量/字符串类型的变量参数。
+- Baseline:
+  - `Flag: Boolean; Pick(Flag);` 调用 `Pick(Value: Integer)` 时，旧 stable evidence gate 会因为
+    `Flag` 是普通 identifier 而 deferred，不发 type mismatch。
+  - `Worker.Pick(Flag);` 同样会因为变量参数 evidence 不稳定而 deferred。
+- Actions taken:
+  - 先写 focused RED，要求 bare/member 两条变量参数路径都发 `sema.type-mismatch`、model status
+    `failure`、binding count `0`。
+  - 新增 `TypeIdHasStableScalarFact(...)`，只把 `Boolean`、整数/浮点、`Char` 与内建字符串族变量
+    视作 stable evidence。
+  - `ExpressionTypeFactIsStable(...)` 现在对 identifier 使用当前 scope symbol `TypeId` 判断稳定性；
+    class/record/Pointer/Text/Variant/declared alias、成员访问、函数结果继续 deferred。
+  - 新增 `type-mismatch-variable-call-check` 与 `member-type-mismatch-variable-call-check` stage0 gates。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-bare-variable-call-type-mismatch-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `type-mismatch-variable-call-check=pass`、
+    `member-type-mismatch-variable-call-check=pass`、`semantic-call-bindings-check=pass`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只把变量参数中最安全的内建标量事实纳入 evidence，不触碰 Batch 79 证明过高风险的 class
+    variable path，例如 `SetNext(TNode)` 仍应 deferred。
+
 ## Session: 2026-05-26 (Batch 79 single-target call type mismatch diagnostics)
 
 - **Status:** completed

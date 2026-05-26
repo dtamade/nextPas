@@ -15,6 +15,66 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 80 Scalar Variable Call Type Mismatch Evidence
+
+### Goal
+
+把 Batch 79 的 `sema.type-mismatch` evidence 从 literal/纯表达式推进到第一条变量事实：
+当 bare procedure/function call 或 direct member-call 只有 root-owned 单一 target、arity 已匹配，且
+argument signature 来自当前 scope 中已声明为内建标量/字符串类型的变量时，若与 target param signature
+明确不兼容，发出 `sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `ExpressionTypeFactIsStable(...)` 对 identifier 不再只接受 `True` / `False`，还会通过当前 scope
+  的 symbol `TypeId` 判断是否为稳定内建标量事实。
+- 新增 `TypeIdHasStableScalarFact(...)`，只认可 `Boolean`、整数/浮点、`Char` 与内建字符串族；
+  `Pointer`、`Text`、`Variant`、declared class/record/alias 等继续不作为 diagnostic evidence。
+- `build/verify_local.sh` 新增 `type-mismatch-variable-call-check` 与
+  `member-type-mismatch-variable-call-check`，固定 stage0 failure projection 与 final verify envelope 的
+  `typeMismatchVariableCallCheck` / `memberTypeMismatchVariableCallCheck`。
+
+### Architecture Decision
+
+这是 variable argument type mismatch evidence 的第一条安全切片，不是完整 variable type flow：
+
+- 只覆盖当前 semantic model 中已能稳定解析为内建标量/字符串 type id 的变量参数。
+- class/record/Pointer/Text/Variant、declared alias、成员访问、函数结果、imported target 与多 overload
+  signature no-match 继续 deferred。
+- 不引入 implicit conversion/ranking、default parameter lowering、var/out compatibility 或完整 overload resolver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 bare `Pick(Flag)`，其中 `Flag: Boolean` 调 `Pick(Integer)` 的 focused regression
+- [x] RED：新增 `Worker.Pick(Flag)` 的 member focused regression
+- [x] 新增内建标量变量 evidence gate
+- [x] 新增 `tests/fixtures/type_mismatch_variable_call` /
+      `member_type_mismatch_variable_call` 与 verify gates
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在
+  `semantic-call-bindings-failure=missing-bare-variable-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `type-mismatch-variable-call-check=pass`、
+  `member-type-mismatch-variable-call-check=pass`、`semantic-call-bindings-check=pass`、
+  `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 class/record/Pointer/Text/Variant/declared alias 变量纳入 type mismatch evidence
+- 不实现 imported target type-mismatch diagnostics
+- 不实现 multi-target no-matching-overload diagnostics
+- 不实现 implicit conversion / overload ranking / default parameter lowering
+- 不实现 unknown callable / unknown member diagnostics
+
 ## Addendum: 2026-05-26 Batch 79 Single-target Call Type Mismatch Diagnostics
 
 ### Goal

@@ -1568,6 +1568,137 @@ begin
   end;
 end;
 
+procedure CheckBareVariableCallTypeMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program BareVariableCallTypeMismatchCalls;' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(Flag);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-bare-variable-call-type-mismatch-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.type-mismatch') then
+      Fail('unexpected-bare-variable-call-type-mismatch-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-bare-variable-call-type-mismatch-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('bare-variable-call-type-mismatch-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-bare-variable-call-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-bare-variable-call-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-bare-variable-call-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckMemberVariableCallTypeMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program MemberVariableCallTypeMismatchCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    '  Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(Flag);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-member-variable-call-type-mismatch-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.type-mismatch') then
+      Fail('unexpected-member-variable-call-type-mismatch-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-member-variable-call-type-mismatch-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('member-variable-call-type-mismatch-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-member-variable-call-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-member-variable-call-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-member-variable-call-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckClassMemberCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1820,6 +1951,8 @@ begin
     CheckMemberWrongArgumentCountDiagnostic;
     CheckBareCallTypeMismatchDiagnostic;
     CheckMemberCallTypeMismatchDiagnostic;
+    CheckBareVariableCallTypeMismatchDiagnostic;
+    CheckMemberVariableCallTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
