@@ -28,6 +28,8 @@ type
     FSavedEntryBlockId: THIRBlockId;
     FPendingParamCount: LongInt;
     FPendingParamLlvmIdx: LongInt;
+    FPendingObjectFreeDestroyName: string;
+    FPendingObjectFreeReceiverName: string;
     FSretValueId: THIRValueId;
 
     FAllocaNames: array of string;
@@ -127,6 +129,18 @@ var
   GStringType: THIRTypeId = 0;
   GPtrType: THIRTypeId = 0;
 
+function ExtractVarOperandName(const ABlob: string): string;
+begin
+  Result := '';
+  if (Length(ABlob) > 4) and (Copy(ABlob, 1, 4) = 'var ') then
+  begin
+    Result := Copy(ABlob, 5, Length(ABlob));
+    if (Length(Result) > 0) and (Result[Length(Result)] = #10) then
+      Result := Copy(Result, 1, Length(Result) - 1);
+    Result := Trim(Result);
+  end;
+end;
+
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel);
 begin
   inherited Create;
@@ -142,6 +156,8 @@ begin
   FEntryBlockId := 0;
   FPendingParamCount := 0;
   FPendingParamLlvmIdx := 0;
+  FPendingObjectFreeDestroyName := '';
+  FPendingObjectFreeReceiverName := '';
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
   SetLength(FRecordAllocaSlots, 0);
@@ -1729,9 +1745,11 @@ var
   Instr: THIRInstr;
   TabPos: LongInt;
   FuncName, Rest, ArgBlob, StrVarName: string;
+  FirstArgBlob, FirstArgName: string;
   ArgValue, PtrVal, LenVal: THIRValueId;
   ArgOps: array of THIROperand;
-  ArgCount, I: LongInt;
+  ArgCount: LongInt;
+  OwnsObjectFreeDestroy: Boolean;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -1746,6 +1764,7 @@ begin
   end;
 
   ArgCount := 0;
+  FirstArgBlob := '';
   SetLength(ArgOps, 0);
   while Rest <> '' do
   begin
@@ -1760,6 +1779,8 @@ begin
       ArgBlob := Rest;
       Rest := '';
     end;
+    if FirstArgBlob = '' then
+      FirstArgBlob := ArgBlob;
     if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strvar ') then
     begin
       StrVarName := Copy(ArgBlob, 8, Length(ArgBlob));
@@ -1831,9 +1852,25 @@ begin
     end;
   end;
 
+  FirstArgName := ExtractVarOperandName(FirstArgBlob);
+  OwnsObjectFreeDestroy := (FPendingObjectFreeDestroyName <> '') and
+    SameText(FuncName, FPendingObjectFreeDestroyName) and
+    SameText(FirstArgName, FPendingObjectFreeReceiverName);
+  if FPendingObjectFreeDestroyName <> '' then
+  begin
+    FPendingObjectFreeDestroyName := '';
+    FPendingObjectFreeReceiverName := '';
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikCall;
+  if OwnsObjectFreeDestroy then
+  begin
+    Instr.Kind := hikIntrinsic;
+    Instr.IntrinsicName := 'np.system.object_free.destroy';
+  end
+  else
+    Instr.Kind := hikCall;
   Instr.TypeId := GetIntType;
   Instr.CallTarget := FuncName;
   Instr.Operands := ArgOps;
@@ -1849,6 +1886,8 @@ var
 begin
   DestroyName := '';
   ReceiverName := '';
+  FPendingObjectFreeDestroyName := '';
+  FPendingObjectFreeReceiverName := '';
   Rest := ANode.Operand;
   while Rest <> '' do
   begin
@@ -1895,6 +1934,12 @@ begin
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ReceiverPtr, GetPtrType);
   EmitInstr(Instr);
+
+  if DestroyName <> '' then
+  begin
+    FPendingObjectFreeDestroyName := DestroyName;
+    FPendingObjectFreeReceiverName := ReceiverName;
+  end;
 end;
 
 procedure THIRBuilder.ProcessIntToStr(const ANode: TTypedHirNode);
@@ -3148,6 +3193,14 @@ end;
 
 procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);
 begin
+  if (FPendingObjectFreeDestroyName <> '') and
+    (ANode.Kind <> 'call-runtime') and
+    (ANode.Kind <> 'object-free-runtime') then
+  begin
+    FPendingObjectFreeDestroyName := '';
+    FPendingObjectFreeReceiverName := '';
+  end;
+
   if (ANode.Kind = 'var-decl-runtime') or
      (ANode.Kind = 'var-decl-str-runtime') or
      (ANode.Kind = 'var-decl-arr-runtime') or

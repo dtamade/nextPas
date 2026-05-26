@@ -14,6 +14,7 @@ var
   Instr: THIRInstr;
   OperandType: THIRTypeRec;
   FoundContract: Boolean;
+  FoundOwnedDestroy: Boolean;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
 
 procedure Fail(const AMessage: string);
@@ -38,6 +39,13 @@ begin
       'nil-guard true' + #10 +
       'heap-release true' + #10
     );
+    SemaModel.AddTypedHirNode(
+      'call-runtime',
+      'TObject.Destroy',
+      0,
+      0,
+      'TObject.Destroy' + #9 + 'var Worker' + #10
+    );
 
     Builder := THIRBuilder.Create(SemaModel);
     Builder.Build;
@@ -47,6 +55,7 @@ begin
       Fail('hir-verifier-error-count:' + IntToStr(Verifier.ErrorCount));
 
     FoundContract := False;
+    FoundOwnedDestroy := False;
     for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
     begin
       Func := Builder.Module.FunctionAt(FuncIndex);
@@ -71,11 +80,34 @@ begin
             if OperandType.Kind <> htkPointer then
               Fail('object-free-receiver-not-pointer');
           end;
+          if (Instr.Kind = hikCall) and
+            SameText(Instr.CallTarget, 'TObject.Destroy') then
+            Fail('plain-object-free-destroy-call');
+          if (Instr.Kind = hikIntrinsic) and
+            SameText(Instr.IntrinsicName, 'np.system.object_free.destroy') then
+          begin
+            if FoundOwnedDestroy then
+              Fail('duplicate-object-free-owned-destroy');
+            FoundOwnedDestroy := True;
+            if not SameText(Instr.CallTarget, 'TObject.Destroy') then
+              Fail('object-free-owned-destroy-target-mismatch:' +
+                Instr.CallTarget);
+            if Length(Instr.Operands) <> 1 then
+              Fail('object-free-owned-destroy-operand-count:' +
+                IntToStr(Length(Instr.Operands)));
+            if Instr.Operands[0].TypeId = 0 then
+              Fail('object-free-owned-destroy-receiver-type-missing');
+            OperandType := Builder.Module.Types.GetType(Instr.Operands[0].TypeId);
+            if OperandType.Kind <> htkPointer then
+              Fail('object-free-owned-destroy-receiver-not-pointer');
+          end;
         end;
     end;
 
     if not FoundContract then
       Fail('missing-object-free-hir-intrinsic');
+    if not FoundOwnedDestroy then
+      Fail('missing-object-free-owned-destroy-intrinsic');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

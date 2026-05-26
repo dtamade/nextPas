@@ -28,6 +28,7 @@ type
     function EscapeLlvmStr(const AValue: string): string;
     function IsSretFunction(const AName: string): Boolean;
     procedure EmitFunction(const AFunc: THIRFunction);
+    procedure EmitCallInstr(const AInstr: THIRInstr);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
@@ -93,6 +94,30 @@ begin
   else
     Result := 'i64';
   end;
+end;
+
+procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
+var
+  I: LongInt;
+  LlvmType, Op: string;
+begin
+  LlvmType := TypeToLlvm(AInstr.TypeId);
+  if IsSretFunction(AInstr.CallTarget) then
+    Op := '  call void @' + AInstr.CallTarget + '('
+  else
+    Op := '  ' + ValueRef(AInstr.ResultId) + ' = call ' + LlvmType +
+      ' @' + AInstr.CallTarget + '(';
+  for I := 0 to High(AInstr.Operands) do
+  begin
+    if I > 0 then Op := Op + ', ';
+    if AInstr.Operands[I].TypeId <> 0 then
+      Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' +
+        ValueRef(AInstr.Operands[I].ValueId)
+    else
+      Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
+  end;
+  Op := Op + ')';
+  Emit(Op);
 end;
 
 procedure THIRLlvmEmitter.EmitInstr(const AInstr: THIRInstr);
@@ -195,23 +220,7 @@ begin
       if Length(AInstr.Operands) >= 1 then
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext i1 ' + ValueRef(AInstr.Operands[0].ValueId) + ' to i64');
     hikCall:
-    begin
-      if IsSretFunction(AInstr.CallTarget) then
-        Op := '  call void @' + AInstr.CallTarget + '('
-      else
-        Op := '  ' + ValueRef(AInstr.ResultId) + ' = call ' + LlvmType +
-          ' @' + AInstr.CallTarget + '(';
-      for I := 0 to High(AInstr.Operands) do
-      begin
-        if I > 0 then Op := Op + ', ';
-        if AInstr.Operands[I].TypeId <> 0 then
-          Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' ' + ValueRef(AInstr.Operands[I].ValueId)
-        else
-          Op := Op + 'i64 ' + ValueRef(AInstr.Operands[I].ValueId);
-      end;
-      Op := Op + ')';
-      Emit(Op);
-    end;
+      EmitCallInstr(AInstr);
     hikIntrinsic:
     begin
       if AInstr.IntrinsicName = 'halt' then
@@ -223,6 +232,8 @@ begin
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
+      else if AInstr.IntrinsicName = 'np.system.object_free.destroy' then
+        EmitCallInstr(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;

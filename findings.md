@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 92 把 `np.system.object_free` 与紧随的 effective `Destroy` 连接成 HIR lifecycle group：
+  匹配 receiver/destroy target 的后续 `call-runtime` 现在会成为 `hikIntrinsic` /
+  `np.system.object_free.destroy`，而不是裸 `hikCall @TObject.Destroy`。
+- 新 focused HIR RED 固定旧行为缺口：在 `object-free-runtime` 后追加匹配
+  `call-runtime TObject.Destroy` 时，旧实现失败在 `plain-object-free-destroy-call`。
+- 修正后 focused test 输出 `hir-object-free-contract-status=pass`；fresh full verify 已输出
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- LLVM HIR emitter 现在让 `np.system.object_free.destroy` 复用 ordinary call emission，
+  所以本批保留当前可执行析构 call 行为，但仍不声称 nil guard、allocator free 或完整动态
+  dispatch runtime 已完成。
 - Batch 91 把 `object-free-runtime` 从 semantic typed HIR 接到 HIR builder：`THIRBuilder` 现在会
   生成 `hikIntrinsic` / `np.system.object_free` marker，receiver 以 pointer operand 保留，
   effective `Destroy` 名称保存在 `CallTarget`。

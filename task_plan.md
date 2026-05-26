@@ -15,6 +15,61 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 92 Object-free Owned Destroy HIR Marker
+
+### Goal
+
+继续推进目标树 G3 / G1.5，让 `np.system.object_free` 不只作为孤立 marker 存在，还要约束
+紧随其后的 effective `Destroy` lowering：
+
+- typed HIR 中 `object-free-runtime` 后接匹配的 `call-runtime <Destroy>` 时，HIR builder
+  不能再把这个析构投影成裸 `hikCall`。
+- 该析构要成为 `np.system.object_free` contract 拥有的 HIR marker：
+  `hikIntrinsic` / `np.system.object_free.destroy`，并保留原 `CallTarget` 与 receiver pointer
+  operand。
+- LLVM HIR emitter 继续把 owned destroy marker lowering 成现有 call，保持当前可执行析构行为；
+  本批不声明真实 nil branch、allocator free 或完整 dynamic dispatch runtime 已完成。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+`object-free-runtime` 与后续 `Destroy` 是一个生命周期组，而不是两个互不相关的普通操作：
+
+- `THIRBuilder.ProcessObjectFreeRuntime(...)` 发出 `np.system.object_free` 后，记录一个只允许被
+  紧随 `call-runtime` 消费的 pending receiver/destroy contract。
+- `ProcessCallRuntime(...)` 只有在 destroy target 和首个 `var <receiver>` operand 同时匹配时，
+  才把该 call 改写为 `np.system.object_free.destroy` intrinsic；否则仍保持普通 `hikCall`。
+- LLVM emitter 抽出统一 call emission helper，让 `hikCall` 和 owned destroy intrinsic 使用同一
+  lowering 逻辑，避免复制和行为漂移。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：匹配 object-free 后续 `TObject.Destroy` 不能再是裸 `hikCall`
+- [x] 实现 pending object-free destroy contract consumption
+- [x] 让 LLVM emitter 对 owned destroy marker 走现有 call lowering
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `plain-object-free-destroy-call`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不生成真实 nil branch
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Batch 91 Object-free Contract HIR Bridge
 
 ### Goal

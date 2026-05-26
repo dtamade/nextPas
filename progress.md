@@ -3,6 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 92 object-free owned destroy HIR marker)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 91 的 `np.system.object_free` HIR marker 继续推进成生命周期组边界：
+    后续匹配的 effective `Destroy` 不能再被 HIR builder 暴露成裸 `hikCall`。
+- Baseline:
+  - Batch 91 已保留 `object-free-runtime` 为 `hikIntrinsic` / `np.system.object_free`，并把
+    effective `Destroy` 目标保存在 `CallTarget`。
+  - semantic typed HIR 仍会在该 contract 后追加 `call-runtime TObject.Destroy`；旧 builder 会把它
+    投影为普通 `hikCall`，后端无法区分这是 object-free contract 拥有的析构，还是用户代码中的
+    普通无条件 call。
+- Actions taken:
+  - 扩展 focused HIR RED：在 `object-free-runtime` 后追加匹配 `call-runtime TObject.Destroy`，
+    要求输出 `np.system.object_free.destroy` owned marker，并拒绝裸 `hikCall @TObject.Destroy`。
+  - `THIRBuilder` 新增 pending receiver/destroy contract：只有紧随的 `call-runtime` 同时匹配
+    destroy target 和首个 `var <receiver>` operand 时，才消费 contract 并发出
+    `hikIntrinsic` / `np.system.object_free.destroy`。
+  - `THIRLlvmEmitter` 抽出统一 call emission helper，让 ordinary `hikCall` 与 owned destroy
+    intrinsic 共享现有 LLVM call lowering，避免当前可执行析构行为退化。
+- Verification:
+  - RED: focused HIR test 失败在 `plain-object-free-destroy-call`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批仍只建立 backend-facing object lifecycle contract：真实 nil branch、allocator free、
+    dynamic dispatch runtime 和 implicit `System.pas` backend/link 接管仍是后续任务。
+  - 本轮没有修改 `core/`。
+
 ## Session: 2026-05-26 (Batch 91 object-free contract HIR bridge)
 
 - **Status:** completed

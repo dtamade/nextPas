@@ -311,8 +311,9 @@ candidate collection
   - `Obj.Free` 同时会生成 `object-free-runtime` typed HIR node，DisplayName 为
     `np.system.object_free`，Operand 记录 receiver、effective `Destroy`、nil guard 和 heap release
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
-    receiver pointer operand 与 effective `Destroy` target，给 backend/runtime helper 留出稳定
-    接入口，但当前还不声明真实 allocator free 已完成
+    receiver pointer operand 与 effective `Destroy` target，并把紧随其后的匹配 `Destroy`
+    lowering 标记成 `np.system.object_free.destroy` owned marker，给 backend/runtime helper 留出
+    稳定接入口，但当前还不声明真实 allocator free 已完成
   - 没有 class layout truth 的 alias / generic specialization / record-like receiver 继续 deferred，直到
     generic instantiation、record methods 和完整 member resolver 进入 semantic model
 
