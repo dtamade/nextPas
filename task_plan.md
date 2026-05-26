@@ -15,13 +15,62 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新已合并记录为 Batch 102 Object Release Invalid Boundary 与并行
-Platform API Boundary Cleanup；Batch 101 Object Release Poison Contract、
-Batch 100 Object Release Valid Boundary、Batch 99 Object Header Magic Validation、
+当前最新本轮为 Batch 103 Object Release Invalid Trap Policy；并行收口包含
+Platform API Boundary Cleanup；Batch 102 Object Release Invalid Boundary、
+Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
+Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 103 Object Release Invalid Trap Policy
+
+### Goal
+
+把 Batch 102 的 no-op invalid-release boundary 推进成最小真实 failure policy：
+
+- `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 必须调用 `@llvm.trap()`。
+- trap 后必须发出 `unreachable`，避免非法释放路径继续被视为可正常返回。
+- 本批仍不实现结构化 diagnostics、不抛 Pascal exception、不接 `core/` allocator，也不改变 object
+  header layout。
+
+### Architecture Decision
+
+invalid release 当前采用 always-trap 策略：
+
+- nil receiver 仍由 `@np_object_free_release` 的 null guard 安全跳过。
+- magic-valid release 仍走 `@np_object_release_valid` 并 poison header magic。
+- magic mismatch 代表 double free 或 foreign payload pointer；进入 invalid helper 后触发
+  `llvm.trap`，这是当前最小 fatal runtime behavior。
+- helper ABI 保持 Batch 102 的 `raw` / `size` / `magic` 证据参数，后续结构化 diagnostics 可以复用。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：invalid helper 必须调用 `@llvm.trap()`、发出 `unreachable` 并声明 intrinsic
+- [x] 实现 LLVM invalid-release trap policy
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-invalid-trap-call`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不修改或暂存 `core/`
+- 不改变 object header layout
+- 不实现结构化 diagnostics / Pascal exception path
+- 不实现完整 dynamic dispatch runtime
 
 ## Addendum: 2026-05-26 Batch 102 Object Release Invalid Boundary
 

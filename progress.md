@@ -3,13 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新已合并记录为 Batch 102 object release invalid boundary 与并行 platform API boundary
-cleanup；Batch 101 object release poison contract、Batch 100 object release valid boundary、
+当前最新本轮为 Batch 103 object release invalid trap policy；并行收口包含 platform API boundary
+cleanup；Batch 102 object release invalid boundary、Batch 101 object release poison contract、
+Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 103 object release invalid trap policy)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 在不修改 `core/` 的前提下，把 no-op invalid-release helper 推进成最小 fatal failure policy。
+- Baseline:
+  - Batch 102 已让 magic mismatch 进入 `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)`。
+  - 该 helper 仍只是 `ret void`，非法释放路径仍会被当成可正常返回。
+- Actions taken:
+  - 扩展 `test_hir_object_free_contract.pas`：要求 invalid helper 调用 `@llvm.trap()`，随后
+    `unreachable`，并要求 LLVM 文本声明 `declare void @llvm.trap()`。
+  - `THIRLlvmEmitter.EmitObjectReleaseInvalidHelper` 已发出 trap / unreachable。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-release-invalid-trap-call`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只实现最小 fatal trap；当前仍没有真实 allocator free、结构化 diagnostics、Pascal exception
+    path、core allocator 接管或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 102 object release invalid boundary)
 

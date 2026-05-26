@@ -117,17 +117,18 @@ hook 只在非空分支执行；class allocation lowering 也已先进入 `@np_o
 helper 申请 16-byte header + payload，写入 payload size 与 magic 后返回 payload pointer。
 release helper 会从 payload pointer 回退读取该 header、校验 magic，并把合法 header 分到
 `release:` 占位块、非法 header 分到 `invalid:`；invalid path 会调用
-`@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`。`release:` 当前调用
+`@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`；invalid helper 当前会
+调用 `@llvm.trap()` 并发出 `unreachable`。`release:` 当前调用
 `@np_object_release_valid(ptr %raw, i64 %size)`，把已验证 header 交给 compiler-owned release
-boundary，并清零 header magic，让重复释放进入 invalid-release boundary。当前 object alloc/release
-helpers 仍是最小 ownership contract，不是真实 allocator free、diagnostics/trap failure path 或完整
-validation runtime。
+boundary，并清零 header magic，让重复释放进入 invalid-release trap。当前 object alloc/release
+helpers 仍是最小 ownership contract，不是真实 allocator free、结构化 diagnostics / Pascal
+exception path 或完整 validation runtime。
 这个 source-backed truth 现在不再依赖用户显式写 `uses System`；但 implicit runtime 仍保持
 `OriginClass=implicit-runtime`，backend extra assemble/link 不会因此自动把 `System.pas`
 加进每个 program。显式 `uses System` 仍会继续解析真实源码，并可把 implicit runtime 节点升级为
 explicit source provenance。长期方向仍然不是在语义层硬编码更多名字，而是让 nextPas-owned
 `System` 继续提供真实 lifetime helper，把 object allocation/free helpers 接到 allocator free、
-header validation diagnostics/trap、release statistics/poison、unit init/fini 等运行期能力。
+header validation diagnostics、release statistics/poison、unit init/fini 等运行期能力。
 
 这里的运行时规范与 `Source syntax`、`Core semantics` 互相配合，但不互相替代。
 语法和核心语义决定程序“被如何理解”，RTL 决定这些程序在运行期“如何表现”。
