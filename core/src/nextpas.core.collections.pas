@@ -15,27 +15,40 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
   nextpas.core.collections.arr,
+  nextpas.core.collections.slice,
+  nextpas.core.collections.iterators,
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.builder,
+  nextpas.core.collections.node,
   // 容器接口/实现
   nextpas.core.collections.vec,
+  nextpas.core.collections.smallvec,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.forward_list,
   nextpas.core.collections.deque,
   nextpas.core.collections.queue,
   nextpas.core.collections.stack,
   nextpas.core.collections.list,
+  nextpas.core.collections.circularbuffer,
   nextpas.core.collections.element_manager,
   // HashMap / HashSet (OA default)
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.multimap,
+  nextpas.core.collections.multiset,
   // Ordered containers (RB)
+  nextpas.core.collections.tree.rb,
+  nextpas.core.collections.rbset,
+  nextpas.core.collections.orderedset,
   nextpas.core.collections.orderedset.rb,
   nextpas.core.collections.orderedmap.rb,
   // 新增：有序容器和缓存
   nextpas.core.collections.treemap,
   nextpas.core.collections.tree_set,
+  nextpas.core.collections.skiplist,
+  nextpas.core.collections.trie,
   nextpas.core.collections.priorityqueue,
   nextpas.core.collections.lrucache,
-  // LinkedHashMap (插入顺序保持的哈希映射)
-  nextpas.core.collections.linkedhashmap,
   // BitSet (高效位集合)
   nextpas.core.collections.bitset;
 

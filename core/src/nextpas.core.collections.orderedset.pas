@@ -60,7 +60,7 @@ type
       TInternalMap = specialize TLinkedHashMap<T, Boolean>;
       TPairType = specialize TPair<T, Boolean>;
       TMapEntryType = specialize TMapEntry<T, Boolean>;
-      TInternalArray = array of T;
+      TInternalArray = specialize TGenericArray<T>;
   private
     FMap: TInternalMap;
 
@@ -114,7 +114,7 @@ type
      * @desc 清空集合
      * @Complexity O(n)
      *}
-    procedure Clear;
+    procedure Clear; override;
 
     {**
      * First
@@ -201,7 +201,7 @@ type
      * @return 包含所有元素的数组
      * @Complexity O(n)
      *}
-    function ToArray: TInternalArray;
+    function ToArray: TInternalArray; override;
 
     {**
      * IsEmpty
@@ -219,13 +219,14 @@ type
      *}
     function GetCount: SizeUInt; override;
 
-  protected
     // 实现抽象方法（TCollection）
     function PtrIter: TPtrIter; override;
-    function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
     procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
     procedure AppendToUnChecked(const aDst: TCollection); override;
+
+  protected
+    function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
 
     // 实现抽象方法（TGenericCollection）
     procedure DoZero; override;
