@@ -887,6 +887,7 @@ require_path core/src/nextpas.core.platform.android.ffi.pas
 require_path core/src/nextpas.core.platform.freebsd.ffi.pas
 require_path core/src/nextpas.core.platform.unix.ffi.pas
 require_path core/src/nextpas.core.platform.windows.ffi.pas
+require_path core/src/nextpas.core.platform.windows.math.pas
 require_path core/src/nextpas.core.platform.thread.pas
 require_path core/src/nextpas.core.platform.sync.pas
 require_path core/src/nextpas.core.platform.time.pas

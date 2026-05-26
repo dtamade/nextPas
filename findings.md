@@ -18,6 +18,9 @@
 - `platform.time` 的 helper/no-FPC focused tests 原先位于 `core/tests/nextpas.core.time/`，
   这会弱化 L0 platform contract 与 L1 time API 的边界；本批迁入
   `core/tests/nextpas.core.platform.time/`，`nextpas.core.time/test_time` 继续覆盖 L1 public API。
+- `*.ffi.pas` 与“同 host family 的纯 helper unit”不能混为一谈：如果单元不拥有 `external` ABI
+  declaration，就不该继续命名成 `*.ffi.pas`，否则会和 `test_platform_ffi_owner_boundary`
+  以及 `docs/design-conventions.md` 的规则自相矛盾。
 - `core/docs/design-conventions.md` 中 Windows FFI 示例文件名仍写作 `win32.ffi`，与当前真实
   `nextpas.core.platform.windows.ffi.pas` 不一致；同时目标平台描述需要显式包含通用 Unix/BSD
   与 Android。
@@ -1719,3 +1722,22 @@
   `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
 - 当前证据边界仍要诚实：这轮没有新增 Darwin / FreeBSD / Android / Windows runtime 证据，所以这些宿主
   仍主要由 source-surface contract 与 compile-only proof 覆盖。
+
+## 2026-05-27 Follow-up Findings 15
+
+- `platform.time` 这轮真正暴露出的不是 clock 算法错误，而是链接边界错误：consumer 为了复用纯
+  `windows_qpc_to_ns` / `windows_qpc_resolution_ns` 换算，把 `nextpas.core.platform.windows.ffi`
+  无条件拉进了 Linux 链接路径，直接导致
+  `/usr/bin/ld.bfd: cannot find -lkernel32`。
+- 正确分解不是把纯数学 helper 再复制回 `platform.time`，也不是继续让 Linux 链接路径碰
+  `kernel32`，而是新增同 host family 的普通 helper unit
+  `nextpas.core.platform.windows.math`，承载纯 QPC 数学换算。
+- `windows.ffi` 继续拥有真实 Windows ABI 与 public helper 名，但把纯 QPC 数学委托给
+  `windows.math`；`platform.time` 在非 Windows 目标只复用 `windows.math`，从而保持换算语义一致且不
+  污染非 Windows 链接。
+- 第一次把这个单元命名成 `nextpas.core.platform.windows.math.ffi` 是错误的；`test_platform_ffi_owner_boundary`
+  很快就证明了这一点。修正后的规则应该是：只有拥有 `external` declaration 的 owner 单元才叫
+  `*.ffi.pas`，纯 helper 保持普通 unit 命名。
+- `verify_local` 的 `core-platform-time-win64-check` 这轮还额外抓到了一个条件编译语法缺口：
+  `platform.time` 的 `implementation uses` 在 Windows 分支后缺少统一结尾分号。这个问题在 Linux runtime
+  proof 下不会露出来，但 Win64 compile-only 会立即失败，所以这条 gate 的价值是实打实的。

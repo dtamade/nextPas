@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync Windows Timeout Result FFI Ownership；并行收口包含
+当前最新本轮为 Platform Time Windows Math Helper Boundary；并行收口包含
+Platform Sync Windows Timeout Result FFI Ownership、
 Platform Sync POSIX Helper FFI Ownership、Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
@@ -27,6 +28,52 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Time Windows Math Helper Boundary
+
+### Goal
+
+把 `platform.time` 里纯 QPC 换算逻辑继续从 consumer 收回 owner-side helper，同时避免非 Windows
+宿主为了复用纯数学换算而被 `windows.ffi` 污染链接：
+
+- Linux/macOS/Unix 链接路径不能因为 `platform_qpc_to_ns` / `platform_resolution_from_frequency_ns`
+  去拉 `kernel32`
+- `windows.ffi` 继续拥有真正的 Windows ABI 与 host-owned clock helper
+- 纯 QPC 数学换算放进同 host family 的普通 helper unit，而不是伪装成新的 `*.ffi.pas`
+
+### Architecture Decision
+
+- `*.ffi.pas` 继续只表示拥有 `external` ABI declaration 的 owner 单元；纯 helper 不再命名成
+  `*.ffi.pas`，避免和 `test_platform_ffi_owner_boundary` 以及文档规则冲突。
+- 这批新增 `core/src/nextpas.core.platform.windows.math.pas`，承载
+  `windows_qpc_to_ns` / `windows_qpc_resolution_ns` 与相关饱和乘除换算。
+- `platform.time` 在 Windows 目标继续通过 `windows.ffi` 暴露的 helper 名消费 Windows 时钟契约；
+  非 Windows 目标则复用 `windows.math`，从而保持纯换算语义一致但不引入 `kernel32` 链接依赖。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：`test_platform_time_helpers` 在 Linux 上暴露 `-lkernel32` 链接污染
+- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求存在 helper-only Windows math sibling
+- [x] 新增 `nextpas.core.platform.windows.math`
+- [x] 让 `windows.ffi` 委托纯 QPC 数学给 `windows.math`
+- [x] 让 `platform.time` 在非 Windows 目标复用 `windows.math`
+- [x] 修正 helper unit 命名，避免把纯 helper 伪装成 `*.ffi.pas`
+- [x] focused：`test_platform_time_helpers` / `test_platform_time_host_ffi_surface` /
+  `test_platform_ffi_owner_boundary` / Win64 compile-only 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 这批不改 `platform.time` public API 名称
+- 这批不新增 Windows runtime 证据
+- 这批不把 `platform.time` 里的其余 host-owned clock helper 全部重画边界
 
 ## Addendum: 2026-05-27 Platform Sync Windows Timeout Result FFI Ownership
 

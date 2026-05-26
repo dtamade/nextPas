@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform sync windows timeout result ffi ownership；并行收口包含
+当前最新本轮为 platform time windows math helper boundary；并行收口包含
+platform sync windows timeout result ffi ownership、
 platform sync POSIX helper ffi ownership、platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
@@ -16,6 +17,66 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.time windows math helper boundary)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 修掉 `platform.time` 当前半重构态里“Linux 为了复用纯 QPC 换算被无条件 `windows.ffi` 污染链接”的真实问题，
+    同时把这条边界冻结成 focused gate。
+- Baseline:
+  - `test_platform_time_host_ffi_surface` 已经要求 `platform.time` 消费 `windows_qpc_to_ns` /
+    `windows_qpc_resolution_ns`，但当前实现把 `nextpas.core.platform.windows.ffi` 无条件放进了
+    `platform.time` 的实现 `uses`。
+  - 直接结果是 Linux 跑 `test_platform_time_helpers` 时链接失败：
+    `/usr/bin/ld.bfd: cannot find -lkernel32`。
+  - 第一次修法把纯 helper 单元命名成 `nextpas.core.platform.windows.math.ffi`，随后又被
+    `test_platform_ffi_owner_boundary` 抓到：纯 helper 不该伪装成 `*.ffi.pas`。
+- Actions taken:
+  - 先把 `test_platform_time_host_ffi_surface` 扩成更强的 source-surface gate：
+    - 要求存在 Windows pure math helper sibling
+    - 要求 `windows.ffi` 把 QPC 数学委托给这个 sibling
+    - 要求 `platform.time` 在非 Windows 宿主走这个 sibling
+  - 新增 `core/src/nextpas.core.platform.windows.math.pas`，承载：
+    - `windows_qpc_to_ns`
+    - `windows_qpc_resolution_ns`
+    - 饱和 `mul/div` 与 unit scaling helper
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 继续保留 public helper 名和真实 `kernel32`
+    ABI，但把纯 QPC 数学委托给 `windows.math`。
+  - `core/src/nextpas.core.platform.time.pas` 改为：
+    - Windows 目标继续吃 `windows.ffi`
+    - 非 Windows 目标只吃 `windows.math`
+  - `build/verify_local.sh` 输入面补入
+    `core/src/nextpas.core.platform.windows.math.pas`。
+  - `core/docs/design-conventions.md` 追加规则：纯 helper 不得伪装成 `*.ffi.pas`。
+- Verification so far:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+      初始失败在 `/usr/bin/ld.bfd: cannot find -lkernel32`。
+    - 扩完 `test_platform_time_host_ffi_surface` 后，初始失败为新 helper sibling 缺失。
+    - 第一次把 helper 命名成 `windows.math.ffi` 后，
+      `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      初始失败在 `platform ffi unit must own external declarations`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - Win64 compile-only:
+      `fpc -Twin64 -Cn -Fi... -Fu... core/tests/nextpas.core.time/test_time/test_time.lpr`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `corePlatformTimeWin64Check":"pass"`、
+      `corePlatformTimeHostFfiSurfaceCheck":"pass"`、
+      `corePlatformFfiOwnerBoundaryCheck":"pass"`、`verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批说明了一条很重要的边界：host-owned helper 可以属于同一宿主 family，但不是所有 helper
+    都该塞进 `*.ffi.pas`。只要没有 raw `external`，它就应该是普通 helper unit。
+  - `verify_local` 的 Win64 compile-only 这次也确实帮忙抓到了条件编译 `uses` 块缺分号的语法问题，
+    不是摆设。
 
 ## Session: 2026-05-27 (platform sync Windows timeout result ffi ownership)
 

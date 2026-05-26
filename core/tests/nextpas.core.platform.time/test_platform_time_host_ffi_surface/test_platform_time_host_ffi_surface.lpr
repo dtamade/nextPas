@@ -23,6 +23,8 @@ const
   DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
+  WINDOWS_MATH_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.math.pas';
+  WINDOWS_MATH_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.math.pas';
 
 var
   T: TTestRunner;
@@ -86,6 +88,7 @@ var
   LPosixSource: string;
   LDarwinSource: string;
   LWindowsSource: string;
+  LWindowsMathSource: string;
 begin
   LTimeSource := ReadSourceFile(ResolveSourcePath(TIME_SOURCE_PATH_FROM_TEST, TIME_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
@@ -95,6 +98,7 @@ begin
   LPosixSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsMathSource := ReadSourceFile(ResolveSourcePath(WINDOWS_MATH_SOURCE_PATH_FROM_TEST, WINDOWS_MATH_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LPosixSource, 'timespec',
     'posix.ffi must expose timespec for platform.time');
@@ -102,6 +106,8 @@ begin
     'posix.ffi must expose clock_gettime for platform.time');
   CheckTokenPresent(LPosixSource, 'clock_getres',
     'posix.ffi must expose clock_getres for platform.time');
+  CheckTokenPresent(LPosixSource, 'platform_posix_timespec_to_ns_u64',
+    'posix.ffi must expose shared timespec conversion helper for platform.time');
   CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi');
   CheckPosixClockHelperSet(LAndroidSource, 'android.ffi');
   CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi');
@@ -117,6 +123,11 @@ begin
   CheckTokenPresent(LDarwinSource, 'darwin_mach_monotonic_resolution_ns',
     'darwin.ffi must expose Darwin monotonic resolution helper for platform.time');
 
+  CheckTokenPresent(LWindowsMathSource, 'windows_qpc_to_ns',
+    'windows.math must expose pure Windows QPC nanosecond conversion helper for platform.time');
+  CheckTokenPresent(LWindowsMathSource, 'windows_qpc_resolution_ns',
+    'windows.math must expose pure Windows QPC resolution helper for platform.time');
+
   CheckTokenPresent(LWindowsSource, 'queryperformancefrequency',
     'windows.ffi must expose QueryPerformanceFrequency for platform.time');
   CheckTokenPresent(LWindowsSource, 'queryperformancecounter',
@@ -127,6 +138,12 @@ begin
     'windows.ffi must expose Windows QPC frequency helper for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_qpc_counter_u64',
     'windows.ffi must expose Windows QPC counter helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_qpc_to_ns',
+    'windows.ffi must expose Windows QPC nanosecond conversion helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_qpc_resolution_ns',
+    'windows.ffi must expose Windows QPC resolution conversion helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'nextpas.core.platform.windows.math',
+    'windows.ffi must delegate pure QPC conversion math through helper-only windows.math');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_now_unix_ns',
     'windows.ffi must expose Windows FILETIME realtime helper for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_unix_epoch_offset_100ns',
@@ -154,12 +171,20 @@ begin
     'platform.time must bind generic Unix host-owned clock ids through unix.ffi');
   CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.ffi',
     'platform.time must bind Windows clock APIs through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.math',
+    'platform.time must use helper-only windows.math for pure QPC math on non-Windows hosts');
   CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_ns_u64',
     'platform.time must consume host-owned monotonic nanosecond helper');
   CheckTokenPresent(LTimeSource, 'platform_clock_realtime_ns_u64',
     'platform.time must consume host-owned realtime nanosecond helper');
   CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_resolution_ns_u64',
     'platform.time must consume host-owned monotonic resolution nanosecond helper');
+  CheckTokenPresent(LTimeSource, 'windows_qpc_to_ns',
+    'platform.time must consume Windows QPC nanosecond conversion helper through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_qpc_resolution_ns',
+    'platform.time must consume Windows QPC resolution helper through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'platform_posix_timespec_to_ns_u64',
+    'platform.time must consume shared POSIX timespec conversion helper through posix.ffi');
   Check(Pos('mach_absolute_time(', LTimeSource) = 0,
     'platform.time must not call mach_absolute_time directly in the consumer');
   Check(Pos('mach_timebase_info(', LTimeSource) = 0,
@@ -198,6 +223,12 @@ begin
     'platform.time must not consume raw FILETIME epoch offset tokens in the consumer');
   Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeSource) = 0,
     'platform.time must not consume raw FILETIME tick size tokens in the consumer');
+  Check(Pos('function platform_mul_div_floor', LTimeSource) = 0,
+    'platform.time must not keep a local multiply-divide helper after ffi ownerization');
+  Check(Pos('function platform_scale_units', LTimeSource) = 0,
+    'platform.time must not keep a local unit-scaling helper after ffi ownerization');
+  Check(Pos('nanoseconds_per_second', LTimeSource) = 0,
+    'platform.time must not keep a local nanoseconds-per-second helper constant after ffi ownerization');
   Check(Pos('116444736000000000', LTimeSource) = 0,
     'platform.time must not keep a raw Windows FILETIME epoch offset literal');
 end;
