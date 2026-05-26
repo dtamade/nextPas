@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 66 把 `member-call` 从零参数 direct class receiver 推进到参数个数匹配：`Worker.SetValue(7);`
+  现在会绑定到 `TWorker.SetValue` method symbol，缺参 `Worker.SetValue;` 不会再因为 method name
+  match 被误注册。
+- member-call 参数个数匹配仍不等于完整 overload/type dispatch：当前只在存在同名 `TClass.Method`
+  body declaration 时要求 `CountDeclParams(...)` 与 call argument count 恰好唯一匹配；同名同参数个数
+  的多个 body declaration 仍保持不绑定。
+- `stage0-query-member-call-bindings-check` 现在用
+  `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 固定 `query-bindings` /
+  `queryDefinitions` 中的 `member-call` truth，并确认 query surface 仍保持 MIR/backend/toolchain
+  deferred。
+- expression-position member function call（例如 `Halt(M.Add(1, 2))`）当前不会被本批纳入 binding
+  contract；focused probe 已显示这类形态还需要后续 AST/member expression binding 设计。
 - Batch 65 把 selector/member binding 从“只排除误绑定”推进到第一条正向 truth：root source
   中 direct class variable receiver 的零参数 class method call（`Worker.Run;` 与
   `Worker.Run();`）现在会注册 `member-call` binding，并指向 `TWorker.Run` 的 `method`

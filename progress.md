@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 66 member call argument arity)
+
+- **Status:** completed
+- Objective:
+  - 把 direct class variable receiver 的 member-call 从零参数推进到参数个数匹配，让
+    `Worker.SetValue(7);` 绑定到 `TWorker.SetValue` method symbol，同时避免缺参
+    `Worker.SetValue;` 被 name-only/member-name match 误绑。
+- Baseline:
+  - Batch 65 已能绑定 `Worker.Run;` / `Worker.Run();` 这类零参数 class method call。
+  - 旧实现遇到带参数 member call 会直接跳过；同时对需要参数的方法，缺参 statement 仍可能因为
+    method name match 被误注册为零参 `member-call`。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入 `Worker.SetValue(7);` 与
+    缺参 `Worker.SetValue;`，并用 `SetValue(7)` 的 byte offset 固定正确 occurrence。
+  - RED focused test 已确认旧实现失败在
+    `semantic-call-bindings-failure=member-call-argument-binding-offset-mismatch`。
+  - `TSemanticAnalyzer.MethodSymbolIdForClassMember(...)` 现在会在同名 `TClass.Method`
+    body declarations 存在时要求唯一 argument count match；多个同 arity body 或 arity 不匹配都不会绑定。
+  - 新增 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas`，并让
+    `build/verify_local.sh` 的 `stage0-query-member-call-bindings-check` 固定 line output 与
+    envelope 中的 `member-call` / `queryDefinitions`。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Focused query probe 已确认 `Run` 与 `SetValue` 都进入 `query-bindings` / `query-definitions`，
+    target 分别是 `TWorker.Run` 与 `TWorker.SetValue` 的 `method` symbol。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+    `stage0QueryMemberCallBindingsCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 聚焦 semantic analyzer、focused semantic regression、query fixture、verify gate 与规格/持续记录。
+  - 本批仍不声明完整 overload/type dispatch；只用参数个数关闭 direct member-call 的下一个真实断点。
+  - expression-position member function call（例如 `Halt(M.Add(1, 2))`）仍未纳入本批 binding contract。
+
 ## Session: 2026-05-26 (Batch 65 class member call binding foundation)
 
 - **Status:** completed

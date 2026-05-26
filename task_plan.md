@@ -15,6 +15,69 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 66 Member Call Argument Arity
+
+### Goal
+
+把 Batch 65 的 direct class variable receiver member-call 从零参数推进到参数个数匹配：
+`Worker.SetValue(7);` 这类带参数 method call 应注册为 `member-call`，并指向
+`TWorker.SetValue` method symbol；缺参的 `Worker.SetValue;` 不能因为 name match 被误绑。
+
+本批次新增并冻结：
+
+- direct class receiver method call 的 argument count matching
+- `TClass.Method` body declaration arity 作为最小匹配依据
+- `query symbols` 对 `member-call` / `queryDefinitions` 的 stage0 gate
+- focused semantic regression，证明带参数 member-call 和缺参防误绑同时成立
+
+### Architecture Decision
+
+member-call 仍然归属于 `TSemanticAnalyzer` 的 binding seeding，不引入完整 method overload
+resolver：
+
+- receiver 类型仍来自 `TSemanticModel` 中 root variable symbol 的 `TypeId`。
+- target symbol 仍是 class declaration 产生的 `TClass.Method` / `method` symbol。
+- 参数个数只从同名 `TClass.Method` body declaration 的 `CountDeclParams(...)` 读取；如果存在
+  body declarations，则必须恰好一个 declaration 与 call argument count 匹配。
+- 没有 body declaration 时只保留零参数 declaration-only binding；非零参调用不猜测参数列表。
+- 这不是 type-based overload resolution：同名同参数个数的多个 body declaration 仍不会绑定。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入 `Worker.SetValue(7);`
+      与缺参 `Worker.SetValue;`，确认旧实现绑定到了错误 occurrence
+- [x] 在 `TSemanticAnalyzer.MethodSymbolIdForClassMember(...)` 中加入 body declaration arity
+      matching
+- [x] focused semantic call binding test 转绿
+- [x] 新增 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas`，并把
+      `stage0-query-member-call-bindings-check` 纳入 verify-local
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 先失败在
+  `semantic-call-bindings-failure=member-call-argument-binding-offset-mismatch`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- focused query probe: `query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas`
+  已输出 `member-call` / `queryDefinitions` for `Run` 与 `SetValue`
+- final: fresh `bash build/verify_local.sh` 已通过，并确认
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `stage0QueryMemberCallBindingsCheck":"pass"` 与 `verify-local=pass`
+
+### Non-goals
+
+- 不实现完整 type-based overload resolution
+- 不实现 expression-position member function call binding
+- 不实现 virtual/override dispatch、record method、property accessor、array/deref receiver 或 constructor binding
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 65 Class Member Call Binding Foundation
 
 ### Goal

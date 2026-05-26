@@ -293,6 +293,9 @@ var
   MemberBindingCount: LongInt;
   MethodSymbolId: LongInt;
   Model: TSemanticModel;
+  SetValueBindingCount: LongInt;
+  SetValueOffset: LongInt;
+  SetValueSymbolId: LongInt;
   SourceText: string;
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
@@ -302,8 +305,12 @@ begin
     'type' + LineEnding +
     '  TWorker = class' + LineEnding +
     '    procedure Run;' + LineEnding +
+    '    procedure SetValue(Value: Integer);' + LineEnding +
     '  end;' + LineEnding +
     'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.SetValue(Value: Integer);' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
     'var' + LineEnding +
@@ -311,6 +318,8 @@ begin
     'begin' + LineEnding +
     '  Worker.Run;' + LineEnding +
     '  Worker.Run();' + LineEnding +
+    '  Worker.SetValue(7);' + LineEnding +
+    '  Worker.SetValue;' + LineEnding +
     'end.' + LineEnding;
 
   Diagnostics := TDiagnosticsSink.CreateDefault;
@@ -333,8 +342,17 @@ begin
     MethodSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Run', 'method');
     if MethodSymbolId <= 0 then
       Fail('missing-member-call-method-symbol');
+    SetValueSymbolId := SymbolIdByNameAndKind(
+      Model,
+      'TWorker.SetValue',
+      'method'
+    );
+    if SetValueSymbolId <= 0 then
+      Fail('missing-member-call-argument-method-symbol');
 
     MemberBindingCount := 0;
+    SetValueBindingCount := 0;
+    SetValueOffset := Pos('SetValue(7)', SourceText) - 1;
     for Index := 0 to Model.BindingCount - 1 do
     begin
       Binding := Model.BindingAt(Index);
@@ -344,6 +362,16 @@ begin
         Inc(MemberBindingCount);
         if Binding.TargetSymbolId <> MethodSymbolId then
           Fail('member-call-binding-target-mismatch');
+      end
+      else if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'SetValue') then
+      begin
+        Inc(SetValueBindingCount);
+        if Binding.TargetSymbolId <> SetValueSymbolId then
+          Fail('member-call-argument-binding-target-mismatch');
+        if Binding.ByteOffset <> SetValueOffset then
+          Fail('member-call-argument-binding-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
       end;
     end;
     if MemberBindingCount = 0 then
@@ -351,6 +379,11 @@ begin
     if MemberBindingCount <> 2 then
       Fail('unexpected-member-call-binding-count:' +
         IntToStr(MemberBindingCount));
+    if SetValueBindingCount = 0 then
+      Fail('missing-member-call-argument-binding');
+    if SetValueBindingCount <> 1 then
+      Fail('unexpected-member-call-argument-binding-count:' +
+        IntToStr(SetValueBindingCount));
   finally
     Model.Free;
     Analyzer.Free;

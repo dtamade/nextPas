@@ -192,10 +192,11 @@ procedure/function call occurrence 可以绑定到 root callable 或唯一 impor
 path/byte offset。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，
 但当前 `query symbols` 仍不承诺完整 LSP、完整 selector/member binding、open document
 overlay 或 incremental invalidation。`Holder.Help();` 这类 qualified selector/member call
-会被当前 name-only binding pass 显式排除；第一条正向 selector/member truth 只覆盖 direct
-class variable receiver 的零参数 method call，并以 `member-call` 指向 `TClass.Method`
-method symbol。property accessor、record method、array/deref receiver、virtual/override
-dispatch 与 type-based overload resolution 仍然 deferred。
+会被当前 name-only binding pass 显式排除；当前正向 selector/member truth 覆盖 direct
+class variable receiver 的 method statement call，并以 `member-call` 指向 `TClass.Method`
+method symbol。带参数 call 只用同名 method body declaration 的 argument count 做唯一匹配。
+property accessor、record method、array/deref receiver、expression-position member function call、
+virtual/override dispatch 与 type-based overload resolution 仍然 deferred。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

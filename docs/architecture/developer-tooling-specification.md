@@ -570,10 +570,11 @@ session-owned symbol/unit truth，公开 target `name` / `kind` / owner unit / s
 byte offset，让调用方不需要在 query 外重扫源码或维护第二套 lookup。当前 binding surface
 已经把 `Holder.Help();` 这类 selector/member callee 从 name-only lookup 中排除，避免误绑定
 到 imported bare callable；同时先公开 `member-call` 的最小正向边界：direct class variable
-receiver 的零参数 method call（例如 `Worker.Run;` / `Worker.Run();`）会绑定到
-`TClass.Method` method symbol。完整 member lookup、property accessor、record method、
-array/deref receiver、virtual/override dispatch 与 type-based overload resolution 仍不属于
-当前 query contract。
+receiver 的 method statement call（例如 `Worker.Run;` / `Worker.Run();` /
+`Worker.SetValue(7);`）会绑定到 `TClass.Method` method symbol。带参数 method call 只用
+同名 method body declaration 的 argument count 做唯一匹配。完整 member lookup、property
+accessor、record method、array/deref receiver、expression-position member function call、
+virtual/override dispatch 与 type-based overload resolution 仍不属于当前 query contract。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
 

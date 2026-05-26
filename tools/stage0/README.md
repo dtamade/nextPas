@@ -243,8 +243,11 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 `query-definitions` 继续把这些 binding 的 target symbol id join 回同一份 semantic
 symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset 与 target
 symbol id/name/kind/owner unit/source path/offset。当前 name-only binding pass 会显式排除
-`Holder.Help();` 这类 selector/member callee；完整 member binding 仍属于后续
-language-service / semantic model 工作。
+`Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
+class variable receiver 的 method statement call，包括 argument-count matched
+`Worker.SetValue(7);` 这类带参数调用。完整 member lookup、expression-position member
+function call、virtual dispatch 与 type-based overload resolution 仍属于后续 language-service /
+semantic model 工作。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
@@ -904,8 +907,8 @@ preflight 样本、package lock detail fixture 下的 `nextpas pkg inspect --wor
 `analysis-source=compilation-session`、`query-result-count=<non-zero>`、
 `query-bindings=<json-array>`、`query-definitions=<json-array>`、
 `query-scopes=<json-array>`、`query-types=<json-array>`、
-`stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass`、`stage0QueryDefinitionsCheck=pass` 与
-`stage0QueryInvalidArgumentsCheck=pass`、
+`stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass`、`stage0QueryDefinitionsCheck=pass`、
+`stage0QueryMemberCallBindingsCheck=pass` 与 `stage0QueryInvalidArgumentsCheck=pass`、
 `package-workflow-status=ready`、`package-manifest-status=ready`、
 `package-lock-status=missing|ready|invalid`、`package-lock-format-version=<version>`、
 `package-lock-entry-count=<count>`、`package-lock-entries=<json-array>`、

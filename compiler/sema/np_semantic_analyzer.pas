@@ -111,7 +111,8 @@ type
     function TypeNameForVariable(const AName: string): string;
     function MethodSymbolIdForClassMember(
       const AClassName: string;
-      const AMemberName: string
+      const AMemberName: string;
+      const AArgCount: LongInt
     ): LongInt;
     function TryRegisterMemberCallBinding(const ACallNode: TGreenNode): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
@@ -1011,25 +1012,56 @@ end;
 
 function TSemanticAnalyzer.MethodSymbolIdForClassMember(
   const AClassName: string;
-  const AMemberName: string
+  const AMemberName: string;
+  const AArgCount: LongInt
 ): LongInt;
 var
+  BodyCandidateCount: LongInt;
+  BodyMatchCount: LongInt;
   Index: LongInt;
   QualifiedName: string;
   Symbol: TSemanticSymbol;
+  SymbolId: LongInt;
 begin
   Result := 0;
   if (AClassName = '') or (AMemberName = '') then
     Exit;
 
   QualifiedName := AClassName + '.' + AMemberName;
+  SymbolId := 0;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
     if SameText(Symbol.Name, QualifiedName) and
       SameText(Symbol.Kind, 'method') then
-      Exit(Symbol.SymbolId);
+    begin
+      SymbolId := Symbol.SymbolId;
+      Break;
+    end;
   end;
+  if SymbolId <= 0 then
+    Exit;
+
+  BodyCandidateCount := 0;
+  BodyMatchCount := 0;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if SameText(FProcedureBodies[Index].Name, QualifiedName) then
+    begin
+      Inc(BodyCandidateCount);
+      if CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount then
+        Inc(BodyMatchCount);
+    end;
+
+  if BodyCandidateCount = 0 then
+  begin
+    if AArgCount = 0 then
+      Exit(SymbolId);
+    Exit;
+  end;
+  if BodyMatchCount <> 1 then
+    Exit;
+
+  Result := SymbolId;
 end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(
@@ -1052,14 +1084,15 @@ begin
     ArgCount
   ) then
     Exit;
-  if ArgCount <> 0 then
-    Exit;
-
   ReceiverTypeName := TypeNameForVariable(ReceiverName);
   if ReceiverTypeName = '' then
     Exit;
 
-  TargetSymbolId := MethodSymbolIdForClassMember(ReceiverTypeName, MemberName);
+  TargetSymbolId := MethodSymbolIdForClassMember(
+    ReceiverTypeName,
+    MemberName,
+    ArgCount
+  );
   if TargetSymbolId <= 0 then
     Exit;
 
