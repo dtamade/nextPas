@@ -3,6 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 73 member typed overload binding)
+
+- **Status:** completed
+- Objective:
+  - 把 member-call overload binding 从 arity identity 推进到最小 typed argument relation：
+    同 owner、同 method name、同 `ParamCount` 的多个候选可通过 compact `ParamSignature` 唯一选择。
+- Baseline:
+  - Batch 72 已让 `method` symbol 记录 `ParamCount`，但 `Pick(Integer)` 与 `Pick(Boolean)`
+    都是 1 参时仍无法区分，只能保守不绑定。
+  - `InferExpressionType(...)` 已能识别 integer literal、comparison expression -> Boolean、
+    string/char 等最小类型事实，可以支撑第一条 typed overload slice。
+- Actions taken:
+  - 先写 focused RED，构造 `TWorker.Pick(Value: Integer)` 与
+    `TWorker.Pick(Value: Boolean)`，要求 `Worker.Pick(1)` / `Worker.Pick(1 = 1)` 分别绑定
+    到 `i` / `b` 签名的 method symbol。
+  - `TSemanticSymbol` 新增 `ParamSignature`，`ProcessClassFields(...)` 为 class method symbol
+    写入 `GetParamSignature(...)`。
+  - `TryRegisterMemberCallBinding(...)` 现在为 call arguments 推导 compact signature；
+    exact member lookup 在同 arity 多候选时按 signature 唯一匹配，同时用 body declaration
+    signature 做二次确认。
+  - `querySymbols` / `queryDefinitions` 新增 `paramSignature` / `targetParamSignature` 投影；
+    `stage0-query-member-call-bindings-check` 固定 integer/boolean overload target。
+  - 同步 semantic model / language service / developer tooling / stage0 / roadmap docs，明确当前
+    是 minimal typed overload binding，不是完整 ranking。
+- Verification:
+  - RED: focused semantic test build 曾失败在 `Identifier idents no member "ParamSignature"`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只消费已经可推断的 argument type，不引入 implicit conversion、default parameter、
+    var/out compatibility、visibility 或 virtual dispatch。
+  - 复盘：这轮把 Batch 72 的 arity identity 推进成可消费的 typed signature truth，减少同 arity
+    overload 被静默跳过的空洞；下一步可继续做 unresolved/ambiguous overload 的结构化 diagnostics，
+    或把同样的 typed relation 复用到 bare procedure/function calls。
+
 ## Session: 2026-05-26 (Batch 72 member overload target identity)
 
 - **Status:** completed

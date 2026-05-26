@@ -117,16 +117,25 @@ type
       const ATypeId: LongInt;
       out ASymbol: TSemanticSymbol
     ): Boolean;
+    function TypeSignatureForTypeId(const ATypeId: LongInt): string;
+    function CallArgumentSignature(
+      const ACallNode: TGreenNode;
+      out ASignature: string
+    ): Boolean;
     function MethodSymbolIdForExactClassTypeMember(
       const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt;
+      const AArgSignature: string;
+      const AHasArgSignature: Boolean;
       out AMethodNameFound: Boolean
     ): LongInt;
     function MethodSymbolIdForClassTypeMember(
       const AClassTypeId: LongInt;
       const AMemberName: string;
-      const AArgCount: LongInt
+      const AArgCount: LongInt;
+      const AArgSignature: string;
+      const AHasArgSignature: Boolean
     ): LongInt;
     function TryRegisterMemberCallBinding(
       const ACallNode: TGreenNode;
@@ -1073,6 +1082,7 @@ begin
   ASymbol.ScopeId := 0;
   ASymbol.TypeId := 0;
   ASymbol.ParamCount := -1;
+  ASymbol.ParamSignature := '';
   ASymbol.ByteOffset := 0;
   Result := False;
   if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
@@ -1088,10 +1098,77 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
+var
+  TypeName: string;
+  TypeInfo: TSemanticType;
+  Dummy: Int64;
+begin
+  Result := '';
+  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
+    Exit;
+
+  TypeInfo := FModel.TypeAt(ATypeId - 1);
+  TypeName := TypeInfo.Name;
+  if (TypeName = '') then
+    Exit;
+  if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') or
+    SameText(TypeName, 'ShortString') or SameText(TypeName, 'WideString') or
+    SameText(TypeName, 'UnicodeString') then
+    Exit('s');
+  if SameText(TypeName, 'Boolean') then
+    Exit('b');
+  if FModel.LookupConstValue(TypeName + '$record', Dummy) then
+    Exit('r');
+  if FModel.LookupConstValue(TypeName + '$size', Dummy) then
+    Exit('p');
+  Result := 'i';
+end;
+
+function TSemanticAnalyzer.CallArgumentSignature(
+  const ACallNode: TGreenNode;
+  out ASignature: string
+): Boolean;
+var
+  ArgNode: TGreenNode;
+  ArgRoot: TGreenNode;
+  ArgTypeId: LongInt;
+  Index: LongInt;
+  TypeSig: string;
+begin
+  ASignature := '';
+  Result := False;
+  if ACallNode = nil then
+    Exit;
+
+  ArgRoot := ACallNode;
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (ACallNode.ChildCount > 0) and
+    (ACallNode.ChildAt(0) <> nil) and
+    (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    ArgRoot := ACallNode.ChildAt(0);
+
+  if ArgRoot.NodeKind <> gnkFunctionCall then
+    Exit(True);
+
+  for Index := 1 to ArgRoot.ChildCount - 1 do
+  begin
+    ArgNode := ArgRoot.ChildAt(Index);
+    ArgTypeId := InferExpressionType(ArgNode);
+    TypeSig := TypeSignatureForTypeId(ArgTypeId);
+    if TypeSig = '' then
+      Exit(False);
+    ASignature := ASignature + TypeSig;
+  end;
+  Result := True;
+end;
+
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AClassTypeId: LongInt;
   const AMemberName: string;
   const AArgCount: LongInt;
+  const AArgSignature: string;
+  const AHasArgSignature: Boolean;
   out AMethodNameFound: Boolean
 ): LongInt;
 var
@@ -1100,6 +1177,8 @@ var
   Index: LongInt;
   QualifiedName: string;
   Symbol: TSemanticSymbol;
+  SignatureMatchCount: LongInt;
+  SignatureSymbolId: LongInt;
   SymbolId: LongInt;
   SymbolMatchCount: LongInt;
   TypeSymbol: TSemanticSymbol;
@@ -1113,7 +1192,9 @@ begin
 
   QualifiedName := TypeSymbol.Name + '.' + AMemberName;
   SymbolId := 0;
+  SignatureSymbolId := 0;
   SymbolMatchCount := 0;
+  SignatureMatchCount := 0;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -1126,10 +1207,23 @@ begin
       begin
         Inc(SymbolMatchCount);
         SymbolId := Symbol.SymbolId;
+        if AHasArgSignature and
+          SameText(Symbol.ParamSignature, AArgSignature) then
+        begin
+          Inc(SignatureMatchCount);
+          SignatureSymbolId := Symbol.SymbolId;
+        end;
       end;
     end;
   end;
   if SymbolMatchCount <> 1 then
+  begin
+    if AHasArgSignature and (SignatureMatchCount = 1) then
+      SymbolId := SignatureSymbolId
+    else
+      Exit;
+  end;
+  if SymbolId <= 0 then
     Exit;
 
   BodyCandidateCount := 0;
@@ -1139,7 +1233,9 @@ begin
       SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       Inc(BodyCandidateCount);
-      if CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount then
+      if (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) and
+        ((not AHasArgSignature) or
+         SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
         Inc(BodyMatchCount);
     end;
 
@@ -1158,7 +1254,9 @@ end;
 function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AClassTypeId: LongInt;
   const AMemberName: string;
-  const AArgCount: LongInt
+  const AArgCount: LongInt;
+  const AArgSignature: string;
+  const AHasArgSignature: Boolean
 ): LongInt;
 var
   CurrentTypeId: LongInt;
@@ -1174,6 +1272,8 @@ begin
       CurrentTypeId,
       AMemberName,
       AArgCount,
+      AArgSignature,
+      AHasArgSignature,
       MethodNameFound
     );
     if Result > 0 then
@@ -1193,6 +1293,8 @@ function TSemanticAnalyzer.TryRegisterMemberCallBinding(
 ): Boolean;
 var
   ArgCount: LongInt;
+  ArgSignature: string;
+  HasArgSignature: Boolean;
   MemberName: string;
   MemberOffset: LongInt;
   ReceiverName: string;
@@ -1214,11 +1316,14 @@ begin
   );
   if ReceiverTypeId <= 0 then
     Exit;
+  HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
 
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
     MemberName,
-    ArgCount
+    ArgCount,
+    ArgSignature,
+    HasArgSignature
   );
   if TargetSymbolId <= 0 then
     Exit;
@@ -3003,6 +3108,7 @@ begin
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
+          FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin

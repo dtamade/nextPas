@@ -13,6 +13,7 @@ type
     ScopeId: LongInt;
     TypeId: LongInt;
     ParamCount: LongInt;
+    ParamSignature: string;
     ByteOffset: LongInt;
   end;
 
@@ -127,6 +128,8 @@ type
       const AParentScopeId: LongInt): LongInt;
     procedure SetSymbolScope(const ASymbolId: LongInt; const AScopeId: LongInt);
     procedure SetSymbolParamCount(const ASymbolId: LongInt; const ACount: LongInt);
+    procedure SetSymbolParamSignature(const ASymbolId: LongInt;
+      const ASignature: string);
     function FindSymbolInScope(const AName: string;
       const AScopeId: LongInt): LongInt;
     function LookupSymbol(const AName: string;
@@ -240,6 +243,7 @@ begin
   FSymbols[NextIndex].ScopeId := 0;
   FSymbols[NextIndex].TypeId := ATypeId;
   FSymbols[NextIndex].ParamCount := -1;
+  FSymbols[NextIndex].ParamSignature := '';
   FSymbols[NextIndex].ByteOffset := AByteOffset;
   Result := FSymbols[NextIndex].SymbolId;
 end;
@@ -330,6 +334,16 @@ begin
   Idx := ASymbolId - 1;
   if (Idx >= 0) and (Idx < Length(FSymbols)) then
     FSymbols[Idx].ParamCount := ACount;
+end;
+
+procedure TSemanticModel.SetSymbolParamSignature(const ASymbolId: LongInt;
+  const ASignature: string);
+var
+  Idx: LongInt;
+begin
+  Idx := ASymbolId - 1;
+  if (Idx >= 0) and (Idx < Length(FSymbols)) then
+    FSymbols[Idx].ParamSignature := ASignature;
 end;
 
 function TSemanticModel.FindSymbolInScope(const AName: string;
@@ -494,6 +508,8 @@ begin
     Result.Kind := '';
     Result.OwnerUnitId := '';
     Result.TypeId := 0;
+    Result.ParamCount := -1;
+    Result.ParamSignature := '';
     Result.ByteOffset := 0;
     Exit;
   end;

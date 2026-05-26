@@ -8,6 +8,7 @@ type
     function Add(A, B: Integer): Integer;
     procedure Pick;
     procedure Pick(Value: Integer);
+    procedure Pick(Value: Boolean);
   end;
   TBaseWorker = class
     procedure Touch;
@@ -41,6 +42,10 @@ procedure TWorker.Pick(Value: Integer);
 begin
 end;
 
+procedure TWorker.Pick(Value: Boolean);
+begin
+end;
+
 procedure TBaseWorker.Touch;
 begin
 end;
@@ -57,5 +62,6 @@ begin
   Halt(Worker.Add(1, 2));
   Worker.Pick;
   Worker.Pick(5);
+  Worker.Pick(1 = 1);
   Child.Touch;
 end.

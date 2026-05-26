@@ -171,7 +171,10 @@
   class method declaration 的 parameter list 进入 green tree，`method` symbol 记录 `ParamCount`，
   `member-call` 按 call argument count 选择唯一同 owner / 同 qualified name / 同 `ParamCount`
   target，并在 `queryDefinitions` 中投影 `targetParamCount`；完整 type-based overload resolution
-  仍保持 deferred。
+  仍保持 deferred。`Batch 73` 继续把同 arity overload 推进到最小 typed argument relation：
+  `method` symbol 记录 compact `ParamSignature`，member-call 从当前可推断的 argument type 生成
+  signature，并在同 arity 多候选时选择唯一 matching target；`querySymbols` / `queryDefinitions`
+  同步公开 `paramSignature` / `targetParamSignature`。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

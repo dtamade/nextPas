@@ -78,6 +78,30 @@ begin
   end;
 end;
 
+function SymbolIdByNameKindOwnerAndSignature(
+  const AModel: TSemanticModel;
+  const AName: string;
+  const AKind: string;
+  const AOwnerUnitId: string;
+  const AParamCount: LongInt;
+  const AParamSignature: string
+): LongInt;
+var
+  Index: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  Result := 0;
+  for Index := 0 to AModel.SymbolCount - 1 do
+  begin
+    Symbol := AModel.SymbolAt(Index);
+    if SameText(Symbol.Name, AName) and SameText(Symbol.Kind, AKind) and
+      SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
+      (Symbol.ParamCount = AParamCount) and
+      SameText(Symbol.ParamSignature, AParamSignature) then
+      Exit(Symbol.SymbolId);
+  end;
+end;
+
 function BindingTargetForName(
   const AModel: TSemanticModel;
   const AName: string
@@ -682,6 +706,126 @@ begin
   end;
 end;
 
+procedure CheckMemberTypedOverloadBindingTargets;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingCount: LongInt;
+  BooleanOffset: LongInt;
+  BooleanSymbolId: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  IntegerOffset: LongInt;
+  IntegerSymbolId: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program MemberTypedOverloadCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: Boolean);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Boolean);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(1);' + LineEnding +
+    '  Worker.Pick(1 = 1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-member-typed-overload-diagnostics');
+    if Model = nil then
+      Fail('missing-member-typed-overload-semantic-model');
+
+    IntegerSymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model,
+      'TWorker.Pick',
+      'method',
+      'membertypedoverloadcalls',
+      1,
+      'i'
+    );
+    BooleanSymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model,
+      'TWorker.Pick',
+      'method',
+      'membertypedoverloadcalls',
+      1,
+      'b'
+    );
+    if IntegerSymbolId <= 0 then
+      Fail('missing-integer-member-overload-symbol');
+    if BooleanSymbolId <= 0 then
+      Fail('missing-boolean-member-overload-symbol');
+
+    IntegerOffset := Pos('  Worker.Pick(1);', SourceText) +
+      Length('  Worker.') - 1;
+    BooleanOffset := Pos('  Worker.Pick(1 = 1);', SourceText) +
+      Length('  Worker.') - 1;
+    BindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Pick') then
+      begin
+        if (Binding.ByteOffset <> IntegerOffset) and
+          (Binding.ByteOffset <> BooleanOffset) then
+          Continue;
+        Inc(BindingCount);
+        if Binding.ByteOffset = IntegerOffset then
+        begin
+          if Binding.TargetSymbolId <> IntegerSymbolId then
+            Fail('integer-member-overload-target-mismatch');
+        end
+        else if Binding.ByteOffset = BooleanOffset then
+        begin
+          if Binding.TargetSymbolId <> BooleanSymbolId then
+            Fail('boolean-member-overload-target-mismatch');
+        end;
+      end;
+    end;
+
+    if BindingCount = 0 then
+      Fail('missing-member-typed-overload-bindings');
+    if BindingCount <> 2 then
+      Fail('unexpected-member-typed-overload-binding-count:' +
+        IntToStr(BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1020,6 +1164,7 @@ begin
     CheckOwnerAwareImportedClassMemberCallBinding;
     CheckInheritedClassMemberCallBinding;
     CheckMemberOverloadBindingTargets;
+    CheckMemberTypedOverloadBindingTargets;
     CheckOverloadBindings;
     CheckClassMemberCallBinding;
 

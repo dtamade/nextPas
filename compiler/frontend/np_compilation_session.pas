@@ -1645,6 +1645,8 @@ begin
       Symbol.ParamCount,
       Symbol.ParamCount >= 0
     );
+    if Symbol.ParamSignature <> '' then
+      AppendJsonStringField(Fields, 'paramSignature', Symbol.ParamSignature);
     AppendJsonIntegerField(Fields, 'byteOffset', Symbol.ByteOffset, True);
 
     Result := Result + '{' + Fields + '}';
@@ -1738,6 +1740,12 @@ begin
       TargetSymbol.ParamCount,
       TargetSymbol.ParamCount >= 0
     );
+    if TargetSymbol.ParamSignature <> '' then
+      AppendJsonStringField(
+        Fields,
+        'targetParamSignature',
+        TargetSymbol.ParamSignature
+      );
     AppendJsonStringField(
       Fields,
       'targetOwnerUnitId',

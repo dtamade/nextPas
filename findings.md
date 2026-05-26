@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 73 把 member-call overload binding 从 arity identity 推进到最小 typed argument relation：
+  `Worker.Pick(1)` 会绑定到 `TWorker.Pick` 的 `i` signature，`Worker.Pick(1 = 1)` 会绑定到
+  `b` signature。
+- `TSemanticSymbol` 现在有 `ParamSignature`；class method declaration 通过
+  `GetParamSignature(...)` 写入 compact signature，当前编码为 `i` / `b` / `s` / `r` / `p`。
+- member-call target lookup 在同 owner / 同 qualified name / 同 `ParamCount` 有多个 candidate
+  时，会用 call argument signature 做唯一匹配，并继续用 method body declaration signature
+  做二次确认；无法推断 argument type 或同签名不唯一时仍保守不绑定。
+- `querySymbols` / `queryDefinitions` 现在分别投影 `paramSignature` / `targetParamSignature`；
+  stage0 member-call gate 已固定 integer/boolean 同 arity overload 的 target signature。
+- Batch 73 仍不声明 implicit conversion ranking、default parameter、var/out compatibility、
+  visibility checking、virtual/override dispatch、record/property receiver 或完整 Pascal member resolver。
 - Batch 72 把 class method overload 的 member-call target identity 从“同名 method + body 参数数”
   补强为“同名同 owner 同 `ParamCount` method symbol”：`Worker.Pick;` 与 `Worker.Pick(1);`
   现在会分别绑定到 0 参与 1 参的 `TWorker.Pick` method symbol。

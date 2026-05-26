@@ -15,6 +15,64 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 73 Member Typed Overload Binding
+
+### Goal
+
+关闭 Batch 72 后的下一条 overload 缺口：当同一个 class 内存在同参数个数但参数类型不同的
+method overload 时，例如 `TWorker.Pick(Integer)` 与 `TWorker.Pick(Boolean)`，`Worker.Pick(1)`
+和 `Worker.Pick(1 = 1)` 应分别绑定到对应参数签名的 method symbol，而不是因为 arity 相同而
+保守不绑定。
+
+本批次新增并冻结：
+
+- `TSemanticSymbol.ParamSignature`，作为当前最小 callable/member 参数类型签名。
+- class method symbol 同步记录 `ParamCount` 与 `ParamSignature`。
+- member-call lookup 在同 owner / 同 qualified name / 同 arity 有多个候选时，用 call argument
+  signature 做二次唯一匹配。
+- `queryDefinitions` / `querySymbols` 对 target / symbol 参数签名做只读投影。
+
+### Architecture Decision
+
+这是最小 typed overload binding，不是完整 Pascal overload resolver：
+
+- argument signature 只来自当前 `InferExpressionType(...)` 已能证明的表达式类型。
+- 当前签名仍是 compact semantic signature：`i` / `b` / `s` / `r` / `p`。
+- 如果 call argument type 无法推断，或同签名候选不唯一，保持不绑定。
+- 不实现 implicit conversion ranking、default parameter、open array、var/out compatibility、
+  visibility、virtual dispatch 或 property/record/array receiver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 Integer / Boolean 同 arity member overload focused regression
+- [x] 为 `TSemanticSymbol` 增加 `ParamSignature`
+- [x] 为 class method symbol 写入 `ParamSignature`
+- [x] 从 member call arguments 推导 compact argument signature
+- [x] exact member lookup 在同 arity 多候选时按 signature 唯一匹配
+- [x] 扩展 `queryDefinitions` / `querySymbols` 参数签名投影与 stage0 gate
+- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test build 曾失败在 `Identifier idents no member "ParamSignature"`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+  `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 type-based overload ranking
+- 不实现 implicit conversion / default parameter / var-out compatibility
+- 不实现 visibility checking 或 virtual/override dispatch
+- 不实现 record/property/array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 72 Member Overload Target Identity
 
 ### Goal
