@@ -71,6 +71,9 @@ function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
 function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
 function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
+function platform_clock_monotonic_ns_u64: UInt64;
+function platform_clock_realtime_ns_u64: UInt64; inline;
+function platform_clock_monotonic_resolution_ns_u64: UInt64;
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
@@ -477,6 +480,20 @@ begin
   Result := darwin_scale_units(mach_absolute_time, GDarwinTimebaseDenom, GDarwinTimebaseNumer);
 end;
 
+function platform_clock_monotonic_ns_u64: UInt64;
+begin
+  Result := darwin_mach_monotonic_ns;
+end;
+
+function platform_clock_realtime_ns_u64: UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_clock_realtime_now(@LTime) <> 0 then
+    Exit(0);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+end;
+
 function darwin_mach_monotonic_resolution_ns: UInt64;
 begin
   darwin_ensure_timebase;
@@ -489,6 +506,11 @@ begin
 
   if Result = 0 then
     Result := 1;
+end;
+
+function platform_clock_monotonic_resolution_ns_u64: UInt64;
+begin
+  Result := darwin_mach_monotonic_resolution_ns;
 end;
 
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32;

@@ -5208,3 +5208,46 @@ Hello from nextPas!
   - Full:
     - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`
+
+### Phase 14: Platform Time Host Clock Ns Helper Ownership
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 先核对 live truth：`main` 继续是当前 platform 主线；旧
+    `codex/platform-time-integration @ 02be065` 仍未并入 `main`，而且不是这轮 ownerization 的落点。
+  - 先把 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/` 扩成新的 RED gate，
+    要求 `linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 都继续暴露
+    `platform_clock_monotonic_ns_u64`、`platform_clock_realtime_ns_u64`、
+    `platform_clock_monotonic_resolution_ns_u64`。
+  - 同一个 gate 现在还会禁止 `platform.time` consumer 继续直接消费
+    `platform_clock_monotonic_now` / `platform_clock_realtime_now` /
+    `platform_clock_monotonic_getres`、`darwin_mach_monotonic_*`、`windows_qpc_*` 与
+    `windows_filetime_now_unix_ns`。
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增共享
+    `platform_posix_timespec_to_ns_u64`，把 POSIX host ffi owner 复用的饱和 `timespec -> ns`
+    语义收成单一事实源。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi`、`darwin.ffi`、`freebsd.ffi`、`unix.ffi`、`windows.ffi` 全部补齐统一命名的
+    `platform_clock_*_ns_u64` helper。
+  - `core/src/nextpas.core.platform.time.pas` 的 Unix / Darwin / Windows 分支现在统一改为薄
+    delegation，只消费新的高层 host-owned clock helper。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose host-owned monotonic nanosecond helper for platform.time: platform_clock_monotonic_ns_u64`
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - `make -C core test`
+    - `make -C core examples`
+    - `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`
+- Review:
+  - 这批把 `platform.time` 从“消费宿主 clock helper 的实现层”再推进成“只消费宿主 clock 结果的薄
+    contract 层”，host ffi owner 的时钟 ownership 更完整了。
+  - 下一步更值的是评估 `platform.time` public pure helper 是否需要继续抽成共享 math owner，或者转向
+    `platform.sync` / `platform.thread` 剩余的 host policy ownerization。

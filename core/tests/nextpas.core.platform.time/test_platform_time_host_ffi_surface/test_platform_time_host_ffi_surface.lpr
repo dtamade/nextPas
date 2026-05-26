@@ -68,6 +68,12 @@ begin
     AHostLabel + ' must expose host realtime clock helper for platform.time');
   CheckTokenPresent(ASource, 'platform_clock_monotonic_getres',
     AHostLabel + ' must expose host monotonic clock resolution helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_clock_monotonic_ns_u64',
+    AHostLabel + ' must expose host-owned monotonic nanosecond helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_clock_realtime_ns_u64',
+    AHostLabel + ' must expose host-owned realtime nanosecond helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_clock_monotonic_resolution_ns_u64',
+    AHostLabel + ' must expose host-owned monotonic resolution nanosecond helper for platform.time');
 end;
 
 procedure TestPlatformTimeUsesHostClockFFI;
@@ -127,6 +133,12 @@ begin
     'windows.ffi must own the FILETIME unix epoch offset token for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_nanoseconds_per_tick',
     'windows.ffi must own the FILETIME tick size token for platform.time');
+  CheckTokenPresent(LWindowsSource, 'platform_clock_monotonic_ns_u64',
+    'windows.ffi must expose host-owned monotonic nanosecond helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'platform_clock_realtime_ns_u64',
+    'windows.ffi must expose host-owned realtime nanosecond helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'platform_clock_monotonic_resolution_ns_u64',
+    'windows.ffi must expose host-owned monotonic resolution nanosecond helper for platform.time');
 
   CheckTokenPresent(LTimeSource, 'nextpas.core.platform.posix.ffi',
     'platform.time must use shared POSIX ffi declarations');
@@ -142,22 +154,12 @@ begin
     'platform.time must bind generic Unix host-owned clock ids through unix.ffi');
   CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.ffi',
     'platform.time must bind Windows clock APIs through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_now',
-    'platform.time must consume host-owned monotonic clock helper');
-  CheckTokenPresent(LTimeSource, 'platform_clock_realtime_now',
-    'platform.time must consume host-owned realtime clock helper');
-  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_getres',
-    'platform.time must consume host-owned monotonic clock resolution helper');
-  CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_ns',
-    'platform.time must consume Darwin monotonic clock helper through darwin.ffi');
-  CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_resolution_ns',
-    'platform.time must consume Darwin monotonic resolution helper through darwin.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_qpc_frequency_u64',
-    'platform.time must consume Windows QPC frequency helper through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_qpc_counter_u64',
-    'platform.time must consume Windows QPC counter helper through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_filetime_now_unix_ns',
-    'platform.time must consume Windows FILETIME realtime helper through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_ns_u64',
+    'platform.time must consume host-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeSource, 'platform_clock_realtime_ns_u64',
+    'platform.time must consume host-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_resolution_ns_u64',
+    'platform.time must consume host-owned monotonic resolution nanosecond helper');
   Check(Pos('mach_absolute_time(', LTimeSource) = 0,
     'platform.time must not call mach_absolute_time directly in the consumer');
   Check(Pos('mach_timebase_info(', LTimeSource) = 0,
@@ -172,10 +174,26 @@ begin
     'platform.time must not call clock_gettime directly in the consumer');
   Check(Pos('clock_getres(', LTimeSource) = 0,
     'platform.time must not call clock_getres directly in the consumer');
+  Check(Pos('platform_clock_monotonic_now', LTimeSource) = 0,
+    'platform.time must not consume raw host monotonic timespec helpers in the consumer');
+  Check(Pos('platform_clock_realtime_now', LTimeSource) = 0,
+    'platform.time must not consume raw host realtime timespec helpers in the consumer');
+  Check(Pos('platform_clock_monotonic_getres', LTimeSource) = 0,
+    'platform.time must not consume raw host monotonic resolution timespec helpers in the consumer');
   Check(Pos('platform_clock_monotonic_id', LTimeSource) = 0,
     'platform.time must not consume raw host monotonic clock ids in the consumer');
   Check(Pos('platform_clock_realtime_id', LTimeSource) = 0,
     'platform.time must not consume raw host realtime clock ids in the consumer');
+  Check(Pos('darwin_mach_monotonic_ns', LTimeSource) = 0,
+    'platform.time must not consume Darwin raw monotonic helper directly in the consumer');
+  Check(Pos('darwin_mach_monotonic_resolution_ns', LTimeSource) = 0,
+    'platform.time must not consume Darwin raw monotonic resolution helper directly in the consumer');
+  Check(Pos('windows_qpc_frequency_u64', LTimeSource) = 0,
+    'platform.time must not consume Windows QPC frequency helper directly in the consumer');
+  Check(Pos('windows_qpc_counter_u64', LTimeSource) = 0,
+    'platform.time must not consume Windows QPC counter helper directly in the consumer');
+  Check(Pos('windows_filetime_now_unix_ns', LTimeSource) = 0,
+    'platform.time must not consume Windows FILETIME realtime helper directly in the consumer');
   Check(Pos('windows_filetime_unix_epoch_offset_100ns', LTimeSource) = 0,
     'platform.time must not consume raw FILETIME epoch offset tokens in the consumer');
   Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeSource) = 0,

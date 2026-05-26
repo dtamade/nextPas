@@ -1675,3 +1675,31 @@
 - 当前证据边界仍要诚实：这批新增了 Linux runtime proof 和 Win64 compile-only，但没有新增真实
   Windows runtime 执行证据，所以 Windows 语义目前仍主要由 source-surface contract 与 compile-only
   proof 覆盖。
+
+## 2026-05-27 Follow-up Findings 14
+
+- `platform.time` 前几轮虽然已经把 raw `clock_gettime` / `clock_getres`、Darwin `mach_*`、Windows
+  QPC / FILETIME declaration 都收回到了 nextPas-owned ffi，但 consumer 里还残留一层更高阶的宿主拼装：
+  POSIX 分支自己拿 `timespec` 再转纳秒，Darwin 分支直接点 `darwin_mach_monotonic_*`，Windows 分支直接
+  点 `windows_qpc_*` / `windows_filetime_now_unix_ns`。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 都继续拥有统一命名的高层时钟
+  helper：`platform_clock_monotonic_ns_u64`、`platform_clock_realtime_ns_u64`、
+  `platform_clock_monotonic_resolution_ns_u64`。`platform.time` consumer 现在只做薄 delegation，
+  不再直接消费 raw timespec helper、Darwin mach monotonic helper，或 Windows QPC/FILETIME helper。
+- shared `posix.ffi` 这轮新增 `platform_posix_timespec_to_ns_u64`，让所有 POSIX host ffi owner 复用同一条
+  饱和 `timespec -> ns` 语义，而不是各自再复制一份秒/纳秒拼接与溢出保护逻辑。
+- `test_platform_time_host_ffi_surface` 这轮也一起升级：它现在不仅要求 host ffi owner 暴露
+  `platform_clock_*_ns_u64`，还禁止 `platform.time` 回退去直接消费
+  `platform_clock_monotonic_now` / `platform_clock_realtime_now` /
+  `platform_clock_monotonic_getres`、`darwin_mach_monotonic_*`，或 `windows_qpc_*` /
+  `windows_filetime_now_unix_ns`。
+- fresh focused proof 已拿到：
+  `test_platform_time_host_ffi_surface`、`test_platform_time_helpers`、`test_platform_simulated_host_compile_matrix`
+  通过。这说明新的 owner boundary 至少在 Linux runtime 与 Darwin/Android/FreeBSD/generic Unix
+  compile-only proof 上没有被打坏。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与 fresh
+  `bash build/verify_local.sh` 也都已通过；official envelope 继续保持
+  `corePlatformTimeHostFfiSurfaceCheck":"pass"` 与
+  `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
+- 当前证据边界仍要诚实：这轮没有新增 Darwin / FreeBSD / Android / Windows runtime 证据，所以这些宿主
+  仍主要由 source-surface contract 与 compile-only proof 覆盖。

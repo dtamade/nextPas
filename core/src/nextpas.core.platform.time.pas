@@ -203,41 +203,18 @@ end;
 {$IFDEF NEXTPAS_POSIX_CLOCK}
 
 function platform_monotonic_ns: UInt64;
-var
-  LTs: timespec;
 begin
-  if platform_clock_monotonic_now(@LTs) <> 0 then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  Result := platform_timespec_to_ns(LTs.tv_sec, LTs.tv_nsec);
+  Result := platform_clock_monotonic_ns_u64;
 end;
 
 function platform_realtime_ns: UInt64;
-var
-  LTs: timespec;
 begin
-  if platform_clock_realtime_now(@LTs) <> 0 then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  Result := platform_timespec_to_ns(LTs.tv_sec, LTs.tv_nsec);
+  Result := platform_clock_realtime_ns_u64;
 end;
 
 function platform_monotonic_resolution_ns: UInt64;
-var
-  LTs: timespec;
 begin
-  if platform_clock_monotonic_getres(@LTs) <> 0 then
-  begin
-    Result := 1;
-    Exit;
-  end;
-  Result := platform_timespec_to_ns(LTs.tv_sec, LTs.tv_nsec);
-  if Result = 0 then
-    Result := 1;
+  Result := platform_clock_monotonic_resolution_ns_u64;
 end;
 
 {$ENDIF}
@@ -248,24 +225,17 @@ end;
 {$IFDEF NEXTPAS_MACOS}
 function platform_monotonic_ns: UInt64;
 begin
-  Result := darwin_mach_monotonic_ns;
+  Result := platform_clock_monotonic_ns_u64;
 end;
 
 function platform_realtime_ns: UInt64;
-var
-  LTs: timespec;
 begin
-  if platform_clock_realtime_now(@LTs) <> 0 then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  Result := platform_timespec_to_ns(LTs.tv_sec, LTs.tv_nsec);
+  Result := platform_clock_realtime_ns_u64;
 end;
 
 function platform_monotonic_resolution_ns: UInt64;
 begin
-  Result := darwin_mach_monotonic_resolution_ns;
+  Result := platform_clock_monotonic_resolution_ns_u64;
 end;
 
 {$ENDIF}
@@ -280,29 +250,18 @@ end;
  *       避免 counter * 1e9 的 UInt64 溢出
  *}
 function platform_monotonic_ns: UInt64;
-var
-  LCounter: UInt64;
-  LFreq: UInt64;
 begin
-  if not windows_qpc_counter_u64(LCounter) then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  LFreq := windows_qpc_frequency_u64;
-  Result := platform_qpc_to_ns(UInt64(LCounter), LFreq);
+  Result := platform_clock_monotonic_ns_u64;
 end;
 
 function platform_realtime_ns: UInt64;
 begin
-  Result := windows_filetime_now_unix_ns;
+  Result := platform_clock_realtime_ns_u64;
 end;
 
 function platform_monotonic_resolution_ns: UInt64;
 begin
-  Result := platform_resolution_from_frequency_ns(windows_qpc_frequency_u64);
-  if Result = 0 then
-    Result := 1;
+  Result := platform_clock_monotonic_resolution_ns_u64;
 end;
 
 {$ENDIF}

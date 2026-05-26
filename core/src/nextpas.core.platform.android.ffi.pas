@@ -64,6 +64,9 @@ function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
 function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
 function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
+function platform_clock_monotonic_ns_u64: UInt64; inline;
+function platform_clock_realtime_ns_u64: UInt64; inline;
+function platform_clock_monotonic_resolution_ns_u64: UInt64; inline;
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
@@ -206,6 +209,35 @@ begin
     Result := 0
   else
     Result := platform_posix_errno_value;
+end;
+
+function platform_clock_monotonic_ns_u64: UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_clock_monotonic_now(@LTime) <> 0 then
+    Exit(0);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+end;
+
+function platform_clock_realtime_ns_u64: UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_clock_realtime_now(@LTime) <> 0 then
+    Exit(0);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+end;
+
+function platform_clock_monotonic_resolution_ns_u64: UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_clock_monotonic_getres(@LTime) <> 0 then
+    Exit(1);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+  if Result = 0 then
+    Result := 1;
 end;
 
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;

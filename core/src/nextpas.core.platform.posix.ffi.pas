@@ -158,6 +158,8 @@ type
   end;
   {$ENDIF}
 
+function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
@@ -201,5 +203,28 @@ function pthread_cond_signal(cond: Pointer): Int32; cdecl; external 'pthread' na
 function pthread_cond_broadcast(cond: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_broadcast';
 
 implementation
+
+const
+  PLATFORM_POSIX_NANOSECONDS_PER_SECOND = UInt64(1000000000);
+
+function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+var
+  LSecNs: UInt64;
+  LNsec: UInt64;
+begin
+  if ATime = nil then
+    Exit(0);
+  if (ATime^.tv_sec < 0) or (ATime^.tv_nsec < 0) then
+    Exit(0);
+  if UInt64(ATime^.tv_sec) > High(UInt64) div PLATFORM_POSIX_NANOSECONDS_PER_SECOND then
+    Exit(High(UInt64));
+
+  LSecNs := UInt64(ATime^.tv_sec) * PLATFORM_POSIX_NANOSECONDS_PER_SECOND;
+  LNsec := UInt64(ATime^.tv_nsec);
+  if LSecNs > High(UInt64) - LNsec then
+    Exit(High(UInt64));
+
+  Result := LSecNs + LNsec;
+end;
 
 end.

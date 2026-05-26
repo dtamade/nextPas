@@ -7098,3 +7098,65 @@ Completed; verification passed.
 - 这批不新增 Darwin / FreeBSD / Android runtime 证据
 - 这批不改 `platform.thread` / `platform.sync` public API
 - 这批不把 nextPas 的 timeout/error mapping 直接塞进 ffi；收回的是 Windows ABI type / thunk / scalar leakage
+
+## Addendum: 2026-05-27 Platform Time Host Clock Ns Helper Ownership
+
+### Goal
+
+继续把 `platform.time` 的宿主时钟 ownership 再收紧一层：
+
+- host ffi owner 不只暴露 raw `timespec` / mach / QPC / FILETIME helper
+- 各宿主 ffi owner 直接暴露统一命名的高层 clock result helper
+- `platform.time` consumer 尽量只保留 public clock contract 和对 host helper 的薄 delegation
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 统一继续拥有：
+  - `platform_clock_monotonic_ns_u64`
+  - `platform_clock_realtime_ns_u64`
+  - `platform_clock_monotonic_resolution_ns_u64`
+- shared `posix.ffi` 允许继续拥有所有 POSIX 宿主都复用的饱和 `timespec -> ns` helper；这类 helper 不携带
+  host capability truth，也不回退成 consumer 本地逻辑复制。
+- `platform.time` 继续保留 public pure helper API 和 public clock contract，但 consumer 分支不再直接消费
+  `platform_clock_monotonic_now` / `platform_clock_realtime_now` /
+  `platform_clock_monotonic_getres`、Darwin `mach_*` helper，或 Windows `windows_qpc_*` /
+  `windows_filetime_now_unix_ns`。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 host ffi owner 暴露 `platform_clock_*_ns_u64`
+- [x] RED：禁止 `platform.time` consumer 继续直接消费 raw timespec/Darwin/Windows clock helper
+- [x] 在 `posix.ffi` 增加共享 `platform_posix_timespec_to_ns_u64`
+- [x] 在 Linux/Android/Darwin/FreeBSD/Unix/Windows ffi owner 中补齐 `platform_clock_*_ns_u64`
+- [x] 让 `platform.time` 改成薄 delegation
+- [x] 回写文档与跟踪文件
+- [x] 运行 fresh `make -C core test`
+- [x] 运行 fresh `make -C core examples`
+- [x] 运行 fresh `make -C core benchmarks`
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在 `platform_clock_monotonic_ns_u64`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `verify-local=pass` 与 `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 `platform.time` public API
+- 这批不宣称 Darwin / FreeBSD / Android / Windows 新增 runtime truth
+- 这批不把 `TDuration`、`TInstant`、`TStopwatch` 或其他 L1 时间抽象带回 platform
