@@ -1821,6 +1821,65 @@ begin
   end;
 end;
 
+procedure CheckImplicitSelfBareMethodCallDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program ImplicitSelfBareMethodCallDeferred;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '    procedure Touch;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-implicit-self-bare-method-call-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-implicit-self-bare-method-call-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-implicit-self-bare-method-call-model-status:' +
+        Model.Status);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckMemberParameterCallTypeMismatchDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -2203,6 +2262,7 @@ begin
     CheckMemberVariableCallTypeMismatchDiagnostic;
     CheckBareParameterCallTypeMismatchDiagnostic;
     CheckBareUnknownCallableDiagnostic;
+    CheckImplicitSelfBareMethodCallDeferred;
     CheckMemberParameterCallTypeMismatchDiagnostic;
     CheckBareFunctionResultTypeMismatchDeferred;
     CheckClassMemberCallBinding;

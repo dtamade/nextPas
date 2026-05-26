@@ -186,6 +186,7 @@ type
       const AMessage: string;
       const AByteOffset: LongInt
     );
+    function IsSimpleIdentifierName(const AName: string): Boolean;
     function RegisterSymbol(
       const AName: string;
       const AKind: string;
@@ -1050,7 +1051,8 @@ begin
   if (RootNameCount = 0) and (ImportedNameCount = 0) then
   begin
     KnownSymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
-    if (KnownSymbolId = 0) and (FModel.FindTypeByName(AName) = 0) and
+    if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
+      (FModel.FindTypeByName(AName) = 0) and
       (not IsBuiltinProcedure(AName)) then
       AResolutionFailureKind := 'unknown-callable';
     Exit(False);
@@ -1968,7 +1970,8 @@ begin
           'argument type mismatch for "' + ANode.Text + '"',
           ANode.ByteOffset
         )
-      else if SameText(ResolutionFailureKind, 'unknown-callable') then
+      else if SameText(ResolutionFailureKind, 'unknown-callable') and
+        (MethodClass = '') then
         EmitSemaError(
           'sema.unknown-callable',
           'unknown callable "' + ANode.Text + '"',
@@ -2191,6 +2194,28 @@ procedure TSemanticAnalyzer.EmitSemaError(
 begin
   FDiagnostics.EmitError(ACode, 'sema', FRootFileId, AByteOffset, AMessage);
   FModel.MarkFailure;
+end;
+
+function TSemanticAnalyzer.IsSimpleIdentifierName(const AName: string): Boolean;
+var
+  I: LongInt;
+  Ch: Char;
+begin
+  if AName = '' then
+    Exit(False);
+
+  Ch := AName[1];
+  if not (Ch in ['A'..'Z', 'a'..'z', '_']) then
+    Exit(False);
+
+  for I := 2 to Length(AName) do
+  begin
+    Ch := AName[I];
+    if not (Ch in ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+      Exit(False);
+  end;
+
+  Result := True;
 end;
 
 function TSemanticAnalyzer.RegisterSymbol(
