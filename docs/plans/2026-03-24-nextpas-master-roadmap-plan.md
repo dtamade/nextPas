@@ -205,6 +205,10 @@
   `Flag: Boolean; Pick(Flag);` 这类 root-owned 单一 target mismatch 会发 `sema.type-mismatch`，
   但 class/record/Pointer/Text/Variant/declared alias、成员访问、函数结果、imported target 与
   多 overload signature no-match 仍保持 deferred。
+  `Batch 81` 继续把这条 evidence 扩到当前 callable scope 中已声明为内建标量/字符串类型的参数：
+  `procedure Run(Flag: Boolean); begin Pick(Flag); end;` 现在同样会发 `sema.type-mismatch`；
+  为守住边界，stable evidence 明确限制为 `variable` / `parameter` symbol，函数返回值 symbol
+  即使有 builtin return type 也不作为 diagnostic evidence，且 signature mismatch 不注册错误 binding。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

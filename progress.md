@@ -3,6 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 81 parameter call type mismatch evidence)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 80 的 `sema.type-mismatch` evidence 从 root/current-scope 变量推进到 callable scope
+    中已声明为内建标量/字符串类型的参数。
+- Baseline:
+  - `procedure Run(Flag: Boolean); begin Pick(Flag); end;` 旧 call binding walker 不会进入
+    `Run` 的 callable scope，参数 symbol 也没有 `TypeId`，因此 `Flag` 不能作为稳定 evidence。
+  - Batch 80 的 stable evidence 只看 symbol `TypeId`，会把 `function Flag: Boolean` 这类函数返回值
+    symbol 误当成稳定变量事实。
+- Actions taken:
+  - 先写 focused RED，要求 bare/member 两条参数路径都发 `sema.type-mismatch`、model status
+    `failure`、失败调用不注册 binding。
+  - 新增 function-result guard focused regression，要求 bare function result mismatch 不发
+    `sema.type-mismatch`。
+  - `TProcedureBodyEntry` 记录 callable `ScopeId`；`SeedCallBindingsInNode(...)` 遍历 declaration body
+    时切到该 scope。
+  - procedure/function parameter symbol 现在写入声明 type id。
+  - `ExpressionTypeFactIsStable(...)` 只接受 `variable` / `parameter` symbol 的 builtin scalar/string
+    type id，function result 继续 deferred。
+  - bare single-target call 在 argument signature 已知但缺少 stable evidence 且 signature 不匹配时，
+    不再注册错误 `call` binding。
+  - 新增 `type-mismatch-parameter-call-check` 与 `member-type-mismatch-parameter-call-check` stage0 gates。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-bare-parameter-call-type-mismatch-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `type-mismatch-parameter-call-check=pass`、
+    `member-type-mismatch-parameter-call-check=pass`、`semantic-call-bindings-check=pass`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批把 scope/value evidence 往 callable 参数推进，但没有把 function result 或 broad
+    no-matching-overload 纳入诊断；function result guard 防止 builtin return type 被误当成稳定变量事实，
+    并保持不诊断、不绑定的 deferred 边界。
+
 ## Session: 2026-05-26 (Batch 80 scalar variable call type mismatch evidence)
 
 - **Status:** completed

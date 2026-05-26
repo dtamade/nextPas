@@ -18,6 +18,7 @@ type
     Body: TGreenNode;
     Decl: TGreenNode;
     OwnerUnitId: string;
+    ScopeId: LongInt;
   end;
 
   TParamSnapshot = record
@@ -80,6 +81,9 @@ type
     procedure RegisterProcedureBody(const AName: string;
       const ABody: TGreenNode; const ADecl: TGreenNode;
       const AOwnerUnitId: string);
+    function ProcedureBodyScopeIdForDecl(const ADecl: TGreenNode): LongInt;
+    function ParamDeclTypeId(const AParamDecl: TGreenNode;
+      const AOwnerUnitId: string): LongInt;
     function LookupProcedureBody(const AName: string;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;
@@ -832,6 +836,7 @@ begin
         FProcedureBodies[Index].Body := ABody;
         FProcedureBodies[Index].Decl := ADecl;
         FProcedureBodies[Index].OwnerUnitId := AOwnerUnitId;
+        FProcedureBodies[Index].ScopeId := FCurrentScopeId;
         Exit;
       end;
     end;
@@ -841,6 +846,37 @@ begin
   FProcedureBodies[NextIndex].Body := ABody;
   FProcedureBodies[NextIndex].Decl := ADecl;
   FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;
+  FProcedureBodies[NextIndex].ScopeId := FCurrentScopeId;
+end;
+
+function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
+  const ADecl: TGreenNode
+): LongInt;
+var
+  Index: LongInt;
+begin
+  Result := 0;
+  if ADecl = nil then
+    Exit;
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if FProcedureBodies[Index].Decl = ADecl then
+      Exit(FProcedureBodies[Index].ScopeId);
+end;
+
+function TSemanticAnalyzer.ParamDeclTypeId(
+  const AParamDecl: TGreenNode;
+  const AOwnerUnitId: string
+): LongInt;
+var
+  TypeChild: TGreenNode;
+begin
+  Result := 0;
+  if (AParamDecl = nil) or (AParamDecl.ChildCount <= 0) then
+    Exit;
+  TypeChild := AParamDecl.ChildAt(0);
+  if (TypeChild = nil) or (TypeChild.NodeKind <> gnkIdentifier) then
+    Exit;
+  Result := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -977,14 +1013,15 @@ begin
   begin
     if RootMatchCount = 1 then
     begin
-      if AHasTypeMismatchEvidence and AHasArgSignature and
+      if AHasArgSignature and
         (not DeclParamSignatureMatchesArgs(
           FProcedureBodies[RootMatchIndex].Decl,
           AArgSignature,
           AArgCount
         )) then
       begin
-        AResolutionFailureKind := 'type-mismatch';
+        if AHasTypeMismatchEvidence then
+          AResolutionFailureKind := 'type-mismatch';
         Exit(False);
       end;
       RootSignatureMatchIndex := RootMatchIndex
@@ -1055,6 +1092,9 @@ begin
         if SymId <= 0 then
           Exit(False);
         Sym := FModel.SymbolAt(SymId - 1);
+        if (not SameText(Sym.Kind, 'variable')) and
+          (not SameText(Sym.Kind, 'parameter')) then
+          Exit(False);
         Exit(TypeIdHasStableScalarFact(Sym.TypeId));
       end;
     gnkBinaryExpression, gnkUnaryExpression:
@@ -1825,6 +1865,7 @@ var
   ArgIndex: LongInt;
   ArgSignature: string;
   BodyNode: TGreenNode;
+  CallableScopeId: LongInt;
   Child: TGreenNode;
   DeclNode: TGreenNode;
   HasArgSignature: Boolean;
@@ -1836,16 +1877,21 @@ var
   OwnerUnitId: string;
   QualifiedPos: LongInt;
   ResolutionFailureKind: string;
+  SavedScopeId: LongInt;
 begin
   if ANode = nil then
     Exit;
 
   MethodClass := ACurrentMethodClass;
+  SavedScopeId := FCurrentScopeId;
   if ANode.NodeKind in [gnkProcedureDecl, gnkFunctionDecl] then
   begin
     QualifiedPos := Pos('.', ANode.Text);
     if QualifiedPos > 1 then
       MethodClass := Copy(ANode.Text, 1, QualifiedPos - 1);
+    CallableScopeId := ProcedureBodyScopeIdForDecl(ANode);
+    if CallableScopeId > 0 then
+      FCurrentScopeId := CallableScopeId;
   end;
 
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
@@ -1929,6 +1975,7 @@ begin
     if Child <> nil then
       SeedCallBindingsInNode(Child, MethodClass);
   end;
+  FCurrentScopeId := SavedScopeId;
 end;
 
 procedure TSemanticAnalyzer.SeedCallBindings;
@@ -3146,6 +3193,7 @@ var
   Index, J: LongInt;
   Child, ParamChild: TGreenNode;
   CallableScopeId, SavedScopeId: LongInt;
+  ParamTypeId: LongInt;
   ParamCount: LongInt;
 begin
   if ANode = nil then
@@ -3171,7 +3219,8 @@ begin
         ParamChild := Child.ChildAt(J);
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
         begin
-          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
+          ParamTypeId := ParamDeclTypeId(ParamChild, AOwnerUnitId);
+          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, ParamTypeId,
             ParamChild.ByteOffset);
           FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
           Inc(ParamCount);
@@ -3198,6 +3247,7 @@ var
   J: LongInt;
   Child, ParamChild: TGreenNode;
   CallableScopeId, SavedScopeId: LongInt;
+  ParamTypeId: LongInt;
   ParamCount: LongInt;
 begin
   if ANode = nil then
@@ -3233,7 +3283,8 @@ begin
         ParamChild := Child.ChildAt(TypeId);
         if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) then
         begin
-          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, 0,
+          ParamTypeId := ParamDeclTypeId(ParamChild, AOwnerUnitId);
+          FModel.AddSymbol(ParamChild.Text, 'parameter', AOwnerUnitId, ParamTypeId,
             ParamChild.ByteOffset);
           FModel.SetSymbolScope(FModel.SymbolCount, CallableScopeId);
           Inc(ParamCount);

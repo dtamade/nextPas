@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 81 把 `sema.type-mismatch` evidence 从变量扩展到当前 callable scope 中已声明为内建
+  标量/字符串类型的参数：`procedure Run(Flag: Boolean); begin Pick(Flag); end;` 调
+  `Pick(Integer)` 现在会失败并且不注册该失败 call binding。
+- `TProcedureBodyEntry` 现在记录 callable scope id，call binding walker 进入 procedure/function
+  declaration body 时会切到对应 scope，让参数 lookup 不再退化到 root scope。
+- parameter symbol 现在记录声明 type id；stable scalar evidence 明确限制为 `variable` /
+  `parameter` symbol，`function Flag: Boolean` 这类函数返回值 symbol 继续不作为 diagnostic evidence。
+- bare single-target call 若 argument signature 已知但缺少 stable evidence 且 signature 不匹配，会保持
+  no diagnostic / no binding 的 deferred 边界，避免把函数返回值 mismatch 误注册为有效 call binding。
+- Batch 81 新增 `type-mismatch-parameter-call-check` 与
+  `member-type-mismatch-parameter-call-check`，用 dedicated fixtures 固定 bare/member 参数
+  `sema.type-mismatch` projection 与 final envelope。
 - Batch 80 把 `sema.type-mismatch` evidence 从 literal/纯表达式扩展到当前 scope 中已声明为内建
   标量/字符串类型的变量参数：`Flag: Boolean; Pick(Flag);` 调 `Pick(Integer)` 现在会失败并且不注册
   binding。

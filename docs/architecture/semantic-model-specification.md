@@ -86,8 +86,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `ParamSignature`；name-only call binding 会把默认参数语法折算成
   `requiredParamCount..ParamCount` 的可接受 arity 区间，并只用当前已提供参数的 compact
   argument signature 前缀选择唯一 target；root-owned 单一 target 且当前参数签名来自 literal/纯表达式
-  或已声明内建标量/字符串变量等稳定事实并可证明不兼容时发 `sema.type-mismatch`，imported target、
-  class/record/alias 变量、成员/函数结果相关 no-match、无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发 `sema.type-mismatch`，imported target、
+  class/record/alias 变量/参数、成员/函数结果相关 no-match、无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
@@ -106,7 +106,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   class method declaration 的 parameter list 会进入
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
-  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量等稳定事实并可证明不兼容时发
+  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发
   `sema.type-mismatch`，若同 arity 有多个候选，则用当前可推断的 argument signature 做唯一匹配，并用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
@@ -292,7 +292,7 @@ candidate collection
   - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
 - `sema.type-mismatch`
   - 先用于 bare procedure/function call 与 direct member-call 中，root-owned 单一 target 的 arity
-    已匹配、当前 argument signature 来自稳定 literal/纯表达式或已声明内建标量/字符串变量事实且与
+    已匹配、当前 argument signature 来自稳定 literal/纯表达式或已声明内建标量/字符串变量/参数事实且与
     target param signature 明确不兼容的场景
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
