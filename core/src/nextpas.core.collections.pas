@@ -59,7 +59,7 @@ type
   ICollection = nextpas.core.collections.intf.ICollection;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
-  IGrowthStrategy          = nextpas.core.collections.abstract.IGrowthStrategy;
+  IGrowthStrategy          = nextpas.core.collections.intf.IGrowthStrategy;
   TGrowthStrategy          = nextpas.core.collections.abstract.TGrowthStrategy;
   TGrowthStrategyClass     = nextpas.core.collections.abstract.TGrowthStrategyClass;
   TCustomGrowthStrategy    = nextpas.core.collections.abstract.TCustomGrowthStrategy;

@@ -12,6 +12,7 @@ uses
   nextpas.core.math,
   nextpas.core.mem.utils,
   nextpas.core.collections.base,
+  nextpas.core.collections.abstract,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,

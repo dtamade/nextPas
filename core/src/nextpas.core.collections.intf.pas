@@ -14,7 +14,12 @@ uses
 
 type
   ICollection = nextpas.core.collections.base.ICollection;
-  IGrowthStrategy = nextpas.core.collections.base.IGrowthStrategy;
+
+  { IGrowthStrategy 增长策略接口 }
+  IGrowthStrategy = interface
+  ['{FC9AB81C-B79D-425C-A453-2137C359CF83}']
+    function GetGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;
+  end;
 
   { IArray 数组接口 }
   generic IArray<T> = interface(specialize IGenericCollection<T>)

@@ -3,6 +3,7 @@ program test_abstract;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.testing,
   nextpas.core.collections.abstract;
 
@@ -34,9 +35,56 @@ begin
     'aligned wrapper default alignment');
 end;
 
+function ReadSourceFile(const APath: string): string;
+var
+  LFile: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(LFile, APath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + #10;
+    end;
+  finally
+    Close(LFile);
+  end;
+end;
+
+function ResolveSourcePath(const APathFromTest: string; const APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
+procedure TestGrowthStrategyInterfaceLivesInIntf;
+var
+  LBaseSource: string;
+  LIntfSource: string;
+begin
+  LBaseSource := ReadSourceFile(ResolveSourcePath(
+    '../../../src/nextpas.core.collections.base.pas',
+    'core/src/nextpas.core.collections.base.pas'));
+  LIntfSource := ReadSourceFile(ResolveSourcePath(
+    '../../../src/nextpas.core.collections.intf.pas',
+    'core/src/nextpas.core.collections.intf.pas'));
+
+  Check(Pos('IGrowthStrategy = interface', LIntfSource) > 0,
+    'IGrowthStrategy interface definition should live in collections.intf');
+  Check(Pos('IGrowthStrategy = interface', LBaseSource) = 0,
+    'collections.base should not own IGrowthStrategy interface definition');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.abstract');
   T.Run('exports collection skeleton', @TestAbstractExportsCollectionSkeleton);
   T.Run('exports growth strategies', @TestAbstractExportsGrowthStrategies);
+  T.Run('growth strategy interface lives in intf', @TestGrowthStrategyInterfaceLivesInIntf);
   T.Summary;
 end.
