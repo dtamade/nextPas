@@ -42,6 +42,17 @@
 - Batch 104 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
+  root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
+  candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
+  call binding。
+- `sema.no-matching-overload` 与 `sema.type-mismatch` 分工明确：单一 target 不兼容继续报
+  `type-mismatch`；多候选集合全不匹配报 `no-matching-overload`。
+- Batch 105 新增 `no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `noMatchingOverloadCheck=pass`。
+- Batch 105 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `no-matching-overload-check=pass`、`noMatchingOverloadCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
 - Batch 102 已把 platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`，
   并让 official gates 指向 platform 命名空间；`nextpas.core.time/test_time` 继续只覆盖 L1
   `time` public API。

@@ -750,7 +750,7 @@ key/value 行反推结果对象。
 `object-file` artifact，为 future native link selection 提前冻结 object-level input truth。
 
 失败路径当前也会在 stderr 上补出最小失败投影，例如 `status=failure`、`result=failure`、
-`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.wrong-argument-count|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
+`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.no-matching-overload|sema.wrong-argument-count|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
 `diagnostic-phase=syntax|resolution|sema|toolchain`、`command-outcome=failure`、`command-envelope=<json>` 和
 `human-summary=<message>`，再附上原始失败消息。
 
@@ -879,7 +879,8 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
 `semantic-analysis-failed` + `sema.duplicate-declaration`，再对
 ambiguous imported callable overload 与 ambiguous member overload 断言
-`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 wrong argument count 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 root-owned no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
 同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言

@@ -15,15 +15,76 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 104 Function Result Call Type Mismatch Evidence；并行收口包含
-Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
-Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
+当前最新本轮为 Batch 105 No Matching Overload Diagnostics；Batch 104 Function Result Call Type
+Mismatch Evidence 已完成；并行收口包含
+Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
+Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 105 No Matching Overload Diagnostics
+
+### Goal
+
+把 Batch 75 之前明确 deferred 的 root-owned overload signature no-match 推进成第一条安全诊断：
+当 bare procedure/function call 在 root source 中存在同名同参数个数的多个候选，当前 argument
+signature 来自稳定事实，且没有任何候选 signature 匹配时，发出
+`sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `procedure Pick(Integer); procedure Pick(AnsiString); Pick(True);` 必须失败为
+  `sema.no-matching-overload`，且失败调用不注册 `call` binding。
+- 只覆盖 root-owned bare callable set；root callable 仍优先，不回落 imported 代偿。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  builtin/future callable、implicit conversion 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `no-matching-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `noMatchingOverloadCheck`。
+
+### Architecture Decision
+
+这是 overload failure surface 的第一条 no-match 切片，不是完整 Pascal overload resolver：
+
+- ambiguity、wrong arity、single-target type mismatch、unknown callable 已经各自有结构化 code；
+  本批补上“root 多候选但稳定签名全不匹配”这个空缺。
+- `sema.no-matching-overload` 与 `sema.type-mismatch` 分开：前者描述多候选集合没有匹配项，后者描述
+  单一 target 的参数类型不兼容。
+- imported no-match、member no-match、implicit conversion、default parameter ranking、var/out
+  compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 root bare overload `Pick(Integer)` / `Pick(AnsiString)` 调 `Pick(True)` 的 focused regression
+- [x] 在 bare call lookup 中带出 `no-matching-overload` failure kind
+- [x] 在 semantic analyzer 中发 `sema.no-matching-overload`
+- [x] 新增 `tests/fixtures/no_matching_overload` 与 `no-matching-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-bare-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `no-matching-overload-check=pass`、`noMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported callable no-match 纳入 diagnostics
+- 不把 member-call no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 104 Function Result Call Type Mismatch Evidence
 

@@ -169,10 +169,11 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 当前状态：
 
-- 已完成 ambiguity、wrong argument count、部分 single-target type mismatch。
+- 已完成 ambiguity、wrong argument count、root-owned stable no matching overload、部分 single-target
+  type mismatch。
 - 已完成 source-owned bare unknown callable 与 direct class unknown member 的第一条结构化诊断。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
-  imported target type mismatch、多 target no-matching-overload，以及非 source-owned /
+  imported/member target no-match、imported target type mismatch，以及非 source-owned /
   typecast / function-pointer 等更复杂 callable 边界。
 
 下一步证据：

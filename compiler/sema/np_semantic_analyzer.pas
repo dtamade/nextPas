@@ -1041,7 +1041,11 @@ begin
       Exit(False);
     end
     else if RootSignatureMatchCount = 0 then
+    begin
+      if AHasTypeMismatchEvidence then
+        AResolutionFailureKind := 'no-matching-overload';
       Exit(False);
+    end;
 
     ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
     ADecl := FProcedureBodies[RootSignatureMatchIndex].Decl;
@@ -2053,6 +2057,12 @@ begin
         EmitSemaError(
           'sema.type-mismatch',
           'argument type mismatch for "' + ANode.Text + '"',
+          ANode.ByteOffset
+        )
+      else if SameText(ResolutionFailureKind, 'no-matching-overload') then
+        EmitSemaError(
+          'sema.no-matching-overload',
+          'no matching overload for "' + ANode.Text + '"',
           ANode.ByteOffset
         )
       else if SameText(ResolutionFailureKind, 'unknown-callable') and

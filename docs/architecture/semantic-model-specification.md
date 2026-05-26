@@ -298,6 +298,9 @@ candidate collection
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
+- `sema.no-matching-overload`
+  - 先用于 root-owned bare procedure/function call binding 中，同名同 arity 多候选存在、argument
+    signature 来自稳定 evidence、但没有任何 candidate signature 匹配的场景
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
 - `sema.unknown-member`
