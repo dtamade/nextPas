@@ -90,8 +90,8 @@ type
 implementation
 
 uses
-  SysUtils
-  {$IFDEF UNIX}, Linux, UnixType{$ENDIF};
+  SysUtils,
+  nextpas.core.platform.time;
 
 { TDuration }
 
@@ -383,18 +383,9 @@ end;
 { TInstant }
 
 class function TInstant.Now: TInstant;
-{$IFDEF UNIX}
-var
-  LTs: TimeSpec;
 begin
-  clock_gettime(CLOCK_MONOTONIC, @LTs);
-  Result.FNs := UInt64(LTs.tv_sec) * UInt64(NS_PER_SEC) + UInt64(LTs.tv_nsec);
+  Result.FNs := PlatformMonotonicNs;
 end;
-{$ELSE}
-begin
-  Result.FNs := 0;
-end;
-{$ENDIF}
 
 function TInstant.Elapsed: TDuration;
 begin

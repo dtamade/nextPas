@@ -5,7 +5,8 @@ unit nextpas.core.platform;
 interface
 
 uses
-  nextpas.core.platform.base;
+  nextpas.core.platform.base,
+  nextpas.core.platform.time;
 
 type
   TOSKind = nextpas.core.platform.base.TOSKind;
@@ -17,6 +18,11 @@ function CurrentCPU: TCPUArch; inline;
 function CurrentEndian: TEndianness; inline;
 function OSName: string; inline;
 function CPUName: string; inline;
+
+{ Time }
+function PlatformMonotonicNs: UInt64; inline;
+function PlatformRealtimeNs: UInt64; inline;
+function PlatformMonotonicResolutionNs: UInt64; inline;
 
 implementation
 
@@ -54,6 +60,21 @@ begin
   else
     Result := 'Unknown';
   end;
+end;
+
+function PlatformMonotonicNs: UInt64;
+begin
+  Result := nextpas.core.platform.time.PlatformMonotonicNs;
+end;
+
+function PlatformRealtimeNs: UInt64;
+begin
+  Result := nextpas.core.platform.time.PlatformRealtimeNs;
+end;
+
+function PlatformMonotonicResolutionNs: UInt64;
+begin
+  Result := nextpas.core.platform.time.PlatformMonotonicResolutionNs;
 end;
 
 end.
