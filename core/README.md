@@ -4,7 +4,12 @@ nextPas 的唯一基座框架。提供从基础类型到 HTTP 服务、终端 UI
 
 ## 状态
 
-初始阶段，L0 内核模块开发中。
+初始阶段，L0 内核模块与第一批 L1 基础设施模块已开始落地：
+
+- L0: `base`、`errors`、`platform`、`mem`、`log.intf`
+- L1: `testing`、`bytes`、`time`
+
+顶层 `build/verify_local.sh` 已覆盖 `nextpas.core.time` 的 focused 编译/运行检查。
 
 ## 构建
 

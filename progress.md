@@ -3,6 +3,39 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 82 core time verification closure)
+
+- **Status:** completed
+- Objective:
+  - 把 `nextpas.core.time` 与新增 platform time source 从未完全收口的 dirty tree 推进到
+    顶层 `verify_local` 受保护的正式 core 批次。
+- Baseline:
+  - `feat(core): add time module (L1 P1)` 已提交 `Duration` / `Instant` / `Stopwatch` 与 focused
+    test，但顶层 `build/verify_local.sh` 还没有 `core-time-check`。
+  - 后续工作树又出现 `core.platform.time` 与 `TInstant.Now` 改为 platform clock 的改动，需要作为
+    同一批次收口，不能继续保持未跟踪/未验证状态。
+- Actions taken:
+  - `core.platform.time` 现在作为 platform-owned time source，被 `nextpas.core.platform` facade
+    re-export。
+  - 修正 `core.platform.time` 的 implementation `uses` 顺序，抽出纳秒常量，并为未知平台保留
+    可编译 fallback；Unix 路径检查 `clock_gettime` / `clock_getres` 返回值。
+  - `nextpas.core.time` focused test 新增 direct platform time facade 覆盖：
+    monotonic 不倒退、realtime 在 Linux 可用、resolution 至少 1ns。
+  - `build/verify_local.sh` 新增 `core-time-check`，编译并运行
+    `core/tests/nextpas.core.time/test_time/test_time.lpr`，断言
+    `13 total, 13 passed, 0 failed`，并把 `coreTimeCheck` 纳入 final envelope。
+  - `core/README.md` 同步当前 core 状态：L0 基础模块和 L1 `testing` / `bytes` / `time`
+    已开始落地。
+- Verification:
+  - Focused compile/run: `nextpas.core.time: 13 total, 13 passed, 0 failed`。
+  - Core matrix: `make -C core test` 已通过，覆盖 base / errors / platform / time / bytes /
+    testing / mem。
+  - Full: `bash build/verify_local.sh` 已输出 `core-time-check=pass`、`coreTimeCheck":"pass"`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只收口 core time/platform time 的 verification 与 hygiene，不扩成 DateTime、timezone、
+    timer、scheduler 或 async runtime。
+
 ## Session: 2026-05-26 (Batch 81 parameter call type mismatch evidence)
 
 - **Status:** completed

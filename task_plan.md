@@ -15,6 +15,59 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 82 Core Time Verification Closure
+
+### Goal
+
+把 `nextpas.core.time` 从“已提交模块但未进入顶层官方验证”的状态收口为可追溯的
+core 基础设施批次：
+
+- `core.platform.time` 正式承载平台时间源，并由 `nextpas.core.platform` facade re-export。
+- `TInstant.Now` 使用 platform-owned monotonic clock，不在 `time.base` 内直接依赖 OS 单元。
+- `build/verify_local.sh` 新增 `core-time-check`，编译并运行
+  `core/tests/nextpas.core.time/test_time/test_time.lpr`，最终 envelope 暴露 `coreTimeCheck`。
+- `core/README.md` 同步当前 core reality，避免继续只描述 L0 初始状态。
+
+### Architecture Decision
+
+这是 L1 `time` 的验证收口，不扩大成完整跨平台时间/日历库：
+
+- 当前承诺 `Duration`、`Instant`、`Stopwatch` 与 platform monotonic/realtime/resolution 最小入口。
+- Linux 路径使用 `clock_gettime` / `clock_getres`；Windows 路径保留
+  `QueryPerformanceCounter` / `GetSystemTimeAsFileTime` 结构；未知平台 fallback 只保证可编译。
+- 不引入 DateTime、timezone、timer、scheduler、async runtime 或 benchmark layer。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 复查 `core.time` / `core.platform.time` 的当前 dirty tree 与 core 模块约定
+- [x] 修正 `core.platform.time` 的 implementation `uses` 顺序与保守 fallback
+- [x] 给 focused time 测试补 direct platform time facade coverage
+- [x] 在 `build/verify_local.sh` 增加 `core-time-check` 与 `coreTimeCheck` envelope field
+- [x] 同步 core README 与持续记录
+- [x] 运行 focused core test / `make -C core test`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused compile/run 已通过：`nextpas.core.time: 13 total, 13 passed, 0 failed`。
+- Core matrix: `make -C core test` 已通过，覆盖 base / errors / platform / time / bytes /
+  testing / mem。
+- Full: `bash build/verify_local.sh` 已输出 `core-time-check=pass`、
+  `coreTimeCheck":"pass"`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 DateTime / timezone / calendar formatting
+- 不实现 Timer / scheduler / async runtime
+- 不把未知平台 fallback 宣称为高精度时间源
+- 不重开 sema / package manager / backend 路线
+
 ## Addendum: 2026-05-26 Batch 81 Parameter Call Type Mismatch Evidence
 
 ### Goal

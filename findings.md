@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 82 把 `nextpas.core.time` 纳入顶层官方验证面：`build/verify_local.sh` 新增
+  `core-time-check`，编译并运行 `core/tests/nextpas.core.time/test_time/test_time.lpr`，并在
+  final envelope 中暴露 `coreTimeCheck=pass`。
+- `core.platform.time` 现在是 `TInstant.Now` 的 platform-owned monotonic clock 来源，同时由
+  `nextpas.core.platform` facade re-export `PlatformMonotonicNs` / `PlatformRealtimeNs` /
+  `PlatformMonotonicResolutionNs`。
+- `core.platform.time` 的 Unix 路径使用 `clock_gettime` / `clock_getres`，并检查返回值；Windows
+  路径保留 `QueryPerformanceCounter` / `GetSystemTimeAsFileTime` 结构，未知平台 fallback 只保证可编译。
+- `nextpas.core.time` focused test 现在覆盖 13 项，包括 direct platform time facade：
+  monotonic 不倒退、Linux realtime 可用、resolution 至少 1ns。
+- 本批不声明 DateTime、timezone、Timer、scheduler、async runtime 或完整跨平台时间库已经完成。
 - Batch 81 把 `sema.type-mismatch` evidence 从变量扩展到当前 callable scope 中已声明为内建
   标量/字符串类型的参数：`procedure Run(Flag: Boolean); begin Pick(Flag); end;` 调
   `Pick(Integer)` 现在会失败并且不注册该失败 call binding。

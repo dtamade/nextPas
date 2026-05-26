@@ -4,13 +4,8 @@ unit nextpas.core.platform.time;
 
 interface
 
-{ 单调时钟，纳秒精度，不受系统时钟调整影响 }
 function PlatformMonotonicNs: UInt64;
-
-{ 实时时钟（UTC），纳秒精度 }
 function PlatformRealtimeNs: UInt64;
-
-{ 单调时钟分辨率（纳秒/tick），通常为 1 }
 function PlatformMonotonicResolutionNs: UInt64;
 
 implementation
@@ -18,29 +13,51 @@ implementation
 {$IFDEF UNIX}
 uses
   Linux, UnixType;
+{$ENDIF}
 
+{$IFDEF WINDOWS}
+uses
+  Windows;
+{$ENDIF}
+
+const
+  NANOSECONDS_PER_SECOND = UInt64(1000000000);
+
+{$IFDEF UNIX}
 function PlatformMonotonicNs: UInt64;
 var
   LTs: TimeSpec;
 begin
-  clock_gettime(CLOCK_MONOTONIC, @LTs);
-  Result := UInt64(LTs.tv_sec) * UInt64(1000000000) + UInt64(LTs.tv_nsec);
+  if clock_gettime(CLOCK_MONOTONIC, @LTs) <> 0 then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Result := UInt64(LTs.tv_sec) * NANOSECONDS_PER_SECOND + UInt64(LTs.tv_nsec);
 end;
 
 function PlatformRealtimeNs: UInt64;
 var
   LTs: TimeSpec;
 begin
-  clock_gettime(CLOCK_REALTIME, @LTs);
-  Result := UInt64(LTs.tv_sec) * UInt64(1000000000) + UInt64(LTs.tv_nsec);
+  if clock_gettime(CLOCK_REALTIME, @LTs) <> 0 then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Result := UInt64(LTs.tv_sec) * NANOSECONDS_PER_SECOND + UInt64(LTs.tv_nsec);
 end;
 
 function PlatformMonotonicResolutionNs: UInt64;
 var
   LTs: TimeSpec;
 begin
-  clock_getres(CLOCK_MONOTONIC, @LTs);
-  Result := UInt64(LTs.tv_sec) * UInt64(1000000000) + UInt64(LTs.tv_nsec);
+  if clock_getres(CLOCK_MONOTONIC, @LTs) <> 0 then
+  begin
+    Result := 1;
+    Exit;
+  end;
+  Result := UInt64(LTs.tv_sec) * NANOSECONDS_PER_SECOND + UInt64(LTs.tv_nsec);
   if Result = 0 then
     Result := 1;
 end;
@@ -48,8 +65,6 @@ end;
 {$ENDIF}
 
 {$IFDEF WINDOWS}
-uses
-  Windows;
 
 var
   GFrequency: Int64 = 0;
@@ -57,7 +72,12 @@ var
 procedure EnsureFrequency;
 begin
   if GFrequency = 0 then
-    QueryPerformanceFrequency(GFrequency);
+  begin
+    if not QueryPerformanceFrequency(GFrequency) then
+      GFrequency := 1;
+    if GFrequency <= 0 then
+      GFrequency := 1;
+  end;
 end;
 
 function PlatformMonotonicNs: UInt64;
@@ -65,8 +85,12 @@ var
   LCounter: Int64;
 begin
   EnsureFrequency;
-  QueryPerformanceCounter(LCounter);
-  Result := UInt64(LCounter) * UInt64(1000000000) div UInt64(GFrequency);
+  if not QueryPerformanceCounter(LCounter) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Result := UInt64(LCounter) * NANOSECONDS_PER_SECOND div UInt64(GFrequency);
 end;
 
 function PlatformRealtimeNs: UInt64;
@@ -82,11 +106,30 @@ end;
 function PlatformMonotonicResolutionNs: UInt64;
 begin
   EnsureFrequency;
-  Result := UInt64(1000000000) div UInt64(GFrequency);
+  Result := NANOSECONDS_PER_SECOND div UInt64(GFrequency);
   if Result = 0 then
     Result := 1;
 end;
 
+{$ENDIF}
+
+{$IFNDEF UNIX}
+{$IFNDEF WINDOWS}
+function PlatformMonotonicNs: UInt64;
+begin
+  Result := 0;
+end;
+
+function PlatformRealtimeNs: UInt64;
+begin
+  Result := 0;
+end;
+
+function PlatformMonotonicResolutionNs: UInt64;
+begin
+  Result := 1;
+end;
+{$ENDIF}
 {$ENDIF}
 
 end.

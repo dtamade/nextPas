@@ -5,6 +5,7 @@ program test_time;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.platform,
   nextpas.core.time,
   nextpas.core.time.base;
 
@@ -159,6 +160,20 @@ begin
   Check(not LSw.IsRunning);
 end;
 
+procedure TestPlatformTime;
+var
+  LM1, LM2, LR, LResolution: UInt64;
+begin
+  LM1 := PlatformMonotonicNs;
+  LM2 := PlatformMonotonicNs;
+  LR := PlatformRealtimeNs;
+  LResolution := PlatformMonotonicResolutionNs;
+
+  Check(LM2 >= LM1, 'monotonic clock should not go backwards');
+  Check(LR > 0, 'realtime clock should be available on linux');
+  Check(LResolution >= 1, 'resolution must be at least one nanosecond');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.time');
   T.Run('Duration zero', @TestDurationZero);
@@ -173,5 +188,6 @@ begin
   T.Run('Stopwatch basic', @TestStopwatch);
   T.Run('Stopwatch accumulate', @TestStopwatchAccumulate);
   T.Run('Stopwatch reset', @TestStopwatchReset);
+  T.Run('Platform time', @TestPlatformTime);
   T.Summary;
 end.
