@@ -15,6 +15,41 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 85 Latest Baseline Verification Closure
+
+### Goal
+
+把并行推进后的最新 baseline 收口到可继续开发的状态：
+
+- 确认 `sema.unknown-callable` 的保守边界已经不再误伤 compiler self-compile 中的
+  `inherited Create` / implicit self bare method call。
+- 确认 `unit_root_precedence` 不再被 host FPC 旧 `.ppu/.o/.s` 中间产物污染。
+- 保持协作边界：不修改、不 stage、不提交 `core/` 负责人当前工作。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 复核最新 HEAD、工作树和非 `core/` 变更边界
+- [x] 用 focused semantic call binding test 确认 unknown callable 回归已转绿
+- [x] 用 detached clean worktree 运行 fresh `bash build/verify_local.sh`
+- [x] 复核 verify 失败历史，确认当前最高 blocker 已从 self-compile / unit-root precedence 关闭
+- [x] 同步计划记录，提交本轮收口状态
+
+### Verification
+
+- Focused: `semantic-call-bindings-status=pass`。
+- Full: detached clean worktree 基于 `287d13d` 输出
+  `unknown-callable-check=pass`、`unit-root-precedence-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Next
+
+下一轮继续走非 `core/` 路线，优先从目标树 G1.5/G1.6 中选择 source-owned、
+误报风险可控的 callable/member diagnostics：unknown member 或 no-matching-overload。
+
 ## Addendum: 2026-05-26 Batch 84 Unknown Bare Callable Diagnostic
 
 ### Goal

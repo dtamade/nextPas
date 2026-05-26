@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 85 重新验证最新 baseline：detached clean worktree 基于 `287d13d` 已输出
+  `unknown-callable-check=pass`、`unit-root-precedence-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- `unit_root_precedence` 曾暴露 host FPC backend cache 污染：前序 build 留下的
+  `Stage0Greeter` 中间产物可能让后续显式 `--unit-root` 构建运行到旧 installed-source 行为；
+  当前 runner 会在 host compiler step 前清理旧 `.ppu/.o/.s/*_link.res/*_ppas.sh`。
+- 当前最高价值后续路线仍是非 `core/` 的 G1.5/G1.6：优先补 source-owned、证据稳定、
+  误报风险可控的 unknown member 或 no-matching-overload diagnostic。
 - Batch 84 把 source-owned bare callable name miss 接进 structured diagnostics：当 bare call
   的名字既不是 root/imported procedure/function、也不是已知 symbol/type/builtin callable 时，
   semantic analyzer 发出 `sema.unknown-callable`，model status 进入 `failure`，且不会注册 call binding。

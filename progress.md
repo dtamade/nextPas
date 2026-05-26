@@ -3,6 +3,32 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 85 latest baseline verification closure)
+
+- **Status:** completed
+- Objective:
+  - 在 `core/` 并行推进后，重新确认当前最新 baseline 是否仍能作为下一轮 non-core compiler
+    工作的可信起点。
+- Baseline:
+  - 裸 HEAD 曾在 compiler self-compile 处因 `inherited Create` / `EmitErrorAtSpan`
+    被误判为 `sema.unknown-callable` 而失败。
+  - unknown callable 边界修正后，full verify 又暴露 `unit_root_precedence` 运行输出被旧
+    host FPC 中间产物污染。
+- Actions taken:
+  - 复核最新 HEAD、工作树和 staged diff，确认本轮不碰 `core/`。
+  - 用 focused semantic call binding test 重新确认
+    `semantic-call-bindings-status=pass`。
+  - 在 detached clean worktree 上运行 fresh `bash build/verify_local.sh`，避免当前工作树里的
+    `core/` 未跟踪文件影响判断。
+- Verification:
+  - Full: detached clean worktree 基于 `287d13d` 输出
+    `unknown-callable-check=pass`、`unit-root-precedence-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 当前 latest baseline 已可继续作为下一轮 G1.5/G1.6 non-core 语义诊断工作起点。
+  - 工作树仍有外部 `core/docs/superpowers/plans/2026-05-26-platform-time-hardening.md`
+    未跟踪文件，本轮不 stage、不提交。
+
 ## Session: 2026-05-26 (Batch 84 unknown bare callable diagnostic)
 
 - **Status:** completed
