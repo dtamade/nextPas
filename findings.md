@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 83 新增 `docs/architecture/nextpas-goal-tree.md`，把 nextPas 的北极星目标、G0-G8
+  能力树、当前完成度、近期优先级和每轮报告格式收成总控地图。
+- 目标树明确后续每轮批次必须绑定目标节点；近期最高价值非 core 路线是继续推进
+  G1.4/G1.5/G1.6：semantic model、call/member/overload resolution 与 diagnostics。
+- 目标树明确当前协作边界：`core/` 由 core 负责人推进；本工作流不直接修改 `core/` 代码，
+  只提出 compiler/tooling 侧 integration requirement 或 review/suggestion。
+- `build/verify_local.sh` docs-check 现在要求 `docs/architecture/nextpas-goal-tree.md` 存在，
+  防止总控目标树脱离 verification surface。
 - Batch 82 把 `nextpas.core.time` 纳入顶层官方验证面：`build/verify_local.sh` 新增
   `core-time-check`，编译并运行 `core/tests/nextpas.core.time/test_time/test_time.lpr`，并在
   final envelope 中暴露 `coreTimeCheck=pass`。

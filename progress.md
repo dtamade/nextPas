@@ -3,6 +3,32 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 83 capability goal tree)
+
+- **Status:** completed
+- Objective:
+  - 生成一份可掌控 nextPas 开发方向和节奏的完整目标树，让后续每轮开发能明确归属目标节点、
+    交付范围、验证方式和非目标。
+- Baseline:
+  - 项目已经有 master roadmap、compiler roadmap、bootstrap roadmap 和多份专题规范，但缺少一张
+    面向执行节奏的全局能力目标树。
+  - 近期工作在 core/sema/tooling 之间切换，用户明确要求不再写 `core/` 代码，并要求用目标树控制方向。
+- Actions taken:
+  - 新增 `docs/architecture/nextpas-goal-tree.md`，定义北极星目标、G0-G8 能力树、当前完成度、
+    近期优先级与每轮报告格式。
+  - 在 `docs/architecture/master-roadmap.md` 加入目标树入口。
+  - 在 `build/verify_local.sh` docs-check 加入 `docs/architecture/nextpas-goal-tree.md`，避免目标树漂出
+    verification surface。
+  - 同步 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md` 顶部状态到 Batch 83。
+  - 同步 `task_plan.md`、`progress.md` 与 `findings.md`。
+- Verification:
+  - Fresh `bash build/verify_local.sh` 已输出
+    `verified-path=docs/architecture/nextpas-goal-tree.md`、`docs-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只建立目标树和验证挂钩，不把文档当成功能完成；下一步应按目标树优先回到非 core 的
+    G1.4/G1.5/G1.6 compiler semantic correctness。
+
 ## Session: 2026-05-26 (Batch 82 core time verification closure)
 
 - **Status:** completed

@@ -13,7 +13,8 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 64` 为准。
+以最新完成的 `Batch 83` 为准。全局能力目标和每轮批次归属现在由
+`docs/architecture/nextpas-goal-tree.md` 统一承接；本计划继续负责当前 rolling window 的执行记录。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -22,6 +23,7 @@
 
 如果你要看这一轮之后 nextPas 的长期架构主线，读：
 
+- `docs/architecture/nextpas-goal-tree.md`
 - `docs/architecture/master-roadmap.md`
 - `docs/architecture/compiler-roadmap.md`
 
@@ -103,9 +105,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 79：single-target call type mismatch diagnostics。
+- 当前 rolling window 已推进到 Batch 83：nextPas capability goal tree。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 79` 已完成。
+- `Batch 1` 到 `Batch 83` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -209,7 +211,9 @@
   `procedure Run(Flag: Boolean); begin Pick(Flag); end;` 现在同样会发 `sema.type-mismatch`；
   为守住边界，stable evidence 明确限制为 `variable` / `parameter` symbol，函数返回值 symbol
   即使有 builtin return type 也不作为 diagnostic evidence，且 signature mismatch 不注册错误 binding。
-  下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
+  `Batch 82` 把 `nextpas.core.time` 纳入顶层 official verification。`Batch 83` 则把 nextPas 的完整
+  能力目标、当前完成度、优先级和每轮报告格式收成 `nextpas-goal-tree.md`，并明确后续非 core
+  工作优先回到 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 
 ## 执行规则

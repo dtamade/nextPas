@@ -15,6 +15,54 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 83 Capability Goal Tree
+
+### Goal
+
+把 nextPas 的长期目标从“继续推进”收成一份可执行、可检查、可复盘的目标树：
+
+- 定义 nextPas 的北极星目标：现代 Pascal 编译器、RTL/core/framework、workspace/package/tooling、
+  language service、IDE 与 FPC 兼容生态。
+- 把完整能力拆成 G0-G8：项目控制面、编译器语言能力、IR/backend/toolchain、RTL/core/framework、
+  workspace/package、developer tools、language service/IDE、FPC compatibility、performance/reliability。
+- 标注当前完成度、下一步证据和近期优先级，让后续每轮 batch 都能绑定目标节点。
+- 明确当前协作边界：不直接修改 `core/`，core 相关需求以 integration requirement 或 review/suggestion
+  形式反馈。
+
+### Architecture Decision
+
+目标树不是新路线图替代品，而是总控索引：
+
+- `docs/architecture/master-roadmap.md` 继续负责产品顺序。
+- `docs/architecture/compiler-roadmap.md` 继续负责 compiler execution spine。
+- `docs/architecture/bootstrap-roadmap.md` 继续负责 `stage0 -> stage1 -> stage2` 所有权迁移。
+- `docs/architecture/nextpas-goal-tree.md` 负责把上述路线收成能力目标、当前状态、优先级和每轮报告格式。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 新增 `docs/architecture/nextpas-goal-tree.md`
+- [x] 在 `docs/architecture/master-roadmap.md` 接入目标树入口
+- [x] 在 `build/verify_local.sh` docs-check 中加入目标树文件
+- [x] 同步 rolling plan 顶部状态到 Batch 83
+- [x] 同步 `task_plan.md`、`progress.md` 与 `findings.md`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- fresh `bash build/verify_local.sh` 必须输出 `verified-path=docs/architecture/nextpas-goal-tree.md`、
+  `docs-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `core/` 代码
+- 不打开 package manager resolver/fetch/install/publish
+- 不把目标树当作替代真实功能实现的完成标准
+
 ## Addendum: 2026-05-26 Batch 82 Core Time Verification Closure
 
 ### Goal

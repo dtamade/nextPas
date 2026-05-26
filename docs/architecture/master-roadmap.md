@@ -7,6 +7,8 @@
 
 如果你要看当前批次怎么执行，读
 `docs/plans/2026-03-24-nextpas-master-roadmap-plan.md`。
+如果你要看 nextPas 的完整能力目标、当前完成度和每轮开发应该绑定的目标节点，读
+`nextpas-goal-tree.md`。
 如果你要看 compiler 自己应该按什么顺序接管，读
 `compiler-roadmap.md`。
 如果你要看 FPC `stage0 -> stage1 -> stage2` 的自举所有权路径，读
