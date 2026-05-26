@@ -9,7 +9,8 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.rwlock,
-  nextpas.core.sync.waitgroup;
+  nextpas.core.sync.waitgroup,
+  nextpas.core.sync.condvar;
 
 type
   TLockState = nextpas.core.sync.base.TLockState;
@@ -18,15 +19,18 @@ type
   IMutex = nextpas.core.sync.intf.IMutex;
   IRWLock = nextpas.core.sync.intf.IRWLock;
   IWaitGroup = nextpas.core.sync.intf.IWaitGroup;
+  ICondVar = nextpas.core.sync.intf.ICondVar;
   TMutex = nextpas.core.sync.mutex.TMutex;
   TFutexMutex = nextpas.core.sync.mutex.TFutexMutex;
   TRWLock = nextpas.core.sync.rwlock.TRWLock;
   TWaitGroup = nextpas.core.sync.waitgroup.TWaitGroup;
+  TCondVar = nextpas.core.sync.condvar.TCondVar;
 
 function Mutex: IMutex; inline;
 function FutexMutex: IMutex; inline;
 function RWLock: IRWLock; inline;
 function WaitGroup: IWaitGroup; inline;
+function CondVar: ICondVar; inline;
 
 implementation
 
@@ -48,6 +52,11 @@ end;
 function WaitGroup: IWaitGroup;
 begin
   Result := nextpas.core.sync.waitgroup.TWaitGroup.Create;
+end;
+
+function CondVar: ICondVar;
+begin
+  Result := nextpas.core.sync.condvar.TCondVar.Create;
 end;
 
 end.

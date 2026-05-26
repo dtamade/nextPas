@@ -13,9 +13,11 @@ function CreateThreadPool(const AWorkerCount: Integer = 0): IThreadPool;
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.platform.thread,
-  nextpas.core.platform.sync;
+  SysUtils, Classes,
+  nextpas.core.sync.intf,
+  nextpas.core.sync.mutex,
+  nextpas.core.sync.condvar,
+  nextpas.core.platform.thread;
 
 type
   PTaskNode = ^TTaskNode;
@@ -26,9 +28,9 @@ type
 
   TThreadPool = class(TInterfacedObject, IThreadPool)
   private
-    FMutex: TPlatformMutex;
-    FCondVar: TPlatformCondVar;
-    FDoneCondVar: TPlatformCondVar;
+    FMutex: IMutex;
+    FCondVar: ICondVar;
+    FDoneCondVar: ICondVar;
     FHead: PTaskNode;
     FTail: PTaskNode;
     FWorkerCount: Integer;
@@ -55,14 +57,14 @@ begin
 
   while True do
   begin
-    platform_mutex_lock(LPool.FMutex);
+    LPool.FMutex.Acquire;
 
     while (LPool.FHead = nil) and (not LPool.FShutdown) do
-      platform_condvar_wait(LPool.FCondVar, LPool.FMutex);
+      LPool.FCondVar.Wait(LPool.FMutex);
 
     if (LPool.FHead = nil) and LPool.FShutdown then
     begin
-      platform_mutex_unlock(LPool.FMutex);
+      LPool.FMutex.Release;
       Break;
     end;
 
@@ -71,7 +73,7 @@ begin
     if LPool.FHead = nil then
       LPool.FTail := nil;
 
-    platform_mutex_unlock(LPool.FMutex);
+    LPool.FMutex.Release;
 
     LTask := LNode^.Task;
     LNode^.Task := nil;
@@ -83,11 +85,11 @@ begin
     end;
     LTask := nil;
 
-    platform_mutex_lock(LPool.FMutex);
+    LPool.FMutex.Acquire;
     Dec(LPool.FPendingTasks);
     if LPool.FPendingTasks = 0 then
-      platform_condvar_broadcast(LPool.FDoneCondVar);
-    platform_mutex_unlock(LPool.FMutex);
+      LPool.FDoneCondVar.Broadcast;
+    LPool.FMutex.Release;
   end;
 end;
 
@@ -104,9 +106,9 @@ begin
   FShutdown := False;
   FPendingTasks := 0;
 
-  platform_mutex_init(FMutex);
-  platform_condvar_init(FCondVar);
-  platform_condvar_init(FDoneCondVar);
+  FMutex := nextpas.core.sync.mutex.TMutex.Create;
+  FCondVar := nextpas.core.sync.condvar.TCondVar.Create;
+  FDoneCondVar := nextpas.core.sync.condvar.TCondVar.Create;
 
   if AWorkerCount > 0 then
     LCount := AWorkerCount
@@ -123,6 +125,9 @@ end;
 destructor TThreadPool.Destroy;
 begin
   Shutdown;
+  FDoneCondVar := nil;
+  FCondVar := nil;
+  FMutex := nil;
   inherited Destroy;
 end;
 
@@ -130,11 +135,11 @@ procedure TThreadPool.Submit(const ATask: TThreadTask);
 var
   LNode: PTaskNode;
 begin
-  platform_mutex_lock(FMutex);
+  FMutex.Acquire;
 
   if FShutdown then
   begin
-    platform_mutex_unlock(FMutex);
+    FMutex.Release;
     Exit;
   end;
 
@@ -149,8 +154,8 @@ begin
   FTail := LNode;
   Inc(FPendingTasks);
 
-  platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FCondVar);
+  FMutex.Release;
+  FCondVar.Signal;
 end;
 
 procedure TThreadPool.Shutdown;
@@ -158,16 +163,16 @@ var
   LI: Integer;
   LRetVal: Pointer;
 begin
-  platform_mutex_lock(FMutex);
+  FMutex.Acquire;
   if FShutdown then
   begin
-    platform_mutex_unlock(FMutex);
+    FMutex.Release;
     Exit;
   end;
   FShutdown := True;
-  platform_mutex_unlock(FMutex);
+  FMutex.Release;
 
-  platform_condvar_broadcast(FCondVar);
+  FCondVar.Broadcast;
 
   for LI := 0 to FWorkerCount - 1 do
     platform_thread_join(FWorkers[LI], LRetVal);
@@ -175,10 +180,10 @@ end;
 
 procedure TThreadPool.WaitAll;
 begin
-  platform_mutex_lock(FMutex);
+  FMutex.Acquire;
   while FPendingTasks > 0 do
-    platform_condvar_wait(FDoneCondVar, FMutex);
-  platform_mutex_unlock(FMutex);
+    FDoneCondVar.Wait(FMutex);
+  FMutex.Release;
 end;
 
 function TThreadPool.GetWorkerCount: Integer;
