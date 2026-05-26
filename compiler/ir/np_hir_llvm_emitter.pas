@@ -1050,8 +1050,11 @@ begin
   Emit('');
   Emit('define internal void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic) {');
   Emit('entry:');
-  Emit('  ret void');
+  Emit('  call void @llvm.trap()');
+  Emit('  unreachable');
   Emit('}');
+  Emit('');
+  Emit('declare void @llvm.trap()');
 end;
 
 procedure THIRLlvmEmitter.EmitVmtGlobals;

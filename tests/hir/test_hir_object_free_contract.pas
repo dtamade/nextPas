@@ -24,7 +24,8 @@ var
   InvalidLabelPos, InvalidBoundaryCallPos, InvalidDoneBranchPos,
   ReleaseLabelPos, ReleaseBoundaryCallPos, ReleaseDoneBranchPos,
   ReleaseBoundaryHelperPos, ReleaseBoundaryMagicSlotPos,
-  ReleaseBoundaryMagicStorePos, InvalidBoundaryHelperPos: LongInt;
+  ReleaseBoundaryMagicStorePos, InvalidBoundaryHelperPos, InvalidTrapCallPos,
+  InvalidTrapUnreachablePos, InvalidTrapDeclarePos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -250,8 +251,18 @@ begin
       LlvmText, ReleaseBoundaryHelperPos);
     if InvalidBoundaryHelperPos = 0 then
       Fail('missing-object-free-release-invalid-helper');
-    if FindAfter('  ret void', LlvmText, InvalidBoundaryHelperPos) = 0 then
-      Fail('missing-object-free-release-invalid-helper-return');
+    InvalidTrapCallPos := FindAfter('call void @llvm.trap()', LlvmText,
+      InvalidBoundaryHelperPos);
+    if InvalidTrapCallPos = 0 then
+      Fail('missing-object-free-release-invalid-trap-call');
+    InvalidTrapUnreachablePos := FindAfter('  unreachable', LlvmText,
+      InvalidTrapCallPos);
+    if InvalidTrapUnreachablePos = 0 then
+      Fail('missing-object-free-release-invalid-unreachable');
+    InvalidTrapDeclarePos := FindAfter('declare void @llvm.trap()', LlvmText,
+      InvalidTrapUnreachablePos);
+    if InvalidTrapDeclarePos = 0 then
+      Fail('missing-object-free-release-invalid-trap-declare');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

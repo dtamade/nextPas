@@ -80,14 +80,15 @@ class allocation lowering 也已进入 `@np_object_alloc(i64 size)` helper，再
 magic `1313882451`，返回值是 payload pointer。`@np_object_free_release` 会从 payload pointer
 回退读取 header，校验 magic，并把合法 header 分到 `release:` 占位块、非法 header 直接分到
 `invalid:`；invalid path 会调用
-`@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`。`release:` 当前调用
+`@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`；invalid helper 当前会
+调用 `@llvm.trap()` 并发出 `unreachable`。`release:` 当前调用
 `@np_object_release_valid(ptr %raw, i64 %size)`，把已验证的 header raw pointer 与 payload size
-交给 future allocator free 的唯一边界，并在当前实现中清零 header magic，让重复释放走
-invalid-release boundary。当前 object alloc/release helpers 只是最小 ownership contract。它们仍不是完整
+交给 future allocator free 的唯一边界，并在当前实现中清零 header magic，让重复释放进入
+invalid-release trap。当前 object alloc/release helpers 只是最小 ownership contract。它们仍不是完整
 `System` 重写，也没有把
 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍把 implicit runtime 排除在额外
-assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、header validation
-diagnostics/trap、dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
+assemble/link 之外。后续应在这个 source-backed 边界上继续补 allocator free、结构化 diagnostics、
+dynamic dispatch runtime helper、unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 

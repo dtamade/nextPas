@@ -25,6 +25,15 @@
 - platform.time 批次的 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 103 把 `@np_object_release_invalid` 从 no-op boundary 推进成最小 fatal failure policy：
+  invalid helper 会调用 `@llvm.trap()`，随后发出 `unreachable`。
+- Batch 103 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 新 focused RED 固定旧行为缺口：Batch 102 的 invalid helper 仍 `ret void`，因此
+  object-free focused test 失败在 `missing-object-free-release-invalid-trap-call`。
+- 修正后 magic mismatch / double free 已有最小 fatal runtime 行为，但这还不是结构化 diagnostics、
+  Pascal exception、core allocator 接管或完整 validation runtime。
 - Batch 102 把 `@np_object_free_release` 的 magic mismatch 路径推进成 compiler-owned
   invalid-release boundary：非法 header 会进入 `invalid:`，调用
   `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后再汇合到 `done:`。
