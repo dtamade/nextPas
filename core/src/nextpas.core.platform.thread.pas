@@ -259,7 +259,7 @@ begin
   end
   else
   begin
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
     Dispose(LState);
   end;
 end;
@@ -273,18 +273,19 @@ begin
     Exit(-1);
 
   LState := PWindowsThreadState(AHandle);
-  if WaitForSingleObject(LState^.Handle, INFINITE) = WAIT_OBJECT_0 then
+  if windows_wait_for_single_object_is_signaled(
+    WaitForSingleObject(LState^.Handle, INFINITE)) then
   begin
     ARetVal := LState^.ReturnValue;
     if CloseHandle(LState^.Handle) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := windows_last_error_i32;
     LState^.Handle := nil;
     WindowsReleaseThreadState(LState);
   end
   else
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
@@ -302,7 +303,7 @@ begin
     Result := 0
   end
   else
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
 end;
 
 function platform_thread_self: TPlatformThreadToken;
@@ -344,7 +345,7 @@ begin
   else
   begin
     AKey := 0;
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
   end;
 end;
 
@@ -353,7 +354,7 @@ begin
   if TlsFree(DWORD(AKey)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
 end;
 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
@@ -361,7 +362,7 @@ begin
   if TlsSetValue(DWORD(AKey), AValue) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := windows_last_error_i32;
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;

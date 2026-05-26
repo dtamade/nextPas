@@ -1387,3 +1387,27 @@
 ## Visual/Browser Findings
 
 - 本轮未使用图片或浏览器结果
+
+## 2026-05-27 Follow-up Findings
+
+- 当前仓库 live truth 是：本批 platform Windows wait/error ownerization 改动直接发生在
+  `main` 的 dirty worktree 上，尚未提交；历史
+  `codex/platform-time-integration @ 02be065` 仍未合入 `main@b255298`，不能把它误记为已合并。
+- `nextpas.core.platform.windows.ffi` 现在不应只拥有 ABI declaration 和 timeout conversion；
+  Windows last-error 投影、timeout classification、wait-result success semantics 也应该继续归它 owner。
+- `platform.thread` 的 Windows consumer 现在应该只消费
+  `windows_last_error_i32` 与 `windows_wait_for_single_object_is_signaled`；
+  raw `GetLastError` 与 `WAIT_OBJECT_0` 不应继续散落在实现里。
+- `platform.sync` 的 Windows consumer 现在应该只消费
+  `windows_last_error_i32`、`windows_last_error_is_timeout` 与
+  `windows_timeout_ns_to_ms`；raw `GetLastError` / `ERROR_TIMEOUT`
+  不应继续散落在 condvar / `WaitOnAddress` 路径里。
+- 这批 focused gate 已把上面的 owner boundary 冻结成 source-surface contract：
+  `test_platform_thread_host_ffi_surface` 与
+  `test_platform_sync_host_ffi_surface` 现在同时防回归 raw consumer 语义。
+- fresh `bash build/verify_local.sh` 已再次得到 `verify-local=pass` 与
+  `human-summary=local verification passed`，说明这批 owner boundary 收紧没有引入
+  thread/sync/platform 的回归。
+- 下一轮最自然的 platform 方向，不是再回头碰 stopwatch 一类 L1 time API，而是继续审计
+  `platform.time` / `platform.sync` 剩余的 host capability / wait semantics owner truth，
+  尤其是 Windows 与 Darwin 的 residual policy token。

@@ -821,20 +821,25 @@ begin
   if SleepConditionVariableSRW(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], INFINITE, 0) then
     Result := 0
   else
-    Result := GetLastError;
+    Result := windows_last_error_i32;
 end;
 
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
 var
+  LError: Int32;
   LMs: DWORD;
 begin
   LMs := windows_timeout_ns_to_ms(ATimeoutNs);
   if SleepConditionVariableSRW(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], LMs, 0) then
     Result := 0
-  else if GetLastError = ERROR_TIMEOUT then
-    Result := PLATFORM_ERR_TIMEOUT
   else
-    Result := GetLastError;
+  begin
+    LError := windows_last_error_i32;
+    if windows_last_error_is_timeout(DWORD(LError)) then
+      Result := PLATFORM_ERR_TIMEOUT
+    else
+      Result := LError;
+  end;
 end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
@@ -853,6 +858,7 @@ end;
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 var
+  LError: Int32;
   LMs: DWORD;
   LExpected: Int32;
 begin
@@ -860,10 +866,14 @@ begin
   LMs := windows_timeout_ns_to_ms(ATimeoutNs);
   if WaitOnAddress(AAddr, @LExpected, SizeOf(Int32), LMs) then
     Result := 0
-  else if GetLastError = ERROR_TIMEOUT then
-    Result := PLATFORM_ERR_TIMEOUT
   else
-    Result := GetLastError;
+  begin
+    LError := windows_last_error_i32;
+    if windows_last_error_is_timeout(DWORD(LError)) then
+      Result := PLATFORM_ERR_TIMEOUT
+    else
+      Result := LError;
+  end;
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;

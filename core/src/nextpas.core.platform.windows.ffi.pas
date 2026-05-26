@@ -41,6 +41,9 @@ const
 
 function windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
 function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
+function windows_last_error_i32: Int32; inline;
+function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
+function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -111,6 +114,21 @@ end;
 function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 begin
   Result := windows_positive_ns_to_ms(ANanoseconds);
+end;
+
+function windows_last_error_i32: Int32; inline;
+begin
+  Result := Int32(GetLastError);
+end;
+
+function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
+begin
+  Result := AError = ERROR_TIMEOUT;
+end;
+
+function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
+begin
+  Result := AWaitResult = WAIT_OBJECT_0;
 end;
 
 end.

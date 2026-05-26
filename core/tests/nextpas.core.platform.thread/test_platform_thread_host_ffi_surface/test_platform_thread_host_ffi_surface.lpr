@@ -104,6 +104,10 @@ begin
     'freebsd.ffi must expose FreeBSD errno binding for retryable nanosleep');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
+  CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',
+    'windows.ffi must expose Windows last-error conversion helper');
+  CheckTokenPresent(LWindowsSource, 'windows_wait_for_single_object_is_signaled',
+    'windows.ffi must expose Windows wait-result success semantics');
 
   CheckTokenPresent(LThreadSource, 'function platform_thread_id',
     'platform.thread must continue to expose the thread id contract');
@@ -119,6 +123,14 @@ begin
     'platform.thread must use host-owned errno binding for nanosleep retry semantics');
   CheckTokenPresent(LThreadSource, 'windows_sleep_ns_to_ms',
     'platform.thread must consume Windows sleep timeout conversion through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_last_error_i32',
+    'platform.thread must consume Windows last-error conversion through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_wait_for_single_object_is_signaled',
+    'platform.thread must consume Windows wait-result success semantics through windows.ffi');
+  Check(Pos('getlasterror', LThreadSource) = 0,
+    'platform.thread must not call GetLastError directly in the Windows consumer');
+  Check(Pos('wait_object_0', LThreadSource) = 0,
+    'platform.thread must not keep a raw WaitForSingleObject success token');
   Check(Pos('$ffffffff', LThreadSource) = 0,
     'platform.thread must not keep a raw Windows sleep saturation literal');
 end;

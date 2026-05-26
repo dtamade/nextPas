@@ -4681,3 +4681,38 @@ Hello from nextPas!
 | What's the goal?     | 让 nextPas 的“当前能力”先真实可信，再继续往现代化、高性能、优雅的全栈工具链推进                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | What have I learned? | 假绿、模糊 provenance 和没投影出来的真实 command truth 都会拖慢后续架构推进；不管是 failure attribution 还是 success transcript，只要 trace/status 没跟真实 executed step 对齐，就会同时污染 CLI、diagnostic 与 replay surface                                                                                                                                                                                                                                                                                                        |
 | What have I done?    | 已收紧 harness、修正 resolver、把 shared workspace model 收口成 compiler-owned truth，补上 typed `TToolchainPlan` 的真实 execution runner 与 `native-run-*` contract gate，把 backend intermediate artifact truth 与 logical object input 接进 session/stage0/verify，再把 production path 真正切到 `bootstrap-native-assemble-link`，补齐 later-step failure attribution 与 success-path full transcript，新增最小 `nextpas test`、`env status`、`doctor`、`query symbols` surface，并把 package workflow 的 manifest/lock/install truth skeleton 接进 compiler/frontend/toolchain contract；fresh `bash build/verify_local.sh` 已再次确认整套 verify-local 继续全绿 |
+
+## Session: 2026-05-27
+
+### Phase 1: Platform Windows Wait/Error Owner Boundary Closure
+
+- **Status:** completed
+- Actions taken:
+  - 先核对当前 `main` 与 worktree 真相，确认本批改动是在 `main` 上的未提交 batch；
+    历史 `codex/platform-time-integration` 仍未合入 `main`，不能把它当成本批已收口事实。
+  - 在 `core/src/nextpas.core.platform.windows.ffi.pas` 新增
+    `windows_last_error_i32`、`windows_last_error_is_timeout`、
+    `windows_wait_for_single_object_is_signaled`，把 Windows last-error /
+    wait-result 语义继续收口到 host-owned ffi owner。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Windows 分支改为消费上述 helper，
+    不再直接保留 raw `GetLastError` 或 `WAIT_OBJECT_0` 语义。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows condvar /
+    `WaitOnAddress` 路径改为消费上述 helper，不再直接比较 raw
+    `GetLastError = ERROR_TIMEOUT`。
+  - 扩充 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface`，冻结：
+    - `windows.ffi` 必须继续拥有 Windows last-error / timeout / wait-result helper
+    - `platform.thread`、`platform.sync` 必须消费这些 helper
+    - consumer 不得回归 raw `GetLastError`、`WAIT_OBJECT_0`、`ERROR_TIMEOUT`
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把新的 owner boundary 和记要同步到持续记录。
+  - 运行 fresh `bash build/verify_local.sh`，确认整套本地权威 gate 继续输出
+    `verify-local=pass`。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`：pass
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`：pass
+- `bash build/verify_local.sh`（platform windows wait/error ownerization batch）：pass

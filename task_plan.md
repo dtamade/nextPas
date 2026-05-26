@@ -6130,3 +6130,68 @@ Completed
 - 当前仍未完成的更大项不是这轮收口内容：
   完整 multi-root workspace model、更丰富的 package/workspace provenance 与
   nextPas 完整脱离宿主 FPC 的最终 codegen
+
+## Addendum: 2026-05-27 Platform Windows Wait/Error Semantics Ownerization
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+把 Windows wait result / last-error semantics 继续从 `platform.thread`、
+`platform.sync` 的 consumer 实现里抽离到 host-owned
+`nextpas.core.platform.windows.ffi`，让 platform L0 owner boundary 更诚实。
+
+### Current Gap
+
+- 前几批已经把 Windows timeout conversion 和 `FILETIME` token 下沉到了
+  `windows.ffi`，但 `platform.thread`、`platform.sync` 里仍有 raw
+  `GetLastError`、`WAIT_OBJECT_0`、`ERROR_TIMEOUT` 语义。
+- 这些 raw Windows token 还没有被 focused source-surface gate 冻结为
+  “必须由 host ffi owner 提供”的公开约束。
+
+### Architecture Decision
+
+- Windows wait result / error semantics 与 timeout conversion 一样，都属于宿主 ABI /
+  policy truth，应继续归 `nextpas.core.platform.windows.ffi` owner。
+- `platform.thread`、`platform.sync` 继续负责 nextPas 的稳定错误映射和 API 契约，
+  但不直接持有 raw `GetLastError` / `WAIT_*` / `ERROR_*` 语义。
+- 这批只收紧 owner boundary，不改变 `platform.thread` / `platform.sync`
+  对外 public API，也不伪装成已经拿到 Windows runtime evidence。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `nextpas.core.platform.windows.ffi`，补齐 Windows last-error / wait-result helper
+- [x] 让 `platform.thread` 改为消费 host-owned Windows error / wait semantics
+- [x] 让 `platform.sync` 改为消费 host-owned Windows error / timeout semantics
+- [x] 扩充 `test_platform_thread_host_ffi_surface`
+- [x] 扩充 `test_platform_sync_host_ffi_surface`
+- [x] 运行 focused tests
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `windows.ffi must expose Windows last-error conversion helper`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `windows.ffi must expose Windows last-error conversion helper`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 Windows wait API 的 public contract
+- 这批不声称 macOS / FreeBSD / Android 已有新增 runtime evidence
+- 这批不继续扩 `platform.time` / `platform.sync` 的下一轮 ownerization 目标
