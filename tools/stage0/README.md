@@ -242,7 +242,7 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。
 `query-definitions` 继续把这些 binding 的 target symbol id join 回同一份 semantic
 symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset 与 target
-symbol id/name/kind/owner unit/source path/offset。当前 name-only binding pass 会显式排除
+symbol id/name/kind/param count/owner unit/source path/offset。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
@@ -255,7 +255,9 @@ symbol owner，再在该 owner 下选择 method target，避免 query surface �
 class method，并把 `Child.Touch` 这类 inherited call 投影到 parent method target；exact type
 已有同名 method 但 arity/body 不匹配或不唯一时会保守停止。完整 member resolver、
 visibility checking、runtime constructor lowering、virtual dispatch 与 type-based overload
-resolution 仍属于后续 language-service / semantic model 工作。
+resolution 仍属于后续 language-service / semantic model 工作。class method overload 目前只按
+argument count 选择同 owner / 同 qualified name / 同 `ParamCount` 的唯一 method symbol，并通过
+`queryDefinitions[].targetParamCount` 暴露 target arity。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。

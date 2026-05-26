@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 72 把 class method overload 的 member-call target identity 从“同名 method + body 参数数”
+  补强为“同名同 owner 同 `ParamCount` method symbol”：`Worker.Pick;` 与 `Worker.Pick(1);`
+  现在会分别绑定到 0 参与 1 参的 `TWorker.Pick` method symbol。
+- parser 不再跳过 class method declaration 的 parameter list；`gnkClassMethod` 现在携带已有
+  `gnkParameterList` / `gnkParameterDecl` 结构，`ProcessClassFields(...)` 可为 method symbol 设置
+  `ParamCount`。
+- `queryDefinitions` 现在投影 `targetParamCount`，stage0 member-call gate 已固定 overloaded
+  `Pick` 的 0 参/1 参 target；这让 automation / future IDE adapter 不必回扫 `querySymbols`
+  才能确认 target arity。
+- Batch 72 仍不声明 type-based overload resolution、default parameter matching、implicit
+  conversion、visibility checking、virtual/override dispatch、record/property receiver 或
+  runtime constructor lowering。
 - Batch 71 把 `member-call` target lookup 从 receiver exact class type 推进到最小 inherited
   method lookup：`TChild` receiver 在本类没有 `Touch` 时，会沿 `ParentTypeId` 找到
   `TBase.Touch`，并注册 target 为 parent method symbol 的 `member-call` binding。

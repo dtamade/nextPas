@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 72 Member Overload Target Identity
+
+### Goal
+
+关闭 Batch 71 后暴露出的下一个 member-call identity 缺口：当同一个 class 内存在同名 method
+overload 时，例如 `TWorker.Pick` 同时有 0 参数与 1 参数版本，`Worker.Pick(1)` 必须绑定到
+1 参数 method symbol，而不是只拿第一个同名 `TWorker.Pick` symbol。
+
+本批次新增并冻结：
+
+- class method declaration 的 parameter list 进入 green tree，不再在 parser 中被跳过。
+- `method` semantic symbol 记录 `ParamCount`，member target lookup 用 call arg-count 选择同名
+  method symbol。
+- `queryDefinitions` 对 target symbol 额外投影 `targetParamCount`，让 stage0 / automation 能直接
+  验证 overloaded target identity。
+
+### Architecture Decision
+
+这是 argument-count based overload identity，不是完整 type-based overload resolution：
+
+- target 仍必须同 owner unit、同 qualified method name。
+- 同 owner 同名同参数个数 method symbol 若不唯一，保守不绑定。
+- body declaration 仍作为二次确认：若存在 method body，则必须恰好一个 body 的参数个数与 call
+  arg-count 匹配。
+- 不实现 typed argument conversion、default parameter、visibility、virtual/override dispatch 或
+  property/record/array receiver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增同名 `TWorker.Pick` 0 参/1 参 focused semantic regression
+- [x] 让 class method declaration parameter list 进入 syntax tree
+- [x] 为 `method` symbol 设置 `ParamCount`
+- [x] 让 exact member lookup 按 `ParamCount` 选择 target method symbol
+- [x] 在 `queryDefinitions` 投影 `targetParamCount`
+- [x] 扩展 `stage0-query-member-call-bindings-check`
+- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 曾失败在
+  `semantic-call-bindings-failure=missing-zero-arg-member-overload-symbol`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+  `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 type-based overload resolution
+- 不实现 default parameter / implicit conversion matching
+- 不实现 visibility checking 或 virtual/override dispatch
+- 不实现 record/property/array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 71 Inherited Member Receiver Binding
 
 ### Goal

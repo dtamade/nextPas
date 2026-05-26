@@ -6,6 +6,8 @@ type
     procedure Run;
     procedure SetValue(Value: Integer);
     function Add(A, B: Integer): Integer;
+    procedure Pick;
+    procedure Pick(Value: Integer);
   end;
   TBaseWorker = class
     procedure Touch;
@@ -31,6 +33,14 @@ begin
   Add := A + B;
 end;
 
+procedure TWorker.Pick;
+begin
+end;
+
+procedure TWorker.Pick(Value: Integer);
+begin
+end;
+
 procedure TBaseWorker.Touch;
 begin
 end;
@@ -45,5 +55,7 @@ begin
   Worker.SetValue(7);
   Worker.SetValue;
   Halt(Worker.Add(1, 2));
+  Worker.Pick;
+  Worker.Pick(5);
   Child.Touch;
 end.

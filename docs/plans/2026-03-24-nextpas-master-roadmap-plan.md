@@ -167,7 +167,11 @@
   没有同名 method 时沿 `ParentTypeId` 绑定到 parent `TClass.Method`，但 exact type 已声明
   同名 method 且 arity/body 不匹配或不唯一时保守停止；完整 selector/member lookup、
   visibility checking、runtime constructor lowering、virtual/override dispatch 与 type-based
-  dispatch 仍保持 deferred。
+  dispatch 仍保持 deferred。`Batch 72` 补上 class method overload target identity：
+  class method declaration 的 parameter list 进入 green tree，`method` symbol 记录 `ParamCount`，
+  `member-call` 按 call argument count 选择唯一同 owner / 同 qualified name / 同 `ParamCount`
+  target，并在 `queryDefinitions` 中投影 `targetParamCount`；完整 type-based overload resolution
+  仍保持 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

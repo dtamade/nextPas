@@ -567,7 +567,8 @@ graph 作为 normalized side tables 同步投影进 line output 与 result envel
 adapter；当前最小条目包含 `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与
 `targetSymbolId`。`queryDefinitions[]` 继续把这些 binding 的 target symbol id join 回同一份
 session-owned symbol/unit truth，公开 target `name` / `kind` / owner unit / source path /
-byte offset，让调用方不需要在 query 外重扫源码或维护第二套 lookup。当前 binding surface
+byte offset；当 target symbol 有参数元数据时还会公开 `targetParamCount`，让调用方不需要在
+query 外重扫源码或维护第二套 lookup。当前 binding surface
 已经把 `Holder.Help();` 这类 selector/member callee 从 name-only lookup 中排除，避免误绑定
 到 imported bare callable；同时先公开 `member-call` 的最小正向边界：direct class variable
 receiver 的 method statement call（例如 `Worker.Run;` / `Worker.Run();` /
@@ -580,9 +581,10 @@ imported class type 作为 root variable type 时的 direct member call，会绑
 若 receiver exact class type 没有同名 method，当前会沿 `ParentTypeId` 链查 parent class
 method，并继续按 parent type symbol owner 限定 target；exact type 已声明同名 method 但
 arity/body 不匹配或不唯一时不会穿透 parent。带参数 method call 只用同名 method body
-declaration 的 argument count 做唯一匹配。完整 member resolver、visibility checking、property
-accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
-virtual/override dispatch 与 type-based overload resolution 仍不属于当前 query contract。
+declaration 的 argument count 做唯一匹配，并在 class method overload 场景下要求 target
+method symbol 的 `ParamCount` 与 call argument count 对齐。完整 type-based overload
+resolution、member resolver、visibility checking、property accessor、record method、
+array/deref receiver、runtime constructor allocation/lowering 与 virtual/override dispatch 仍不属于当前 query contract。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。
 

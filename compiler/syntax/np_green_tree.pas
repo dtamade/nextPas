@@ -1960,14 +1960,8 @@ begin
                 end;
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
-                begin
-                  Inc(ACursor);
-                  while (ACursor < ALexer.TokenCount) and
-                    (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
-                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
-                    Inc(ACursor);
-                  MatchTokenSilent(ALexer, ACursor, tkRParen);
-                end;
+                  ParseParameterList(ALexer, ACursor, ElementNode, ATree,
+                    ADiagnostics, ARootFileId);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkColon) then
                 begin

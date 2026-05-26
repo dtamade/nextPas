@@ -1101,6 +1101,7 @@ var
   QualifiedName: string;
   Symbol: TSemanticSymbol;
   SymbolId: LongInt;
+  SymbolMatchCount: LongInt;
   TypeSymbol: TSemanticSymbol;
 begin
   Result := 0;
@@ -1112,6 +1113,7 @@ begin
 
   QualifiedName := TypeSymbol.Name + '.' + AMemberName;
   SymbolId := 0;
+  SymbolMatchCount := 0;
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -1120,11 +1122,14 @@ begin
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       AMethodNameFound := True;
-      SymbolId := Symbol.SymbolId;
-      Break;
+      if Symbol.ParamCount = AArgCount then
+      begin
+        Inc(SymbolMatchCount);
+        SymbolId := Symbol.SymbolId;
+      end;
     end;
   end;
-  if SymbolId <= 0 then
+  if SymbolMatchCount <> 1 then
     Exit;
 
   BodyCandidateCount := 0;
@@ -2997,6 +3002,7 @@ begin
           SymbolId := FModel.AddSymbol(
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+          FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin

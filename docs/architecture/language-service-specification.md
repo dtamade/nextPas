@@ -200,9 +200,10 @@ call，并以 `member-call` 指向 `TClass.Method` method symbol；root/imported
 场景下，receiver 会沿变量 `TypeId` 回到对应 type symbol owner，再按 owner 限定 target
 method。若 receiver exact class type 没有同名 method，当前会沿 `ParentTypeId` 链查 parent
 class method；若 exact type 已有同名 method 但 arity/body 不匹配或不唯一，则保守停止。带参数
-call 只用同名 method body declaration 的 argument count 做唯一匹配。完整 member resolver、
-visibility checking、property accessor、record method、array/deref receiver、runtime constructor
-allocation/lowering、virtual/override dispatch 与 type-based overload resolution 仍然 deferred。
+call 会用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的唯一 method
+symbol，并通过 `queryDefinitions[].targetParamCount` 暴露 target arity。完整 type-based overload
+resolution、member resolver、visibility checking、property accessor、record method、array/deref
+receiver、runtime constructor allocation/lowering、virtual/override dispatch 仍然 deferred。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

@@ -1732,6 +1732,12 @@ begin
     );
     AppendJsonStringField(Fields, 'targetName', TargetSymbol.Name);
     AppendJsonStringField(Fields, 'targetKind', TargetSymbol.Kind);
+    AppendJsonIntegerField(
+      Fields,
+      'targetParamCount',
+      TargetSymbol.ParamCount,
+      TargetSymbol.ParamCount >= 0
+    );
     AppendJsonStringField(
       Fields,
       'targetOwnerUnitId',

@@ -95,11 +95,12 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   owner unit 限定 `TClass.Method`，避免继续靠第一个同名 class/method 字符串匹配。若 receiver
   exact class type 未声明同名 method，member lookup 会沿 `ParentTypeId` 链查 parent class
   method，并继续使用 parent type symbol owner 限定 target；exact type 已声明同名 method 但
-  arity/body 不匹配或不唯一时会保守停止。带参数 method call 只使用同名 `TClass.Method`
-  body declaration 的 argument count 做唯一匹配；完整 member resolver、visibility checking、
-  property accessor、record method、array/deref receiver、runtime
-  constructor allocation/lowering、virtual/override dispatch 与 type-based overload resolution
-  仍未完成
+  arity/body 不匹配或不唯一时会保守停止。class method declaration 的 parameter list 会进入
+  green tree，`method` symbol 会记录 `ParamCount`；带参数 method call 使用 call argument count
+  选择同 owner、同 qualified name、同 `ParamCount` 的唯一 target symbol，并用同名
+  `TClass.Method` body declaration 的 argument count 做二次确认。完整 type-based overload
+  resolution、member resolver、visibility checking、property accessor、record method、
+  array/deref receiver、runtime constructor allocation/lowering 与 virtual/override dispatch 仍未完成
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

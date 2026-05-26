@@ -3,6 +3,41 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 72 member overload target identity)
+
+- **Status:** completed
+- Objective:
+  - 把 member-call target lookup 从“同 owner 同名 method + argument count body check”推进到
+    “同 owner 同名同 `ParamCount` method symbol”，避免 class method overload 时绑定到第一个同名
+    symbol。
+- Baseline:
+  - Batch 71 已能沿 parent chain 找 inherited method，但 exact lookup 仍先抓第一个同名
+    `TClass.Method` symbol。
+  - parser 过去会跳过 class method declaration 的 parameter list，`method` symbol 没有稳定
+    `ParamCount`，因此 `Worker.Pick(1)` 这类同名 overload 无法在 symbol identity 上区分。
+- Actions taken:
+  - 先写 focused RED，构造 `TWorker.Pick` 0 参/1 参 overload，并要求 `Worker.Pick;` 与
+    `Worker.Pick(1);` 分别绑定到对应 `ParamCount` 的 method symbol。
+  - class method declaration 现在复用 `ParseParameterList(...)`，让参数列表进入 green tree。
+  - `ProcessClassFields(...)` 为 `method` symbol 设置 `ParamCount`；exact member lookup 按
+    owner、qualified name 与 `ParamCount` 选择唯一 symbol。
+  - `queryDefinitions` 新增 `targetParamCount`，并扩展 `query_member_call_bindings` fixture /
+    `stage0-query-member-call-bindings-check` 固定 0 参与 1 参 `Pick` target。
+  - 同步 semantic model / language service / developer tooling / stage0 / roadmap docs，明确当前
+    是 argument-count identity，不是 type-based overload resolution。
+- Verification:
+  - RED: focused semantic test 曾失败在
+    `semantic-call-bindings-failure=missing-zero-arg-member-overload-symbol`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只补 method symbol arity identity 与 query target arity projection，不展开 typed argument
+    matching、default parameter、visibility 或 virtual dispatch。
+  - 复盘：这轮把 Batch 66 的 argument-count 规则真正落到 method symbol identity 上，避免 query /
+    IDE 只拿到“同名第一个 symbol”的弱真相；下一步如果继续 member resolver，应优先处理 typed
+    argument relation 或 ambiguous same-arity overload 的结构化诊断。
+
 ## Session: 2026-05-26 (Batch 71 inherited member receiver binding)
 
 - **Status:** completed
