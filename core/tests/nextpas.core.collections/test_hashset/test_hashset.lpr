@@ -5,6 +5,7 @@ program test_hashset;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.collections.intf,
   nextpas.core.collections.hashmap;
 
 type

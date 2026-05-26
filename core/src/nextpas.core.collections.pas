@@ -14,6 +14,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
+  nextpas.core.collections.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.collections.iterators,
@@ -54,7 +55,7 @@ uses
 
 type
   // 统一对外导出的关键接口类型（非泛型别名；泛型类型请直接使用其本单元 uses 引入的原始定义）
-  ICollection = nextpas.core.collections.base.ICollection;
+  ICollection = nextpas.core.collections.intf.ICollection;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;

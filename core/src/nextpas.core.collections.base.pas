@@ -21,6 +21,11 @@ type
 
   generic TGenericArray<T> = array of T;
 
+  generic TElementRef<T> = record
+  public type
+    PElement = ^T;
+  end;
+
   {**
    * TMapEntry<K,V> - 键值对记录
    *
