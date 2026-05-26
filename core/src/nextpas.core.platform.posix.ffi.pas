@@ -11,11 +11,35 @@ type
   end;
   PTimeSpec = ^timespec;
 
-  pthread_mutex_t = array[0..39] of Byte;
-  pthread_mutexattr_t = array[0..7] of Byte;
-  pthread_rwlock_t = array[0..55] of Byte;
-  pthread_cond_t = array[0..47] of Byte;
-  pthread_condattr_t = array[0..7] of Byte;
+  pthread_mutex_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..39] of Byte);
+  end;
+
+  pthread_mutexattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..7] of Byte);
+  end;
+
+  pthread_rwlock_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..55] of Byte);
+  end;
+
+  pthread_cond_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..47] of Byte);
+  end;
+
+  pthread_condattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..7] of Byte);
+  end;
 
 const
   CLOCK_REALTIME  = 0;
