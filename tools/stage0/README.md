@@ -257,9 +257,12 @@ root source 中变量的 class type 也可以来自 imported project/source unit
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
 当 receiver exact class type 没有同名 method 时，当前还会沿 `ParentTypeId` 链查 parent
 class method，并把 `Child.Touch` 这类 inherited call 投影到 parent method target；exact type
-已有同名 method 但 arity/body 不匹配或不唯一时会保守停止。完整 member resolver、
-visibility checking、runtime constructor lowering、virtual dispatch 与 type-based overload
-resolution 仍属于后续 language-service / semantic model 工作。class method overload 目前只按
+已有同名 method 但 arity/body 不匹配或不唯一时会保守停止。implicit source-backed `System`
+路径下，no-fold typed HIR 会复制继承到的 `TObject.Destroy` VMT slot/function truth，并把
+`Obj.Free` lowering 到当前有效 `Destroy` runtime call；这仍不是完整 heap free、nil guard 或
+动态 virtual dispatch runtime。完整 member resolver、visibility checking、runtime constructor
+lowering、完整 virtual dispatch 与 type-based overload resolution 仍属于后续 language-service /
+semantic model 工作。class method overload 目前只按
 argument count 选择同 owner / 同 qualified name / 同 `ParamCount` 的唯一 method symbol，并通过
 `queryDefinitions[].targetParamCount` 暴露 target arity；若同 arity 有多个候选，当前可推断的
 argument signature 会选择唯一 `ParamSignature` target，并通过

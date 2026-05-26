@@ -106,12 +106,14 @@ result/span/allocation/path discipline。如果这层还没有 nextPas 自己的
 `System` 基线还要明确承接 class/object 的最低语义事实。当前仓库已经落地最小
 source-backed `System.pas` / `TObject` slice：implicit runtime `System` 会在语义层指向
 target-installed `units/linux-x86_64/System.pas`，普通 `class` 默认继承 `System.TObject`，
-`Obj.Free` 会通过继承 member lookup 绑定到 `TObject.Free`。这个 source-backed truth 现在不再
+`Obj.Free` 会通过继承 member lookup 绑定到 `TObject.Free`，no-fold typed HIR 也会把继承
+路径上的 `Free` lowering 到当前有效 `Destroy` runtime call。这个 source-backed truth 现在不再
 依赖用户显式写 `uses System`；但 implicit runtime 仍保持 `OriginClass=implicit-runtime`，
 backend extra assemble/link 不会因此自动把 `System.pas` 加进每个 program。显式 `uses System`
 仍会继续解析真实源码，并可把 implicit runtime 节点升级为 explicit source provenance。
-长期方向仍然不是在语义层硬编码更多名字，而是让 nextPas-owned `System` 继续提供真实 lifetime
-符号，供语义分析、lowering 和 runtime bootstrap 共同消费。
+长期方向仍然不是在语义层硬编码更多名字，而是让 nextPas-owned `System` 继续提供 heap free、
+nil guard、unit init/fini 等真实 lifetime 符号，供语义分析、lowering 和 runtime bootstrap
+共同消费。
 
 这里的运行时规范与 `Source syntax`、`Core semantics` 互相配合，但不互相替代。
 语法和核心语义决定程序“被如何理解”，RTL 决定这些程序在运行期“如何表现”。

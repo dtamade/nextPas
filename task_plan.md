@@ -48,6 +48,60 @@ Completed
 主 checkout 仍有未提交同事工作；preview 分支验证通过后，等待主线现场干净或由负责人确认可集成，
 再合入 `main`、删除旧 `platform-sync-hardening` worktree，并从最新主线重新开新 worktree。
 
+## Addendum: 2026-05-26 Batch 89 Inherited TObject.Destroy Free Lowering
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 88 的 source-backed implicit `System` truth 往对象生命周期
+下一层推进：
+
+- 普通 `class` 即使没有显式父类，也要继承 `System.TObject` 的 VMT slot/function truth。
+- `Worker.Free` 在 no-fold typed HIR 中不能只停在 `TObject.Free` binding；当 receiver class
+  只继承 `System.TObject.Destroy` 时，也要 lowering 到有效 `TObject.Destroy` runtime call。
+- 这条 gate 只证明 compiler semantic/HIR 层的 lifecycle intent，不宣称完整 heap free、完整
+  virtual dispatch 或 backend/link 已接管 nextPas `System.pas`。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+这是最小 `Free -> effective Destroy` semantic lowering，不是完整对象释放：
+
+- `ProcessClassFields(...)` 要同时消费显式父类和 `ProcessTypeSection(...)` 设置的隐式
+  `ParentTypeId`，让隐式 `System.TObject` 的 VMT metadata 可以被子类复制。
+- `Free` lowering 不再硬写 `TClass.Destroy`；它先查 `TClass$vmt_slot_Destroy`，再通过
+  `TClass$vmt_func_<slot>` 找到当前有效 destructor，继承路径可落到 `TObject.Destroy`。
+- 仍不在本批处理析构后的内存释放、nil guard、动态 dispatch table 运行时布局或 unit init/fini。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：implicit source-backed `System` 下，普通 class 的 `Worker.Free` 必须 lowering 到继承的
+      `TObject.Destroy`
+- [x] 让隐式父类也复制父类 VMT slot/function metadata
+- [x] 让 `Free` lowering 使用 VMT slot 对应的有效 destructor function name
+- [x] 同步 System / runtime bootstrap / semantic docs 与持续记录
+- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-implicit-system-free-inherited-destroy-lowering`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 FPC `System`
+- 不实现完整 heap free / nil guard / dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不实现 unit init-fini
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Batch 88 Implicit Runtime Source-backed System Semantics
 
 ### Goal

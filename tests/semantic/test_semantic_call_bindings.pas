@@ -1183,6 +1183,106 @@ begin
   end;
 end;
 
+procedure CheckImplicitSystemObjectFreeLowersToInheritedDestroy;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  DestroyCallCount: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  HirNode: TTypedHirNode;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  SystemPath: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SystemPath := ExpandFileName('units/linux-x86_64/System.pas');
+  SourceText :=
+    'program ImplicitSystemObjectFreeLowering;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Free;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        Ast.DeclaredName,
+        '',
+        ruoRootSource,
+        'linux-x86_64',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'System',
+        SystemPath,
+        ruoImplicitRuntime,
+        'linux-x86_64',
+        'unit',
+        2
+      )
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-implicit-system-free-lowering-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-implicit-system-free-lowering-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-implicit-system-free-lowering-model-status:' +
+        Model.Status);
+
+    DestroyCallCount := 0;
+    for Index := 0 to Model.TypedHirNodeCount - 1 do
+    begin
+      HirNode := Model.TypedHirNodeAt(Index);
+      if SameText(HirNode.Kind, 'call-runtime') and
+        SameText(HirNode.DisplayName, 'TObject.Destroy') then
+      begin
+        Inc(DestroyCallCount);
+        if Pos('TObject.Destroy' + #9 + 'var Worker', HirNode.Operand) <> 1 then
+          Fail('implicit-system-free-destroy-operand-mismatch:' +
+            HirNode.Operand);
+      end
+      else if SameText(HirNode.Kind, 'call-runtime') and
+        SameText(HirNode.DisplayName, 'TWorker.Destroy') then
+        Fail('implicit-system-free-lowered-to-missing-worker-destroy');
+    end;
+    if DestroyCallCount = 0 then
+      Fail('missing-implicit-system-free-inherited-destroy-lowering');
+    if DestroyCallCount <> 1 then
+      Fail('unexpected-implicit-system-free-destroy-call-count:' +
+        IntToStr(DestroyCallCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckSpecializedGenericMemberCallStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -2603,6 +2703,7 @@ begin
     CheckKnownFieldMemberCallStaysDeferred;
     CheckSystemObjectFreeMemberCallStaysDeferred;
     CheckSourceBackedSystemObjectFreeMemberCallBinding;
+    CheckImplicitSystemObjectFreeLowersToInheritedDestroy;
     CheckSpecializedGenericMemberCallStaysDeferred;
     CheckOverloadBindings;
     CheckBareTypedOverloadBindingTargets;
