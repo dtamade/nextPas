@@ -1,11 +1,12 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-26 记录为准。
+2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync POSIX fallback runtime coverage；并行收口包含
-platform.sync FFI surface parity、platform.thread L0 surface coverage、
-platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
+当前最新本轮为 platform POSIX FFI target matrix hardening；并行收口包含
+platform.sync POSIX fallback runtime coverage、platform.sync FFI surface parity、
+platform.thread L0 surface coverage、platform.time L0 surface coverage、
+platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
@@ -14,6 +15,54 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform POSIX FFI target matrix hardening)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `nextpas.core.platform.posix.ffi` 从“主要按 Linux 近似”收紧成对 Linux、Android、
+    macOS、FreeBSD 更诚实的 pthread ABI target matrix，并把这批 contract 提升进 official
+    verify gate。
+- Baseline:
+  - `platform.time`、`platform.thread`、`platform.sync` 已经脱离 FPC 平台单元，但
+    `posix.ffi` 的 pthread opaque/type 假设仍偏 Linux-centric。
+  - `platform.sync` 的 public opaque size 对 Android/macOS/FreeBSD 还不够诚实。
+  - `build/verify_local.sh` 虽然已经执行 sync focused gates，但 final
+    `verify-local` envelope 还没有把 sync gate 与新的 `posix.ffi` source-surface contract
+    正式写进结构化结果。
+- Actions taken:
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 按目标分支收紧 pthread ABI：
+    FreeBSD 改成 pointer-backed mutex/rwlock/condvar/attr；macOS 改成 `64/16/200/24/48/16`
+    opaque size；Android 改成 `40/PtrInt/56/PtrInt/48/PtrInt`；Linux 改成
+    `40/Int32/56/Int64/48/Int32`，并补齐 `pthread_rwlockattr_t` 与 FreeBSD mutex kind 编号。
+  - `core/src/nextpas.core.platform.sync.pas` 追加 Android/macOS/FreeBSD 的
+    `PLATFORM_*_SIZE` 分支，让 public opaque storage 与 target pthread ABI 更一致。
+  - `core/src/nextpas.core.platform.thread.pas` 的 POSIX create path 改为对 thread state
+    整体 `FillChar` 清零，避免 FreeBSD pointer-shaped `pthread_t` 下的整数零赋值假设。
+  - 新增 `core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/`，固定
+    `posix.ffi` target matrix、FreeBSD pointer ABI 与 macOS/Android/Linux 关键 token。
+  - 扩充 `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/`，
+    固定 Android/macOS/FreeBSD 的 public opaque size branch 真实存在。
+  - `build/verify_local.sh` 新增 `core-platform-posix-ffi-surface-check`，并把
+    `corePlatformPosixFfiSurfaceCheck`、全部 sync focused gate 与 fallback gate 写入最终
+    `verify-local` envelope。
+- Verification:
+  - Focused GREEN: `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
+    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`、
+    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`、
+    `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test` 通过。
+  - Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
+    通过。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `core-platform-posix-ffi-surface-check=pass`、`corePlatformPosixFfiSurfaceCheck":"pass"`、
+    `corePlatformSyncCheck":"pass"`、`corePlatformSyncPosixFallbackCheck":"pass"`、
+    `coreSyncPosixFallbackCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 这批把 platform FFI 的“跨平台诚实度”往前推了一步：L0 public storage、pthread kind 编号与
+    source-surface gate 开始按 target matrix 说真话，而不是继续拿 Linux 近似值冒充 Unix 通用。
+  - 仍未闭环的是 host-side compile/runtime matrix：当前主机缺少 Darwin/FreeBSD/Android 的
+    cross RTL，所以下一步还需要补真实 cross-target compile gate 或外部 CI/runtime 证据。
 
 ## Session: 2026-05-26 (platform.sync POSIX fallback runtime coverage)
 

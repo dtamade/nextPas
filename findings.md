@@ -35,6 +35,26 @@
   non-Linux Unix 的 `platform_wait_address32` / wake 走 bucketed condvar fallback，Linux 继续默认
   走 futex，但可以通过 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 在 Linux 主机上强制验证
   fallback surface。
+- `nextpas.core.platform.posix.ffi` 现在开始按 target matrix 诚实建模 pthread ABI，而不是继续用
+  Linux 近似值覆盖所有 POSIX：
+  FreeBSD 的 mutex/rwlock/condvar/attr 都回到 pointer-backed handle；
+  macOS 的 opaque size 固定为 `64/16/200/24/48/16`；
+  Android 固定为 `40/PtrInt/56/PtrInt/48/PtrInt`；
+  Linux 固定为 `40/Int32/56/Int64/48/Int32`；
+  同时补齐 `pthread_rwlockattr_t` 与 FreeBSD mutex type 常量编号。
+- `platform.sync` 的 public opaque storage 现在也按 Linux/Android/macOS/FreeBSD/Windows/generic
+  Unix 分支，至少在 public size/align surface 上不再把 FreeBSD pointer handle 或 macOS rwlock
+  继续装进“通用 Unix 大数组”里。
+- 新增 `core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/`，并扩充
+  `test_platform_sync_posix_surface`，把 target-specific pthread ABI token 与 public opaque size
+  branch 都冻结成 source-surface gate。
+- `build/verify_local.sh` 现在不仅运行 sync focused gates，也会把
+  `corePlatformPosixFfiSurfaceCheck`、`corePlatformSyncCheck`、
+  `corePlatformSyncNoFpcCheck`、`corePlatformSyncL0BoundaryCheck`、
+  `corePlatformSyncPosixSurfaceCheck`、`corePlatformSyncSizeCheck`、
+  `corePlatformSyncWin64Check`、`corePlatformSyncExampleCheck`、
+  `corePlatformSyncBenchCheck`、`corePlatformSyncPosixFallbackCheck`、
+  `coreSyncPosixFallbackCheck` 正式写进最终 `verify-local` envelope。
 - `nextpas.core.platform.posix.ffi` 现在拥有跨 Linux/Android、macOS/FreeBSD 的 errno surface：
   `POSIX_EAGAIN` / `POSIX_EBUSY` / `POSIX_EINVAL` / `POSIX_ENOTSUP` / `POSIX_ETIMEDOUT`
   与 `posix_errno_location` 已沉到 nextPas-owned FFI，而不是让实现层去猜宿主符号。

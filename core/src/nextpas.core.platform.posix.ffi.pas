@@ -11,16 +11,116 @@ type
   end;
   PTimeSpec = ^timespec;
 
-  {$IFDEF NEXTPAS_MACOS}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   pthread_t = Pointer;
-  pthread_key_t = PtrUInt;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  pthread_t = PtrInt;
   {$ELSE}
   pthread_t = PtrUInt;
+  {$ENDIF}
+
+  {$IFDEF NEXTPAS_MACOS}
+  pthread_key_t = PtrUInt;
+  {$ELSEIF defined(NEXTPAS_ANDROID) or defined(NEXTPAS_FREEBSD)}
+  pthread_key_t = Int32;
+  {$ELSE}
   pthread_key_t = UInt32;
   {$ENDIF}
 
   TPThreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
 
+  {$IFDEF NEXTPAS_FREEBSD}
+  pthread_mutex_t = Pointer;
+  pthread_mutexattr_t = Pointer;
+  pthread_rwlock_t = Pointer;
+  pthread_rwlockattr_t = Pointer;
+  pthread_cond_t = Pointer;
+  pthread_condattr_t = Pointer;
+  {$ELSEIFDEF NEXTPAS_MACOS}
+  pthread_mutex_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..63] of Byte);
+  end;
+
+  pthread_mutexattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..15] of Byte);
+  end;
+
+  pthread_rwlock_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..199] of Byte);
+  end;
+
+  pthread_rwlockattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..23] of Byte);
+  end;
+
+  pthread_cond_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..47] of Byte);
+  end;
+
+  pthread_condattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..15] of Byte);
+  end;
+  {$ELSEIFDEF NEXTPAS_ANDROID}
+  pthread_mutex_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..39] of Byte);
+  end;
+
+  pthread_mutexattr_t = PtrInt;
+
+  pthread_rwlock_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..55] of Byte);
+  end;
+
+  pthread_rwlockattr_t = PtrInt;
+
+  pthread_cond_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..47] of Byte);
+  end;
+
+  pthread_condattr_t = PtrInt;
+  {$ELSEIFDEF NEXTPAS_LINUX}
+  pthread_mutex_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..39] of Byte);
+  end;
+
+  pthread_mutexattr_t = Int32;
+
+  pthread_rwlock_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..55] of Byte);
+  end;
+
+  pthread_rwlockattr_t = Int64;
+
+  pthread_cond_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..47] of Byte);
+  end;
+
+  pthread_condattr_t = Int32;
+  {$ELSE}
   pthread_mutex_t = record
     case Integer of
       0: (FAlign: UInt64);
@@ -39,6 +139,12 @@ type
       1: (FOpaque: array[0..55] of Byte);
   end;
 
+  pthread_rwlockattr_t = record
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..7] of Byte);
+  end;
+
   pthread_cond_t = record
     case Integer of
       0: (FAlign: UInt64);
@@ -50,6 +156,7 @@ type
       0: (FAlign: UInt64);
       1: (FOpaque: array[0..7] of Byte);
   end;
+  {$ENDIF}
 
 const
   CLOCK_REALTIME = Int32(0);
@@ -59,9 +166,15 @@ const
   CLOCK_MONOTONIC = Int32(1);
   {$ENDIF}
 
+  {$IFDEF NEXTPAS_FREEBSD}
+  PTHREAD_MUTEX_ERRORCHECK = 1;
+  PTHREAD_MUTEX_RECURSIVE  = 2;
+  PTHREAD_MUTEX_NORMAL     = 3;
+  {$ELSE}
   PTHREAD_MUTEX_NORMAL     = 0;
   PTHREAD_MUTEX_RECURSIVE  = 1;
   PTHREAD_MUTEX_ERRORCHECK = 2;
+  {$ENDIF}
 
   {$IFDEF NEXTPAS_LINUX}
   _SC_NPROCESSORS_ONLN = Int32(84);

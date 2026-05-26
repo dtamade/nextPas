@@ -57,6 +57,16 @@ begin
     'platform.sync must expose a generic Unix branch beyond Linux-only sync support');
   CheckTokenPresent(LSource, 'posix_wait_bucket_count',
     'platform.sync must declare a POSIX wait bucket fallback for address-wait emulation');
+  CheckTokenPresent(LSource, 'nextpas_android',
+    'platform.sync must expose an Android-specific opaque size branch');
+  CheckTokenPresent(LSource, 'nextpas_macos',
+    'platform.sync must expose a macOS-specific opaque size branch');
+  CheckTokenPresent(LSource, 'nextpas_freebsd',
+    'platform.sync must expose a FreeBSD-specific opaque size branch');
+  CheckTokenPresent(LSource, 'platform_rwlock_size  = 200',
+    'platform.sync must preserve the macOS rwlock opaque size');
+  CheckTokenPresent(LSource, 'platform_mutex_size   = 8',
+    'platform.sync must preserve the FreeBSD pointer-sized mutex storage');
 end;
 
 begin

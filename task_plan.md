@@ -15,9 +15,10 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync POSIX Fallback Runtime Coverage；并行收口包含
-Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
-Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
+当前最新本轮为 Platform POSIX FFI Target Matrix Hardening；并行收口包含
+Platform Sync POSIX Fallback Runtime Coverage、Platform Sync FFI Surface Parity、
+Platform Thread L0 Surface Coverage、Platform Time L0 Surface Coverage 与
+Platform API Boundary Cleanup；Batch 103 Object Release
 Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
@@ -25,6 +26,62 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform POSIX FFI Target Matrix Hardening
+
+### Goal
+
+把 `platform` 的 POSIX ABI 基线从 “Linux 近似值可以先顶着” 提升到更诚实的 target matrix：
+
+- `nextpas.core.platform.posix.ffi` 的 pthread types/opaque sizes/attr kinds 要开始按 Linux、
+  Android、macOS、FreeBSD 分支说真话。
+- `platform.sync` 的 public opaque storage 要跟着 target matrix 收紧，至少先把 public
+  size/alignment contract 调整到不明显失真。
+- 这批 contract 不能只存在于源码 diff 里，要进入 focused gate 与 `verify-local`
+  的 machine-readable success envelope。
+
+### Architecture Decision
+
+- platform FFI 继续集中在 nextPas-owned `*.ffi.pas`，实现单元只消费 ABI 声明，不回退到
+  FPC 平台单元。
+- 对于当前主机暂时无法 cross-compile 的 Darwin/FreeBSD/Android，先用 source-surface gate
+  冻结 ABI contract，而不是伪装成“已经有真实跨平台编译证据”。
+- `platform.sync` public opaque size 先优先追求 target honesty，再继续做更细的 ABI matrix
+  compile/runtime proof。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 收紧 `nextpas.core.platform.posix.ffi` 的 pthread target matrix
+- [x] 补齐 `pthread_rwlockattr_t`
+- [x] 固定 FreeBSD mutex kind 编号
+- [x] 调整 `platform.sync` 的 target-specific public opaque sizes
+- [x] 修正 `platform.thread` 对 pointer-shaped `pthread_t` 的初始化假设
+- [x] 新增 `test_platform_posix_ffi_surface`
+- [x] 扩充 `test_platform_sync_posix_surface`
+- [x] 把新 gate 与 sync gate result 写进 `build/verify_local.sh`
+- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- Focused GREEN: `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
+  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`、
+  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`、
+  `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test` 通过。
+- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `core-platform-posix-ffi-surface-check=pass`、`corePlatformPosixFfiSurfaceCheck":"pass"`、
+  `corePlatformSyncCheck":"pass"`、`corePlatformSyncPosixFallbackCheck":"pass"`、
+  `coreSyncPosixFallbackCheck":"pass"`、`verify-local=pass`。
+
+### Non-goals
+
+- 这批不宣称 Darwin/FreeBSD/Android 已有 host-side runtime 证据
+- 这批不引入新的 platform public API
+- 这批不把 source-surface gate 伪装成 cross-target compile proof
 
 ## Addendum: 2026-05-26 Platform Sync POSIX Fallback Runtime Coverage
 

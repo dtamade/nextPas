@@ -51,7 +51,7 @@ begin
     Exit(-1);
 
   New(LState);
-  LState^.Thread := 0;
+  FillChar(LState^, SizeOf(LState^), 0);
 
   Result := pthread_create(@LState^.Thread, nil, TPThreadStartRoutine(AProc), AArg);
   if Result = 0 then
