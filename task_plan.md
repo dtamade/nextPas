@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 105 No Matching Overload Diagnostics；Batch 104 Function Result Call Type
+当前最新本轮为 Batch 106 Imported No Matching Overload Diagnostics；Batch 105 No Matching Overload
+Diagnostics、Batch 104 Function Result Call Type
 Mismatch Evidence 已完成；并行收口包含
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
 Batch 102 Object Release Invalid Boundary、
@@ -25,6 +26,66 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 106 Imported No Matching Overload Diagnostics
+
+### Goal
+
+把 Batch 105 的 `sema.no-matching-overload` 从 root-owned overload set 推进到第一条 imported
+callable 安全边界：当 root source 没有同名 callable，imported units 中存在同名同参数个数的多个
+候选，当前 argument signature 来自稳定事实，且没有任何 imported candidate signature 匹配时，
+发出 `sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `uses HelperA, HelperB; Pick(True);`，其中 `HelperA.Pick(Integer)` 与
+  `HelperB.Pick(AnsiString)` 同时可见时，必须失败为 `sema.no-matching-overload`，且失败调用不注册
+  `call` binding。
+- root callable 仍优先；只在 root 没有同名 callable、imported candidate set 可证明全不匹配时报告。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  implicit conversion、future imported resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-no-matching-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedNoMatchingOverloadCheck`。
+
+### Architecture Decision
+
+这是 imported callable failure surface 的第一条 no-match 切片，不是完整 Pascal overload resolver：
+
+- root / imported 优先级不改变；root 明确有 callable name 时不回落 imported。
+- imported ambiguity 仍由 `sema.ambiguous-overload` 表达，single imported target 的 type mismatch 继续
+  deferred。
+- member no-match、implicit conversion、default parameter ranking、var/out compatibility、visibility
+  checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 imported `Pick(Integer)` / `Pick(AnsiString)` 调 `Pick(True)` 的 focused regression
+- [x] 在 imported bare call lookup 中带出 `no-matching-overload` failure kind
+- [x] 复用 semantic analyzer 中现有 `sema.no-matching-overload` 投影
+- [x] 新增 `tests/fixtures/imported_no_matching_overload` 与 `imported-no-matching-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-no-matching-overload-check=pass`、`importedNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 single imported target type mismatch 纳入 diagnostics
+- 不把 member-call no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 105 No Matching Overload Diagnostics
 

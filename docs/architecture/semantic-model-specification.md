@@ -87,8 +87,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `requiredParamCount..ParamCount` 的可接受 arity 区间，并只用当前已提供参数的 compact
   argument signature 前缀选择唯一 target；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
-  `sema.type-mismatch`，imported target、class/record/alias 变量/参数、imported/带参/member
-  function result 相关 no-match、无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  `sema.type-mismatch`；root source 没有同名 callable、imported 同名同 arity 多候选、稳定
+  argument signature 全不匹配时发 `sema.no-matching-overload`。single imported target
+  type mismatch、class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
+  无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
@@ -299,8 +301,8 @@ candidate collection
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
 - `sema.no-matching-overload`
-  - 先用于 root-owned bare procedure/function call binding 中，同名同 arity 多候选存在、argument
-    signature 来自稳定 evidence、但没有任何 candidate signature 匹配的场景
+  - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
+    argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
 - `sema.unknown-member`

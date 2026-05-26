@@ -1084,7 +1084,11 @@ begin
     Exit(False);
   end
   else if ImportedSignatureMatchCount = 0 then
+  begin
+    if AHasTypeMismatchEvidence then
+      AResolutionFailureKind := 'no-matching-overload';
     Exit(False);
+  end;
 
   ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
   ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;

@@ -3,9 +3,10 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 105 no matching overload diagnostics；并行收口包含
-platform.thread L0 surface coverage、platform.time L0 surface coverage、platform API boundary cleanup
-与 Batch 104 function result call type mismatch evidence；Batch 103 object release
+当前最新本轮为 Batch 106 imported no matching overload diagnostics；Batch 105 no matching overload
+diagnostics、Batch 104 function result call type mismatch evidence 已完成；并行收口包含
+platform.thread L0 surface coverage、platform.time L0 surface coverage 与 platform API boundary cleanup；
+Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
@@ -13,6 +14,39 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 106 imported no matching overload diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 imported bare overload 的稳定 signature no-match 从 silent deferred 推进到
+    `sema.no-matching-overload`。
+- Baseline:
+  - Batch 105 已覆盖 root-owned overload set，但 imported 多候选 `ImportedSignatureMatchCount = 0`
+    仍保持 deferred。
+  - 当前 argument signature 和 stable evidence 已能覆盖 literal/纯表达式、变量、参数和 root-owned
+    零参 function result；因此 root source 无同名 callable、imported 多候选全不匹配这条边界可以安全收口。
+- Actions taken:
+  - 先写 focused RED：`uses HelperA, HelperB; Pick(True);`，其中 imported `Pick(Integer)` /
+    `Pick(AnsiString)` 同时可见时，必须触发 `sema.no-matching-overload`、semantic model status
+    `failure`，且不注册失败 call binding。
+  - `LookupCallBindingDeclaration(...)` 在 imported 同名同 arity 多候选、argument signature 稳定、
+    signature match count 为 0 时返回 `no-matching-overload` failure kind。
+  - `SeedCallBindingsInNode(...)` 复用已有 projection，把该 failure kind 投影成
+    `sema.no-matching-overload`。
+  - 新增 `tests/fixtures/imported_no_matching_overload`，并把
+    `imported-no-matching-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-imported-no-matching-overload-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `imported-no-matching-overload-check=pass`、`importedNoMatchingOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批不扩大到 single imported target type mismatch、member no-match、implicit conversion、
+    default parameter ranking、var/out compatibility 或 visibility checking。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-26 (Batch 105 no matching overload diagnostics)
 
@@ -94,6 +128,7 @@ platform/core 工作流保留下来的已完成记录。
     task 等属于 `nextpas.core.thread` 或更高层。
   - 本批把 `platform_thread_self` 的类型边界、测试入口、示例、基准和 official gate 一起收口；
     Windows/macOS/Android 仍需要后续真实主机/CI runtime 证据，当前 Win64 是 compile-only。
+
 ## Session: 2026-05-26 (Batch 104 function result call type mismatch evidence)
 
 - **Status:** completed; verification passed

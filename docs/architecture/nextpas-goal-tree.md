@@ -35,7 +35,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - `core/` 已开始成为 nextPas 未来 RTL + framework 的独立基础设施，但当前由 core 负责人推进；
   非 core 开发不得直接修改 `core/` 代码，只能提出 compiler/tooling 侧需求或 review 意见。
 - 最大未完成面仍在 compiler correctness，尤其是语义系统：完整 overload resolver、完整 type checking、
-  imported callable no-match、unknown callable/member、record/property/array/deref receiver、
+  member no-match、unknown callable/member、record/property/array/deref receiver、
   implicit conversion、default parameter lowering/ranking、visibility 与更完整 FPC 兼容语义。
 
 ## 使用规则
