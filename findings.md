@@ -29,6 +29,9 @@
   `clock_gettime/getres`、`nanosleep`、`sched_yield`、`sysconf` 与 pthread
   type/function declarations；host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno 常量和 errno
   symbol binding 已经不应继续留在这里。
+- 现在新增了 platform-level `test_platform_ffi_owner_boundary`：它会扫描整组
+  `nextpas.core.platform*.pas`，固定“非 `*.ffi.pas` 不得声明 `external`、`*.ffi.pas`
+  必须继续拥有 `external`、`platform.sync.windows.ffi` 不得回归”这三条 owner boundary。
 - `core/src/nextpas.core.platform.android.ffi.pas`、
   `core/src/nextpas.core.platform.freebsd.ffi.pas`、
   `core/src/nextpas.core.platform.unix.ffi.pas` 已新增；`linux.ffi` 与 `darwin.ffi` 也扩成 host-owned
@@ -71,6 +74,7 @@
   FFI surface 全部冻结成 source-surface gate；同时测试必须支持“从测试目录运行”和“从 repo root 的
   official verify 入口运行”两种路径解析。
 - `build/verify_local.sh` 现在不仅运行 sync focused gates，也会把
+  `corePlatformFfiOwnerBoundaryCheck`、
   `corePlatformFfiPartitionSurfaceCheck`、
   `corePlatformPosixFfiSurfaceCheck`、`corePlatformSyncCheck`、
   `corePlatformSyncNoFpcCheck`、`corePlatformSyncL0BoundaryCheck`、

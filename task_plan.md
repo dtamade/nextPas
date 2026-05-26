@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host-owned FFI Partitioning；并行收口包含
-Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
+当前最新本轮为 Platform FFI Owner Boundary Guard；并行收口包含
+Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
 Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
@@ -26,6 +26,59 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform FFI Owner Boundary Guard
+
+### Goal
+
+把“platform 所需 ABI 归 FFI 子模块所有”从局部约定提升成整组 `platform` 单元的官方 guard：
+
+- 非 `*.ffi.pas` 的 platform 单元不得直接声明 `external` ABI。
+- `platform.*.ffi.pas` 必须继续承担 ABI owner 角色，而不是退回实现层散落 `external`。
+- 旧的按模块切碎 FFI 形态（例如 `platform.sync.windows.ffi`）不能死灰复燃。
+
+### Architecture Decision
+
+- `platform.time`、`platform.thread`、`platform.sync` 这些实现单元负责策略、错误映射与稳定契约，
+  不负责 ABI declaration。
+- “所有 `external` 都沉到 `platform.*.ffi.pas`” 应该是整组 `nextpas.core.platform*.pas`
+  的通用约束，而不是只靠 `sync` / `time` / `thread` 各自零散静态检查。
+- Windows FFI 继续优先保持 host-owned 归并，不接受重新拆回 `platform.sync.windows.ffi`
+  这种按模块切碎的 owner 形态。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 写新的 platform-level owner-boundary test project
+- [x] 在测试里扫描整组 `nextpas.core.platform*.pas`
+- [x] 固定非 ffi 单元不得直接声明 `external`
+- [x] 固定 ffi 单元必须继续拥有 `external`
+- [x] 固定 `platform.sync.windows.ffi` 不得回归
+- [x] 把新 gate 接进 `build/verify_local.sh`
+- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED: `test -d core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary` 初始失败，
+  证明这条 guard 还不存在。
+- GREEN focused:
+  `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  通过。
+- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
+  通过。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `core-platform-ffi-owner-boundary-check=pass`、
+  `corePlatformFfiOwnerBoundaryCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不新增宿主 ABI
+- 这批不宣称新增 Darwin / FreeBSD / Android runtime 证据
+- 这批不替代后续更细的 host-specific compile/runtime matrix 工作
 
 ## Addendum: 2026-05-27 Platform Host-owned FFI Partitioning
 
