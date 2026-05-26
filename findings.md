@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 86 把 receiver type 已知的 direct class member-call name miss 接进 structured diagnostics：
+  `Worker.Missing(1)` 这类 class/parent chain 没有同名 method 的调用会发出
+  `sema.unknown-member`，model status 进入 `failure`，且不会注册 `member-call` binding。
+- `ClassTypeHasKnownNonMethodMember(...)` 让已知 field / property 名称保持 deferred，不把
+  `Worker.Value(1)` 这类后续应由 non-callable / field-property access 处理的边界误报成 unknown member。
+- 新增 `tests/fixtures/unknown_member/unknown_member_fail.pas` 与 `unknown-member-check`，固定
+  stage0 failure projection、`diagnosticsSummary=sema.unknown-member` 和 final envelope
+  `unknownMemberCheck=pass`。
 - Batch 85 重新验证最新 baseline：detached clean worktree 基于 `287d13d` 已输出
   `unknown-callable-check=pass`、`unit-root-precedence-check=pass`、`verify-local=pass` 与
   `human-summary=local verification passed`。

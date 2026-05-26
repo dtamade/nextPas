@@ -3,6 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 86 unknown member diagnostic)
+
+- **Status:** completed
+- Objective:
+  - 按目标树 G1.5/G1.6，把 receiver type 已知的 direct class member-call name miss 从
+    silent deferred 推进到 structured semantic diagnostic。
+- Baseline:
+  - member-call resolution 已覆盖 direct/inherited/overload/arity/type-mismatch 的多条稳定边界。
+  - `Worker.Missing(1)` 这类 class/parent chain 上完全没有同名 method 的调用仍不会发 diagnostic。
+- Actions taken:
+  - 先写 focused RED：`Worker.Missing(1)` 必须触发 `sema.unknown-member`、semantic model
+    status `failure`，且不注册 `member-call` binding。
+  - `MethodSymbolIdForClassTypeMember(...)` 在 receiver type 已知、沿 parent chain 没有 method
+    命中且不是已知 field/property 时返回 `unknown-member`。
+  - `SeedCallBindingsInNode(...)` 对 direct member-call 的 `unknown-member` failure kind 发
+    `sema.unknown-member`。
+  - 新增 stage0 fixture `tests/fixtures/unknown_member/unknown_member_fail.pas` 与
+    `unknown-member-check` gate。
+  - 同步 semantic/stage0 docs、goal tree、rolling plan 与持续记录。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-unknown-member-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 必须输出 `unknown-member-check=pass`、
+    `unknownMemberCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖 receiver type 已知的 direct class member-call name miss；未知 receiver、
+    field/property access、record/array/deref receiver、visibility 和完整 overload resolver 继续 deferred。
+
 ## Session: 2026-05-26 (Batch 85 latest baseline verification closure)
 
 - **Status:** completed

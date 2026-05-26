@@ -191,6 +191,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 - 多类 compiler/sema/toolchain/package/env 错误已有结构化 projection。
 - `sema.unknown-callable` 已覆盖 source-owned bare callable name miss。
+- `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss。
 - 语义错误覆盖仍不完整。
 
 下一步证据：

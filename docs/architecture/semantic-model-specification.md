@@ -297,6 +297,10 @@ candidate collection
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
+- `sema.unknown-callable`
+  - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
+- `sema.unknown-member`
+  - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
 
 这里的重点不是今天就冻结完整 code 列表，而是先冻结“语义错误是结构化类别”的事实。
 

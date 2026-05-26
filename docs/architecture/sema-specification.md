@@ -114,6 +114,7 @@ sema 必须能在编译期求值以下常量表达式：
 - `sema.undeclared-identifier`：标识符未声明
 - `sema.type-mismatch`：类型不匹配
 - `sema.unknown-callable`：调用目标不是当前可解析的 procedure/function 或内建 callable
+- `sema.unknown-member`：receiver 类型已知但当前 class/parent chain 上没有可解析的成员 callable
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧

@@ -130,6 +130,10 @@ type
       const ATypeId: LongInt;
       out ASymbol: TSemanticSymbol
     ): Boolean;
+    function ClassTypeHasKnownNonMethodMember(
+      const AClassTypeId: LongInt;
+      const AMemberName: string
+    ): Boolean;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
     function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
     function CallArgumentSignature(
@@ -1366,6 +1370,29 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.ClassTypeHasKnownNonMethodMember(
+  const AClassTypeId: LongInt;
+  const AMemberName: string
+): Boolean;
+var
+  ConstValue: Int64;
+  MemberPrefix: string;
+  StringValue: string;
+  TypeSymbol: TSemanticSymbol;
+begin
+  Result := False;
+  if (AClassTypeId <= 0) or (AMemberName = '') then
+    Exit;
+  if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
+    Exit;
+
+  MemberPrefix := TypeSymbol.Name + '.' + AMemberName;
+  Result :=
+    FModel.LookupConstValue(MemberPrefix + '$idx', ConstValue) or
+    FModel.LookupStringConstValue(MemberPrefix + '$read', StringValue) or
+    FModel.LookupStringConstValue(MemberPrefix + '$write', StringValue);
+end;
+
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
 var
   TypeName: string;
@@ -1597,6 +1624,9 @@ begin
   Depth := 0;
   while (CurrentTypeId > 0) and (Depth < 32) do
   begin
+    if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
+      Exit;
+
     Result := MethodSymbolIdForExactClassTypeMember(
       CurrentTypeId,
       AMemberName,
@@ -1618,6 +1648,7 @@ begin
     CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
     Inc(Depth);
   end;
+  AResolutionFailureKind := 'unknown-member';
 end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(
@@ -1932,6 +1963,12 @@ begin
         EmitSemaError(
           'sema.type-mismatch',
           'argument type mismatch for "' + MemberFailureName + '"',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'unknown-member') then
+        EmitSemaError(
+          'sema.unknown-member',
+          'unknown member "' + MemberFailureName + '"',
           MemberFailureOffset
         );
     end

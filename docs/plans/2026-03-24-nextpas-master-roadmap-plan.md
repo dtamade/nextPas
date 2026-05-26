@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 84` 为准。全局能力目标和每轮批次归属现在由
+以最新完成的 `Batch 86` 为准。全局能力目标和每轮批次归属现在由
 `docs/architecture/nextpas-goal-tree.md` 统一承接；本计划继续负责当前 rolling window 的执行记录。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
@@ -65,6 +65,7 @@
   `ambiguousMemberOverloadCheck=pass`、`wrongArgumentCountCheck=pass`、
   `memberWrongArgumentCountCheck=pass`、
   `typeMismatchCallCheck=pass`、`memberTypeMismatchCallCheck=pass`、
+  `unknownCallableCheck=pass`、`unknownMemberCheck=pass`、
   `multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
