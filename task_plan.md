@@ -15,10 +15,10 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform POSIX FFI Target Matrix Hardening；并行收口包含
-Platform Sync POSIX Fallback Runtime Coverage、Platform Sync FFI Surface Parity、
-Platform Thread L0 Surface Coverage、Platform Time L0 Surface Coverage 与
-Platform API Boundary Cleanup；Batch 103 Object Release
+当前最新本轮为 Platform Sync FFI-owned Opaque Size Derivation；并行收口包含
+Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
+Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
+Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
 Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
@@ -26,6 +26,53 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync FFI-owned Opaque Size Derivation
+
+### Goal
+
+把 `platform.sync` 的 public opaque size contract 再往 FFI owner 方向推进一步：
+
+- POSIX size 直接由 `pthread_*` FFI 类型决定，而不是 wrapper 再重复一套平台分支。
+- Windows size 直接由 `SRWLOCK` / `CONDITION_VARIABLE` FFI 类型决定，而不是 wrapper
+  继续手写数字。
+- 这条 ownership 进入 source-surface test，而不是只留在代码风格层。
+
+### Architecture Decision
+
+- wrapper implementation 可以保留 policy 和 error mapping，但 ABI type/size truth 尽量只放在
+  `platform.*.ffi.pas`。
+- `platform.sync` 的 interface 如果需要公开依赖 `SizeOf(...)`，可以直接 uses nextPas-owned
+  FFI 单元；这比在 wrapper 里复制平台数字更诚实。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 先把 source-surface test 改成要求 `SizeOf(...)` ownership
+- [x] 跑一次 RED，确认当前实现确实还在重复写 size 常量
+- [x] 在 Windows FFI 中补 `SRWLOCK` / `CONDITION_VARIABLE` 类型
+- [x] 改 `platform.sync` interface size 常量为从 FFI 类型派生
+- [x] 跑 focused tests
+- [x] 跑 Win64 compile-only proof
+
+### Verification
+
+- RED: fresh `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  失败在 `platform_mutex_size = sizeof(pthread_mutex_t)` token 缺失。
+- GREEN focused: `test_platform_sync_posix_surface clean test`、
+  `test_platform_sync_sizes clean test` 通过。
+- GREEN Win64 compile-only:
+  `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FUcore/build/review-win64-sync -FEcore/build/review-win64-sync -Fucore/src -Ficore/src core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+  通过。
+
+### Non-goals
+
+- 这批不改变 `platform.sync` 行为语义
+- 这批不声称 Darwin/FreeBSD/Android 已新增 runtime 证据
+- 这批不新增新的 L0 public API
 
 ## Addendum: 2026-05-27 Platform POSIX FFI Target Matrix Hardening
 

@@ -45,6 +45,13 @@
 - `platform.sync` 的 public opaque storage 现在也按 Linux/Android/macOS/FreeBSD/Windows/generic
   Unix 分支，至少在 public size/align surface 上不再把 FreeBSD pointer handle 或 macOS rwlock
   继续装进“通用 Unix 大数组”里。
+- `platform.sync` 的 size ownership 现在进一步收回到 FFI 类型本身：
+  POSIX 分支直接取 `SizeOf(pthread_mutex_t)` / `SizeOf(pthread_rwlock_t)` /
+  `SizeOf(pthread_cond_t)`，Windows 分支直接取 `SizeOf(SRWLOCK)` /
+  `SizeOf(CONDITION_VARIABLE)`，不再在 wrapper 里复制一套平台 size 数字。
+- `nextpas.core.platform.windows.ffi` 现在显式声明 `SRWLOCK` 与
+  `CONDITION_VARIABLE` 类型，让 Windows sync ABI 在类型层也能成为单一事实源，
+  而不是只剩过程声明。
 - 新增 `core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/`，并扩充
   `test_platform_sync_posix_surface`，把 target-specific pthread ABI token 与 public opaque size
   branch 都冻结成 source-surface gate。

@@ -8,6 +8,8 @@ type
   DWORD = UInt32;
   BOOL = LongBool;
   HANDLE = Pointer;
+  SRWLOCK = Pointer;
+  CONDITION_VARIABLE = Pointer;
 
   FILETIME = record
     dwLowDateTime: DWORD;

@@ -3,10 +3,10 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform POSIX FFI target matrix hardening；并行收口包含
-platform.sync POSIX fallback runtime coverage、platform.sync FFI surface parity、
-platform.thread L0 surface coverage、platform.time L0 surface coverage、
-platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
+当前最新本轮为 platform.sync FFI-owned opaque size derivation；并行收口包含
+platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
+platform.sync FFI surface parity、platform.thread L0 surface coverage、
+platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
@@ -15,6 +15,42 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync FFI-owned opaque size derivation)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform.sync` 的 public opaque storage size 从“再次手写每个平台常量”收回到 FFI 类型自身，
+    让 ABI size truth 继续集中在 `platform.*.ffi.pas`。
+- Baseline:
+  - 前一批虽然把 Android/macOS/FreeBSD 的 size 分支补诚实了，但
+    `platform.sync` 仍在重复写一套平台 size 常量。
+  - `nextpas.core.platform.windows.ffi` 还缺显式 `SRWLOCK` 与 `CONDITION_VARIABLE` 类型，
+    所以 Windows sync size 也没法像 POSIX 那样从 FFI 类型直接派生。
+- Actions taken:
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 追加 `SRWLOCK` 与
+    `CONDITION_VARIABLE` 类型声明。
+  - `core/src/nextpas.core.platform.sync.pas` 把接口层的
+    `PLATFORM_MUTEX_SIZE` / `PLATFORM_RWLOCK_SIZE` / `PLATFORM_CONDVAR_SIZE`
+    改成从 `SizeOf(pthread_*_t)`、`SizeOf(SRWLOCK)` 与
+    `SizeOf(CONDITION_VARIABLE)` 派生。
+  - `platform.sync` 的 FFI uses 移到 interface，让 public opaque size contract 直接依赖
+    FFI type truth；implementation 只额外保留 Linux futex FFI。
+  - `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/` 改成固定
+    `platform.sync` 必须通过 `SizeOf(...)` 从 FFI 类型派生 POSIX/Windows opaque size。
+- Verification:
+  - RED: fresh `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    初版失败在 `platform_mutex_size = sizeof(pthread_mutex_t)` token 缺失。
+  - GREEN focused: `test_platform_sync_posix_surface clean test`、`test_platform_sync_sizes clean test`
+    通过。
+  - GREEN Win64 compile-only:
+    `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FUcore/build/review-win64-sync -FEcore/build/review-win64-sync -Fucore/src -Ficore/src core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+    通过。
+- Review:
+  - 这批进一步把“平台 ABI 真相”从 wrapper implementation 收回 FFI 类型自身；后续如果
+    `pthread_*` 或 Windows sync FFI 再细化，`platform.sync` public size contract 会跟着走。
+  - 下一步更值得做的是继续补 Darwin/FreeBSD/Android 的 compile/runtime matrix 证据，而不是再让
+    wrapper 层复制一轮平台常量。
 
 ## Session: 2026-05-27 (platform POSIX FFI target matrix hardening)
 

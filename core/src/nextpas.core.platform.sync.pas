@@ -4,31 +4,25 @@ unit nextpas.core.platform.sync;
 
 interface
 
+{$IFDEF NEXTPAS_UNIX}
+uses
+  nextpas.core.platform.posix.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.ffi;
+{$ENDIF}
+
 const
-  {$IFDEF NEXTPAS_LINUX}
-  PLATFORM_MUTEX_SIZE   = 48;
-  PLATFORM_RWLOCK_SIZE  = 56;
-  PLATFORM_CONDVAR_SIZE = 48;
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  PLATFORM_MUTEX_SIZE   = 40;
-  PLATFORM_RWLOCK_SIZE  = 56;
-  PLATFORM_CONDVAR_SIZE = 48;
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  PLATFORM_MUTEX_SIZE   = 64;
-  PLATFORM_RWLOCK_SIZE  = 200;
-  PLATFORM_CONDVAR_SIZE = 48;
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  PLATFORM_MUTEX_SIZE   = 8;
-  PLATFORM_RWLOCK_SIZE  = 8;
-  PLATFORM_CONDVAR_SIZE = 8;
+  {$IFDEF NEXTPAS_UNIX}
+  PLATFORM_MUTEX_SIZE   = SizeOf(pthread_mutex_t);
+  PLATFORM_RWLOCK_SIZE  = SizeOf(pthread_rwlock_t);
+  PLATFORM_CONDVAR_SIZE = SizeOf(pthread_cond_t);
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
-  PLATFORM_MUTEX_SIZE   = 40;
-  PLATFORM_RWLOCK_SIZE  = 8;
-  PLATFORM_CONDVAR_SIZE = 8;
-  {$ELSEIF defined(NEXTPAS_UNIX)}
-  PLATFORM_MUTEX_SIZE   = 64;
-  PLATFORM_RWLOCK_SIZE  = 256;
-  PLATFORM_CONDVAR_SIZE = 64;
+  PLATFORM_MUTEX_SIZE   = SizeOf(SRWLOCK);
+  PLATFORM_RWLOCK_SIZE  = SizeOf(SRWLOCK);
+  PLATFORM_CONDVAR_SIZE = SizeOf(CONDITION_VARIABLE);
   {$ELSE}
   PLATFORM_MUTEX_SIZE   = 64;
   PLATFORM_RWLOCK_SIZE  = 64;
@@ -97,15 +91,9 @@ function platform_wake_address_all(AAddr: PInt32): Int32;
 
 implementation
 
-{$IFDEF NEXTPAS_UNIX}
+{$IFDEF NEXTPAS_LINUX}
 uses
-  nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.ffi{$ENDIF};
-{$ENDIF}
-
-{$IFDEF NEXTPAS_WINDOWS}
-uses
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.linux.ffi;
 {$ENDIF}
 
 const
