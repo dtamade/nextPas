@@ -62,7 +62,9 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
-procedure CheckPosixClockHelperSet(const ASource, AHostLabel: string);
+procedure CheckPosixClockHelperSet(
+  const ASource, AHostLabel: string;
+  const ARequireSharedResolutionProjection: Boolean);
 begin
   CheckTokenPresent(ASource, 'platform_clock_monotonic_now',
     AHostLabel + ' must expose host monotonic clock helper for platform.time');
@@ -76,6 +78,15 @@ begin
     AHostLabel + ' must expose host-owned realtime nanosecond helper for platform.time');
   CheckTokenPresent(ASource, 'platform_clock_monotonic_resolution_ns_u64',
     AHostLabel + ' must expose host-owned monotonic resolution nanosecond helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_posix_clock_now',
+    AHostLabel + ' must delegate raw POSIX clock reads to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_clock_getres',
+    AHostLabel + ' must delegate raw POSIX clock resolution reads to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_clock_ns_u64',
+    AHostLabel + ' must delegate POSIX realtime ns projection to shared posix.ffi');
+  if ARequireSharedResolutionProjection then
+    CheckTokenPresent(ASource, 'platform_posix_clock_resolution_ns_u64',
+      AHostLabel + ' must delegate POSIX resolution projection to shared posix.ffi');
 end;
 
 procedure TestPlatformTimeUsesHostClockFFI;
@@ -108,11 +119,11 @@ begin
     'posix.ffi must expose clock_getres for platform.time');
   CheckTokenPresent(LPosixSource, 'platform_posix_timespec_to_ns_u64',
     'posix.ffi must expose shared timespec conversion helper for platform.time');
-  CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi');
-  CheckPosixClockHelperSet(LAndroidSource, 'android.ffi');
-  CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi');
-  CheckPosixClockHelperSet(LUnixSource, 'unix.ffi');
-  CheckPosixClockHelperSet(LDarwinSource, 'darwin.ffi');
+  CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi', True);
+  CheckPosixClockHelperSet(LAndroidSource, 'android.ffi', True);
+  CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi', True);
+  CheckPosixClockHelperSet(LUnixSource, 'unix.ffi', True);
+  CheckPosixClockHelperSet(LDarwinSource, 'darwin.ffi', False);
 
   CheckTokenPresent(LDarwinSource, 'mach_absolute_time',
     'darwin.ffi must expose mach_absolute_time for platform.time');

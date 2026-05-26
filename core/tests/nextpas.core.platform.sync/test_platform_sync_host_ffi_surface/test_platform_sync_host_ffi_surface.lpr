@@ -114,6 +114,40 @@ begin
     AHostLabel + ' must expose pthread condvar signal helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_condvar_broadcast',
     AHostLabel + ' must expose pthread condvar broadcast helper for sync');
+  CheckTokenPresent(ASource, 'platform_posix_clock_now',
+    AHostLabel + ' must delegate timeout clock reads to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_destroy',
+    AHostLabel + ' must delegate pthread mutex destroy to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_lock',
+    AHostLabel + ' must delegate pthread mutex lock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_trylock',
+    AHostLabel + ' must delegate pthread mutex trylock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_unlock',
+    AHostLabel + ' must delegate pthread mutex unlock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_init',
+    AHostLabel + ' must delegate pthread rwlock init to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_destroy',
+    AHostLabel + ' must delegate pthread rwlock destroy to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_rdlock',
+    AHostLabel + ' must delegate pthread rwlock read-lock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_tryrdlock',
+    AHostLabel + ' must delegate pthread rwlock try-read-lock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_wrlock',
+    AHostLabel + ' must delegate pthread rwlock write-lock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_trywrlock',
+    AHostLabel + ' must delegate pthread rwlock try-write-lock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_unlock',
+    AHostLabel + ' must delegate pthread rwlock unlock to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_destroy',
+    AHostLabel + ' must delegate pthread condvar destroy to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_wait',
+    AHostLabel + ' must delegate pthread condvar wait to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_timedwait_abs',
+    AHostLabel + ' must delegate pthread condvar timedwait to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_signal',
+    AHostLabel + ' must delegate pthread condvar signal to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_broadcast',
+    AHostLabel + ' must delegate pthread condvar broadcast to shared posix.ffi');
 end;
 
 procedure TestPlatformSyncUsesHostFFISurface;

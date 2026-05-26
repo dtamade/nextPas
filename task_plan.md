@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Thread Shared POSIX Helper Ownership；并行收口包含
+当前最新本轮为 Platform POSIX Clock/Sync Shared Helper Ownership；并行收口包含
+Platform Thread Shared POSIX Helper Ownership；
 Platform Time Windows Math Helper Boundary；
 Platform Sync Windows Timeout Result FFI Ownership、
 Platform Sync POSIX Helper FFI Ownership、Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
@@ -29,6 +30,92 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform POSIX Clock/Sync Shared Helper Ownership
+
+### Goal
+
+继续把 POSIX host ffi 中仍然重复的 clock / sync 薄转发收回 shared owner：
+
+- `linux/android/darwin/freebsd/unix.ffi` 不再各自重复 `clock_gettime` / `clock_getres`
+  包装和 `timespec -> ns` 投影
+- `pthread_mutex_*`、`pthread_rwlock_*`、`pthread_cond_*` 的 host-independent forwarder
+  不再在 5 个 host ffi 里各写一份
+- host ffi 继续只保留 clock id、timeout clock id、errno binding、mutex/condattr capability
+  这类宿主 truth
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 本轮新增 truly shared helper：
+  - `platform_posix_clock_now`
+  - `platform_posix_clock_getres`
+  - `platform_posix_clock_ns_u64`
+  - `platform_posix_clock_resolution_ns_u64`
+  - `platform_posix_pthread_mutex_destroy/lock/trylock/unlock`
+  - `platform_posix_pthread_rwlock_init/destroy/rdlock/tryrdlock/wrlock/trywrlock/unlock`
+  - `platform_posix_pthread_condvar_destroy/wait/timedwait_abs/signal/broadcast`
+- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
+  `platform.time` / `platform.sync` 消费，但实现改为委托 shared `posix.ffi` helper。
+- Darwin 的 `darwin_mach_monotonic_ns` /
+  `darwin_mach_monotonic_resolution_ns` 继续留在 host owner，不向 shared helper 收窄。
+- 旧 `codex/platform-time-integration` 继续只作为历史参考；这批直接在当前 `main` 上收口。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared clock/sync helper
+- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 POSIX host ffi 委托 shared clock helper
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared sync helper
+- [x] 在 `posix.ffi` 实现 shared clock/sync helper
+- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
+- [x] focused：`test_platform_posix_ffi_surface` / `test_platform_time_host_ffi_surface` /
+  `test_platform_sync_host_ffi_surface` / `test_platform_time_helpers` /
+  `test_platform_sync` / `test_platform_thread_host_ffi_surface` /
+  `test_platform_simulated_host_compile_matrix` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在
+    `posix.ffi must expose shared POSIX clock read helper for host ffi owners`。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate raw POSIX clock reads to shared posix.ffi`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate timeout clock reads to shared posix.ffi`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+    `corePlatformTimeHostFfiSurfaceCheck":"pass"`、
+    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不改 `platform.time` / `platform.sync` public API
+- 这批不把 Darwin mach monotonic truth 收窄到 shared owner
+- 这批不把 source-surface / compile-only 证据包装成新的 Darwin / Android / FreeBSD runtime truth
 
 ## Addendum: 2026-05-27 Platform Thread Shared POSIX Helper Ownership
 

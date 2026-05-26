@@ -1751,3 +1751,33 @@
 - `verify_local` 的 `core-platform-time-win64-check` 这轮还额外抓到了一个条件编译语法缺口：
   `platform.time` 的 `implementation uses` 在 Windows 分支后缺少统一结尾分号。这个问题在 Linux runtime
   proof 下不会露出来，但 Win64 compile-only 会立即失败，所以这条 gate 的价值是实打实的。
+
+## 2026-05-27 Follow-up Findings 16
+
+- 这轮继续往下挖之后，POSIX host ffi 里剩下的显著重复已经不在 public API，而在一层很薄的
+  glue：`clock_gettime` / `clock_getres` 的参数化 wrapper，以及
+  `pthread_mutex_*` / `pthread_rwlock_*` / `pthread_cond_*` 的 host-independent forwarder。
+- 这些 helper 虽然会触碰 raw POSIX external，但它们本身不携带宿主 capability truth；真正变化的只有
+  clock id、timeout clock id、errno binding、mutex kind、condattr capability 与 Darwin mach monotonic
+  truth。把这层 glue 收回 shared `nextpas.core.platform.posix.ffi`，比继续在 5 个 host ffi 内复制更符合
+  “FFI owner 只保留宿主 truth，shared owner 保留 truly shared helper” 这条方向。
+- 这轮之后，`nextpas.core.platform.posix.ffi` 新增了
+  `platform_posix_clock_now/getres/ns_u64/resolution_ns_u64` 和
+  `platform_posix_pthread_mutex_*` / `platform_posix_pthread_rwlock_*` /
+  `platform_posix_pthread_condvar_*`。`linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public
+  helper 名，但实现改成对 shared helper 的薄委托。
+- 这也让 Darwin 的边界更清楚了：`platform_clock_realtime_ns_u64` 现在可以回到 shared POSIX helper，
+  但 `darwin_mach_monotonic_ns` / `darwin_mach_monotonic_resolution_ns` 仍然留在 host owner，不会因为
+  “名字看起来像 clock helper” 就被误收进 shared owner。
+- `test_platform_posix_ffi_surface`、`test_platform_time_host_ffi_surface`、
+  `test_platform_sync_host_ffi_surface` 这轮都升级成更强的 source-surface gate：不仅要求 symbol 存在，
+  也明确要求 POSIX host ffi source 出现对 shared `platform_posix_*` helper 的委托 token。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与 fresh
+  `bash build/verify_local.sh` 都已通过；official envelope 继续保持
+  `corePlatformPosixFfiSurfaceCheck":"pass"`、
+  `corePlatformTimeHostFfiSurfaceCheck":"pass"`、
+  `corePlatformSyncHostFfiSurfaceCheck":"pass"` 与
+  `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
+- 当前证据边界仍要诚实：这轮新增的是 owner boundary / compile coherence / Linux runtime 行为的进一步收紧，
+  不是新的 Darwin / Android / FreeBSD runtime 证据；这些宿主仍主要由 source-surface contract 与
+  compile-only proof 覆盖。

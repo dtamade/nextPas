@@ -106,6 +106,46 @@ begin
     'posix.ffi must expose shared pthread TLS set helper for platform.thread host owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_tls_get',
     'posix.ffi must expose shared pthread TLS get helper for platform.thread host owners');
+  CheckTokenPresent(LSource, 'platform_posix_clock_now',
+    'posix.ffi must expose shared POSIX clock read helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_clock_getres',
+    'posix.ffi must expose shared POSIX clock resolution helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_clock_ns_u64',
+    'posix.ffi must expose shared POSIX clock nanosecond helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_clock_resolution_ns_u64',
+    'posix.ffi must expose shared POSIX clock resolution-ns helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_destroy',
+    'posix.ffi must expose shared pthread mutex destroy helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_lock',
+    'posix.ffi must expose shared pthread mutex lock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_trylock',
+    'posix.ffi must expose shared pthread mutex trylock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_unlock',
+    'posix.ffi must expose shared pthread mutex unlock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_init',
+    'posix.ffi must expose shared pthread rwlock init helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_destroy',
+    'posix.ffi must expose shared pthread rwlock destroy helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_rdlock',
+    'posix.ffi must expose shared pthread rwlock read-lock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_tryrdlock',
+    'posix.ffi must expose shared pthread rwlock try-read-lock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_wrlock',
+    'posix.ffi must expose shared pthread rwlock write-lock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_trywrlock',
+    'posix.ffi must expose shared pthread rwlock try-write-lock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_unlock',
+    'posix.ffi must expose shared pthread rwlock unlock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_destroy',
+    'posix.ffi must expose shared pthread condvar destroy helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_wait',
+    'posix.ffi must expose shared pthread condvar wait helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_timedwait_abs',
+    'posix.ffi must expose shared pthread condvar timedwait helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_signal',
+    'posix.ffi must expose shared pthread condvar signal helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_broadcast',
+    'posix.ffi must expose shared pthread condvar broadcast helper for host ffi owners');
   CheckTokenAbsent(LSource, 'pthread_mutex_errorcheck',
     'posix.ffi must not keep per-host pthread mutex kind numbering');
   CheckTokenAbsent(LSource, 'pthread_mutex_recursive',

@@ -158,63 +158,55 @@ end;
 
 function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
 begin
-  if clock_gettime(PLATFORM_CLOCK_MONOTONIC_ID, ATime) = 0 then
-    Result := 0
-  else
-    Result := platform_posix_errno_value;
+  Result := platform_posix_clock_now(
+    PLATFORM_CLOCK_MONOTONIC_ID,
+    ATime,
+    platform_errno_location);
 end;
 
 function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
 begin
-  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, ATime) = 0 then
-    Result := 0
-  else
-    Result := platform_posix_errno_value;
+  Result := platform_posix_clock_now(
+    PLATFORM_CLOCK_REALTIME_ID,
+    ATime,
+    platform_errno_location);
 end;
 
 function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
 begin
-  if clock_getres(PLATFORM_CLOCK_MONOTONIC_ID, ATime) = 0 then
-    Result := 0
-  else
-    Result := platform_posix_errno_value;
+  Result := platform_posix_clock_getres(
+    PLATFORM_CLOCK_MONOTONIC_ID,
+    ATime,
+    platform_errno_location);
 end;
 
 function platform_clock_monotonic_ns_u64: UInt64; inline;
-var
-  LTime: timespec;
 begin
-  if platform_clock_monotonic_now(@LTime) <> 0 then
-    Exit(0);
-  Result := platform_posix_timespec_to_ns_u64(@LTime);
+  Result := platform_posix_clock_ns_u64(
+    PLATFORM_CLOCK_MONOTONIC_ID,
+    platform_errno_location);
 end;
 
 function platform_clock_realtime_ns_u64: UInt64; inline;
-var
-  LTime: timespec;
 begin
-  if platform_clock_realtime_now(@LTime) <> 0 then
-    Exit(0);
-  Result := platform_posix_timespec_to_ns_u64(@LTime);
+  Result := platform_posix_clock_ns_u64(
+    PLATFORM_CLOCK_REALTIME_ID,
+    platform_errno_location);
 end;
 
 function platform_clock_monotonic_resolution_ns_u64: UInt64; inline;
-var
-  LTime: timespec;
 begin
-  if platform_clock_monotonic_getres(@LTime) <> 0 then
-    Exit(1);
-  Result := platform_posix_timespec_to_ns_u64(@LTime);
-  if Result = 0 then
-    Result := 1;
+  Result := platform_posix_clock_resolution_ns_u64(
+    PLATFORM_CLOCK_MONOTONIC_ID,
+    platform_errno_location);
 end;
 
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
 begin
-  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, ATime) = 0 then
-    Result := 0
-  else
-    Result := platform_posix_errno_value;
+  Result := platform_posix_clock_now(
+    PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
+    ATime,
+    platform_errno_location);
 end;
 
 function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
@@ -249,62 +241,62 @@ end;
 
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 begin
-  Result := pthread_mutex_destroy(AMutex);
+  Result := platform_posix_pthread_mutex_destroy(AMutex);
 end;
 
 function platform_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 begin
-  Result := pthread_mutex_lock(AMutex);
+  Result := platform_posix_pthread_mutex_lock(AMutex);
 end;
 
 function platform_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
-  Result := pthread_mutex_trylock(AMutex);
+  Result := platform_posix_pthread_mutex_trylock(AMutex);
 end;
 
 function platform_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 begin
-  Result := pthread_mutex_unlock(AMutex);
+  Result := platform_posix_pthread_mutex_unlock(AMutex);
 end;
 
 function platform_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_init(ARwLock, nil);
+  Result := platform_posix_pthread_rwlock_init(ARwLock);
 end;
 
 function platform_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_destroy(ARwLock);
+  Result := platform_posix_pthread_rwlock_destroy(ARwLock);
 end;
 
 function platform_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_rdlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_rdlock(ARwLock);
 end;
 
 function platform_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_tryrdlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_tryrdlock(ARwLock);
 end;
 
 function platform_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_wrlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_wrlock(ARwLock);
 end;
 
 function platform_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_trywrlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_trywrlock(ARwLock);
 end;
 
 function platform_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_unlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_unlock(ARwLock);
 end;
 
 function platform_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
 begin
-  Result := pthread_rwlock_unlock(ARwLock);
+  Result := platform_posix_pthread_rwlock_unlock(ARwLock);
 end;
 
 function platform_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
@@ -329,27 +321,27 @@ end;
 
 function platform_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
 begin
-  Result := pthread_cond_destroy(ACondVar);
+  Result := platform_posix_pthread_condvar_destroy(ACondVar);
 end;
 
 function platform_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
 begin
-  Result := pthread_cond_wait(ACondVar, AMutex);
+  Result := platform_posix_pthread_condvar_wait(ACondVar, AMutex);
 end;
 
 function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 begin
-  Result := pthread_cond_timedwait(ACondVar, AMutex, PTimeSpec(ADeadline));
+  Result := platform_posix_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
 end;
 
 function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 begin
-  Result := pthread_cond_signal(ACondVar);
+  Result := platform_posix_pthread_condvar_signal(ACondVar);
 end;
 
 function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 begin
-  Result := pthread_cond_broadcast(ACondVar);
+  Result := platform_posix_pthread_condvar_broadcast(ACondVar);
 end;
 
 end.

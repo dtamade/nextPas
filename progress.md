@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform thread shared POSIX helper ownership；并行收口包含
+当前最新本轮为 platform POSIX clock/sync shared helper ownership；并行收口包含
+platform thread shared POSIX helper ownership；
 platform time windows math helper boundary；
 platform sync windows timeout result ffi ownership、
 platform sync POSIX helper ffi ownership、platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
@@ -18,6 +19,72 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform POSIX clock/sync shared helper ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `linux/android/darwin/freebsd/unix.ffi` 中仍然重复的 POSIX clock thin wrapper 与
+    pthread sync forwarder 收回 `nextpas.core.platform.posix.ffi`，让 host ffi 更接近只保留宿主 truth。
+- Baseline:
+  - 前几轮已经把 shared `timespec` 算术、thread glue、host-owned clock id / errno /
+    capability truth 拆开了，但 `clock_gettime` / `clock_getres` 的参数化 wrapper，以及
+    `pthread_mutex_*` / `pthread_rwlock_*` / `pthread_cond_*` 的 host-independent thin forwarder
+    仍在 5 个 POSIX host ffi 里逐份复制。
+  - 旧 `codex/platform-time-integration` 仍未合入 `main`，而且明显落后主线；这批继续以当前
+    clean `main` 为准，不整条合并旧 worktree。
+- Actions taken:
+  - 先把 `test_platform_posix_ffi_surface` 扩成 RED gate，要求 `posix.ffi` 显式暴露：
+    - `platform_posix_clock_now/getres/ns_u64/resolution_ns_u64`
+    - `platform_posix_pthread_mutex_destroy/lock/trylock/unlock`
+    - `platform_posix_pthread_rwlock_init/destroy/rdlock/tryrdlock/wrlock/trywrlock/unlock`
+    - `platform_posix_pthread_condvar_destroy/wait/timedwait_abs/signal/broadcast`
+  - 再把 `test_platform_time_host_ffi_surface`、`test_platform_sync_host_ffi_surface` 扩成 RED gate，
+    明确要求 `linux/android/darwin/freebsd/unix.ffi` 委托这些 shared helper。
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增上述 shared clock/sync helper，把 raw
+    `clock_gettime` / `clock_getres`、shared `timespec` 投影，以及 host-independent pthread
+    destroy/lock/wait/broadcast forwarder 收成 shared owner。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    改为委托 shared helper，只继续保留 clock id、timeout clock id、errno binding、
+    mutex/condattr capability 与 Darwin mach monotonic truth。
+  - `core/docs/design-conventions.md` 回写规则：shared `posix.ffi` 可以继续拥有参数化的 POSIX
+    clock thin wrapper 与 host-independent pthread sync forwarder；host ffi 继续只保留宿主 truth。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在
+      `posix.ffi must expose shared POSIX clock read helper for host ffi owners`。
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate raw POSIX clock reads to shared posix.ffi`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate timeout clock reads to shared posix.ffi`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+      `corePlatformTimeHostFfiSurfaceCheck":"pass"`、
+      `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+      `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+      `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批把 POSIX host ffi 里最后一层明显的 clock/sync duplication 也收掉了：shared `posix.ffi`
+    现在不只拥有 ABI 形状、`timespec` 算术与 thread glue，也拥有 host-independent 的 clock/sync
+    thin wrapper。
+  - 更重要的是，文档边界也跟上了：shared helper 与宿主 truth 的分界，现在不只是代码风格，而是已有
+    focused gate 和 design convention 一起冻结的 contract。
 
 ## Session: 2026-05-27 (platform thread shared POSIX helper ownership)
 

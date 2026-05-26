@@ -180,6 +180,39 @@ function platform_posix_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
 function platform_posix_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
 function platform_posix_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
 function platform_posix_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
+function platform_posix_clock_now(
+  const AClockId: Int32;
+  ATime: Pointer;
+  const AErrnoLocation: PInt32): Int32; inline;
+function platform_posix_clock_getres(
+  const AClockId: Int32;
+  ATime: Pointer;
+  const AErrnoLocation: PInt32): Int32; inline;
+function platform_posix_clock_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32): UInt64; inline;
+function platform_posix_clock_resolution_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32): UInt64; inline;
+function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
+function platform_posix_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
+function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+function platform_posix_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_rwlock_unlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_timedwait_abs(
+  ACondVar: Pointer;
+  AMutex: Pointer;
+  ADeadline: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
@@ -368,6 +401,137 @@ end;
 function platform_posix_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 begin
   Result := pthread_getspecific(pthread_key_t(AKey));
+end;
+
+function platform_posix_clock_now(
+  const AClockId: Int32;
+  ATime: Pointer;
+  const AErrnoLocation: PInt32): Int32; inline;
+begin
+  if clock_gettime(AClockId, ATime) = 0 then
+    Exit(0);
+  if AErrnoLocation = nil then
+    Exit(-1);
+  Result := AErrnoLocation^;
+end;
+
+function platform_posix_clock_getres(
+  const AClockId: Int32;
+  ATime: Pointer;
+  const AErrnoLocation: PInt32): Int32; inline;
+begin
+  if clock_getres(AClockId, ATime) = 0 then
+    Exit(0);
+  if AErrnoLocation = nil then
+    Exit(-1);
+  Result := AErrnoLocation^;
+end;
+
+function platform_posix_clock_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32): UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_posix_clock_now(AClockId, @LTime, AErrnoLocation) <> 0 then
+    Exit(0);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+end;
+
+function platform_posix_clock_resolution_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32): UInt64; inline;
+var
+  LTime: timespec;
+begin
+  if platform_posix_clock_getres(AClockId, @LTime, AErrnoLocation) <> 0 then
+    Exit(1);
+  Result := platform_posix_timespec_to_ns_u64(@LTime);
+  if Result = 0 then
+    Result := 1;
+end;
+
+function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
+begin
+  Result := pthread_mutex_destroy(AMutex);
+end;
+
+function platform_posix_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
+begin
+  Result := pthread_mutex_lock(AMutex);
+end;
+
+function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+begin
+  Result := pthread_mutex_trylock(AMutex);
+end;
+
+function platform_posix_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
+begin
+  Result := pthread_mutex_unlock(AMutex);
+end;
+
+function platform_posix_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_init(ARwLock, nil);
+end;
+
+function platform_posix_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_destroy(ARwLock);
+end;
+
+function platform_posix_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_rdlock(ARwLock);
+end;
+
+function platform_posix_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_tryrdlock(ARwLock);
+end;
+
+function platform_posix_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_wrlock(ARwLock);
+end;
+
+function platform_posix_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_trywrlock(ARwLock);
+end;
+
+function platform_posix_pthread_rwlock_unlock(ARwLock: Pointer): Int32; inline;
+begin
+  Result := pthread_rwlock_unlock(ARwLock);
+end;
+
+function platform_posix_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
+begin
+  Result := pthread_cond_destroy(ACondVar);
+end;
+
+function platform_posix_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+begin
+  Result := pthread_cond_wait(ACondVar, AMutex);
+end;
+
+function platform_posix_pthread_condvar_timedwait_abs(
+  ACondVar: Pointer;
+  AMutex: Pointer;
+  ADeadline: Pointer): Int32; inline;
+begin
+  Result := pthread_cond_timedwait(ACondVar, AMutex, PTimeSpec(ADeadline));
+end;
+
+function platform_posix_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
+begin
+  Result := pthread_cond_signal(ACondVar);
+end;
+
+function platform_posix_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+begin
+  Result := pthread_cond_broadcast(ACondVar);
 end;
 
 end.
