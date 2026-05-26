@@ -4,7 +4,7 @@
 
 **Goal:** Harden `nextpas.core.platform.sync` into a precise, portable L0 contract for the L1 `sync` module.
 
-**Architecture:** Keep `nextpas.core.platform.sync` as the public contract, but split platform-specific implementation and FFI details away from the shared API. Fix the RWLock API so Unix and Windows can both implement it honestly, then add focused Linux and Win64 compile gates.
+**Architecture:** Keep `nextpas.core.platform.sync` as the public contract, but split platform-specific implementation and FFI details away from the shared API. Fix the RWLock API so Unix and Windows can both implement it honestly, route POSIX/Linux ABI declarations through nextPas-owned FFI units instead of FPC platform units, then add focused Linux and Win64 compile gates.
 
 **Tech Stack:** Free Pascal 3.3.1, ObjFPC mode, pthread/futex on Linux, Windows SRWLOCK/CONDITION_VARIABLE/WaitOnAddress via explicit FFI declarations.
 
@@ -18,7 +18,11 @@
   - Use aligned opaque records.
   - Dispatch Linux and Windows implementations with target-accurate guards.
 - Create: `src/nextpas.core.platform.sync.windows.ffi.pas`
-  - Narrow external declarations for Windows synchronization APIs missing from FPC's `Windows` unit.
+  - Narrow external declarations for Windows synchronization APIs without depending on FPC's `Windows` unit.
+- Create: `src/nextpas.core.platform.posix.ffi.pas`
+  - POSIX ABI declarations needed by `platform.sync`: `timespec`, `clock_gettime`, pthread opaque types, pthread attributes, mutexes, rwlocks, and condition variables.
+- Create: `src/nextpas.core.platform.linux.ffi.pas`
+  - Linux-only ABI declarations needed by `platform.sync`: futex constants, syscall number, libc `syscall`, and errno access.
 - Modify: `src/nextpas.core.sync.rwlock.pas`
   - Call `platform_rwlock_rdunlock` and `platform_rwlock_wrunlock`.
 - Modify: `tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
@@ -190,7 +194,8 @@ git commit -m "fix(core): split platform rwlock release modes"
 
 - [ ] **Step 1: Create the Windows FFI unit**
 
-Create `src/nextpas.core.platform.sync.windows.ffi.pas`:
+Create `src/nextpas.core.platform.sync.windows.ffi.pas` without a `uses Windows`
+dependency:
 
 ```pascal
 unit nextpas.core.platform.sync.windows.ffi;
@@ -199,8 +204,8 @@ unit nextpas.core.platform.sync.windows.ffi;
 
 interface
 
-uses
-  Windows;
+type
+  DWORD = UInt32;
 
 procedure InitializeSRWLock(SRWLock: Pointer); stdcall; external 'kernel32' name 'InitializeSRWLock';
 procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32' name 'AcquireSRWLockExclusive';
@@ -218,6 +223,11 @@ procedure WakeAllConditionVariable(ConditionVariable: Pointer); stdcall; externa
 function WaitOnAddress(Address: Pointer; CompareAddress: Pointer; AddressSize: PtrUInt; dwMilliseconds: DWORD): LongBool; stdcall; external 'kernel32' name 'WaitOnAddress';
 procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressSingle';
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
+function GetLastError: DWORD; stdcall; external 'kernel32' name 'GetLastError';
+
+const
+  INFINITE = DWORD($FFFFFFFF);
+  ERROR_TIMEOUT = DWORD(1460);
 
 implementation
 
@@ -229,9 +239,8 @@ end.
 In `src/nextpas.core.platform.sync.pas`, change the Windows `uses` block to:
 
 ```pascal
-{$IFDEF WINDOWS}
+{$IFDEF NEXTPAS_WINDOWS}
 uses
-  Windows,
   nextpas.core.platform.sync.windows.ffi;
 {$ENDIF}
 ```
@@ -362,6 +371,8 @@ git commit -m "fix(core): align platform sync opaque storage"
 
 **Files:**
 - Modify: `src/nextpas.core.platform.sync.pas`
+- Create: `src/nextpas.core.platform.posix.ffi.pas`
+- Create: `src/nextpas.core.platform.linux.ffi.pas`
 - Modify: `tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
 
 - [ ] **Step 1: Add public error constants**
@@ -415,6 +426,17 @@ end;
 
 Use this helper in Windows condvar and address-wait paths.
 
+Also replace all Linux-side FPC platform-unit dependencies:
+
+```pascal
+uses
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.linux.ffi;
+```
+
+`platform.sync` must not `uses Linux`, `PThreads`, `UnixType`, `BaseUnix`,
+`Syscall`, or `Windows`.
+
 - [ ] **Step 4: Run focused tests**
 
 Run:
@@ -444,6 +466,9 @@ Add required paths for:
 
 ```text
 core/src/nextpas.core.platform.sync.pas
+core/src/nextpas.core.platform.posix.ffi.pas
+core/src/nextpas.core.platform.linux.ffi.pas
+core/src/nextpas.core.platform.sync.windows.ffi.pas
 core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
 core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
 ```

@@ -11,11 +11,12 @@ LIB_DIR := $(BUILD_DIR)/lib
 BIN_DIR := $(BUILD_DIR)/bin
 TESTS_DIR := tests
 EXAMPLES_DIR := examples
+BENCHMARKS_DIR := benchmarks
 
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
 
-.PHONY: build test examples clean dirs
+.PHONY: build test examples benchmarks clean dirs
 
 # Default target
 build: dirs
@@ -27,23 +28,60 @@ dirs:
 
 # Compile and run all tests
 test: dirs
-	@find $(TESTS_DIR) -name '*.lpr' | while read lpr; do \
-		echo "Compiling: $$lpr"; \
-		$(FPC) $(FPC_FLAGS) "$$lpr" || exit 1; \
-		bin=$$(basename "$$lpr" .lpr); \
-		echo "Running: $$bin"; \
-		$(BIN_DIR)/$$bin || exit 1; \
+	@missing=$$(find $(TESTS_DIR) -name '*.lpr' | while read lpr; do \
+		dir=$$(dirname "$$lpr"); \
+		if [ ! -f "$$dir/Makefile" ]; then echo "$$dir"; fi; \
+	done | sort -u); \
+	if [ -n "$$missing" ]; then \
+		echo "Missing project Makefile:"; \
+		echo "$$missing"; \
+		exit 1; \
+	fi
+	@find $(TESTS_DIR) -mindepth 2 -name Makefile | sort | while read mk; do \
+		dir=$$(dirname "$$mk"); \
+		echo "Running test project: $$dir"; \
+		$(MAKE) -C "$$dir" test || exit 1; \
 		echo ""; \
 	done
 	@echo "All tests passed."
 
 # Compile all examples
 examples: dirs
-	@find $(EXAMPLES_DIR) -name '*.lpr' | while read lpr; do \
-		echo "Compiling: $$lpr"; \
-		$(FPC) $(FPC_FLAGS) "$$lpr" || exit 1; \
+	@missing=$$(find $(EXAMPLES_DIR) -name '*.lpr' | while read lpr; do \
+		dir=$$(dirname "$$lpr"); \
+		if [ ! -f "$$dir/Makefile" ]; then echo "$$dir"; fi; \
+	done | sort -u); \
+	if [ -n "$$missing" ]; then \
+		echo "Missing project Makefile:"; \
+		echo "$$missing"; \
+		exit 1; \
+	fi
+	@find $(EXAMPLES_DIR) -mindepth 2 -name Makefile | sort | while read mk; do \
+		dir=$$(dirname "$$mk"); \
+		echo "Building example project: $$dir"; \
+		$(MAKE) -C "$$dir" build || exit 1; \
+		echo ""; \
 	done
 	@echo "All examples compiled."
+
+# Compile and run all benchmarks
+benchmarks: dirs
+	@missing=$$(find $(BENCHMARKS_DIR) -name '*.lpr' | while read lpr; do \
+		dir=$$(dirname "$$lpr"); \
+		if [ ! -f "$$dir/Makefile" ]; then echo "$$dir"; fi; \
+	done | sort -u); \
+	if [ -n "$$missing" ]; then \
+		echo "Missing project Makefile:"; \
+		echo "$$missing"; \
+		exit 1; \
+	fi
+	@find $(BENCHMARKS_DIR) -mindepth 2 -name Makefile | sort | while read mk; do \
+		dir=$$(dirname "$$mk"); \
+		echo "Running benchmark project: $$dir"; \
+		$(MAKE) -C "$$dir" run || exit 1; \
+		echo ""; \
+	done
+	@echo "All benchmarks passed."
 
 # Clean build artifacts
 clean:

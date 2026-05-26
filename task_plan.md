@@ -15,30 +15,12 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-## Addendum: 2026-05-26 Batch 90 TObject.Free Runtime Contract
+## Addendum: 2026-05-26 Platform Sync Merge-preview Closeout
 
 ### Goal
 
-继续推进目标树 G3 / G1.5，把 Batch 89 的 `Free -> effective Destroy` lowering 扩展成
-`TObject.Free` 的最小 runtime contract：
-
-- no-fold typed HIR 必须在 `Obj.Free` 上表达 object-free lifecycle intent。
-- contract 必须同时记录 receiver、effective `Destroy` target、nil guard 和 heap release intent。
-- 这条 gate 只证明 compiler semantic/HIR 层已经拥有 `Free` 的对象释放契约；不宣称 backend
-  已生成真实 nil branch、allocator free、完整动态 dispatch runtime 或 implicit `System.pas` 自动 link。
-- 不修改 `core/`。
-
-### Architecture Decision
-
-这是 compound `object-free-runtime` contract，不是 allocator/backend 实现：
-
-- 复用 Batch 89 的 effective destructor 解析：`TClass$vmt_slot_Destroy` 到
-  `TClass$vmt_func_<slot>`。
-- 在现有 `call-runtime <Destroy>` 前额外生成 `object-free-runtime` typed HIR node，DisplayName
-  为 `np.system.object_free`，Operand 写明 `var <receiver>`、`destroy <effective target>`、
-  `nil-guard true` 与 `heap-release true`。
-- `THIRBuilder` 当前可以继续忽略该 contract；后续 backend/runtime helper 接管时再把它展开成真实
-  nil branch、destructor dispatch 和 heap release。
+把 `platform.sync` hardening 分支合入最新主线预览分支，确保主线新增 core/test 结构与
+platform.sync 的无 FPC 平台单元依赖、测试、example、benchmark、官方验证入口能够同时成立。
 
 ### Status
 
@@ -46,28 +28,25 @@ Completed
 
 ### Planned Steps
 
-- [x] 写 RED：implicit source-backed `System` 下，`Worker.Free` 必须生成 object-free runtime contract
-- [x] 让 `Free` lowering 在 effective `Destroy` resolved 后写入 `object-free-runtime`
-- [x] 保持 inherited `TObject.Destroy` call-runtime gate 不退化
-- [x] 同步 System / runtime bootstrap / semantic docs、总控地图与持续记录
-- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
-- [x] 简短 review 后提交
+- [x] 在干净的 `codex/platform-sync-merge-preview` worktree 合并 `codex/platform-sync-hardening`
+- [x] 择优解决文档和跟踪文件冲突
+- [x] 收紧 `linux.ffi`，只保留 external ABI 声明
+- [x] 为主线新增 core 测试项目补齐单独 Makefile
+- [x] 运行 platform.sync focused tests、examples、benchmarks、core aggregate gates 和顶层验证
+- [x] 简短 review 后提交 merge-preview
 
 ### Verification
 
-- RED: focused semantic test 失败在
-  `semantic-call-bindings-failure=missing-implicit-system-free-runtime-contract`。
-- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
-- Full: fresh `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
-  `verify-local=pass` 与 `human-summary=local verification passed`。
+- `make -C core test`: All tests passed。
+- `make -C core examples`: All examples compiled。
+- `make -C core benchmarks`: All benchmarks passed。
+- `bash build/verify_local.sh`: `verify-local=pass`、
+  `human-summary=local verification passed`。
 
-### Non-goals
+### Next
 
-- 不实现完整 FPC `System`
-- 不生成真实 backend nil branch / allocator free
-- 不实现完整 dynamic virtual dispatch runtime
-- 不让 implicit runtime 自动进入 backend extra assemble/link
-- 不修改 `core/`
+主 checkout 仍有未提交同事工作；preview 分支验证通过后，等待主线现场干净或由负责人确认可集成，
+再合入 `main`、删除旧 `platform-sync-hardening` worktree，并从最新主线重新开新 worktree。
 
 ## Addendum: 2026-05-26 Batch 89 Inherited TObject.Destroy Free Lowering
 
@@ -249,6 +228,39 @@ Completed
 - 不把 implicit runtime placeholder 自动升级为 source-backed compile/link
 - 不实现 destructor lowering / virtual dispatch / unit init-fini
 - 不修改 `core/`
+
+## Addendum: 2026-05-26 Platform Sync Worktree-safe Verification
+
+### Goal
+
+收口 `platform.sync` worktree 的官方顶层验证问题：`build/verify_local.sh` 不能再假设仓库路径
+一定以 `/nextPas` 结尾，也不能写死主 checkout 的 `/home/dtamade/projects/nextPas` 路径。
+
+### Architecture Decision
+
+`verify_local` 的路径契约继续保持精确，但精确性来自当前 `REPO_ROOT`、workspace artifact root、
+distribution/runtime root 等派生变量，而不是固定目录名。对 line output 优先使用 literal
+断言；对 JSON envelope 使用经过 ERE escaping 的路径 pattern。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 复现 worktree 下的 `missing-stage0-workspace-root`
+- [x] 在 `build/verify_local.sh` 增加 ERE path escaping helper 与派生路径 pattern
+- [x] 替换所有写死 `.*/nextPas` 与主 checkout 的断言
+- [x] 同步 `core-platform-sync-check` 当前 14 项接口覆盖 summary
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh `bash build/verify_local.sh` 失败在 `missing-stage0-workspace-root`，而实际
+  `workspace-root` 是当前 linked worktree 路径。
+- GREEN: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
 
 ## Addendum: 2026-05-26 Batch 86 Unknown Member Diagnostic
 

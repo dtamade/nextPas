@@ -10,11 +10,28 @@
 
 ## Research Findings
 
-- Batch 90 把 `TObject.Free` 的 no-fold typed HIR 从单纯 inherited `Destroy` call 推进到明确的
-  `object-free-runtime` contract：contract DisplayName 为 `np.system.object_free`，Operand 记录
-  receiver、effective `Destroy` target、`nil-guard true` 与 `heap-release true`。
-- 这条 contract 是 compiler semantic/HIR 层的 lifecycle intent，给后续 backend/runtime helper
-  一个稳定接入口；它还不是实际生成 nil branch、allocator free 或完整动态 dispatch runtime。
+- Merge-preview closeout 已证明 platform.sync 分支可以和最新 `main` 的 source-backed
+  `System/TObject`、`ICondVar`、Vec/interface allocator 等变更共存；冲突只落在设计约定和
+  跟踪文档，源码自动合并后通过全量验证。
+- `nextpas.core.platform.sync` 当前只依赖 `nextpas.core.platform.posix.ffi`、
+  `nextpas.core.platform.linux.ffi`、`nextpas.core.platform.sync.windows.ffi`，不再 `uses`
+  FPC 的 `Linux`、`PThreads`、`UnixType`、`BaseUnix`、`Syscall`、`Windows` 平台单元。
+- `nextpas.core.platform.linux.ffi` 已保持为纯 ABI 声明文件；`__errno_location` 只作为
+  external declaration 暴露，读取 errno 的逻辑位于 `platform.sync` 实现层。
+- 主线新增的 `atomic`、`hashmap`、`arena`、`pool`、`thread` 测试项目暴露了 per-project
+  Makefile 规则的合并缺口；补齐后 `make -C core test` 已能覆盖全部 core 测试项目。
+- 当前硬规则仍有后续债务：`platform.time` 与 `platform.thread` 仍存在 FPC 平台单元依赖，应在新
+  worktree 中继续按 `posix.ffi` / `linux.ffi` / Windows FFI 边界迁移。
+- Platform sync closeout 证明 `build/verify_local.sh` 之前不是 stage0 行为失败，而是 verification
+  contract 自身把 explicit workspace 固定成 `.*/nextPas`，导致 linked worktree 下误报
+  `missing-stage0-workspace-root`。
+- `verify_local` 现在通过 `escape_ere()` 派生当前 `REPO_ROOT`、workspace artifact/output、
+  distribution/runtime root 的正则 pattern；line output 用 literal 断言，JSON envelope 用
+  escaped regex 断言，保留精确性但不再绑定主 checkout 目录名。
+- `core-text-smoke-check` 不再写死 `/home/dtamade/projects/nextPas/rtl/core/...`，而是使用当前
+  `REPO_ROOT/rtl/core/...`，让 smoke 在 worktree 内自洽。
+- `core-platform-sync-check` 顶层 summary 已同步到当前 14 项接口覆盖；fresh
+  `bash build/verify_local.sh` 已通过并输出 `verify-local=pass` / `human-summary=local verification passed`。
 - Batch 89 把 source-backed implicit `System` 的对象生命周期从 `TObject.Free` binding 推进到
   no-fold typed HIR 的 effective `Destroy` runtime call：普通 class 没有显式父类时，会继承
   `System.TObject` 的 VMT slot/function metadata。
