@@ -62,6 +62,7 @@
   `stage0EnvInvalidArgumentsCheck=pass`、`ambiguousOverloadCheck=pass`、
   `ambiguousMemberOverloadCheck=pass`、`wrongArgumentCountCheck=pass`、
   `memberWrongArgumentCountCheck=pass`、
+  `typeMismatchCallCheck=pass`、`memberTypeMismatchCallCheck=pass`、
   `multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
@@ -102,9 +103,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 78：member wrong argument count diagnostics。
+- 当前 rolling window 已推进到 Batch 79：single-target call type mismatch diagnostics。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 78` 已完成。
+- `Batch 1` 到 `Batch 79` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -195,7 +196,11 @@
   `Batch 78` 把同一条 arity no-match diagnostic 扩到 direct member-call：当前已支持的
   class/type receiver path 中，同名 method 已知但没有任何同 arity target 时发
   `sema.wrong-argument-count`；未知 member、receiver 未覆盖、body mismatch、signature no-match
-  与完整 member resolver 继续 deferred。
+  与完整 member resolver 继续 deferred。`Batch 79` 把第一条可证明 type no-match 接进
+  call diagnostics：bare procedure/function call 与 direct member-call 在 root-owned 单一 target、arity
+  已匹配且 argument signature 来自 literal/纯表达式等稳定事实并可推断为不兼容时发
+  `sema.type-mismatch`；imported target、变量/成员/函数结果相关 no-match、多 overload signature
+  no-match、未知 callable/member、implicit conversion、完整 overload ranking 与完整 member resolver 继续 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

@@ -10,6 +10,27 @@
 
 ## Research Findings
 
+- Batch 79 把第一条可证明 type no-match 接进 call diagnostics：bare procedure/function call 与
+  direct member-call 在只有 root-owned 单一 target、arity 已匹配、argument signature 来自稳定事实且与
+  param signature 明确不兼容时，会发 `sema.type-mismatch`，model status 进入 `failure`，且不会注册
+  `call` / `member-call` binding。
+- `sema.type-mismatch` 还要求 argument signature 来自 literal/纯表达式等稳定事实；变量、成员或函数结果
+  相关 no-match 继续 deferred。
+- `True` / `False` 现在由 `InferExpressionType(...)` 识别为 `Boolean`，避免 boolean literal
+  在 call argument signature 中退化为 unknown identifier。
+- `LookupCallBindingDeclaration(...)` 不再因为 bare call target 唯一就绕过 signature check；
+  单一 target 的 signature mismatch 会透传 `type-mismatch` failure kind。
+- `MethodSymbolIdForExactClassTypeMember(...)` 同样会在 direct member-call 单一 target signature
+  mismatch 时透传 `type-mismatch` failure kind。
+- Batch 79 仍保持 imported target 与多 overload signature no-match deferred；implicit conversion、完整
+  ranking、unknown callable/member、record/property/array/deref receiver 与完整 member resolver 继续 deferred。
+- fresh verify 首轮证明 imported RTL/helper surface 不能纳入本批 type-mismatch 诊断：`ExpandFileName` /
+  `FileExists` 曾被过宽规则误报，原因是 compact signature 还不足以完整表达 imported declaration
+  与 caller-side alias/string facts。
+- fresh verify 二轮证明变量 type facts 也不能纳入本批 diagnostic evidence：`SetNext(TNode)` 被变量参数
+  `B` / `C` 误报后，type mismatch 诊断边界收紧为 literal/纯表达式稳定事实。
+- 新增 `type-mismatch-call-check` 与 `member-type-mismatch-call-check`，用 dedicated stage0 failure
+  fixtures 固定 `sema.type-mismatch` projection 与 final envelope。
 - Batch 78 把 `sema.wrong-argument-count` 从 bare call 扩到 direct member-call：当前已支持的
   class/type receiver path 中，同名 method 已知但没有任何同 arity target 时，semantic analyzer
   会发 diagnostic，model status 进入 `failure`，且不会注册 `member-call` binding。

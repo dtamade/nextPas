@@ -862,7 +862,8 @@ failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义�
 ambiguous imported callable overload 与 ambiguous member overload 断言
 `semantic-analysis-failed` + `sema.ambiguous-overload`，再对 wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
-同一组 semantic failure / diagnostic projection，再对
+同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、

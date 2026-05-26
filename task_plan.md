@@ -15,6 +15,78 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 79 Single-target Call Type Mismatch Diagnostics
+
+### Goal
+
+把 semantic binding/type relation 从“能绑定正确 target”推进到第一条可证明 type no-match：
+当 bare procedure/function call 或 direct member-call 只有 root-owned 单一 target、arity 已匹配，且当前
+argument signature 来自 literal/纯表达式等稳定事实、可推断为与 target param signature 明确不兼容时，
+发出 `sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `InferExpressionType(...)` 识别 `True` / `False` 为 `Boolean`，让 boolean literal 进入
+  call argument signature。
+- `LookupCallBindingDeclaration(...)` 对 bare call 的单一 target signature mismatch 透传
+  `type-mismatch` failure kind，不再错误注册 `call` binding。
+- `MethodSymbolIdForExactClassTypeMember(...)` 对 direct member-call 的单一 target signature
+  mismatch 透传 `type-mismatch` failure kind。
+- `build/verify_local.sh` 新增 `type-mismatch-call-check` 与
+  `member-type-mismatch-call-check`，固定 stage0 failure projection 与 final verify envelope 的
+  `typeMismatchCallCheck` / `memberTypeMismatchCallCheck`。
+
+### Architecture Decision
+
+这是 root-owned single-target type mismatch diagnostics，不是完整 no-matching-overload resolver：
+
+- 只覆盖 root-owned target 唯一、arity 已匹配、argument signature 来自稳定 facts 且明确不兼容的路径。
+- imported target 继续 deferred；当前 compact signature 尚不足以可靠覆盖 RTL/package helper surface。
+- 变量/成员/函数结果相关 no-match 继续 deferred；当前变量声明与 symbol type facts 还不能作为
+  diagnostic 证据使用。
+- 多 overload 的 signature no-match 仍保持 deferred，避免把 implicit conversion、ranking 或 future
+  resolver 能力误报成错误。
+- 未知 callable / unknown member、receiver 未覆盖、record/property/array/deref receiver、visibility、
+  implicit conversion、default parameter lowering/ranking 与完整 overload ranking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 bare `Pick(True)` 调 `Pick(Integer)` 的 type mismatch focused regression
+- [x] RED：新增 `Worker.Pick(True)` 调 `TWorker.Pick(Integer)` 的 member type mismatch regression
+- [x] 让 boolean literal 进入 expression type inference / argument signature
+- [x] 在 bare call lookup 中带出 `type-mismatch` failure kind，避免错误绑定
+- [x] 在 member target lookup 中带出 `type-mismatch` failure kind
+- [x] 新增 `tests/fixtures/type_mismatch_call` / `member_type_mismatch_call` 与 verify gates
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在
+  `semantic-call-bindings-failure=missing-bare-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full first pass: `bash build/verify_local.sh` 曾失败在
+  `compiler-module-workspace-model-self-compile-failed`，原因为 imported `SysUtils.ExpandFileName` /
+  `FileExists` 被过宽 type-mismatch 规则误报。
+- Full second pass: `bash build/verify_local.sh` 曾失败在 `llvm-linked-list-build-failed`，原因为
+  root-owned `SetNext(TNode)` 的变量参数 `B` / `C` 被不稳定 variable type fact 误报。
+- Full: `bash build/verify_local.sh` 已输出 `type-mismatch-call-check=pass`、
+  `member-type-mismatch-call-check=pass`、`semantic-call-bindings-check=pass`、
+  `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 multi-target no-matching-overload diagnostics
+- 不实现 implicit conversion / overload ranking / default parameter lowering
+- 不实现 unknown callable / unknown member diagnostics
+- 不扩展 record/property/array/deref receiver、virtual dispatch 或完整 member resolver
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 78 Member Wrong Argument Count Diagnostics
 
 ### Goal

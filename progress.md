@@ -3,6 +3,53 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 79 single-target call type mismatch diagnostics)
+
+- **Status:** completed
+- Objective:
+  - 把当前已有 compact `ParamSignature` / argument signature 从“可选中正确 overload”推进到第一条
+    可证明 type no-match：bare call 与 direct member-call 在 root-owned 单一 target、arity 已匹配、argument
+    signature 来自 literal/纯表达式等稳定事实且不兼容时，发出 `sema.type-mismatch`。
+- Baseline:
+  - `Pick(True)` 调用 `Pick(Value: Integer)` 时，旧 bare call path 因为 target 唯一会错误注册
+    `call` binding。
+  - `Worker.Pick(True)` 调用 `TWorker.Pick(Value: Integer)` 时，旧 member path 不注册 binding，
+    但也不进入 diagnostics sink。
+  - `True` / `False` 作为 identifier 进入 AST 时，旧 `InferExpressionType(...)` 不能推断 Boolean。
+- Actions taken:
+  - 先写 focused RED，要求 bare `Pick(True)` 与 member `Worker.Pick(True)` 都发
+    `sema.type-mismatch`、model status `failure`、binding count `0`。
+  - `InferExpressionType(...)` 现在把 `True` / `False` 识别为 `Boolean`，让 boolean literal
+    进入 call argument signature。
+  - `LookupCallBindingDeclaration(...)` 现在在 bare call 单一 target 但 signature mismatch 时透传
+    `type-mismatch`，不再错误注册 `call` binding。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 现在在 direct member-call 单一 target 但 signature
+    mismatch 时透传 `type-mismatch`。
+  - type mismatch diagnostic 现在还要求 argument signature 来自稳定表达式事实；变量、成员或函数结果
+    参与的 signature no-match 继续 deferred。
+  - `SeedCallBindingsInNode(...)` 对 bare/member 的 `type-mismatch` failure kind 发
+    `sema.type-mismatch`。
+  - fresh verify 首轮暴露 imported `SysUtils.ExpandFileName` / `FileExists` 会被过宽规则误报；
+    本批边界已收紧到 root-owned target，imported target 继续 deferred。
+  - fresh verify 二轮暴露 root-owned `SetNext(TNode)` 被变量参数 `B/C` 的不稳定 type fact 误报；
+    本批边界已进一步收紧为 literal/纯表达式稳定事实。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-bare-call-type-mismatch-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full first pass: `bash build/verify_local.sh` 曾失败在
+    `compiler-module-workspace-model-self-compile-failed`，原因为 imported
+    `SysUtils.ExpandFileName` / `FileExists` 被过宽 type-mismatch 规则误报。
+  - Full second pass: `bash build/verify_local.sh` 曾失败在 `llvm-linked-list-build-failed`，原因为
+    root-owned `SetNext(TNode)` 的变量参数 `B` / `C` 被不稳定 variable type fact 误报。
+  - Full: `bash build/verify_local.sh` 已输出 `type-mismatch-call-check=pass`、
+    `member-type-mismatch-call-check=pass`、`semantic-call-bindings-check=pass`、`smoke-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖 root-owned single-target、arity matched、argument signature 来自稳定 facts 且明确不兼容的路径。
+  - imported target、变量/成员/函数结果、多 overload signature no-match、implicit conversion/ranking、
+    unknown callable/member 与完整 member resolver 继续 deferred。
+
 ## Session: 2026-05-26 (Batch 78 member wrong argument count diagnostics)
 
 - **Status:** completed

@@ -84,7 +84,9 @@ type
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;
       const AArgCount: LongInt; const AArgSignature: string;
-      const AHasArgSignature: Boolean; out AResolutionFailureKind: string;
+      const AHasArgSignature: Boolean;
+      const AHasTypeMismatchEvidence: Boolean;
+      out AResolutionFailureKind: string;
       out ABody: TGreenNode;
       out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
@@ -129,12 +131,17 @@ type
       const ACallNode: TGreenNode;
       out ASignature: string
     ): Boolean;
+    function ExpressionTypeFactIsStable(const ANode: TGreenNode): Boolean;
+    function CallArgumentSignatureIsStable(
+      const ACallNode: TGreenNode
+    ): Boolean;
     function MethodSymbolIdForExactClassTypeMember(
       const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
+      const AHasTypeMismatchEvidence: Boolean;
       out AMethodNameFound: Boolean;
       out AResolutionFailureKind: string
     ): LongInt;
@@ -144,6 +151,7 @@ type
       const AArgCount: LongInt;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
+      const AHasTypeMismatchEvidence: Boolean;
       out AResolutionFailureKind: string
     ): LongInt;
     function TryRegisterMemberCallBinding(
@@ -885,6 +893,7 @@ function TSemanticAnalyzer.LookupCallBindingDeclaration(
   const AArgCount: LongInt;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
+  const AHasTypeMismatchEvidence: Boolean;
   out AResolutionFailureKind: string;
   out ABody: TGreenNode;
   out ADecl: TGreenNode;
@@ -966,7 +975,19 @@ begin
   if RootMatchCount > 0 then
   begin
     if RootMatchCount = 1 then
+    begin
+      if AHasTypeMismatchEvidence and AHasArgSignature and
+        (not DeclParamSignatureMatchesArgs(
+          FProcedureBodies[RootMatchIndex].Decl,
+          AArgSignature,
+          AArgCount
+        )) then
+      begin
+        AResolutionFailureKind := 'type-mismatch';
+        Exit(False);
+      end;
       RootSignatureMatchIndex := RootMatchIndex
+    end
     else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
     begin
       AResolutionFailureKind := 'ambiguous-overload';
@@ -1007,6 +1028,58 @@ begin
   ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
   ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
   AOwnerUnitId := FProcedureBodies[ImportedSignatureMatchIndex].OwnerUnitId;
+  Result := True;
+end;
+
+function TSemanticAnalyzer.ExpressionTypeFactIsStable(
+  const ANode: TGreenNode
+): Boolean;
+var
+  Index: LongInt;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+
+  case ANode.NodeKind of
+    gnkIntegerLiteral, gnkRealLiteral, gnkStringLiteral, gnkCharLiteral:
+      Exit(True);
+    gnkIdentifier:
+      Exit(SameText(ANode.Text, 'True') or SameText(ANode.Text, 'False'));
+    gnkBinaryExpression, gnkUnaryExpression:
+      begin
+        for Index := 0 to ANode.ChildCount - 1 do
+          if not ExpressionTypeFactIsStable(ANode.ChildAt(Index)) then
+            Exit(False);
+        Exit(True);
+      end;
+  end;
+end;
+
+function TSemanticAnalyzer.CallArgumentSignatureIsStable(
+  const ACallNode: TGreenNode
+): Boolean;
+var
+  ArgRoot: TGreenNode;
+  Index: LongInt;
+begin
+  Result := False;
+  if ACallNode = nil then
+    Exit;
+
+  ArgRoot := ACallNode;
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (ACallNode.ChildCount > 0) and
+    (ACallNode.ChildAt(0) <> nil) and
+    (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    ArgRoot := ACallNode.ChildAt(0);
+
+  if ArgRoot.NodeKind <> gnkFunctionCall then
+    Exit(True);
+
+  for Index := 1 to ArgRoot.ChildCount - 1 do
+    if not ExpressionTypeFactIsStable(ArgRoot.ChildAt(Index)) then
+      Exit(False);
   Result := True;
 end;
 
@@ -1301,6 +1374,7 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AArgCount: LongInt;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
+  const AHasTypeMismatchEvidence: Boolean;
   out AMethodNameFound: Boolean;
   out AResolutionFailureKind: string
 ): LongInt;
@@ -1356,6 +1430,14 @@ begin
       AResolutionFailureKind := 'wrong-argument-count';
     Exit;
   end;
+  if AHasTypeMismatchEvidence and
+    SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) and
+    (SymbolMatchCount = 1) and AHasArgSignature and
+    (SignatureMatchCount = 0) then
+  begin
+    AResolutionFailureKind := 'type-mismatch';
+    Exit;
+  end;
   if SymbolMatchCount > 1 then
   begin
     if AHasArgSignature and (SignatureMatchCount = 1) then
@@ -1407,6 +1489,7 @@ function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AArgCount: LongInt;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
+  const AHasTypeMismatchEvidence: Boolean;
   out AResolutionFailureKind: string
 ): LongInt;
 var
@@ -1426,6 +1509,7 @@ begin
       AArgCount,
       AArgSignature,
       AHasArgSignature,
+      AHasTypeMismatchEvidence,
       MethodNameFound,
       AResolutionFailureKind
     );
@@ -1453,6 +1537,7 @@ var
   ArgCount: LongInt;
   ArgSignature: string;
   HasArgSignature: Boolean;
+  HasTypeMismatchEvidence: Boolean;
   MemberName: string;
   MemberOffset: LongInt;
   ReceiverName: string;
@@ -1480,6 +1565,8 @@ begin
   if ReceiverTypeId <= 0 then
     Exit;
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode);
 
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
@@ -1487,6 +1574,7 @@ begin
     ArgCount,
     ArgSignature,
     HasArgSignature,
+    HasTypeMismatchEvidence,
     AResolutionFailureKind
   );
   if TargetSymbolId <= 0 then
@@ -1698,6 +1786,7 @@ var
   Child: TGreenNode;
   DeclNode: TGreenNode;
   HasArgSignature: Boolean;
+  HasTypeMismatchEvidence: Boolean;
   Index: LongInt;
   MemberFailureName: string;
   MemberFailureOffset: LongInt;
@@ -1738,16 +1827,25 @@ begin
           'sema.wrong-argument-count',
           'wrong number of arguments for "' + MemberFailureName + '"',
           MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'type-mismatch') then
+        EmitSemaError(
+          'sema.type-mismatch',
+          'argument type mismatch for "' + MemberFailureName + '"',
+          MemberFailureOffset
         );
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
+      HasTypeMismatchEvidence := HasArgSignature and
+        CallArgumentSignatureIsStable(ANode);
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
         ArgSignature,
         HasArgSignature,
+        HasTypeMismatchEvidence,
         ResolutionFailureKind,
         BodyNode,
         DeclNode,
@@ -1764,6 +1862,12 @@ begin
         EmitSemaError(
           'sema.wrong-argument-count',
           'wrong number of arguments for "' + ANode.Text + '"',
+          ANode.ByteOffset
+        )
+      else if SameText(ResolutionFailureKind, 'type-mismatch') then
+        EmitSemaError(
+          'sema.type-mismatch',
+          'argument type mismatch for "' + ANode.Text + '"',
           ANode.ByteOffset
         );
     end;
@@ -2059,6 +2163,8 @@ begin
       Result := FModel.FindTypeByName('Char');
     gnkIdentifier:
       begin
+        if SameText(ANode.Text, 'True') or SameText(ANode.Text, 'False') then
+          Exit(FModel.FindTypeByName('Boolean'));
         SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
         if SymId > 0 then
         begin
