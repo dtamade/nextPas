@@ -130,18 +130,23 @@ type
       const AArgCount: LongInt;
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
-      out AMethodNameFound: Boolean
+      out AMethodNameFound: Boolean;
+      out AResolutionFailureKind: string
     ): LongInt;
     function MethodSymbolIdForClassTypeMember(
       const AClassTypeId: LongInt;
       const AMemberName: string;
       const AArgCount: LongInt;
       const AArgSignature: string;
-      const AHasArgSignature: Boolean
+      const AHasArgSignature: Boolean;
+      out AResolutionFailureKind: string
     ): LongInt;
     function TryRegisterMemberCallBinding(
       const ACallNode: TGreenNode;
-      const ACurrentMethodClass: string
+      const ACurrentMethodClass: string;
+      out AResolutionFailureKind: string;
+      out AFailureName: string;
+      out AFailureOffset: LongInt
     ): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
@@ -1213,7 +1218,8 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AArgCount: LongInt;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
-  out AMethodNameFound: Boolean
+  out AMethodNameFound: Boolean;
+  out AResolutionFailureKind: string
 ): LongInt;
 var
   BodyCandidateCount: LongInt;
@@ -1229,6 +1235,7 @@ var
 begin
   Result := 0;
   AMethodNameFound := False;
+  AResolutionFailureKind := '';
   if (AClassTypeId <= 0) or (AMemberName = '') then
     Exit;
   if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
@@ -1260,11 +1267,18 @@ begin
       end;
     end;
   end;
-  if SymbolMatchCount <> 1 then
+  if SymbolMatchCount = 0 then
+    Exit;
+  if SymbolMatchCount > 1 then
   begin
     if AHasArgSignature and (SignatureMatchCount = 1) then
       SymbolId := SignatureSymbolId
-    else
+    else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
+    begin
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit;
+    end
+    else if SignatureMatchCount = 0 then
       Exit;
   end;
   if SymbolId <= 0 then
@@ -1289,7 +1303,12 @@ begin
       Exit(SymbolId);
     Exit;
   end;
-  if BodyMatchCount <> 1 then
+  if BodyMatchCount > 1 then
+  begin
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit;
+  end;
+  if BodyMatchCount = 0 then
     Exit;
 
   Result := SymbolId;
@@ -1300,7 +1319,8 @@ function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AMemberName: string;
   const AArgCount: LongInt;
   const AArgSignature: string;
-  const AHasArgSignature: Boolean
+  const AHasArgSignature: Boolean;
+  out AResolutionFailureKind: string
 ): LongInt;
 var
   CurrentTypeId: LongInt;
@@ -1308,6 +1328,7 @@ var
   MethodNameFound: Boolean;
 begin
   Result := 0;
+  AResolutionFailureKind := '';
   CurrentTypeId := AClassTypeId;
   Depth := 0;
   while (CurrentTypeId > 0) and (Depth < 32) do
@@ -1318,9 +1339,12 @@ begin
       AArgCount,
       AArgSignature,
       AHasArgSignature,
-      MethodNameFound
+      MethodNameFound,
+      AResolutionFailureKind
     );
     if Result > 0 then
+      Exit;
+    if AResolutionFailureKind <> '' then
       Exit;
     if MethodNameFound then
       Exit;
@@ -1333,7 +1357,10 @@ end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(
   const ACallNode: TGreenNode;
-  const ACurrentMethodClass: string
+  const ACurrentMethodClass: string;
+  out AResolutionFailureKind: string;
+  out AFailureName: string;
+  out AFailureOffset: LongInt
 ): Boolean;
 var
   ArgCount: LongInt;
@@ -1346,6 +1373,9 @@ var
   TargetSymbolId: LongInt;
 begin
   Result := False;
+  AResolutionFailureKind := '';
+  AFailureName := '';
+  AFailureOffset := 0;
   if not ExtractDirectMemberCall(
     ACallNode,
     ReceiverName,
@@ -1354,6 +1384,8 @@ begin
     ArgCount
   ) then
     Exit;
+  AFailureName := MemberName;
+  AFailureOffset := MemberOffset;
   ReceiverTypeId := TypeIdForMemberReceiver(
     ReceiverName,
     ACurrentMethodClass
@@ -1367,7 +1399,8 @@ begin
     MemberName,
     ArgCount,
     ArgSignature,
-    HasArgSignature
+    HasArgSignature,
+    AResolutionFailureKind
   );
   if TargetSymbolId <= 0 then
     Exit;
@@ -1579,6 +1612,8 @@ var
   DeclNode: TGreenNode;
   HasArgSignature: Boolean;
   Index: LongInt;
+  MemberFailureName: string;
+  MemberFailureOffset: LongInt;
   MethodClass: string;
   OwnerUnitId: string;
   QualifiedPos: LongInt;
@@ -1598,7 +1633,20 @@ begin
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
     if IsQualifiedCallNode(ANode) then
-      TryRegisterMemberCallBinding(ANode, MethodClass)
+    begin
+      if (not TryRegisterMemberCallBinding(
+        ANode,
+        MethodClass,
+        ResolutionFailureKind,
+        MemberFailureName,
+        MemberFailureOffset
+      )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
+        EmitSemaError(
+          'sema.ambiguous-overload',
+          'ambiguous overload for "' + MemberFailureName + '"',
+          MemberFailureOffset
+        );
+    end
     else if Pos('.', ANode.Text) = 0 then
     begin
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);

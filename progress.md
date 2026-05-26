@@ -3,6 +3,43 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 76 member ambiguous overload diagnostics)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 75 的 `sema.ambiguous-overload` structured failure 从 bare call 推进到 direct
+    member-call：当 compact signature 不能唯一选择同 owner / 同 method / 同 arity target 时，
+    发出 semantic diagnostic，而不是静默无 binding。
+- Baseline:
+  - Batch 73 已能用 compact `ParamSignature` 绑定 `Integer` / `Boolean` 这类可区分 member
+    overload。
+  - `Integer` / `LongInt` 当前都会编码为 `i`；`Worker.Pick(1)` 面对两个 `i` target 时旧实现
+    只是不注册 binding，不进入 diagnostics sink。
+- Actions taken:
+  - 先写 focused RED，构造 `TWorker.Pick(Integer)` 与 `TWorker.Pick(LongInt)`，要求
+    `Worker.Pick(1)` 触发 `sema.ambiguous-overload`，semantic model status 为 `failure`，
+    且不产生 member-call binding。
+  - `MethodSymbolIdForExactClassTypeMember(...)` / `MethodSymbolIdForClassTypeMember(...)`
+    现在会在 compact signature collision 或无法签名消歧的多候选上透传
+    `ambiguous-overload`。
+  - `TryRegisterMemberCallBinding(...)` 把 failure name / offset 带回
+    `SeedCallBindingsInNode(...)`，由统一 semantic error path 发 diagnostic。
+  - 新增 `tests/fixtures/ambiguous_member_overload`，并把 `ambiguous-member-overload-check`
+    纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-ambiguous-member-overload-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `ambiguous-member-overload-check=pass`、
+    `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批没有把所有 member-call miss 报错；signature match count 为 0、receiver 未覆盖、
+    no-match overload 仍保持 deferred。
+  - 复盘：这轮让 member-call failure surface 与 bare-call failure surface 对齐了一层，同时保留
+    当前 member resolver 的边界；下一步如果继续 diagnostics，优先做 no-matching-overload 前应先
+    明确 builtin/future callable 的豁免条件。
+
 ## Session: 2026-05-26 (Batch 75 bare ambiguous overload diagnostics)
 
 - **Status:** completed

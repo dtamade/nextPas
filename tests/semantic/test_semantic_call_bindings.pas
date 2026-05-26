@@ -826,6 +826,77 @@ begin
   end;
 end;
 
+procedure CheckAmbiguousMemberOverloadDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program AmbiguousMemberOverloadCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: LongInt);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Pick(Value: LongInt);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-ambiguous-member-overload-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.ambiguous-overload') then
+      Fail('unexpected-ambiguous-member-overload-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-ambiguous-member-overload-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('ambiguous-member-overload-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-ambiguous-member-overload-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-ambiguous-member-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-ambiguous-member-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1384,6 +1455,7 @@ begin
     CheckInheritedClassMemberCallBinding;
     CheckMemberOverloadBindingTargets;
     CheckMemberTypedOverloadBindingTargets;
+    CheckAmbiguousMemberOverloadDiagnostic;
     CheckOverloadBindings;
     CheckBareTypedOverloadBindingTargets;
     CheckAmbiguousImportedBareOverloadDiagnostic;

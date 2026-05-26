@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 76 Member Ambiguous Overload Diagnostics
+
+### Goal
+
+把 Batch 75 的 structured overload failure 从 bare call 推进到 direct member-call：当
+`member-call` target lookup 在 receiver exact/parent class 上遇到同 owner、同 qualified name、
+同参数个数且 compact signature 无法唯一选择的 method 候选时，发出
+`sema.ambiguous-overload`。
+
+本批次新增并冻结：
+
+- `MethodSymbolIdForExactClassTypeMember(...)` / `MethodSymbolIdForClassTypeMember(...)`
+  透传 `ambiguous-overload` failure kind。
+- `TryRegisterMemberCallBinding(...)` 在明确 member overload ambiguity 时让
+  `SeedCallBindingsInNode(...)` 发 `sema.ambiguous-overload`。
+- `build/verify_local.sh` 新增 `ambiguous-member-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `ambiguousMemberOverloadCheck`。
+
+### Architecture Decision
+
+这是 member-call diagnostics 的第一条 ambiguity 切片，不是完整 Pascal member resolver：
+
+- 只覆盖 direct class/member call 已支持的 receiver path。
+- 只在 compact signature collision 或无法签名消歧的多候选上报 ambiguity。
+- signature match count 为 0 仍保持 deferred，不报 no-matching-overload。
+- 不实现 implicit conversion、default parameter、visibility、virtual dispatch、record/property receiver
+  或完整 type-based overload ranking。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `Integer` / `LongInt` compact signature collision 的 member-call focused regression
+- [x] 在 member target lookup 中带出 `ambiguous-overload` failure kind
+- [x] 在 semantic analyzer 中为 direct member-call 发 `sema.ambiguous-overload`
+- [x] 新增 `tests/fixtures/ambiguous_member_overload` 与 `ambiguous-member-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在
+  `semantic-call-bindings-failure=missing-ambiguous-member-overload-diagnostic`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `ambiguous-member-overload-check=pass`、
+  `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 no-matching-overload / unresolved callable diagnostics
+- 不把全部 member-call binding miss 统一报错
+- 不扩展 receiver grammar 或 member lookup coverage
+- 不实现 implicit conversion / default parameter / visibility / virtual dispatch
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 75 Bare Ambiguous Overload Diagnostics
 
 ### Goal

@@ -858,7 +858,7 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 `parser.syntax-error`，并对 missing unit / ambiguous unit / unit cycle 三类 resolution
 failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
 `semantic-analysis-failed` + `sema.duplicate-declaration`，再对
-ambiguous imported callable overload 断言
+ambiguous imported callable overload 与 ambiguous member overload 断言
 `semantic-analysis-failed` + `sema.ambiguous-overload`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言

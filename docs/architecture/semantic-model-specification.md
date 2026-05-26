@@ -285,6 +285,7 @@ candidate collection
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
+  - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
 
 这里的重点不是今天就冻结完整 code 列表，而是先冻结“语义错误是结构化类别”的事实。
 

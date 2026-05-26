@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 76 把 `sema.ambiguous-overload` 从 bare call 扩展到 direct member-call：当同 owner /
+  同 qualified method name / 同 arity 的 method candidates 不能被 compact `ParamSignature`
+  唯一选择时，semantic analyzer 会发 diagnostic，model status 进入 `failure`，且不会注册
+  `member-call` binding。
+- member lookup 现在通过 `AResolutionFailureKind` 把 exact class lookup、parent-chain lookup 与
+  `TryRegisterMemberCallBinding(...)` 串起来；exact receiver type 明确 ambiguous 时不会继续穿透
+  parent class 代偿。
+- Batch 76 仍保持 no-match deferred：signature match count 为 0、receiver form 未覆盖或未来
+  type-based resolver 才能判断的路径，不会被提前归类成 ambiguity。
+- 新增 `ambiguous-member-overload-check`，用 `tests/fixtures/ambiguous_member_overload` 固定 stage0
+  failure projection 与 final envelope `ambiguousMemberOverloadCheck=pass`。
 - Batch 75 把 bare overload binding 的第一条可证明失败边界接进 structured diagnostics：
   imported bare callable 同名同 arity 多候选且无法唯一选择时，`SeedCallBindingsInNode(...)`
   会发出 `sema.ambiguous-overload`，model status 进入 `failure`，且不会注册 call binding。
