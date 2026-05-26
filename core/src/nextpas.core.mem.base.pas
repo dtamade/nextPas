@@ -8,8 +8,11 @@ type
   TAllocatorKind = (
     akDefault,
     akArena,
-    akPool
+    akPool,
+    akMimalloc
   );
+
+  TArenaMarker = SizeUInt;
 
 implementation
 
