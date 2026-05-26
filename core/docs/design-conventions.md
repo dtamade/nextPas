@@ -472,16 +472,20 @@ EJsonParseError = class(Exception)
 tests/nextpas.core.time/       ← 模块测试目录
   test_duration/               ← 独立测试项目
     test_duration.lpr
+    Makefile
   test_timer/                  ← 独立测试项目
     test_timer.lpr
+    Makefile
 
 benchmarks/nextpas.core.time/  ← 模块基准测试目录
   bench_duration/              ← 独立基准测试项目
     bench_duration.lpr
+    Makefile
 
 examples/nextpas.core.time/    ← 模块示例目录
   demo_stopwatch/              ← 独立示例项目
     demo_stopwatch.lpr
+    Makefile
 ```
 
 ### 规则
@@ -491,6 +495,8 @@ examples/nextpas.core.time/    ← 模块示例目录
 - `examples/` — 演示用法（示例代码、demo）
 - 按模块名建子目录，每个子目录内可有多个独立项目
 - 每个测试/示例项目是独立的 `.lpr`，各自编译成独立可执行文件
+- 每个测试/基准/示例项目必须有自己的 `Makefile`，支持在项目目录内单独
+  `make build`、`make run` 或 `make test`
 - 不使用统一 test runner
 - 公开接口必须满覆盖：每个 public type、const、函数、方法、错误分支和边界语义都要有对应测试
 - 审查时必须明确报告接口覆盖缺口，不能只用 happy path 测试代替接口契约覆盖
@@ -624,7 +630,10 @@ build/
 - `make build` — 编译框架
 - `make test` — 编译并运行所有测试
 - `make examples` — 编译所有示例
+- `make benchmarks` — 编译并运行所有基准
 - `make clean` — 清理所有构建产物
+- 顶层 Makefile 只能聚合项目级 Makefile；测试、基准和示例必须保留
+  可单独进入目录执行的构建入口，便于大型框架定位失败边界
 
 ### 项目卫生
 

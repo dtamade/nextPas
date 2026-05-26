@@ -11,6 +11,9 @@ type
   end;
   PTimeSpec = ^timespec;
 
+  pthread_t = PtrUInt;
+  TPthreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
+
   pthread_mutex_t = record
     case Integer of
       0: (FAlign: UInt64);
@@ -50,6 +53,9 @@ const
   PTHREAD_MUTEX_ERRORCHECK = 2;
 
 function clock_gettime(clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
+
+function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPthreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
+function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
 
 function pthread_mutexattr_init(attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutexattr_init';
 function pthread_mutexattr_settype(attr: Pointer; kind: Int32): Int32; cdecl; external 'pthread' name 'pthread_mutexattr_settype';
