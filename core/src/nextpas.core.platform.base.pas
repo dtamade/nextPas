@@ -9,6 +9,8 @@ type
     osLinux,
     osMacOS,
     osWindows,
+    osAndroid,
+    osUnix,
     osUnknown
   );
 
@@ -30,6 +32,10 @@ const
   CURRENT_OS: TOSKind = osMacOS;
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
   CURRENT_OS: TOSKind = osWindows;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  CURRENT_OS: TOSKind = osAndroid;
+  {$ELSEIF defined(NEXTPAS_UNIX)}
+  CURRENT_OS: TOSKind = osUnix;
   {$ELSE}
   CURRENT_OS: TOSKind = osUnknown;
   {$ENDIF}

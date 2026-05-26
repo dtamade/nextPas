@@ -29,61 +29,94 @@ function platform_cpu_count: Int32;
 
 implementation
 
-{$IFDEF UNIX}
+{$IFDEF NEXTPAS_UNIX}
 uses
-  BaseUnix, PThreads, UnixType;
+  nextpas.core.platform.posix.ffi;
 
-function sysconf(AName: cint): clong; cdecl; external 'c';
-function c_sched_yield: cint; cdecl; external 'c' name 'sched_yield';
-
-const
-  _SC_NPROCESSORS_ONLN = 84;
+type
+  PPosixThreadState = ^TPosixThreadState;
+  TPosixThreadState = record
+    Thread: pthread_t;
+  end;
 
 { Thread lifecycle }
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 var
-  LThread: TThreadID;
+  LState: PPosixThreadState;
 begin
-  Result := pthread_create(@LThread, nil, AProc, AArg);
+  AHandle := nil;
+  if not Assigned(AProc) then
+    Exit(-1);
+
+  New(LState);
+  LState^.Thread := 0;
+
+  Result := pthread_create(@LState^.Thread, nil, TPThreadStartRoutine(AProc), AArg);
   if Result = 0 then
-    AHandle := Pointer(LThread)
+    AHandle := TPlatformThreadHandle(LState)
   else
+  begin
+    Dispose(LState);
     AHandle := nil;
+  end;
 end;
 
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
+var
+  LState: PPosixThreadState;
 begin
-  Result := pthread_join(TThreadID(AHandle), @ARetVal);
+  ARetVal := nil;
+  if AHandle = nil then
+    Exit(-1);
+
+  LState := PPosixThreadState(AHandle);
+  Result := pthread_join(LState^.Thread, @ARetVal);
+  if Result = 0 then
+    Dispose(LState);
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
+var
+  LState: PPosixThreadState;
 begin
-  Result := pthread_detach(TThreadID(AHandle));
+  if AHandle = nil then
+    Exit(-1);
+
+  LState := PPosixThreadState(AHandle);
+  Result := pthread_detach(LState^.Thread);
+  if Result = 0 then
+    Dispose(LState);
 end;
 
 function platform_thread_self: TPlatformThreadHandle;
 begin
-  Result := Pointer(pthread_self);
+  Result := TPlatformThreadHandle(PtrUInt(pthread_self));
 end;
 
 function platform_thread_id: UInt64;
 begin
-  Result := UInt64(pthread_self);
+  Result := UInt64(PtrUInt(pthread_self));
 end;
 
 procedure platform_thread_yield;
 begin
-  c_sched_yield;
+  sched_yield;
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 var
-  LReq, LRem: TimeSpec;
+  LReq, LRem: timespec;
 begin
+  if ANanoseconds = 0 then
+    Exit;
+
   LReq.tv_sec := ANanoseconds div 1000000000;
   LReq.tv_nsec := ANanoseconds mod 1000000000;
-  while FpNanoSleep(@LReq, @LRem) <> 0 do
+  LRem.tv_sec := 0;
+  LRem.tv_nsec := 0;
+
+  while nanosleep(@LReq, @LRem) <> 0 do
     LReq := LRem;
 end;
 
@@ -119,7 +152,7 @@ end;
 
 function platform_cpu_count: Int32;
 var
-  LResult: clong;
+  LResult: PtrInt;
 begin
   LResult := sysconf(_SC_NPROCESSORS_ONLN);
   if LResult < 1 then
@@ -130,40 +163,115 @@ end;
 
 {$ENDIF}
 
-{$IFDEF WINDOWS}
+{$IFDEF NEXTPAS_WINDOWS}
 uses
-  Windows;
+  nextpas.core.platform.windows.ffi;
+
+type
+  PWindowsThreadState = ^TWindowsThreadState;
+  TWindowsThreadState = record
+    Handle: HANDLE;
+    Proc: TPlatformThreadProc;
+    Arg: Pointer;
+    ReturnValue: Pointer;
+    RefCount: Int32;
+  end;
+
+procedure WindowsReleaseThreadState(const AState: PWindowsThreadState);
+begin
+  if AState = nil then
+    Exit;
+
+  if InterlockedDecrement(AState^.RefCount) = 0 then
+    Dispose(AState);
+end;
+
+function WindowsThreadEntry(AParameter: Pointer): DWORD; stdcall;
+var
+  LState: PWindowsThreadState;
+  LReturnValue: Pointer;
+begin
+  LState := PWindowsThreadState(AParameter);
+  LReturnValue := nil;
+
+  if (LState <> nil) and Assigned(LState^.Proc) then
+    LReturnValue := LState^.Proc(LState^.Arg);
+
+  if LState <> nil then
+  begin
+    LState^.ReturnValue := LReturnValue;
+    WindowsReleaseThreadState(LState);
+  end;
+
+  Result := 0;
+end;
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 var
   LId: DWORD;
+  LState: PWindowsThreadState;
 begin
-  AHandle := Pointer(CreateThread(nil, 0, @AProc, AArg, 0, @LId));
-  if AHandle <> nil then
+  AHandle := nil;
+  if not Assigned(AProc) then
+    Exit(-1);
+
+  New(LState);
+  LState^.Handle := nil;
+  LState^.Proc := AProc;
+  LState^.Arg := AArg;
+  LState^.ReturnValue := nil;
+  LState^.RefCount := 2;
+
+  LState^.Handle := CreateThread(nil, 0, @WindowsThreadEntry, LState, 0, @LId);
+  if LState^.Handle <> nil then
+  begin
+    AHandle := TPlatformThreadHandle(LState);
     Result := 0
+  end
   else
+  begin
     Result := Int32(GetLastError);
+    Dispose(LState);
+  end;
 end;
 
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
 var
-  LCode: DWORD;
+  LState: PWindowsThreadState;
 begin
-  if WaitForSingleObject(THandle(AHandle), INFINITE) = WAIT_OBJECT_0 then
+  ARetVal := nil;
+  if AHandle = nil then
+    Exit(-1);
+
+  LState := PWindowsThreadState(AHandle);
+  if WaitForSingleObject(LState^.Handle, INFINITE) = WAIT_OBJECT_0 then
   begin
-    GetExitCodeThread(THandle(AHandle), @LCode);
-    ARetVal := Pointer(PtrUInt(LCode));
-    CloseHandle(THandle(AHandle));
-    Result := 0;
+    ARetVal := LState^.ReturnValue;
+    if CloseHandle(LState^.Handle) then
+      Result := 0
+    else
+      Result := Int32(GetLastError);
+    LState^.Handle := nil;
+    WindowsReleaseThreadState(LState);
   end
   else
     Result := Int32(GetLastError);
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
+var
+  LState: PWindowsThreadState;
 begin
-  if CloseHandle(THandle(AHandle)) then
+  if AHandle = nil then
+    Exit(-1);
+
+  LState := PWindowsThreadState(AHandle);
+  if CloseHandle(LState^.Handle) then
+  begin
+    LState^.Handle := nil;
+    WindowsReleaseThreadState(LState);
     Result := 0
+  end
   else
     Result := Int32(GetLastError);
 end;
@@ -187,6 +295,9 @@ procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 var
   LMs: DWORD;
 begin
+  if ANanoseconds = 0 then
+    Exit;
+
   LMs := DWORD(ANanoseconds div 1000000);
   if (ANanoseconds mod 1000000 > 0) and (LMs < $FFFFFFFF) then
     Inc(LMs);
@@ -233,9 +344,9 @@ end;
 
 function platform_cpu_count: Int32;
 var
-  LInfo: TSystemInfo;
+  LInfo: SYSTEM_INFO;
 begin
-  GetSystemInfo(@LInfo);
+  GetSystemInfo(LInfo);
   Result := Int32(LInfo.dwNumberOfProcessors);
   if Result < 1 then
     Result := 1;
@@ -243,7 +354,7 @@ end;
 
 {$ENDIF}
 
-{$IFNDEF UNIX}{$IFNDEF WINDOWS}
+{$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := -1; end;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := -1; end;

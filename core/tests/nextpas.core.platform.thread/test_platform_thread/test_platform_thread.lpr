@@ -13,6 +13,7 @@ var
 
 var
   GThreadResult: PtrUInt = 0;
+  GDetachedThreadResult: PtrUInt = 0;
 
 function SimpleThread(AArg: Pointer): Pointer; cdecl;
 begin
@@ -35,6 +36,38 @@ begin
   CheckEqual(Int64(0), Int64(LRet), 'join');
   CheckEqual(Int64(42), Int64(PtrUInt(LRetVal)), 'return value');
   CheckEqual(Int64(42), Int64(GThreadResult), 'thread executed');
+end;
+
+function DetachedThread(AArg: Pointer): Pointer; cdecl;
+begin
+  platform_thread_sleep_ns(1000000);
+  GDetachedThreadResult := PtrUInt(AArg);
+  Result := nil;
+end;
+
+procedure TestThreadDetach;
+var
+  LHandle: TPlatformThreadHandle;
+  LRet: Int32;
+  LWait: Integer;
+begin
+  GDetachedThreadResult := 0;
+
+  LRet := platform_thread_create(LHandle, @DetachedThread, Pointer(PtrUInt(77)));
+  CheckEqual(Int64(0), Int64(LRet), 'create detached candidate');
+  Check(LHandle <> nil, 'detach handle not nil');
+
+  LRet := platform_thread_detach(LHandle);
+  CheckEqual(Int64(0), Int64(LRet), 'detach');
+
+  for LWait := 1 to 100 do
+  begin
+    if GDetachedThreadResult = 77 then
+      Break;
+    platform_thread_sleep_ns(1000000);
+  end;
+
+  CheckEqual(Int64(77), Int64(GDetachedThreadResult), 'detached thread executed');
 end;
 
 var
@@ -107,6 +140,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.platform.thread');
   T.Run('Thread create and join', @TestThreadCreateJoin);
+  T.Run('Thread detach', @TestThreadDetach);
   T.Run('TLS set/get', @TestTlsSetGet);
   T.Run('Thread ID non-zero', @TestThreadId);
   T.Run('CPU count >= 1', @TestCpuCount);

@@ -15,6 +15,54 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 93 Platform Thread FFI Boundary
+
+### Goal
+
+把 `platform.thread` 从 FPC 平台单元迁到 nextPas-owned FFI 边界，并和已合入主线的
+`platform.sync` FFI 声明兼容；本 clean preview 基于 `main@ad236a2`，不混入独立
+`platform.time` worktree 的提交。
+
+### Status
+
+Completed.
+
+### Planned Steps
+
+- [x] 写 RED：`platform.thread` 静态测试禁止直接引用 FPC 平台单元和旧 Win32 `@AProc` entry
+- [x] 将 POSIX 分支改为 `nextpas.core.platform.posix.ffi`
+- [x] 将 Windows 分支改为 `nextpas.core.platform.windows.ffi` trampoline state
+- [x] 补 detach focused 行为测试
+- [x] 从最新 `main@ad236a2` 整理 clean merge-preview，避免把独立 `platform.time` commit 混入
+- [x] 跑 focused / aggregate / verify-local 验证
+- [x] 复盘后提交
+
+### Architecture Decision
+
+- POSIX create 返回 nextPas-owned opaque state pointer，join/detach 成功后释放 state。
+- Windows create 返回 state pointer，state 内部保存 native handle、user proc、arg、return value 和
+  refcount；thread entry 与 join/detach 各释放自己的引用。
+- `posix.ffi` 保留 sync 所需 mutex/rwlock/condvar pthread 声明，同时追加 thread 所需
+  detach/self/TLS/nanosleep/sched_yield/sysconf。
+- `windows.ffi` 本批只声明 thread/TLS/yield/sleep/cpu-count 所需 Win32 ABI，不携带 time-only FFI。
+
+### Verification
+
+- RED: `test_platform_thread_no_fpc_units` 旧实现失败在 `BaseUnix`。
+- Focused GREEN 已通过：thread no-FPC static 1/1、platform.thread 7/7、nextpas.core.thread 6/6、
+  platform.sync 14/14、platform.sync.sizes 4/4。
+- Win64 compile-only 已通过：`fpc -Twin64 -Cn ... test_platform_thread.lpr` 编译 875 行。
+- Aggregate 已通过：`make -C core test`、`make -C core examples`、`make -C core benchmarks`。
+- Official verify 已通过：`bash build/verify_local.sh` 输出 `verify-local=pass`、
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `platform.sync` 的 public API 或 futex/wait-wake 语义。
+- 不声明 Windows runtime 行为已在真实 Windows 主机运行验证；本批只做 Win64 compile-only。
+- 不合并独立 `platform.time` worktree 的 hardening commit。
+- 不引入完整 thread pool、scheduler 或 async runtime 设计。
+
 ## Addendum: 2026-05-26 Batch 92 Object-free Owned Destroy HIR Marker
 
 ### Goal

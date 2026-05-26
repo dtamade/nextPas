@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- `platform.thread` 现在可以在不直接 `uses` FPC 平台单元的前提下覆盖 thread lifecycle、TLS、
+  yield/sleep 和 CPU count；禁止规则由 `test_platform_thread_no_fpc_units` 固定。
+- Windows `CreateThread` 不能接收 Pascal cdecl user proc，也不能靠 32-bit thread exit code 携带
+  64-bit pointer return value；本批改为 stdcall trampoline state，由 join 读取 state 中保存的
+  return pointer。
+- `platform.thread` 和 `platform.sync` 共同使用 `posix.ffi`，因此 FFI 文件必须取并集；clean
+  preview 基于 `main@ad236a2` 保留 sync 的 mutex/rwlock/condvar 声明，并追加 thread 的
+  detach/self/TLS/nanosleep/sched_yield/sysconf 声明。
+- 本批刻意不混入独立 `platform.time` hardening commit；`windows.ffi` 只保留 thread/TLS/yield/sleep/
+  cpu-count 所需 ABI，后续 time 合并时再追加 QueryPerformance/FileTime 等 time-only FFI。
 - Batch 92 把 `np.system.object_free` 与紧随的 effective `Destroy` 连接成 HIR lifecycle group：
   匹配 receiver/destroy target 的后续 `call-runtime` 现在会成为 `hikIntrinsic` /
   `np.system.object_free.destroy`，而不是裸 `hikCall @TObject.Destroy`。
@@ -41,7 +51,7 @@
   external declaration 暴露，读取 errno 的逻辑位于 `platform.sync` 实现层。
 - 主线新增的 `atomic`、`hashmap`、`arena`、`pool`、`thread` 测试项目暴露了 per-project
   Makefile 规则的合并缺口；补齐后 `make -C core test` 已能覆盖全部 core 测试项目。
-- 当前硬规则仍有后续债务：`platform.time` 与 `platform.thread` 仍存在 FPC 平台单元依赖，应在新
+- 当前硬规则仍有后续债务：`platform.time` 仍存在 FPC 平台单元依赖，应在新
   worktree 中继续按 `posix.ffi` / `linux.ffi` / Windows FFI 边界迁移。
 - Platform sync closeout 证明 `build/verify_local.sh` 之前不是 stage0 行为失败，而是 verification
   contract 自身把 explicit workspace 固定成 `.*/nextPas`，导致 linked worktree 下误报

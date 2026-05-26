@@ -11,8 +11,15 @@ type
   end;
   PTimeSpec = ^timespec;
 
+  {$IFDEF NEXTPAS_MACOS}
+  pthread_t = Pointer;
+  pthread_key_t = PtrUInt;
+  {$ELSE}
   pthread_t = PtrUInt;
-  TPthreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
+  pthread_key_t = UInt32;
+  {$ENDIF}
+
+  TPThreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
 
   pthread_mutex_t = record
     case Integer of
@@ -45,17 +52,43 @@ type
   end;
 
 const
-  CLOCK_REALTIME  = 0;
-  CLOCK_MONOTONIC = 1;
+  CLOCK_REALTIME = Int32(0);
+  {$IFDEF NEXTPAS_FREEBSD}
+  CLOCK_MONOTONIC = Int32(4);
+  {$ELSE}
+  CLOCK_MONOTONIC = Int32(1);
+  {$ENDIF}
 
   PTHREAD_MUTEX_NORMAL     = 0;
   PTHREAD_MUTEX_RECURSIVE  = 1;
   PTHREAD_MUTEX_ERRORCHECK = 2;
 
-function clock_gettime(clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
+  {$IFDEF NEXTPAS_LINUX}
+  _SC_NPROCESSORS_ONLN = Int32(84);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  _SC_NPROCESSORS_ONLN = Int32(97);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  _SC_NPROCESSORS_ONLN = Int32(58);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  _SC_NPROCESSORS_ONLN = Int32(58);
+  {$ELSE}
+  _SC_NPROCESSORS_ONLN = Int32(-1);
+  {$ENDIF}
 
-function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPthreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
+function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
+function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
+function sched_yield: Int32; cdecl; external 'c' name 'sched_yield';
+function sysconf(name: Int32): PtrInt; cdecl; external 'c' name 'sysconf';
+
+function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
+function pthread_detach(thread: pthread_t): Int32; cdecl; external 'pthread' name 'pthread_detach';
+function pthread_self: pthread_t; cdecl; external 'pthread' name 'pthread_self';
+
+function pthread_key_create(key: Pointer; destructor_proc: Pointer): Int32; cdecl; external 'pthread' name 'pthread_key_create';
+function pthread_key_delete(key: pthread_key_t): Int32; cdecl; external 'pthread' name 'pthread_key_delete';
+function pthread_setspecific(key: pthread_key_t; value: Pointer): Int32; cdecl; external 'pthread' name 'pthread_setspecific';
+function pthread_getspecific(key: pthread_key_t): Pointer; cdecl; external 'pthread' name 'pthread_getspecific';
 
 function pthread_mutexattr_init(attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutexattr_init';
 function pthread_mutexattr_settype(attr: Pointer; kind: Int32): Int32; cdecl; external 'pthread' name 'pthread_mutexattr_settype';

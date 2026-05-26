@@ -47,6 +47,8 @@ begin
     osLinux: Result := 'Linux';
     osMacOS: Result := 'macOS';
     osWindows: Result := 'Windows';
+    osAndroid: Result := 'Android';
+    osUnix: Result := 'Unix';
   else
     Result := 'Unknown';
   end;

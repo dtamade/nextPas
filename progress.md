@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 93 platform.thread FFI boundary)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 基于最新 `main@ad236a2` clean preview，把 `platform.thread`
+    脱离 FPC 平台单元，统一走 nextPas-owned POSIX/Windows FFI。
+- Baseline:
+  - `platform.sync` 已进入主线并提供 `posix.ffi` / `linux.ffi` 的同步原语声明。
+  - 主线仍有独立 `platform.time` FPC 平台单元债务，本批不混入 `platform.time` worktree commit。
+  - thread 旧实现仍直接 `uses BaseUnix, PThreads, UnixType` 和 `Windows`，Windows
+    `CreateThread(nil, 0, @AProc, ...)` 还把 cdecl user proc 变量地址错当 Win32 entry。
+- Actions taken:
+  - 先在 stacked worktree 完成 thread hardening，再从最新 `main@ad236a2` 整理 clean
+    `codex/platform-thread-merge-preview`，只保留 thread 正确代码。
+  - 将 `posix.ffi` 保持为 sync/thread 并集，保留 mutex/rwlock/condvar 声明，并追加
+    thread lifecycle/TLS/sleep/yield/cpu-count 所需 ABI。
+  - 将 POSIX thread handle 改为 nextPas-owned state pointer，join/detach 成功后释放 state。
+  - 将 Windows create/join/detach 改为 trampoline state + refcount，保存完整 Pascal pointer
+    return value，不依赖 Win32 exit code 携带指针。
+  - 新增 `test_platform_thread_no_fpc_units` 静态测试，并给 focused 行为测试补 detach 覆盖。
+  - 补充 `NEXTPAS_UNIX` / Android / FreeBSD 平台检测，使 POSIX thread 分支不只绑定 Linux/macOS。
+- Verification:
+  - RED: no-FPC static test 旧实现失败在 `BaseUnix`。
+  - Focused GREEN: no-FPC static 1/1、platform.thread 7/7、nextpas.core.thread 6/6、
+    platform.sync 14/14、platform.sync.sizes 4/4。
+  - Win64 compile-only: `test_platform_thread.lpr` 编译 875 行通过。
+  - Aggregate: `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+  - Official: `bash build/verify_local.sh` 输出 `verify-local=pass`、
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只固定 low-level platform.thread ABI 边界；Windows 运行行为仍需要真实 Windows 主机或 CI 补证。
+  - POSIX pthread opaque 类型仍需后续按 macOS/FreeBSD/Android ABI 做独立 compile gates；
+    当前 Linux focused gate 和 Win64 compile gate 已覆盖本批最危险路径。
+
 ## Session: 2026-05-26 (Batch 92 object-free owned destroy HIR marker)
 
 - **Status:** completed
