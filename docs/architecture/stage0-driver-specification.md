@@ -639,7 +639,7 @@ toolchain contract probe 应落到临时 build dir，并在 harness bootstrap fa
 - `sema.duplicate-declaration` 的 phase 为 `sema`
 - semantic failure 会阻止宿主 FPC compile step 启动
 - `examples/smoke/hello_with_units.pas` 必须能显式投影
-  `semantic-status=ready`、`symbol-count=4`、`type-count=3`、`typed-hir-node-count=7`
+  `semantic-status=ready`、`symbol-count=10`、`type-count=21`、`typed-hir-node-count=8`
   与 `runtime-contract-count=2`
 
 对当前最小 `MIR` / backend / toolchain baseline，`stage0 build` 还必须满足：

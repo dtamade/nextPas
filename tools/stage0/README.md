@@ -849,7 +849,7 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 `build-trace-ref=trace-<session-id>-toolchain-plan`、
 `ast-root-kind=program` 和 session 相关结果字段；随后再对
 `examples/smoke/hello_with_units.pas` 断言 `resolved-unit-count=4` /
-`unit-graph-edge-count=4` / `typed-hir-node-count=7` / `mir-operation-count=8` /
+`unit-graph-edge-count=4` / `typed-hir-node-count=8` / `mir-operation-count=8` /
 `backend-output-kind=executable` / `toolchain-binding-id=linux-x86_64-to-linux-x86_64-gnu` /
 `target-c-library-naming=lib-prefix-so-a` / `target-llvm-triple=x86_64-unknown-linux-gnu`，
 再对 `examples/smoke/external_cdecl_smoke.pas` 断言

@@ -48,6 +48,70 @@ Completed
 主 checkout 仍有未提交同事工作；preview 分支验证通过后，等待主线现场干净或由负责人确认可集成，
 再合入 `main`、删除旧 `platform-sync-hardening` worktree，并从最新主线重新开新 worktree。
 
+## Addendum: 2026-05-26 Batch 88 Implicit Runtime Source-backed System Semantics
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 implicit runtime 的 `System` 从“只有 graph placeholder”
+推进到“语义层可消费 target-installed `System.pas`”：
+
+- 没有显式 `uses System` 的 program 也能在 semantic model 中看到 nextPas-owned
+  `System.TObject`。
+- 普通 `class` 的隐式父类必须能通过 implicit runtime source-backed `System` 指向
+  `TObject`。
+- `Worker.Free` 必须绑定到真实 `TObject.Free` method symbol，并从 `query definitions`
+  回指 `units/linux-x86_64/System.pas`。
+- build/backend 仍不能因为 implicit runtime 自动把 `System.pas` 当作额外 source-backed unit
+  编译/链接。
+- 显式 `uses System` 仍必须继续解析真实源码，并能把 implicit runtime 节点升级为
+  `installed-source` provenance。
+
+### Architecture Decision
+
+这是 semantic truth upgrade，不是 full runtime/link upgrade：
+
+- `EnsureRuntimeUnit` 只给 implicit runtime `System` 填入 target-installed `System.pas` 的
+  `SourcePath`，但保留 `OriginClass=implicit-runtime`。
+- `TCompilationSession.CollectAdditionalAssemblyBaseNames()` 已跳过 `implicit-runtime`，因此本批不会
+  让所有程序额外 assemble/link `System.pas`。
+- `ResolveDependency(...)` 遇到显式 `uses System` 时不能因为已有 implicit runtime source path
+  就短路；它必须继续走 normal search，并让 `TUnitGraph.AddResolvedUnit(...)` 支持从
+  source-backed implicit runtime 升级到 explicit source provenance。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：无显式 `uses System` 的 `Worker.Free` 必须通过 implicit source-backed System 绑定
+- [x] 让 implicit runtime `System` 指向 target-installed `units/linux-x86_64/System.pas`
+- [x] 保持 explicit `uses System` 可升级 implicit runtime 节点，不被 source path 短路
+- [x] 新增 stage0 query gate，固定 implicit `TObject.Free` binding / definition source path
+- [x] 同步 System / RTL / runtime bootstrap / unit resolution / semantic docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused stage0 query 旧实现输出 `query-bindings=[]` 与 `query-definitions=[]`，缺少
+  implicit source-backed `TObject.Free` binding。
+- GREEN focused: rebuilt stage0 query 已显示 implicit fixture 中 `TWorker.typeParentId` 指向
+  `TObject`，`query-bindings` 含 `Free` member-call，`query-definitions.targetSourcePath`
+  为 `units/linux-x86_64/System.pas`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `stage0-query-system-object-free-implicit-check=pass`、
+  `stage0QuerySystemObjectFreeImplicitCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 FPC `System`
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不实现 destructor lowering / virtual dispatch / unit init-fini
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Batch 87 Source-backed System/TObject Truth
 
 ### Goal

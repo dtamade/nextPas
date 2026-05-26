@@ -61,11 +61,12 @@ fs/process、time。
 从宿主 FPC RTL 借语义。`System` 平替因此是自举路线的最低依赖，不是外围库任务。
 
 当前仓库里的实现切片已经从 `rtl/core/base`、`rtl/core/mem` 和 `rtl/core/text`
-推进到第一条 source-backed `System` truth：`rtl/core/system/System.pas` 与
+推进到 source-backed `System` truth：`rtl/core/system/System.pas` 与
 `units/linux-x86_64/System.pas` 先提供 `TObject.Create`、`TObject.Destroy` 和
-`TObject.Free`。这让显式 `uses System` 的语义分析可以把普通 class 的隐式 `TObject`
-父类和 `Obj.Free` 绑定落到真实 symbol 上。它仍不是完整 `System` 重写，也没有把
-implicit runtime placeholder 改成自动编译/链接 `System.pas`；后续应在这个 source-backed
+`TObject.Free`。这让 implicit runtime 的语义分析可以把普通 class 的隐式 `TObject`
+父类和 `Obj.Free` 绑定落到真实 symbol 上，即使 root source 没有显式 `uses System`。
+它仍不是完整 `System` 重写，也没有把 implicit runtime 改成自动编译/链接 `System.pas`；
+backend 仍把 implicit runtime 排除在额外 assemble/link 之外。后续应在这个 source-backed
 边界上继续扩展 unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束

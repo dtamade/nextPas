@@ -115,9 +115,9 @@ sema 必须能在编译期求值以下常量表达式：
 - `sema.type-mismatch`：类型不匹配
 - `sema.unknown-callable`：调用目标不是当前可解析的 procedure/function 或内建 callable
 - `sema.unknown-member`：receiver 类型已知但当前 class/parent chain 上没有可解析的成员 callable
-  （source-backed nextPas `System` / `TObject` 已解析时，普通 class 的 `Free` 会绑定到真实
-  `TObject.Free`；没有 source-backed System truth、或 alias/generic specialization/record-like
-  receiver 等没有 class layout truth 的类型继续 deferred）
+  （implicit runtime 已能读取 source-backed nextPas `System` / `TObject`，普通 class 的
+  `Free` 会绑定到真实 `TObject.Free`；缺少 source-backed System truth、或
+  alias/generic specialization/record-like receiver 等没有 class layout truth 的类型继续 deferred）
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧
