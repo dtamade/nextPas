@@ -78,7 +78,9 @@ Completed
   已输出 `Self.SetValue(9)` 的 `member-call` / `queryDefinitions`，target 为 `TWorker.SetValue`
   的 `method` symbol
 - Fresh full verification: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
-  `stage0-query-member-call-bindings-check=pass`、`verify-local=pass`
+  `stage0-query-member-call-bindings-check=pass`、
+  `stage0QueryMemberCallBindingsCheck":"pass"`、`smoke-check=pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`
 
 ### Non-goals
 

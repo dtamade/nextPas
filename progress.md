@@ -31,7 +31,9 @@
 - Verification:
   - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
   - Full：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
-    `stage0-query-member-call-bindings-check=pass`、`verify-local=pass`。
+    `stage0-query-member-call-bindings-check=pass`、
+    `stage0QueryMemberCallBindingsCheck":"pass"`、`smoke-check=pass`、`verify-local=pass`
+    与 `human-summary=local verification passed`。
 - Review:
   - 当前实现继续保持 member-call 的 compiler-owned binding truth，不引入独立 CLI lookup。
   - 本批仍不声明完整 inherited lookup、visibility rules、record/property receiver、virtual dispatch、
