@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 103 Object Release Invalid Trap Policy；并行收口包含
+当前最新已完成切片为 Platform Time L0 Surface Coverage；Batch 103 Object Release Invalid
+Trap Policy 与并行收口的
 Platform API Boundary Cleanup；Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
@@ -23,6 +24,76 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Platform Time L0 Surface Coverage
+
+### Goal
+
+把 `platform.time` 的可用性证明保持在 L0 系统平台 API 边界内：
+
+- 新增 platform clock 示例项目，展示 `platform_monotonic_ns`、`platform_realtime_ns`、
+  `platform_monotonic_resolution_ns` 的系统 API contract。
+- 新增 platform clock 基准项目，测量 monotonic/realtime 原生 clock 调用开销。
+- 新示例/基准必须位于 `nextpas.core.platform.time` 命名空间，不能出现 `Stopwatch`、`Duration`
+  等 L1 convenience API。
+- `build/verify_local.sh` 必须把 platform.time 边界测试、示例和基准纳入官方本地验证 envelope。
+
+### Architecture Decision
+
+- `platform.time` 是 L0 clock source，不是计时器、秒表或日期时间库。
+- `Duration` / `Instant` / `Stopwatch` / Timer 属于 L1 `nextpas.core.time`
+  或后续独立 `nextpas.core.stopwatch`，不能出现在 `nextpas.core.platform.*` 的 API、示例或基准里。
+- 示例和基准只调用 platform-owned clock 函数，输出 machine-readable 状态行，便于 gate 检查。
+- 旧 `codex/platform-time-integration` 中的 `demo_stopwatch` / `bench_platform_time` 不按原样合入；
+  正确的 L1 time 示例应另走 `nextpas.core.time` 批次。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：确认 `core/examples/nextpas.core.platform.time/platform_time_clock` 缺失
+- [x] RED：确认 `core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock` 缺失
+- [x] 新增 L0 platform clock 示例项目和独立 Makefile
+- [x] 新增 L0 platform clock 基准项目和独立 Makefile
+- [x] 新增 L0 boundary guard 测试，防止 L1 time API 混入 platform.time
+- [x] `build/verify_local.sh` 新增 platform.time boundary/example/benchmark gates
+- [x] 运行 focused example/benchmark
+- [x] 运行 `make -C core test`
+- [x] 运行 `make -C core examples`
+- [x] 运行 `make -C core benchmarks`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 复盘
+
+### Verification
+
+- RED: `test -f core/examples/nextpas.core.platform.time/platform_time_clock/platform_time_clock.lpr`
+  失败。
+- RED: `test -f core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock/bench_platform_time_clock.lpr`
+  失败。
+- Focused GREEN: `make -C core/examples/nextpas.core.platform.time/platform_time_clock run` 输出
+  `platform-time-clock-status=pass`。
+- Focused GREEN: `make -C core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock run`
+  输出 `platform-time-bench-status=pass`。
+- RED: `test -f core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr`
+  失败。
+- Focused GREEN: `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary test`
+  输出 `nextpas.core.platform.time.l0_boundary: 4 total, 4 passed, 0 failed`。
+- Aggregate GREEN: `make test` 输出 `All tests passed.`。
+- Aggregate GREEN: `make examples` 输出 `All examples compiled.`。
+- Aggregate GREEN: `make benchmarks` 输出 `All benchmarks passed.`。
+- Official GREEN: fresh `bash build/verify_local.sh` 输出
+  `corePlatformTimeL0BoundaryCheck=pass`、`corePlatformTimeExampleCheck=pass`、
+  `corePlatformTimeBenchCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不新增 `Stopwatch` 示例或基准
+- 不把 `Duration` / `Instant` 的 L1 行为放进 platform 命名空间
+- 不改变 `platform.time` ABI 或 clock conversion 语义
+- 不从旧 `platform-time-integration` 整条合入混杂改动
 
 ## Addendum: 2026-05-26 Batch 103 Object Release Invalid Trap Policy
 

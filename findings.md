@@ -44,6 +44,23 @@
 - platform.time 批次的 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- `platform.time` 示例/基准必须贴着 L0 clock source 语义：本批新增
+  `nextpas.core.platform.time/platform_time_clock` 与
+  `nextpas.core.platform.time/bench_platform_time_clock`，只调用 platform clock API，不引入
+  `Stopwatch`、`Duration` 或 L1 time convenience API。
+- 新增 `nextpas.core.platform.time/test_platform_time_l0_boundary`，把这个边界变成 gate：
+  platform.time 源码、platform 门面、platform 示例和 platform 基准不能引用
+  `nextpas.core.time`、`TStopwatch`、`TDuration`、`TInstant` 或 Timer。
+- 旧 `codex/platform-time-integration` 仍有可参考内容，但其中 `demo_stopwatch`、L1 time 基准、
+  通用 Makefile 批量改动和已过期 platform.time 代码不能整条合入；后续只能按模块边界择优搬迁。
+- `build/verify_local.sh` 已增加 platform.time boundary/example/benchmark focused gates，并在 final
+  envelope 暴露 `corePlatformTimeL0BoundaryCheck`、`corePlatformTimeExampleCheck` 与
+  `corePlatformTimeBenchCheck`。
+- platform.time L0 surface coverage 的 fresh verification 已闭环：`make test`、`make examples`、
+  `make benchmarks` 通过，fresh `bash build/verify_local.sh` 输出
+  `corePlatformTimeL0BoundaryCheck=pass`、`corePlatformTimeExampleCheck=pass`、
+  `corePlatformTimeBenchCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 - Batch 103 把 `@np_object_release_invalid` 从 no-op boundary 推进成最小 fatal failure policy：
   invalid helper 会调用 `@llvm.trap()`，随后发出 `unreachable`。
 - Batch 103 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
