@@ -15,6 +15,39 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 85 Worktree-safe Local Verification
+
+### Goal
+
+收口 `platform.sync` worktree 的官方顶层验证问题：`build/verify_local.sh` 不能再假设仓库路径
+一定以 `/nextPas` 结尾，也不能写死主 checkout 的 `/home/dtamade/projects/nextPas` 路径。
+
+### Architecture Decision
+
+`verify_local` 的路径契约继续保持精确，但精确性来自当前 `REPO_ROOT`、workspace artifact root、
+distribution/runtime root 等派生变量，而不是固定目录名。对 line output 优先使用 literal
+断言；对 JSON envelope 使用经过 ERE escaping 的路径 pattern。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 复现 worktree 下的 `missing-stage0-workspace-root`
+- [x] 在 `build/verify_local.sh` 增加 ERE path escaping helper 与派生路径 pattern
+- [x] 替换所有写死 `.*/nextPas` 与主 checkout 的断言
+- [x] 同步 `core-platform-sync-check` 当前 14 项接口覆盖 summary
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: fresh `bash build/verify_local.sh` 失败在 `missing-stage0-workspace-root`，而实际
+  `workspace-root` 是当前 linked worktree 路径。
+- GREEN: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
 ## Addendum: 2026-05-26 Batch 84 Unknown Bare Callable Diagnostic
 
 ### Goal

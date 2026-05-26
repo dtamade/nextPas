@@ -3,6 +3,32 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 85 worktree-safe local verification)
+
+- **Status:** completed
+- Objective:
+  - 让 `build/verify_local.sh` 在 linked worktree 中也能作为官方 route-truth gate 通过，
+    避免 platform/core 收口分支因为硬编码主 checkout 路径无法合并。
+- Baseline:
+  - fresh `bash build/verify_local.sh` 已证明 stage0 smoke build 成功，但断言
+    `^workspace-root=.*/nextPas$` 导致 `missing-stage0-workspace-root`。
+  - 脚本里还存在多处 `.*/nextPas`、`/home/dtamade/projects/nextPas` 与旧的
+    `core-platform-sync: 7 total` summary。
+- Actions taken:
+  - 在脚本顶部新增 `escape_ere()`，集中派生 `REPO_ROOT`、workspace artifact/output、
+    distribution/runtime 等 literal 与 escaped regex pattern。
+  - 将 stage0 smoke、workspace model、explicit workspace envelope、invalid early failure、
+    env status 与 core text smoke 的硬编码路径改为当前 repo root 派生值。
+  - 将 `core-platform-sync-check` summary 更新为当前 14 项接口覆盖。
+- Verification:
+  - `sh -n build/verify_local.sh`: pass。
+  - 硬编码扫描：`rg '\.\*/nextPas|/home/dtamade/projects/nextPas|nextPas/bin|nextPas/lib|nextPas/share' build/verify_local.sh`
+    无命中。
+  - fresh `bash build/verify_local.sh`: pass，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只调整验证脚本的路径契约和 platform sync summary，不改 compiler/core 行为。
+
 ## Session: 2026-05-26 (Batch 84 unknown bare callable diagnostic)
 
 - **Status:** completed

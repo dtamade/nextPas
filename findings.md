@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 85 证明 `build/verify_local.sh` 之前不是 stage0 行为失败，而是 verification
+  contract 自身把 explicit workspace 固定成 `.*/nextPas`，导致 linked worktree 下误报
+  `missing-stage0-workspace-root`。
+- `verify_local` 现在通过 `escape_ere()` 派生当前 `REPO_ROOT`、workspace artifact/output、
+  distribution/runtime root 的正则 pattern；line output 用 literal 断言，JSON envelope 用
+  escaped regex 断言，保留精确性但不再绑定主 checkout 目录名。
+- `core-text-smoke-check` 不再写死 `/home/dtamade/projects/nextPas/rtl/core/...`，而是使用当前
+  `REPO_ROOT/rtl/core/...`，让 smoke 在 worktree 内自洽。
+- `core-platform-sync-check` 顶层 summary 已同步到当前 14 项接口覆盖；fresh
+  `bash build/verify_local.sh` 已通过并输出 `verify-local=pass` / `human-summary=local verification passed`。
 - Batch 84 把 source-owned bare callable name miss 接进 structured diagnostics：当 bare call
   的名字既不是 root/imported procedure/function、也不是已知 symbol/type/builtin callable 时，
   semantic analyzer 发出 `sema.unknown-callable`，model status 进入 `failure`，且不会注册 call binding。
