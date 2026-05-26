@@ -4924,3 +4924,31 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（POSIX lifecycle helper ownerization）：pass
 - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass
 - `bash build/verify_local.sh`（platform.thread POSIX lifecycle helper ownerization batch）：pass
+
+### Phase 9: Platform Sync POSIX Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_sync_host_ffi_surface` 扩成新的 RED gate，要求
+    `linux/android/darwin/freebsd/unix.ffi` 暴露
+    `platform_pthread_timeout_clock_now`、`platform_pthread_mutex_*`、
+    `platform_pthread_rwlock_*`、`platform_pthread_condvar_*`，同时禁止
+    `platform.sync` 再直接写 raw `clock_gettime` / `pthread_*` / `sched_yield`。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    统一新增 POSIX sync helper wrapper，把 timeout clock 读取、mutex/rwlock/condvar attr 初始化和
+    raw pthread 调用继续收回当前宿主 ffi owner。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Unix 分支改为消费这些 helper；consumer
+    只继续保留 public opaque storage contract、`PLATFORM_ERR_*` 映射、deadline 计算与
+    wait-bucket fallback 策略。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 POSIX sync helper owner boundary 与 fresh 证据写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`（POSIX sync helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（POSIX sync helper ownerization）：pass
+- `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
+- `bash build/verify_local.sh`（platform.sync POSIX helper ownerization batch）：pass

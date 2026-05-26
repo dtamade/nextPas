@@ -6526,6 +6526,72 @@ Completed; verification passed.
 - 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
 - 这批不顺手把 `platform.sync` 的 pthread raw 调用一起抽走
 
+## Addendum: 2026-05-27 Platform Sync POSIX Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.sync` 的 POSIX pthread mutex / rwlock / condvar / timeout clock raw 调用
+从 consumer 实现层收回当前宿主 ffi owner，让 `platform.sync` 在 Unix 路径下也像 Windows /
+Linux futex 路径那样保持清晰的 owner boundary。
+
+### Current Gap
+
+- `platform.sync` 虽然已经把 pthread capability token、Linux futex helper、Windows sync helper
+  和 errno read truth 收回 host ffi owner，但 consumer 仍直接调用
+  `clock_gettime`、`pthread_mutexattr_*`、`pthread_mutex_*`、`pthread_rwlock_*`、
+  `pthread_condattr_*`、`pthread_cond_*` 与 `sched_yield`。
+- 这意味着 POSIX timeout clock 读取、mutex/cond attr 初始化、raw pthread 调用和 spin-yield
+  细节仍泄漏在 consumer，而不是收口到当前宿主 ffi owner。
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
+  - `platform_pthread_timeout_clock_now`
+  - `platform_pthread_mutex_*`
+  - `platform_pthread_rwlock_*`
+  - `platform_pthread_condvar_*`
+- `platform.sync` 继续保留 `PLATFORM_ERR_*` 映射、public opaque storage contract、
+  deadline 计算与 wait-bucket fallback 策略，但不再直接写 raw `clock_gettime` /
+  `pthread_*` / `sched_yield`。
+- 这批不改 public API，不顺手改变 Linux futex path 或 Windows helper 形状。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `test_platform_sync_host_ffi_surface`，先把 POSIX sync helper owner boundary 打成 RED
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 POSIX sync helper wrappers
+- [x] 让 `platform.sync` 的 Unix 分支改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose pthread timeout clock helper for sync: platform_pthread_timeout_clock_now`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 `platform.sync` public API
+- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
+- 这批不顺手改写 wait-bucket fallback 算法或跨模块抽象
+
 ## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
 
 ### Goal Node

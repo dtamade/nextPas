@@ -1544,3 +1544,25 @@
 - 当前证据边界要继续诚实：这批新增了 Linux focused runtime proof 与 Win64 compile-only，
   但没有新增 Darwin / FreeBSD / Android runtime 或 cross compile 证据，所以这些宿主目前仍主要由
   source-surface contract 覆盖。
+
+## 2026-05-27 Follow-up Findings 9
+
+- `platform.sync` 的 Unix 分支之前虽然已经把 pthread capability token、Linux futex helper、
+  Windows sync helper 和 errno read truth 收进 host ffi owner，但 consumer 仍直接碰
+  `clock_gettime`、`pthread_mutexattr_*`、`pthread_mutex_*`、`pthread_rwlock_*`、
+  `pthread_condattr_*`、`pthread_cond_*` 与 `sched_yield`，所以 POSIX sync helper ownership
+  还是半收口状态。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 统一继续拥有
+  `platform_pthread_timeout_clock_now`、`platform_pthread_mutex_*`、
+  `platform_pthread_rwlock_*` 与 `platform_pthread_condvar_*`；`platform.sync`
+  不再直接调用 raw `clock_gettime` / `pthread_*` / `sched_yield`。
+- 现在 `platform.sync` 的 Unix consumer 更接近“public contract + policy consumer”：
+  它继续保留 public opaque storage contract、`PLATFORM_ERR_*` 映射、deadline 计算与
+  wait-bucket fallback 策略，但把 timeout clock 读取、mutex/cond attr 初始化和 raw pthread
+  调用细节继续收回当前宿主 ffi owner。
+- `test_platform_sync_host_ffi_surface` 现在也把这条 POSIX owner boundary 冻成 source-surface
+  contract：不仅要求各宿主 ffi 文件继续暴露 helper 名称，也防回归 consumer 重新直接调用 raw
+  `clock_gettime` / `pthread_*` / `sched_yield`。
+- 当前证据边界仍然要诚实：这批新增了 Linux focused runtime proof 与 Win64 compile-only，
+  但没有新增 Darwin / FreeBSD / Android runtime 或 cross compile 证据，所以这些宿主目前仍主要由
+  source-surface contract 覆盖。
