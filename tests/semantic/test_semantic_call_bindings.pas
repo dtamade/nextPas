@@ -1211,6 +1211,168 @@ begin
   end;
 end;
 
+procedure CheckBareWrongArgumentCountDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program WrongArgumentCountCalls;' + LineEnding +
+    'procedure Pick;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(1, 2);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-bare-wrong-argument-count-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.wrong-argument-count') then
+      Fail('unexpected-bare-wrong-argument-count-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-bare-wrong-argument-count-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('bare-wrong-argument-count-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-bare-wrong-argument-count-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-bare-wrong-argument-count-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-bare-wrong-argument-count-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckBareDefaultParameterCallBindings;
+var
+  AddBindingCount: LongInt;
+  AddSymbolId: LongInt;
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  LogBindingCount: LongInt;
+  LogSymbolId: LongInt;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program DefaultParameterCalls;' + LineEnding +
+    'function Add(A: Integer; B: Integer = 0; C: Integer = 0): Integer;' +
+      LineEnding +
+    'begin' + LineEnding +
+    '  Add := A + B + C;' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Log(const Msg: string; Level: Integer = 0);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  X: Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  X := Add(1);' + LineEnding +
+    '  X := Add(1, 2);' + LineEnding +
+    '  X := Add(1, 2, 3);' + LineEnding +
+    '  Log(''hello'');' + LineEnding +
+    '  Log(''world'', 1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-default-parameter-diagnostics');
+    if Model = nil then
+      Fail('missing-default-parameter-semantic-model');
+
+    AddSymbolId := SymbolIdByNameAndKind(Model, 'Add', 'function');
+    if AddSymbolId <= 0 then
+      Fail('missing-default-parameter-add-symbol');
+    LogSymbolId := SymbolIdByNameAndKind(Model, 'Log', 'procedure');
+    if LogSymbolId <= 0 then
+      Fail('missing-default-parameter-log-symbol');
+
+    AddBindingCount := 0;
+    LogBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'call') and SameText(Binding.Name, 'Add') then
+      begin
+        Inc(AddBindingCount);
+        if Binding.TargetSymbolId <> AddSymbolId then
+          Fail('default-parameter-add-target-mismatch');
+      end
+      else if SameText(Binding.Kind, 'call') and
+        SameText(Binding.Name, 'Log') then
+      begin
+        Inc(LogBindingCount);
+        if Binding.TargetSymbolId <> LogSymbolId then
+          Fail('default-parameter-log-target-mismatch');
+      end;
+    end;
+
+    if AddBindingCount <> 3 then
+      Fail('unexpected-default-parameter-add-binding-count:' +
+        IntToStr(AddBindingCount));
+    if LogBindingCount <> 2 then
+      Fail('unexpected-default-parameter-log-binding-count:' +
+        IntToStr(LogBindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckClassMemberCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1459,6 +1621,8 @@ begin
     CheckOverloadBindings;
     CheckBareTypedOverloadBindingTargets;
     CheckAmbiguousImportedBareOverloadDiagnostic;
+    CheckBareWrongArgumentCountDiagnostic;
+    CheckBareDefaultParameterCallBindings;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');

@@ -243,9 +243,10 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 `query-definitions` 继续把这些 binding 的 target symbol id join 回同一份 semantic
 symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset 与 target
 symbol id/name/kind/param count/param signature/owner unit/source path/offset。bare
-procedure/function call 已覆盖同名同 arity overload 的最小 typed binding：当前可推断的 argument
-signature 会选择唯一 `ParamSignature` target，并通过 `queryDefinitions[].targetParamSignature`
-暴露 compact target signature；无法推断或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
+procedure/function call 已覆盖同名同 arity overload 的最小 typed binding；默认参数语法会把
+bare call 的可接受 arity 扩展为必填参数数到总参数数，当前可推断的 argument signature
+会按已提供参数前缀选择唯一 `ParamSignature` target，并通过
+`queryDefinitions[].targetParamSignature` 暴露 compact target signature；无法推断或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
@@ -730,7 +731,7 @@ key/value 行反推结果对象。
 `object-file` artifact，为 future native link selection 提前冻结 object-level input truth。
 
 失败路径当前也会在 stderr 上补出最小失败投影，例如 `status=failure`、`result=failure`、
-`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|toolchain.host-compiler-exec-failed`、
+`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.wrong-argument-count|toolchain.host-compiler-exec-failed`、
 `diagnostic-phase=syntax|resolution|sema|toolchain`、`command-outcome=failure`、`command-envelope=<json>` 和
 `human-summary=<message>`，再附上原始失败消息。
 
@@ -859,7 +860,8 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
 `semantic-analysis-failed` + `sema.duplicate-declaration`，再对
 ambiguous imported callable overload 与 ambiguous member overload 断言
-`semantic-analysis-failed` + `sema.ambiguous-overload`，再对
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、

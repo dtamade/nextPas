@@ -83,8 +83,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `query-bindings` / `queryBindings` 暴露给 CLI 与 future language-service adapter；同一份
   session-owned model 还会把 target symbol/unit metadata 投影成 `query-definitions` /
   `queryDefinitions`。bare procedure/function symbol 会记录 `ParamCount` 与 compact
-  `ParamSignature`；name-only call binding 在同名同 arity 多候选时，只用当前可推断的 argument
-  signature 选择唯一 target，无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  `ParamSignature`；name-only call binding 会把默认参数语法折算成
+  `requiredParamCount..ParamCount` 的可接受 arity 区间，并只用当前已提供参数的 compact
+  argument signature 前缀选择唯一 target，无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
@@ -104,7 +105,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
   set，若同 arity 有多个候选，则用当前可推断的 argument signature 做唯一匹配，并用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
-  ranking、implicit conversion、default parameter、member resolver、visibility checking、property
+  ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
   virtual/override dispatch 仍未完成
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
@@ -283,6 +284,8 @@ candidate collection
 
 - `sema.duplicate-declaration`
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
+- `sema.wrong-argument-count`
+  - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景

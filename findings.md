@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 77 把 bare callable 的第一条 arity no-match 接进 structured diagnostics：
+  root/imported 同优先级内已存在同名 callable，但没有任何候选参数个数匹配调用时，发出
+  `sema.wrong-argument-count`，model status 进入 `failure`，且不会注册 call binding。
+- `LookupCallBindingDeclaration(...)` 现在区分 name miss、arity miss、ambiguous overload 与
+  signature no-match：name miss 仍 deferred，arity miss 报 `wrong-argument-count`，signature
+  match count 为 0 仍 deferred。
+- 默认参数不能被 arity diagnostics 误伤：bare call 的 arity match 现在按
+  `requiredParamCount..ParamCount` 判断，并用已提供参数的 compact signature 前缀消歧；默认参数
+  lowering、完整 overload ranking 与 implicit conversion 仍不是本批目标。
+- root callable name 继续优先；root 有同名 callable 但 arity 不匹配时不会回落 imported 代偿。
+- 新增 `wrong-argument-count-check`，用 `tests/fixtures/wrong_argument_count` 固定 stage0 failure
+  projection 与 final envelope `wrongArgumentCountCheck=pass`。
 - Batch 76 把 `sema.ambiguous-overload` 从 bare call 扩展到 direct member-call：当同 owner /
   同 qualified method name / 同 arity 的 method candidates 不能被 compact `ParamSignature`
   唯一选择时，semantic analyzer 会发 diagnostic，model status 进入 `failure`，且不会注册

@@ -15,6 +15,71 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 77 Bare Wrong Argument Count Diagnostics
+
+### Goal
+
+把 bare callable failure 从 ambiguity 继续推进到第一条 no-match 形态：当 root/imported
+优先级内已经存在同名 callable，但没有任何候选的参数个数与调用匹配时，发出
+`sema.wrong-argument-count`。
+
+本批次新增并冻结：
+
+- `LookupCallBindingDeclaration(...)` 先按 owner priority 统计同名候选，再判断 call arity 是否落在
+  declaration 的必填参数数到总参数数之间。
+- root callable name 存在但 arity 全不匹配时，不回落 imported，直接发
+  `sema.wrong-argument-count`。
+- imported callable name 存在但 arity 全不匹配时，同样发 `sema.wrong-argument-count`。
+- `build/verify_local.sh` 新增 `wrong-argument-count-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `wrongArgumentCountCheck`。
+
+### Architecture Decision
+
+这是 bare callable 的 arity no-match diagnostics，不是完整 no-matching-overload resolver：
+
+- 只覆盖 bare procedure/function call，不覆盖 member-call wrong arity。
+- 只在 callable name 已知、但同优先级没有任何 arity match 时发 diagnostic；默认参数只参与
+  bare call 的 arity 区间与 provided-argument signature prefix 判断。
+- 可接受 arity 存在但 compact signature match count 为 0 时仍 deferred，避免把 implicit conversion、
+  type ranking 或 future resolver 能力误报成 wrong-argument-count。
+- builtin / 未知 callable name 继续不报错，避免误伤 `WriteLn` 等内建或未来 callable forms。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 overloaded bare `Pick` 调用 `Pick(1, 2)` 的 wrong-argument-count regression
+- [x] 在 bare call lookup 中带出 `wrong-argument-count` failure kind
+- [x] 在 semantic analyzer 中发 `sema.wrong-argument-count`
+- [x] 新增 `tests/fixtures/wrong_argument_count` 与 `wrong-argument-count-check`
+- [x] 修复 `default_params_pass.pas` 暴露的默认参数 arity false positive
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在
+  `semantic-call-bindings-failure=missing-bare-wrong-argument-count-diagnostic`。
+- RED: 默认参数 focused regression 已失败在
+  `semantic-call-bindings-failure=unexpected-default-parameter-diagnostics`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Focused parser: `./tests/run_all_tests.sh --filter parser` 已输出
+  `failed-fixture-count=0` 与 `human-summary=group parser passed`。
+- Full: `bash build/verify_local.sh` 已输出 `wrong-argument-count-check=pass`、
+  `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 member-call wrong-argument-count diagnostics
+- 不实现 type-based no-matching-overload diagnostics
+- 不把未知 callable / builtin 统一报错
+- 不实现 implicit conversion / default parameter lowering/ranking / var-out compatibility / visibility checking
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 76 Member Ambiguous Overload Diagnostics
 
 ### Goal

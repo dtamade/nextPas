@@ -91,6 +91,11 @@ type
     procedure PushInlining(const AName: string);
     procedure PopInlining;
     function CountDeclParams(const ADecl: TGreenNode): LongInt;
+    function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
+    function DeclAcceptsArgCount(const ADecl: TGreenNode;
+      const AArgCount: LongInt): Boolean;
+    function DeclParamSignatureMatchesArgs(const ADecl: TGreenNode;
+      const AArgSignature: string; const AArgCount: LongInt): Boolean;
     function GetParamSignature(const ADecl: TGreenNode): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
     function MangledNameSig(const AName: string; const ASig: string): string;
@@ -687,6 +692,55 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.CountRequiredDeclParams(
+  const ADecl: TGreenNode): LongInt;
+var
+  J, K: LongInt;
+  Child, ParamChild: TGreenNode;
+begin
+  Result := 0;
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild <> nil) and (ParamChild.NodeKind = gnkParameterDecl) and
+          (ParamChild.ChildCount <= 1) then
+          Inc(Result);
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.DeclAcceptsArgCount(const ADecl: TGreenNode;
+  const AArgCount: LongInt): Boolean;
+var
+  MaxParamCount: LongInt;
+  MinParamCount: LongInt;
+begin
+  MaxParamCount := CountDeclParams(ADecl);
+  MinParamCount := CountRequiredDeclParams(ADecl);
+  Result := (AArgCount >= MinParamCount) and (AArgCount <= MaxParamCount);
+end;
+
+function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
+  const ADecl: TGreenNode;
+  const AArgSignature: string;
+  const AArgCount: LongInt
+): Boolean;
+var
+  ParamSignature: string;
+begin
+  ParamSignature := GetParamSignature(ADecl);
+  Result := (AArgCount >= 0) and (Length(ParamSignature) >= AArgCount) and
+    SameText(Copy(ParamSignature, 1, AArgCount), AArgSignature);
+end;
+
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
 var
   J, K: LongInt;
@@ -817,7 +871,7 @@ begin
   ADecl := nil;
   for Index := 0 to Length(FProcedureBodies) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) and
-      (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) then
+      DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
     begin
       ABody := FProcedureBodies[Index].Body;
       ADecl := FProcedureBodies[Index].Decl;
@@ -840,10 +894,12 @@ var
   Index: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
+  ImportedNameCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
   RootMatchCount: LongInt;
   RootMatchIndex: LongInt;
+  RootNameCount: LongInt;
   RootOwnerUnitId: string;
   RootSignatureMatchCount: LongInt;
   RootSignatureMatchIndex: LongInt;
@@ -854,38 +910,55 @@ begin
   AResolutionFailureKind := '';
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
+  ImportedNameCount := 0;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
   RootMatchCount := 0;
   RootMatchIndex := -1;
+  RootNameCount := 0;
   RootSignatureMatchCount := 0;
   RootSignatureMatchIndex := -1;
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
 
   for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) and
-      (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) then
+    if SameText(FProcedureBodies[Index].Name, AName) then
     begin
       if SameText(FProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) then
       begin
-        RootMatchIndex := Index;
-        Inc(RootMatchCount);
-        if AHasArgSignature and
-          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+        Inc(RootNameCount);
+        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
         begin
-          RootSignatureMatchIndex := Index;
-          Inc(RootSignatureMatchCount);
+          RootMatchIndex := Index;
+          Inc(RootMatchCount);
+          if AHasArgSignature and
+            DeclParamSignatureMatchesArgs(
+              FProcedureBodies[Index].Decl,
+              AArgSignature,
+              AArgCount
+            ) then
+          begin
+            RootSignatureMatchIndex := Index;
+            Inc(RootSignatureMatchCount);
+          end;
         end;
       end
       else
       begin
-        ImportedMatchIndex := Index;
-        Inc(ImportedMatchCount);
-        if AHasArgSignature and
-          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+        Inc(ImportedNameCount);
+        if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
         begin
-          ImportedSignatureMatchIndex := Index;
-          Inc(ImportedSignatureMatchCount);
+          ImportedMatchIndex := Index;
+          Inc(ImportedMatchCount);
+          if AHasArgSignature and
+            DeclParamSignatureMatchesArgs(
+              FProcedureBodies[Index].Decl,
+              AArgSignature,
+              AArgCount
+            ) then
+          begin
+            ImportedSignatureMatchIndex := Index;
+            Inc(ImportedSignatureMatchCount);
+          end;
         end;
       end;
     end;
@@ -908,8 +981,18 @@ begin
     Exit(True);
   end;
 
-  if ImportedMatchCount = 0 then
+  if RootNameCount > 0 then
+  begin
+    AResolutionFailureKind := 'wrong-argument-count';
     Exit(False);
+  end;
+
+  if ImportedMatchCount = 0 then
+  begin
+    if ImportedNameCount > 0 then
+      AResolutionFailureKind := 'wrong-argument-count';
+    Exit(False);
+  end;
 
   if ImportedMatchCount = 1 then
     ImportedSignatureMatchIndex := ImportedMatchIndex
@@ -1665,6 +1748,12 @@ begin
         EmitSemaError(
           'sema.ambiguous-overload',
           'ambiguous overload for "' + ANode.Text + '"',
+          ANode.ByteOffset
+        )
+      else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
+        EmitSemaError(
+          'sema.wrong-argument-count',
+          'wrong number of arguments for "' + ANode.Text + '"',
           ANode.ByteOffset
         );
     end;

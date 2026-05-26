@@ -60,7 +60,7 @@
   `stage0PkgMalformedDependenciesCheck=pass`、
   `stage0PkgInvalidArgumentsCheck=pass`、
   `stage0EnvInvalidArgumentsCheck=pass`、`ambiguousOverloadCheck=pass`、
-  `ambiguousMemberOverloadCheck=pass`、
+  `ambiguousMemberOverloadCheck=pass`、`wrongArgumentCountCheck=pass`、
   `multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
@@ -101,9 +101,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 76：member ambiguous overload diagnostics。
+- 当前 rolling window 已推进到 Batch 77：bare wrong argument count diagnostics。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 76` 已完成。
+- `Batch 1` 到 `Batch 77` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -187,6 +187,10 @@
   collision（例如 `Integer` / `LongInt` 都编码为 `i`）导致同 owner / 同 method / 同 arity
   target 无法唯一选择时发 `sema.ambiguous-overload`，但 no-match、receiver 扩展和完整
   type-based ranking 继续 deferred。
+  `Batch 77` 再把 bare callable 的第一条 arity no-match 接进 diagnostics：同名 callable 已知但
+  没有任何同优先级 arity match 时发 `sema.wrong-argument-count`；默认参数语法只参与
+  bare call 的 `requiredParamCount..ParamCount` arity 区间和 provided-argument signature prefix
+  判断，未知 callable、builtin 与可接受 arity 内但 type/signature 不能匹配的路径继续 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

@@ -3,6 +3,45 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 77 bare wrong argument count diagnostics)
+
+- **Status:** completed
+- Objective:
+  - 把 bare callable diagnostics 从 ambiguity 推进到第一条 arity no-match：同名 callable
+    已存在，但没有任何同优先级候选的参数个数匹配时，发出 `sema.wrong-argument-count`。
+- Baseline:
+  - 旧的 `CheckTypeMismatchesInNode(...)` 只对非 overload 单一 callable 的“参数太多”发过
+    `sema.wrong-argument-count`。
+  - overloaded `Pick` 只有 0 参和 1 参候选时，`Pick(1, 2)` 在 call binding pass 中只是无 binding，
+    不进入 diagnostics sink。
+- Actions taken:
+  - 先写 focused RED，构造 `Pick` 0 参 / 1 参 overload 后调用 `Pick(1, 2)`，要求
+    `sema.wrong-argument-count`、model status `failure`、binding count `0`。
+  - `LookupCallBindingDeclaration(...)` 现在先统计 root/imported 同名候选，再按 arity 和 compact
+    signature 选择 target；name 存在但 arity 全不匹配时透传 `wrong-argument-count`。
+  - 收口验证发现 `tests/parser/default_params_pass.pas` 会被新 arity 诊断误伤；已补
+    `CheckBareDefaultParameterCallBindings`，并让 bare call arity match 接受默认参数形成的
+    必填参数数到总参数数区间。
+  - `SeedCallBindingsInNode(...)` 对 `wrong-argument-count` failure kind 发
+    `sema.wrong-argument-count`，但未知 callable / builtin / type no-match 继续 deferred。
+  - 新增 `tests/fixtures/wrong_argument_count`，并把 `wrong-argument-count-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-bare-wrong-argument-count-diagnostic`。
+  - RED: 默认参数 focused regression 已失败在
+    `semantic-call-bindings-failure=unexpected-default-parameter-diagnostics`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Focused parser: `./tests/run_all_tests.sh --filter parser` 已输出
+    `failed-fixture-count=0` 与 `human-summary=group parser passed`。
+  - Full: `bash build/verify_local.sh` 已输出 `wrong-argument-count-check=pass`、
+    `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖 bare callable arity no-match；同 arity 但 type/signature 不能匹配仍保持 deferred。
+  - 复盘：这轮让已知 callable 的错误参数数量进入统一 diagnostics/projection，同时保留 builtins
+    和 future callable forms 的空间；下一步可把同样的 arity no-match 规则扩到 direct member-call。
+
 ## Session: 2026-05-26 (Batch 76 member ambiguous overload diagnostics)
 
 - **Status:** completed
