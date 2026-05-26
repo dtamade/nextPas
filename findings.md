@@ -1566,3 +1566,23 @@
 - 当前证据边界仍然要诚实：这批新增了 Linux focused runtime proof 与 Win64 compile-only，
   但没有新增 Darwin / FreeBSD / Android runtime 或 cross compile 证据，所以这些宿主目前仍主要由
   source-surface contract 覆盖。
+
+## 2026-05-27 Follow-up Findings 10
+
+- `platform.time` 的 Unix / Darwin consumer 之前虽然已经把 Windows QPC / FILETIME helper、
+  Darwin `mach_*` helper 和 host clock id token 收进 `*.ffi` owner，但 POSIX 路径仍直接碰
+  raw `clock_gettime` / `clock_getres`，所以 host clock helper ownership 还没像
+  `platform.thread` / `platform.sync` 一样收紧到底。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 统一继续拥有
+  `platform_clock_monotonic_now`、`platform_clock_realtime_now`、
+  `platform_clock_monotonic_getres`；`platform.time` 不再直接调用 raw
+  `clock_gettime` / `clock_getres`，也不再直接消费 raw host clock id token。
+- 现在 `platform.time` 更接近“public contract + cross-platform conversion consumer”：
+  它继续保留 `platform_timespec_to_ns`、QPC/frequency 安全换算和 public clock contract，但把
+  POSIX raw clock 调用细节继续收回当前宿主 ffi owner。
+- `test_platform_time_host_ffi_surface` 现在也把这条 POSIX/Darwin owner boundary 冻成
+  source-surface contract：不仅要求各宿主 ffi 文件继续暴露 clock helper 名称，也防回归
+  consumer 重新直接写 raw `clock_gettime` / `clock_getres` 或 host clock id。
+- 当前证据边界仍然要诚实：这批新增了 Linux focused runtime proof、Win64 compile-only 与
+  fresh `verify_local` 主门通过，但没有新增 Darwin / FreeBSD / Android runtime 或 cross
+  compile 证据，所以这些宿主目前仍主要由 source-surface contract 覆盖。

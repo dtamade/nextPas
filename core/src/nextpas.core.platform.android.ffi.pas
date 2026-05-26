@@ -37,6 +37,9 @@ function platform_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
 function platform_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
 function platform_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
 function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
+function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
+function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
+function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
@@ -158,6 +161,30 @@ end;
 function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 begin
   Result := pthread_getspecific(pthread_key_t(AKey));
+end;
+
+function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
+begin
+  if clock_gettime(PLATFORM_CLOCK_MONOTONIC_ID, ATime) = 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
+begin
+  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, ATime) = 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
+begin
+  if clock_getres(PLATFORM_CLOCK_MONOTONIC_ID, ATime) = 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
 end;
 
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;

@@ -4952,3 +4952,31 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（POSIX sync helper ownerization）：pass
 - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
 - `bash build/verify_local.sh`（platform.sync POSIX helper ownerization batch）：pass
+
+### Phase 10: Platform Time POSIX Clock Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_time_host_ffi_surface` 扩成新的 RED gate，要求
+    `linux/android/darwin/freebsd/unix.ffi` 暴露
+    `platform_clock_monotonic_now`、`platform_clock_realtime_now`、
+    `platform_clock_monotonic_getres`，同时禁止 `platform.time` 再直接写 raw
+    `clock_gettime` / `clock_getres` 或 host clock id token。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    统一新增 host clock helper wrapper，把 monotonic / realtime / resolution 的 raw POSIX clock
+    调用和 errno 投影继续收回当前宿主 ffi owner。
+  - `core/src/nextpas.core.platform.time.pas` 的 POSIX / Darwin realtime 路径改为消费这些 helper；
+    consumer 继续保留 `timespec -> ns`、QPC/frequency 安全换算和 public clock contract。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 POSIX clock helper owner boundary 与证据缺口写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`（POSIX clock helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`（POSIX clock helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`（POSIX clock helper ownerization）：pass
+- `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/core/build/review-win64-time -FU/home/dtamade/projects/nextPas/core/build/review-win64-time /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`：pass
+- `bash build/verify_local.sh`（platform.time POSIX clock helper ownerization batch）：pass

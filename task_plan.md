@@ -6592,6 +6592,71 @@ Completed; verification passed.
 - 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
 - 这批不顺手改写 wait-bucket fallback 算法或跨模块抽象
 
+## Addendum: 2026-05-27 Platform Time POSIX Clock Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.time` 的 POSIX raw clock 调用从 consumer 实现层收回当前宿主 ffi owner，让
+`platform.time` 的 Unix / Darwin 路径也像 `platform.thread` / `platform.sync` 一样保持清晰的
+host helper boundary。
+
+### Current Gap
+
+- `platform.time` 虽然已经把 Windows QPC / FILETIME helper、Darwin `mach_*` helper 和
+  host clock id token 收回 `*.ffi` owner，但 POSIX 路径仍在 consumer 里直接调用
+  `clock_gettime` / `clock_getres`。
+- 这意味着 monotonic / realtime / resolution 的 raw POSIX clock 调用细节和 host clock id
+  依赖仍泄漏在 consumer，而不是继续收口到当前宿主 ffi owner。
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
+  - `platform_clock_monotonic_now`
+  - `platform_clock_realtime_now`
+  - `platform_clock_monotonic_getres`
+- `platform.time` 继续保留 `platform_timespec_to_ns`、QPC/frequency 安全换算和 public clock
+  contract，但不再直接写 raw `clock_gettime` / `clock_getres` 或 host clock id token。
+- 这批不改 `platform.time` public API，不改 Windows helper 形状，也不顺手引入 L1 `core.time`
+  抽象。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 `test_platform_time_host_ffi_surface`，先把 POSIX clock helper owner boundary 打成 RED
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 host clock helper wrappers
+- [x] 让 `platform.time` 的 POSIX / Darwin realtime 路径改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose host monotonic clock helper for platform.time: platform_clock_monotonic_now`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/core/build/review-win64-time -FU/home/dtamade/projects/nextPas/core/build/review-win64-time /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 `platform.time` public API
+- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
+- 这批不顺手改变 L1 `core.time` 示例/基准或 `Stopwatch` 归属
+
 ## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
 
 ### Goal Node

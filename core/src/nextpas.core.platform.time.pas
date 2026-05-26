@@ -198,7 +198,7 @@ begin
 end;
 
 { ============================================================ }
-{ POSIX: clock_gettime(CLOCK_MONOTONIC / CLOCK_REALTIME)       }
+{ POSIX: host-owned clock helper wrappers                      }
 { ============================================================ }
 {$IFDEF NEXTPAS_POSIX_CLOCK}
 
@@ -206,7 +206,7 @@ function platform_monotonic_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(PLATFORM_CLOCK_MONOTONIC_ID, @LTs) <> 0 then
+  if platform_clock_monotonic_now(@LTs) <> 0 then
   begin
     Result := 0;
     Exit;
@@ -218,7 +218,7 @@ function platform_realtime_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, @LTs) <> 0 then
+  if platform_clock_realtime_now(@LTs) <> 0 then
   begin
     Result := 0;
     Exit;
@@ -230,7 +230,7 @@ function platform_monotonic_resolution_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_getres(PLATFORM_CLOCK_MONOTONIC_ID, @LTs) <> 0 then
+  if platform_clock_monotonic_getres(@LTs) <> 0 then
   begin
     Result := 1;
     Exit;
@@ -243,7 +243,7 @@ end;
 {$ENDIF}
 
 { ============================================================ }
-{ macOS: mach_absolute_time + clock_gettime (10.12+)           }
+{ macOS: mach_absolute_time + host-owned realtime helper       }
 { ============================================================ }
 {$IFDEF NEXTPAS_MACOS}
 function platform_monotonic_ns: UInt64;
@@ -255,7 +255,7 @@ function platform_realtime_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, @LTs) <> 0 then
+  if platform_clock_realtime_now(@LTs) <> 0 then
   begin
     Result := 0;
     Exit;

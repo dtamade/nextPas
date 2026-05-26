@@ -9,6 +9,14 @@ uses
 const
   TIME_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.pas';
   TIME_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.pas';
+  LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
+  LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
+  ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
+  ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
+  FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
+  FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
+  UNIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.ffi.pas';
+  UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
@@ -52,14 +60,32 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckPosixClockHelperSet(const ASource, AHostLabel: string);
+begin
+  CheckTokenPresent(ASource, 'platform_clock_monotonic_now',
+    AHostLabel + ' must expose host monotonic clock helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_clock_realtime_now',
+    AHostLabel + ' must expose host realtime clock helper for platform.time');
+  CheckTokenPresent(ASource, 'platform_clock_monotonic_getres',
+    AHostLabel + ' must expose host monotonic clock resolution helper for platform.time');
+end;
+
 procedure TestPlatformTimeUsesHostClockFFI;
 var
   LTimeSource: string;
+  LLinuxSource: string;
+  LAndroidSource: string;
+  LFreeBSDSource: string;
+  LUnixSource: string;
   LPosixSource: string;
   LDarwinSource: string;
   LWindowsSource: string;
 begin
   LTimeSource := ReadSourceFile(ResolveSourcePath(TIME_SOURCE_PATH_FROM_TEST, TIME_SOURCE_PATH_FROM_ROOT));
+  LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
   LPosixSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
@@ -70,6 +96,11 @@ begin
     'posix.ffi must expose clock_gettime for platform.time');
   CheckTokenPresent(LPosixSource, 'clock_getres',
     'posix.ffi must expose clock_getres for platform.time');
+  CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi');
+  CheckPosixClockHelperSet(LAndroidSource, 'android.ffi');
+  CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi');
+  CheckPosixClockHelperSet(LUnixSource, 'unix.ffi');
+  CheckPosixClockHelperSet(LDarwinSource, 'darwin.ffi');
 
   CheckTokenPresent(LDarwinSource, 'mach_absolute_time',
     'darwin.ffi must expose mach_absolute_time for platform.time');
@@ -111,14 +142,12 @@ begin
     'platform.time must bind generic Unix host-owned clock ids through unix.ffi');
   CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.ffi',
     'platform.time must bind Windows clock APIs through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_id',
-    'platform.time must consume host-owned monotonic clock ids');
-  CheckTokenPresent(LTimeSource, 'platform_clock_realtime_id',
-    'platform.time must consume host-owned realtime clock ids');
-  CheckTokenPresent(LTimeSource, 'clock_gettime',
-    'platform.time must call POSIX clock_gettime through posix.ffi');
-  CheckTokenPresent(LTimeSource, 'clock_getres',
-    'platform.time must call POSIX clock_getres through posix.ffi');
+  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_now',
+    'platform.time must consume host-owned monotonic clock helper');
+  CheckTokenPresent(LTimeSource, 'platform_clock_realtime_now',
+    'platform.time must consume host-owned realtime clock helper');
+  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_getres',
+    'platform.time must consume host-owned monotonic clock resolution helper');
   CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_ns',
     'platform.time must consume Darwin monotonic clock helper through darwin.ffi');
   CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_resolution_ns',
@@ -139,6 +168,14 @@ begin
     'platform.time must not call QueryPerformanceCounter directly in the consumer');
   Check(Pos('getsystemtimeasfiletime(', LTimeSource) = 0,
     'platform.time must not call GetSystemTimeAsFileTime directly in the consumer');
+  Check(Pos('clock_gettime(', LTimeSource) = 0,
+    'platform.time must not call clock_gettime directly in the consumer');
+  Check(Pos('clock_getres(', LTimeSource) = 0,
+    'platform.time must not call clock_getres directly in the consumer');
+  Check(Pos('platform_clock_monotonic_id', LTimeSource) = 0,
+    'platform.time must not consume raw host monotonic clock ids in the consumer');
+  Check(Pos('platform_clock_realtime_id', LTimeSource) = 0,
+    'platform.time must not consume raw host realtime clock ids in the consumer');
   Check(Pos('windows_filetime_unix_epoch_offset_100ns', LTimeSource) = 0,
     'platform.time must not consume raw FILETIME epoch offset tokens in the consumer');
   Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeSource) = 0,
