@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 91 把 `object-free-runtime` 从 semantic typed HIR 接到 HIR builder：`THIRBuilder` 现在会
+  生成 `hikIntrinsic` / `np.system.object_free` marker，receiver 以 pointer operand 保留，
+  effective `Destroy` 名称保存在 `CallTarget`。
+- 新 focused HIR RED/GREEN 固定这个边界：旧实现失败在
+  `missing-object-free-hir-intrinsic`，修正后输出
+  `hir-object-free-contract-status=pass`；`build/verify_local.sh` 也新增
+  `hir-object-free-contract` gate，fresh full verify 已输出 `hir-object-free-contract=pass` 与
+  `verify-local=pass`。
+- 这个 HIR bridge 仍不是真实对象释放：当前 LLVM HIR emitter 不展开 nil guard、不调用 allocator
+  free，也不声明完整 dynamic dispatch runtime 已完成。
 - Merge-preview closeout 已证明 platform.sync 分支可以和最新 `main` 的 source-backed
   `System/TObject`、`ICondVar`、Vec/interface allocator 等变更共存；冲突只落在设计约定和
   跟踪文档，源码自动合并后通过全量验证。

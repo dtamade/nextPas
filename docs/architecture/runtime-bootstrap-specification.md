@@ -69,10 +69,11 @@ no-fold typed HIR 现在还会复制隐式 `TObject` 父类的 VMT slot/function
 `Obj.Free` lowering 到当前有效 `Destroy` runtime call；只继承 `System.TObject.Destroy`
 的普通 class 会落到 `TObject.Destroy`。同一 lowering 还会生成 `np.system.object_free`
 contract，记录 receiver、effective `Destroy`、nil guard 和 heap release intent。
-它仍不是完整 `System` 重写，也没有把 implicit runtime 改成自动编译/链接 `System.pas`；
-backend 仍把 implicit runtime 排除在额外 assemble/link 之外。后续应在这个 source-backed
-边界上把 object-free contract 接到真实 backend/runtime helper，并继续扩展 unit init/fini、helper
-和 lowering。
+`THIRBuilder` 已把这个 contract 保留为 HIR `np.system.object_free` intrinsic marker，
+带 receiver pointer operand 和 effective `Destroy` target。它仍不是完整 `System` 重写，
+也没有把 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍把 implicit runtime
+排除在额外 assemble/link 之外。后续应在这个 source-backed 边界上把 object-free HIR marker
+接到真实 backend/runtime helper，并继续扩展 unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 

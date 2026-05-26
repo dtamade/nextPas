@@ -260,10 +260,11 @@ class method，并把 `Child.Touch` 这类 inherited call 投影到 parent metho
 已有同名 method 但 arity/body 不匹配或不唯一时会保守停止。implicit source-backed `System`
 路径下，no-fold typed HIR 会复制继承到的 `TObject.Destroy` VMT slot/function truth，并把
 `Obj.Free` lowering 到当前有效 `Destroy` runtime call；同一 lowering 还会产生
-`np.system.object_free` contract，记录 nil guard 与 heap release intent。这仍不是实际 backend
-nil branch、allocator free 或动态 virtual dispatch runtime。完整 member resolver、visibility
-checking、runtime constructor lowering、完整 virtual dispatch 与 type-based overload resolution
-仍属于后续 language-service / semantic model 工作。class method overload 目前只按
+`np.system.object_free` contract，记录 nil guard 与 heap release intent，并由 HIR builder
+保留为同名 intrinsic marker。这仍不是实际 backend nil branch、allocator free 或动态 virtual
+dispatch runtime。完整 member resolver、visibility checking、runtime constructor lowering、
+完整 virtual dispatch 与 type-based overload resolution仍属于后续 language-service /
+semantic model 工作。class method overload 目前只按
 argument count 选择同 owner / 同 qualified name / 同 `ParamCount` 的唯一 method symbol，并通过
 `queryDefinitions[].targetParamCount` 暴露 target arity；若同 arity 有多个候选，当前可推断的
 argument signature 会选择唯一 `ParamSignature` target，并通过

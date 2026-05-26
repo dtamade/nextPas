@@ -3,6 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 91 object-free contract HIR bridge)
+
+- **Status:** completed
+- Objective:
+  - 把 semantic typed HIR 中的 `object-free-runtime` / `np.system.object_free` contract
+    接到 `THIRBuilder`，让下一层 HIR 不再丢失对象 `Free` 的 lifecycle intent。
+- Baseline:
+  - Batch 90 已让 `Worker.Free` 产生 `object-free-runtime` typed HIR node，并记录 receiver、
+    effective `Destroy`、nil guard 与 heap release intent。
+  - `THIRBuilder.ProcessNode(...)` 只处理 `call-runtime` 等旧节点，当前会静默忽略
+    `object-free-runtime`。
+- Actions taken:
+  - 新增 focused HIR RED：`tests/hir/test_hir_object_free_contract.pas` 要求 builder 产出
+    `hikIntrinsic` / `np.system.object_free`，receiver operand 必须是 pointer，`CallTarget`
+    必须保留 `TObject.Destroy`。
+  - `THIRBuilder` 新增 `ProcessObjectFreeRuntime(...)`：解析 contract operand 中的
+    `var <receiver>` 与 `destroy <method>`，加载 receiver pointer，并发出 HIR intrinsic marker。
+  - `build/verify_local.sh` 新增 `hir-object-free-contract` focused gate。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-hir-intrinsic`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只把 object-free contract 传到 HIR/backend-facing contract 层；LLVM emitter 仍不展开真实
+    nil branch 或 allocator free，避免夸大当前能力。
+  - 本轮没有修改 `core/`。
+
 ## Session: 2026-05-26 (platform.sync merge-preview closeout)
 
 - **Status:** completed

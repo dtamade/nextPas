@@ -15,6 +15,58 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 91 Object-free Contract HIR Bridge
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 90 已经产生的 `np.system.object_free`
+typed HIR contract 接到下一层 HIR：
+
+- `THIRBuilder` 不能再静默忽略 `object-free-runtime`。
+- HIR 中要有稳定、可验证的 `np.system.object_free` intrinsic marker，保留 receiver pointer
+  operand 和 effective `Destroy` target。
+- 本批只建立 compiler-owned HIR/backend-facing contract，不声明真实 nil branch、allocator free、
+  dynamic dispatch runtime 或 implicit `System.pas` link 已完成。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+`object-free-runtime` 是 compound lifecycle contract，不是普通函数调用：
+
+- semantic typed HIR 仍负责选择 effective `Destroy` 并记录 nil guard / heap release intent。
+- HIR builder 把 receiver 解析为 pointer operand，把 effective `Destroy` 名称放入
+  `CallTarget`，并用 `hikIntrinsic` / `np.system.object_free` 表示后续 runtime helper 接口。
+- 当前 LLVM HIR emitter 对这个 intrinsic 仍不展开真实代码，避免把“可见契约”误说成
+  “释放实现已完成”。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：`object-free-runtime` 必须投影成 HIR `np.system.object_free` intrinsic
+- [x] 实现 `THIRBuilder.ProcessObjectFreeRuntime`
+- [x] 把 focused HIR gate 纳入 `build/verify_local.sh`
+- [x] 同步目标树 / semantic / runtime 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-hir-intrinsic`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不生成真实 nil branch
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Platform Sync Merge-preview Closeout
 
 ### Goal

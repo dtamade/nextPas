@@ -86,6 +86,7 @@ type
     procedure ProcessFunctionEnd(const ANode: TTypedHirNode);
     procedure ProcessRetRuntime(const ANode: TTypedHirNode);
     procedure ProcessCallRuntime(const ANode: TTypedHirNode);
+    procedure ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
     procedure ProcessIntToStr(const ANode: TTypedHirNode);
     procedure ProcessCopyStr(const ANode: TTypedHirNode);
     procedure ProcessWriteInt(const ANode: TTypedHirNode);
@@ -1839,6 +1840,63 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
+var
+  DestroyName, Line, Rest, ReceiverName: string;
+  Instr: THIRInstr;
+  LineEnd: LongInt;
+  ReceiverPtr, ReceiverSlot: THIRValueId;
+begin
+  DestroyName := '';
+  ReceiverName := '';
+  Rest := ANode.Operand;
+  while Rest <> '' do
+  begin
+    LineEnd := Pos(#10, Rest);
+    if LineEnd > 0 then
+    begin
+      Line := Copy(Rest, 1, LineEnd - 1);
+      Rest := Copy(Rest, LineEnd + 1, Length(Rest));
+    end
+    else
+    begin
+      Line := Rest;
+      Rest := '';
+    end;
+    Line := Trim(Line);
+    if (Length(Line) > 4) and SameText(Copy(Line, 1, 4), 'var ') then
+      ReceiverName := Trim(Copy(Line, 5, Length(Line)))
+    else if (Length(Line) > 8) and SameText(Copy(Line, 1, 8), 'destroy ') then
+      DestroyName := Trim(Copy(Line, 9, Length(Line)));
+  end;
+
+  if ReceiverName = '' then
+    Exit;
+  ReceiverSlot := FindAlloca(ReceiverName);
+  if ReceiverSlot = 0 then
+  begin
+    EnsureAlloca(ReceiverName, GetPtrType);
+    ReceiverSlot := FindAlloca(ReceiverName);
+  end;
+  if ReceiverSlot = 0 then
+    Exit;
+
+  if IsVarParamAlloca(ReceiverName) then
+    ReceiverPtr := EmitLoad(GetPtrType, EmitLoad(GetPtrType, ReceiverSlot))
+  else
+    ReceiverPtr := EmitLoad(GetPtrType, ReceiverSlot);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := ANode.DisplayName;
+  Instr.CallTarget := DestroyName;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(ReceiverPtr, GetPtrType);
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessIntToStr(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -3131,6 +3189,8 @@ begin
     ProcessRetStrRuntime(ANode)
   else if ANode.Kind = 'call-runtime' then
     ProcessCallRuntime(ANode)
+  else if ANode.Kind = 'object-free-runtime' then
+    ProcessObjectFreeRuntime(ANode)
   else if ANode.Kind = 'int-to-str-runtime' then
     ProcessIntToStr(ANode)
   else if ANode.Kind = 'copy-str-runtime' then

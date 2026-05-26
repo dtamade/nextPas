@@ -241,14 +241,16 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   target-installed `System.pas`，普通 class 默认继承 `System.TObject`，`Obj.Free` 可绑定到
   真实 `TObject.Free` method symbol；no-fold typed HIR 也会把继承路径上的 `Free` lowering 到
   当前有效 `Destroy` runtime call，并产生 `np.system.object_free` contract，记录 nil guard 与
-  heap release intent。显式 `uses System` 仍可升级到 explicit source provenance。
+  heap release intent。`THIRBuilder` 已把该 contract 投影成 HIR `np.system.object_free`
+  intrinsic marker，保留 receiver pointer 与 effective `Destroy` target；显式 `uses System`
+  仍可升级到 explicit source provenance。
 - 新 `core/` 已开始 L0/L1 基础设施。
 - 当前协作边界：core 由 core 负责人写，非 core 批次不直接修改 `core/`。
 
 下一步证据：
 
-- 继续扩展 `System` source truth：把 `np.system.object_free` contract 接到真实 backend/runtime helper，
-  并推进 unit init/fini。
+- 继续扩展 `System` source truth：把 HIR `np.system.object_free` marker 接到真实 backend/runtime
+  helper，并推进 unit init/fini。
 - compiler/tooling 侧只提出 core 需求和 integration contract。
 - 需要 core 改动时，先形成 review/suggestion，不直接落 core 代码。
 
