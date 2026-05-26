@@ -80,7 +80,8 @@ function pthread_condattr_setclock(AAttr: Ppthread_condattr_t; AClockId: cint): 
 
 {$IFDEF WINDOWS}
 uses
-  Windows;
+  Windows,
+  nextpas.core.platform.sync.windows.ffi;
 {$ENDIF}
 
 {$IFDEF UNIX}
