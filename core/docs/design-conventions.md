@@ -475,6 +475,10 @@ tests/nextpas.core.time/       ← 模块测试目录
   test_timer/                  ← 独立测试项目
     test_timer.lpr
 
+benchmarks/nextpas.core.time/  ← 模块基准测试目录
+  bench_duration/              ← 独立基准测试项目
+    bench_duration.lpr
+
 examples/nextpas.core.time/    ← 模块示例目录
   demo_stopwatch/              ← 独立示例项目
     demo_stopwatch.lpr
@@ -483,15 +487,17 @@ examples/nextpas.core.time/    ← 模块示例目录
 ### 规则
 
 - `tests/` — 验证正确性（断言、回归测试）
+- `benchmarks/` — 性能基准测试
 - `examples/` — 演示用法（示例代码、demo）
 - 按模块名建子目录，每个子目录内可有多个独立项目
 - 每个测试/示例项目是独立的 `.lpr`，各自编译成独立可执行文件
 - 不使用统一 test runner
 
-### 测试框架
+### 测试框架 & 基准框架
 
 - 初期零依赖（直接用 assert 或简单的 WriteLn 验证）
-- 后期随框架成熟，逐步依赖框架内部模块构建更完善的测试框架
+- 后期随框架成熟，逐步依赖框架内部模块构建更完善的测试框架和基准框架
+- benchmarks 同 tests 结构，按模块分子目录，独立 .lpr 项目
 
 ---
 
@@ -701,6 +707,7 @@ build/
 nextpas.core/
   src/            ← 所有源码（.pas + .inc 平铺）
   tests/          ← 测试项目（按模块分子目录）
+  benchmarks/     ← 基准测试项目（按模块分子目录）
   examples/       ← 示例项目（按模块分子目录）
   vendors/        ← 第三方 C 库源码（vendored）
   docs/           ← 设计文档、规范
