@@ -4,9 +4,9 @@ unit nextpas.core.platform.time;
 
 interface
 
-function PlatformMonotonicNs: UInt64;
-function PlatformRealtimeNs: UInt64;
-function PlatformMonotonicResolutionNs: UInt64;
+function platform_monotonic_ns: UInt64;
+function platform_realtime_ns: UInt64;
+function platform_monotonic_resolution_ns: UInt64;
 
 implementation
 
@@ -24,7 +24,7 @@ const
   NANOSECONDS_PER_SECOND = UInt64(1000000000);
 
 {$IFDEF UNIX}
-function PlatformMonotonicNs: UInt64;
+function platform_monotonic_ns: UInt64;
 var
   LTs: TimeSpec;
 begin
@@ -36,7 +36,7 @@ begin
   Result := UInt64(LTs.tv_sec) * NANOSECONDS_PER_SECOND + UInt64(LTs.tv_nsec);
 end;
 
-function PlatformRealtimeNs: UInt64;
+function platform_realtime_ns: UInt64;
 var
   LTs: TimeSpec;
 begin
@@ -48,7 +48,7 @@ begin
   Result := UInt64(LTs.tv_sec) * NANOSECONDS_PER_SECOND + UInt64(LTs.tv_nsec);
 end;
 
-function PlatformMonotonicResolutionNs: UInt64;
+function platform_monotonic_resolution_ns: UInt64;
 var
   LTs: TimeSpec;
 begin
@@ -80,7 +80,7 @@ begin
   end;
 end;
 
-function PlatformMonotonicNs: UInt64;
+function platform_monotonic_ns: UInt64;
 var
   LCounter: Int64;
 begin
@@ -93,7 +93,7 @@ begin
   Result := UInt64(LCounter) * NANOSECONDS_PER_SECOND div UInt64(GFrequency);
 end;
 
-function PlatformRealtimeNs: UInt64;
+function platform_realtime_ns: UInt64;
 var
   LFt: FILETIME;
   LVal: UInt64;
@@ -103,7 +103,7 @@ begin
   Result := (LVal - UInt64(116444736000000000)) * UInt64(100);
 end;
 
-function PlatformMonotonicResolutionNs: UInt64;
+function platform_monotonic_resolution_ns: UInt64;
 begin
   EnsureFrequency;
   Result := NANOSECONDS_PER_SECOND div UInt64(GFrequency);
@@ -115,17 +115,17 @@ end;
 
 {$IFNDEF UNIX}
 {$IFNDEF WINDOWS}
-function PlatformMonotonicNs: UInt64;
+function platform_monotonic_ns: UInt64;
 begin
   Result := 0;
 end;
 
-function PlatformRealtimeNs: UInt64;
+function platform_realtime_ns: UInt64;
 begin
   Result := 0;
 end;
 
-function PlatformMonotonicResolutionNs: UInt64;
+function platform_monotonic_resolution_ns: UInt64;
 begin
   Result := 1;
 end;

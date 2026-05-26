@@ -540,6 +540,7 @@ end;
 | 参数 | PascalCase + `A` 前缀 | `ACapacity`, `AValue` |
 | 局部变量 | PascalCase + `L` 前缀 | `LValue`, `LCount`, `LIdx` |
 | 函数/方法/类名 | PascalCase（首字母大写） | `GetCapacity`, `TryReserve` |
+| platform 层函数 | C 风格 snake_case + `platform_` 前缀 | `platform_mutex_lock`, `platform_futex_wait` |
 | 编译器宏 | UPPER_SNAKE_CASE | `NEXTPAS_CORE_USE_FUTEX` |
 
 ### 参数声明风格

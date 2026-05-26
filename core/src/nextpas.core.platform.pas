@@ -20,9 +20,9 @@ function OSName: string; inline;
 function CPUName: string; inline;
 
 { Time }
-function PlatformMonotonicNs: UInt64; inline;
-function PlatformRealtimeNs: UInt64; inline;
-function PlatformMonotonicResolutionNs: UInt64; inline;
+function platform_monotonic_ns: UInt64; inline;
+function platform_realtime_ns: UInt64; inline;
+function platform_monotonic_resolution_ns: UInt64; inline;
 
 implementation
 
@@ -62,19 +62,19 @@ begin
   end;
 end;
 
-function PlatformMonotonicNs: UInt64;
+function platform_monotonic_ns: UInt64;
 begin
-  Result := nextpas.core.platform.time.PlatformMonotonicNs;
+  Result := nextpas.core.platform.time.platform_monotonic_ns;
 end;
 
-function PlatformRealtimeNs: UInt64;
+function platform_realtime_ns: UInt64;
 begin
-  Result := nextpas.core.platform.time.PlatformRealtimeNs;
+  Result := nextpas.core.platform.time.platform_realtime_ns;
 end;
 
-function PlatformMonotonicResolutionNs: UInt64;
+function platform_monotonic_resolution_ns: UInt64;
 begin
-  Result := nextpas.core.platform.time.PlatformMonotonicResolutionNs;
+  Result := nextpas.core.platform.time.platform_monotonic_resolution_ns;
 end;
 
 end.

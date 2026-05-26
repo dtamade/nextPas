@@ -164,10 +164,10 @@ procedure TestPlatformTime;
 var
   LM1, LM2, LR, LResolution: UInt64;
 begin
-  LM1 := PlatformMonotonicNs;
-  LM2 := PlatformMonotonicNs;
-  LR := PlatformRealtimeNs;
-  LResolution := PlatformMonotonicResolutionNs;
+  LM1 := platform_monotonic_ns;
+  LM2 := platform_monotonic_ns;
+  LR := platform_realtime_ns;
+  LResolution := platform_monotonic_resolution_ns;
 
   Check(LM2 >= LM1, 'monotonic clock should not go backwards');
   Check(LR > 0, 'realtime clock should be available on linux');

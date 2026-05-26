@@ -384,7 +384,7 @@ end;
 
 class function TInstant.Now: TInstant;
 begin
-  Result.FNs := PlatformMonotonicNs;
+  Result.FNs := platform_monotonic_ns;
 end;
 
 function TInstant.Elapsed: TDuration;
