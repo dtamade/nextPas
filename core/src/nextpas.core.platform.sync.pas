@@ -709,19 +709,9 @@ begin
 end;
 
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
-var
-  LError: Int32;
 begin
-  LError := windows_condvar_timedwait_ns(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], ATimeoutNs);
-  if LError = 0 then
-    Result := 0
-  else
-  begin
-    if windows_error_i32_is_timeout(LError) then
-      Result := PLATFORM_ERR_TIMEOUT
-    else
-      Result := LError;
-  end;
+  Result := windows_condvar_timedwait_timeout_result(
+    @ACondVar.FOpaque[0], @AMutex.FOpaque[0], ATimeoutNs, PLATFORM_ERR_TIMEOUT);
 end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
@@ -737,19 +727,9 @@ end;
 { Address-wait (Windows address-wait primitive) }
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
-var
-  LError: Int32;
 begin
-  LError := windows_wait_address_i32_timeout_ns(AAddr, AExpected, ATimeoutNs);
-  if LError = 0 then
-    Result := 0
-  else
-  begin
-    if windows_error_i32_is_timeout(LError) then
-      Result := PLATFORM_ERR_TIMEOUT
-    else
-      Result := LError;
-  end;
+  Result := windows_wait_address_i32_timeout_result(
+    AAddr, AExpected, ATimeoutNs, PLATFORM_ERR_TIMEOUT);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;

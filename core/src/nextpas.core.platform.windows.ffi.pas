@@ -90,6 +90,11 @@ function windows_condvar_timedwait_ns(
   const ACondVar: Pointer;
   const AMutex: Pointer;
   const ATimeoutNs: Int64): Int32; inline;
+function windows_condvar_timedwait_timeout_result(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutNs: Int64;
+  const ATimeoutResult: Int32): Int32; inline;
 function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
 function windows_condvar_broadcast(const ACondVar: Pointer): Int32; inline;
 function windows_wait_address_i32(
@@ -100,6 +105,11 @@ function windows_wait_address_i32_timeout_ns(
   const AAddress: PInt32;
   const AExpected: Int32;
   const ATimeoutNs: Int64): Int32; inline;
+function windows_wait_address_i32_timeout_result(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64;
+  const ATimeoutResult: Int32): Int32; inline;
 function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
 function windows_wake_address_all(const AAddress: PInt32): Int32; inline;
 function windows_current_thread_id_u64: UInt64; inline;
@@ -349,6 +359,17 @@ begin
   Result := AWaitResult = WAIT_OBJECT_0;
 end;
 
+function windows_wait_error_timeout_result(
+  const AError: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  if AError = 0 then
+    Exit(0);
+  if windows_error_i32_is_timeout(AError) then
+    Exit(ATimeoutResult);
+  Result := AError;
+end;
+
 function windows_mutex_init(const AMutex: Pointer): Int32; inline;
 begin
   InitializeSRWLock(AMutex);
@@ -443,6 +464,17 @@ begin
     ACondVar, AMutex, windows_timeout_ns_to_ms(ATimeoutNs));
 end;
 
+function windows_condvar_timedwait_timeout_result(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutNs: Int64;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  Result := windows_wait_error_timeout_result(
+    windows_condvar_timedwait_ns(ACondVar, AMutex, ATimeoutNs),
+    ATimeoutResult);
+end;
+
 function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
 begin
   WakeConditionVariable(ACondVar);
@@ -476,6 +508,17 @@ function windows_wait_address_i32_timeout_ns(
 begin
   Result := windows_wait_address_i32(
     AAddress, AExpected, windows_timeout_ns_to_ms(ATimeoutNs));
+end;
+
+function windows_wait_address_i32_timeout_result(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  Result := windows_wait_error_timeout_result(
+    windows_wait_address_i32_timeout_ns(AAddress, AExpected, ATimeoutNs),
+    ATimeoutResult);
 end;
 
 function windows_wake_address_single(const AAddress: PInt32): Int32; inline;

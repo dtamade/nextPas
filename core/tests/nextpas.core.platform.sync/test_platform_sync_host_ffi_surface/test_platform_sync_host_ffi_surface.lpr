@@ -211,6 +211,8 @@ begin
     'windows.ffi must expose Windows condvar timedwait helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_ns',
     'windows.ffi must expose Windows condvar timedwait helper with ns timeout input');
+  CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_timeout_result',
+    'windows.ffi must expose Windows condvar timedwait helper that maps timeout semantics for sync');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_signal',
     'windows.ffi must expose Windows condvar signal helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_broadcast',
@@ -219,6 +221,8 @@ begin
     'windows.ffi must expose Windows wait-address helper');
   CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_ns',
     'windows.ffi must expose Windows wait-address helper with ns timeout input');
+  CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_result',
+    'windows.ffi must expose Windows wait-address helper that maps timeout semantics for sync');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_single',
     'windows.ffi must expose Windows wake-address-single helper');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_all',
@@ -303,8 +307,6 @@ begin
     'platform.sync must consume Linux futex wake-one helper through linux.ffi');
   CheckTokenPresent(LSyncSource, 'linux_futex_wake_all_i32',
     'platform.sync must consume Linux futex wake-all helper through linux.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_error_i32_is_timeout',
-    'platform.sync must consume the Int32 Windows timeout classifier through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_init',
     'platform.sync must consume Windows mutex init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_lock',
@@ -331,14 +333,14 @@ begin
     'platform.sync must consume Windows condvar init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_wait',
     'platform.sync must consume Windows condvar wait helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_timedwait_ns',
-    'platform.sync must consume Windows condvar timedwait helper with ns timeout input through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_condvar_timedwait_timeout_result',
+    'platform.sync must consume Windows condvar timedwait timeout-mapping helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_signal',
     'platform.sync must consume Windows condvar signal helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_broadcast',
     'platform.sync must consume Windows condvar broadcast helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_wait_address_i32_timeout_ns',
-    'platform.sync must consume Windows wait-address helper with ns timeout input through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_wait_address_i32_timeout_result',
+    'platform.sync must consume Windows wait-address timeout-mapping helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_single',
     'platform.sync must consume Windows wake-address-single helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_all',
@@ -389,6 +391,12 @@ begin
     'platform.sync must not keep the raw Windows timeout-ms helper in the consumer');
   Check(Pos('windows_last_error_is_timeout', LSyncSource) = 0,
     'platform.sync must not keep the raw Windows DWORD timeout classifier in the consumer');
+  Check(Pos('windows_error_i32_is_timeout', LSyncSource) = 0,
+    'platform.sync must not keep the Int32 Windows timeout classifier in the consumer');
+  Check(Pos('windows_condvar_timedwait_ns', LSyncSource) = 0,
+    'platform.sync must not keep the raw Windows condvar timedwait helper in the consumer');
+  Check(Pos('windows_wait_address_i32_timeout_ns', LSyncSource) = 0,
+    'platform.sync must not keep the raw Windows wait-address timeout helper in the consumer');
   Check(Pos(': dword', LSyncSource) = 0,
     'platform.sync must not keep raw DWORD temporaries in the Windows consumer');
   Check(Pos('linux_syscall', LSyncSource) = 0,

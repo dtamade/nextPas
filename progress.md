@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform sync POSIX helper ffi ownership；并行收口包含
-platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform sync windows timeout result ffi ownership；并行收口包含
+platform sync POSIX helper ffi ownership、platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,59 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform sync Windows timeout result ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续把 Windows wait timeout 语义从 `platform.sync` consumer 收回 `windows.ffi` owner，让
+    Windows condvar timedwait / address-wait 的 timeout classifier 不再散落在 consumer。
+- Baseline:
+  - `windows.ffi` 已经拥有 `windows_timeout_ns_to_ms`、`windows_last_error_i32`、
+    `windows_last_error_is_timeout` 与 `windows_error_i32_is_timeout`，但 `platform.sync` 仍自己写：
+    - `LError := windows_condvar_timedwait_ns(...)`
+    - `if windows_error_i32_is_timeout(LError) then ...`
+    - `LError := windows_wait_address_i32_timeout_ns(...)`
+  - 这层逻辑已经不再是 generic wait policy，而是 Windows wait-result / last-error semantics 的最后一小段
+    残留。
+- Actions taken:
+  - `core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/` 先扩成 RED gate：
+    - `windows.ffi` 必须暴露 `windows_condvar_timedwait_timeout_result`
+    - `windows.ffi` 必须暴露 `windows_wait_address_i32_timeout_result`
+    - `platform.sync` 必须消费这两个 helper
+    - `platform.sync` 不得再直接消费 `windows_error_i32_is_timeout`、
+      `windows_condvar_timedwait_ns`、
+      `windows_wait_address_i32_timeout_ns`
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增：
+    - `windows_wait_error_timeout_result`
+    - `windows_condvar_timedwait_timeout_result`
+    - `windows_wait_address_i32_timeout_result`
+    让 timeout classifier 与 caller-supplied timeout result 投影继续留在 host ffi owner。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows `platform_condvar_timedwait` /
+    `platform_wait_address32` 改为直接消费上述 helper，只保留 `PLATFORM_ERR_TIMEOUT` public contract。
+  - `core/docs/design-conventions.md` 追加规则：优先用 caller-supplied timeout result helper，而不是让
+    consumer 自己写 `if windows_error_i32_is_timeout(...) then ... else ...`。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose Windows condvar timedwait helper that maps timeout semantics for sync`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+      通过。
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批把 Windows wait timeout 的最后一段宿主 classifier 分支收回了 `windows.ffi`，但没有把
+    `PLATFORM_ERR_TIMEOUT` 这样的 public contract 常量硬塞进 ffi owner，边界比“直接在 ffi 里写死 110”
+    干净得多。
+  - 下一步还值得继续看的，是 Windows trylock busy-result、thread wait failure projection，或者
+    POSIX host ffi 内部仍重复的 shared helper 骨架。
 
 ## Session: 2026-05-27 (platform sync POSIX helper ffi ownership)
 

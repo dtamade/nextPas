@@ -59,6 +59,11 @@
 - `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
   `linux/android/darwin/freebsd/unix.ffi` 统一暴露
   `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。
+- Windows condvar timedwait / address-wait 的 timeout classifier 分支也不该继续散落在
+  `platform.sync` consumer；现在 `windows.ffi` 继续拥有
+  `windows_condvar_timedwait_timeout_result` 与
+  `windows_wait_address_i32_timeout_result`，consumer 只传 caller-chosen
+  `PLATFORM_ERR_TIMEOUT` result。
 - 现在新增了 platform-level `test_platform_ffi_owner_boundary`：它会扫描整组
   `nextpas.core.platform*.pas`，固定“非 `*.ffi.pas` 不得声明 `external`、`*.ffi.pas`
   必须继续拥有 `external`、`platform.sync.windows.ffi` 不得回归”这三条 owner boundary。

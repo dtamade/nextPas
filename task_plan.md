@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync POSIX Helper FFI Ownership；并行收口包含
-Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Sync Windows Timeout Result FFI Ownership；并行收口包含
+Platform Sync POSIX Helper FFI Ownership、Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,67 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Windows Timeout Result FFI Ownership
+
+### Goal
+
+继续把 Windows wait timeout 语义从 `platform.sync` consumer 收回 `windows.ffi` owner：
+
+- `platform.sync` 不再自己判断 `windows_error_i32_is_timeout`
+- Windows condvar timedwait / address-wait 的 timeout classifier 分支不再散落在 consumer
+- caller 仍然保留 nextPas public timeout result 常量的最终选择权
+
+### Architecture Decision
+
+- `SleepConditionVariableSRW` / `WaitOnAddress` 的 raw ABI、`GetLastError` 读取与 `ERROR_TIMEOUT`
+  classifier 继续归 `nextpas.core.platform.windows.ffi`。
+- 为了不把 nextPas public error 常量硬编码进 ffi owner，这批采用 caller-supplied timeout result
+  形态：`windows_condvar_timedwait_timeout_result`、
+  `windows_wait_address_i32_timeout_result`。
+- `platform.sync` 继续保留 public contract 与 generic error surface，但不再自己写 Windows timeout
+  classifier 分支。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 拥有 timeout-result helper
+- [x] RED：禁止 `platform.sync` 继续消费 `windows_error_i32_is_timeout` 与 raw timedwait timeout helper
+- [x] 在 `windows.ffi` 实现 timeout-result helper
+- [x] 切换 `platform.sync` Windows condvar/address-wait consumer
+- [x] 同步 design/tracking 文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `make -C core test`
+- [x] 跑 fresh `make -C core examples`
+- [x] 跑 fresh `make -C core benchmarks`
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must expose Windows condvar timedwait helper that maps timeout semantics for sync`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Full:
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+    `corePlatformSyncCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不把 `PLATFORM_ERR_TIMEOUT` 常量硬编码进 `windows.ffi`
+- 这批不改 `platform.sync` public API
+- 这批不处理 Windows trylock busy-result 映射
 
 ## Addendum: 2026-05-27 Platform Sync POSIX Helper FFI Ownership
 
