@@ -23,15 +23,21 @@ const
 
 type
   TPlatformMutex = record
-    FOpaque: array[0..PLATFORM_MUTEX_SIZE - 1] of Byte;
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..PLATFORM_MUTEX_SIZE - 1] of Byte);
   end;
 
   TPlatformRwLock = record
-    FOpaque: array[0..PLATFORM_RWLOCK_SIZE - 1] of Byte;
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..PLATFORM_RWLOCK_SIZE - 1] of Byte);
   end;
 
   TPlatformCondVar = record
-    FOpaque: array[0..PLATFORM_CONDVAR_SIZE - 1] of Byte;
+    case Integer of
+      0: (FAlign: UInt64);
+      1: (FOpaque: array[0..PLATFORM_CONDVAR_SIZE - 1] of Byte);
   end;
 
 const
