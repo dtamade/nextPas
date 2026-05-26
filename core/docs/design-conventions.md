@@ -747,6 +747,23 @@ nextpas.core/
 - 设计上预留全平台（通过 .inc 平台分支和多态）
 - 目标平台：Linux、macOS、Windows（x86_64、aarch64）
 
+### 硬规则：platform 模块不依赖 FPC 单元
+
+**platform 层禁止 uses 任何 FPC RTL 单元**（如 Linux、PThreads、UnixType、BaseUnix、Syscall、Windows 等）。
+
+原因：nextpas.core 是 nextPas 编译器的代码框架，将来 nextPas 编译器不会有 FPC 的 RTL 单元。
+
+所有系统调用通过 FFI 文件自行声明：
+
+```
+src/nextpas.core.platform.posix.ffi.pas   ← POSIX 系统调用（cdecl external 'c'）
+src/nextpas.core.platform.linux.ffi.pas   ← Linux 特有（syscall numbers 等）
+src/nextpas.core.platform.darwin.ffi.pas  ← macOS 特有（mach_* 等）
+src/nextpas.core.platform.win32.ffi.pas   ← Win32 API（stdcall external）
+```
+
+platform 子模块（time、sync、thread 等）只 uses 这些 FFI 文件，不 uses FPC 单元。
+
 ---
 
 ## 19. 许可证
