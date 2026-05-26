@@ -215,19 +215,23 @@ implicit runtime dependency。这一点没有改变。
 
 但当前实现已经补上一个关键约束：
 
-- implicit runtime edge 可以先把 `System` 作为 placeholder 放进 `UnitGraph`
+- implicit runtime edge 会把 `System` 放进 `UnitGraph`，并在 target-installed
+  `System.pas` 存在时携带 source path，供 semantic model 读取 `TObject` 等最低运行时事实
 - 如果后续出现显式 `uses System`，resolver 仍然必须继续查找真实 `System.pas`
-- `TUnitGraph.AddResolvedUnit(...)` 会在 placeholder 只有空 `SourcePath` 时，用真实 source
-  升级这个节点
+- `TUnitGraph.AddResolvedUnit(...)` 会在 placeholder 只有空 `SourcePath`，或 existing 节点仍是
+  `implicit-runtime` provenance 时，用显式 source provenance 升级这个节点
 
 这条规则确保：
 
 - graph 始终有显式的 runtime edge
+- semantic model 可以消费 nextPas-owned `System.TObject` truth
 - 显式 `uses System` 不会再被 placeholder 静默短路
 - 真实 `System` 的 provenance、依赖和错误都能继续被看见
 
-所以显式 `uses System` 现在能够暴露真实 `System.pas` 的依赖问题，而不是直接命中一个
-无来源的 synthetic 节点就结束。
+所以 implicit runtime 可以提供最低语义事实，但显式 `uses System` 仍能暴露真实
+`System.pas` 的依赖问题，而不是直接命中一个 synthetic 节点就结束。backend 侧仍按
+`OriginClass=implicit-runtime` 跳过自动 extra assemble/link；source-backed semantic truth 不等于
+runtime/link 已完整接管。
 
 ## search path 现在是显式集合，而且已经有真实 precedence
 

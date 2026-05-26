@@ -302,12 +302,22 @@ begin
 end;
 
 function TUnitResolver.EnsureRuntimeUnit: TResolvedUnit;
+var
+  RuntimeSystemPath: string;
 begin
   if not FUnitGraph.FindUnit('system', Result) then
   begin
+    RuntimeSystemPath := '';
+    if FTargetFacts.UnitsDir <> '' then
+    begin
+      RuntimeSystemPath := IncludeTrailingPathDelimiter(FTargetFacts.UnitsDir) +
+        'System.pas';
+      if not FileExists(RuntimeSystemPath) then
+        RuntimeSystemPath := '';
+    end;
     Result := BuildResolvedUnit(
       'System',
-      '',
+      RuntimeSystemPath,
       ruoImplicitRuntime,
       FTargetFacts.TargetId,
       'unit',
@@ -479,7 +489,9 @@ begin
 
   HasExistingUnit := FUnitGraph.FindUnit(RequestedUnitId, ResolvedUnit);
   if HasExistingUnit and
-    ((ResolvedUnit.SourcePath <> '') or (RequestedUnitId <> 'system')) then
+    ((ResolvedUnit.SourcePath <> '') or (RequestedUnitId <> 'system')) and
+    (not ((RequestedUnitId = 'system') and
+      SameText(ResolvedUnit.OriginClass, 'implicit-runtime'))) then
   begin
     FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, ResolvedUnit.UnitId);
     Exit(True);

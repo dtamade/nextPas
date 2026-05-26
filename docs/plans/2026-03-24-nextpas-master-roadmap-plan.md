@@ -492,7 +492,7 @@ diagnostics 和生命周期归属不再漂浮在未来实现里。
 
 - semantic truth 进入 `CompilationSession`，不再停留在 driver 级临时状态
 - `stage0 build` 成功路径显式投影 `semantic-status=ready`
-- `examples/smoke/hello_with_units.pas` 显式投影 `symbol-count=6`、`type-count=20`、
+- `examples/smoke/hello_with_units.pas` 显式投影 `symbol-count=10`、`type-count=21`、
   `typed-hir-node-count=8` 与 `runtime-contract-count=2`
 - `tests/compiler/fail/duplicate_unit_import_fail.pas` 以
   `semantic-analysis-failed` + `sema.duplicate-declaration` 失败

@@ -304,6 +304,10 @@ begin
   if ExistingIndex >= 0 then
   begin
     if (FResolvedUnits[ExistingIndex].SourcePath = '') and (AUnit.SourcePath <> '') then
+      FResolvedUnits[ExistingIndex] := AUnit
+    else if SameText(FResolvedUnits[ExistingIndex].OriginClass, 'implicit-runtime') and
+      (AUnit.SourcePath <> '') and
+      (not SameText(AUnit.OriginClass, 'implicit-runtime')) then
       FResolvedUnits[ExistingIndex] := AUnit;
     Exit;
   end;

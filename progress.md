@@ -3,6 +3,41 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 88 implicit runtime source-backed System semantics)
+
+- **Status:** completed
+- Objective:
+  - 把 implicit runtime `System` 从无来源 placeholder 推进到 semantic model 可读取
+    target-installed `System.pas`，但不扩大 backend extra assemble/link 边界。
+- Baseline:
+  - Batch 87 已让显式 `uses System` 消费 source-backed `TObject` truth。
+  - 没有显式 `uses System` 的 program 仍只得到 synthetic `System` unit，`Worker.Free`
+    不会绑定到真实 `TObject.Free`。
+- Actions taken:
+  - 新增 `tests/fixtures/system_object_free/system_object_free_implicit_binding.pas` 与
+    `stage0-query-system-object-free-implicit-check`。
+  - RED 已确认旧实现只输出 synthetic `System` unit，`query-bindings=[]`、
+    `query-definitions=[]`。
+  - `EnsureRuntimeUnit` 现在给 implicit runtime `System` 填入
+    `units/linux-x86_64/System.pas` source path，但保留 `OriginClass=implicit-runtime`。
+  - `ResolveDependency(...)` 不再让 source-backed implicit runtime `System` 短路显式
+    `uses System`；`TUnitGraph.AddResolvedUnit(...)` 允许显式 source provenance 覆盖
+    implicit runtime provenance。
+- Verification:
+  - Focused GREEN: rebuilt stage0 query 已显示 implicit fixture 的 `TWorker.typeParentId`
+    指向 `TObject`，`Worker.Free` 绑定到 `TObject.Free`，definition source path 回指
+    `units/linux-x86_64/System.pas`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `stage0-query-system-object-free-implicit-check=pass`、
+    `stage0QuerySystemObjectFreeImplicitCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批是 semantic truth upgrade，不是 runtime/link upgrade；
+    `CollectAdditionalAssemblyBaseNames()` 仍跳过 `implicit-runtime`，防止所有 program 自动
+    assemble/link `System.pas`。
+  - 显式 `uses System` 仍走 normal search 并可升级 provenance，避免 implicit runtime
+    source path 遮蔽真实 `System.pas`。
+
 ## Session: 2026-05-26 (Batch 87 source-backed System/TObject truth)
 
 - **Status:** completed

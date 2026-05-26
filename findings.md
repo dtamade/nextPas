@@ -10,6 +10,18 @@
 
 ## Research Findings
 
+- Batch 88 把 implicit runtime `System` 从无来源 placeholder 推进到 source-backed semantic truth：
+  program 即使没有显式 `uses System`，semantic analyzer 也能从
+  `units/linux-x86_64/System.pas` 读取 `TObject` / `TObject.Free`。
+- 这次升级只发生在 semantic model：implicit runtime unit 的 `OriginClass` 仍是
+  `implicit-runtime`，所以 backend extra assemble 继续跳过它，不会让所有 program 自动编译/链接
+  nextPas 自定义 `System.pas`。
+- 显式 `uses System` 仍不会被 implicit runtime source path 短路；resolver 会继续 normal search，
+  并允许 `TUnitGraph.AddResolvedUnit(...)` 把 source-backed implicit runtime 节点升级成显式
+  `installed-source` provenance。
+- 新增 `tests/fixtures/system_object_free/system_object_free_implicit_binding.pas` 与
+  `stage0-query-system-object-free-implicit-check`，固定无显式 uses 下 `Worker.Free` 到
+  `TObject.Free` 的 binding 和 definition source path。
 - Batch 87 落地第一条 nextPas-owned source-backed `System` truth：`rtl/core/system/System.pas`
   与 `units/linux-x86_64/System.pas` 现在先提供 `TObject.Create`、`TObject.Destroy` 和
   `TObject.Free`。

@@ -301,9 +301,10 @@ candidate collection
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
 - `sema.unknown-member`
   - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
-  - 当 source-backed nextPas `System` / `TObject` truth 已解析时，普通 `class` 会隐式继承
-    `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入 `member-call`
-    binding；没有 source-backed System truth 的路径仍保持 deferred，避免把 System 基线缺口误报成普通 unknown member
+  - implicit runtime 已能读取 source-backed nextPas `System` / `TObject` truth；普通 `class`
+    会隐式继承 `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入
+    `member-call` binding；缺少 source-backed System truth 的路径仍保持 deferred，避免把 System
+    基线缺口误报成普通 unknown member
   - 没有 class layout truth 的 alias / generic specialization / record-like receiver 继续 deferred，直到
     generic instantiation、record methods 和完整 member resolver 进入 semantic model
 
