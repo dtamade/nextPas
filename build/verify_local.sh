@@ -231,6 +231,14 @@ CORE_TEXT_SMOKE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_text_smoke"
 CORE_TEXT_SMOKE_BINARY="$CORE_TEXT_SMOKE_BUILD_DIR/core_text_smoke"
 CORE_TIME_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_time_test"
 CORE_TIME_TEST_BINARY="$CORE_TIME_TEST_BUILD_DIR/test_time"
+CORE_PLATFORM_SYNC_TEST_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_test"
+CORE_PLATFORM_SYNC_TEST_BINARY="$CORE_PLATFORM_SYNC_TEST_BUILD_DIR/test_platform_sync"
+CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
+CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
+CORE_PLATFORM_SYNC_WIN64_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_win64"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -478,6 +486,12 @@ cleanup() {
   rm -rf "$STAGE0_PKG_PLAN_MISSING_WORKSPACE"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -rf "$CORE_TEXT_SMOKE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
   rm -rf "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
@@ -696,10 +710,16 @@ require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
+require_path core/src/nextpas.core.platform.linux.ffi.pas
+require_path core/src/nextpas.core.platform.posix.ffi.pas
+require_path core/src/nextpas.core.platform.sync.pas
+require_path core/src/nextpas.core.platform.sync.windows.ffi.pas
 require_path core/src/nextpas.core.platform.time.pas
 require_path core/src/nextpas.core.time.base.pas
 require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
 require_path core/tests/nextpas.core.time/test_time/test_time.lpr
 require_path examples/smoke/hello_with_units.pas
 require_path examples/smoke/external_cdecl_smoke.pas
@@ -3868,6 +3888,70 @@ fi
 cat "$CORE_TIME_TEST_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.time: 13 total, 13 passed, 0 failed ---$' "$CORE_TIME_TEST_OUTPUT" 'missing-core-time-pass-summary'
 printf 'core-time-check=pass\n'
+
+printf 'core-platform-sync-check=running\n'
+printf 'core-platform-sync-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_TEST_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  fail 'core-platform-sync-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_TEST_BINARY" >>"$CORE_PLATFORM_SYNC_TEST_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  fail 'core-platform-sync-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync: 7 total, 7 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_TEST_OUTPUT" 'missing-core-platform-sync-pass-summary'
+printf 'core-platform-sync-check=pass\n'
+
+printf 'core-platform-sync-size-check=running\n'
+printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr" \
+  >"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  fail 'core-platform-sync-size-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_SIZE_BINARY" >>"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  fail 'core-platform-sync-size-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
+printf 'core-platform-sync-size-check=pass\n'
+
+printf 'core-platform-sync-win64-check=running\n'
+if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
+  printf 'core-platform-sync-win64-command=fpc -Twin64 -Cn -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$REPO_ROOT"
+  mkdir -p "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
+  if ! fpc \
+    -Twin64 \
+    -Cn \
+    -Fi"$REPO_ROOT/core/src" \
+    -Fu"$REPO_ROOT/core/src" \
+    -FE"$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" \
+    -FU"$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" \
+    "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+    >"$CORE_PLATFORM_SYNC_WIN64_OUTPUT" 2>&1; then
+    cat "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+    fail 'core-platform-sync-win64-build-failed'
+  fi
+  cat "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+  printf 'core-platform-sync-win64-check=pass\n'
+else
+  printf 'core-platform-sync-win64-check=skip\n'
+fi
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)
