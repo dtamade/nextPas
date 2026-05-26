@@ -4,7 +4,18 @@ unit nextpas.core.mem.pool;
 
 interface
 
+uses
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.pool.base,
+  nextpas.core.mem.pool.memory_pool,
+  nextpas.core.mem.pool.fixed_slab;
+
 type
+  IPool = nextpas.core.mem.pool.base.IPool;
+  IMemoryPool = nextpas.core.mem.pool.memory_pool.IMemoryPool;
+  IFixedSlabPool = nextpas.core.mem.pool.fixed_slab.IFixedSlabPool;
+  TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
+
   {**
    * @desc 固定大小块池，O(1) 分配/释放
    * @note 非线程安全。适用于频繁创建/销毁相同大小对象的场景
@@ -33,6 +44,10 @@ type
     function Owns(const APtr: Pointer): Boolean;
   end;
 
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool; overload;
+function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
+
 implementation
 
 type
@@ -40,6 +55,21 @@ type
   TFreeNode = record
     Next: PFreeNode;
   end;
+
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt): IFixedSlabPool;
+begin
+  Result := TFixedSlabPool.Create(ACapacity, AAllocator, AMinShift);
+end;
+
+function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool;
+begin
+  Result := TFixedSlabPool.Create(ACapacity, AAllocator);
+end;
+
+function MakeFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
+begin
+  Result := TFixedSlabPool.Create(ACapacity);
+end;
 
 { TPool }
 

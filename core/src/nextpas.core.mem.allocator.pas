@@ -37,7 +37,7 @@ type
   IAllocator = nextpas.core.mem.allocator.base.IAllocator;
   TAllocator = nextpas.core.mem.allocator.base.TAllocator;
 
-  // 回调类型重导出（从 callbackAllocator 单元）
+  // 回调类型重导出（从 callback_allocator 单元）
   TGetMemCallback     = nextpas.core.mem.allocator.callback_allocator.TGetMemCallback;
   TAllocMemCallback   = nextpas.core.mem.allocator.callback_allocator.TAllocMemCallback;
   TReallocMemCallback = nextpas.core.mem.allocator.callback_allocator.TReallocMemCallback;

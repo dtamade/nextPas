@@ -28,12 +28,10 @@ function TryGetCrtAllocator(out A: IAllocator): Boolean;
 
 implementation
 
-{$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
 function  crt_malloc(aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'malloc';
 function  crt_calloc(aNum, aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'calloc';
 function  crt_realloc(aPtr: Pointer; aSize: SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'realloc';
 procedure crt_free(aPtr: Pointer); cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'c'{$ENDIF} name 'free';
-{$ENDIF}
 
 var
   _CrtAllocatorObj: TAllocator = nil;

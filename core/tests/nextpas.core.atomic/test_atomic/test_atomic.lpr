@@ -164,6 +164,72 @@ begin
   CheckEqual(Int64(40000), Int64(LCounter), '4 threads x 10000 increments');
 end;
 
+procedure TestFafafaStyleAtomicApi;
+var
+  LVal: Int32;
+  LExpected: Int32;
+  LOld: Int32;
+  LVal64: Int64;
+begin
+  LVal := 0;
+  atomic_store(LVal, 11, mo_relaxed);
+  CheckEqual(Int64(11), Int64(atomic_load(LVal, mo_acquire)));
+
+  LOld := atomic_fetch_add(LVal, 2, mo_acq_rel);
+  CheckEqual(Int64(11), Int64(LOld));
+  CheckEqual(Int64(13), Int64(LVal));
+
+  LExpected := 20;
+  Check(not atomic_compare_exchange_strong(LVal, LExpected, 30, mo_release, mo_relaxed),
+    'CAS failure returns False');
+  CheckEqual(Int64(13), Int64(LExpected), 'CAS failure writes observed value');
+
+  LExpected := 13;
+  Check(atomic_compare_exchange_weak(LVal, LExpected, 30, mo_seq_cst, mo_seq_cst),
+    'weak CAS succeeds when expected matches');
+  CheckEqual(Int64(30), Int64(LVal));
+
+  LVal64 := 5;
+  CheckEqual(Int64(5), atomic_fetch_add_64(LVal64, 10));
+  CheckEqual(Int64(15), LVal64);
+end;
+
+procedure TestAtomicRecordTypes;
+var
+  LAtomic: TAtomicUInt32;
+  LExpected: UInt32;
+begin
+  LAtomic := TAtomicUInt32.Create(7);
+  CheckEqual(Int64(7), Int64(LAtomic.Load(mo_relaxed)));
+
+  CheckEqual(Int64(7), Int64(LAtomic.FetchAdd(5, mo_acq_rel)));
+  CheckEqual(Int64(12), Int64(LAtomic.Load(mo_acquire)));
+
+  LExpected := 12;
+  Check(LAtomic.CompareExchangeStrong(LExpected, 18, mo_seq_cst),
+    'record strong CAS succeeds');
+  CheckEqual(Int64(18), Int64(LAtomic.IntoInner));
+end;
+
+procedure TestAtomicTaggedPointer;
+var
+  LValue: Int32;
+  LTagged: atomic_tagged_ptr_t;
+  LExpected: atomic_tagged_ptr_t;
+  LNext: atomic_tagged_ptr_t;
+begin
+  LValue := 42;
+  LTagged := atomic_tagged_ptr(@LValue, 1);
+  Check(atomic_tagged_ptr_get_ptr(LTagged) = @LValue, 'tagged pointer preserves pointer');
+  CheckEqual(Int64(1), Int64(atomic_tagged_ptr_get_tag(LTagged)));
+
+  LExpected := LTagged;
+  LNext := atomic_tagged_ptr(@LValue, 2);
+  Check(atomic_tagged_ptr_compare_exchange_strong(LTagged, LExpected, LNext),
+    'tagged pointer CAS succeeds');
+  CheckEqual(Int64(2), Int64(atomic_tagged_ptr_get_tag(LTagged)));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.atomic');
   T.Run('Load32/Store32 all orders', @TestLoad32Store32);
@@ -176,5 +242,8 @@ begin
   T.Run('Pointer atomics', @TestPointerAtomics);
   T.Run('Fences (no crash)', @TestFence);
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
+  T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
+  T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Summary;
 end.
