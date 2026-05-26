@@ -194,11 +194,12 @@ path/byte offset。这为后续 references / hover / go-to-definition 提供 com
 overlay 或 incremental invalidation。`Holder.Help();` 这类 qualified selector/member call
 会被当前 name-only binding pass 显式排除；当前正向 selector/member truth 覆盖 direct
 class variable receiver 的 method statement call、表达式参数里的 direct member function call，
-以及已声明 class type-name receiver 的 constructor-like member call，并以 `member-call`
-指向 `TClass.Method` method symbol。带参数 call 只用同名 method body declaration 的
-argument count 做唯一匹配。property accessor、record method、array/deref receiver、
-runtime constructor allocation/lowering、virtual/override dispatch 与 type-based overload
-resolution 仍然 deferred。
+class method body 内的 `Self` receiver、已声明 class type-name receiver 的 constructor-like
+member call，以及 imported unit 中声明的 class type 作为 root variable type 时的 direct member
+call，并以 `member-call` 指向 `TClass.Method` method symbol。带参数 call 只用同名 method
+body declaration 的 argument count 做唯一匹配。inherited lookup、visibility checking、
+property accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
+virtual/override dispatch 与 type-based overload resolution 仍然 deferred。
 
 ## diagnostics streaming 必须复用结构化 diagnostics，而不是解析 stderr
 

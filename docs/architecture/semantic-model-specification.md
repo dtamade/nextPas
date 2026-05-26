@@ -85,12 +85,16 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
   `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`）、表达式参数里的 direct
-  member function call（例如 `Halt(Worker.Add(1, 2));`），以及已声明 class type-name
-  receiver 的 constructor-like member call（例如 `TWorker.Create(42)`），以 `member-call`
-  binding 指向已声明的 `TClass.Method` method symbol。带参数 method call 只使用同名
-  `TClass.Method` body declaration 的 argument count 做唯一匹配；完整 member lookup、
-  property accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
-  virtual/override dispatch 与 type-based overload resolution 仍未完成
+  member function call（例如 `Halt(Worker.Add(1, 2));`）、class method body 内的
+  `Self.SetValue(9)`，以及已声明 class type-name receiver 的 constructor-like member call
+  （例如 `TWorker.Create(42)`），以 `member-call` binding 指向已声明的 `TClass.Method`
+  method symbol。root source 变量的 type id 也可以来自 imported project/source unit 中已 seed
+  的 class type，因此 `uses Worker; var Worker: TWorker;` 后的 direct member call 可绑定到
+  imported `TWorker.Add` method symbol。带参数 method call 只使用同名 `TClass.Method`
+  body declaration 的 argument count 做唯一匹配；完整 member lookup、inherited lookup、
+  visibility checking、property accessor、record method、array/deref receiver、runtime
+  constructor allocation/lowering、virtual/override dispatch 与 type-based overload resolution
+  仍未完成
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

@@ -109,13 +109,19 @@ type
       out AArgCount: LongInt
     ): Boolean;
     function TypeNameForVariable(const AName: string): string;
-    function TypeNameForMemberReceiver(const AName: string): string;
+    function TypeNameForMemberReceiver(
+      const AName: string;
+      const ACurrentMethodClass: string
+    ): string;
     function MethodSymbolIdForClassMember(
       const AClassName: string;
       const AMemberName: string;
       const AArgCount: LongInt
     ): LongInt;
-    function TryRegisterMemberCallBinding(const ACallNode: TGreenNode): Boolean;
+    function TryRegisterMemberCallBinding(
+      const ACallNode: TGreenNode;
+      const ACurrentMethodClass: string
+    ): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
@@ -126,7 +132,10 @@ type
     procedure RegisterCallBinding(const ACallNode: TGreenNode;
       const ADecl: TGreenNode; const AOwnerUnitId: string);
     procedure SeedCallBindings;
-    procedure SeedCallBindingsInNode(const ANode: TGreenNode);
+    procedure SeedCallBindingsInNode(
+      const ANode: TGreenNode;
+      const ACurrentMethodClass: string
+    );
     function DuplicateImportName: string;
     procedure EmitSemaError(
       const ACode: string;
@@ -1012,13 +1021,18 @@ begin
 end;
 
 function TSemanticAnalyzer.TypeNameForMemberReceiver(
-  const AName: string
+  const AName: string;
+  const ACurrentMethodClass: string
 ): string;
 var
   Index: LongInt;
   Symbol: TSemanticSymbol;
   TypeId: LongInt;
 begin
+  Result := '';
+  if SameText(AName, 'Self') and (ACurrentMethodClass <> '') then
+    Exit(ACurrentMethodClass);
+
   Result := TypeNameForVariable(AName);
   if Result <> '' then
     Exit;
@@ -1093,7 +1107,8 @@ begin
 end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(
-  const ACallNode: TGreenNode
+  const ACallNode: TGreenNode;
+  const ACurrentMethodClass: string
 ): Boolean;
 var
   ArgCount: LongInt;
@@ -1112,7 +1127,10 @@ begin
     ArgCount
   ) then
     Exit;
-  ReceiverTypeName := TypeNameForMemberReceiver(ReceiverName);
+  ReceiverTypeName := TypeNameForMemberReceiver(
+    ReceiverName,
+    ACurrentMethodClass
+  );
   if ReceiverTypeName = '' then
     Exit;
 
@@ -1315,22 +1333,35 @@ begin
   );
 end;
 
-procedure TSemanticAnalyzer.SeedCallBindingsInNode(const ANode: TGreenNode);
+procedure TSemanticAnalyzer.SeedCallBindingsInNode(
+  const ANode: TGreenNode;
+  const ACurrentMethodClass: string
+);
 var
   ArgIndex: LongInt;
   BodyNode: TGreenNode;
   Child: TGreenNode;
   DeclNode: TGreenNode;
   Index: LongInt;
+  MethodClass: string;
   OwnerUnitId: string;
+  QualifiedPos: LongInt;
 begin
   if ANode = nil then
     Exit;
 
+  MethodClass := ACurrentMethodClass;
+  if ANode.NodeKind in [gnkProcedureDecl, gnkFunctionDecl] then
+  begin
+    QualifiedPos := Pos('.', ANode.Text);
+    if QualifiedPos > 1 then
+      MethodClass := Copy(ANode.Text, 1, QualifiedPos - 1);
+  end;
+
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
     if IsQualifiedCallNode(ANode) then
-      TryRegisterMemberCallBinding(ANode)
+      TryRegisterMemberCallBinding(ANode, MethodClass)
     else if Pos('.', ANode.Text) = 0 then
       if LookupCallBindingDeclaration(
         ANode.Text,
@@ -1350,11 +1381,11 @@ begin
     if IsWrappedCallChild(ANode, Child) then
     begin
       for ArgIndex := 1 to Child.ChildCount - 1 do
-        SeedCallBindingsInNode(Child.ChildAt(ArgIndex));
+        SeedCallBindingsInNode(Child.ChildAt(ArgIndex), MethodClass);
       Continue;
     end;
     if Child <> nil then
-      SeedCallBindingsInNode(Child);
+      SeedCallBindingsInNode(Child, MethodClass);
   end;
 end;
 
@@ -1363,7 +1394,7 @@ begin
   if (FRootAst = nil) or (FRootAst.RootNode = nil) then
     Exit;
 
-  SeedCallBindingsInNode(FRootAst.RootNode);
+  SeedCallBindingsInNode(FRootAst.RootNode, '');
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
@@ -2374,8 +2405,8 @@ begin
   SeedBuiltinTypes;
   FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
-  SeedDeclarations;
   SeedImportedUnitBodies;
+  SeedDeclarations;
   AssignScopesToSymbols;
   SeedCallBindings;
   CheckDuplicateDeclarations;
@@ -2689,6 +2720,7 @@ var
   ClsName, ParentName, ConstName, FieldName: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
+  SymbolId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -2824,9 +2856,10 @@ begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
         begin
-          FModel.AddSymbol(
+          SymbolId := FModel.AddSymbol(
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+          FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin
             if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
@@ -2890,6 +2923,7 @@ procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
 var
   I, J: LongInt;
   Child, TypeChild: TGreenNode;
+  SymbolId: LongInt;
   TypeId: LongInt;
 begin
   if ANode = nil then
@@ -2902,8 +2936,10 @@ begin
     if Child.Text = '' then
       Continue;
     TypeId := FModel.AddType(Child.Text, 'declared');
-    FModel.AddSymbol(Child.Text, 'type', AOwnerUnitId, TypeId,
+    SymbolId := FModel.AddSymbol(Child.Text, 'type', AOwnerUnitId, TypeId,
       Child.ByteOffset);
+    if FCurrentScopeId > 0 then
+      FModel.SetSymbolScope(SymbolId, FCurrentScopeId);
     for J := 0 to Child.ChildCount - 1 do
     begin
       TypeChild := Child.ChildAt(J);
@@ -5990,6 +6026,8 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
   var
     ChildIdx, BodyIdx: LongInt;
     Child, BodyChild: TGreenNode;
+    SavedScopeId: LongInt;
+    UnitScopeId: LongInt;
   begin
     if ANode = nil then
       Exit;
@@ -5998,7 +6036,19 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       Child := ANode.ChildAt(ChildIdx);
       if Child = nil then
         Continue;
-      if (Child.NodeKind = gnkProcedureDecl) or
+      if Child.NodeKind = gnkTypeSection then
+      begin
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          ProcessTypeSection(Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
+      else if (Child.NodeKind = gnkProcedureDecl) or
         (Child.NodeKind = gnkFunctionDecl) then
       begin
         SeedImportedCallableSymbol(Child, AOwnerUnitId, 0);

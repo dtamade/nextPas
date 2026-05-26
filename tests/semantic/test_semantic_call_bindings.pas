@@ -187,6 +187,120 @@ begin
   end;
 end;
 
+procedure CheckImportedClassMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingCount: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  MethodSymbolId: LongInt;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  TypeSymbolId: LongInt;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-member-call-' + IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program ImportedMemberCalls;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Halt(Worker.Add(1, 2));' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'function TWorker.Add(A, B: Integer): Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  Add := A + B;' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('ImportedMemberCalls', '', ruoRootSource, '', 'program', 1)
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-imported-member-call-diagnostics');
+    if Model = nil then
+      Fail('missing-imported-member-call-semantic-model');
+
+    TypeSymbolId := SymbolIdByNameAndKind(Model, 'TWorker', 'type');
+    if TypeSymbolId <= 0 then
+      Fail('missing-imported-member-call-type-symbol');
+    if not SameText(SymbolOwnerUnitById(Model, TypeSymbolId), 'worker') then
+      Fail('imported-member-call-type-owner-mismatch');
+
+    MethodSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Add', 'method');
+    if MethodSymbolId <= 0 then
+      Fail('missing-imported-member-call-method-symbol');
+    if not SameText(SymbolOwnerUnitById(Model, MethodSymbolId), 'worker') then
+      Fail('imported-member-call-method-owner-mismatch');
+
+    BindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Add') then
+      begin
+        Inc(BindingCount);
+        if Binding.TargetSymbolId <> MethodSymbolId then
+          Fail('imported-member-call-target-mismatch');
+        if Binding.ByteOffset <> Pos('Add(1, 2)', RootSourceText) - 1 then
+          Fail('imported-member-call-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if BindingCount = 0 then
+      Fail('missing-imported-member-call-binding');
+    if BindingCount <> 1 then
+      Fail('unexpected-imported-member-call-binding-count:' +
+        IntToStr(BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -301,6 +415,8 @@ var
   CreateSymbolId: LongInt;
   SetValueBindingCount: LongInt;
   SetValueOffset: LongInt;
+  SelfSetValueBindingCount: LongInt;
+  SelfSetValueOffset: LongInt;
   SetValueSymbolId: LongInt;
   SourceText: string;
   Tree: TGreenTree;
@@ -320,6 +436,7 @@ begin
     'end;' + LineEnding +
     'procedure TWorker.Run;' + LineEnding +
     'begin' + LineEnding +
+    '  Self.SetValue(9);' + LineEnding +
     'end;' + LineEnding +
     'procedure TWorker.SetValue(Value: Integer);' + LineEnding +
     'begin' + LineEnding +
@@ -380,6 +497,8 @@ begin
     CreateOffset := Pos('Create(42)', SourceText) - 1;
     SetValueBindingCount := 0;
     SetValueOffset := Pos('SetValue(7)', SourceText) - 1;
+    SelfSetValueBindingCount := 0;
+    SelfSetValueOffset := Pos('SetValue(9)', SourceText) - 1;
     for Index := 0 to Model.BindingCount - 1 do
     begin
       Binding := Model.BindingAt(Index);
@@ -396,7 +515,9 @@ begin
         Inc(SetValueBindingCount);
         if Binding.TargetSymbolId <> SetValueSymbolId then
           Fail('member-call-argument-binding-target-mismatch');
-        if Binding.ByteOffset <> SetValueOffset then
+        if Binding.ByteOffset = SelfSetValueOffset then
+          Inc(SelfSetValueBindingCount)
+        else if Binding.ByteOffset <> SetValueOffset then
           Fail('member-call-argument-binding-offset-mismatch:' +
             IntToStr(Binding.ByteOffset));
       end
@@ -428,9 +549,11 @@ begin
         IntToStr(MemberBindingCount));
     if SetValueBindingCount = 0 then
       Fail('missing-member-call-argument-binding');
-    if SetValueBindingCount <> 1 then
+    if SetValueBindingCount <> 2 then
       Fail('unexpected-member-call-argument-binding-count:' +
         IntToStr(SetValueBindingCount));
+    if SelfSetValueBindingCount <> 1 then
+      Fail('missing-self-member-call-binding');
     if AddBindingCount = 0 then
       Fail('missing-member-function-expression-binding');
     if AddBindingCount <> 1 then
@@ -511,8 +634,9 @@ begin
     if BindingTargetForName(Model, 'Add') <> FunctionSymbolId then
       Fail('function-call-binding-target-mismatch');
 
-    CheckOverloadBindings;
     CheckImportedUnitCallBinding;
+    CheckImportedClassMemberCallBinding;
+    CheckOverloadBindings;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');

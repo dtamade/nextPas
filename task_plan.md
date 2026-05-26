@@ -15,6 +15,80 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 69 Self / Imported Member Receiver Binding
+
+### Goal
+
+把 Batch 68 的 class type-name receiver 继续推进到两个高价值但仍然保守的 member-call
+边界：
+
+- class method body 内的 `Self.SetValue(9)` 应解析到当前 method context 的 class type，并注册
+  `member-call`，target 指向 `TWorker.SetValue` method symbol。
+- root source 中变量类型来自 imported unit 时，例如 `uses Worker; var Worker: TWorker;` 后的
+  `Worker.Add(1, 2)`，也应能通过 imported unit 中 seed 出来的 `TWorker` type / `TWorker.Add`
+  method symbol 完成同一份 binding truth。
+
+本批次新增并冻结：
+
+- `SeedCallBindingsInNode(...)` 携带当前 qualified method declaration 的 class context，让
+  `Self` 不靠文本猜测，而是只在 class method body 语境下解析。
+- imported project/source unit 的 type section 与 class method symbols 在 root declarations 之前进入
+  `TSemanticModel`，让 root variable type resolution 能消费 imported class types。
+- `query symbols` 的 member-call gate 增加 `Self.SetValue(9)` 的 `queryBindings` /
+  `queryDefinitions` mirror，证明 stage0 query surface 能消费这条 source occurrence truth。
+- focused semantic regression 覆盖 imported class variable receiver，证明 imported class type/method
+  symbols 与 root source binding table 之间不需要 CLI 重扫源码或独立 lookup。
+
+### Architecture Decision
+
+这仍是 `TSemanticAnalyzer` binding seeding 的渐进增强，而不是完整 Pascal member resolver：
+
+- `Self` 只在当前 walker 已进入 `TClass.Method` / `TClass.Function` declaration body 后可解析，
+  没有 method context 时仍不特殊处理。
+- imported type/method symbols 继续归入各自 owner unit scope；root source 只通过同一份
+  `TSemanticModel` 的 type id / method symbol id 消费它们。
+- member target 仍复用 `TClass.Method` symbol 与 body declaration argument count 的唯一匹配规则。
+- 本批不实现继承链 lookup、visibility rules、virtual dispatch、record/property/array/deref receiver、
+  runtime constructor lowering、完整 overload/type dispatch 或 LSP incremental overlay。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED/GREEN：扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入
+      `Self.SetValue(9)` 并要求 `SetValue` binding count 从 1 变为 2
+- [x] 在 `TSemanticAnalyzer` 中传递 current method class context，并让 `Self` receiver 消费它
+- [x] 为 imported unit class receiver 增加 focused semantic regression
+- [x] 在 `SeedImportedUnitBodies` 中 seed imported type sections / class methods，并确保 root
+      declarations 可解析 imported class type id
+- [x] 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+      `stage0-query-member-call-bindings-check`，固定 `Self.SetValue(9)` 的 query binding /
+      definition projection
+- [x] 同步 semantic model / language service / developer tooling / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 曾失败在 `semantic-call-bindings-failure=unexpected-member-call-argument-binding-count:1`
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`
+- focused query probe: `query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas`
+  已输出 `Self.SetValue(9)` 的 `member-call` / `queryDefinitions`，target 为 `TWorker.SetValue`
+  的 `method` symbol
+- Fresh full verification: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `stage0-query-member-call-bindings-check=pass`、`verify-local=pass`
+
+### Non-goals
+
+- 不实现完整 member lookup / inherited member lookup / visibility checking
+- 不实现 runtime constructor allocation / lowering / initialization semantics
+- 不实现完整 overload/type dispatch 或 virtual/override dispatch
+- 不实现 record method、property accessor、array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 68 Constructor Class Receiver Binding
 
 ### Goal

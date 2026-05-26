@@ -246,9 +246,11 @@ symbol id/name/kind/owner unit/source path/offset。当前 name-only binding pas
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
-direct member function call，还覆盖 `TWorker.Create(42)` 这类已声明 class type-name receiver
-的 constructor-like member call。完整 member lookup、runtime constructor lowering、virtual
-dispatch 与 type-based overload resolution 仍属于后续 language-service / semantic model 工作。
+direct member function call、class method body 内的 `Self.SetValue(9)`，还覆盖
+`TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
+root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
+完整 inherited/member lookup、visibility checking、runtime constructor lowering、virtual dispatch
+与 type-based overload resolution 仍属于后续 language-service / semantic model 工作。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。

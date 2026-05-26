@@ -10,6 +10,23 @@
 
 ## Research Findings
 
+- Batch 69 继续把 `member-call` 正向边界推进到 class method body 内的 `Self` receiver：
+  `Self.SetValue(9)` 现在会把 `SetValue` 注册为 `member-call`，并指向当前 method context
+  提供的 `TWorker.SetValue` method symbol。
+- `Self` receiver 的类型不从 source text 猜测：`SeedCallBindingsInNode(...)` 只在进入
+  qualified method declaration（例如 `TWorker.Run`）后携带当前 class context，
+  `TypeNameForMemberReceiver(...)` 才会把 `Self` 解析成该 class。
+- Batch 69 也补上 imported class variable receiver 的 focused semantic 边界：
+  root source 中 `uses Worker; var Worker: TWorker;` 后的 `Worker.Add(1, 2)` 可以绑定到
+  imported unit `Worker` 的 `TWorker.Add` method symbol。
+- 这个 imported 边界要求 imported type section / class method symbols 先进入
+  `TSemanticModel`，再处理 root declarations；否则 root variable 的 `TWorker` type id 会是 0，
+  后续 receiver type lookup 仍无法进入 `TClass.Method` matching。
+- `stage0-query-member-call-bindings-check` 现在还固定 `Self.SetValue(9)` 的
+  `queryBindings` / `queryDefinitions` truth，并继续确认 query surface 保持
+  MIR/backend/toolchain deferred。
+- Batch 69 仍不声明完整 inherited member lookup、visibility checking、runtime constructor
+  lowering、record/property/array/deref receiver、virtual dispatch 或 type-based overload。
 - Batch 68 关闭 constructor / class type-name receiver 的第一条正向边界：
   `TWorker.Create(42)` 现在会把 `Create` 注册为 `member-call`，并指向 `TWorker.Create`
   method symbol。

@@ -271,10 +271,11 @@ valid lockfile 与 manifest package name/version 不一致时会停在 `package-
 - `queryDefinitions` 必须由同一份 `TCompilationSession` 将 binding target id join 回
   `TSemanticModel` / `TUnitGraph`，当前条目至少包含 binding id/kind/name/offset 与 target
   symbol id/name/kind/owner unit/source path/offset
-- verify gate 还必须固定 direct class variable receiver 的 `member-call` query truth：
-  `Worker.Run;` / `Worker.SetValue(7);` / `Halt(Worker.Add(1, 2));` / `TWorker.Create(42)`
-  会出现在 `queryBindings`，并通过 `queryDefinitions` join 到 `TClass.Method` method symbol；
-  这仍不表示完整 LSP、runtime constructor lowering 或 type-based overload dispatch
+- verify gate 还必须固定当前最小 `member-call` query truth：
+  `Worker.Run;` / `Worker.SetValue(7);` / `Self.SetValue(9)` /
+  `Halt(Worker.Add(1, 2));` / `TWorker.Create(42)` 会出现在 `queryBindings`，
+  并通过 `queryDefinitions` join 到 `TClass.Method` method symbol；这仍不表示完整 LSP、
+  inherited member lookup、runtime constructor lowering 或 type-based overload dispatch
 - `queryScopes` / `queryTypes` 必须同样来自同一份 `TSemanticModel`，作为 `scopeId` /
   `typeId` 的 normalized side tables，而不是由 CLI 重新推导
 

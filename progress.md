@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 69 self/imported member receiver binding)
+
+- **Status:** completed
+- Objective:
+  - 把 direct member-call receiver 从 variable / type-name 继续推进到 class method body 内的
+    `Self` receiver，以及 root source 中 imported class type variable receiver。
+- Baseline:
+  - Batch 68 已能把 `TWorker.Create(42)` 这类已声明 class type-name receiver 绑定到
+    `TWorker.Create` method symbol。
+  - 旧实现没有携带当前 method class context，因此 `Self.SetValue(9)` 无法知道 `Self`
+    的 receiver type；root variable 若使用 imported unit 中声明的 `TWorker`，也会因为 imported
+    type section 没有提前 seed 而拿不到 type id。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，在 `TWorker.Run` body 中加入
+    `Self.SetValue(9)`，并固定 `SetValue(9)` 的 byte offset。
+  - 新增 imported class member focused regression：root program `uses Worker` 后，
+    `Halt(Worker.Add(1, 2))` 必须绑定到 imported unit `Worker` 的 `TWorker.Add` method symbol。
+  - `SeedCallBindingsInNode(...)` 现在沿 AST walker 传递 current method class；
+    `TypeNameForMemberReceiver(...)` 只在该 context 存在时把 `Self` 解析为当前 class。
+  - `SeedImportedUnitBodies` 现在也会 seed imported type sections，并把 imported class method/type
+    symbols 放进 owner unit scope；`SeedDeclarations` 随后处理 root vars 时即可解析 imported
+    class type id。
+  - 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+    `stage0-query-member-call-bindings-check`，要求 line output 与 envelope 同步公开
+    `Self.SetValue(9)` 的 `member-call` / `queryDefinitions`。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Full：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+    `stage0-query-member-call-bindings-check=pass`、`verify-local=pass`。
+- Review:
+  - 当前实现继续保持 member-call 的 compiler-owned binding truth，不引入独立 CLI lookup。
+  - 本批仍不声明完整 inherited lookup、visibility rules、record/property receiver、virtual dispatch、
+    runtime constructor lowering 或 type-based overload。
+
 ## Session: 2026-05-26 (Batch 68 constructor class receiver binding)
 
 - **Status:** completed

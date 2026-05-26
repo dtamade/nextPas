@@ -14,6 +14,7 @@ end;
 
 procedure TWorker.Run;
 begin
+  Self.SetValue(9);
 end;
 
 procedure TWorker.SetValue(Value: Integer);
