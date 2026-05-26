@@ -509,7 +509,9 @@ nextPas parser 把 CST 节点分成六个互斥类别：
 - 空间复杂度 `O(n)`，n 为 CST 节点数。节点数与 token 数线性相关
 - 子节点数组的扩容必须使用 capacity / length 分离策略
 - 吞吐量基线：在调试构建下不低于 20 MB/s（按 source 字节计），release 构建
-  不低于 50 MB/s。这两个数字将来由独立的 parser-bench gate 持续守护
+  不低于 50 MB/s。这两个数字将来由独立的 parser-bench gate 持续守护；gate 使用
+  process CPU time 计量，并投影 `parser-bench-timing-source=process-cpu`，避免宿主负载
+  把验证结果误判为 parser 退化
 
 当前实现的性能反模式（`SetLength(FChildren, n+1)` 每次 O(n) 拷贝）属于 P3 缺陷。
 
@@ -596,4 +598,3 @@ parser 通过 `TDiagnosticsSink` 报告所有语法错误：
 | P-018    | P1     | 缺少 uses..in 路径语法                                  |
 | P-019    | P3     | 子节点扩容 O(n) 性能反模式                              |
 | P-020    | P0     | 缺少 label 声明段                                       |
-

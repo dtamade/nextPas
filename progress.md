@@ -3,6 +3,45 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 64 selector call binding guard)
+
+- **Status:** completed
+- Objective:
+  - 冻结 selector/member statement call 的 name-only binding 边界，避免 `Holder.Help();`
+    在完整 member binding 尚未实现前被误绑定到 imported unit 的 bare `Help` callable。
+- Baseline:
+  - Batch 61-63 已经让 imported callable binding、`queryBindings` 与 `queryDefinitions` 进入
+    compiler-owned semantic query truth。
+  - 现有 fixture 只覆盖 `Holder.Help := 1` 与 `Holder.Help;`，其中 `Holder.Help;` 因 parser
+    wrapper 的 argument count 偶然错开 0 参数 imported `Help`，没有覆盖 `Holder.Help();`
+    这个真正会误绑的 0 参数 qualified call。
+- Actions taken:
+  - 扩展 `tests/semantic/test_semantic_call_bindings.pas`，在 imported unit fixture 中加入
+    `Holder.Help;`、`Holder.Help();`，并把断言收紧为整个 fixture 只能有一条 call binding。
+  - RED focused test 已确认旧实现失败在
+    `semantic-call-bindings-failure=unexpected-imported-call-binding-count:2`。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 新增 `IsQualifiedCallNode(...)`，识别
+    procedure-call statement / function-call wrapper 中以 dot/array/deref selector 作为 callee 的形态。
+  - `SeedCallBindingsInNode(...)` 现在只对 non-qualified call 进入 name-only lookup，qualified
+    callee 留给后续真正的 member/type-based binding。
+  - 收口验证时同步修正 `build/verify_local.sh` 的项目卫生边界：stage0 / lexer / parser / sema
+    bench build dir 现在都落在 run-private `.sisyphus/tmp/verify-local.<run>/...` 下，避免并发
+    verify 互相清理同一个固定目录。
+  - 新增 `tools/bench/np_bench_timing.pas`，让 lexer/parser/sema bench 统一使用 process CPU time，
+    并让 verify gate 显式断言 `*-bench-timing-source=process-cpu`，避免宿主调度等待造成误判。
+- Verification:
+  - Focused：semantic call binding test 已重新输出 `semantic-call-bindings-status=pass`。
+  - Final fresh：`bash build/verify_local.sh` 已通过，最终输出
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+    `stage0QueryBindingsCheck":"pass"`、`stage0QueryDefinitionsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 当前 diff 保持在 semantic analyzer、focused semantic test、verify-local 稳定性修补、
+    bench timing helper 与本批文档/持续记录。
+  - 本批只关闭误绑定边界，不声称 selector/member binding、type dispatch 或完整 language service 已完成。
+  - `git diff --check` 已通过；普通 `git status --short` 仅包含本轮 tracked 修改和
+    `tools/bench/` 新源码目录，未发现需要提交的生成物。
+
 ## Session: 2026-05-26 (Batch 63 query definition target projection)
 
 - **Status:** completed

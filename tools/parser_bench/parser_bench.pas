@@ -5,7 +5,7 @@
     parser_bench <path-to-source.pas> <min-mb-per-sec>
 
   Reads the source file once, then lexes + parses it repeatedly until
-  total bytes processed reach 16 MiB. Reports wall-clock time
+  total bytes processed reach 16 MiB. Reports process CPU time
   and computed MB/s (1 MB = 1_000_000 bytes for human-readable
   numbers). Exits 0 if measured MB/s >= min-mb-per-sec, else 1
   with a diagnostic line on stderr.
@@ -14,6 +14,7 @@
     parser-bench-source-bytes=<n>
     parser-bench-iterations=<n>
     parser-bench-total-bytes=<n>
+    parser-bench-timing-source=process-cpu
     parser-bench-elapsed-ms=<n>
     parser-bench-mb-per-sec=<floored-int>
     parser-bench-min-mb-per-sec=<arg>
@@ -29,8 +30,9 @@ program parser_bench;
 {$UNITPATH ../../rtl/core/text}
 
 uses
-  SysUtils, Classes, DateUtils,
-  np_lexer, np_green_tree, np_diagnostics_sink, np_source_database;
+  SysUtils, Classes,
+  np_lexer, np_green_tree, np_diagnostics_sink, np_source_database,
+  np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;
@@ -67,7 +69,7 @@ var
   Source: string;
   Iterations: LongInt;
   TotalBytes: Int64;
-  StartTime, EndTime: TDateTime;
+  StartTime, EndTime: Int64;
   ElapsedMs: Int64;
   MBPerSec: Int64;
   Lex: TLexerResult;
@@ -88,7 +90,8 @@ begin
   Iterations := 0;
   TotalBytes := 0;
 
-  StartTime := Now;
+  if not TryReadProcessCpuNanoseconds(StartTime) then
+    Die('process CPU timer unavailable', 2);
   while TotalBytes < TARGET_BYTES do
   begin
     Lex := TLexerResult.Create(Source);
@@ -100,16 +103,16 @@ begin
     Inc(Iterations);
     TotalBytes := TotalBytes + Length(Source);
   end;
-  EndTime := Now;
+  if not TryReadProcessCpuNanoseconds(EndTime) then
+    Die('process CPU timer unavailable', 2);
 
-  ElapsedMs := MilliSecondsBetween(EndTime, StartTime);
-  if ElapsedMs <= 0 then
-    ElapsedMs := 1;
+  ElapsedMs := ElapsedMilliseconds(StartTime, EndTime);
   MBPerSec := (TotalBytes * 1000) div (1000000 * ElapsedMs);
 
   Writeln('parser-bench-source-bytes=', Length(Source));
   Writeln('parser-bench-iterations=', Iterations);
   Writeln('parser-bench-total-bytes=', TotalBytes);
+  Writeln('parser-bench-timing-source=', BENCH_TIMING_SOURCE);
   Writeln('parser-bench-elapsed-ms=', ElapsedMs);
   Writeln('parser-bench-mb-per-sec=', MBPerSec);
   Writeln('parser-bench-min-mb-per-sec=', MinMBPerSec);

@@ -5,7 +5,7 @@
     lex_bench <path-to-source.pas> <min-mb-per-sec>
 
   Reads the source file once, then lexes it repeatedly until
-  total bytes processed reach 16 MiB. Reports wall-clock time
+  total bytes processed reach 16 MiB. Reports process CPU time
   and computed MB/s (1 MB = 1_000_000 bytes for human-readable
   numbers). Exits 0 if measured MB/s >= min-mb-per-sec, else 1
   with a diagnostic line on stderr.
@@ -14,6 +14,7 @@
     lex-bench-source-bytes=<n>
     lex-bench-iterations=<n>
     lex-bench-total-bytes=<n>
+    lex-bench-timing-source=process-cpu
     lex-bench-elapsed-ms=<n>
     lex-bench-mb-per-sec=<floored-int>
     lex-bench-min-mb-per-sec=<arg>
@@ -24,7 +25,7 @@ program lex_bench;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils, np_lexer;
+  SysUtils, Classes, np_lexer, np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;
@@ -61,7 +62,7 @@ var
   Source: string;
   Iterations: LongInt;
   TotalBytes: Int64;
-  StartTime, EndTime: TDateTime;
+  StartTime, EndTime: Int64;
   ElapsedMs: Int64;
   MBPerSec: Int64;
   Lex: TLexerResult;
@@ -80,7 +81,8 @@ begin
   Iterations := 0;
   TotalBytes := 0;
 
-  StartTime := Now;
+  if not TryReadProcessCpuNanoseconds(StartTime) then
+    Die('process CPU timer unavailable', 2);
   while TotalBytes < TARGET_BYTES do
   begin
     Lex := TLexerResult.Create(Source);
@@ -88,16 +90,16 @@ begin
     Inc(Iterations);
     TotalBytes := TotalBytes + Length(Source);
   end;
-  EndTime := Now;
+  if not TryReadProcessCpuNanoseconds(EndTime) then
+    Die('process CPU timer unavailable', 2);
 
-  ElapsedMs := MilliSecondsBetween(EndTime, StartTime);
-  if ElapsedMs <= 0 then
-    ElapsedMs := 1;
+  ElapsedMs := ElapsedMilliseconds(StartTime, EndTime);
   MBPerSec := (TotalBytes * 1000) div (1000000 * ElapsedMs);
 
   Writeln('lex-bench-source-bytes=', Length(Source));
   Writeln('lex-bench-iterations=', Iterations);
   Writeln('lex-bench-total-bytes=', TotalBytes);
+  Writeln('lex-bench-timing-source=', BENCH_TIMING_SOURCE);
   Writeln('lex-bench-elapsed-ms=', ElapsedMs);
   Writeln('lex-bench-mb-per-sec=', MBPerSec);
   Writeln('lex-bench-min-mb-per-sec=', MinMBPerSec);

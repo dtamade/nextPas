@@ -5,13 +5,14 @@
     sema_bench <path-to-source.pas> <min-mb-per-sec>
 
   Reads the source file once, then runs the full pipeline (lex + parse + sema)
-  repeatedly until total bytes processed reach 16 MiB. Reports wall-clock time
+  repeatedly until total bytes processed reach 16 MiB. Reports process CPU time
   and computed MB/s. Exits 0 if measured MB/s >= min-mb-per-sec, else 1.
 
   Output (stdout):
     sema-bench-source-bytes=<n>
     sema-bench-iterations=<n>
     sema-bench-total-bytes=<n>
+    sema-bench-timing-source=process-cpu
     sema-bench-elapsed-ms=<n>
     sema-bench-mb-per-sec=<floored-int>
     sema-bench-min-mb-per-sec=<arg>
@@ -28,10 +29,10 @@ program sema_bench;
 {$UNITPATH ../../rtl/core/text}
 
 uses
-  SysUtils, Classes, DateUtils,
+  SysUtils, Classes,
   np_lexer, np_green_tree, np_ast_facade,
   np_diagnostics_sink, np_source_database, np_unit_graph,
-  np_semantic_analyzer, np_semantic_model;
+  np_semantic_analyzer, np_semantic_model, np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;
@@ -68,7 +69,7 @@ var
   Source: string;
   Iterations: LongInt;
   TotalBytes: Int64;
-  StartTime, EndTime: TDateTime;
+  StartTime, EndTime: Int64;
   ElapsedMs: Int64;
   MBPerSec: Int64;
   Lex: TLexerResult;
@@ -93,7 +94,8 @@ begin
   Iterations := 0;
   TotalBytes := 0;
 
-  StartTime := Now;
+  if not TryReadProcessCpuNanoseconds(StartTime) then
+    Die('process CPU timer unavailable', 2);
   while TotalBytes < TARGET_BYTES do
   begin
     Lex := TLexerResult.Create(Source);
@@ -115,16 +117,16 @@ begin
     Inc(Iterations);
     TotalBytes := TotalBytes + Length(Source);
   end;
-  EndTime := Now;
+  if not TryReadProcessCpuNanoseconds(EndTime) then
+    Die('process CPU timer unavailable', 2);
 
-  ElapsedMs := MilliSecondsBetween(EndTime, StartTime);
-  if ElapsedMs <= 0 then
-    ElapsedMs := 1;
+  ElapsedMs := ElapsedMilliseconds(StartTime, EndTime);
   MBPerSec := (TotalBytes * 1000) div (1000000 * ElapsedMs);
 
   Writeln('sema-bench-source-bytes=', Length(Source));
   Writeln('sema-bench-iterations=', Iterations);
   Writeln('sema-bench-total-bytes=', TotalBytes);
+  Writeln('sema-bench-timing-source=', BENCH_TIMING_SOURCE);
   Writeln('sema-bench-elapsed-ms=', ElapsedMs);
   Writeln('sema-bench-mb-per-sec=', MBPerSec);
   Writeln('sema-bench-min-mb-per-sec=', MinMBPerSec);

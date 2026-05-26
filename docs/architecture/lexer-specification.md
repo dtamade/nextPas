@@ -256,7 +256,10 @@ trivia 是 P2 缺陷。当前实现完全没有 trivia 模型，本规范要求�
 - 空间复杂度 `O(t)`，t 为产出 token 数；token 数组的扩容必须使用 capacity / length
   分离策略，避免每次 `SetLength(arr, n+1)` 触发 `O(n)` 拷贝
 - 吞吐量基线：在调试构建下不低于 50 MB/s（按 source 字节计），release 构建不低于
-  100 MB/s。这两个数字将来由独立的 lexer-bench gate 持续守护
+  100 MB/s。这两个数字属于稳定 perf 环境里的 release 目标；当前 `verify-local` 的
+  `lexer-bench` 是保守 smoke floor，不替代正式 perf gate
+- bench 计量必须使用 process CPU time，并投影 `lex-bench-timing-source=process-cpu`，避免宿主
+  调度等待把验证结果误判为 lexer 退化
 
 当前实现的两条性能反模式（`Lexeme + ASourceText[i]` 反复 string 分配，`SetLength(FTokens, n+1)`
 每 token O(n) 拷贝）属于 P3 缺陷。

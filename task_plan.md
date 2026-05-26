@@ -15,6 +15,64 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 64 Selector Call Binding Guard
+
+### Goal
+
+把 Batch 61-63 已经公开的 call binding / definition target truth 继续加固到 selector/member
+边界：在完整 member binding 与 type-based dispatch 尚未实现前，`Holder.Help();` 这类 qualified
+callee 不能被 name-only lookup 误绑定成 imported unit 的 bare `Help` procedure。
+
+本批次新增并冻结：
+
+- selector/member statement call 不进入 name-only call binding
+- qualified function-call wrapper 不注册 imported bare callable binding
+- `semantic-call-bindings-check` 覆盖 `Holder.Help;` 与 `Holder.Help();` 两种 selector statement
+  边界
+
+### Architecture Decision
+
+selector/member call guard 继续归属于 `TSemanticAnalyzer` 的 binding seeding：
+
+- `TSemanticModel` 仍只持有已经被 analyzer 确认的 source occurrence binding truth。
+- 当前 name-only binding 只适用于 bare procedure/function call；qualified callee 需要后续真正的
+  member lookup / type dispatch，而不是借 imported callable lookup 兜底。
+- `IsQualifiedCallNode(...)` 只识别当前 parser 已生成的 selector wrapper 形态，不新增完整 member
+  resolution、不改 `query` projection、不执行 MIR/backend/toolchain。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：扩展 `tests/semantic/test_semantic_call_bindings.pas`，加入 `Holder.Help();`，确认旧实现
+      会产生第二条 imported `Help` binding
+- [x] 在 `TSemanticAnalyzer.SeedCallBindingsInNode(...)` 前加入 qualified callee guard
+- [x] focused semantic call binding test 重新转绿
+- [x] 同步 language service / semantic model / stage0 tooling docs 与持续记录
+- [x] 收口验证中把 `verify_local` 的 stage0 / bench build dirs 改成 run-private 临时目录，并让
+      lexer/parser/sema bench 显式投影 process CPU timing source
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 先失败在
+  `semantic-call-bindings-failure=unexpected-imported-call-binding-count:2`
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`
+- final: fresh `bash build/verify_local.sh` 已通过，并确认 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`stage0QueryBindingsCheck":"pass"`、
+  `stage0QueryDefinitionsCheck":"pass"` 与 `verify-local=pass`
+
+### Non-goals
+
+- 不实现 selector/member access binding
+- 不实现 bare identifier function-reference binding
+- 不实现完整 type-based overload resolution
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 63 Query Definition Target Projection
 
 ### Goal

@@ -81,7 +81,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   当前已覆盖 root callable、arg-count overload 消歧与唯一 imported-unit callable target，并通过
   `query-bindings` / `queryBindings` 暴露给 CLI 与 future language-service adapter；同一份
   session-owned model 还会把 target symbol/unit metadata 投影成 `query-definitions` /
-  `queryDefinitions`
+  `queryDefinitions`。带 selector/member 的 qualified callee（例如 `Holder.Help();`）当前会被
+  name-only binding pass 排除；
+  后续只有真正的 member lookup / type-based dispatch 落地后，才允许把这类 occurrence 作为
+  selector/member binding 写入 model
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 

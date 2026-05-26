@@ -115,6 +115,8 @@ begin
     'begin' + LineEnding +
     '  Help;' + LineEnding +
     '  Holder.Help := 1;' + LineEnding +
+    '  Holder.Help;' + LineEnding +
+    '  Holder.Help();' + LineEnding +
     'end.' + LineEnding;
   WriteTextFile(
     UnitPath,
@@ -153,6 +155,9 @@ begin
       Fail('unexpected-imported-call-diagnostics');
     if Model = nil then
       Fail('missing-imported-call-semantic-model');
+    if Model.BindingCount <> 1 then
+      Fail('unexpected-imported-call-binding-count:' +
+        IntToStr(Model.BindingCount));
 
     BindingTarget := 0;
     for Index := 0 to Model.BindingCount - 1 do

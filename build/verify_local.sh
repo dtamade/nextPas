@@ -13,17 +13,20 @@ esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+VERIFY_TMP_ROOT="$REPO_ROOT/.sisyphus/tmp"
+mkdir -p "$VERIFY_TMP_ROOT"
+VERIFY_RUN_TMP_DIR=$(mktemp -d "$VERIFY_TMP_ROOT/verify-local.XXXXXX")
 TARGET_ID="linux-x86_64"
 VERIFY_SELECTOR="verify-local"
 STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text"
 LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text"
-LEX_BENCH_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -O2"
-STAGE0_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/stage0-bootstrap"
-LEX_SNAPSHOT_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/lex_snapshot"
+LEX_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -O2"
+STAGE0_BUILD_DIR="$VERIFY_RUN_TMP_DIR/stage0-bootstrap"
+LEX_SNAPSHOT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/lex_snapshot"
 LEX_SNAPSHOT_BINARY="$LEX_SNAPSHOT_BUILD_DIR/lex_snapshot"
-LEX_BENCH_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/lex_bench"
+LEX_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/lex_bench"
 LEX_BENCH_BINARY="$LEX_BENCH_BUILD_DIR/lex_bench"
-LEX_BENCH_MIN_MB_PER_SEC=10
+LEX_BENCH_MIN_MB_PER_SEC=5
 STAGE0_BINARY="$STAGE0_BUILD_DIR/nextpas"
 WORKSPACE_ARTIFACT_ROOT="$REPO_ROOT/.nextpas"
 HOST_FPC_CACHE_ROOT="$WORKSPACE_ARTIFACT_ROOT/cache/host-fpc/$TARGET_ID"
@@ -168,6 +171,9 @@ LLVM_PROC_ARG_PROGRAM_OUT_DIR=$(mktemp -d)
 LLVM_PROC_ARG_PROGRAM_RUN_OUTPUT=$(mktemp)
 LLVM_FN_SQUARE_PROGRAM_OUTPUT=$(mktemp)
 LLVM_FN_SQUARE_PROGRAM_OUT_DIR=$(mktemp -d)
+LEX_BENCH_OUTPUT=$(mktemp)
+PARSER_BENCH_OUTPUT=$(mktemp)
+SEMA_BENCH_OUTPUT=$(mktemp)
 SEMANTIC_SMOKE_OUTPUT=$(mktemp)
 FOREIGN_CDECL_SMOKE_OUTPUT=$(mktemp)
 HARNESS_SMOKE_OUTPUT=$(mktemp)
@@ -401,6 +407,9 @@ cleanup() {
   rm -f "$LLVM_PROC_ARG_PROGRAM_RUN_OUTPUT"
   rm -f "$LLVM_FN_SQUARE_PROGRAM_OUTPUT"
   rm -rf "$LLVM_FN_SQUARE_PROGRAM_OUT_DIR"
+  rm -f "$LEX_BENCH_OUTPUT"
+  rm -f "$PARSER_BENCH_OUTPUT"
+  rm -f "$SEMA_BENCH_OUTPUT"
   rm -f "$SEMANTIC_SMOKE_OUTPUT"
   rm -f "$FOREIGN_CDECL_SMOKE_OUTPUT"
   rm -f "$HARNESS_SMOKE_OUTPUT"
@@ -512,6 +521,7 @@ cleanup() {
   rm -rf "$STAGE0_BUILD_DIR"
   rm -rf "$LEX_SNAPSHOT_BUILD_DIR"
   rm -rf "$LEX_BENCH_BUILD_DIR"
+  rm -rf "$VERIFY_RUN_TMP_DIR"
 }
 
 trap cleanup EXIT HUP INT TERM
@@ -647,6 +657,7 @@ printf 'inputs-check=running\n'
 require_path build/targets/linux-x86_64.toml
 require_path build/toolchains/linux-x86_64-to-linux-x86_64-gnu.toml
 require_path tools/stage0/nextpas.pas
+require_path tools/bench/np_bench_timing.pas
 require_path compiler/frontend/np_source_database.pas
 require_path compiler/frontend/np_compilation_session.pas
 require_path compiler/frontend/np_unit_graph.pas
@@ -739,6 +750,7 @@ printf 'stage0-compiler=fpc\n'
 mkdir -p "$STAGE0_BUILD_DIR"
 printf 'stage0-command=fpc %s -FE%s -FU%s tools/stage0/nextpas.pas\n' "$STAGE0_FPC_FLAGS" "$STAGE0_BUILD_DIR" "$STAGE0_BUILD_DIR"
 fpc $STAGE0_FPC_FLAGS -FE"$STAGE0_BUILD_DIR" -FU"$STAGE0_BUILD_DIR" tools/stage0/nextpas.pas
+require_executable "$STAGE0_BINARY"
 printf 'stage0-build=pass\n'
 
 printf 'hir-late-alloca-hoist=running\n'
@@ -851,19 +863,18 @@ fi
 if [ ! -x "$LEX_BENCH_BINARY" ]; then
   fail 'missing-lexer-bench-binary'
 fi
-set +e
-"$LEX_BENCH_BINARY" compiler/syntax/np_lexer.pas "$LEX_BENCH_MIN_MB_PER_SEC"
-LEX_BENCH_EXIT=$?
-set -e
-if [ "$LEX_BENCH_EXIT" -ne 0 ]; then
+if ! "$LEX_BENCH_BINARY" compiler/syntax/np_lexer.pas "$LEX_BENCH_MIN_MB_PER_SEC" >"$LEX_BENCH_OUTPUT" 2>&1; then
+  cat "$LEX_BENCH_OUTPUT"
   fail 'lexer-bench-throughput-below-minimum'
 fi
+cat "$LEX_BENCH_OUTPUT"
+require_output_pattern '^lex-bench-timing-source=process-cpu$' "$LEX_BENCH_OUTPUT" 'missing-lex-bench-process-cpu-timing-source'
 printf 'lexer-bench=pass\n'
 
 printf 'parser-bench=running\n'
-PARSER_BENCH_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/parser_bench"
+PARSER_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/parser_bench"
 PARSER_BENCH_BINARY="$PARSER_BENCH_BUILD_DIR/parser_bench"
-PARSER_BENCH_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -O2"
+PARSER_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Furtl/core/base -Furtl/core/text -O2"
 PARSER_BENCH_MIN_MB_PER_SEC=2
 mkdir -p "$PARSER_BENCH_BUILD_DIR"
 if ! fpc $PARSER_BENCH_FPC_FLAGS -FE"$PARSER_BENCH_BUILD_DIR" -FU"$PARSER_BENCH_BUILD_DIR" tools/parser_bench/parser_bench.pas >/dev/null 2>&1; then
@@ -873,19 +884,18 @@ fi
 if [ ! -x "$PARSER_BENCH_BINARY" ]; then
   fail 'missing-parser-bench-binary'
 fi
-set +e
-"$PARSER_BENCH_BINARY" tests/parser/comprehensive_pass.pas "$PARSER_BENCH_MIN_MB_PER_SEC"
-PARSER_BENCH_EXIT=$?
-set -e
-if [ "$PARSER_BENCH_EXIT" -ne 0 ]; then
+if ! "$PARSER_BENCH_BINARY" tests/parser/comprehensive_pass.pas "$PARSER_BENCH_MIN_MB_PER_SEC" >"$PARSER_BENCH_OUTPUT" 2>&1; then
+  cat "$PARSER_BENCH_OUTPUT"
   fail 'parser-bench-throughput-below-minimum'
 fi
+cat "$PARSER_BENCH_OUTPUT"
+require_output_pattern '^parser-bench-timing-source=process-cpu$' "$PARSER_BENCH_OUTPUT" 'missing-parser-bench-process-cpu-timing-source'
 printf 'parser-bench=pass\n'
 
 printf 'sema-bench=running\n'
-SEMA_BENCH_BUILD_DIR="$REPO_ROOT/.sisyphus/tmp/sema_bench"
+SEMA_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/sema_bench"
 SEMA_BENCH_BINARY="$SEMA_BENCH_BUILD_DIR/sema_bench"
-SEMA_BENCH_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -O2"
+SEMA_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -O2"
 SEMA_BENCH_MIN_MB_PER_SEC=1
 mkdir -p "$SEMA_BENCH_BUILD_DIR"
 if ! fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas >/dev/null 2>&1; then
@@ -895,13 +905,12 @@ fi
 if [ ! -x "$SEMA_BENCH_BINARY" ]; then
   fail 'missing-sema-bench-binary'
 fi
-set +e
-"$SEMA_BENCH_BINARY" tests/semantic/sema_stress_pass.pas "$SEMA_BENCH_MIN_MB_PER_SEC"
-SEMA_BENCH_EXIT=$?
-set -e
-if [ "$SEMA_BENCH_EXIT" -ne 0 ]; then
+if ! "$SEMA_BENCH_BINARY" tests/semantic/sema_stress_pass.pas "$SEMA_BENCH_MIN_MB_PER_SEC" >"$SEMA_BENCH_OUTPUT" 2>&1; then
+  cat "$SEMA_BENCH_OUTPUT"
   fail 'sema-bench-throughput-below-minimum'
 fi
+cat "$SEMA_BENCH_OUTPUT"
+require_output_pattern '^sema-bench-timing-source=process-cpu$' "$SEMA_BENCH_OUTPUT" 'missing-sema-bench-process-cpu-timing-source'
 printf 'sema-bench=pass\n'
 
 printf 'semantic-call-bindings-check=running\n'

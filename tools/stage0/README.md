@@ -242,7 +242,9 @@ package workflow 投影；其中 `pkg plan` 是 install plan preflight 的专用
 `bindingId`、`kind`、`name`、`ownerUnitId`、`byteOffset` 与 `targetSymbolId`。
 `query-definitions` 继续把这些 binding 的 target symbol id join 回同一份 semantic
 symbol/unit truth，当前每个条目至少包含 binding id/kind/name/offset 与 target
-symbol id/name/kind/owner unit/source path/offset。
+symbol id/name/kind/owner unit/source path/offset。当前 name-only binding pass 会显式排除
+`Holder.Help();` 这类 selector/member callee；完整 member binding 仍属于后续
+language-service / semantic model 工作。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。
@@ -803,9 +805,10 @@ plan-level trace，而失败 attribution 则落在真实失败 step。
 
 `build/verify_local.sh` 会复用这条公开 build 路径：先检查关键架构文档、目标规格与
 `compiler/` skeleton 输入，再用
-`fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -FE.sisyphus/tmp/stage0-bootstrap -FU.sisyphus/tmp/stage0-bootstrap tools/stage0/nextpas.pas`
-构建驱动入口，然后执行
-`.sisyphus/tmp/stage0-bootstrap/nextpas build examples/smoke/hello.pas --target linux-x86_64 --workspace <repo-root>` 并断言
+`fpc -Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -FE.sisyphus/tmp/verify-local.<run>/stage0-bootstrap -FU.sisyphus/tmp/verify-local.<run>/stage0-bootstrap tools/stage0/nextpas.pas`
+构建驱动入口。这个 stage0 build dir 是每次 verify 独占的 run-private 目录，避免并发
+verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
+`.sisyphus/tmp/verify-local.<run>/stage0-bootstrap/nextpas build examples/smoke/hello.pas --target linux-x86_64 --workspace <repo-root>` 并断言
 输出里存在 `command-envelope=`、`session-id=`、`source-db-file-count=1`、`syntax-status=ready`、
 `resolution-status=ready`、`semantic-status=ready`、`mir-status=ready`、
 `backend-plan-status=ready`、`host-id=linux-x86_64`、
@@ -862,19 +865,19 @@ evidence，然后再跑真实 smoke。现在这份 verify 还会额外通过 fak
 `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` smoke，断言
 `compiler=opt`、`backend-artifact-count=4`、
 `toolchain-plan-family=llvm-ir-opt-llc-link` 与三步 LLVM transcript。除此之外，它也会再跑
-`.sisyphus/tmp/stage0-bootstrap/nextpas env status --target linux-x86_64`、
+同一个 run-private stage0 binary 的 `nextpas env status --target linux-x86_64`、
 临时 workspace 下的 `nextpas env use --target linux-x86_64 --toolchain-binding ... --workspace ...`
 和 `nextpas env status --target linux-x86_64 --workspace ...`、同一 workspace 下的
 `nextpas env sync --target linux-x86_64 --workspace ...`、
 `nextpas env clean --target linux-x86_64 --workspace ...`、裸
-`nextpas env`、`.sisyphus/tmp/stage0-bootstrap/nextpas doctor --target linux-x86_64`
+`nextpas env`、同一个 run-private stage0 binary 的 `nextpas doctor --target linux-x86_64`
 与 package manifest fixture、workspace member fixture 下的 `nextpas doctor --workspace ...`
 正向 package workspace 样本、裸 `nextpas doctor`、
-`.sisyphus/tmp/stage0-bootstrap/nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
+同一个 run-private stage0 binary 的 `nextpas query symbols examples/smoke/hello_with_units.pas --target linux-x86_64`
 与裸 `nextpas query`、
-`.sisyphus/tmp/stage0-bootstrap/nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
-与 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg plan --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
-与 `.sisyphus/tmp/stage0-bootstrap/nextpas pkg graph --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
+同一个 run-private stage0 binary 的 `nextpas pkg inspect --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
+与 `nextpas pkg plan --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
+与 `nextpas pkg graph --workspace "$PACKAGE_MANIFEST_FIXTURE_ROOT" --target linux-x86_64`
 与 workspace member fixture 下的 `nextpas pkg inspect --workspace ...` 正向 package workflow
 样本、workspace member fixture 下的 `nextpas pkg plan --workspace ...` lock-missing blocked
 install-plan preflight 样本、package-free 临时 workspace 下的 `nextpas pkg plan --workspace ...`

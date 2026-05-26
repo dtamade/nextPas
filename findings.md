@@ -10,6 +10,20 @@
 
 ## Research Findings
 
+- Selector/member statement call 的真实风险点已经被 Batch 64 RED 抓住：`Holder.Help();`
+  会被 parser 表达成 procedure-call statement 包住 qualified `gnkFunctionCall`，旧
+  `SeedCallBindingsInNode(...)` 会继续按 name-only `Help` + 0 参数查找，进而误绑定到 imported
+  unit 的 bare `Help` procedure。
+- `Holder.Help;` 过去没有误绑只是因为当前 parser wrapper 让 `CallArgumentCount(...)` 返回 1，
+  与 imported 0 参数 `Help` 偶然错开；这个行为不能作为长期 contract。
+- `TSemanticAnalyzer.IsQualifiedCallNode(...)` 现在显式排除 dot/array/deref selector callee，
+  让 name-only binding 只覆盖 bare procedure/function call。完整 selector/member access binding
+  仍然留给后续 member lookup 与 type-based dispatch，不由 imported callable lookup 代偿。
+- `build/verify_local.sh` 的 stage0 bootstrap 与 lexer/parser/sema bench build dirs 现在使用
+  run-private `.sisyphus/tmp/verify-local.<run>/...`，避免并发 verify 或失败重跑互相删除固定目录。
+- lexer/parser/sema bench 现在统一通过 `tools/bench/np_bench_timing.pas` 读取 process CPU time，
+  并由 verify gate 断言 `*-bench-timing-source=process-cpu`；这让 smoke perf floor 更接近代码自身
+  成本，而不是宿主调度等待。
 - `nextpas query symbols` 现在会把 binding target definition metadata 作为
   `query-definitions=<json-array>` 与 envelope `queryDefinitions` 投影出来；该 JSON 由
   `TCompilationSession.DefinitionsJson` 从同一份 `TSemanticModel` 的 binding table 与 symbol graph
@@ -38,7 +52,8 @@
 - `LookupCallBindingDeclaration` 当前采用保守绑定规则：root callable 优先；如果 root 没有唯一匹配，
   imported callable 也必须只有一个同名同参数数目的匹配才会成为 binding target。
 - `tests/semantic/test_semantic_call_bindings.pas` 现在覆盖 `Help;` 调用绑定到 `Helper` unit 的 callable
-  symbol，同时用 `Holder.Help := 1` 固定 selector/member access 不应误注册为 imported call binding。
+  symbol，同时用 `Holder.Help := 1`、`Holder.Help;` 与 `Holder.Help();` 固定 selector/member
+  access 不应误注册为 imported call binding。
 - owner-aware imported callable symbols 让 `examples/smoke/hello_with_units.pas` 的 semantic smoke
   `symbol-count` 从 4 变成 6；这是 imported callable truth 进入 semantic model 的结果，不是
   verifier 假绿。

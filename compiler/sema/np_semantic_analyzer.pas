@@ -100,6 +100,7 @@ type
       const AParent: TGreenNode;
       const AChild: TGreenNode
     ): Boolean;
+    function IsQualifiedCallNode(const ACallNode: TGreenNode): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
       const ANameSkip: LongInt): TParamSnapshots;
@@ -873,6 +874,46 @@ begin
     SameText(AParent.Text, AChild.Text);
 end;
 
+function TSemanticAnalyzer.IsQualifiedCallNode(
+  const ACallNode: TGreenNode
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+begin
+  Result := False;
+  if (ACallNode = nil) or
+    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) or
+    (ACallNode.ChildCount = 0) then
+    Exit;
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if CalleeNode = nil then
+    Exit;
+
+  if ACallNode.NodeKind = gnkFunctionCall then
+  begin
+    Result := CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
+      gnkDereference];
+    Exit;
+  end;
+
+  if CalleeNode.ByteOffset <> ACallNode.ByteOffset then
+    Exit;
+
+  if CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess, gnkDereference] then
+    Exit(True);
+
+  if (CalleeNode.NodeKind = gnkFunctionCall) and
+    SameText(ACallNode.Text, CalleeNode.Text) and
+    (CalleeNode.ChildCount > 0) then
+  begin
+    CalleeNode := CalleeNode.ChildAt(0);
+    Result := (CalleeNode <> nil) and
+      (CalleeNode.NodeKind in [gnkDotAccess, gnkArrayAccess,
+       gnkDereference]);
+  end;
+end;
+
 function TSemanticAnalyzer.BindCallArgs(const ADecl: TGreenNode;
   const ACallNode: TGreenNode;
   const ANameSkip: LongInt): TParamSnapshots;
@@ -1067,7 +1108,7 @@ begin
 
   if ANode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall] then
   begin
-    if Pos('.', ANode.Text) = 0 then
+    if (not IsQualifiedCallNode(ANode)) and (Pos('.', ANode.Text) = 0) then
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),

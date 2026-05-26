@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 63` 为准。
+以最新完成的 `Batch 64` 为准。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
 
@@ -33,6 +33,7 @@
 - `stage0 build`、`test harness` 与 `build/verify_local.sh` 的 envelope baseline 已真实落地。
 - 当前 freshest verification evidence 是 fresh `bash build/verify_local.sh`，
   其中 `toolchainContractCheck=pass`、`semanticSmokeCheck=pass`、
+  `semanticCallBindingsCheck=pass`、
   `toolchainFailureCheck=pass`、`assemblerFailureAttributionCheck=pass`、
   `linkerFailureAttributionCheck=pass`、`stage0EnvStatusCheck=pass`、
   `stage0DoctorCheck=pass`、`stage0DoctorPackageWorkspaceCheck=pass`、
@@ -93,9 +94,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 63：query definition target projection。
+- 当前 rolling window 已推进到 Batch 64：selector call binding guard。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 63` 已完成。
+- `Batch 1` 到 `Batch 64` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -145,7 +146,9 @@
   package declaration。`Batch 62` / `Batch 63` 已把 semantic binding table 继续公开成 `queryBindings`，并把
   binding target metadata 公开成 `queryDefinitions`，让 CLI、automation 与 future IDE adapter
   可以直接消费 source occurrence -> definition target truth，而不需要在 query 之外重扫源码或维护
-  第二套 lookup。下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
+  第二套 lookup。`Batch 64` 又把 selector/member callee guard 冻进 semantic binding pass，
+  确保 `Holder.Help();` 在完整 member lookup 落地前不会误绑定到 imported bare callable。
+  下一步优先继续 richer package workflow / richer query / richer env action 中最高价值的
   真实功能切片。
 
 ## 执行规则
