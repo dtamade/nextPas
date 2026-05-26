@@ -3,9 +3,9 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 104 function result call type mismatch evidence；并行收口包含 platform API boundary
-cleanup；Batch 103 object release invalid trap policy、Batch 102 object release invalid boundary、
-Batch 101 object release poison contract、
+当前最新本轮为 Batch 104 function result call type mismatch evidence；并行收口包含
+platform.time L0 surface coverage 与 platform API boundary cleanup；Batch 103 object release
+invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
@@ -42,6 +42,45 @@ platform/core 工作流保留下来的已完成记录。
   - 本批不扩大到 imported/带参/member function result，也不实现 implicit conversion、overload ranking
     或 no-matching-overload diagnostics。
   - 本轮不修改 `core/`。
+
+## Session: 2026-05-26 (platform.time L0 surface coverage)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 给 `platform.time` 补齐 L0 系统 clock API 的 example/benchmark，并纳入 official local gate；
+    不把 `Stopwatch` / `Duration` 混入 platform。
+- Baseline:
+  - `platform.time` 的 helper/no-FPC 测试已经在 platform 命名空间。
+  - 旧 `codex/platform-time-integration` 里有 `demo_stopwatch` 和 `bench_platform_time`，但它们属于
+    L1 `nextpas.core.time` 方向，不能作为 platform 成果整条合入。
+- Actions taken:
+  - 新增 `core/examples/nextpas.core.platform.time/platform_time_clock/`，只调用
+    `platform_monotonic_ns`、`platform_realtime_ns`、`platform_monotonic_resolution_ns`。
+  - 新增 `core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock/`，测量 monotonic 和
+    realtime clock source 调用开销。
+  - 新增 `core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/`，防止
+    `nextpas.core.time`、`TStopwatch`、`TDuration`、`TInstant`、Timer 等 L1 time API 混入
+    platform.time 源码、platform 门面、platform 示例和 platform 基准。
+  - `build/verify_local.sh` 新增 example/benchmark focused gates，并把
+    `corePlatformTimeL0BoundaryCheck` / `corePlatformTimeExampleCheck` /
+    `corePlatformTimeBenchCheck` 放入 final envelope。
+- Verification:
+  - RED: 两个新 L0 项目入口的 `test -f ...` 均失败，确认缺口存在。
+  - Focused GREEN: `platform_time_clock` 输出 `platform-time-clock-status=pass`。
+  - Focused GREEN: `bench_platform_time_clock` 输出 `platform-time-bench-status=pass`。
+  - RED: 新 L0 boundary 测试入口的 `test -f ...` 失败，确认守卫缺口存在。
+  - Focused GREEN: `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary test`
+    输出 `4 total, 4 passed, 0 failed`。
+  - Aggregate GREEN: `make test` 输出 `All tests passed.`。
+  - Aggregate GREEN: `make examples` 输出 `All examples compiled.`。
+  - Aggregate GREEN: `make benchmarks` 输出 `All benchmarks passed.`。
+  - Full GREEN: fresh `bash build/verify_local.sh` 输出 `corePlatformTimeL0BoundaryCheck=pass`、
+    `corePlatformTimeExampleCheck=pass`、`corePlatformTimeBenchCheck=pass`、`verify-local=pass`
+    与 `human-summary=local verification passed`。
+- Review:
+  - 本切片继续把 `platform` 固定为系统 API/ABI 层；`Duration` / `Instant` /
+    `Stopwatch` / Timer 只能进 `nextpas.core.time`、后续 `nextpas.core.stopwatch`
+    或更高层模块。
 
 ## Session: 2026-05-26 (Batch 103 object release invalid trap policy)
 
