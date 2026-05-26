@@ -78,6 +78,17 @@
   non-Linux Unix 的 `platform_wait_address32` / wake 走 bucketed condvar fallback，Linux 继续默认
   走 futex，但可以通过 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 在 Linux 主机上强制验证
   fallback surface。
+- `nextpas.core.platform.posix.ffi` 现在不再拥有 per-host pthread capability truth：`PTHREAD_MUTEX_*`
+  kind 编号与 `pthread_condattr_setclock` 已继续下沉到 `linux/darwin/android/freebsd/unix` 各自的 FFI
+  owner 单元。
+- `linux/darwin/android/freebsd/unix` FFI 现在统一暴露
+  `PLATFORM_PTHREAD_MUTEX_*_KIND`、
+  `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`、
+  `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 与
+  `platform_pthread_condattr_setclock`，让 `platform.sync` 不再在实现层自己保存 pthread capability
+  例外知识。
+- `darwin.ffi` 现在显式承载 “`pthread_condattr_setclock` 不支持” 这条宿主事实；shared `posix.ffi`
+  不再假装所有 POSIX 宿主都共享这条 capability。
 - `nextpas.core.platform.posix.ffi` 现在开始按 target matrix 诚实建模 pthread ABI，而不是继续用
   Linux 近似值覆盖所有 POSIX：
   FreeBSD 的 mutex/rwlock/condvar/attr 都回到 pointer-backed handle；

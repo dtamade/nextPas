@@ -87,6 +87,14 @@ begin
     'posix.ffi must not keep per-host sysconf ids after ffi partitioning');
   CheckTokenAbsent(LPosixSource, 'function posix_errno_location',
     'posix.ffi must not keep per-host errno symbol bindings after ffi partitioning');
+  CheckTokenAbsent(LPosixSource, 'pthread_mutex_normal',
+    'posix.ffi must not keep per-host pthread mutex kind numbering after ffi partitioning');
+  CheckTokenAbsent(LPosixSource, 'pthread_mutex_recursive',
+    'posix.ffi must not keep per-host pthread mutex recursive numbering after ffi partitioning');
+  CheckTokenAbsent(LPosixSource, 'pthread_mutex_errorcheck',
+    'posix.ffi must not keep per-host pthread mutex errorcheck numbering after ffi partitioning');
+  CheckTokenAbsent(LPosixSource, 'function pthread_condattr_setclock',
+    'posix.ffi must not keep host-specific pthread condattr clock capability after ffi partitioning');
 
   CheckTokenPresent(LLinuxSource, 'platform_clock_monotonic_id',
     'linux.ffi must expose Linux clock ids');
@@ -94,6 +102,14 @@ begin
     'linux.ffi must expose Linux errno constants');
   CheckTokenPresent(LLinuxSource, 'function platform_errno_location',
     'linux.ffi must expose Linux errno binding');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_mutex_normal_kind',
+    'linux.ffi must expose Linux pthread mutex kind numbering');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_condattr_setclock_supported',
+    'linux.ffi must expose Linux pthread condattr clock capability');
+  CheckTokenPresent(LLinuxSource, 'function platform_pthread_condattr_setclock',
+    'linux.ffi must expose Linux pthread condattr clock binding');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_timeout_clock_id',
+    'linux.ffi must expose Linux pthread timeout clock policy');
 
   CheckTokenPresent(LDarwinSource, 'platform_clock_monotonic_id',
     'darwin.ffi must expose Darwin clock ids');
@@ -101,6 +117,14 @@ begin
     'darwin.ffi must expose Darwin errno constants');
   CheckTokenPresent(LDarwinSource, 'function platform_errno_location',
     'darwin.ffi must expose Darwin errno binding');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_mutex_normal_kind',
+    'darwin.ffi must expose Darwin pthread mutex kind numbering');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_condattr_setclock_supported',
+    'darwin.ffi must expose Darwin pthread condattr clock capability');
+  CheckTokenPresent(LDarwinSource, 'function platform_pthread_condattr_setclock',
+    'darwin.ffi must expose Darwin pthread condattr clock binding or stub');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_timeout_clock_id',
+    'darwin.ffi must expose Darwin pthread timeout clock policy');
 
   CheckTokenPresent(LAndroidSource, 'platform_clock_monotonic_id',
     'android.ffi must expose Android clock ids');
@@ -108,6 +132,14 @@ begin
     'android.ffi must expose Android errno constants');
   CheckTokenPresent(LAndroidSource, 'function platform_errno_location',
     'android.ffi must expose Android errno binding');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_mutex_normal_kind',
+    'android.ffi must expose Android pthread mutex kind numbering');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_condattr_setclock_supported',
+    'android.ffi must expose Android pthread condattr clock capability');
+  CheckTokenPresent(LAndroidSource, 'function platform_pthread_condattr_setclock',
+    'android.ffi must expose Android pthread condattr clock binding');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_timeout_clock_id',
+    'android.ffi must expose Android pthread timeout clock policy');
 
   CheckTokenPresent(LFreeBSDSource, 'platform_clock_monotonic_id',
     'freebsd.ffi must expose FreeBSD clock ids');
@@ -115,6 +147,14 @@ begin
     'freebsd.ffi must expose FreeBSD errno constants');
   CheckTokenPresent(LFreeBSDSource, 'function platform_errno_location',
     'freebsd.ffi must expose FreeBSD errno binding');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_mutex_normal_kind',
+    'freebsd.ffi must expose FreeBSD pthread mutex kind numbering');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_condattr_setclock_supported',
+    'freebsd.ffi must expose FreeBSD pthread condattr clock capability');
+  CheckTokenPresent(LFreeBSDSource, 'function platform_pthread_condattr_setclock',
+    'freebsd.ffi must expose FreeBSD pthread condattr clock binding');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_timeout_clock_id',
+    'freebsd.ffi must expose FreeBSD pthread timeout clock policy');
 
   CheckTokenPresent(LUnixSource, 'platform_clock_monotonic_id',
     'unix.ffi must expose generic Unix clock ids');
@@ -122,6 +162,14 @@ begin
     'unix.ffi must expose generic Unix errno constants');
   CheckTokenPresent(LUnixSource, 'function platform_errno_location',
     'unix.ffi must expose generic Unix errno binding');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_mutex_normal_kind',
+    'unix.ffi must expose generic Unix pthread mutex kind numbering');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_condattr_setclock_supported',
+    'unix.ffi must expose generic Unix pthread condattr clock capability');
+  CheckTokenPresent(LUnixSource, 'function platform_pthread_condattr_setclock',
+    'unix.ffi must expose generic Unix pthread condattr clock binding');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_timeout_clock_id',
+    'unix.ffi must expose generic Unix pthread timeout clock policy');
 end;
 
 begin

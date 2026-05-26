@@ -155,18 +155,9 @@ begin
   end;
 end;
 
-function platform_posix_timeout_clock_id: Int32; inline;
-begin
-  {$IFDEF NEXTPAS_MACOS}
-  Result := PLATFORM_CLOCK_REALTIME_ID;
-  {$ELSE}
-  Result := PLATFORM_CLOCK_MONOTONIC_ID;
-  {$ENDIF}
-end;
-
 function platform_posix_now(out ATime: timespec): Int32;
 begin
-  if clock_gettime(platform_posix_timeout_clock_id, @ATime) = 0 then
+  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @ATime) = 0 then
     Result := 0
   else
     Result := platform_posix_map_error(platform_posix_errno);
@@ -234,10 +225,10 @@ end;
 function platform_posix_mutex_kind(const AKind: Int32): Int32; inline;
 begin
   case AKind of
-    PLATFORM_MUTEX_NORMAL: Result := PTHREAD_MUTEX_NORMAL;
-    PLATFORM_MUTEX_RECURSIVE: Result := PTHREAD_MUTEX_RECURSIVE;
+    PLATFORM_MUTEX_NORMAL: Result := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
+    PLATFORM_MUTEX_RECURSIVE: Result := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
   else
-    Result := PTHREAD_MUTEX_ERRORCHECK;
+    Result := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
   end;
 end;
 
@@ -269,12 +260,13 @@ begin
   if Result <> 0 then
     Exit;
   try
-    {$IFNDEF NEXTPAS_MACOS}
-    Result := platform_posix_map_error(
-      pthread_condattr_setclock(@LAttr, platform_posix_timeout_clock_id));
-    if Result <> 0 then
-      Exit;
-    {$ENDIF}
+    if PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
+    begin
+      Result := platform_posix_map_error(
+        platform_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID));
+      if Result <> 0 then
+        Exit;
+    end;
     Result := platform_posix_map_error(pthread_cond_init(@ACondVar.FOpaque[0], @LAttr));
   finally
     pthread_condattr_destroy(@LAttr);

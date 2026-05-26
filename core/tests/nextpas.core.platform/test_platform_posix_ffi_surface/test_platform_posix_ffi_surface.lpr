@@ -46,6 +46,11 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure TestPosixFFIExposesTargetMatrix;
 var
   LSource: string;
@@ -73,10 +78,14 @@ begin
     'posix.ffi must model Android pthread mutex attributes as long-sized values');
   CheckTokenPresent(LSource, 'pthread_mutexattr_t = int32;',
     'posix.ffi must model Linux pthread mutex attributes as 32-bit values');
-  CheckTokenPresent(LSource, 'pthread_mutex_errorcheck = 1;',
-    'posix.ffi must preserve the FreeBSD mutex kind numbering');
-  CheckTokenPresent(LSource, 'pthread_mutex_normal     = 3;',
-    'posix.ffi must preserve the FreeBSD normal mutex numbering');
+  CheckTokenAbsent(LSource, 'pthread_mutex_errorcheck',
+    'posix.ffi must not keep per-host pthread mutex kind numbering');
+  CheckTokenAbsent(LSource, 'pthread_mutex_recursive',
+    'posix.ffi must not keep per-host pthread mutex kind numbering');
+  CheckTokenAbsent(LSource, 'pthread_mutex_normal',
+    'posix.ffi must not keep per-host pthread mutex kind numbering');
+  CheckTokenAbsent(LSource, 'function pthread_condattr_setclock',
+    'posix.ffi must not keep host-specific pthread condattr clock binding');
 end;
 
 begin

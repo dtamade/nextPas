@@ -784,6 +784,12 @@ time、sync ABI 应尽量统一沉到 `nextpas.core.platform.windows.ffi`，Linu
 `nextpas.core.platform.darwin.ffi`。`platform.time`、`platform.sync`、`platform.thread`
 等实现单元负责策略、契约和错误码映射，不在实现体里散落 `external` 声明。
 
+`nextpas.core.platform.posix.ffi` 这类 shared FFI 单元只保留真正跨宿主共享的 ABI 形状，例如
+`timespec`、pthread opaque types 与普遍存在的 pthread/system call 声明；像 mutex kind 编号、
+`pthread_condattr_setclock` 是否可用、condvar timeout 应绑定哪一个 clock id 这类宿主 capability /
+policy token，必须下沉到各自 `linux/darwin/android/freebsd/unix` FFI owner 单元，不要继续塞在
+shared `posix.ffi` 或实现层条件编译里。
+
 ### `platform.time` 的边界
 
 `nextpas.core.platform.time` 只提供系统时钟源和平台换算工具，例如 monotonic clock、

@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync Host FFI Surface Guard；并行收口包含
-Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Sync Pthread Capability FFI Ownership；并行收口包含
+Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,66 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Pthread Capability FFI Ownership
+
+### Goal
+
+继续把 `platform.sync` 需要的宿主 pthread capability / policy truth 从 shared `posix.ffi`
+与实现层条件编译下沉到 host-specific FFI owner：
+
+- `pthread_mutex_*` kind 编号必须进入各自 host ffi
+- `pthread_condattr_setclock` 的符号拥有权与“是否支持”事实必须进入各自 host ffi
+- condvar timedwait 使用哪个 clock id 也必须成为 host-owned token
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 只继续拥有 shared POSIX ABI 形状，不再拥有 per-host mutex kind
+  编号，也不继续拥有 `pthread_condattr_setclock` 这种宿主可用性会分叉的绑定。
+- `linux/darwin/android/freebsd/unix` 各自拥有
+  `PLATFORM_PTHREAD_MUTEX_*_KIND`、
+  `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`、
+  `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 与
+  `platform_pthread_condattr_setclock`。
+- `platform.sync` 继续只负责把这些 host-owned truth 组装成稳定的 nextPas 同步契约，不再自己知道
+  “macOS 例外” 或 FreeBSD mutex kind 编号。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 focused tests，要求 `posix.ffi` 退出 pthread capability ownership
+- [x] RED：扩 focused tests，要求 `platform.sync` 消费新的 host-owned pthread capability token
+- [x] 将 pthread mutex kind / condattr clock capability / timeout clock policy 下沉到 host ffi
+- [x] 调整 `platform.sync` 消费新的 host-owned token
+- [x] 同步设计约定文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    初始失败在 `posix.ffi must not keep per-host pthread mutex kind numbering after ffi partitioning`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `platform.sync must consume host-owned pthread mutex normal numbering`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不声称 Darwin / FreeBSD / Android 已获得新的真实 runtime 证据
+- 这批不扩展新的 L1 sync API
+- 这批不新增 Windows-only pthread compatibility 抽象
 
 ## Addendum: 2026-05-27 Platform Sync Host FFI Surface Guard
 

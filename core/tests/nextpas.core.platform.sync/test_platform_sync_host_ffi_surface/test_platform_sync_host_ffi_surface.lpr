@@ -93,12 +93,18 @@ begin
 
   CheckTokenPresent(LSyncSource, 'platform_errno_location',
     'platform.sync must consume host-owned errno bindings');
-  CheckTokenPresent(LSyncSource, 'platform_clock_realtime_id',
-    'platform.sync must consume host-owned realtime clock ids');
-  CheckTokenPresent(LSyncSource, 'platform_clock_monotonic_id',
-    'platform.sync must consume host-owned monotonic clock ids');
-  CheckTokenPresent(LSyncSource, 'pthread_condattr_setclock',
-    'platform.sync must consume pthread_condattr_setclock through shared posix.ffi');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_normal_kind',
+    'platform.sync must consume host-owned pthread mutex normal numbering');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_recursive_kind',
+    'platform.sync must consume host-owned pthread mutex recursive numbering');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_errorcheck_kind',
+    'platform.sync must consume host-owned pthread mutex errorcheck numbering');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_condattr_setclock_supported',
+    'platform.sync must consume host-owned pthread condattr clock capability');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_condattr_setclock',
+    'platform.sync must consume host-owned pthread condattr clock binding');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_clock_id',
+    'platform.sync must consume host-owned pthread timeout clock policy');
   CheckTokenPresent(LSyncSource, 'linux_syscall',
     'platform.sync must consume linux futex bindings through linux.ffi');
   CheckTokenPresent(LSyncSource, 'waitonaddress',

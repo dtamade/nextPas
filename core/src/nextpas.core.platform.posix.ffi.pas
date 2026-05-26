@@ -158,17 +158,6 @@ type
   end;
   {$ENDIF}
 
-const
-  {$IFDEF NEXTPAS_FREEBSD}
-  PTHREAD_MUTEX_ERRORCHECK = 1;
-  PTHREAD_MUTEX_RECURSIVE  = 2;
-  PTHREAD_MUTEX_NORMAL     = 3;
-  {$ELSE}
-  PTHREAD_MUTEX_NORMAL     = 0;
-  PTHREAD_MUTEX_RECURSIVE  = 1;
-  PTHREAD_MUTEX_ERRORCHECK = 2;
-  {$ENDIF}
-
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
@@ -203,7 +192,6 @@ function pthread_rwlock_trywrlock(rwlock: Pointer): Int32; cdecl; external 'pthr
 function pthread_rwlock_unlock(rwlock: Pointer): Int32; cdecl; external 'pthread' name 'pthread_rwlock_unlock';
 
 function pthread_condattr_init(attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_condattr_init';
-function pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
 function pthread_condattr_destroy(attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_condattr_destroy';
 function pthread_cond_init(cond: Pointer; attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_init';
 function pthread_cond_destroy(cond: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_destroy';

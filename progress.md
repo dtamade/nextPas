@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync host ffi surface guard；并行收口包含
-platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform.sync pthread capability ffi ownership；并行收口包含
+platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,56 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync pthread capability ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续把 `platform.sync` 依赖的 pthread capability / policy truth 从 shared `posix.ffi` 和实现层
+    target 条件编译下沉到 host-specific ffi owner。
+- Baseline:
+  - `platform.sync` 已经按 host 拆出 errno/clock/futex/wait-address truth，但 pthread mutex kind 编号
+    仍留在 `posix.ffi`，`pthread_condattr_setclock` 也仍由 shared `posix.ffi` 声明，`platform.sync`
+    自己还保留着“macOS 不走 condattr_setclock”的实现层知识。
+- Actions taken:
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 移除 `PTHREAD_MUTEX_*` kind 编号与
+    `pthread_condattr_setclock` 声明，只保留 shared POSIX ABI。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi`、`darwin.ffi`、`freebsd.ffi`、`unix.ffi` 统一新增：
+    - `PLATFORM_PTHREAD_MUTEX_NORMAL_KIND`
+    - `PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND`
+    - `PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND`
+    - `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`
+    - `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID`
+    - `platform_pthread_condattr_setclock`
+  - `darwin.ffi` 用 host-owned stub 承载不支持 `pthread_condattr_setclock` 的现实，`platform.sync`
+    不再需要知道 “macOS 例外”。
+  - `core/src/nextpas.core.platform.sync.pas` 改为消费新的 host-owned mutex kind / condattr capability /
+    timeout clock token。
+  - 更新 `test_platform_posix_ffi_surface`、`test_platform_ffi_partition_surface` 与
+    `test_platform_sync_host_ffi_surface`，把新 owner boundary 冻结成 focused gate。
+  - `core/docs/design-conventions.md` 追加规则：shared `posix.ffi` 不得继续拥有这类宿主 capability /
+    policy token。
+- Verification:
+  - RED:
+    - `test_platform_ffi_partition_surface` 初始失败在
+      `posix.ffi must not keep per-host pthread mutex kind numbering after ffi partitioning`。
+    - `test_platform_sync_host_ffi_surface` 初始失败在
+      `platform.sync must consume host-owned pthread mutex normal numbering`。
+  - Focused GREEN:
+    - `test_platform_posix_ffi_surface` 1/1 pass
+    - `test_platform_ffi_partition_surface` 1/1 pass
+    - `test_platform_sync_host_ffi_surface` 1/1 pass
+    - `test_platform_sync_posix_surface` 1/1 pass
+    - `test_platform_sync` 14/14 pass
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.sync` 的宿主 pthread truth 又往 FFI owner 单元里推了一层，shared `posix.ffi`
+    现在更像真正的 shared ABI，而不是继续偷带 host capability。
+  - 下一步更值得做的是继续把 cross-target compile/runtime 证据矩阵补硬，特别是 Darwin /
+    FreeBSD / Android 当前还卡在本机 toolchain boundary 的部分。
 
 ## Session: 2026-05-27 (platform.sync host ffi surface guard)
 

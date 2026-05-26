@@ -8,6 +8,12 @@ const
   PLATFORM_CLOCK_REALTIME_ID = Int32(0);
   PLATFORM_CLOCK_MONOTONIC_ID = Int32(1);
   PLATFORM_SYSCONF_NPROCESSORS_ONLN = Int32(84);
+  PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID = PLATFORM_CLOCK_MONOTONIC_ID;
+  PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1;
+
+  PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 0;
+  PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 1;
+  PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 2;
 
   PLATFORM_POSIX_EAGAIN = 11;
   PLATFORM_POSIX_EBUSY = 16;
@@ -30,6 +36,7 @@ const
 function linux_syscall(ANumber: PtrInt; A1: PtrUInt; A2: PtrUInt; A3: PtrUInt; A4: PtrUInt; A5: PtrUInt; A6: PtrUInt): PtrInt; cdecl; external 'c' name 'syscall';
 function gettid: Int32; cdecl; external 'c' name 'gettid';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
+function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
 
 implementation
 
