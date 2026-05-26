@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform simulated host compile matrix；并行收口包含
-platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform sync POSIX helper ffi ownership；并行收口包含
+platform simulated host compile matrix、platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,61 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform sync POSIX helper ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续把 `platform.sync` 里残留的 shared POSIX helper duplication 收回到 `posix.ffi` 与当前宿主 ffi
+    owner，让 consumer 更接近纯 public-contract / error-mapping / wait-policy 层。
+- Baseline:
+  - `platform.sync` 已经不再直接写 raw pthread / futex / wait-address ABI，但仍保留本地
+    `platform_posix_add_timeout`、`platform_posix_timespec_to_ns`、
+    `platform_posix_remaining_ns` 与 `platform_posix_mutex_kind`。
+  - shared `posix.ffi` 先前只固定了 `platform_posix_timespec_to_ns_u64`，还没把 shared deadline
+    arithmetic 继续收成单一事实源。
+  - 旧 `codex/platform-time-integration` worktree 仍存在，但与当前主线已经分叉；因此这批收口不能再假设
+    “还有一个旧 platform-time 分支等着整条合并”，而是要以当前 `main` 的真实状态为准。
+- Actions taken:
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增：
+    - `platform_posix_timespec_add_ns`
+    - `platform_posix_timespec_remaining_ns_u64`
+    让 shared POSIX `timespec` 算术继续留在 shared owner，而不是由 consumer 各自复制。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi`、`darwin.ffi`、`freebsd.ffi`、`unix.ffi` 统一新增
+    `platform_pthread_mutex_init_platform_kind`，承载 public mutex kind 到宿主 pthread 编号的映射。
+  - `core/src/nextpas.core.platform.sync.pas` 删除本地：
+    - `platform_posix_add_timeout`
+    - `platform_posix_timespec_to_ns`
+    - `platform_posix_remaining_ns`
+    - `platform_posix_mutex_kind`
+    改为消费 `platform_posix_timespec_add_ns`、
+    `platform_posix_timespec_remaining_ns_u64` 与
+    `platform_pthread_mutex_init_platform_kind`。
+  - `test_platform_posix_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 扩成 focused gate，继续冻结：
+    - shared `posix.ffi` 必须拥有 shared `timespec` arithmetic helper
+    - POSIX host ffi owner 必须拥有 public mutex kind init helper
+    - `platform.sync` 不得回归 local timespec / mutex-kind duplication
+  - `core/docs/design-conventions.md` 追加规则：shared `posix.ffi` 可以拥有真正跨宿主共享的
+    `timespec` 算术 helper；`platform.sync` 不应继续复制这些 helper，也不应再保留 public mutex kind
+    mapping。
+- Verification:
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批没有去“过度 ownerize”整个 `platform.sync`，而是只把真正共享的 POSIX 算术和真正宿主相关的
+    mutex-kind mapping 放回正确 owner，consumer 仍然保留 `platform.sync` 应有的策略层职责。
+  - 这批也把一个协作事实说清了：当前需要收口的是 `main` 上这批未提交改动，不是把已经明显落后的
+    `platform-time-integration` worktree 整条并进来。
 
 ## Session: 2026-05-27 (platform simulated host compile matrix)
 

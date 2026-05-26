@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Simulated Host Compile Matrix；并行收口包含
-Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Sync POSIX Helper FFI Ownership；并行收口包含
+Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,69 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync POSIX Helper FFI Ownership
+
+### Goal
+
+继续把 `platform.sync` 里剩余的 shared POSIX helper duplication 收回正确 owner：
+
+- shared `timespec` deadline arithmetic 不再在 `platform.sync` 本地复制
+- public mutex kind 到宿主 pthread kind 的映射不再停在 consumer
+- owner boundary 继续保持克制，不把整个 wait-bucket / deadline policy 都粗暴塞进 ffi
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 可以拥有真正跨 POSIX 宿主共享的 helper，不只限于 raw `external`
+  声明；这批新增的就是 shared `timespec -> ns`、`timespec + ns` 与 remaining-time 算术。
+- `TPlatformMutexKind` 到宿主 pthread mutex kind 编号的映射属于 host-owned contract，应该由
+  `linux/android/darwin/freebsd/unix.ffi` 各自暴露统一 helper
+  `platform_pthread_mutex_init_platform_kind`。
+- `platform.sync` 继续保留 public opaque storage contract、error mapping、deadline 计算与
+  wait-bucket 策略；这批不重划更大的 sync ownership 边界。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 `test_platform_posix_ffi_surface`，要求 shared `posix.ffi` 显式暴露 POSIX timespec 算术 helper
+- [x] 扩 `test_platform_sync_host_ffi_surface`，要求 host ffi owner 暴露 public mutex kind init helper
+- [x] 删除 `platform.sync` 本地 timespec / mutex-kind helper duplication，切到 ffi owner helper
+- [x] 同步 design/tracking 文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `make -C core test`
+- [x] 跑 fresh `make -C core examples`
+- [x] 跑 fresh `make -C core benchmarks`
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - 扩完 `test_platform_posix_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 后，主线先暴露出
+    shared POSIX timespec helper 缺失与 `platform.sync` 仍保留 local mutex-kind / deadline helper
+    duplication 的 owner-boundary 失败。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、`corePlatformSyncCheck":"pass"`、
+    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不把 `platform.sync` 的 wait-bucket strategy 下沉到 ffi owner
+- 这批不新增 public sync API
+- 这批不把 compile-only evidence 包装成 Darwin / Android / FreeBSD 的真实 runtime truth
 
 ## Addendum: 2026-05-27 Platform Simulated Host Compile Matrix
 

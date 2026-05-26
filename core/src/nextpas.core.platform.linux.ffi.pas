@@ -84,6 +84,7 @@ function platform_clock_monotonic_ns_u64: UInt64; inline;
 function platform_clock_realtime_ns_u64: UInt64; inline;
 function platform_clock_monotonic_resolution_ns_u64: UInt64; inline;
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
+function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 function platform_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
@@ -312,6 +313,19 @@ begin
     Result := 0
   else
     Result := platform_posix_errno_value;
+end;
+
+function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
+var
+  LHostKind: Int32;
+begin
+  case AKind of
+    0: LHostKind := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
+    2: LHostKind := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
+  else
+    LHostKind := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
+  end;
+  Result := platform_pthread_mutex_init(AMutex, LHostKind);
 end;
 
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;

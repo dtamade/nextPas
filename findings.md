@@ -52,6 +52,13 @@
   `clock_gettime/getres`、`nanosleep`、`sched_yield`、`sysconf` 与 pthread
   type/function declarations；host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno 常量和 errno
   symbol binding 已经不应继续留在这里。
+- shared `posix.ffi` 不必被收窄成“只能放 raw external 声明”；只要语义在 POSIX 宿主间完全共享，
+  它也应该拥有单一事实源级别的 helper。当前已经明确收口的包括
+  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns` 与
+  `platform_posix_timespec_remaining_ns_u64`。
+- `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
+  `linux/android/darwin/freebsd/unix.ffi` 统一暴露
+  `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。
 - 现在新增了 platform-level `test_platform_ffi_owner_boundary`：它会扫描整组
   `nextpas.core.platform*.pas`，固定“非 `*.ffi.pas` 不得声明 `external`、`*.ffi.pas`
   必须继续拥有 `external`、`platform.sync.windows.ffi` 不得回归”这三条 owner boundary。
@@ -80,6 +87,10 @@
 - fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与
   fresh `bash build/verify_local.sh` 都已通过；official envelope 现在包含
   `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
+- 当前 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-time-integration`
+  仍未合入 `main`；`main...codex/platform-time-integration = 71:1`，说明它已经明显落后主线。它那 1 个独有
+  提交混有 `demo_stopwatch`、L1 time benchmark 与过期的 platform.time 收口方式，不能整条合并；如果还要
+  参考，只能按模块边界择优吸收。
 - `platform_thread_self` 与 `platform_thread_id` 不是同一个契约：前者是 unowned current-thread
   token，后者应该尽可能返回宿主 native integer thread id。继续在所有 Unix 平台上把
   `pthread_self` 强转成 `UInt64` 会把 Darwin / FreeBSD 这类非整数 `pthread_t` 的语义糊成一层。

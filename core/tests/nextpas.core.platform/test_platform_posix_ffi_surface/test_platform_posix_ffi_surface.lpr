@@ -78,6 +78,12 @@ begin
     'posix.ffi must model Android pthread mutex attributes as long-sized values');
   CheckTokenPresent(LSource, 'pthread_mutexattr_t = int32;',
     'posix.ffi must model Linux pthread mutex attributes as 32-bit values');
+  CheckTokenPresent(LSource, 'platform_posix_timespec_to_ns_u64',
+    'posix.ffi must expose shared timespec-to-ns conversion for platform consumers');
+  CheckTokenPresent(LSource, 'platform_posix_timespec_add_ns',
+    'posix.ffi must expose shared timespec deadline arithmetic for platform consumers');
+  CheckTokenPresent(LSource, 'platform_posix_timespec_remaining_ns_u64',
+    'posix.ffi must expose shared timespec remaining-time arithmetic for platform consumers');
   CheckTokenAbsent(LSource, 'pthread_mutex_errorcheck',
     'posix.ffi must not keep per-host pthread mutex kind numbering');
   CheckTokenAbsent(LSource, 'pthread_mutex_recursive',

@@ -139,9 +139,6 @@ uses
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
 
-const
-  NANOSECONDS_PER_SECOND = UInt64(1000000000);
-
 {$IFDEF NEXTPAS_UNIX}
 const
   POSIX_WAIT_BUCKET_COUNT = 64;
@@ -178,80 +175,16 @@ begin
   Result := platform_posix_map_error(platform_pthread_timeout_clock_now(@ATime));
 end;
 
-procedure platform_posix_add_timeout(var ATime: timespec; const ANanoseconds: UInt64); inline;
-var
-  LSeconds: UInt64;
-  LNanos: UInt64;
-begin
-  LSeconds := ANanoseconds div NANOSECONDS_PER_SECOND;
-  LNanos := ANanoseconds mod NANOSECONDS_PER_SECOND;
-  ATime.tv_sec := ATime.tv_sec + Int64(LSeconds);
-  ATime.tv_nsec := ATime.tv_nsec + Int64(LNanos);
-  if ATime.tv_nsec >= Int64(NANOSECONDS_PER_SECOND) then
-  begin
-    Inc(ATime.tv_sec);
-    Dec(ATime.tv_nsec, Int64(NANOSECONDS_PER_SECOND));
-  end;
-end;
-
-function platform_posix_timespec_to_ns(const ATime: timespec): UInt64; inline;
-var
-  LSecNs: UInt64;
-begin
-  if (ATime.tv_sec <= 0) and (ATime.tv_nsec <= 0) then
-    Exit(0);
-
-  if ATime.tv_sec > 0 then
-  begin
-    if UInt64(ATime.tv_sec) > High(UInt64) div NANOSECONDS_PER_SECOND then
-      Exit(High(UInt64));
-    LSecNs := UInt64(ATime.tv_sec) * NANOSECONDS_PER_SECOND;
-  end
-  else
-    LSecNs := 0;
-
-  if ATime.tv_nsec > 0 then
-  begin
-    if LSecNs > High(UInt64) - UInt64(ATime.tv_nsec) then
-      Exit(High(UInt64));
-    Result := LSecNs + UInt64(ATime.tv_nsec);
-  end
-  else
-    Result := LSecNs;
-end;
-
-function platform_posix_remaining_ns(const ADeadline: timespec; const ANow: timespec): UInt64; inline;
-var
-  LDeadlineNs: UInt64;
-  LNowNs: UInt64;
-begin
-  LDeadlineNs := platform_posix_timespec_to_ns(ADeadline);
-  LNowNs := platform_posix_timespec_to_ns(ANow);
-  if LDeadlineNs <= LNowNs then
-    Exit(0);
-  Result := LDeadlineNs - LNowNs;
-end;
-
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
 begin
   Result := (PtrUInt(AAddr) shr 2) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
-end;
-
-function platform_posix_mutex_kind(const AKind: Int32): Int32; inline;
-begin
-  case AKind of
-    PLATFORM_MUTEX_NORMAL: Result := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
-    PLATFORM_MUTEX_RECURSIVE: Result := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
-  else
-    Result := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
-  end;
 end;
 
 function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_posix_map_error(
-    platform_pthread_mutex_init(@AMutex.FOpaque[0], platform_posix_mutex_kind(AKind)));
+    platform_pthread_mutex_init_platform_kind(@AMutex.FOpaque[0], AKind));
 end;
 
 function platform_posix_condvar_init_impl(var ACondVar: TPlatformCondVar): Int32;
@@ -430,7 +363,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  platform_posix_add_timeout(LDeadline, UInt64(ATimeoutNs));
+  platform_posix_timespec_add_ns(LDeadline, UInt64(ATimeoutNs));
   Result := platform_posix_condvar_timedwait_abs(ACondVar, AMutex, LDeadline);
 end;
 
@@ -492,7 +425,7 @@ begin
       begin
         Result := platform_posix_now(LDeadline);
         if Result = 0 then
-          platform_posix_add_timeout(LDeadline, UInt64(ATimeoutNs))
+          platform_posix_timespec_add_ns(LDeadline, UInt64(ATimeoutNs))
         else
           LDone := True;
       end;
@@ -506,7 +439,7 @@ begin
           Result := platform_posix_now(LNow);
           if Result <> 0 then
             Break;
-          LRemainingNs := platform_posix_remaining_ns(LDeadline, LNow);
+          LRemainingNs := platform_posix_timespec_remaining_ns_u64(@LDeadline, @LNow);
           if LRemainingNs = 0 then
           begin
             Result := PLATFORM_ERR_TIMEOUT;

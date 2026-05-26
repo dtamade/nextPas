@@ -871,8 +871,10 @@ delegation。
 
 POSIX 的 `clock_gettime` / `clock_getres` 也遵循同一条 owner boundary。shared
 `nextpas.core.platform.posix.ffi` 保留共享 ABI 形状，例如 `timespec`、raw declaration，以及所有
-POSIX 宿主都会复用的饱和 `timespec -> ns` 转换 helper。具体宿主使用哪组 clock id、如何把失败投影成
-nextPas `Int32`、以及 monotonic / realtime / resolution 的 raw clock 调用细节，应归
+POSIX 宿主都会复用的饱和 `timespec -> ns`、`timespec + ns` 与 deadline remaining 算术 helper。
+这类 helper 虽然不是 raw `external` 声明，但只要语义在各 POSIX 宿主间完全共享，且被多个 host ffi
+owner / consumer 复用，就可以继续留在 shared `posix.ffi` 作为单一事实源。具体宿主使用哪组 clock
+id、如何把失败投影成 nextPas `Int32`、以及 monotonic / realtime / resolution 的 raw clock 调用细节，应归
 `linux/android/darwin/freebsd/unix.ffi` 这类 host ffi owner 单元提供
 `platform_clock_monotonic_now`、`platform_clock_realtime_now`、
 `platform_clock_monotonic_getres` 以及更高层的
@@ -911,10 +913,12 @@ ffi owner，而不是继续留在 `platform.sync` consumer。即使 `pthread_mut
 `pthread_rwlock_*`、`pthread_cond_*` 与 `clock_gettime` 的 ABI 形状来自 shared `posix.ffi`，
 mutex attr / cond attr 初始化、condattr clock capability、timeout clock 读取与 raw pthread 调用
 细节，仍属于 `linux/darwin/android/freebsd/unix.ffi` owner truth。优先消费
-`platform_pthread_timeout_clock_now`、`platform_pthread_mutex_*`、
+`platform_pthread_timeout_clock_now`、`platform_pthread_mutex_init_platform_kind`、
+`platform_pthread_mutex_*`、
 `platform_pthread_rwlock_*`、`platform_pthread_condvar_*` 这类 helper；`platform.sync`
 只继续保留 nextPas 的 public opaque storage contract、error mapping、deadline 计算与
-wait-bucket 策略。
+wait-bucket 策略。对应地，`platform.sync` 不应继续自留 public mutex kind 到宿主 pthread kind 的
+映射逻辑，也不应继续复制 shared POSIX `timespec` deadline arithmetic。
 
 ### `platform.thread` 的边界
 

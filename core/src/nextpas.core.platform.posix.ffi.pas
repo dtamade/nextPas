@@ -159,6 +159,10 @@ type
   {$ENDIF}
 
 function platform_posix_timespec_to_ns_u64(const ATime: PTimeSpec): UInt64; inline;
+procedure platform_posix_timespec_add_ns(var ATime: timespec; const ANanoseconds: UInt64); inline;
+function platform_posix_timespec_remaining_ns_u64(
+  const ADeadline: PTimeSpec;
+  const ANow: PTimeSpec): UInt64; inline;
 
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
@@ -225,6 +229,36 @@ begin
     Exit(High(UInt64));
 
   Result := LSecNs + LNsec;
+end;
+
+procedure platform_posix_timespec_add_ns(var ATime: timespec; const ANanoseconds: UInt64); inline;
+var
+  LSeconds: UInt64;
+  LNanos: UInt64;
+begin
+  LSeconds := ANanoseconds div PLATFORM_POSIX_NANOSECONDS_PER_SECOND;
+  LNanos := ANanoseconds mod PLATFORM_POSIX_NANOSECONDS_PER_SECOND;
+  ATime.tv_sec := ATime.tv_sec + Int64(LSeconds);
+  ATime.tv_nsec := ATime.tv_nsec + Int64(LNanos);
+  if ATime.tv_nsec >= Int64(PLATFORM_POSIX_NANOSECONDS_PER_SECOND) then
+  begin
+    Inc(ATime.tv_sec);
+    Dec(ATime.tv_nsec, Int64(PLATFORM_POSIX_NANOSECONDS_PER_SECOND));
+  end;
+end;
+
+function platform_posix_timespec_remaining_ns_u64(
+  const ADeadline: PTimeSpec;
+  const ANow: PTimeSpec): UInt64; inline;
+var
+  LDeadlineNs: UInt64;
+  LNowNs: UInt64;
+begin
+  LDeadlineNs := platform_posix_timespec_to_ns_u64(ADeadline);
+  LNowNs := platform_posix_timespec_to_ns_u64(ANow);
+  if LDeadlineNs <= LNowNs then
+    Exit(0);
+  Result := LDeadlineNs - LNowNs;
 end;
 
 end.

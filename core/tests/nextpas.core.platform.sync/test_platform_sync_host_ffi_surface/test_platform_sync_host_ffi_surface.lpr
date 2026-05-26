@@ -76,6 +76,8 @@ begin
     AHostLabel + ' must expose pthread timeout clock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init',
     AHostLabel + ' must expose pthread mutex init helper for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_mutex_init_platform_kind',
+    AHostLabel + ' must expose pthread mutex init helper for public kind contract');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_destroy',
     AHostLabel + ' must expose pthread mutex destroy helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_lock',
@@ -247,12 +249,12 @@ begin
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.unix.ffi',
     'platform.sync must use unix.ffi for generic Unix host-owned errno/clock ids');
 
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_normal_kind',
-    'platform.sync must consume host-owned pthread mutex normal numbering');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_recursive_kind',
-    'platform.sync must consume host-owned pthread mutex recursive numbering');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_errorcheck_kind',
-    'platform.sync must consume host-owned pthread mutex errorcheck numbering');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init_platform_kind',
+    'platform.sync must consume host-owned pthread mutex init helper for public kind contract');
+  CheckTokenPresent(LSyncSource, 'platform_posix_timespec_add_ns',
+    'platform.sync must consume shared POSIX timespec deadline arithmetic');
+  CheckTokenPresent(LSyncSource, 'platform_posix_timespec_remaining_ns_u64',
+    'platform.sync must consume shared POSIX timespec remaining-time arithmetic');
   CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_clock_now',
     'platform.sync must consume host-owned pthread timeout clock helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init',
@@ -363,6 +365,20 @@ begin
     'platform.sync must not keep raw errno helper usage in the Unix consumer');
   Check(Pos('platform_errno_location^', LSyncSource) = 0,
     'platform.sync must not dereference errno storage directly in the consumer');
+  Check(Pos('function platform_posix_mutex_kind', LSyncSource) = 0,
+    'platform.sync must not keep a local pthread mutex kind mapper in the Unix consumer');
+  Check(Pos('platform_pthread_mutex_normal_kind', LSyncSource) = 0,
+    'platform.sync must not keep raw pthread mutex normal numbering in the Unix consumer');
+  Check(Pos('platform_pthread_mutex_recursive_kind', LSyncSource) = 0,
+    'platform.sync must not keep raw pthread mutex recursive numbering in the Unix consumer');
+  Check(Pos('platform_pthread_mutex_errorcheck_kind', LSyncSource) = 0,
+    'platform.sync must not keep raw pthread mutex errorcheck numbering in the Unix consumer');
+  Check(Pos('procedure platform_posix_add_timeout', LSyncSource) = 0,
+    'platform.sync must not keep local POSIX timespec deadline arithmetic');
+  Check(Pos('function platform_posix_timespec_to_ns', LSyncSource) = 0,
+    'platform.sync must not keep local POSIX timespec-to-ns arithmetic');
+  Check(Pos('function platform_posix_remaining_ns', LSyncSource) = 0,
+    'platform.sync must not keep local POSIX remaining-time arithmetic');
   Check(Pos('getlasterror', LSyncSource) = 0,
     'platform.sync must not call GetLastError directly in the Windows consumer');
   Check(Pos('error_timeout', LSyncSource) = 0,
