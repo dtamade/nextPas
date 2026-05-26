@@ -46,8 +46,21 @@ begin
   CheckEqual(Int64(1), Int64(LDeque.PopBack), 'deque back');
 end;
 
+procedure TestFacadeExportsGrowthStrategies;
+var
+  LStrategy: IGrowthStrategy;
+begin
+  LStrategy := FactorGrow(1.5);
+  Check(LStrategy <> nil, 'FactorGrow should return a growth strategy');
+  Check(LStrategy.GetGrowSize(0, 12) >= 12, 'FactorGrow should satisfy required size');
+
+  LStrategy := DoublingGrow;
+  CheckEqual(Int64(8), Int64(LStrategy.GetGrowSize(4, 5)), 'DoublingGrow should double capacity');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.facade');
   T.Run('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
+  T.Run('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
   T.Summary;
 end.

@@ -14,6 +14,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
+  nextpas.core.collections.abstract,
   nextpas.core.collections.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
@@ -58,20 +59,27 @@ type
   ICollection = nextpas.core.collections.intf.ICollection;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
-  IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
-  TGrowthStrategy          = nextpas.core.collections.base.TGrowthStrategy;
-  TGrowthStrategyClass     = nextpas.core.collections.base.TGrowthStrategyClass;
-  TCustomGrowthStrategy    = nextpas.core.collections.base.TCustomGrowthStrategy;
-  TDoublingGrowStrategy    = nextpas.core.collections.base.TDoublingGrowStrategy;
-  TFixedGrowStrategy       = nextpas.core.collections.base.TFixedGrowStrategy;
-  TFactorGrowStrategy      = nextpas.core.collections.base.TFactorGrowStrategy;
-  TPowerOfTwoGrowStrategy  = nextpas.core.collections.base.TPowerOfTwoGrowStrategy;
-  TGoldenRatioGrowStrategy = nextpas.core.collections.base.TGoldenRatioGrowStrategy;
-  TAlignedWrapperStrategy  = nextpas.core.collections.base.TAlignedWrapperStrategy;
+  IGrowthStrategy          = nextpas.core.collections.abstract.IGrowthStrategy;
+  TGrowthStrategy          = nextpas.core.collections.abstract.TGrowthStrategy;
+  TGrowthStrategyClass     = nextpas.core.collections.abstract.TGrowthStrategyClass;
+  TCustomGrowthStrategy    = nextpas.core.collections.abstract.TCustomGrowthStrategy;
+  TDoublingGrowStrategy    = nextpas.core.collections.abstract.TDoublingGrowStrategy;
+  TFixedGrowStrategy       = nextpas.core.collections.abstract.TFixedGrowStrategy;
+  TFactorGrowStrategy      = nextpas.core.collections.abstract.TFactorGrowStrategy;
+  TPowerOfTwoGrowStrategy  = nextpas.core.collections.abstract.TPowerOfTwoGrowStrategy;
+  TGoldenRatioGrowStrategy = nextpas.core.collections.abstract.TGoldenRatioGrowStrategy;
+  TAlignedWrapperStrategy  = nextpas.core.collections.abstract.TAlignedWrapperStrategy;
+  TExactGrowStrategy       = nextpas.core.collections.abstract.TExactGrowStrategy;
 
 {$IFDEF FAFAFA_CORE_TYPE_ALIASES}
   // 可选：常用 specialization 的类型别名，避免重复 specialization（按需开启）
 {$ENDIF}
+
+function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
+function FactorGrow(aFactor: Double): IGrowthStrategy;
+function DoublingGrow: IGrowthStrategy;
+function ExactGrow: IGrowthStrategy;
+function GoldenRatioGrow: IGrowthStrategy;
 
 // 工厂函数（TDD：先声明，后实现；优先 MakeVec/MakeVecDeque/MakeArray）
 // 为减少调用方对实现细节的耦合，返回接口类型
@@ -221,6 +229,31 @@ generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAll
 
 
 implementation
+
+function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.abstract.FixedGrow(aStep);
+end;
+
+function FactorGrow(aFactor: Double): IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.abstract.FactorGrow(aFactor);
+end;
+
+function DoublingGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.abstract.DoublingGrow;
+end;
+
+function ExactGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.abstract.ExactGrow;
+end;
+
+function GoldenRatioGrow: IGrowthStrategy;
+begin
+  Result := nextpas.core.collections.abstract.GoldenRatioGrow;
+end;
 
 // 工厂实现
 // 说明：当前直接创建真实实例，返回接口以降低调用方耦合
