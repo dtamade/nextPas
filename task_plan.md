@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform ABI Alignment Carrier Ownership；并行收口包含
-Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Windows ABI Type Leakage Ownership；并行收口包含
+Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -6955,3 +6955,83 @@ Completed; verification passed.
 - 这批不新增 Darwin / FreeBSD / Android runtime 证据
 - 这批不改 `platform.thread` / `platform.sync` public API
 - 这批不把 deadline arithmetic、errno mapping 或 wait policy 挪进 ffi；收回的是 raw ABI alignment truth
+
+## Addendum: 2026-05-27 Platform Windows ABI Type Leakage Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` / `platform.sync` Windows consumer 里残留的 raw ABI type / calling
+convention / scalar conversion 泄漏收回 `windows.ffi` owner，让 Windows 宿主细节不只拥有 raw
+API declaration 和 helper 名称，也继续拥有 thread state thunk、TLS key ABI 投影以及 timeout /
+error 的 `DWORD` 中间形状。
+
+### Current Gap
+
+- 之前虽然已经把 Windows lifecycle helper、TLS raw helper、timeout conversion 与 last-error
+  semantics 收进 `windows.ffi`，但 `platform.thread` 仍保留本地 `HANDLE` 字段、
+  `DWORD` TLS key 转换和 `stdcall` thread entry thunk。
+- `platform.sync` 的 Windows condvar / `WaitOnAddress` 路径仍保留 `DWORD` timeout 临时变量，以及
+  `windows_last_error_is_timeout(DWORD(LError))` 这种 consumer-side ABI scalar 投影。
+- 这些 raw type / calling convention 细节在 source-surface 上仍然说明 owner boundary 没有彻底闭合。
+
+### Architecture Decision
+
+- `nextpas.core.platform.windows.ffi` 继续拥有 raw Windows declaration，并新增：
+  - `TPlatformWindowsThreadProc`
+  - `PPlatformWindowsThreadState` / `TPlatformWindowsThreadState`
+  - `windows_thread_state_create`
+  - `windows_thread_state_join`
+  - `windows_thread_state_detach`
+  - `windows_tls_create_platform_key`
+  - `windows_tls_destroy_platform_key`
+  - `windows_tls_set_platform_key`
+  - `windows_tls_get_platform_key`
+  - `windows_error_i32_is_timeout`
+  - `windows_condvar_timedwait_ns`
+  - `windows_wait_address_i32_timeout_ns`
+- `platform.thread` 继续保留 nextPas 的 public thread contract、join/detach API 和 thread proc
+  contract，但 Windows 分支不再自己声明 raw `HANDLE` / `DWORD` state、`stdcall` thunk 或 TLS
+  key 投影。
+- `platform.sync` 继续保留 nextPas 的 `PLATFORM_ERR_TIMEOUT` 映射和跨平台 wait policy，但 Windows
+  分支不再自己保留 `DWORD` timeout / timeout-classifier 中间层。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 thread/sync host ffi surface tests，先把 Windows ABI type leakage boundary 打成 RED
+- [x] 在 `windows.ffi` 增加 Windows thread-state / TLS platform-key / timeout-classifier helper
+- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 ownerized helper/type
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `tplatformwindowsthreadproc`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `windows_error_i32_is_timeout`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 ... test_platform_thread.lpr`
+  - `fpc -Twin64 ... test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
+
+### Non-goals
+
+- 这批不新增 Darwin / FreeBSD / Android runtime 证据
+- 这批不改 `platform.thread` / `platform.sync` public API
+- 这批不把 nextPas 的 timeout/error mapping 直接塞进 ffi；收回的是 Windows ABI type / thunk / scalar leakage

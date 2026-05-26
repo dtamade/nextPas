@@ -1635,3 +1635,25 @@
 - 当前证据边界仍要诚实：这批新增了 Linux runtime alignment proof 和 Win64 compile-only，但还没新增
   Darwin / FreeBSD / Android runtime 或 cross-compile 对齐证据，所以这些宿主目前仍主要由
   source-surface contract 覆盖。
+
+## 2026-05-27 Follow-up Findings 13
+
+- Windows helper ownerization 再往前走一层之后，`platform.thread` / `platform.sync` 里还剩的不是 raw
+  WinAPI 调用，而是更隐蔽的 ABI leakage：本地 `HANDLE` 字段、`DWORD` TLS key / timeout 临时量、
+  `DWORD(AError)` classifier，以及 `stdcall` thread entry thunk。
+- 这轮之后，`windows.ffi` 不只拥有 raw declaration 和 lifecycle/sync helper 名称，还继续拥有
+  `TPlatformWindowsThreadProc`、`PPlatformWindowsThreadState` /
+  `TPlatformWindowsThreadState`、`windows_thread_state_create/join/detach`，
+  以及 `windows_tls_create/destroy/set/get_platform_key`；`platform.thread` 不再在 consumer
+  里重写 Windows state carrier / TLS ABI 投影。
+- `platform.sync` 现在也不再自己保留 Windows `DWORD` timeout/error 中间层，而是直接消费
+  `windows_error_i32_is_timeout`、`windows_condvar_timedwait_ns` 与
+  `windows_wait_address_i32_timeout_ns`。这让 consumer 继续只保留 nextPas 的 timeout 映射和
+  public contract，而不是继续承担 `DWORD` 细节。
+- source-surface 上最直接的变化是：`platform.thread` / `platform.sync` 现在都不再出现 raw
+  `HANDLE`、`DWORD`、`stdcall`、`windows_timeout_ns_to_ms` 或
+  `windows_last_error_is_timeout` 这些 Windows ABI leakage token；focused gate 已把这条 contract
+  冻住。
+- 当前证据边界仍要诚实：这批新增了 Linux runtime proof 和 Win64 compile-only，但没有新增真实
+  Windows runtime 执行证据，所以 Windows 语义目前仍主要由 source-surface contract 与 compile-only
+  proof 覆盖。

@@ -264,6 +264,12 @@ begin
     'windows.ffi must expose Windows current-thread id helper');
   CheckTokenPresent(LWindowsSource, 'windows_thread_yield',
     'windows.ffi must expose Windows thread yield helper');
+  CheckTokenPresent(LWindowsSource, 'tplatformwindowsthreadproc',
+    'windows.ffi must expose a Windows user-thread proc carrier type');
+  CheckTokenPresent(LWindowsSource, 'pplatformwindowsthreadstate',
+    'windows.ffi must expose a Windows thread state pointer type');
+  CheckTokenPresent(LWindowsSource, 'tplatformwindowsthreadstate',
+    'windows.ffi must expose a Windows thread state carrier record');
   CheckTokenPresent(LWindowsSource, 'windows_tls_alloc_key',
     'windows.ffi must expose Windows TLS alloc helper');
   CheckTokenPresent(LWindowsSource, 'windows_tls_free_key',
@@ -284,6 +290,20 @@ begin
     'windows.ffi must expose Windows thread sleep helper');
   CheckTokenPresent(LWindowsSource, 'windows_atomic_decrement_i32',
     'windows.ffi must expose Windows atomic decrement helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_state_create',
+    'windows.ffi must expose a Windows thread-state create helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_state_join',
+    'windows.ffi must expose a Windows thread-state join helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_state_detach',
+    'windows.ffi must expose a Windows thread-state detach helper');
+  CheckTokenPresent(LWindowsSource, 'windows_tls_create_platform_key',
+    'windows.ffi must expose a platform-neutral Windows TLS create helper');
+  CheckTokenPresent(LWindowsSource, 'windows_tls_destroy_platform_key',
+    'windows.ffi must expose a platform-neutral Windows TLS destroy helper');
+  CheckTokenPresent(LWindowsSource, 'windows_tls_set_platform_key',
+    'windows.ffi must expose a platform-neutral Windows TLS set helper');
+  CheckTokenPresent(LWindowsSource, 'windows_tls_get_platform_key',
+    'windows.ffi must expose a platform-neutral Windows TLS get helper');
 
   CheckTokenPresent(LThreadSource, 'function platform_thread_id',
     'platform.thread must continue to expose the thread id contract');
@@ -325,26 +345,28 @@ begin
     'platform.thread must consume Windows current-thread id helper through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_thread_yield',
     'platform.thread must consume Windows thread yield helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_tls_alloc_key',
-    'platform.thread must consume Windows TLS alloc helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_tls_free_key',
-    'platform.thread must consume Windows TLS free helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_tls_set_value',
-    'platform.thread must consume Windows TLS set helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_tls_get_value',
-    'platform.thread must consume Windows TLS get helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'pplatformwindowsthreadstate',
+    'platform.thread must consume the Windows thread state type through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'tplatformwindowsthreadproc',
+    'platform.thread must consume the Windows user-thread proc carrier through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_state_create',
+    'platform.thread must consume the Windows thread-state create helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_state_join',
+    'platform.thread must consume the Windows thread-state join helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_state_detach',
+    'platform.thread must consume the Windows thread-state detach helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_tls_create_platform_key',
+    'platform.thread must consume the platform-neutral Windows TLS create helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_tls_destroy_platform_key',
+    'platform.thread must consume the platform-neutral Windows TLS destroy helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_tls_set_platform_key',
+    'platform.thread must consume the platform-neutral Windows TLS set helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_tls_get_platform_key',
+    'platform.thread must consume the platform-neutral Windows TLS get helper through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_cpu_count_i32',
     'platform.thread must consume Windows CPU count helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_thread_create_handle',
-    'platform.thread must consume Windows thread create helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_thread_wait_terminated',
-    'platform.thread must consume Windows thread wait helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_thread_close_handle',
-    'platform.thread must consume Windows thread close helper through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_thread_sleep_ns',
     'platform.thread must consume Windows thread sleep helper through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_atomic_decrement_i32',
-    'platform.thread must consume Windows atomic decrement helper through windows.ffi');
   Check(Pos('getlasterror', LThreadSource) = 0,
     'platform.thread must not call GetLastError directly in the Windows consumer');
   Check(Pos('wait_object_0', LThreadSource) = 0,
@@ -375,6 +397,28 @@ begin
     'platform.thread must not call Sleep directly in the Windows consumer');
   Check(Pos('interlockeddecrement', LThreadSource) = 0,
     'platform.thread must not call InterlockedDecrement directly in the Windows consumer');
+  Check(Pos('windows_tls_alloc_key', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows TLS alloc helper in the consumer');
+  Check(Pos('windows_tls_free_key', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows TLS free helper in the consumer');
+  Check(Pos('windows_tls_set_value', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows TLS set helper in the consumer');
+  Check(Pos('windows_tls_get_value', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows TLS get helper in the consumer');
+  Check(Pos('windows_thread_create_handle', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows thread-create helper in the consumer');
+  Check(Pos('windows_thread_wait_terminated', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows thread-wait helper in the consumer');
+  Check(Pos('windows_thread_close_handle', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows thread-close helper in the consumer');
+  Check(Pos('windows_atomic_decrement_i32', LThreadSource) = 0,
+    'platform.thread must not keep the raw Windows atomic decrement helper in the consumer');
+  Check(Pos('handle: handle', LThreadSource) = 0,
+    'platform.thread must not keep raw HANDLE fields in the Windows consumer');
+  Check(Pos(': dword', LThreadSource) = 0,
+    'platform.thread must not keep raw DWORD types in the Windows consumer');
+  Check(Pos('stdcall', LThreadSource) = 0,
+    'platform.thread must not keep a raw stdcall Windows entry thunk in the consumer');
   Check(Pos('pthread_create(', LThreadSource) = 0,
     'platform.thread must not call pthread_create directly in the Unix consumer');
   Check(Pos('pthread_join(', LThreadSource) = 0,

@@ -177,6 +177,8 @@ begin
     'windows.ffi must expose Windows last-error conversion helper');
   CheckTokenPresent(LWindowsSource, 'windows_last_error_is_timeout',
     'windows.ffi must expose Windows timeout-result semantics');
+  CheckTokenPresent(LWindowsSource, 'windows_error_i32_is_timeout',
+    'windows.ffi must expose an Int32 timeout classifier helper');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_init',
     'windows.ffi must expose Windows mutex init helper');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_lock',
@@ -205,12 +207,16 @@ begin
     'windows.ffi must expose Windows condvar wait helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_ms',
     'windows.ffi must expose Windows condvar timedwait helper');
+  CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_ns',
+    'windows.ffi must expose Windows condvar timedwait helper with ns timeout input');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_signal',
     'windows.ffi must expose Windows condvar signal helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_broadcast',
     'windows.ffi must expose Windows condvar broadcast helper');
   CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32',
     'windows.ffi must expose Windows wait-address helper');
+  CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_ns',
+    'windows.ffi must expose Windows wait-address helper with ns timeout input');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_single',
     'windows.ffi must expose Windows wake-address-single helper');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_all',
@@ -295,10 +301,8 @@ begin
     'platform.sync must consume Linux futex wake-one helper through linux.ffi');
   CheckTokenPresent(LSyncSource, 'linux_futex_wake_all_i32',
     'platform.sync must consume Linux futex wake-all helper through linux.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_timeout_ns_to_ms',
-    'platform.sync must consume Windows wait timeout conversion through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_last_error_is_timeout',
-    'platform.sync must consume Windows timeout-result semantics through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_error_i32_is_timeout',
+    'platform.sync must consume the Int32 Windows timeout classifier through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_init',
     'platform.sync must consume Windows mutex init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_lock',
@@ -325,14 +329,14 @@ begin
     'platform.sync must consume Windows condvar init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_wait',
     'platform.sync must consume Windows condvar wait helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_timedwait_ms',
-    'platform.sync must consume Windows condvar timedwait helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_condvar_timedwait_ns',
+    'platform.sync must consume Windows condvar timedwait helper with ns timeout input through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_signal',
     'platform.sync must consume Windows condvar signal helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_broadcast',
     'platform.sync must consume Windows condvar broadcast helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_wait_address_i32',
-    'platform.sync must consume Windows wait-address helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_wait_address_i32_timeout_ns',
+    'platform.sync must consume Windows wait-address helper with ns timeout input through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_single',
     'platform.sync must consume Windows wake-address-single helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_all',
@@ -365,6 +369,12 @@ begin
     'platform.sync must not keep a raw Windows timeout-result token');
   Check(Pos('function platform_timeout_ns_to_ms', LSyncSource) = 0,
     'platform.sync must not keep a local Windows timeout conversion helper');
+  Check(Pos('windows_timeout_ns_to_ms', LSyncSource) = 0,
+    'platform.sync must not keep the raw Windows timeout-ms helper in the consumer');
+  Check(Pos('windows_last_error_is_timeout', LSyncSource) = 0,
+    'platform.sync must not keep the raw Windows DWORD timeout classifier in the consumer');
+  Check(Pos(': dword', LSyncSource) = 0,
+    'platform.sync must not keep raw DWORD temporaries in the Windows consumer');
   Check(Pos('linux_syscall', LSyncSource) = 0,
     'platform.sync must not call linux_syscall directly in the Linux consumer');
   Check(Pos('futex_wait or futex_private_flag', LSyncSource) = 0,

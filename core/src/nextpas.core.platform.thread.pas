@@ -151,104 +151,30 @@ end;
 uses
   nextpas.core.platform.windows.ffi;
 
-type
-  PWindowsThreadState = ^TWindowsThreadState;
-  TWindowsThreadState = record
-    Handle: HANDLE;
-    Proc: TPlatformThreadProc;
-    Arg: Pointer;
-    ReturnValue: Pointer;
-    RefCount: Int32;
-  end;
-
-procedure WindowsReleaseThreadState(const AState: PWindowsThreadState);
-begin
-  if AState = nil then
-    Exit;
-
-  if windows_atomic_decrement_i32(AState^.RefCount) = 0 then
-    Dispose(AState);
-end;
-
-function WindowsThreadEntry(AParameter: Pointer): DWORD; stdcall;
-var
-  LState: PWindowsThreadState;
-  LReturnValue: Pointer;
-begin
-  LState := PWindowsThreadState(AParameter);
-  LReturnValue := nil;
-
-  if (LState <> nil) and Assigned(LState^.Proc) then
-    LReturnValue := LState^.Proc(LState^.Arg);
-
-  if LState <> nil then
-  begin
-    LState^.ReturnValue := LReturnValue;
-    WindowsReleaseThreadState(LState);
-  end;
-
-  Result := 0;
-end;
-
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 var
-  LState: PWindowsThreadState;
+  LState: PPlatformWindowsThreadState;
 begin
   AHandle := nil;
-  if not Assigned(AProc) then
-    Exit(-1);
-
-  New(LState);
-  LState^.Handle := nil;
-  LState^.Proc := AProc;
-  LState^.Arg := AArg;
-  LState^.ReturnValue := nil;
-  LState^.RefCount := 2;
-
-  Result := windows_thread_create_handle(@WindowsThreadEntry, LState, LState^.Handle);
+  Result := windows_thread_state_create(TPlatformWindowsThreadProc(AProc), AArg, LState);
   if Result = 0 then
-  begin
     AHandle := TPlatformThreadHandle(LState);
-  end
-  else
-  begin
-    Dispose(LState);
-  end;
 end;
 
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
 var
-  LState: PWindowsThreadState;
+  LState: PPlatformWindowsThreadState;
 begin
-  ARetVal := nil;
-  if AHandle = nil then
-    Exit(-1);
-
-  LState := PWindowsThreadState(AHandle);
-  Result := windows_thread_wait_terminated(LState^.Handle);
-  if Result = 0 then
-  begin
-    ARetVal := LState^.ReturnValue;
-    Result := windows_thread_close_handle(LState^.Handle);
-    LState^.Handle := nil;
-    WindowsReleaseThreadState(LState);
-  end
+  LState := PPlatformWindowsThreadState(AHandle);
+  Result := windows_thread_state_join(LState, ARetVal);
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
 var
-  LState: PWindowsThreadState;
+  LState: PPlatformWindowsThreadState;
 begin
-  if AHandle = nil then
-    Exit(-1);
-
-  LState := PWindowsThreadState(AHandle);
-  Result := windows_thread_close_handle(LState^.Handle);
-  if Result = 0 then
-  begin
-    LState^.Handle := nil;
-    WindowsReleaseThreadState(LState);
-  end;
+  LState := PPlatformWindowsThreadState(AHandle);
+  Result := windows_thread_state_detach(LState);
 end;
 
 function platform_thread_self: TPlatformThreadToken;
@@ -272,31 +198,23 @@ begin
 end;
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
-var
-  LIdx: DWORD;
 begin
-  Result := windows_tls_alloc_key(LIdx);
-  if Result = 0 then
-  begin
-    AKey := TPlatformTLSKey(LIdx);
-  end
-  else
-    AKey := 0;
+  Result := windows_tls_create_platform_key(AKey);
 end;
 
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
-  Result := windows_tls_free_key(DWORD(AKey));
+  Result := windows_tls_destroy_platform_key(AKey);
 end;
 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
 begin
-  Result := windows_tls_set_value(DWORD(AKey), AValue);
+  Result := windows_tls_set_platform_key(AKey, AValue);
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 begin
-  Result := windows_tls_get_value(DWORD(AKey));
+  Result := windows_tls_get_platform_key(AKey);
 end;
 
 function platform_cpu_count: Int32;

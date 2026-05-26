@@ -778,15 +778,13 @@ end;
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
 var
   LError: Int32;
-  LMs: DWORD;
 begin
-  LMs := windows_timeout_ns_to_ms(ATimeoutNs);
-  LError := windows_condvar_timedwait_ms(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], LMs);
+  LError := windows_condvar_timedwait_ns(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], ATimeoutNs);
   if LError = 0 then
     Result := 0
   else
   begin
-    if windows_last_error_is_timeout(DWORD(LError)) then
+    if windows_error_i32_is_timeout(LError) then
       Result := PLATFORM_ERR_TIMEOUT
     else
       Result := LError;
@@ -808,15 +806,13 @@ end;
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 var
   LError: Int32;
-  LMs: DWORD;
 begin
-  LMs := windows_timeout_ns_to_ms(ATimeoutNs);
-  LError := windows_wait_address_i32(AAddr, AExpected, LMs);
+  LError := windows_wait_address_i32_timeout_ns(AAddr, AExpected, ATimeoutNs);
   if LError = 0 then
     Result := 0
   else
   begin
-    if windows_last_error_is_timeout(DWORD(LError)) then
+    if windows_error_i32_is_timeout(LError) then
       Result := PLATFORM_ERR_TIMEOUT
     else
       Result := LError;

@@ -5106,3 +5106,55 @@ Hello from nextPas!
   - Full:
     - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`
+
+### Phase 13: Platform Windows ABI Type Leakage Ownership
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 先核对 live truth：当前收口继续直接发生在 `main` worktree；旧
+    `codex/platform-time-integration @ 02be065` 依旧未并入 `main`，这轮 Windows ABI type leakage
+    ownerization 不能被误记成旧 worktree 已合。
+  - 先把 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface` 扩成新的 RED gate，要求：
+    - `windows.ffi` 暴露 `TPlatformWindowsThreadProc`、
+      `PPlatformWindowsThreadState` / `TPlatformWindowsThreadState`、
+      `windows_thread_state_create/join/detach`
+    - `windows.ffi` 暴露 `windows_tls_create/destroy/set/get_platform_key`
+    - `windows.ffi` 暴露 `windows_error_i32_is_timeout`、
+      `windows_condvar_timedwait_ns`、`windows_wait_address_i32_timeout_ns`
+    - `platform.thread` / `platform.sync` 不得继续在 consumer 里保留 raw `HANDLE` / `DWORD` /
+      `stdcall` thunk / `DWORD(AError)` 这类宿主 ABI 细节
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增 Windows thread state carrier type、
+    entry thunk、state create/join/detach helper、platform-neutral TLS key helper，以及
+    Int32 timeout classifier / ns-timeout condvar / wait-address helper。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Windows 分支改为消费
+    `PPlatformWindowsThreadState`、`TPlatformWindowsThreadProc`、
+    `windows_thread_state_create/join/detach` 与 platform-key TLS helper，不再在 consumer 里继续
+    保存 raw `HANDLE` 字段、`DWORD` TLS key 转换或 `stdcall` Windows entry thunk。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows 分支改为消费
+    `windows_error_i32_is_timeout`、`windows_condvar_timedwait_ns`、
+    `windows_wait_address_i32_timeout_ns`，不再在 consumer 里保留 `DWORD` timeout 临时量或
+    `DWORD(LError)` 分类。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`，
+    把“Windows ABI type leakage 也归 ffi owner”这条规则写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose a Windows user-thread proc carrier type: tplatformwindowsthreadproc`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose an Int32 timeout classifier helper: windows_error_i32_is_timeout`
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - Win64 compile-only:
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`

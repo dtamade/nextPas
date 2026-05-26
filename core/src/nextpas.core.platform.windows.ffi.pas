@@ -10,6 +10,7 @@ type
   HANDLE = Pointer;
   SRWLOCK = Pointer;
   CONDITION_VARIABLE = Pointer;
+  TPlatformWindowsThreadProc = function(AArg: Pointer): Pointer; cdecl;
 
   FILETIME = record
     dwLowDateTime: DWORD;
@@ -30,6 +31,15 @@ type
   end;
 
   TWinThreadStartRoutine = function(lpThreadParameter: Pointer): DWORD; stdcall;
+  PPlatformWindowsThreadState = ^TPlatformWindowsThreadState;
+  TPlatformWindowsThreadState = record
+    Handle: HANDLE;
+    Proc: TPlatformWindowsThreadProc;
+    Arg: Pointer;
+    ReturnValue: Pointer;
+    RefCount: Int32;
+  end;
+
   TPlatformWindowsMutexAlign = record
     Value: SRWLOCK;
   end;
@@ -57,6 +67,7 @@ function windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
 function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 function windows_last_error_i32: Int32; inline;
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
+function windows_error_i32_is_timeout(const AError: Int32): Boolean; inline;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
 function windows_mutex_init(const AMutex: Pointer): Int32; inline;
 function windows_mutex_lock(const AMutex: Pointer): Int32; inline;
@@ -75,12 +86,20 @@ function windows_condvar_timedwait_ms(
   const ACondVar: Pointer;
   const AMutex: Pointer;
   const ATimeoutMs: DWORD): Int32; inline;
+function windows_condvar_timedwait_ns(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutNs: Int64): Int32; inline;
 function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
 function windows_condvar_broadcast(const ACondVar: Pointer): Int32; inline;
 function windows_wait_address_i32(
   const AAddress: PInt32;
   const AExpected: Int32;
   const ATimeoutMs: DWORD): Int32; inline;
+function windows_wait_address_i32_timeout_ns(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64): Int32; inline;
 function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
 function windows_wake_address_all(const AAddress: PInt32): Int32; inline;
 function windows_current_thread_id_u64: UInt64; inline;
@@ -90,6 +109,15 @@ function windows_thread_create_handle(
   out AHandle: HANDLE): Int32; inline;
 function windows_thread_wait_terminated(const AHandle: HANDLE): Int32; inline;
 function windows_thread_close_handle(const AHandle: HANDLE): Int32; inline;
+function windows_thread_state_create(
+  const AProc: TPlatformWindowsThreadProc;
+  const AArg: Pointer;
+  out AState: PPlatformWindowsThreadState): Int32; inline;
+function windows_thread_state_join(
+  const AState: PPlatformWindowsThreadState;
+  out ARetVal: Pointer): Int32; inline;
+function windows_thread_state_detach(
+  const AState: PPlatformWindowsThreadState): Int32; inline;
 procedure windows_thread_sleep_ns(const ANanoseconds: UInt64); inline;
 function windows_atomic_decrement_i32(var AValue: Int32): Int32; inline;
 procedure windows_thread_yield; inline;
@@ -97,6 +125,10 @@ function windows_tls_alloc_key(out AIndex: DWORD): Int32; inline;
 function windows_tls_free_key(const AIndex: DWORD): Int32; inline;
 function windows_tls_set_value(const AIndex: DWORD; const AValue: Pointer): Int32; inline;
 function windows_tls_get_value(const AIndex: DWORD): Pointer; inline;
+function windows_tls_create_platform_key(out AKey: PtrUInt): Int32; inline;
+function windows_tls_destroy_platform_key(const AKey: PtrUInt): Int32; inline;
+function windows_tls_set_platform_key(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+function windows_tls_get_platform_key(const AKey: PtrUInt): Pointer; inline;
 function windows_cpu_count_i32: Int32; inline;
 function windows_qpc_frequency_u64: UInt64;
 function windows_qpc_counter_u64(out ACounter: UInt64): Boolean;
@@ -184,6 +216,11 @@ end;
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
 begin
   Result := AError = ERROR_TIMEOUT;
+end;
+
+function windows_error_i32_is_timeout(const AError: Int32): Boolean; inline;
+begin
+  Result := (AError >= 0) and windows_last_error_is_timeout(DWORD(AError));
 end;
 
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
@@ -276,6 +313,15 @@ begin
     Result := windows_last_error_i32;
 end;
 
+function windows_condvar_timedwait_ns(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutNs: Int64): Int32; inline;
+begin
+  Result := windows_condvar_timedwait_ms(
+    ACondVar, AMutex, windows_timeout_ns_to_ms(ATimeoutNs));
+end;
+
 function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
 begin
   WakeConditionVariable(ACondVar);
@@ -300,6 +346,15 @@ begin
     Result := 0
   else
     Result := windows_last_error_i32;
+end;
+
+function windows_wait_address_i32_timeout_ns(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64): Int32; inline;
+begin
+  Result := windows_wait_address_i32(
+    AAddress, AExpected, windows_timeout_ns_to_ms(ATimeoutNs));
 end;
 
 function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
@@ -350,6 +405,91 @@ begin
     Result := 0
   else
     Result := windows_last_error_i32;
+end;
+
+procedure windows_thread_state_release(const AState: PPlatformWindowsThreadState); inline;
+begin
+  if AState = nil then
+    Exit;
+
+  if windows_atomic_decrement_i32(AState^.RefCount) = 0 then
+    Dispose(AState);
+end;
+
+function windows_thread_entry(AParameter: Pointer): DWORD; stdcall;
+var
+  LState: PPlatformWindowsThreadState;
+  LReturnValue: Pointer;
+begin
+  LState := PPlatformWindowsThreadState(AParameter);
+  LReturnValue := nil;
+
+  if (LState <> nil) and Assigned(LState^.Proc) then
+    LReturnValue := LState^.Proc(LState^.Arg);
+
+  if LState <> nil then
+  begin
+    LState^.ReturnValue := LReturnValue;
+    windows_thread_state_release(LState);
+  end;
+
+  Result := 0;
+end;
+
+function windows_thread_state_create(
+  const AProc: TPlatformWindowsThreadProc;
+  const AArg: Pointer;
+  out AState: PPlatformWindowsThreadState): Int32; inline;
+begin
+  AState := nil;
+  if not Assigned(AProc) then
+    Exit(-1);
+
+  New(AState);
+  AState^.Handle := nil;
+  AState^.Proc := AProc;
+  AState^.Arg := AArg;
+  AState^.ReturnValue := nil;
+  AState^.RefCount := 2;
+
+  Result := windows_thread_create_handle(@windows_thread_entry, AState, AState^.Handle);
+  if Result <> 0 then
+  begin
+    Dispose(AState);
+    AState := nil;
+  end;
+end;
+
+function windows_thread_state_join(
+  const AState: PPlatformWindowsThreadState;
+  out ARetVal: Pointer): Int32; inline;
+begin
+  ARetVal := nil;
+  if AState = nil then
+    Exit(-1);
+
+  Result := windows_thread_wait_terminated(AState^.Handle);
+  if Result = 0 then
+  begin
+    ARetVal := AState^.ReturnValue;
+    Result := windows_thread_close_handle(AState^.Handle);
+    AState^.Handle := nil;
+    windows_thread_state_release(AState);
+  end;
+end;
+
+function windows_thread_state_detach(
+  const AState: PPlatformWindowsThreadState): Int32; inline;
+begin
+  if AState = nil then
+    Exit(-1);
+
+  Result := windows_thread_close_handle(AState^.Handle);
+  if Result = 0 then
+  begin
+    AState^.Handle := nil;
+    windows_thread_state_release(AState);
+  end;
 end;
 
 procedure windows_thread_sleep_ns(const ANanoseconds: UInt64); inline;
@@ -404,6 +544,32 @@ end;
 function windows_tls_get_value(const AIndex: DWORD): Pointer; inline;
 begin
   Result := TlsGetValue(AIndex);
+end;
+
+function windows_tls_create_platform_key(out AKey: PtrUInt): Int32; inline;
+var
+  LIndex: DWORD;
+begin
+  Result := windows_tls_alloc_key(LIndex);
+  if Result = 0 then
+    AKey := PtrUInt(LIndex)
+  else
+    AKey := 0;
+end;
+
+function windows_tls_destroy_platform_key(const AKey: PtrUInt): Int32; inline;
+begin
+  Result := windows_tls_free_key(DWORD(AKey));
+end;
+
+function windows_tls_set_platform_key(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+begin
+  Result := windows_tls_set_value(DWORD(AKey), AValue);
+end;
+
+function windows_tls_get_platform_key(const AKey: PtrUInt): Pointer; inline;
+begin
+  Result := windows_tls_get_value(DWORD(AKey));
 end;
 
 function windows_cpu_count_i32: Int32; inline;
