@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync pthread capability ffi ownership；并行收口包含
-platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform.thread sleep eintr ffi ownership；并行收口包含
+platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,43 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.thread sleep eintr ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续把 `platform.thread` 的 Unix sleep retry 语义从实现层下沉到 host-owned errno truth，避免对任意
+    `nanosleep` 错误都盲目重试。
+- Baseline:
+  - `platform.thread` 已经按 host 拥有 native thread id 与 sysconf token，但 `platform_thread_sleep_ns`
+    仍对 `nanosleep` 的所有失败一律重试，没有显式消费宿主 errno binding 与 `EINTR` token。
+- Actions taken:
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、`android.ffi`、`darwin.ffi`、`freebsd.ffi`、
+    `unix.ffi` 统一新增 `PLATFORM_POSIX_EINTR`。
+  - `core/src/nextpas.core.platform.thread.pas` 新增本地 `platform_posix_errno` 读取，POSIX sleep 现在只在
+    `platform_errno_location^ = PLATFORM_POSIX_EINTR` 时继续重试 `nanosleep`。
+  - 扩充 `test_platform_ffi_partition_surface` 与 `test_platform_thread_host_ffi_surface`，把
+    host-owned EINTR 与 errno binding 消费关系冻结成 focused gate。
+  - `core/docs/design-conventions.md` 追加规则：shared `nanosleep` ABI 可以留在 `posix.ffi`，但 retryable
+    errno truth 必须下沉到 host ffi owner。
+- Verification:
+  - RED:
+    - `test_platform_ffi_partition_surface` 初始失败在
+      `linux.ffi must expose Linux EINTR for retryable sleep semantics`。
+    - `test_platform_thread_host_ffi_surface` 初始失败在
+      `linux.ffi must expose Linux EINTR for retryable nanosleep`。
+  - Focused GREEN:
+    - `test_platform_ffi_partition_surface` 1/1 pass
+    - `test_platform_thread_host_ffi_surface` 1/1 pass
+    - `test_platform_thread` 8/8 pass
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.thread` 的 sleep retry 语义也纳入了 host-owned FFI owner 边界，避免实现层继续保存
+    “所有 Unix 错误都一样” 这种粗糙假设。
+  - 下一步更值得做的是继续审计 `platform.time` / `platform.thread` 里是否还有类似 retry/error policy
+    没进 host ffi 的残余点，或者把 cross-target compile/runtime 证据矩阵补硬。
 
 ## Session: 2026-05-27 (platform.sync pthread capability ffi ownership)
 

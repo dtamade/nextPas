@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync Pthread Capability FFI Ownership；并行收口包含
-Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Thread Sleep EINTR FFI Ownership；并行收口包含
+Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,57 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Thread Sleep EINTR FFI Ownership
+
+### Goal
+
+继续把 `platform.thread` 的宿主错误语义从实现层下沉到 host-specific FFI owner：
+
+- retryable `nanosleep` errno truth 不能再隐含在实现层 while-loop 里
+- Linux / Android / macOS / FreeBSD / generic Unix 各自都要显式拥有 `EINTR` token
+- `platform.thread` 必须消费 host-owned errno binding 与 `EINTR` token，而不是对任意错误一律重试
+
+### Architecture Decision
+
+- `nanosleep` 本身仍属于 shared POSIX ABI，所以继续留在 `posix.ffi`。
+- “什么错误可以安全重试”属于宿主 errno truth，继续归 `linux/darwin/android/freebsd/unix` 各自 FFI owner。
+- `platform.thread` 继续只负责线程 API 契约与 sleep policy，不再凭实现层假设“所有 Unix 错误都可重试”。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 focused tests，要求 host ffi 暴露 `PLATFORM_POSIX_EINTR`
+- [x] RED：扩 focused tests，要求 `platform.thread` 消费 host-owned errno binding 与 `EINTR`
+- [x] 将 `PLATFORM_POSIX_EINTR` 下沉到各 Unix host ffi
+- [x] 调整 `platform.thread` 的 POSIX sleep 只在 `EINTR` 上重试
+- [x] 同步设计约定与跟踪文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    初始失败在 `linux.ffi must expose Linux EINTR for retryable sleep semantics`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose Linux EINTR for retryable nanosleep`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不引入新的 thread public API
+- 这批不宣称 Darwin / FreeBSD / Android 已获得新的真实 runtime 证据
+- 这批不扩展 signal handling 抽象
 
 ## Addendum: 2026-05-27 Platform Sync Pthread Capability FFI Ownership
 

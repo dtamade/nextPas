@@ -790,6 +790,10 @@ time、sync ABI 应尽量统一沉到 `nextpas.core.platform.windows.ffi`，Linu
 policy token，必须下沉到各自 `linux/darwin/android/freebsd/unix` FFI owner 单元，不要继续塞在
 shared `posix.ffi` 或实现层条件编译里。
 
+同样，`nanosleep` 这类 shared POSIX ABI 的 retry/error 语义也不能由实现层凭空假设。像
+`EINTR` 这样的 retryable errno token 必须由各宿主 FFI owner 提供，`platform.thread` 等实现单元只消费
+这些 host-owned token，而不是把“所有 Unix 都按同一个 errno 编号重试”写死在实现里。
+
 ### `platform.time` 的边界
 
 `nextpas.core.platform.time` 只提供系统时钟源和平台换算工具，例如 monotonic clock、

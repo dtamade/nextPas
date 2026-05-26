@@ -100,6 +100,8 @@ begin
     'linux.ffi must expose Linux clock ids');
   CheckTokenPresent(LLinuxSource, 'platform_posix_etimedout',
     'linux.ffi must expose Linux errno constants');
+  CheckTokenPresent(LLinuxSource, 'platform_posix_eintr',
+    'linux.ffi must expose Linux EINTR for retryable sleep semantics');
   CheckTokenPresent(LLinuxSource, 'function platform_errno_location',
     'linux.ffi must expose Linux errno binding');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_mutex_normal_kind',
@@ -115,6 +117,8 @@ begin
     'darwin.ffi must expose Darwin clock ids');
   CheckTokenPresent(LDarwinSource, 'platform_posix_etimedout',
     'darwin.ffi must expose Darwin errno constants');
+  CheckTokenPresent(LDarwinSource, 'platform_posix_eintr',
+    'darwin.ffi must expose Darwin EINTR for retryable sleep semantics');
   CheckTokenPresent(LDarwinSource, 'function platform_errno_location',
     'darwin.ffi must expose Darwin errno binding');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_mutex_normal_kind',
@@ -130,6 +134,8 @@ begin
     'android.ffi must expose Android clock ids');
   CheckTokenPresent(LAndroidSource, 'platform_posix_etimedout',
     'android.ffi must expose Android errno constants');
+  CheckTokenPresent(LAndroidSource, 'platform_posix_eintr',
+    'android.ffi must expose Android EINTR for retryable sleep semantics');
   CheckTokenPresent(LAndroidSource, 'function platform_errno_location',
     'android.ffi must expose Android errno binding');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_mutex_normal_kind',
@@ -145,6 +151,8 @@ begin
     'freebsd.ffi must expose FreeBSD clock ids');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_etimedout',
     'freebsd.ffi must expose FreeBSD errno constants');
+  CheckTokenPresent(LFreeBSDSource, 'platform_posix_eintr',
+    'freebsd.ffi must expose FreeBSD EINTR for retryable sleep semantics');
   CheckTokenPresent(LFreeBSDSource, 'function platform_errno_location',
     'freebsd.ffi must expose FreeBSD errno binding');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_mutex_normal_kind',
@@ -160,6 +168,8 @@ begin
     'unix.ffi must expose generic Unix clock ids');
   CheckTokenPresent(LUnixSource, 'platform_posix_etimedout',
     'unix.ffi must expose generic Unix errno constants');
+  CheckTokenPresent(LUnixSource, 'platform_posix_eintr',
+    'unix.ffi must expose generic Unix EINTR for retryable sleep semantics');
   CheckTokenPresent(LUnixSource, 'function platform_errno_location',
     'unix.ffi must expose generic Unix errno binding');
   CheckTokenPresent(LUnixSource, 'platform_pthread_mutex_normal_kind',

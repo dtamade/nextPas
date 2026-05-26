@@ -53,6 +53,10 @@
 - 这批已把 host-native thread id ABI 继续沉进各自 FFI：
   Linux/Android 走 `gettid`，macOS 走 `pthread_threadid_np`，FreeBSD 走
   `pthread_getthreadid_np`，generic Unix 才保留 `pthread_self` fallback。
+- `platform.thread` 的 POSIX sleep retry 现在不再对 `nanosleep` 的所有失败一律重试；各宿主 FFI 统一拥有
+  `PLATFORM_POSIX_EINTR`，实现层只在 `platform_errno_location^ = PLATFORM_POSIX_EINTR` 时重试。
+- 这也意味着 `nanosleep` 的 retry/error 语义现在和 mutex kind、condattr clock capability 一样，
+  进入了 host-owned FFI truth，而不是继续躲在实现层 while-loop 假设里。
 - 新增 `core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface/`，把
   host-native thread id declarations 与 `platform.thread` 的消费关系冻结成 source-surface gate；
   Linux behavior test 也已从“self token == thread id”改成 “`platform_thread_id` 对齐宿主 `gettid`”。
