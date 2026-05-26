@@ -246,7 +246,9 @@ symbol id/name/kind/param count/param signature/owner unit/source path/offset。
 procedure/function call 已覆盖同名同 arity overload 的最小 typed binding；默认参数语法会把
 bare call 的可接受 arity 扩展为必填参数数到总参数数，当前可推断的 argument signature
 会按已提供参数前缀选择唯一 `ParamSignature` target，并通过
-`queryDefinitions[].targetParamSignature` 暴露 compact target signature；无法推断或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
+`queryDefinitions[].targetParamSignature` 暴露 compact target signature；root-owned 单一 target 的
+type-mismatch diagnostics 现在还接受 root-owned 零参内建标量/字符串 function result 作为稳定
+argument evidence；无法推断、imported/带参/member function result 或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的

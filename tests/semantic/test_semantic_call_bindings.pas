@@ -2422,7 +2422,7 @@ begin
   end;
 end;
 
-procedure CheckBareFunctionResultTypeMismatchDeferred;
+procedure CheckBareFunctionResultTypeMismatchDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -2434,7 +2434,7 @@ var
   UnitGraph: TUnitGraph;
 begin
   SourceText :=
-    'program BareFunctionResultTypeMismatchDeferred;' + LineEnding +
+    'program BareFunctionResultTypeMismatchCalls;' + LineEnding +
     'procedure Pick(Value: Integer);' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
@@ -2457,12 +2457,19 @@ begin
     Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
-    if Diagnostics.HasErrors then
-      Fail('unexpected-bare-function-result-type-mismatch-diagnostic:' +
+    if not Diagnostics.HasErrors then
+      Fail('missing-bare-function-result-type-mismatch-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.type-mismatch') then
+      Fail('unexpected-bare-function-result-type-mismatch-diagnostic-code:' +
         Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-bare-function-result-type-mismatch-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('bare-function-result-type-mismatch-diagnostic-missing-name');
     if Model = nil then
       Fail('missing-bare-function-result-type-mismatch-semantic-model');
-    if not SameText(Model.Status, 'ready') then
+    if not SameText(Model.Status, 'failure') then
       Fail('unexpected-bare-function-result-type-mismatch-model-status:' +
         Model.Status);
     if Model.BindingCount <> 0 then
@@ -2743,7 +2750,7 @@ begin
     CheckBareUnknownCallableDiagnostic;
     CheckImplicitSelfBareMethodCallDeferred;
     CheckMemberParameterCallTypeMismatchDiagnostic;
-    CheckBareFunctionResultTypeMismatchDeferred;
+    CheckBareFunctionResultTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');

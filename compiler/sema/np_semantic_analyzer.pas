@@ -1093,6 +1093,7 @@ function TSemanticAnalyzer.ExpressionTypeFactIsStable(
 ): Boolean;
 var
   Index: LongInt;
+  RootOwnerUnitId: string;
   Sym: TSemanticSymbol;
   SymId: LongInt;
 begin
@@ -1111,10 +1112,28 @@ begin
         if SymId <= 0 then
           Exit(False);
         Sym := FModel.SymbolAt(SymId - 1);
-        if (not SameText(Sym.Kind, 'variable')) and
+        if SameText(Sym.Kind, 'function') then
+        begin
+          RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+          Exit((Sym.ParamCount = 0) and
+            SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+            TypeIdHasStableScalarFact(Sym.TypeId));
+        end
+        else if (not SameText(Sym.Kind, 'variable')) and
           (not SameText(Sym.Kind, 'parameter')) then
           Exit(False);
         Exit(TypeIdHasStableScalarFact(Sym.TypeId));
+      end;
+    gnkFunctionCall:
+      begin
+        SymId := FModel.LookupSymbol(ANode.Text, FCurrentScopeId);
+        if SymId <= 0 then
+          Exit(False);
+        Sym := FModel.SymbolAt(SymId - 1);
+        RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+        Exit(SameText(Sym.Kind, 'function') and (Sym.ParamCount = 0) and
+          SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+          (ANode.ChildCount <= 1) and TypeIdHasStableScalarFact(Sym.TypeId));
       end;
     gnkBinaryExpression, gnkUnaryExpression:
       begin

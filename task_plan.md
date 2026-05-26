@@ -15,14 +15,76 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 103 Object Release Invalid Trap Policy；并行收口包含
-Platform API Boundary Cleanup；Batch 102 Object Release Invalid Boundary、
+当前最新本轮为 Batch 104 Function Result Call Type Mismatch Evidence；并行收口包含
+Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
+Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 104 Function Result Call Type Mismatch Evidence
+
+### Goal
+
+把 Batch 81 之前明确 deferred 的 root-owned function result evidence 推进成第一条安全切片：
+当 bare procedure/function call 只有 root-owned 单一 target、arity 已匹配，且参数是同一 root source 中
+零参 function 的内建标量/字符串返回值时，若与 target param signature 明确不兼容，发出
+`sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `function Flag: Boolean; Pick(Flag);` 调 `Pick(Value: Integer)` 必须失败为
+  `sema.type-mismatch`，且失败调用不注册 `call` binding。
+- stable function-result evidence 只接受 root-owned、零参、`function` symbol，且返回类型必须通过
+  `TypeIdHasStableScalarFact(...)`。
+- imported function result、带参 function result、class/record/alias/Pointer/Text/Variant、member
+  function result、多 overload signature no-match 继续 deferred。
+- `build/verify_local.sh` 新增 `type-mismatch-function-result-call-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `typeMismatchFunctionResultCallCheck`。
+
+### Architecture Decision
+
+这是 value fact evidence 的第三条安全切片，不是完整 expression evaluator：
+
+- root-owned function symbol 已经在 semantic model 中有 owner、param count 和 return type id，因此
+  零参 builtin scalar/string result 可以作为 compile-time type evidence。
+- 只扩展 diagnostics evidence，不改变 callable lookup 的 root/imported 优先级，不引入 implicit
+  conversion、ranking、effect analysis 或 function pointer semantics。
+- 失败时仍通过现有 `LookupCallBindingDeclaration(...)` 的 `type-mismatch` failure kind 投影到
+  diagnostics sink。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：把 focused semantic guard 从 function result deferred 改成 `sema.type-mismatch`
+- [x] 新增 `tests/fixtures/type_mismatch_function_result_call` 与 verify gate
+- [x] 在 stable evidence 中接受 root-owned 零参 builtin function result
+- [x] focused semantic gate 转绿
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-bare-function-result-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported function result 纳入 type mismatch diagnostics
+- 不把带参 function result / function pointer / member function result 纳入 evidence
+- 不实现 implicit conversion / overload ranking / no-matching-overload diagnostics
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 103 Object Release Invalid Trap Policy
 

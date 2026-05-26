@@ -3,14 +3,45 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 103 object release invalid trap policy；并行收口包含 platform API boundary
-cleanup；Batch 102 object release invalid boundary、Batch 101 object release poison contract、
+当前最新本轮为 Batch 104 function result call type mismatch evidence；并行收口包含 platform API boundary
+cleanup；Batch 103 object release invalid trap policy、Batch 102 object release invalid boundary、
+Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 104 function result call type mismatch evidence)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 root-owned 零参 function result 的 builtin scalar/string return type 纳入
+    `sema.type-mismatch` stable evidence。
+- Baseline:
+  - Batch 81 特意把 `function Flag: Boolean; Pick(Flag);` 保持 deferred，避免函数返回值被误当成
+    普通变量事实。
+  - 当前 semantic model 已有 function symbol 的 owner、`ParamCount` 与 return `TypeId`，可以安全推进
+    root-owned 零参函数结果这一条窄边界。
+- Actions taken:
+  - 把 focused semantic guard 改成要求 `Pick(Flag)` 发 `sema.type-mismatch`、model status
+    `failure`、binding count `0`。
+  - 新增 `tests/fixtures/type_mismatch_function_result_call/type_mismatch_function_result_call_fail.pas`。
+  - `ExpressionTypeFactIsStable(...)` 现在接受 root-owned、零参、builtin scalar/string function result。
+  - `build/verify_local.sh` 新增 `type-mismatch-function-result-call-check` 与
+    `typeMismatchFunctionResultCallCheck` envelope field。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-bare-function-result-type-mismatch-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批不扩大到 imported/带参/member function result，也不实现 implicit conversion、overload ranking
+    或 no-matching-overload diagnostics。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 103 object release invalid trap policy)
 

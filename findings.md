@@ -33,6 +33,15 @@
   `remainder * multiplier` 会溢出但最终商仍可表示时，走逐位 fallback 而不是直接饱和。
 - `build/verify_local.sh` 已提升 platform time focused gates：time helpers、no-FPC 静态检查和 Win64
   compile-only 都会进入 official local verification。
+- Batch 104 把 `sema.type-mismatch` evidence 从变量/参数推进到 root-owned 零参 function result：
+  `function Flag: Boolean; Pick(Flag);` 调 `Pick(Integer)` 现在会失败且不注册失败 call binding。
+- function-result evidence 只接受 root-owned、零参、builtin scalar/string return type；imported、
+  带参、member function result、function pointer、class/record/alias/Pointer/Text/Variant 继续 deferred。
+- Batch 104 新增 `type-mismatch-function-result-call-check`，用 dedicated fixture 固定 stage0
+  `sema.type-mismatch` projection 与 final envelope。
+- Batch 104 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 102 已把 platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`，
   并让 official gates 指向 platform 命名空间；`nextpas.core.time/test_time` 继续只覆盖 L1
   `time` public API。
