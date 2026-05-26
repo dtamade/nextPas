@@ -10,6 +10,21 @@
 
 ## Research Findings
 
+- `platform.time` 现在通过 nextPas-owned FFI 单元访问平台 ABI：POSIX clock API 位于
+  `nextpas.core.platform.posix.ffi`，macOS mach timebase 位于
+  `nextpas.core.platform.darwin.ffi`，Windows QPC/FILETIME 位于
+  `nextpas.core.platform.windows.ffi`。
+- `platform.time` 不再直接 `uses Linux`、`UnixType` 或 `Windows`，也不在实现单元中声明
+  `external` ABI；`test_platform_time_no_fpc_units` 固定这个硬规则。
+- time conversion helper 现在对不可表示的 UInt64 结果做饱和，对负的 timespec 输入归零，并用
+  ceil 计算 frequency resolution，避免对 Windows QPC/macOS timebase 精度做过度承诺。
+- QPC / mach timebase 的 fractional multiply/divide 边界已补强：当 divisor 很大导致
+  `remainder * multiplier` 会溢出但最终商仍可表示时，走逐位 fallback 而不是直接饱和。
+- `build/verify_local.sh` 已提升 platform time focused gates：time helpers、no-FPC 静态检查和 Win64
+  compile-only 都会进入 official local verification。
+- 本批 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
+  `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 97 把 object allocation/release helper boundary 推进成最小 header ownership contract：
   `@np_object_alloc` 现在申请 `payload size + 16`，在 header offset 0 写 payload size，在
   offset 8 写 magic `1313882451`，再返回 payload pointer。

@@ -28,6 +28,22 @@ begin
   Check(LResult > UInt64(900000000) * UInt64(1000000000), 'should be > 900 billion ns');
 end;
 
+procedure TestQpcToNsHugeFrequencyFraction;
+var
+  LResult: UInt64;
+begin
+  LResult := platform_qpc_to_ns(High(UInt64) div 2, High(UInt64));
+  CheckEqual(Int64(499999999), Int64(LResult), 'huge frequency fractional conversion should stay exact');
+end;
+
+procedure TestQpcToNsSaturatesOnUnrepresentableValue;
+var
+  LResult: UInt64;
+begin
+  LResult := platform_qpc_to_ns(High(UInt64), 1);
+  CheckEqual(Int64(-1), Int64(LResult), 'unrepresentable qpc conversion should saturate');
+end;
+
 procedure TestQpcToNsZeroFrequency;
 var
   LResult: UInt64;
@@ -36,12 +52,26 @@ begin
   Check(LResult > 0, 'zero frequency should be handled safely');
 end;
 
+procedure TestResolutionFromFrequencyUsesCeil;
+begin
+  CheckEqual(Int64(334), Int64(platform_resolution_from_frequency_ns(3000000)), '3MHz resolution should ceil 333.333ns');
+  CheckEqual(Int64(1), Int64(platform_resolution_from_frequency_ns(0)), 'zero frequency should fall back to 1ns');
+  CheckEqual(Int64(1), Int64(platform_resolution_from_frequency_ns(2000000000)), 'sub-ns frequencies should report at least 1ns');
+end;
+
 procedure TestTimespecToNsBasic;
 begin
   CheckEqual(Int64(1000000000), Int64(platform_timespec_to_ns(1, 0)), '1 sec');
   CheckEqual(Int64(999999999), Int64(platform_timespec_to_ns(0, 999999999)), 'max nsec');
   CheckEqual(Int64(1999999999), Int64(platform_timespec_to_ns(1, 999999999)), '1 sec + max nsec');
   CheckEqual(Int64(0), Int64(platform_timespec_to_ns(0, 0)), 'zero');
+end;
+
+procedure TestTimespecToNsClampsInvalidInput;
+begin
+  CheckEqual(Int64(0), Int64(platform_timespec_to_ns(-1, 0)), 'negative seconds should clamp to zero');
+  CheckEqual(Int64(0), Int64(platform_timespec_to_ns(0, -1)), 'negative nanoseconds should clamp to zero');
+  CheckEqual(Int64(-1), Int64(platform_timespec_to_ns(High(Int64), 999999999)), 'overflow should saturate');
 end;
 
 procedure TestMonotonicNeverGoesBackward;
@@ -62,8 +92,12 @@ begin
   T := TTestRunner.Create('nextpas.core.platform.time.helpers');
   T.Run('QPC to ns basic', @TestQpcToNsBasic);
   T.Run('QPC to ns high counter (no overflow)', @TestQpcToNsHighCounter);
+  T.Run('QPC to ns huge frequency fraction', @TestQpcToNsHugeFrequencyFraction);
+  T.Run('QPC to ns saturates unrepresentable values', @TestQpcToNsSaturatesOnUnrepresentableValue);
   T.Run('QPC to ns zero frequency', @TestQpcToNsZeroFrequency);
+  T.Run('Resolution from frequency uses ceil', @TestResolutionFromFrequencyUsesCeil);
   T.Run('Timespec to ns basic', @TestTimespecToNsBasic);
+  T.Run('Timespec to ns clamps invalid input', @TestTimespecToNsClampsInvalidInput);
   T.Run('Monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
   T.Summary;
 end.

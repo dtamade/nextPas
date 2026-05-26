@@ -76,6 +76,7 @@ const
   {$ENDIF}
 
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
+function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
 function sched_yield: Int32; cdecl; external 'c' name 'sched_yield';
 function sysconf(name: Int32): PtrInt; cdecl; external 'c' name 'sysconf';

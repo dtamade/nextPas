@@ -9,6 +9,11 @@ type
   BOOL = LongBool;
   HANDLE = Pointer;
 
+  FILETIME = record
+    dwLowDateTime: DWORD;
+    dwHighDateTime: DWORD;
+  end;
+
   SYSTEM_INFO = record
     dwOemId: DWORD;
     dwPageSize: DWORD;
@@ -34,6 +39,9 @@ function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; std
 function CloseHandle(hObject: HANDLE): BOOL; stdcall; external 'kernel32' name 'CloseHandle';
 function GetCurrentThread: HANDLE; stdcall; external 'kernel32' name 'GetCurrentThread';
 function GetCurrentThreadId: DWORD; stdcall; external 'kernel32' name 'GetCurrentThreadId';
+function QueryPerformanceFrequency(var lpFrequency: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceFrequency';
+function QueryPerformanceCounter(var lpPerformanceCount: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceCounter';
+procedure GetSystemTimeAsFileTime(var lpSystemTimeAsFileTime: FILETIME); stdcall; external 'kernel32' name 'GetSystemTimeAsFileTime';
 function SwitchToThread: BOOL; stdcall; external 'kernel32' name 'SwitchToThread';
 procedure Sleep(dwMilliseconds: DWORD); stdcall; external 'kernel32' name 'Sleep';
 function GetLastError: DWORD; stdcall; external 'kernel32' name 'GetLastError';

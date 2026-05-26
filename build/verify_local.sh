@@ -252,6 +252,14 @@ CORE_TEXT_SMOKE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_text_smoke"
 CORE_TEXT_SMOKE_BINARY="$CORE_TEXT_SMOKE_BUILD_DIR/core_text_smoke"
 CORE_TIME_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_time_test"
 CORE_TIME_TEST_BINARY="$CORE_TIME_TEST_BUILD_DIR/test_time"
+CORE_PLATFORM_TIME_HELPERS_OUTPUT=$(mktemp)
+CORE_PLATFORM_TIME_HELPERS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_helpers"
+CORE_PLATFORM_TIME_HELPERS_BINARY="$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR/test_platform_time_helpers"
+CORE_PLATFORM_TIME_NO_FPC_OUTPUT=$(mktemp)
+CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_no_fpc"
+CORE_PLATFORM_TIME_NO_FPC_BINARY="$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR/test_platform_time_no_fpc_units"
+CORE_PLATFORM_TIME_WIN64_OUTPUT=$(mktemp)
+CORE_PLATFORM_TIME_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_win64"
 CORE_PLATFORM_SYNC_TEST_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_test"
 CORE_PLATFORM_SYNC_TEST_BINARY="$CORE_PLATFORM_SYNC_TEST_BUILD_DIR/test_platform_sync"
@@ -750,6 +758,8 @@ require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
 require_path core/src/nextpas.core.platform.linux.ffi.pas
 require_path core/src/nextpas.core.platform.posix.ffi.pas
+require_path core/src/nextpas.core.platform.darwin.ffi.pas
+require_path core/src/nextpas.core.platform.windows.ffi.pas
 require_path core/src/nextpas.core.platform.sync.pas
 require_path core/src/nextpas.core.platform.sync.windows.ffi.pas
 require_path core/src/nextpas.core.platform.time.pas
@@ -758,6 +768,8 @@ require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
+require_path core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr
+require_path core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
 require_path core/tests/nextpas.core.time/test_time/test_time.lpr
 require_path examples/smoke/hello_with_units.pas
 require_path examples/smoke/external_cdecl_smoke.pas
@@ -3967,6 +3979,66 @@ cat "$CORE_TIME_TEST_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.time: 13 total, 13 passed, 0 failed ---$' "$CORE_TIME_TEST_OUTPUT" 'missing-core-time-pass-summary'
 printf 'core-time-check=pass\n'
 
+printf 'core-platform-time-helpers-check=running\n'
+printf 'core-platform-time-helpers-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr" \
+  >"$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
+  fail 'core-platform-time-helpers-build-failed'
+fi
+if ! "$CORE_PLATFORM_TIME_HELPERS_BINARY" >>"$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
+  fail 'core-platform-time-helpers-run-failed'
+fi
+cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.time\.helpers: 9 total, 9 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 'missing-core-platform-time-helpers-pass-summary'
+printf 'core-platform-time-helpers-check=pass\n'
+
+printf 'core-platform-time-no-fpc-check=running\n'
+printf 'core-platform-time-no-fpc-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr" \
+  >"$CORE_PLATFORM_TIME_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
+  fail 'core-platform-time-no-fpc-build-failed'
+fi
+if ! "$CORE_PLATFORM_TIME_NO_FPC_BINARY" >>"$CORE_PLATFORM_TIME_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
+  fail 'core-platform-time-no-fpc-run-failed'
+fi
+cat "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.time\.no_fpc_units: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT" 'missing-core-platform-time-no-fpc-pass-summary'
+printf 'core-platform-time-no-fpc-check=pass\n'
+
+printf 'core-platform-time-win64-check=running\n'
+printf 'core-platform-time-win64-command=fpc -Twin64 -Cn -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.time/test_time/test_time.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_WIN64_BUILD_DIR" "$CORE_PLATFORM_TIME_WIN64_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_TIME_WIN64_BUILD_DIR"
+if ! fpc \
+  -Twin64 \
+  -Cn \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_TIME_WIN64_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_TIME_WIN64_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.time/test_time/test_time.lpr" \
+  >"$CORE_PLATFORM_TIME_WIN64_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_WIN64_OUTPUT"
+  fail 'core-platform-time-win64-build-failed'
+fi
+cat "$CORE_PLATFORM_TIME_WIN64_OUTPUT"
+printf 'core-platform-time-win64-check=pass\n'
+
 printf 'core-platform-sync-check=running\n'
 printf 'core-platform-sync-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
@@ -6380,6 +6452,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","wrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","unknownCallableCheck":"pass","unknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","corePlatformTimeHelpersCheck":"pass","corePlatformTimeNoFpcCheck":"pass","corePlatformTimeWin64Check":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","wrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","unknownCallableCheck":"pass","unknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'

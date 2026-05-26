@@ -3,8 +3,42 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 97 object header ownership contract；Batch 93 platform.thread FFI boundary
-是并行 platform/core 工作流保留下来的已完成记录。
+当前最新本轮为 Batch 98 platform.time FFI boundary；Batch 97 object header ownership contract、
+Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
+platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 98 platform.time FFI boundary)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 从 clean preview 重放到当前 `main@9ce9a26`，把 `platform.time` 从 FPC 平台单元迁到
+    nextPas-owned FFI 边界，不合入旧 stacked `platform-time-integration` 的过期 sync/thread/compiler 内容。
+- Baseline:
+  - `platform.time` 功能测试已通过，但实现仍直接 `uses Linux, UnixType` 和 `Windows`。
+  - 旧 `codex/platform-time-integration` 相对当前 main 有大量非 time-only 差异，不能直接 merge。
+- Actions taken:
+  - 新增 `test_platform_time_no_fpc_units`，RED 失败在 `UnixType`。
+  - POSIX clock API 改走 `nextpas.core.platform.posix.ffi`，追加 `clock_getres`。
+  - 新增 `nextpas.core.platform.darwin.ffi` 承载 `mach_absolute_time` /
+    `mach_timebase_info`。
+  - Windows QPC / realtime API 追加到现有 `nextpas.core.platform.windows.ffi`，保留 thread/TLS
+    FFI 并集。
+  - `platform.time` helper 改为饱和换算、负 timespec 归零、resolution ceil，避免溢出或高估精度。
+  - 补强大 divisor / fractional QPC 换算边界，避免数学结果可表示时被误判为饱和。
+  - `build/verify_local.sh` 新增 time helpers、time no-FPC、Win64 compile-only gates。
+- Verification:
+  - RED: `test_platform_time_no_fpc_units` 旧实现失败在 `UnixType`。
+  - Focused GREEN: time no-FPC 1/1、time helpers 9/9、time 13/13。
+  - Win64 compile-only: `test_time.lpr` 编译 1931 行通过。
+  - Aggregate: `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+  - Full: fresh `bash build/verify_local.sh` 输出 `corePlatformTimeHelpersCheck`、
+    `corePlatformTimeNoFpcCheck`、`corePlatformTimeWin64Check` 全部为 `pass`，
+    并输出 `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只收口 platform.time ABI 边界和 conversion correctness；不声明真实 macOS/Windows runtime
+    已运行验证，仍需要对应主机/CI 补证。
+  - POSIX clock gate 覆盖 Linux 当前路径；Android/FreeBSD 目前是 compile-design 预留，后续需要目标
+    toolchain gate。
 
 ## Session: 2026-05-26 (Batch 97 object header ownership contract)
 

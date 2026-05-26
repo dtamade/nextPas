@@ -15,8 +15,64 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 97 Object Header Ownership Contract；Batch 93 Platform Thread FFI Boundary 是
-并行 platform/core 工作流保留下来的已完成记录。
+当前最新本轮为 Batch 98 Platform Time FFI Boundary；Batch 97 Object Header Ownership Contract、
+Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
+platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 98 Platform Time FFI Boundary
+
+### Goal
+
+从当前 main 重新整理 clean preview，把 `platform.time` 从 FPC 平台单元迁到 nextPas-owned
+FFI 边界：
+
+- `nextpas.core.platform.time` 不直接 `uses Linux`、`UnixType`、`Windows` 等 FPC 平台单元。
+- POSIX、macOS 和 Windows ABI 声明分别由 nextPas 自己的 FFI 单元承载。
+- time conversion helper 对溢出、负 timespec 和 resolution rounding 给出稳定契约。
+- QPC / mach timebase 换算在极大 divisor 的 fractional 路径上不能把可表示结果误判为饱和。
+- official local verification 覆盖 no-FPC 静态检查、helper 行为和 Win64 compile-only。
+
+### Status
+
+Completed.
+
+### Planned Steps
+
+- [x] 写 RED：`platform.time` 静态测试禁止 FPC 平台单元和 implementation-local external ABI
+- [x] 将 POSIX clock API 改为 `nextpas.core.platform.posix.ffi`
+- [x] 新增 `nextpas.core.platform.darwin.ffi`
+- [x] 将 Windows QPC/FILETIME API 追加到 `nextpas.core.platform.windows.ffi`
+- [x] 补 helper 边界测试和 Win64 compile-only
+- [x] 跑 aggregate / official verification
+- [x] 复盘后提交并择优合并
+
+### Architecture Decision
+
+- `posix.ffi` 保留 sync/thread 所需 pthread 与 sleep/yield/sysconf 声明，同时追加 time 所需
+  `clock_getres`。
+- `windows.ffi` 保留 thread/TLS 声明，同时追加 time 所需 `FILETIME`、
+  `QueryPerformanceFrequency`、`QueryPerformanceCounter`、`GetSystemTimeAsFileTime`。
+- `platform.time` 只保留 platform contract 与换算逻辑，所有 native ABI 声明都在 FFI 单元。
+- conversion helpers 用饱和和 ceil 策略避免溢出或高估精度；fractional multiply/divide
+  在普通路径保持 O(1)，只在乘法会溢出的边界走逐位 fallback。
+
+### Verification
+
+- RED: `test_platform_time_no_fpc_units` 旧实现失败在 `UnixType`。
+- Focused GREEN 已通过：time no-FPC 1/1、time helpers 9/9、time 13/13。
+- Win64 compile-only 已通过：`fpc -Twin64 -Cn ... test_time.lpr` 编译 1931 行。
+- Aggregate 已通过：`make -C core test`、`make -C core examples`、
+  `make -C core benchmarks`。
+- Full verification 已通过：fresh `bash build/verify_local.sh` 输出
+  `corePlatformTimeHelpersCheck=pass`、`corePlatformTimeNoFpcCheck=pass`、
+  `corePlatformTimeWin64Check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 DateTime/timezone/timer/scheduler/async runtime。
+- 不声明 macOS 或 Windows runtime 行为已经在真实主机运行验证。
+- 不合并旧 `platform-time-integration` 中过期的 sync/thread/compiler 内容。
 
 ## Addendum: 2026-05-26 Batch 97 Object Header Ownership Contract
 
