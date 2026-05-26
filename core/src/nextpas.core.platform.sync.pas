@@ -73,6 +73,8 @@ implementation
 {$IFDEF UNIX}
 uses
   Linux, PThreads, UnixType, BaseUnix, Syscall;
+
+function pthread_condattr_setclock(AAttr: Ppthread_condattr_t; AClockId: cint): cint; cdecl; external 'pthread';
 {$ENDIF}
 
 {$IFDEF WINDOWS}
@@ -168,9 +170,19 @@ end;
 { CondVar }
 
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
+var
+  LAttr: pthread_condattr_t;
 begin
   FillChar(ACondVar, SizeOf(ACondVar), 0);
-  Result := pthread_cond_init(@ACondVar.FOpaque[0], nil);
+  Result := pthread_condattr_init(@LAttr);
+  if Result <> 0 then Exit;
+  try
+    Result := pthread_condattr_setclock(@LAttr, CLOCK_MONOTONIC);
+    if Result <> 0 then Exit;
+    Result := pthread_cond_init(@ACondVar.FOpaque[0], @LAttr);
+  finally
+    pthread_condattr_destroy(@LAttr);
+  end;
 end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
@@ -188,7 +200,7 @@ var
   LTs: TimeSpec;
   LNow: TimeSpec;
 begin
-  clock_gettime(CLOCK_REALTIME, @LNow);
+  clock_gettime(CLOCK_MONOTONIC, @LNow);
   LTs.tv_sec := LNow.tv_sec + (ATimeoutNs div 1000000000);
   LTs.tv_nsec := LNow.tv_nsec + (ATimeoutNs mod 1000000000);
   if LTs.tv_nsec >= 1000000000 then

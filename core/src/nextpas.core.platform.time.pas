@@ -25,6 +25,18 @@ function platform_realtime_ns: UInt64;
  *}
 function platform_monotonic_resolution_ns: UInt64;
 
+{**
+ * @desc QPC 计数器转纳秒（div/mod 安全，不溢出）
+ * @note 纯函数，可单测
+ *}
+function platform_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64;
+
+{**
+ * @desc timespec 转纳秒
+ * @note 纯函数，可单测
+ *}
+function platform_timespec_to_ns(const ASec: Int64; const ANsec: Int64): UInt64;
+
 implementation
 
 {$IFDEF NEXTPAS_LINUX}
@@ -236,5 +248,28 @@ end;
 {$ENDIF}
 {$ENDIF}
 {$ENDIF}
+
+{ ============================================================ }
+{ Pure helper functions (testable, platform-independent)        }
+{ ============================================================ }
+
+function platform_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64;
+var
+  LFreq: UInt64;
+  LWholeSec, LFracTicks: UInt64;
+begin
+  LFreq := AFrequency;
+  if LFreq = 0 then
+    LFreq := 1;
+  LWholeSec := ACounter div LFreq;
+  LFracTicks := ACounter mod LFreq;
+  Result := LWholeSec * NANOSECONDS_PER_SECOND +
+            LFracTicks * NANOSECONDS_PER_SECOND div LFreq;
+end;
+
+function platform_timespec_to_ns(const ASec: Int64; const ANsec: Int64): UInt64;
+begin
+  Result := UInt64(ASec) * NANOSECONDS_PER_SECOND + UInt64(ANsec);
+end;
 
 end.
