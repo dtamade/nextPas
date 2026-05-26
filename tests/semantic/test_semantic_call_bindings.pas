@@ -1019,6 +1019,124 @@ begin
   end;
 end;
 
+procedure CheckSystemObjectFreeMemberCallStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program SystemObjectMemberCall;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Free;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-system-object-free-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-system-object-free-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-system-object-free-model-status:' + Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-system-object-free-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckSpecializedGenericMemberCallStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program SpecializedGenericMemberCall;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntegerBox = specialize TBox<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  Box: TIntegerBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  Box.Put(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-specialized-generic-member-call-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-specialized-generic-member-call-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-specialized-generic-member-call-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-specialized-generic-member-call-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -2374,6 +2492,8 @@ begin
     CheckAmbiguousMemberOverloadDiagnostic;
     CheckUnknownMemberDiagnostic;
     CheckKnownFieldMemberCallStaysDeferred;
+    CheckSystemObjectFreeMemberCallStaysDeferred;
+    CheckSpecializedGenericMemberCallStaysDeferred;
     CheckOverloadBindings;
     CheckBareTypedOverloadBindingTargets;
     CheckAmbiguousImportedBareOverloadDiagnostic;

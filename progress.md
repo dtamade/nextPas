@@ -17,21 +17,33 @@
     status `failure`，且不注册 `member-call` binding。
   - `MethodSymbolIdForClassTypeMember(...)` 在 receiver type 已知、沿 parent chain 没有 method
     命中且不是已知 field/property 时返回 `unknown-member`。
+  - Full verify 首轮暴露 `C.Free` 被误报为 `sema.unknown-member`；这是 nextPas 尚缺
+    source-backed `System` / `TObject` truth 的证据。本批先把 `Free` 作为最低对象生命周期入口
+    保持 deferred，避免误报，后续应落真实 `System.pas` / `TObject` 符号。
+  - Full verify 后段又暴露 `TIntStack.Push` 被误报为 `sema.unknown-member`；本批把诊断
+    限定到已有 class layout truth 的 receiver，alias、generic specialization、record-like receiver
+    在完整 member resolver / generic instantiation 落地前继续 deferred。
   - `SeedCallBindingsInNode(...)` 对 direct member-call 的 `unknown-member` failure kind 发
     `sema.unknown-member`。
   - 新增 stage0 fixture `tests/fixtures/unknown_member/unknown_member_fail.pas` 与
     `unknown-member-check` gate。
-  - 同步 semantic/stage0 docs、goal tree、rolling plan 与持续记录。
+  - 同步 semantic/stage0 docs、System/RTL docs、goal tree、rolling plan 与持续记录。
 - Verification:
   - RED: focused semantic test 已失败在
     `semantic-call-bindings-failure=missing-unknown-member-diagnostic`。
   - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
-  - Full: fresh `bash build/verify_local.sh` 必须输出 `unknown-member-check=pass`、
-    `unknownMemberCheck":"pass"`、`verify-local=pass` 与
-    `human-summary=local verification passed`。
+  - Parser focused after deferred-boundary fixes: `./tests/run_all_tests.sh --filter parser`
+    已输出 `passed-fixture-count=32`、`failed-fixture-count=0` 与 `human-summary=group parser passed`。
+  - Full: fresh detached clean worktree 已输出 `llvm-destructor-program=pass`、
+    `unknown-member-check=pass`、`unknownMemberCheck":"pass"`、`stage0-test-smoke-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
 - Review:
   - 本批只覆盖 receiver type 已知的 direct class member-call name miss；未知 receiver、
     field/property access、record/array/deref receiver、visibility 和完整 overload resolver 继续 deferred。
+  - `Free` deferred 是 System 基线落地前的保护边界，不是长期 resolver 终点；下一步应让
+    nextPas-owned `System` 提供真实 `TObject`/lifetime symbols。
+  - specialized generic receiver deferred 是 generic instantiation truth 落地前的保护边界，不应扩成
+    字符串兜底绑定。
 
 ## Session: 2026-05-26 (Batch 85 latest baseline verification closure)
 

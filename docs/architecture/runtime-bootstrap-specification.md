@@ -48,11 +48,17 @@ fs/process、time。
 
 - `rtl/core/system/`
   - 负责 process startup / shutdown、unit init/fini、runtime contract dispatch
+  - 负责 nextPas-owned 最小 `System` 子集，先平替自举代码和 `core` 框架当前从 FPC
+    `System` 隐式获得的最低对象生命周期与基础运行时事实
 - `rtl/core/base` / `mem` / `text` / `collections` / `fs` / `process` / `time`
   - 负责 compiler/toolchain 自己要长期依赖的基础设施
 
 如果把这两层重新混成一个“什么都丢进 `System`”的方向，nextPas 后面一定会再次退化成
 隐式宿主依赖。
+
+反过来，如果没有 nextPas 自己的 `System` 基线，编译器也会在语义层缺少 `TObject` /
+`Free` / destructor / unit init-fini 这些最底层事实，导致自举代码和 `core` 框架仍然必须
+从宿主 FPC RTL 借语义。`System` 平替因此是自举路线的最低依赖，不是外围库任务。
 
 当前仓库里的实现切片故意先从 `rtl/core/base`、`rtl/core/mem` 和 `rtl/core/text`
 开始。这不是范围缩小，而是为了先把 compiler/session、diagnostics、runtime contract

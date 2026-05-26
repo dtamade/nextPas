@@ -31,8 +31,12 @@ fresh `bash build/verify_local.sh` 为准。
 这是 unknown member 的保守首切片，不是完整 member resolver：
 
 - receiver type 必须可由当前 semantic model 解析。
+- receiver type 还必须已有 class layout truth；alias、generic specialization、record-like receiver
+  继续 deferred，避免把尚未 materialize 的 member truth 误报成 unknown member。
 - 已知 field / property name 不报 unknown member，继续 deferred 给后续 field/property access。
 - inherited method 仍沿现有 parent chain lookup 成功绑定。
+- 在 source-backed nextPas `System` / `TObject` truth 落地前，`Free` 这类最低对象生命周期入口
+  不作为普通 unknown member 报错，避免把 System 基线缺口误报成用户成员缺失。
 - 未知 receiver、record/property/array/deref receiver、visibility、implicit conversion、default parameter
   与 full overload ranking 不在本批内。
 
@@ -44,6 +48,8 @@ Completed
 
 - [x] 写 focused RED：direct class unknown member 必须产生 `sema.unknown-member`
 - [x] 在 semantic analyzer 接入保守 unknown-member failure kind
+- [x] 固定同名 field 与临时 System object `Free` deferred 边界，避免 known non-method / System 基线误报
+- [x] 固定 specialized generic receiver deferred 边界，避免 generic instantiation truth 未落地前误报
 - [x] 新增 stage0 fail fixture 和 `unknown-member-check`
 - [x] 同步 sema / semantic model / stage0 / goal tree / rolling plan 与持续记录
 - [x] 运行 fresh `bash build/verify_local.sh`
@@ -53,8 +59,15 @@ Completed
 
 - RED: focused semantic test 失败在 `semantic-call-bindings-failure=missing-unknown-member-diagnostic`。
 - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
-- Full: fresh `bash build/verify_local.sh` 必须输出 `unknown-member-check=pass`、
-  `unknownMemberCheck":"pass"`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- First full attempt: detached clean worktree 暴露 `examples/smoke/llvm_destructor.pas` 的
+  `C.Free` 被误报 `sema.unknown-member`；该边界已改为 deferred，并记录为下一步
+  source-backed `System` / `TObject` truth 工作。
+- Second full attempt: `llvm-destructor-program=pass` 且 `unknown-member-check=pass`，后段
+  `stage0-test-smoke-check` 暴露 `tests/parser/generics_pass.pas` 的 specialized generic receiver
+  被误报；该边界已收紧为没有 class layout truth 时 deferred。
+- Final full: fresh detached clean worktree 已输出 `unknown-member-check=pass`、
+  `unknownMemberCheck":"pass"`、`stage0-test-smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 
 ### Next
 

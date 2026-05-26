@@ -18,6 +18,17 @@
 - 新增 `tests/fixtures/unknown_member/unknown_member_fail.pas` 与 `unknown-member-check`，固定
   stage0 failure projection、`diagnosticsSummary=sema.unknown-member` 和 final envelope
   `unknownMemberCheck=pass`。
+- Full verify 首轮暴露 `examples/smoke/llvm_destructor.pas` 的 `C.Free` 被误报为
+  `sema.unknown-member`；这不是普通 member miss，而是当前尚未有 source-backed nextPas
+  `System` / `TObject` truth 的结果。本批先把 `Free` 保持 deferred，后续要用真实
+  `System.pas` / `TObject` 符号替代临时边界。
+- Full verify 后段又暴露 `tests/parser/generics_pass.pas` 的 `TIntStack.Push` 被误报为
+  `sema.unknown-member`；`TIntStack = specialize TStack<Integer>` 当前还没有 generic instantiation
+  member truth。本批把 unknown-member 限定到已有 class layout truth 的 receiver，alias /
+  generic specialization / record-like receiver 继续 deferred。
+- nextPas-owned `System` 是自举代码和 `core` 框架的最低依赖层：它负责平替宿主 FPC
+  `System` 中必须先稳定的基础类型、对象生命周期、启动/退出和 runtime helper 事实；
+  `core` 框架应建立在这层之上，而不是反向承担编译器最低语义前提。
 - Batch 85 重新验证最新 baseline：detached clean worktree 基于 `287d13d` 已输出
   `unknown-callable-check=pass`、`unit-root-precedence-check=pass`、`verify-local=pass` 与
   `human-summary=local verification passed`。

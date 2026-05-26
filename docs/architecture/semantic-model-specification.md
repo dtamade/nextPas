@@ -301,6 +301,10 @@ candidate collection
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
 - `sema.unknown-member`
   - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
+  - 在 source-backed nextPas `System` / `TObject` truth 落地前，`Obj.Free` 这类 FPC `System`
+    默认对象生命周期入口保持 deferred，避免把缺失的 System 基线误报成普通 unknown member
+  - 没有 class layout truth 的 alias / generic specialization / record-like receiver 继续 deferred，直到
+    generic instantiation、record methods 和完整 member resolver 进入 semantic model
 
 这里的重点不是今天就冻结完整 code 列表，而是先冻结“语义错误是结构化类别”的事实。
 

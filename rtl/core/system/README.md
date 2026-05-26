@@ -15,9 +15,23 @@ nextPas 的 allocator、text/path、fs/process、collections 这类 compiler/too
 ## 第一阶段这里先承接什么
 
 - `System` 相关的最小公开表面
+- nextPas 编译器自举代码和 `core` 框架共同依赖的最低运行时基线
+- FPC `System` 中必须先被平替的对象生命周期事实，例如所有 class 都能消费的
+  `TObject.Free` / destructor 调度边界
 - 后续必须直接服务 `stage0`、`tests/rtl/` 或 smoke 路径的基础运行时逻辑
 - 能够清楚解释为“核心运行时”而不是“控制台行为”的实现落点
 - compiler 与 runtime handshake 的 process-level 边界
+
+## System 是最低依赖层
+
+nextPas 后续不能让编译器自举代码和 `core` 框架继续从宿主 FPC RTL 的隐式 `System`
+开始。这里要成为 nextPas-owned 的最低依赖层：先提供足以支撑自举、对象生命周期、
+基础内建类型、启动/退出和 runtime helper 的最小 `System` 子集，再逐步扩展到更完整的
+FreePascal 兼容表面。
+
+这层不是 `core` 框架本身。`core` 可以在它之上提供更现代、更完整的 base/mem/text/time/
+collections 等开发框架能力；但 `core` 不能反过来成为编译器理解 `TObject`、`Free`、程序入口
+或 unit init/fini 的最低前提。
 
 ## 当前占位文件
 

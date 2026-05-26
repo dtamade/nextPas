@@ -33,6 +33,8 @@ package tooling 和 future IDE 真正收敛成同一套系统，nextPas 必须�
 
 - `rtl/core/system/`
   - process startup / shutdown、unit init/fini、runtime contract dispatch
+  - nextPas-owned 最小 `System` 子集，平替编译器自举代码和 `core` 框架当前从 FPC
+    `System` 隐式获得的最低事实
 - `rtl/core/base`
   - 基础类型、错误/result 约定、stable id / span / small support types
 - `rtl/core/mem`
@@ -100,6 +102,11 @@ result/span/allocation/path discipline。如果这层还没有 nextPas 自己的
 对 nextPas-native toolchain RTL 来说，还必须再加一条：
 
 | toolchain 基础层 | 让 compiler / build / package / future IDE 共享同一套 allocator、text/path、fs/process 与 collections truth |
+
+`System` 基线还要明确承接 class/object 的最低语义事实：在完整 `System.pas` 和 `TObject`
+符号表落地前，compiler 不能把 `Obj.Free` 这类 FPC 生态默认可用的对象生命周期入口误报成
+普通 unknown member。长期方案不是在语义层硬编码更多名字，而是让 nextPas-owned `System`
+提供真实 `TObject`/lifetime 符号，供语义分析、lowering 和 runtime bootstrap 共同消费。
 
 这里的运行时规范与 `Source syntax`、`Core semantics` 互相配合，但不互相替代。
 语法和核心语义决定程序“被如何理解”，RTL 决定这些程序在运行期“如何表现”。

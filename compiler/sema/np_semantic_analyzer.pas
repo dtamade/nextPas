@@ -134,6 +134,8 @@ type
       const AClassTypeId: LongInt;
       const AMemberName: string
     ): Boolean;
+    function TypeIdHasKnownClassLayout(const ATypeId: LongInt): Boolean;
+    function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
     function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
     function CallArgumentSignature(
@@ -1393,6 +1395,28 @@ begin
     FModel.LookupStringConstValue(MemberPrefix + '$write', StringValue);
 end;
 
+function TSemanticAnalyzer.TypeIdHasKnownClassLayout(
+  const ATypeId: LongInt
+): Boolean;
+var
+  ConstValue: Int64;
+  TypeSymbol: TSemanticSymbol;
+begin
+  Result := False;
+  if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
+    Exit;
+  if not TypeSymbolForTypeId(ATypeId, TypeSymbol) then
+    Exit;
+  Result := FModel.LookupConstValue(TypeSymbol.Name + '$vmt_count', ConstValue);
+end;
+
+function TSemanticAnalyzer.IsDeferredSystemObjectMember(
+  const AMemberName: string
+): Boolean;
+begin
+  Result := SameText(AMemberName, 'Free');
+end;
+
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
 var
   TypeName: string;
@@ -1622,6 +1646,8 @@ begin
   AResolutionFailureKind := '';
   CurrentTypeId := AClassTypeId;
   Depth := 0;
+  if not TypeIdHasKnownClassLayout(CurrentTypeId) then
+    Exit;
   while (CurrentTypeId > 0) and (Depth < 32) do
   begin
     if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
@@ -1648,6 +1674,8 @@ begin
     CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
     Inc(Depth);
   end;
+  if IsDeferredSystemObjectMember(AMemberName) then
+    Exit;
   AResolutionFailureKind := 'unknown-member';
 end;
 
