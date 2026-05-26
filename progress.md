@@ -3,6 +3,43 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 78 member wrong argument count diagnostics)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 77 的 `sema.wrong-argument-count` 从 bare call 推到当前已支持的 direct
+    member-call：receiver type 上已知同名 method，但没有任何同 arity target 时，发出
+    semantic diagnostic，而不是静默无 binding。
+- Baseline:
+  - Batch 76 已覆盖 direct member-call ambiguity。
+  - `Worker.Pick(1, 2)` 面对 `TWorker.Pick(Value: Integer)` 时旧实现只是不注册
+    `member-call` binding，不进入 diagnostics sink。
+- Actions taken:
+  - 先写 focused RED，构造 `TWorker.Pick(Integer)` 后调用 `Worker.Pick(1, 2)`，要求
+    `sema.wrong-argument-count`、model status `failure`、binding count `0`。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 现在在 exact/parent receiver lookup 中，遇到
+    同名 method 已知但 arity 全不匹配时透传 `wrong-argument-count`。
+  - `SeedCallBindingsInNode(...)` 对 direct member-call 的 `wrong-argument-count` failure kind 发
+    `sema.wrong-argument-count`；未知 member、receiver 未覆盖、body mismatch 与 signature no-match
+    继续 deferred。
+  - 新增 `tests/fixtures/member_wrong_argument_count`，并把
+    `member-wrong-argument-count-check` 纳入 `build/verify_local.sh` 与 final envelope。
+  - fresh verify 首轮暴露 `query_member_call_bindings` 仍含历史负例 `Worker.SetValue;`；该负例已迁移到
+    dedicated failure fixture，query success fixture 只保留应成功投影的 member-call bindings。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-member-wrong-argument-count-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full first pass: `bash build/verify_local.sh` 曾失败在
+    `stage0-query-member-call-bindings-failed`，原因为 success query fixture 被新诊断正确拦截。
+  - Full: `bash build/verify_local.sh` 已输出 `member-wrong-argument-count-check=pass`、
+    `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖已支持 direct class/type receiver 的 method arity no-match。
+  - 复盘：member-call diagnostics 现在和 bare-call diagnostics 对齐到 ambiguity + arity miss 两层；
+    下一步再继续时，应优先评估 signature no-match 是否已有足够类型事实，避免过早报错。
+
 ## Session: 2026-05-26 (Batch 77 bare wrong argument count diagnostics)
 
 - **Status:** completed

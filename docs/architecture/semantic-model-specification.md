@@ -100,7 +100,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   owner unit 限定 `TClass.Method`，避免继续靠第一个同名 class/method 字符串匹配。若 receiver
   exact class type 未声明同名 method，member lookup 会沿 `ParentTypeId` 链查 parent class
   method，并继续使用 parent type symbol owner 限定 target；exact type 已声明同名 method 但
-  arity/body 不匹配或不唯一时会保守停止。class method declaration 的 parameter list 会进入
+  没有任何同 arity target 时会发出 `sema.wrong-argument-count`，body 不匹配或不唯一时仍会保守停止。
+  class method declaration 的 parameter list 会进入
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
   set，若同 arity 有多个候选，则用当前可推断的 argument signature 做唯一匹配，并用同名

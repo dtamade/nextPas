@@ -1351,7 +1351,11 @@ begin
     end;
   end;
   if SymbolMatchCount = 0 then
+  begin
+    if AMethodNameFound then
+      AResolutionFailureKind := 'wrong-argument-count';
     Exit;
+  end;
   if SymbolMatchCount > 1 then
   begin
     if AHasArgSignature and (SignatureMatchCount = 1) then
@@ -1727,6 +1731,12 @@ begin
         EmitSemaError(
           'sema.ambiguous-overload',
           'ambiguous overload for "' + MemberFailureName + '"',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
+        EmitSemaError(
+          'sema.wrong-argument-count',
+          'wrong number of arguments for "' + MemberFailureName + '"',
           MemberFailureOffset
         );
     end

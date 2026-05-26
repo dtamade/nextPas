@@ -10,6 +10,20 @@
 
 ## Research Findings
 
+- Batch 78 把 `sema.wrong-argument-count` 从 bare call 扩到 direct member-call：当前已支持的
+  class/type receiver path 中，同名 method 已知但没有任何同 arity target 时，semantic analyzer
+  会发 diagnostic，model status 进入 `failure`，且不会注册 `member-call` binding。
+- `MethodSymbolIdForExactClassTypeMember(...)` 现在通过 `AResolutionFailureKind` 区分普通
+  deferred、`ambiguous-overload` 与 `wrong-argument-count`；exact receiver type 明确 wrong arity
+  时不会继续穿透 parent class 代偿。
+- Batch 78 仍保持 receiver/type/signature 保守边界：未知 member、receiver 未覆盖、body mismatch、
+  signature no-match、implicit conversion、default parameter lowering/ranking、visibility 与完整
+  member resolver 继续 deferred。
+- `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 里的历史 `Worker.SetValue;`
+  负例在 Batch 78 后不再属于 success query fixture；它现在应由 dedicated
+  `member_wrong_argument_count_fail.pas` 固定 semantic failure projection。
+- 新增 `member-wrong-argument-count-check`，用 `tests/fixtures/member_wrong_argument_count` 固定
+  stage0 failure projection 与 final envelope `memberWrongArgumentCountCheck=pass`。
 - Batch 77 把 bare callable 的第一条 arity no-match 接进 structured diagnostics：
   root/imported 同优先级内已存在同名 callable，但没有任何候选参数个数匹配调用时，发出
   `sema.wrong-argument-count`，model status 进入 `failure`，且不会注册 call binding。

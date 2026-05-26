@@ -1373,6 +1373,73 @@ begin
   end;
 end;
 
+procedure CheckMemberWrongArgumentCountDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program MemberWrongArgumentCountCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(1, 2);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-member-wrong-argument-count-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.wrong-argument-count') then
+      Fail('unexpected-member-wrong-argument-count-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-member-wrong-argument-count-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('member-wrong-argument-count-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-member-wrong-argument-count-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-member-wrong-argument-count-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-member-wrong-argument-count-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckClassMemberCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1429,7 +1496,6 @@ begin
     '  Worker.Run;' + LineEnding +
     '  Worker.Run();' + LineEnding +
     '  Worker.SetValue(7);' + LineEnding +
-    '  Worker.SetValue;' + LineEnding +
     '  Halt(Worker.Add(1, 2));' + LineEnding +
     'end.' + LineEnding;
 
@@ -1623,6 +1689,7 @@ begin
     CheckAmbiguousImportedBareOverloadDiagnostic;
     CheckBareWrongArgumentCountDiagnostic;
     CheckBareDefaultParameterCallBindings;
+    CheckMemberWrongArgumentCountDiagnostic;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');

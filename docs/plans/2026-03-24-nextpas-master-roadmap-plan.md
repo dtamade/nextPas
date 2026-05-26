@@ -61,6 +61,7 @@
   `stage0PkgInvalidArgumentsCheck=pass`、
   `stage0EnvInvalidArgumentsCheck=pass`、`ambiguousOverloadCheck=pass`、
   `ambiguousMemberOverloadCheck=pass`、`wrongArgumentCountCheck=pass`、
+  `memberWrongArgumentCountCheck=pass`、
   `multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
@@ -101,9 +102,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 77：bare wrong argument count diagnostics。
+- 当前 rolling window 已推进到 Batch 78：member wrong argument count diagnostics。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 77` 已完成。
+- `Batch 1` 到 `Batch 78` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -191,6 +192,10 @@
   没有任何同优先级 arity match 时发 `sema.wrong-argument-count`；默认参数语法只参与
   bare call 的 `requiredParamCount..ParamCount` arity 区间和 provided-argument signature prefix
   判断，未知 callable、builtin 与可接受 arity 内但 type/signature 不能匹配的路径继续 deferred。
+  `Batch 78` 把同一条 arity no-match diagnostic 扩到 direct member-call：当前已支持的
+  class/type receiver path 中，同名 method 已知但没有任何同 arity target 时发
+  `sema.wrong-argument-count`；未知 member、receiver 未覆盖、body mismatch、signature no-match
+  与完整 member resolver 继续 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

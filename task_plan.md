@@ -15,6 +15,67 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 78 Member Wrong Argument Count Diagnostics
+
+### Goal
+
+把 Batch 77 的 `sema.wrong-argument-count` 从 bare call 扩展到当前已支持的 direct
+member-call：当 receiver type 上已经存在同名 method，但没有任何同 arity target 时，发出
+`sema.wrong-argument-count`。
+
+本批次新增并冻结：
+
+- `MethodSymbolIdForExactClassTypeMember(...)` 在同名 method 已知但 arity 全不匹配时透传
+  `wrong-argument-count` failure kind。
+- `SeedCallBindingsInNode(...)` 对 direct member-call 的 `wrong-argument-count` failure kind 发
+  `sema.wrong-argument-count`。
+- `build/verify_local.sh` 新增 `member-wrong-argument-count-check`，固定 stage0 failure projection
+  与 final verify envelope 的 `memberWrongArgumentCountCheck`。
+
+### Architecture Decision
+
+这是 direct member-call 的 arity no-match diagnostics，不是完整 Pascal member resolver：
+
+- 只覆盖当前已支持的 direct class/type receiver path。
+- 只在 receiver type 已解析且同名 method 已知、但没有任何同 arity target 时发 diagnostic。
+- 未知 member、receiver 未覆盖、body mismatch、signature no-match 仍保持 deferred。
+- 不实现 implicit conversion、default parameter lowering/ranking、visibility、virtual dispatch、
+  record/property receiver 或完整 type-based overload ranking。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `Worker.Pick(1, 2)` 的 member wrong-argument-count focused regression
+- [x] 在 member target lookup 中带出 `wrong-argument-count` failure kind
+- [x] 在 semantic analyzer 中为 direct member-call 发 `sema.wrong-argument-count`
+- [x] 新增 `tests/fixtures/member_wrong_argument_count` 与 `member-wrong-argument-count-check`
+- [x] 将 `query_member_call_bindings` 的历史缺参负例迁移到 dedicated failure fixture
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在
+  `semantic-call-bindings-failure=missing-member-wrong-argument-count-diagnostic`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full first pass: `bash build/verify_local.sh` 曾失败在
+  `stage0-query-member-call-bindings-failed`，原因为 success query fixture 仍含历史缺参负例。
+- Full: `bash build/verify_local.sh` 已输出 `member-wrong-argument-count-check=pass`、
+  `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 unknown member diagnostics
+- 不实现 type-based no-matching-overload diagnostics
+- 不实现 implicit conversion / default parameter lowering/ranking / var-out compatibility / visibility checking
+- 不扩展 record/property/array/deref receiver、virtual dispatch 或完整 member resolver
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 77 Bare Wrong Argument Count Diagnostics
 
 ### Goal

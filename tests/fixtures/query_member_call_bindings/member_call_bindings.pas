@@ -58,7 +58,6 @@ begin
   Worker := TWorker.Create(42);
   Worker.Run;
   Worker.SetValue(7);
-  Worker.SetValue;
   Halt(Worker.Add(1, 2));
   Worker.Pick;
   Worker.Pick(5);
