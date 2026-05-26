@@ -60,6 +60,12 @@ end;
 
 procedure CheckPosixSyncHelperSet(const ASource, AHostLabel: string);
 begin
+  CheckTokenPresent(ASource, 'platform_pthread_mutex_size',
+    AHostLabel + ' must expose pthread mutex storage size for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_rwlock_size',
+    AHostLabel + ' must expose pthread rwlock storage size for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_condvar_size',
+    AHostLabel + ' must expose pthread condvar storage size for sync');
   CheckTokenPresent(ASource, 'platform_pthread_timeout_clock_now',
     AHostLabel + ' must expose pthread timeout clock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init',
@@ -203,6 +209,12 @@ begin
     'windows.ffi must expose Windows wake-address-single helper');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_all',
     'windows.ffi must expose Windows wake-address-all helper');
+  CheckTokenPresent(LWindowsSource, 'platform_windows_mutex_size',
+    'windows.ffi must expose Windows mutex storage size for sync');
+  CheckTokenPresent(LWindowsSource, 'platform_windows_rwlock_size',
+    'windows.ffi must expose Windows rwlock storage size for sync');
+  CheckTokenPresent(LWindowsSource, 'platform_windows_condvar_size',
+    'windows.ffi must expose Windows condvar storage size for sync');
 
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
     'platform.sync must use linux.ffi for Linux futex bindings');
@@ -313,6 +325,18 @@ begin
     'platform.sync must consume Windows wake-address-single helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_all',
     'platform.sync must consume Windows wake-address-all helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_size',
+    'platform.sync must consume host-owned pthread mutex storage size');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_size',
+    'platform.sync must consume host-owned pthread rwlock storage size');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_size',
+    'platform.sync must consume host-owned pthread condvar storage size');
+  CheckTokenPresent(LSyncSource, 'platform_windows_mutex_size',
+    'platform.sync must consume host-owned Windows mutex storage size');
+  CheckTokenPresent(LSyncSource, 'platform_windows_rwlock_size',
+    'platform.sync must consume host-owned Windows rwlock storage size');
+  CheckTokenPresent(LSyncSource, 'platform_windows_condvar_size',
+    'platform.sync must consume host-owned Windows condvar storage size');
   Check(Pos('platform_posix_errno_value', LSyncSource) = 0,
     'platform.sync must not keep raw errno helper usage in the Unix consumer');
   Check(Pos('platform_errno_location^', LSyncSource) = 0,
@@ -381,6 +405,16 @@ begin
     'platform.sync must not call pthread_cond_broadcast directly in the Unix consumer');
   Check(Pos('sched_yield', LSyncSource) = 0,
     'platform.sync must not call sched_yield directly in the Unix consumer');
+  Check(Pos('sizeof(pthread_mutex_t)', LSyncSource) = 0,
+    'platform.sync must not size raw pthread_mutex_t storage in the Unix consumer');
+  Check(Pos('sizeof(pthread_rwlock_t)', LSyncSource) = 0,
+    'platform.sync must not size raw pthread_rwlock_t storage in the Unix consumer');
+  Check(Pos('sizeof(pthread_cond_t)', LSyncSource) = 0,
+    'platform.sync must not size raw pthread_cond_t storage in the Unix consumer');
+  Check(Pos('sizeof(srwlock)', LSyncSource) = 0,
+    'platform.sync must not size raw SRWLOCK storage in the Windows consumer');
+  Check(Pos('sizeof(condition_variable)', LSyncSource) = 0,
+    'platform.sync must not size raw CONDITION_VARIABLE storage in the Windows consumer');
   Check(Pos('initializesrwlock', LSyncSource) = 0,
     'platform.sync must not call InitializeSRWLock directly in the Windows consumer');
   Check(Pos('acquiresrwlockexclusive', LSyncSource) = 0,

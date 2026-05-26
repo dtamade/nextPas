@@ -4,6 +4,9 @@ unit nextpas.core.platform.darwin.ffi;
 
 interface
 
+uses
+  nextpas.core.platform.posix.ffi;
+
 type
   mach_timebase_info_data_t = record
     numer: UInt32;
@@ -20,6 +23,10 @@ const
   PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 0;
   PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 1;
   PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 2;
+  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
+  PLATFORM_PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
+  PLATFORM_PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
+  PLATFORM_PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
 
   PLATFORM_POSIX_EAGAIN = 35;
   PLATFORM_POSIX_EBUSY = 16;
@@ -73,9 +80,6 @@ function darwin_mach_monotonic_resolution_ns: UInt64;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32;
 
 implementation
-
-uses
-  nextpas.core.platform.posix.ffi;
 
 type
   PPThreadToken = ^pthread_t;

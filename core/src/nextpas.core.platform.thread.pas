@@ -32,8 +32,7 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.ffi
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.ffi
   {$ELSEIF defined(NEXTPAS_MACOS)}, nextpas.core.platform.darwin.ffi
   {$ELSEIF defined(NEXTPAS_ANDROID)}, nextpas.core.platform.android.ffi
   {$ELSEIF defined(NEXTPAS_FREEBSD)}, nextpas.core.platform.freebsd.ffi
@@ -42,7 +41,9 @@ uses
 type
   PPosixThreadState = ^TPosixThreadState;
   TPosixThreadState = record
-    Thread: pthread_t;
+    case Integer of
+      0: (FAlign: PtrUInt);
+      1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
   end;
 
 { Thread lifecycle }
@@ -58,7 +59,7 @@ begin
   New(LState);
   FillChar(LState^, SizeOf(LState^), 0);
 
-  Result := platform_pthread_create_handle(@LState^.Thread, Pointer(AProc), AArg);
+  Result := platform_pthread_create_handle(@LState^.Thread[0], Pointer(AProc), AArg);
   if Result = 0 then
     AHandle := TPlatformThreadHandle(LState)
   else
@@ -77,7 +78,7 @@ begin
     Exit(-1);
 
   LState := PPosixThreadState(AHandle);
-  Result := platform_pthread_join_handle(@LState^.Thread, @ARetVal);
+  Result := platform_pthread_join_handle(@LState^.Thread[0], @ARetVal);
   if Result = 0 then
     Dispose(LState);
 end;
@@ -90,7 +91,7 @@ begin
     Exit(-1);
 
   LState := PPosixThreadState(AHandle);
-  Result := platform_pthread_detach_handle(@LState^.Thread);
+  Result := platform_pthread_detach_handle(@LState^.Thread[0]);
   if Result = 0 then
     Dispose(LState);
 end;

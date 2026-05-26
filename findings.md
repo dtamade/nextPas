@@ -1586,3 +1586,25 @@
 - 当前证据边界仍然要诚实：这批新增了 Linux focused runtime proof、Win64 compile-only 与
   fresh `verify_local` 主门通过，但没有新增 Darwin / FreeBSD / Android runtime 或 cross
   compile 证据，所以这些宿主目前仍主要由 source-surface contract 覆盖。
+
+## 2026-05-27 Follow-up Findings 11
+
+- `platform.thread` / `platform.sync` 前几轮虽然已经把 raw pthread / futex / WinAPI helper 收进
+  host ffi owner，但 ABI size truth 仍没有完全收口：`platform.thread` 还直接保存
+  `pthread_t`，`platform.sync` 还在 consumer interface 里直接写
+  `SizeOf(pthread_*_t)` / `SizeOf(SRWLOCK)` / `SizeOf(CONDITION_VARIABLE)`。
+- 这轮之后，`linux/android/darwin/freebsd/unix.ffi` 统一继续拥有
+  `PLATFORM_PTHREAD_TOKEN_SIZE`、`PLATFORM_PTHREAD_MUTEX_SIZE`、
+  `PLATFORM_PTHREAD_RWLOCK_SIZE`、`PLATFORM_PTHREAD_CONDVAR_SIZE`；`windows.ffi`
+  继续拥有 `PLATFORM_WINDOWS_MUTEX_SIZE`、`PLATFORM_WINDOWS_RWLOCK_SIZE`、
+  `PLATFORM_WINDOWS_CONDVAR_SIZE`。
+- POSIX host ffi 的 interface 现在显式 `uses nextpas.core.platform.posix.ffi`，让 shared ABI
+  shape 只在 ffi owner 层参与 size 派生；consumer 不再需要重新知道 raw type 名字。
+- `platform.thread` 的 Unix consumer 现在用 nextPas 自己的 opaque byte storage 承载 pthread
+  token，并通过 `PLATFORM_PTHREAD_TOKEN_SIZE` 定义尺寸；这比继续把 raw `pthread_t` 放进
+  consumer state record 更符合 L0 boundary。
+- `platform.sync` 的 public opaque storage size 现在只消费 host-owned size token；旧的
+  `test_platform_sync_posix_surface` 初次在 fresh `verify_local` 里失败，正好暴露出它还冻结旧设计。
+  修正后，这条 gate 也开始和新的 owner boundary 对齐。
+- focused tests、Win64 compile-only 与第二轮 fresh `bash build/verify_local.sh` 都已通过，
+  说明这批 ABI size-token ownerization 没把行为测试、跨平台 compile-only 或仓库级主门打坏。

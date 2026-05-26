@@ -57,18 +57,18 @@ begin
     'platform.sync must expose a generic Unix branch beyond Linux-only sync support');
   CheckTokenPresent(LSource, 'posix_wait_bucket_count',
     'platform.sync must declare a POSIX wait bucket fallback for address-wait emulation');
-  CheckTokenPresent(LSource, 'platform_mutex_size   = sizeof(pthread_mutex_t)',
-    'platform.sync must derive POSIX mutex storage from the pthread ffi type');
-  CheckTokenPresent(LSource, 'platform_rwlock_size  = sizeof(pthread_rwlock_t)',
-    'platform.sync must derive POSIX rwlock storage from the pthread ffi type');
-  CheckTokenPresent(LSource, 'platform_condvar_size = sizeof(pthread_cond_t)',
-    'platform.sync must derive POSIX condvar storage from the pthread ffi type');
-  CheckTokenPresent(LSource, 'platform_mutex_size   = sizeof(srwlock)',
-    'platform.sync must derive Windows mutex storage from the SRWLOCK ffi type');
-  CheckTokenPresent(LSource, 'platform_rwlock_size  = sizeof(srwlock)',
-    'platform.sync must derive Windows rwlock storage from the SRWLOCK ffi type');
-  CheckTokenPresent(LSource, 'platform_condvar_size = sizeof(condition_variable)',
-    'platform.sync must derive Windows condvar storage from the CONDITION_VARIABLE ffi type');
+  CheckTokenPresent(LSource, 'platform_mutex_size   = platform_pthread_mutex_size',
+    'platform.sync must derive POSIX mutex storage from the host pthread ffi owner token');
+  CheckTokenPresent(LSource, 'platform_rwlock_size  = platform_pthread_rwlock_size',
+    'platform.sync must derive POSIX rwlock storage from the host pthread ffi owner token');
+  CheckTokenPresent(LSource, 'platform_condvar_size = platform_pthread_condvar_size',
+    'platform.sync must derive POSIX condvar storage from the host pthread ffi owner token');
+  CheckTokenPresent(LSource, 'platform_mutex_size   = platform_windows_mutex_size',
+    'platform.sync must derive Windows mutex storage from the windows ffi owner token');
+  CheckTokenPresent(LSource, 'platform_rwlock_size  = platform_windows_rwlock_size',
+    'platform.sync must derive Windows rwlock storage from the windows ffi owner token');
+  CheckTokenPresent(LSource, 'platform_condvar_size = platform_windows_condvar_size',
+    'platform.sync must derive Windows condvar storage from the windows ffi owner token');
 end;
 
 begin

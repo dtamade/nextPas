@@ -4,6 +4,9 @@ unit nextpas.core.platform.linux.ffi;
 
 interface
 
+uses
+  nextpas.core.platform.posix.ffi;
+
 const
   PLATFORM_CLOCK_REALTIME_ID = Int32(0);
   PLATFORM_CLOCK_MONOTONIC_ID = Int32(1);
@@ -14,6 +17,10 @@ const
   PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 0;
   PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 1;
   PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 2;
+  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
+  PLATFORM_PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
+  PLATFORM_PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
+  PLATFORM_PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
 
   PLATFORM_POSIX_EAGAIN = 11;
   PLATFORM_POSIX_EBUSY = 16;
@@ -79,9 +86,6 @@ function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
 
 implementation
-
-uses
-  nextpas.core.platform.posix.ffi;
 
 type
   PPThreadToken = ^pthread_t;

@@ -110,6 +110,8 @@ begin
     'linux.ffi must expose Linux pthread TLS set helper');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_get',
     'linux.ffi must expose Linux pthread TLS get helper');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_token_size',
+    'linux.ffi must expose Linux pthread token storage size');
 
   CheckTokenPresent(LAndroidSource, 'function gettid',
     'android.ffi must expose Android native thread id ABI');
@@ -145,6 +147,8 @@ begin
     'android.ffi must expose Android pthread TLS set helper');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_get',
     'android.ffi must expose Android pthread TLS get helper');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_token_size',
+    'android.ffi must expose Android pthread token storage size');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
     'darwin.ffi must expose macOS native thread id ABI');
@@ -178,6 +182,8 @@ begin
     'darwin.ffi must expose Darwin pthread TLS set helper');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_get',
     'darwin.ffi must expose Darwin pthread TLS get helper');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_token_size',
+    'darwin.ffi must expose Darwin pthread token storage size');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_eintr',
@@ -210,6 +216,8 @@ begin
     'freebsd.ffi must expose FreeBSD pthread TLS set helper');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_get',
     'freebsd.ffi must expose FreeBSD pthread TLS get helper');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_token_size',
+    'freebsd.ffi must expose FreeBSD pthread token storage size');
   CheckTokenPresent(LUnixSource, 'platform_thread_self_token_u64',
     'unix.ffi must expose generic Unix thread self token helper');
   CheckTokenPresent(LUnixSource, 'platform_native_thread_id_u64',
@@ -234,6 +242,8 @@ begin
     'unix.ffi must expose generic Unix pthread TLS set helper');
   CheckTokenPresent(LUnixSource, 'platform_pthread_tls_get',
     'unix.ffi must expose generic Unix pthread TLS get helper');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_token_size',
+    'unix.ffi must expose generic Unix pthread token storage size');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
   CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',
@@ -291,6 +301,8 @@ begin
     'platform.thread must consume host-owned pthread TLS set helper');
   CheckTokenPresent(LThreadSource, 'platform_pthread_tls_get',
     'platform.thread must consume host-owned pthread TLS get helper');
+  CheckTokenPresent(LThreadSource, 'platform_pthread_token_size',
+    'platform.thread must consume host-owned pthread token storage size');
   Check(Pos('platform_posix_eintr', LThreadSource) = 0,
     'platform.thread must not keep raw EINTR retry semantics in the Unix consumer');
   Check(Pos('platform_posix_errno_value', LThreadSource) = 0,
@@ -379,6 +391,10 @@ begin
     'platform.thread must not call pthread_threadid_np directly in the consumer');
   Check(Pos('pthread_getthreadid_np', LThreadSource) = 0,
     'platform.thread must not call pthread_getthreadid_np directly in the consumer');
+  Check(Pos('thread: pthread_t', LThreadSource) = 0,
+    'platform.thread must not keep raw pthread_t thread storage in the Unix consumer');
+  Check(Pos('ppthreadtoken', LThreadSource) = 0,
+    'platform.thread must not reintroduce raw pthread_t pointer aliases in the Unix consumer');
 end;
 
 begin

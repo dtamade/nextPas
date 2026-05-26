@@ -4980,3 +4980,64 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`（POSIX clock helper ownerization）：pass
 - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/core/build/review-win64-time -FU/home/dtamade/projects/nextPas/core/build/review-win64-time /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`：pass
 - `bash build/verify_local.sh`（platform.time POSIX clock helper ownerization batch）：pass
+
+### Phase 11: Platform ABI Size Token Ownership
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 先核对 live truth：当前收口仍然直接发生在 `main` worktree，历史
+    `codex/platform-time-integration @ 02be065` 依旧未并入 `main`，不能把旧 worktree 的内容误算进
+    本批结论。
+  - 先把 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface` 扩成新的 RED gate，要求：
+    - `linux/android/darwin/freebsd/unix.ffi` 暴露
+      `PLATFORM_PTHREAD_TOKEN_SIZE`、
+      `PLATFORM_PTHREAD_MUTEX_SIZE`、
+      `PLATFORM_PTHREAD_RWLOCK_SIZE`、
+      `PLATFORM_PTHREAD_CONDVAR_SIZE`
+    - `windows.ffi` 暴露
+      `PLATFORM_WINDOWS_MUTEX_SIZE`、
+      `PLATFORM_WINDOWS_RWLOCK_SIZE`、
+      `PLATFORM_WINDOWS_CONDVAR_SIZE`
+    - `platform.thread` / `platform.sync` 必须消费这些 token，且不能继续在 consumer 里保留
+      raw `pthread_t` storage 或直接 `SizeOf(pthread_*_t)` / `SizeOf(SRWLOCK)` /
+      `SizeOf(CONDITION_VARIABLE)`。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、`android.ffi.pas`、`darwin.ffi.pas`、
+    `freebsd.ffi.pas`、`unix.ffi.pas` 的 interface 统一显式 `uses posix.ffi`，让 shared ABI shape
+    可以在 host ffi owner 层派生 size token，而不把 raw type name 再泄回 consumer。
+  - 上述 POSIX host ffi 统一新增 pthread token / mutex / rwlock / condvar size token；
+    `core/src/nextpas.core.platform.windows.ffi.pas` 新增 Windows mutex / rwlock / condvar size
+    token。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Unix state record 改成消费
+    `PLATFORM_PTHREAD_TOKEN_SIZE`，用 nextPas 自己的 opaque byte storage 承载 pthread handle token，
+    不再在 consumer 里直接存 `pthread_t`。
+  - `core/src/nextpas.core.platform.sync.pas` 的 public opaque storage size 改为消费
+    host-owned size token；同时修正 stale `test_platform_sync_posix_surface`，让它冻结新的
+    size-token owner boundary，而不是旧的 raw `SizeOf(...)` 断言。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`，
+    把“ABI size truth 归 host ffi owner”这条规则写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose Linux pthread token storage size: platform_pthread_token_size`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose pthread mutex storage size for sync: platform_pthread_mutex_size`
+    - 首轮 `bash build/verify_local.sh` 初始失败在
+      `core-platform-sync-posix-surface-run-failed`，根因是
+      `test_platform_sync_posix_surface` 仍冻结旧的 raw `SizeOf(...)` 断言
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  - Win64 compile-only:
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`

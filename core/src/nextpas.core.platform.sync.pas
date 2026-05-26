@@ -4,9 +4,29 @@ unit nextpas.core.platform.sync;
 
 interface
 
-{$IFDEF NEXTPAS_UNIX}
+{$IFDEF NEXTPAS_LINUX}
 uses
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.linux.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_MACOS}
+uses
+  nextpas.core.platform.darwin.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_ANDROID}
+uses
+  nextpas.core.platform.android.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_FREEBSD}
+uses
+  nextpas.core.platform.freebsd.ffi;
+{$ENDIF}
+
+{$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
+uses
+  nextpas.core.platform.unix.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -16,13 +36,13 @@ uses
 
 const
   {$IFDEF NEXTPAS_UNIX}
-  PLATFORM_MUTEX_SIZE   = SizeOf(pthread_mutex_t);
-  PLATFORM_RWLOCK_SIZE  = SizeOf(pthread_rwlock_t);
-  PLATFORM_CONDVAR_SIZE = SizeOf(pthread_cond_t);
+  PLATFORM_MUTEX_SIZE   = PLATFORM_PTHREAD_MUTEX_SIZE;
+  PLATFORM_RWLOCK_SIZE  = PLATFORM_PTHREAD_RWLOCK_SIZE;
+  PLATFORM_CONDVAR_SIZE = PLATFORM_PTHREAD_CONDVAR_SIZE;
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
-  PLATFORM_MUTEX_SIZE   = SizeOf(SRWLOCK);
-  PLATFORM_RWLOCK_SIZE  = SizeOf(SRWLOCK);
-  PLATFORM_CONDVAR_SIZE = SizeOf(CONDITION_VARIABLE);
+  PLATFORM_MUTEX_SIZE   = PLATFORM_WINDOWS_MUTEX_SIZE;
+  PLATFORM_RWLOCK_SIZE  = PLATFORM_WINDOWS_RWLOCK_SIZE;
+  PLATFORM_CONDVAR_SIZE = PLATFORM_WINDOWS_CONDVAR_SIZE;
   {$ELSE}
   PLATFORM_MUTEX_SIZE   = 64;
   PLATFORM_RWLOCK_SIZE  = 64;
@@ -91,29 +111,9 @@ function platform_wake_address_all(AAddr: PInt32): Int32;
 
 implementation
 
-{$IFDEF NEXTPAS_LINUX}
+{$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.linux.ffi;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_MACOS}
-uses
-  nextpas.core.platform.darwin.ffi;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_ANDROID}
-uses
-  nextpas.core.platform.android.ffi;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_FREEBSD}
-uses
-  nextpas.core.platform.freebsd.ffi;
-{$ENDIF}
-
-{$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
-uses
-  nextpas.core.platform.unix.ffi;
+  nextpas.core.platform.posix.ffi;
 {$ENDIF}
 
 const

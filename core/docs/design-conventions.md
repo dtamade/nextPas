@@ -794,6 +794,14 @@ shared `posix.ffi` 或实现层条件编译里。
 `EINTR` 这样的 retryable errno token 必须由各宿主 FFI owner 提供，`platform.thread` 等实现单元只消费
 这些 host-owned token，而不是把“所有 Unix 都按同一个 errno 编号重试”写死在实现里。
 
+同样，像 `PLATFORM_PTHREAD_TOKEN_SIZE`、`PLATFORM_PTHREAD_MUTEX_SIZE`、
+`PLATFORM_PTHREAD_RWLOCK_SIZE`、`PLATFORM_PTHREAD_CONDVAR_SIZE`、
+`PLATFORM_WINDOWS_MUTEX_SIZE`、`PLATFORM_WINDOWS_RWLOCK_SIZE`、
+`PLATFORM_WINDOWS_CONDVAR_SIZE` 这类“从 raw ABI type 计算出的 opaque storage size truth”，
+也属于 host ffi owner，而不是 consumer。`platform.thread`、`platform.sync` 这类实现单元只消费
+这些 host-owned size token，不直接在 consumer 里再次写 `SizeOf(pthread_*_t)`、
+`SizeOf(SRWLOCK)` 或 `SizeOf(CONDITION_VARIABLE)`。
+
 不仅 errno token 要按宿主 owner，下层“当前 errno 值怎么读”这件事本身也属于 host ABI truth。
 `platform_errno_location` 这类外部符号绑定与基于它读取当前 errno 的 helper，都应放进
 `linux/darwin/android/freebsd/unix` 等 host ffi owner 单元；`platform.thread`、

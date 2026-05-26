@@ -6786,3 +6786,86 @@ Completed; verification passed.
 - 这批不重写 pthread mutex/rwlock/condvar path
 - 这批不改 `platform.sync` public API
 - 这批不声称新增 Linux futex semantic matrix 以外的平台 runtime evidence
+
+## Addendum: 2026-05-27 Platform ABI Size Token Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` / `platform.sync` 仍然留在 consumer 里的 raw ABI size truth 收回
+host ffi owner，让“谁拥有 raw ABI type 形状，谁就拥有由它派生出来的 opaque storage size token”
+这条边界闭合。
+
+### Current Gap
+
+- 前几轮虽然已经把 pthread / futex / Windows sync / POSIX clock 的 raw declaration 和 helper
+  收进 `*.ffi` owner，但 `platform.thread` 仍直接在 consumer state record 里保存 `pthread_t`。
+- `platform.sync` 仍在 consumer interface 里直接写
+  `SizeOf(pthread_mutex_t)` / `SizeOf(pthread_rwlock_t)` / `SizeOf(pthread_cond_t)` /
+  `SizeOf(SRWLOCK)` / `SizeOf(CONDITION_VARIABLE)`，所以 public opaque storage size truth
+  还没有真正归回 host ffi owner。
+- `test_platform_sync_posix_surface` 也还冻结着旧设计，要求 consumer 直接写 raw `SizeOf(...)`，
+  会和新的 owner boundary 冲突。
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 统一继续拥有：
+  - `PLATFORM_PTHREAD_TOKEN_SIZE`
+  - `PLATFORM_PTHREAD_MUTEX_SIZE`
+  - `PLATFORM_PTHREAD_RWLOCK_SIZE`
+  - `PLATFORM_PTHREAD_CONDVAR_SIZE`
+- `windows.ffi` 继续拥有：
+  - `PLATFORM_WINDOWS_MUTEX_SIZE`
+  - `PLATFORM_WINDOWS_RWLOCK_SIZE`
+  - `PLATFORM_WINDOWS_CONDVAR_SIZE`
+- `platform.thread` 的 Unix consumer 继续保留 nextPas 自己的 state record、join/detach
+  生命周期收口与 public contract，但 thread token storage 改成 nextPas-owned opaque byte
+  storage，不再直接保存 raw `pthread_t`。
+- `platform.sync` 继续保留 nextPas 的 public opaque storage contract、error mapping 与 wait
+  policy，但 public size 常量只消费 host-owned size token，不再在 consumer 里再次
+  `SizeOf(...)` raw type。
+- 这批不扩到新的 public API，也不顺手改写更高层的并发抽象。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 thread/sync host ffi surface tests，先把 size-token owner boundary 打成 RED
+- [x] 在 POSIX host ffi / windows.ffi 暴露 ABI size token
+- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 token
+- [x] 修正 stale `test_platform_sync_posix_surface` 到新的 owner boundary
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `platform_pthread_token_size`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `platform_pthread_mutex_size`
+  - 首轮 `bash build/verify_local.sh` 初始失败在 stale
+    `test_platform_sync_posix_surface`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 ... test_platform_thread.lpr`
+  - `fpc -Twin64 ... test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
+
+### Non-goals
+
+- 这批不新增 Darwin / FreeBSD / Android runtime 证据
+- 这批不改 `platform.thread` / `platform.sync` public API
+- 这批不把 ABI shape 本身从 shared `posix.ffi` 搬走；搬走的是 consumer 里的 size truth
