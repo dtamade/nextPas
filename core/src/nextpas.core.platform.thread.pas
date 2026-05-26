@@ -6,6 +6,7 @@ interface
 
 type
   TPlatformThreadHandle = Pointer;
+  TPlatformThreadToken = UInt64;
   TPlatformThreadProc = function(AArg: Pointer): Pointer; cdecl;
   TPlatformTLSKey = PtrUInt;
 
@@ -13,7 +14,7 @@ type
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
-function platform_thread_self: TPlatformThreadHandle;
+function platform_thread_self: TPlatformThreadToken;
 function platform_thread_id: UInt64;
 procedure platform_thread_yield;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
@@ -89,9 +90,9 @@ begin
     Dispose(LState);
 end;
 
-function platform_thread_self: TPlatformThreadHandle;
+function platform_thread_self: TPlatformThreadToken;
 begin
-  Result := TPlatformThreadHandle(PtrUInt(pthread_self));
+  Result := TPlatformThreadToken(PtrUInt(pthread_self));
 end;
 
 function platform_thread_id: UInt64;
@@ -276,9 +277,9 @@ begin
     Result := Int32(GetLastError);
 end;
 
-function platform_thread_self: TPlatformThreadHandle;
+function platform_thread_self: TPlatformThreadToken;
 begin
-  Result := Pointer(PtrUInt(GetCurrentThread));
+  Result := TPlatformThreadToken(GetCurrentThreadId);
 end;
 
 function platform_thread_id: UInt64;
@@ -358,7 +359,7 @@ end;
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32; begin AHandle := nil; Result := -1; end;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32; begin ARetVal := nil; Result := -1; end;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32; begin Result := -1; end;
-function platform_thread_self: TPlatformThreadHandle; begin Result := nil; end;
+function platform_thread_self: TPlatformThreadToken; begin Result := 0; end;
 function platform_thread_id: UInt64; begin Result := 0; end;
 procedure platform_thread_yield; begin end;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64); begin end;

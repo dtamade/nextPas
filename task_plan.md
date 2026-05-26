@@ -312,6 +312,72 @@ Completed; verification passed.
 - 不改 platform.time ABI/FFI 行为
 - 不声明非 Linux 主机 runtime 已验证
 
+## Addendum: 2026-05-26 Platform Thread L0 Surface Coverage
+
+### Goal
+
+把 `platform.thread` 收口成可证明的 L0 宿主线程 API surface：
+
+- 行为测试覆盖 public interface，不遗漏 `platform_thread_self`。
+- example/benchmark 只展示和测量 L0 thread/TLS/yield/create-join 能力。
+- official local verification 明确跑 platform.thread behavior/no-FPC/L0-boundary/Win64/example/benchmark gates。
+- 不把 ThreadPool、Channel、Future、Scheduler、Task 等 L1 并发抽象放进 platform 命名空间。
+
+### Architecture Decision
+
+- `TPlatformThreadHandle` 是 `platform_thread_create` 返回的 owned handle，只能由
+  `platform_thread_join` 或 `platform_thread_detach` 消费并完成生命周期收口。
+- `platform_thread_self` 返回 `TPlatformThreadToken`，表示当前线程的 unowned identity token；
+  它不是可等待 handle，不能传给 join/detach，也不能假定与平台原生 handle 同形。
+- POSIX/Windows 的系统 ABI 继续只通过 nextPas-owned FFI 单元声明；platform.thread 不 `uses`
+  FPC `BaseUnix`、`PThreads`、`UnixType`、`Windows` 等平台单元。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 对齐 worktree 到最新 `main@88d4147`
+- [x] 写 RED：`platform_thread_self` focused test 需要 `TPlatformThreadToken`
+- [x] 修改 public API：拆分 owned handle 和 unowned self token
+- [x] 补 platform.thread L0 example 和 benchmark
+- [x] 补 L0 boundary static test，禁止 L1 thread API token 混入 platform.thread 源码/示例/基准
+- [x] 同步 `core/docs/design-conventions.md`
+- [x] 同步 `build/verify_local.sh` focused gates 和 final envelope
+- [x] 跑 focused tests / example / benchmark
+- [x] 跑 `make -C core test`
+- [x] 跑 `make -C core examples`
+- [x] 跑 `make -C core benchmarks`
+- [x] 跑 fresh `bash build/verify_local.sh`
+- [x] 提交前复盘，准备提交/合并/清理 worktree
+
+### Verification
+
+- RED: `make -C core/tests/nextpas.core.platform.thread/test_platform_thread test`
+  先失败在 `Identifier not found "TPlatformThreadToken"`。
+- Focused GREEN: 同一测试随后输出 `8 total, 8 passed, 0 failed`。
+- Focused GREEN: no-FPC static 1/1、L0 boundary 3/3、example run pass、
+  benchmark 输出 `platform-thread-bench-status=pass`。
+- Root-cause fix: official verify 首次暴露 `test_platform_thread_no_fpc_units` 在仓库根运行时
+  只能按测试目录相对路径找源码，失败为 `File not found`；修正后测试同时支持 test-dir/root
+  两种路径。
+- Aggregate GREEN: `make -C core test` 输出 `All tests passed.`。
+- Examples/benchmarks GREEN: `make -C core examples` 输出 `All examples compiled.`；
+  `make -C core benchmarks` 输出 `All benchmarks passed.`。
+- Official GREEN: fresh `bash build/verify_local.sh` 输出 `corePlatformThreadCheck=pass`、
+  `corePlatformThreadNoFpcCheck=pass`、`corePlatformThreadL0BoundaryCheck=pass`、
+  `corePlatformThreadWin64Check=pass`、`corePlatformThreadExampleCheck=pass`、
+  `corePlatformThreadBenchCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 thread pool、scheduler、channel、future、async runtime。
+- 不修改 `nextpas.core.thread` 的 L1 public API。
+- 不声明 Windows/macOS/Android runtime 行为已在真实设备运行验证；本轮保留 Win64 compile-only gate。
+- 不修改 `platform.sync` 或 `platform.time` 语义。
+
 
 ## Addendum: 2026-05-26 Batch 101 Object Release Poison Contract
 

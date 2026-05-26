@@ -3,8 +3,9 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 104 function result call type mismatch evidence；并行收口包含
-platform.time L0 surface coverage 与 platform API boundary cleanup；Batch 103 object release
+当前最新本轮为 platform.thread L0 surface coverage；并行收口包含
+platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
+Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
 Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
@@ -12,6 +13,56 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (platform.thread L0 surface coverage)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 给 `platform.thread` 补齐 L0 系统 thread API 的 example/benchmark/L0 boundary gate，并把
+    `platform_thread_self` 从 owned join/detach handle 语义中拆出来。
+- Baseline:
+  - `platform.thread` 已经通过 Batch 93 脱离 FPC 平台单元，行为测试覆盖 create/join/detach、
+    TLS、thread id、yield/sleep 与 CPU count。
+  - 缺口：`platform_thread_self` 没有 focused 接口覆盖；它返回 `TPlatformThreadHandle`，
+    容易和 `platform_thread_create` 产出的 owned handle 混用。
+  - 缺口：缺少 platform.thread 专属 example/benchmark 与 official local focused gates，
+    L0/L1 并发抽象边界没有 gate 化。
+- Actions taken:
+  - 新增 `TPlatformThreadToken = UInt64`；`platform_thread_self` 返回 unowned current-thread identity
+    token，`TPlatformThreadHandle` 只表示 create 产出的 owned join/detach handle。
+  - 删除 Windows FFI 中已不再消费的 `GetCurrentThread` 声明，Windows self token 走
+    `GetCurrentThreadId`。
+  - 新增 `core/examples/nextpas.core.platform.thread/platform_thread_lifecycle/`，只调用
+    `nextpas.core.platform.thread` 的 L0 API。
+  - 新增 `core/benchmarks/nextpas.core.platform.thread/bench_platform_thread_lifecycle/`，测量 TLS
+    set/get、yield、create/join。
+  - 新增 `core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary/`，防止
+    `nextpas.core.thread`、ThreadPool、Channel、Future、Scheduler、Task 混入 platform.thread
+    源码、示例和基准。
+  - `build/verify_local.sh` 新增 platform.thread behavior/no-FPC/L0-boundary/Win64/example/benchmark
+    focused gates，并在 final envelope 暴露对应 `corePlatformThread*` 字段。
+- Verification:
+  - RED: 新增 self token 测试先失败在 `Identifier not found "TPlatformThreadToken"`。
+  - Focused GREEN: `make -C core/tests/nextpas.core.platform.thread/test_platform_thread test`
+    输出 `8 total, 8 passed, 0 failed`。
+  - Focused GREEN: no-FPC static 1/1、L0 boundary 3/3、`platform_thread_lifecycle` run pass、
+    `bench_platform_thread_lifecycle` 输出 `platform-thread-bench-status=pass`。
+  - Aggregate GREEN: `make -C core test` 输出 `All tests passed.`。
+  - Examples/benchmarks GREEN: `make -C core examples` 输出 `All examples compiled.`；
+    `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - Debug/Fix: first official verify exposed that `test_platform_thread_no_fpc_units` only resolved
+    source paths from the test directory; root-run binary failed with `File not found`. The test now
+    resolves both test-directory and repository-root paths.
+  - Official GREEN: fresh `bash build/verify_local.sh` 输出 `corePlatformThreadCheck=pass`、
+    `corePlatformThreadNoFpcCheck=pass`、`corePlatformThreadL0BoundaryCheck=pass`、
+    `corePlatformThreadWin64Check=pass`、`corePlatformThreadExampleCheck=pass`、
+    `corePlatformThreadBenchCheck=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - `platform.thread` 继续只做 L0 宿主线程 API/ABI；`ThreadPool`、channel、future、scheduler、
+    task 等属于 `nextpas.core.thread` 或更高层。
+  - 本批把 `platform_thread_self` 的类型边界、测试入口、示例、基准和 official gate 一起收口；
+    Windows/macOS/Android 仍需要后续真实主机/CI runtime 证据，当前 Win64 是 compile-only。
 
 ## Session: 2026-05-26 (Batch 104 function result call type mismatch evidence)
 

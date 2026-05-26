@@ -70,6 +70,30 @@
   `corePlatformTimeL0BoundaryCheck=pass`、`corePlatformTimeExampleCheck=pass`、
   `corePlatformTimeBenchCheck=pass`、`verify-local=pass` 与
   `human-summary=local verification passed`。
+- `platform.thread` 的 public surface 不应把 current-thread identity 与 create/join/detach lifecycle
+  handle 混成同一个类型：`TPlatformThreadHandle` 现在只表示 `platform_thread_create` 返回的 owned
+  handle，`platform_thread_self` 返回新的 `TPlatformThreadToken` unowned identity token。
+- `platform_thread_self` 的 focused RED 先失败在 `Identifier not found "TPlatformThreadToken"`；
+  修正后 `test_platform_thread` 输出 `8 total, 8 passed, 0 failed`，补齐这个 public API 的接口覆盖。
+- `platform.thread` 示例和基准必须贴着 L0 thread surface：本批新增
+  `platform_thread_lifecycle` 与 `bench_platform_thread_lifecycle`，只覆盖 create/join、TLS、
+  self/id、yield/sleep 与 CPU count，不引入 `nextpas.core.thread`。
+- 新增 `test_platform_thread_l0_boundary`，把 L0/L1 并发边界变成 gate：platform.thread 源码、
+  示例和基准不能引用 `nextpas.core.thread`、ThreadPool、Channel、Future、Scheduler 或 Task。
+- `build/verify_local.sh` 已增加 platform.thread behavior/no-FPC/L0-boundary/Win64/example/benchmark
+  focused gates，并在 final envelope 暴露 `corePlatformThreadCheck`、
+  `corePlatformThreadNoFpcCheck`、`corePlatformThreadL0BoundaryCheck`、
+  `corePlatformThreadWin64Check`、`corePlatformThreadExampleCheck` 与
+  `corePlatformThreadBenchCheck`。
+- Windows FFI 已移除不再消费的 `GetCurrentThread` 声明；self token 使用 `GetCurrentThreadId`，
+  避免 Win32 pseudo handle 被误投影成可 join/detach 的 platform handle。
+- platform.thread L0 surface coverage 的 fresh verification 已闭环：`make -C core test`、
+  `make -C core examples`、`make -C core benchmarks` 均通过；fresh
+  `bash build/verify_local.sh` 输出 `corePlatformThreadCheck=pass`、
+  `corePlatformThreadNoFpcCheck=pass`、`corePlatformThreadL0BoundaryCheck=pass`、
+  `corePlatformThreadWin64Check=pass`、`corePlatformThreadExampleCheck=pass`、
+  `corePlatformThreadBenchCheck=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 - Batch 103 把 `@np_object_release_invalid` 从 no-op boundary 推进成最小 fatal failure policy：
   invalid helper 会调用 `@llvm.trap()`，随后发出 `unreachable`。
 - Batch 103 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出

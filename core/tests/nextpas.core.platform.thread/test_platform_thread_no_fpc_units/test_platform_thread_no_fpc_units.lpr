@@ -7,7 +7,8 @@ uses
   nextpas.core.testing;
 
 const
-  THREAD_SOURCE_PATH = '../../../src/nextpas.core.platform.thread.pas';
+  THREAD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.pas';
+  THREAD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
 
 var
   T: TTestRunner;
@@ -36,11 +37,20 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, 'platform.thread must not reference FPC unit/token: ' + AToken);
 end;
 
+function ResolveThreadSourcePath: string;
+begin
+  if FileExists(THREAD_SOURCE_PATH_FROM_TEST) then
+    Exit(THREAD_SOURCE_PATH_FROM_TEST);
+  if FileExists(THREAD_SOURCE_PATH_FROM_ROOT) then
+    Exit(THREAD_SOURCE_PATH_FROM_ROOT);
+  Result := THREAD_SOURCE_PATH_FROM_TEST;
+end;
+
 procedure TestNoFpcPlatformUnits;
 var
   LSource: string;
 begin
-  LSource := ReadSourceFile(THREAD_SOURCE_PATH);
+  LSource := ReadSourceFile(ResolveThreadSourcePath);
   CheckTokenAbsent(LSource, 'BaseUnix');
   CheckTokenAbsent(LSource, 'UnixType');
   CheckTokenAbsent(LSource, 'TThreadID(');

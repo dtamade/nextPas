@@ -117,6 +117,15 @@ begin
   Check(LId <> 0, 'thread_id must be non-zero');
 end;
 
+procedure TestThreadSelfToken;
+var
+  LSelf: TPlatformThreadToken;
+begin
+  LSelf := platform_thread_self;
+  Check(LSelf <> 0, 'thread self token must be non-zero');
+  CheckEqual(UInt64(platform_thread_id), UInt64(LSelf), 'self token matches current thread id');
+end;
+
 procedure TestCpuCount;
 var
   LCount: Int32;
@@ -142,6 +151,7 @@ begin
   T.Run('Thread create and join', @TestThreadCreateJoin);
   T.Run('Thread detach', @TestThreadDetach);
   T.Run('TLS set/get', @TestTlsSetGet);
+  T.Run('Thread self token', @TestThreadSelfToken);
   T.Run('Thread ID non-zero', @TestThreadId);
   T.Run('CPU count >= 1', @TestCpuCount);
   T.Run('Thread yield', @TestThreadYield);
