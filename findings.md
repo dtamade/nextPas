@@ -62,6 +62,24 @@
 - `platform.time`、`platform.thread`、`platform.sync` 现在都会按 target 选择 host-owned FFI unit；
   generic Unix 分支显式走 `nextpas.core.platform.unix.ffi`，不再从 shared `posix.ffi`
   读取伪通用的 host token。
+- 新增 `core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix/`，在 Linux 主机上用
+  `NEXTPAS_FORCE_HOST_DARWIN`、`NEXTPAS_FORCE_HOST_ANDROID`、
+  `NEXTPAS_FORCE_HOST_FREEBSD`、`NEXTPAS_FORCE_HOST_UNIX` 做 compile-only matrix proof；这条证据验证
+  host branch selection 与 `platform.time/thread/sync + host ffi` compile coherence，但不是 runtime
+  truth。
+- `nextpas.core.settings.inc` 现在显式支持 test-only `NEXTPAS_FORCE_HOST_*` 覆盖层；这层 override 只能用于
+  独立测试项目和 compile proof，不能在文档或结论里包装成真实 cross toolchain/runtime 支持。
+- 这条 matrix proof 直接暴露并修掉了三个真实缺陷：
+  - `platform.thread` 的 non-Linux Unix `uses` 条件块原先有前导逗号语法错误
+  - `platform.posix.ffi` 原先有三处非法 `{$ELSEIFDEF ...}`，会把 FreeBSD 分支解析坏成重复声明
+  - generic Unix 原先没有定义 `NEXTPAS_POSIX_CLOCK`，使 `platform.time` 与 `unix.ffi` 的 POSIX
+    clock helper contract 自相矛盾
+- generic Unix fallback 现在明确启用 `NEXTPAS_POSIX_CLOCK`；既然 `nextpas.core.platform.unix.ffi`
+  已经承载 `clock_gettime` / `clock_getres` / pthread timeout clock truth，就不能再让
+  `platform.time` 把 generic Unix 视为 unsupported。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与
+  fresh `bash build/verify_local.sh` 都已通过；official envelope 现在包含
+  `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
 - `platform_thread_self` 与 `platform_thread_id` 不是同一个契约：前者是 unowned current-thread
   token，后者应该尽可能返回宿主 native integer thread id。继续在所有 Unix 平台上把
   `pthread_self` 强转成 `UInt64` 会把 Darwin / FreeBSD 这类非整数 `pthread_t` 的语义糊成一层。

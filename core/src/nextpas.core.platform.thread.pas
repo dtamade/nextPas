@@ -30,14 +30,32 @@ function platform_cpu_count: Int32;
 
 implementation
 
-{$IFDEF NEXTPAS_UNIX}
+{$IFDEF NEXTPAS_LINUX}
 uses
-  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.ffi
-  {$ELSEIF defined(NEXTPAS_MACOS)}, nextpas.core.platform.darwin.ffi
-  {$ELSEIF defined(NEXTPAS_ANDROID)}, nextpas.core.platform.android.ffi
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}, nextpas.core.platform.freebsd.ffi
-  {$ELSE}, nextpas.core.platform.unix.ffi{$ENDIF};
+  nextpas.core.platform.linux.ffi;
+{$ENDIF}
 
+{$IFDEF NEXTPAS_MACOS}
+uses
+  nextpas.core.platform.darwin.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_ANDROID}
+uses
+  nextpas.core.platform.android.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_FREEBSD}
+uses
+  nextpas.core.platform.freebsd.ffi;
+{$ENDIF}
+
+{$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
+uses
+  nextpas.core.platform.unix.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_UNIX}
 type
   PPosixThreadState = ^TPosixThreadState;
   TPosixThreadState = record

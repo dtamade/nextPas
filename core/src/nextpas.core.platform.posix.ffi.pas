@@ -36,7 +36,7 @@ type
   pthread_rwlockattr_t = Pointer;
   pthread_cond_t = Pointer;
   pthread_condattr_t = Pointer;
-  {$ELSEIFDEF NEXTPAS_MACOS}
+  {$ELSEIF defined(NEXTPAS_MACOS)}
   pthread_mutex_t = record
     case Integer of
       0: (FAlign: UInt64);
@@ -72,7 +72,7 @@ type
       0: (FAlign: UInt64);
       1: (FOpaque: array[0..15] of Byte);
   end;
-  {$ELSEIFDEF NEXTPAS_ANDROID}
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
   pthread_mutex_t = record
     case Integer of
       0: (FAlign: UInt64);
@@ -96,7 +96,7 @@ type
   end;
 
   pthread_condattr_t = PtrInt;
-  {$ELSEIFDEF NEXTPAS_LINUX}
+  {$ELSEIF defined(NEXTPAS_LINUX)}
   pthread_mutex_t = record
     case Integer of
       0: (FAlign: UInt64);

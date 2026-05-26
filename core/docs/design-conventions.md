@@ -816,6 +816,20 @@ record 消费这些 carrier type，把宿主原生对齐要求继承进 nextPas 
 `platform.sync` 等 consumer 只消费 `platform_posix_errno_value` 这类 helper，不直接在实现层
 解引用 errno storage。
 
+为了验证这些宿主分支不会只在 Linux 主机上“看起来没问题”，platform 层允许有限的
+**test-only simulated host selection**：`nextpas.core.settings.inc` 可以识别
+`NEXTPAS_FORCE_HOST_WINDOWS`、`NEXTPAS_FORCE_HOST_LINUX`、
+`NEXTPAS_FORCE_HOST_DARWIN`、`NEXTPAS_FORCE_HOST_ANDROID`、
+`NEXTPAS_FORCE_HOST_FREEBSD`、`NEXTPAS_FORCE_HOST_UNIX`，仅供独立测试项目用
+`-Cn` 做 compile-only host matrix proof。这个 override 只用于验证分支选择、unit surface 与
+FFI compile coherence，不得拿来宣称真实 cross toolchain / runtime 已验证通过。
+
+generic Unix fallback 既然已经有 `nextpas.core.platform.unix.ffi` 承载
+`clock_gettime` / `clock_getres` / pthread timeout clock truth，就必须把
+`NEXTPAS_POSIX_CLOCK` 视为这条 fallback contract 的一部分。也就是说，generic Unix 不能一边暴露
+`unix.ffi` 的 POSIX clock helper，一边让 `platform.time` 因为缺少
+`NEXTPAS_POSIX_CLOCK` 而退化成 unsupported。
+
 ### `platform.time` 的边界
 
 `nextpas.core.platform.time` 只提供系统时钟源和平台换算工具，例如 monotonic clock、

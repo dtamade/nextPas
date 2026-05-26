@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform windows timeout conversion ffi ownership；并行收口包含
-platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform simulated host compile matrix；并行收口包含
+platform windows timeout conversion ffi ownership、platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,56 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform simulated host compile matrix)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 给 `platform` 补一条诚实的 simulated host compile proof，让 Darwin / Android / FreeBSD /
+    generic Unix 的宿主分支选择和 `platform.time/thread/sync + host ffi` 编译自洽性进入官方验证面。
+- Baseline:
+  - 仓库已经有 `darwin/android/freebsd/unix.ffi`，但缺一条系统化证据去证明这些分支在 Linux 主机上至少
+    compile coherence 成立。
+  - `nextpas.core.settings.inc` 没有 test-only host override；新 matrix 项目初始在
+    `simulated darwin compile must select NEXTPAS_MACOS` 直接失败。
+- Actions taken:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix/` 独立测试项目：
+    - `Makefile` 逐个跑 Darwin / Android / FreeBSD / generic Unix 的 `-Cn` compile-only matrix
+    - `test_platform_simulated_host_compile_matrix.lpr` 冻结宿主宏选择与 `platform.time/thread/sync`
+      public surface 编译路径
+  - `core/src/nextpas.core.settings.inc` 新增 test-only
+    `NEXTPAS_FORCE_HOST_WINDOWS/LINUX/DARWIN/ANDROID/FREEBSD/UNIX` 覆盖层。
+  - 修掉 matrix 暴露出的真实问题：
+    - `core/src/nextpas.core.platform.thread.pas` 的 non-Linux Unix `uses` 条件块前导逗号语法错误
+    - `core/src/nextpas.core.platform.posix.ffi.pas` 三处非法 `{$ELSEIFDEF ...}`，导致 FreeBSD 分支重复声明
+    - generic Unix 现在显式启用 `NEXTPAS_POSIX_CLOCK`，让 `platform.time` 与 `unix.ffi` 的 POSIX clock
+      contract 一致
+  - `build/verify_local.sh` 新增
+    `core-platform-simulated-host-compile-matrix-check`，并把
+    `corePlatformSimulatedHostCompileMatrixCheck` 纳入 final envelope。
+  - `core/docs/design-conventions.md` 追加规则：forced-host override 仅限 test-only compile proof，
+    不能伪装成 runtime evidence。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      初始失败在
+      `simulated darwin compile must select NEXTPAS_MACOS`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      输出四条 target pass 与 `simulated-host-compile-matrix-status=pass`。
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `core-platform-simulated-host-compile-matrix-check=pass`、
+      `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、`verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批不是在“装作跨平台全通”，而是在 Linux 主机上把宿主分支选择和 ffi compile coherence 先补成可回归的
+    事实，再把 runtime truth 和 compile-only truth 明确分开。
+  - simulated matrix 很值，因为它不是只证明新测试本身，而是连续揪出了 thread 分支语法、posix.ffi 条件
+    编译和 generic Unix POSIX clock contract 三个真实缺陷。
 
 ## Session: 2026-05-27 (platform windows timeout conversion ffi ownership)
 

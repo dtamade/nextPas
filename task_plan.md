@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Windows ABI Type Leakage Ownership；并行收口包含
-Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Simulated Host Compile Matrix；并行收口包含
+Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,69 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Simulated Host Compile Matrix
+
+### Goal
+
+给 `platform` 宿主分支补一条诚实的 compile-proof：
+
+- 在 Linux 主机上用 test-only host override 驱动 Darwin / Android / FreeBSD / generic Unix
+  分支选择
+- compile-only 验证 `platform.time` / `platform.thread` / `platform.sync` 连同对应 host ffi
+  单元的编译自洽
+- 把这条 proof 接进 `build/verify_local.sh`，但明确它不是 runtime evidence
+
+### Architecture Decision
+
+- `nextpas.core.settings.inc` 允许 test-only `NEXTPAS_FORCE_HOST_*` 宏覆盖宿主选择，范围仅限独立测试
+  项目和 compile-only 证明。
+- 这类 proof 验证的是 branch selection correctness、public API surface 与 host ffi compile coherence，
+  不是 cross toolchain / cross runtime truth。
+- generic Unix fallback 已有 `nextpas.core.platform.unix.ffi` 承载 POSIX clock helper，因此
+  `NEXTPAS_POSIX_CLOCK` 必须成为 generic Unix contract 的一部分，不能让 `platform.time`
+  继续把 generic Unix 当成 unsupported。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：新增独立 `test_platform_simulated_host_compile_matrix` 项目并在主线上先跑出失败
+- [x] 在 `nextpas.core.settings.inc` 增加 test-only `NEXTPAS_FORCE_HOST_*` override
+- [x] 修掉 simulated matrix 暴露出的真实分支缺陷
+- [x] 将 simulated host compile matrix 接入 `build/verify_local.sh`
+- [x] 同步 design/tracking 文档
+- [x] 跑 fresh `make -C core test`
+- [x] 跑 fresh `make -C core examples`
+- [x] 跑 fresh `make -C core benchmarks`
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    初始失败在
+    `simulated darwin compile must select NEXTPAS_MACOS`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出四条 target pass 与 `simulated-host-compile-matrix-status=pass`。
+- Full:
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `core-platform-simulated-host-compile-matrix-check=pass`、
+    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不把 simulated compile-only proof 伪装成 Darwin / Android / FreeBSD / generic Unix 的真实
+  runtime 证据
+- 这批不引入新的 public platform API
+- 这批不替代后续真实 cross toolchain / runtime 验证
 
 ## Addendum: 2026-05-27 Platform Windows Timeout Conversion FFI Ownership
 
