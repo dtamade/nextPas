@@ -1425,3 +1425,23 @@
   consumer 直接写 `platform_errno_location^`。
 - 这一步让 POSIX errno truth 的 owner boundary 比之前更完整：shared `posix.ffi` 仍只保留
   shared ABI，per-host errno binding 与 errno read helper 都继续留在各 host ffi owner。
+
+## 2026-05-27 Follow-up Findings 3
+
+- `platform.time` 之前虽然已经不直接依赖 FPC 平台单元，也已经通过 nextPas-owned ffi
+  声明 raw externals，但 Darwin `mach_timebase_info` cache / sanitize 与 Windows QPC /
+  FILETIME 读取细节仍停留在 consumer。
+- 这轮之后，`darwin.ffi` 继续拥有 `darwin_mach_monotonic_ns` 与
+  `darwin_mach_monotonic_resolution_ns`，`windows.ffi` 继续拥有
+  `windows_qpc_frequency_u64`、`windows_qpc_counter_u64` 与
+  `windows_filetime_now_unix_ns`；`platform.time` 不再直接写 raw
+  `mach_absolute_time` / `mach_timebase_info` / `QueryPerformance*` /
+  `GetSystemTimeAsFileTime` 调用。
+- 现在 `platform.time` 的 Darwin / Windows 分支更接近“platform contract consumer”
+  而不是“宿主时钟初始化脚本”：host-specific stateful helper 继续留在各自 ffi owner，
+  consumer 只保留跨平台 public contract 与通用安全换算。
+- `test_platform_time_host_ffi_surface` 现在不仅要求 host ffi 暴露 Darwin / Windows
+  时钟 helper，还额外防回归 consumer 直接回到 raw `mach_*` / QPC / FILETIME 调用。
+- 当前证据边界仍然要诚实：Win64 compile-only 已补跑通过，但 Darwin compile-only 在当前
+  Linux 宿主因为缺少 target `System` 单元而拿不到有效编译证据，因此这批没有新增 Darwin
+  runtime / compile proof，只新增了 source-surface owner boundary 与 Linux 主门全绿证据。

@@ -6257,3 +6257,69 @@ Completed; verification passed.
 - 这批不新增宿主 ABI externals
 - 这批不修改 `platform.time`
 - 这批不把 POSIX error-code 到 nextPas error-code 的映射再下沉到 ffi
+
+## Addendum: 2026-05-27 Platform Time Host Clock Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.time` 里的 Darwin / Windows 宿主时钟 helper 从 consumer 实现层下沉到
+host-owned ffi owner，让 `platform.time` 尽量只保留跨平台 clock contract 与通用安全换算。
+
+### Current Gap
+
+- `platform.time` 虽然已经不再依赖 FPC 平台单元，也已经通过 `windows.ffi` /
+  `darwin.ffi` 声明 raw externals，但 macOS monotonic 路径仍把
+  `mach_timebase_info` cache / sanitize 逻辑留在 consumer。
+- Windows monotonic / realtime 路径也仍直接在 consumer 中调用
+  `QueryPerformanceFrequency`、`QueryPerformanceCounter` 与
+  `GetSystemTimeAsFileTime`，并自己维护 QPC 频率初始化。
+
+### Architecture Decision
+
+- `platform.time` 继续拥有跨平台通用的安全换算 helper，例如 `platform_qpc_to_ns`、
+  `platform_resolution_from_frequency_ns`、`platform_timespec_to_ns`。
+- Darwin `mach` timebase cache / sanitize 与 monotonic helper 继续归
+  `nextpas.core.platform.darwin.ffi` owner。
+- Windows QPC 频率读取、counter 读取与 `FILETIME -> Unix ns` realtime helper
+  继续归 `nextpas.core.platform.windows.ffi` owner。
+- 这批只收紧 owner boundary，不改变 `platform.time` public API，也不伪装成已经拿到
+  Darwin runtime evidence。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `test_platform_time_host_ffi_surface`，先把 Darwin / Windows host clock helper gate 打成 RED
+- [x] 在 `darwin.ffi` 新增 Darwin monotonic / resolution helper
+- [x] 在 `windows.ffi` 新增 QPC frequency / counter / FILETIME realtime helper
+- [x] 让 `platform.time` 改为消费 host-owned helper
+- [x] 运行 focused tests
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在 `darwin.ffi must expose Darwin monotonic clock helper for platform.time`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+- Additional evidence gap:
+  - `fpc -Tdarwin -Cn ... core/tests/nextpas.core.time/test_time/test_time.lpr`
+    在当前 Linux 宿主失败于 `Can't find unit system`，因此这批没有新增 Darwin compile/runtime proof
+
+### Non-goals
+
+- 这批不改 `platform.time` public API
+- 这批不把 `clock_gettime/getres` 从 shared `posix.ffi` 再抽走
+- 这批不声称当前 Linux 宿主已获得 Darwin runtime evidence

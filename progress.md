@@ -4742,3 +4742,30 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`（errno value ownerization）：pass
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（errno value ownerization）：pass
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（errno value ownerization）：pass
+
+### Phase 3: Platform Time Host Clock Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_time_host_ffi_surface` 改成 RED，要求 `darwin.ffi` 暴露
+    `darwin_mach_monotonic_ns` / `darwin_mach_monotonic_resolution_ns`，要求
+    `windows.ffi` 暴露 `windows_qpc_frequency_u64`、`windows_qpc_counter_u64`、
+    `windows_filetime_now_unix_ns`，并禁止 `platform.time` 继续直接写 raw
+    `mach_*` / `QueryPerformance*` / `GetSystemTimeAsFileTime` 调用。
+  - `core/src/nextpas.core.platform.darwin.ffi.pas` 新增 Darwin monotonic /
+    resolution helper，把 `mach_timebase_info` cache / sanitize truth 收口回 host ffi owner。
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增 QPC frequency / counter /
+    FILETIME realtime helper，把 Windows 时钟读取与初始化细节收口回 host ffi owner。
+  - `core/src/nextpas.core.platform.time.pas` 的 Darwin / Windows 分支改为消费上述
+    host-owned helper，consumer 只继续拥有跨平台通用安全换算。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 `platform.time` 的新 owner boundary 与证据缺口写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`（host clock helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`（host clock helper ownerization）：pass
+- `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`：pass
+- `bash build/verify_local.sh`（platform.time host clock helper ownerization batch）：pass

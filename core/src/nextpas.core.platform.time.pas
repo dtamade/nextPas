@@ -246,35 +246,9 @@ end;
 { macOS: mach_absolute_time + clock_gettime (10.12+)           }
 { ============================================================ }
 {$IFDEF NEXTPAS_MACOS}
-
-var
-  GTimebaseNumer: UInt64 = 0;
-  GTimebaseDenom: UInt64 = 0;
-
-procedure EnsureTimebase;
-var
-  LInfo: mach_timebase_info_data_t;
-begin
-  if GTimebaseDenom = 0 then
-  begin
-    mach_timebase_info(LInfo);
-    GTimebaseNumer := LInfo.numer;
-    GTimebaseDenom := LInfo.denom;
-    if GTimebaseDenom = 0 then
-    begin
-      GTimebaseNumer := 1;
-      GTimebaseDenom := 1;
-    end;
-  end;
-end;
-
 function platform_monotonic_ns: UInt64;
-var
-  LTicks: UInt64;
 begin
-  EnsureTimebase;
-  LTicks := mach_absolute_time;
-  Result := platform_scale_units(LTicks, GTimebaseDenom, GTimebaseNumer);
+  Result := darwin_mach_monotonic_ns;
 end;
 
 function platform_realtime_ns: UInt64;
@@ -291,15 +265,7 @@ end;
 
 function platform_monotonic_resolution_ns: UInt64;
 begin
-  EnsureTimebase;
-  if GTimebaseDenom = 0 then
-    Result := 1
-  else if GTimebaseNumer >= GTimebaseDenom then
-    Result := (GTimebaseNumer + GTimebaseDenom - 1) div GTimebaseDenom
-  else
-    Result := 1;
-  if Result = 0 then
-    Result := 1;
+  Result := darwin_mach_monotonic_resolution_ns;
 end;
 
 {$ENDIF}
@@ -308,21 +274,6 @@ end;
 { Windows: QueryPerformanceCounter (div/mod safe conversion)   }
 { ============================================================ }
 {$IFDEF NEXTPAS_WINDOWS}
-
-var
-  GFrequency: Int64 = 0;
-
-procedure EnsureFrequency;
-begin
-  if GFrequency = 0 then
-  begin
-    if not QueryPerformanceFrequency(GFrequency) then
-      GFrequency := 1;
-    if GFrequency <= 0 then
-      GFrequency := 1;
-  end;
-end;
-
 {**
  * @desc QPC → nanoseconds 无溢出换算
  * @note 使用 div/mod 分段：(counter div freq) * 1e9 + (counter mod freq) * 1e9 / freq
@@ -330,34 +281,26 @@ end;
  *}
 function platform_monotonic_ns: UInt64;
 var
-  LCounter: Int64;
+  LCounter: UInt64;
   LFreq: UInt64;
 begin
-  EnsureFrequency;
-  if not QueryPerformanceCounter(LCounter) then
+  if not windows_qpc_counter_u64(LCounter) then
   begin
     Result := 0;
     Exit;
   end;
-  LFreq := UInt64(GFrequency);
+  LFreq := windows_qpc_frequency_u64;
   Result := platform_qpc_to_ns(UInt64(LCounter), LFreq);
 end;
 
 function platform_realtime_ns: UInt64;
-var
-  LFt: FILETIME;
-  LVal: UInt64;
 begin
-  GetSystemTimeAsFileTime(LFt);
-  LVal := (UInt64(LFt.dwHighDateTime) shl 32) or UInt64(LFt.dwLowDateTime);
-  Result := (LVal - WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS)
-    * WINDOWS_FILETIME_NANOSECONDS_PER_TICK;
+  Result := windows_filetime_now_unix_ns;
 end;
 
 function platform_monotonic_resolution_ns: UInt64;
 begin
-  EnsureFrequency;
-  Result := platform_resolution_from_frequency_ns(UInt64(GFrequency));
+  Result := platform_resolution_from_frequency_ns(windows_qpc_frequency_u64);
   if Result = 0 then
     Result := 1;
 end;

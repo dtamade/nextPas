@@ -44,6 +44,9 @@ function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 function windows_last_error_i32: Int32; inline;
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
+function windows_qpc_frequency_u64: UInt64;
+function windows_qpc_counter_u64(out ACounter: UInt64): Boolean;
+function windows_filetime_now_unix_ns: UInt64;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -85,6 +88,9 @@ implementation
 
 const
   WINDOWS_NANOSECONDS_PER_MILLISECOND = UInt64(1000000);
+
+var
+  GWindowsQpcFrequency: Int64 = 0;
 
 function windows_positive_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 var
@@ -129,6 +135,48 @@ end;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
 begin
   Result := AWaitResult = WAIT_OBJECT_0;
+end;
+
+function windows_qpc_frequency_u64: UInt64;
+begin
+  if GWindowsQpcFrequency = 0 then
+  begin
+    if not QueryPerformanceFrequency(GWindowsQpcFrequency) then
+      GWindowsQpcFrequency := 1;
+    if GWindowsQpcFrequency <= 0 then
+      GWindowsQpcFrequency := 1;
+  end;
+
+  Result := UInt64(GWindowsQpcFrequency);
+end;
+
+function windows_qpc_counter_u64(out ACounter: UInt64): Boolean;
+var
+  LCounter: Int64;
+begin
+  LCounter := 0;
+  Result := QueryPerformanceCounter(LCounter);
+  if not Result then
+  begin
+    ACounter := 0;
+    Exit;
+  end;
+
+  if LCounter < 0 then
+    ACounter := 0
+  else
+    ACounter := UInt64(LCounter);
+end;
+
+function windows_filetime_now_unix_ns: UInt64;
+var
+  LFt: FILETIME;
+  LVal: UInt64;
+begin
+  GetSystemTimeAsFileTime(LFt);
+  LVal := (UInt64(LFt.dwHighDateTime) shl 32) or UInt64(LFt.dwLowDateTime);
+  Result := (LVal - WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS)
+    * WINDOWS_FILETIME_NANOSECONDS_PER_TICK;
 end;
 
 end.

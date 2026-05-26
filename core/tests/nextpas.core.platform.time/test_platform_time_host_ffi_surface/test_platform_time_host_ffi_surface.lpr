@@ -75,6 +75,10 @@ begin
     'darwin.ffi must expose mach_absolute_time for platform.time');
   CheckTokenPresent(LDarwinSource, 'mach_timebase_info',
     'darwin.ffi must expose mach_timebase_info for platform.time');
+  CheckTokenPresent(LDarwinSource, 'darwin_mach_monotonic_ns',
+    'darwin.ffi must expose Darwin monotonic clock helper for platform.time');
+  CheckTokenPresent(LDarwinSource, 'darwin_mach_monotonic_resolution_ns',
+    'darwin.ffi must expose Darwin monotonic resolution helper for platform.time');
 
   CheckTokenPresent(LWindowsSource, 'queryperformancefrequency',
     'windows.ffi must expose QueryPerformanceFrequency for platform.time');
@@ -82,6 +86,12 @@ begin
     'windows.ffi must expose QueryPerformanceCounter for platform.time');
   CheckTokenPresent(LWindowsSource, 'getsystemtimeasfiletime',
     'windows.ffi must expose GetSystemTimeAsFileTime for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_qpc_frequency_u64',
+    'windows.ffi must expose Windows QPC frequency helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_qpc_counter_u64',
+    'windows.ffi must expose Windows QPC counter helper for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_filetime_now_unix_ns',
+    'windows.ffi must expose Windows FILETIME realtime helper for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_unix_epoch_offset_100ns',
     'windows.ffi must own the FILETIME unix epoch offset token for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_nanoseconds_per_tick',
@@ -109,20 +119,30 @@ begin
     'platform.time must call POSIX clock_gettime through posix.ffi');
   CheckTokenPresent(LTimeSource, 'clock_getres',
     'platform.time must call POSIX clock_getres through posix.ffi');
-  CheckTokenPresent(LTimeSource, 'mach_absolute_time',
-    'platform.time must call mach_absolute_time through darwin.ffi');
-  CheckTokenPresent(LTimeSource, 'mach_timebase_info',
-    'platform.time must call mach_timebase_info through darwin.ffi');
-  CheckTokenPresent(LTimeSource, 'queryperformancefrequency',
-    'platform.time must call QueryPerformanceFrequency through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'queryperformancecounter',
-    'platform.time must call QueryPerformanceCounter through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'getsystemtimeasfiletime',
-    'platform.time must call GetSystemTimeAsFileTime through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_filetime_unix_epoch_offset_100ns',
-    'platform.time must consume the FILETIME unix epoch offset through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_filetime_nanoseconds_per_tick',
-    'platform.time must consume the FILETIME tick size through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_ns',
+    'platform.time must consume Darwin monotonic clock helper through darwin.ffi');
+  CheckTokenPresent(LTimeSource, 'darwin_mach_monotonic_resolution_ns',
+    'platform.time must consume Darwin monotonic resolution helper through darwin.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_qpc_frequency_u64',
+    'platform.time must consume Windows QPC frequency helper through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_qpc_counter_u64',
+    'platform.time must consume Windows QPC counter helper through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_filetime_now_unix_ns',
+    'platform.time must consume Windows FILETIME realtime helper through windows.ffi');
+  Check(Pos('mach_absolute_time(', LTimeSource) = 0,
+    'platform.time must not call mach_absolute_time directly in the consumer');
+  Check(Pos('mach_timebase_info(', LTimeSource) = 0,
+    'platform.time must not call mach_timebase_info directly in the consumer');
+  Check(Pos('queryperformancefrequency(', LTimeSource) = 0,
+    'platform.time must not call QueryPerformanceFrequency directly in the consumer');
+  Check(Pos('queryperformancecounter(', LTimeSource) = 0,
+    'platform.time must not call QueryPerformanceCounter directly in the consumer');
+  Check(Pos('getsystemtimeasfiletime(', LTimeSource) = 0,
+    'platform.time must not call GetSystemTimeAsFileTime directly in the consumer');
+  Check(Pos('windows_filetime_unix_epoch_offset_100ns', LTimeSource) = 0,
+    'platform.time must not consume raw FILETIME epoch offset tokens in the consumer');
+  Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeSource) = 0,
+    'platform.time must not consume raw FILETIME tick size tokens in the consumer');
   Check(Pos('116444736000000000', LTimeSource) = 0,
     'platform.time must not keep a raw Windows FILETIME epoch offset literal');
 end;
