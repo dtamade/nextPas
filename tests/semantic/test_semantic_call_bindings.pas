@@ -1193,6 +1193,7 @@ var
   Index: LongInt;
   Lexer: TLexerResult;
   Model: TSemanticModel;
+  ObjectFreeContractCount: LongInt;
   SourceText: string;
   SystemPath: string;
   Tree: TGreenTree;
@@ -1252,6 +1253,7 @@ begin
         Model.Status);
 
     DestroyCallCount := 0;
+    ObjectFreeContractCount := 0;
     for Index := 0 to Model.TypedHirNodeCount - 1 do
     begin
       HirNode := Model.TypedHirNodeAt(Index);
@@ -1266,12 +1268,34 @@ begin
       else if SameText(HirNode.Kind, 'call-runtime') and
         SameText(HirNode.DisplayName, 'TWorker.Destroy') then
         Fail('implicit-system-free-lowered-to-missing-worker-destroy');
+      if SameText(HirNode.Kind, 'object-free-runtime') and
+        SameText(HirNode.DisplayName, 'np.system.object_free') then
+      begin
+        Inc(ObjectFreeContractCount);
+        if Pos('var Worker' + #10, HirNode.Operand) <> 1 then
+          Fail('implicit-system-free-contract-receiver-mismatch:' +
+            HirNode.Operand);
+        if Pos('destroy TObject.Destroy' + #10, HirNode.Operand) = 0 then
+          Fail('implicit-system-free-contract-destroy-mismatch:' +
+            HirNode.Operand);
+        if Pos('nil-guard true' + #10, HirNode.Operand) = 0 then
+          Fail('implicit-system-free-contract-missing-nil-guard:' +
+            HirNode.Operand);
+        if Pos('heap-release true' + #10, HirNode.Operand) = 0 then
+          Fail('implicit-system-free-contract-missing-heap-release:' +
+            HirNode.Operand);
+      end;
     end;
     if DestroyCallCount = 0 then
       Fail('missing-implicit-system-free-inherited-destroy-lowering');
     if DestroyCallCount <> 1 then
       Fail('unexpected-implicit-system-free-destroy-call-count:' +
         IntToStr(DestroyCallCount));
+    if ObjectFreeContractCount = 0 then
+      Fail('missing-implicit-system-free-runtime-contract');
+    if ObjectFreeContractCount <> 1 then
+      Fail('unexpected-implicit-system-free-contract-count:' +
+        IntToStr(ObjectFreeContractCount));
   finally
     Model.Free;
     Analyzer.Free;

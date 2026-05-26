@@ -10,6 +10,11 @@
 
 ## Research Findings
 
+- Batch 90 把 `TObject.Free` 的 no-fold typed HIR 从单纯 inherited `Destroy` call 推进到明确的
+  `object-free-runtime` contract：contract DisplayName 为 `np.system.object_free`，Operand 记录
+  receiver、effective `Destroy` target、`nil-guard true` 与 `heap-release true`。
+- 这条 contract 是 compiler semantic/HIR 层的 lifecycle intent，给后续 backend/runtime helper
+  一个稳定接入口；它还不是实际生成 nil branch、allocator free 或完整动态 dispatch runtime。
 - Batch 89 把 source-backed implicit `System` 的对象生命周期从 `TObject.Free` binding 推进到
   no-fold typed HIR 的 effective `Destroy` runtime call：普通 class 没有显式父类时，会继承
   `System.TObject` 的 VMT slot/function metadata。

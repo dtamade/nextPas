@@ -90,6 +90,7 @@ v1 阶段必须支持的 HIR node kind：
 | `br-cond-runtime`       | 条件跳转                                |
 | `halt-call`             | Halt 调用                               |
 | `runtime-contract`      | 运行时契约（init/fini）                 |
+| `object-free-runtime`   | 对象 `Free` 契约（nil guard、Destroy、heap release intent） |
 
 ## 常量求值契约
 
@@ -118,6 +119,8 @@ sema 必须能在编译期求值以下常量表达式：
   （implicit runtime 已能读取 source-backed nextPas `System` / `TObject`，普通 class 的
   `Free` 会绑定到真实 `TObject.Free`；缺少 source-backed System truth、或
   alias/generic specialization/record-like receiver 等没有 class layout truth 的类型继续 deferred）
+  no-fold typed HIR 中的 `object-free-runtime` 只表达 `Free` 的 compound lifecycle contract；
+  它不是 backend 已经生成真实 nil branch 或 allocator free 的证据。
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧

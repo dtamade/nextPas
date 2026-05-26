@@ -15,6 +15,60 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 90 TObject.Free Runtime Contract
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 89 的 `Free -> effective Destroy` lowering 扩展成
+`TObject.Free` 的最小 runtime contract：
+
+- no-fold typed HIR 必须在 `Obj.Free` 上表达 object-free lifecycle intent。
+- contract 必须同时记录 receiver、effective `Destroy` target、nil guard 和 heap release intent。
+- 这条 gate 只证明 compiler semantic/HIR 层已经拥有 `Free` 的对象释放契约；不宣称 backend
+  已生成真实 nil branch、allocator free、完整动态 dispatch runtime 或 implicit `System.pas` 自动 link。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+这是 compound `object-free-runtime` contract，不是 allocator/backend 实现：
+
+- 复用 Batch 89 的 effective destructor 解析：`TClass$vmt_slot_Destroy` 到
+  `TClass$vmt_func_<slot>`。
+- 在现有 `call-runtime <Destroy>` 前额外生成 `object-free-runtime` typed HIR node，DisplayName
+  为 `np.system.object_free`，Operand 写明 `var <receiver>`、`destroy <effective target>`、
+  `nil-guard true` 与 `heap-release true`。
+- `THIRBuilder` 当前可以继续忽略该 contract；后续 backend/runtime helper 接管时再把它展开成真实
+  nil branch、destructor dispatch 和 heap release。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：implicit source-backed `System` 下，`Worker.Free` 必须生成 object-free runtime contract
+- [x] 让 `Free` lowering 在 effective `Destroy` resolved 后写入 `object-free-runtime`
+- [x] 保持 inherited `TObject.Destroy` call-runtime gate 不退化
+- [x] 同步 System / runtime bootstrap / semantic docs、总控地图与持续记录
+- [x] 运行 focused semantic test 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-implicit-system-free-runtime-contract`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 FPC `System`
+- 不生成真实 backend nil branch / allocator free
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Batch 89 Inherited TObject.Destroy Free Lowering
 
 ### Goal

@@ -4873,6 +4873,7 @@ var
   Operand: string;
   Value, CondValue: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  ReceiverName: string;
   ParamSnaps: TParamSnapshots;
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
@@ -5778,14 +5779,25 @@ begin
           if FModel.LookupConstValue(
             StringValue + '$vmt_slot_Destroy', Value) then
           begin
+            ReceiverName := Child.ChildAt(0).ChildAt(0).Text;
             DestroyFuncName := StringValue + '.Destroy';
             if FModel.LookupStringConstValue(
               StringValue + '$vmt_func_' + IntToStr(Value),
               FuncName
             ) then
               DestroyFuncName := FuncName;
+            FModel.AddTypedHirNode(
+              'object-free-runtime',
+              'np.system.object_free',
+              0,
+              0,
+              'var ' + ReceiverName + #10 +
+              'destroy ' + DestroyFuncName + #10 +
+              'nil-guard true' + #10 +
+              'heap-release true' + #10
+            );
             Operand := DestroyFuncName + #9 +
-              'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
+              'var ' + ReceiverName + #10;
             FModel.AddTypedHirNode('call-runtime',
               DestroyFuncName, 0, 0, Operand);
           end;

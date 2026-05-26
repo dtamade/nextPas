@@ -3,6 +3,33 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 90 TObject.Free runtime contract)
+
+- **Status:** completed
+- Objective:
+  - 按目标树 G3 / G1.5，把 `TObject.Free` 从 inherited `Destroy` call lowering 推进到
+    no-fold typed HIR 中明确的 object-free runtime contract。
+- Baseline:
+  - Batch 89 已能让 implicit source-backed `System` 下的普通 class 把 `Worker.Free`
+    lowering 到继承的 `TObject.Destroy` runtime call。
+  - 但 typed HIR 仍没有表达 `Free` 的 nil guard 和 heap release intent，容易让后续 backend/runtime
+    误以为它只是一个普通 destructor call。
+- Actions taken:
+  - 扩展 focused semantic RED，要求 `Worker.Free` 产生 `object-free-runtime` node，DisplayName 为
+    `np.system.object_free`，Operand 记录 receiver、effective destroy、nil guard 与 heap release。
+  - `Free` lowering 现在在 resolved effective `Destroy` 后额外写入 object-free contract，并保持
+    `call-runtime TObject.Destroy` gate 不退化。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-implicit-system-free-runtime-contract`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只表达 `TObject.Free` 的 semantic/HIR lifecycle contract：nil guard 与 heap release
+    intent 已进入 typed HIR，但 backend/runtime 尚未展开成真实 branch 或 allocator free。
+  - `core/` 并行改动保持未触碰、未提交。
+
 ## Session: 2026-05-26 (Batch 89 inherited TObject.Destroy Free lowering)
 
 - **Status:** completed
