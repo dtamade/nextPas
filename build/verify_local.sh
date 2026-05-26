@@ -290,11 +290,23 @@ CORE_PLATFORM_THREAD_BENCH_BINARY="$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR/bench_p
 CORE_PLATFORM_SYNC_TEST_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_test"
 CORE_PLATFORM_SYNC_TEST_BINARY="$CORE_PLATFORM_SYNC_TEST_BUILD_DIR/test_platform_sync"
+CORE_PLATFORM_SYNC_NO_FPC_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_no_fpc"
+CORE_PLATFORM_SYNC_NO_FPC_BINARY="$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR/test_platform_sync_no_fpc_units"
+CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_l0_boundary"
+CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY="$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR/test_platform_sync_l0_boundary"
 CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
 CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
 CORE_PLATFORM_SYNC_WIN64_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_win64"
+CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_example"
+CORE_PLATFORM_SYNC_EXAMPLE_BINARY="$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR/platform_sync_basics"
+CORE_PLATFORM_SYNC_BENCH_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_bench"
+CORE_PLATFORM_SYNC_BENCH_BINARY="$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR/bench_platform_sync"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -817,13 +829,16 @@ require_path core/src/nextpas.core.platform.darwin.ffi.pas
 require_path core/src/nextpas.core.platform.windows.ffi.pas
 require_path core/src/nextpas.core.platform.thread.pas
 require_path core/src/nextpas.core.platform.sync.pas
-require_path core/src/nextpas.core.platform.sync.windows.ffi.pas
 require_path core/src/nextpas.core.platform.time.pas
 require_path core/src/nextpas.core.time.base.pas
 require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
+require_path core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr
+require_path core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
@@ -4329,6 +4344,48 @@ cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.sync: 14 total, 14 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_TEST_OUTPUT" 'missing-core-platform-sync-pass-summary'
 printf 'core-platform-sync-check=pass\n'
 
+printf 'core-platform-sync-no-fpc-check=running\n'
+printf 'core-platform-sync-no-fpc-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr" \
+  >"$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  fail 'core-platform-sync-no-fpc-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_NO_FPC_BINARY" >>"$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  fail 'core-platform-sync-no-fpc-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.no_fpc_units: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 'missing-core-platform-sync-no-fpc-pass-summary'
+printf 'core-platform-sync-no-fpc-check=pass\n'
+
+printf 'core-platform-sync-l0-boundary-check=running\n'
+printf 'core-platform-sync-l0-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr" \
+  >"$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  fail 'core-platform-sync-l0-boundary-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY" >>"$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  fail 'core-platform-sync-l0-boundary-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
+printf 'core-platform-sync-l0-boundary-check=pass\n'
+
 printf 'core-platform-sync-size-check=running\n'
 printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
@@ -4371,6 +4428,53 @@ if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
 else
   printf 'core-platform-sync-win64-check=skip\n'
 fi
+
+printf 'core-platform-sync-example-check=running\n'
+printf 'core-platform-sync-example-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" \
+  "$REPO_ROOT/core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr" \
+  >"$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  fail 'core-platform-sync-example-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_EXAMPLE_BINARY" >>"$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  fail 'core-platform-sync-example-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+require_output_pattern '^platform-sync-basics=ready$' "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 'missing-core-platform-sync-example-ready'
+require_output_pattern '^platform-sync-basics-status=pass$' "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 'missing-core-platform-sync-example-pass'
+printf 'core-platform-sync-example-check=pass\n'
+
+printf 'core-platform-sync-bench-check=running\n'
+printf 'core-platform-sync-bench-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" \
+  "$REPO_ROOT/core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  fail 'core-platform-sync-bench-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_BENCH_BINARY" >>"$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  fail 'core-platform-sync-bench-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+require_output_pattern '^platform-sync-bench=running$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-running'
+require_output_pattern '^platform-sync-mutex-lock-unlock-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-mutex-iterations'
+require_output_pattern '^platform-sync-rwlock-read-unlock-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-rwlock-iterations'
+require_output_pattern '^platform-sync-address-mismatch-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-address-iterations'
+require_output_pattern '^platform-sync-bench-status=pass$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-pass'
+printf 'core-platform-sync-bench-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)

@@ -25,6 +25,15 @@
   `nextpas.core.platform.posix.ffi`，macOS mach timebase 位于
   `nextpas.core.platform.darwin.ffi`，Windows QPC/FILETIME 位于
   `nextpas.core.platform.windows.ffi`。
+- `platform.sync` 的 Windows ABI 现在也并入统一 `nextpas.core.platform.windows.ffi`：
+  `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 与 `GetLastError` 不再留在
+  `nextpas.core.platform.sync.windows.ffi` 这种按模块切碎的 FFI 单元里。
+- `platform.sync` 现已补齐和 `platform.time` / `platform.thread` 同等级的 focused gate：
+  behavior、no-FPC、L0 boundary、sizes、Win64 compile-only、example、benchmark 都进入
+  official local verification surface。
+- `platform.sync` benchmark 不再直接取用裸 `posix.ffi` 时钟 ABI，而是改走
+  `nextpas.core.platform.time` 的 L0 平台时钟源；这样基准仍留在 platform 命名空间内，但不再绕开
+  platform 自己的 FFI/contract 边界。
 - `platform.time` 不再直接 `uses Linux`、`UnixType` 或 `Windows`，也不在实现单元中声明
   `external` ABI；`test_platform_time_no_fpc_units` 固定这个硬规则。
 - time conversion helper 现在对不可表示的 UInt64 结果做饱和，对负的 timespec 输入归零，并用
@@ -216,7 +225,7 @@
   `System/TObject`、`ICondVar`、Vec/interface allocator 等变更共存；冲突只落在设计约定和
   跟踪文档，源码自动合并后通过全量验证。
 - `nextpas.core.platform.sync` 当前只依赖 `nextpas.core.platform.posix.ffi`、
-  `nextpas.core.platform.linux.ffi`、`nextpas.core.platform.sync.windows.ffi`，不再 `uses`
+  `nextpas.core.platform.linux.ffi`、`nextpas.core.platform.windows.ffi`，不再 `uses`
   FPC 的 `Linux`、`PThreads`、`UnixType`、`BaseUnix`、`Syscall`、`Windows` 平台单元。
 - `nextpas.core.platform.linux.ffi` 已保持为纯 ABI 声明文件；`__errno_location` 只作为
   external declaration 暴露，读取 errno 的逻辑位于 `platform.sync` 实现层。

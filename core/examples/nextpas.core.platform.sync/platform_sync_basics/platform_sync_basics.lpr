@@ -24,6 +24,8 @@ var
   LValue: Int32;
 
 begin
+  WriteLn('platform-sync-basics=ready');
+
   RequireOk(platform_mutex_init(LMutex));
   RequireOk(platform_mutex_lock(LMutex));
   RequireOk(platform_mutex_unlock(LMutex));
@@ -51,4 +53,6 @@ begin
   RequireCode(PLATFORM_ERR_TIMEOUT, platform_wait_address32(@LValue, 42, 0));
   RequireOk(platform_wake_address_one(@LValue));
   RequireOk(platform_wake_address_all(@LValue));
+
+  WriteLn('platform-sync-basics-status=pass');
 end.

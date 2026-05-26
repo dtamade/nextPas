@@ -25,6 +25,59 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Addendum: 2026-05-26 Platform Sync FFI Surface Parity
+
+### Goal
+
+把 `platform.sync` 推到与 `platform.time` / `platform.thread` 同等严格的 FFI 与验证形状：
+
+- Windows synchronization ABI 不再留在按模块切碎的 `platform.sync.windows.ffi`，而是尽量归并到
+  统一平台单元 `platform.windows.ffi`。
+- `platform.sync` 补齐 no-FPC、L0 boundary、example、benchmark 的 official local gates。
+- sync benchmark 不再直接旁路 platform contract 去调用裸 POSIX clock FFI。
+
+### Architecture Decision
+
+- platform FFI 优先按宿主平台归并，而不是按 time/sync/thread 各长一套零散 Windows FFI。
+- `platform.sync` 的实现层只负责策略、错误码和 timeout 语义，不在实现单元里散落 `external`
+  声明。
+- benchmark 可以依赖同属 L0 的 `platform.time` 取时，但不能回退到裸 `posix.ffi` 直接碰 ABI。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 把 Windows sync ABI 声明并入 `core/src/nextpas.core.platform.windows.ffi.pas`
+- [x] 删除 `core/src/nextpas.core.platform.sync.windows.ffi.pas`，并让
+      `platform.sync` 只依赖统一 Windows FFI
+- [x] 新增 `platform.sync` 的 no-FPC focused test
+- [x] 新增 `platform.sync` 的 L0 boundary focused test
+- [x] 给 `platform_sync_basics` 增加 machine-readable 输出
+- [x] 让 `bench_platform_sync` 改走 `platform.time` 的 L0 时钟源
+- [x] 把 sync 的 no-FPC / L0 / example / benchmark gate 纳入 `build/verify_local.sh`
+- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED: `test_platform_sync_no_fpc_units` 初版误把 `linux_syscall` 里的 `syscall` 符号当成
+  FPC `Syscall` 单元引用，先失败在 `platform.sync must not reference FPC unit/token: Syscall`。
+- GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync test`、
+  `test_platform_sync_no_fpc_units test`、`test_platform_sync_l0_boundary test`、
+  `test_platform_sync_sizes test`、`make -C core/examples/nextpas.core.platform.sync/platform_sync_basics run`、
+  `make -C core/benchmarks/nextpas.core.platform.sync/bench_platform_sync run` 全部通过。
+- Aggregate: `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不把 `platform.sync` 扩到 macOS / FreeBSD / Android 的 pthread runtime 语义
+- 这批不重新设计 `platform.sync` public API
+- 这批不引入新的 L1 sync abstraction
+- 这批不改动非 platform 范围的并行工作
+
 ## Addendum: 2026-05-26 Batch 104 Function Result Call Type Mismatch Evidence
 
 ### Goal

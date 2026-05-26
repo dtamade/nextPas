@@ -89,7 +89,7 @@ uses
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.sync.windows.ffi;
+  nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_LINUX}

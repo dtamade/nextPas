@@ -14,6 +14,57 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Session: 2026-05-26 (platform.sync FFI surface parity)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform.sync` 的 FFI 形状收紧到与 `platform.time` / `platform.thread` 同一标准：
+    Windows ABI 尽量归并到统一平台 FFI，focused verification 补齐 no-FPC、L0 boundary、
+    example 与 benchmark。
+- Baseline:
+  - `platform.sync` 已经脱离 FPC 平台单元，但 Windows sync ABI 还留在
+    `nextpas.core.platform.sync.windows.ffi`，FFI 仍按模块切碎。
+  - `platform.sync` 已有 behavior/size/Win64 compile-only gate，但还缺 no-FPC、L0 boundary、
+    example、benchmark 的 official local focused verification。
+  - `bench_platform_sync` 仍直接调用 `nextpas.core.platform.posix.ffi` 的 `clock_gettime`，
+    这会绕开 platform 自己的时间 contract。
+- Actions taken:
+  - 将 Windows sync ABI 并入 `core/src/nextpas.core.platform.windows.ffi.pas`，追加
+    `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 相关声明与 `ERROR_TIMEOUT`，并删除
+    `core/src/nextpas.core.platform.sync.windows.ffi.pas`。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows 分支改为依赖统一
+    `nextpas.core.platform.windows.ffi`。
+  - 新增 `core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/`，固定
+    `platform.sync` 不得重新引用 FPC 平台单元、不得在实现单元里直接写 `external` 声明，也不得重新
+    回到 `nextpas.core.platform.sync.windows.ffi`。
+  - 新增 `core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/`，防止
+    `nextpas.core.sync`、`TMutex`、`TRWLock`、`TCondVar`、`Semaphore`、`Monitor`
+    等 L1 并发抽象混入 platform.sync 源码、示例和基准。
+  - `core/examples/nextpas.core.platform.sync/platform_sync_basics/` 新增 machine-readable
+    `ready/pass` 输出，便于 official gate 直接检查。
+  - `core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/` 改走
+    `nextpas.core.platform.time` 的 L0 时钟源，并放宽为 Linux/Windows 都可运行；非这两类平台仍显式
+    输出 `unsupported`。
+  - `build/verify_local.sh` 新增 `platform.sync` 的 no-FPC、L0 boundary、example、benchmark
+    focused gates，并把对应检查纳入 official local verification 流程。
+- Verification:
+  - RED: 新增 `test_platform_sync_no_fpc_units` 初版误把 `linux_syscall` 中的 `syscall`
+    标识符当成 FPC `Syscall` 单元引用，输出 `platform.sync must not reference FPC unit/token: Syscall`。
+  - GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync test`、
+    `test_platform_sync_no_fpc_units test`、`test_platform_sync_l0_boundary test`、
+    `test_platform_sync_sizes test`、`make -C core/examples/nextpas.core.platform.sync/platform_sync_basics run`、
+    `make -C core/benchmarks/nextpas.core.platform.sync/bench_platform_sync run` 全部通过。
+  - Aggregate: `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+  - Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 这批先收紧 FFI 归并与 verification parity，还没有把 `platform.sync` 真正扩到 macOS /
+    FreeBSD / Android 的 pthread runtime 语义；那一批需要单独处理对象尺寸、condvar 时钟与
+    address-wait fallback。
+  - 现在 `platform.sync` 的 public surface 已经和 `platform.time` / `platform.thread` 一样，有
+    focused behavior + boundary + no-FPC + example + benchmark 证据，可以更从容地继续做各平台
+    FFI 补全。
+
 ## Session: 2026-05-26 (platform.thread L0 surface coverage)
 
 - **Status:** completed; verification passed

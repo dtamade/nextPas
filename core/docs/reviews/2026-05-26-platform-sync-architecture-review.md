@@ -5,6 +5,11 @@ Date: 2026-05-26
 Scope: `nextpas.core.platform.sync` as the L0 native synchronization substrate for
 the L1 `sync` module.
 
+Follow-up note: the later FFI consolidation pass moved the Windows synchronization
+ABI declarations into `nextpas.core.platform.windows.ffi`, so this review's older
+references to `nextpas.core.platform.sync.windows.ffi` are historical context, not
+the current preferred file shape.
+
 ## Review stance
 
 `platform.sync` is not just a helper unit. It is the contract boundary between
