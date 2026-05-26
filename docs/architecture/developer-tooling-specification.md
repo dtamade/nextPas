@@ -569,7 +569,9 @@ adapter；当前最小条目包含 `bindingId`、`kind`、`name`、`ownerUnitId`
 session-owned symbol/unit truth，公开 target `name` / `kind` / owner unit / source path /
 byte offset；当 target symbol 有参数元数据时还会公开 `targetParamCount`，让调用方不需要在
 query 外重扫源码或维护第二套 lookup；当 target 还有 compact 参数类型签名时，会继续公开
-`targetParamSignature`。当前 binding surface
+`targetParamSignature`。bare procedure/function call 当前可在同名同 arity overload 中使用
+argument signature 选择唯一 callable target；root callable 仍优先，imported callable 仍必须在
+对应优先级内唯一。当前 binding surface
 已经把 `Holder.Help();` 这类 selector/member callee 从 name-only lookup 中排除，避免误绑定
 到 imported bare callable；同时先公开 `member-call` 的最小正向边界：direct class variable
 receiver 的 method statement call（例如 `Worker.Run;` / `Worker.Run();` /

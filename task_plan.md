@@ -15,6 +15,62 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 74 Bare Typed Call Binding
+
+### Goal
+
+把 Batch 73 的 compact typed argument relation 从 `member-call` 复用到 bare
+procedure/function call binding：当 root 或 imported callable 中存在同名同参数个数但参数类型不同的
+overload 时，例如 `Pick(Integer)` 与 `Pick(Boolean)`，`Pick(1)` 和 `Pick(1 = 1)` 应分别绑定到
+对应 `ParamSignature` 的 callable symbol。
+
+本批次新增并冻结：
+
+- bare procedure/function symbol 同步记录 `ParamSignature`。
+- `LookupCallBindingDeclaration(...)` 在 root/imported 各自优先级内，先按 name + arity 收集候选；
+  若同 arity 多候选，则用当前可推断 argument signature 选择唯一 target。
+- root callable 继续优先；root 存在同名同 arity 但无法唯一 typed match 时，不回落 imported。
+- `querySymbols` / `queryDefinitions` stage0 gate 固定 bare typed overload 的 symbol signature 与
+  target signature。
+
+### Architecture Decision
+
+这是 bare call 的最小 typed overload binding，不是完整 Pascal overload resolver：
+
+- argument signature 仍只来自当前 `InferExpressionType(...)` 可证明的表达式类型。
+- root/imported 优先级保持 Batch 60 以来的保守策略。
+- 无法推断 argument type、同 signature 不唯一、implicit conversion / default parameter /
+  var-out compatibility / visibility 等情况仍不绑定。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 bare `Pick(Integer)` / `Pick(Boolean)` 同 arity focused regression
+- [x] 为 bare procedure/function symbol 写入 `ParamSignature`
+- [x] bare call lookup 在同 arity 多候选时按 signature 唯一匹配
+- [x] 扩展 stage0 `query_call_bindings` fixture 与 verify gate
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在 `semantic-call-bindings-failure=missing-integer-bare-overload-symbol`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `stage0-query-call-bindings-check=pass`、
+  `stage0-query-member-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 overload ranking
+- 不实现 implicit conversion / default parameter / var-out compatibility
+- 不改变 selector/member binding 边界
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 73 Member Typed Overload Binding
 
 ### Goal

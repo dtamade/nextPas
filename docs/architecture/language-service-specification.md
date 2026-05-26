@@ -189,7 +189,10 @@ procedure/function call occurrence 可以绑定到 root callable 或唯一 impor
 `targetSymbolId` join 回 session-owned symbol/unit truth，投影
 `query-definitions=<json-array>` 与 `command-envelope=<json>.result.queryDefinitions`；
 当前最小字段包含 binding id/kind/name/offset 与 target symbol name/kind/owner unit/source
-path/byte offset。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，
+path/byte offset；当 target 带参数元数据时还会公开 `targetParamCount` /
+`targetParamSignature`。bare procedure/function call 当前可用 argument count 和 compact
+argument signature 在同名同 arity overload 中选择唯一 target；无法推断 argument type 或同
+signature 不唯一时仍保持不绑定。这为后续 references / hover / go-to-definition 提供 compiler-owned truth，
 但当前 `query symbols` 仍不承诺完整 LSP、完整 selector/member binding、open document
 overlay 或 incremental invalidation。`Holder.Help();` 这类 qualified selector/member call
 会被当前 name-only binding pass 显式排除；当前正向 selector/member truth 覆盖 direct

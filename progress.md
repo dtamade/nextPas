@@ -3,6 +3,41 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 74 bare typed call binding)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 73 的 compact `ParamSignature` typed relation 从 `member-call` 复用到 bare
+    procedure/function call binding，让 `Pick(1)` / `Pick(1 = 1)` 能在同名同 arity overload 中
+    绑定到 `i` / `b` target。
+- Baseline:
+  - Batch 60/61 已覆盖 bare call arg-count overload identity；Batch 73 已覆盖 member-call typed
+    overload identity。
+  - bare procedure/function symbol 仍没有 `ParamSignature`，`LookupCallBindingDeclaration(...)`
+    遇到 root 同名同 arity 多候选时只能保守不绑定。
+- Actions taken:
+  - 先写 focused RED，构造 `Pick(Value: Integer)` 与 `Pick(Value: Boolean)`，要求
+    `Pick(1)` / `Pick(1 = 1)` 分别绑定到 `i` / `b` signature 的 procedure symbol。
+  - `ProcessProcedureDecl(...)` / `ProcessFunctionDecl(...)` / imported callable seeding /
+    lazy callable symbol creation 现在都会写入 `ParamSignature`。
+  - `LookupCallBindingDeclaration(...)` 在 root/imported 各自优先级内按 argument signature 做唯一匹配；
+    root ambiguous 不会回落 imported。
+  - 新增 `tests/fixtures/query_call_bindings/call_bindings.pas`，并扩展
+    `stage0-query-call-bindings-check` 固定 `querySymbols` / `queryDefinitions` 的 signature truth。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-integer-bare-overload-symbol`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `stage0-query-call-bindings-check=pass`、
+    `stage0-query-member-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只复用 compact signature relation，不引入 implicit conversion、default parameter、
+    var/out compatibility、visibility 或完整 overload ranking。
+  - 复盘：这轮把 Batch 73 的 typed relation 从 member resolver 回灌到 bare callable resolver，
+    让 compiler-owned binding truth 在普通 call 和 member call 两条路径上保持一致；下一步更适合做
+    unresolved/ambiguous overload 的结构化 diagnostics。
+
 ## Session: 2026-05-26 (Batch 73 member typed overload binding)
 
 - **Status:** completed

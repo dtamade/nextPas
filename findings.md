@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 74 把 Batch 73 的 compact typed argument relation 复用到 bare procedure/function call
+  binding：`Pick(1)` 会绑定到 `Pick(Integer)` 的 `i` signature，`Pick(1 = 1)` 会绑定到
+  `Pick(Boolean)` 的 `b` signature。
+- bare procedure/function symbol 现在会记录 `ParamSignature`；root/imported callable seeding 与
+  lazy callable symbol creation 都会同步写入。
+- `LookupCallBindingDeclaration(...)` 仍保留 root callable 优先；root 里存在同名同 arity 多候选时，
+  只有当前 argument signature 能唯一匹配才会绑定，不会因为 root ambiguous 而回落 imported。
+- 新增 `stage0-query-call-bindings-check`，固定 `querySymbols` / `queryDefinitions` 中 bare typed
+  overload 的 `paramSignature` / `targetParamSignature` truth。
+- Batch 74 仍不声明完整 overload ranking、implicit conversion、default parameter、
+  var/out compatibility、visibility checking 或完整 Pascal callable resolver。
 - Batch 73 把 member-call overload binding 从 arity identity 推进到最小 typed argument relation：
   `Worker.Pick(1)` 会绑定到 `TWorker.Pick` 的 `i` signature，`Worker.Pick(1 = 1)` 会绑定到
   `b` signature。

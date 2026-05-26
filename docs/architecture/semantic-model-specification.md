@@ -78,10 +78,14 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 
 - symbol graph 先表达 unit-level symbol identity 与最小 callable symbol identity
 - binding table 先表达 root source 中 procedure/function call occurrence 到 callable `SymbolId` 的绑定；
-  当前已覆盖 root callable、arg-count overload 消歧与唯一 imported-unit callable target，并通过
+  当前已覆盖 root callable、arg-count overload 消歧、最小 typed overload 消歧与唯一
+  imported-unit callable target，并通过
   `query-bindings` / `queryBindings` 暴露给 CLI 与 future language-service adapter；同一份
   session-owned model 还会把 target symbol/unit metadata 投影成 `query-definitions` /
-  `queryDefinitions`。带 selector/member 的 qualified callee（例如 `Holder.Help();`）不会再被
+  `queryDefinitions`。bare procedure/function symbol 会记录 `ParamCount` 与 compact
+  `ParamSignature`；name-only call binding 在同名同 arity 多候选时，只用当前可推断的 argument
+  signature 选择唯一 target，无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
   `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`）、表达式参数里的 direct

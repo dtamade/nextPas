@@ -83,7 +83,8 @@ type
     function LookupProcedureBody(const AName: string;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;
-      const AArgCount: LongInt; out ABody: TGreenNode;
+      const AArgCount: LongInt; const AArgSignature: string;
+      const AHasArgSignature: Boolean; out ABody: TGreenNode;
       out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
@@ -822,6 +823,8 @@ end;
 function TSemanticAnalyzer.LookupCallBindingDeclaration(
   const AName: string;
   const AArgCount: LongInt;
+  const AArgSignature: string;
+  const AHasArgSignature: Boolean;
   out ABody: TGreenNode;
   out ADecl: TGreenNode;
   out AOwnerUnitId: string
@@ -830,17 +833,25 @@ var
   Index: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
+  ImportedSignatureMatchCount: LongInt;
+  ImportedSignatureMatchIndex: LongInt;
   RootMatchCount: LongInt;
   RootMatchIndex: LongInt;
   RootOwnerUnitId: string;
+  RootSignatureMatchCount: LongInt;
+  RootSignatureMatchIndex: LongInt;
 begin
   ABody := nil;
   ADecl := nil;
   AOwnerUnitId := '';
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
+  ImportedSignatureMatchCount := 0;
+  ImportedSignatureMatchIndex := -1;
   RootMatchCount := 0;
   RootMatchIndex := -1;
+  RootSignatureMatchCount := 0;
+  RootSignatureMatchIndex := -1;
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
 
   for Index := 0 to Length(FProcedureBodies) - 1 do
@@ -851,30 +862,47 @@ begin
       begin
         RootMatchIndex := Index;
         Inc(RootMatchCount);
+        if AHasArgSignature and
+          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+        begin
+          RootSignatureMatchIndex := Index;
+          Inc(RootSignatureMatchCount);
+        end;
       end
       else
       begin
         ImportedMatchIndex := Index;
         Inc(ImportedMatchCount);
+        if AHasArgSignature and
+          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+        begin
+          ImportedSignatureMatchIndex := Index;
+          Inc(ImportedSignatureMatchCount);
+        end;
       end;
     end;
 
-  if RootMatchCount > 1 then
-    Exit(False);
-  if RootMatchCount = 1 then
+  if RootMatchCount > 0 then
   begin
-    ABody := FProcedureBodies[RootMatchIndex].Body;
-    ADecl := FProcedureBodies[RootMatchIndex].Decl;
-    AOwnerUnitId := FProcedureBodies[RootMatchIndex].OwnerUnitId;
+    if RootMatchCount = 1 then
+      RootSignatureMatchIndex := RootMatchIndex
+    else if (not AHasArgSignature) or (RootSignatureMatchCount <> 1) then
+      Exit(False);
+
+    ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
+    ADecl := FProcedureBodies[RootSignatureMatchIndex].Decl;
+    AOwnerUnitId := FProcedureBodies[RootSignatureMatchIndex].OwnerUnitId;
     Exit(True);
   end;
 
-  if ImportedMatchCount <> 1 then
+  if ImportedMatchCount = 1 then
+    ImportedSignatureMatchIndex := ImportedMatchIndex
+  else if (not AHasArgSignature) or (ImportedSignatureMatchCount <> 1) then
     Exit(False);
 
-  ABody := FProcedureBodies[ImportedMatchIndex].Body;
-  ADecl := FProcedureBodies[ImportedMatchIndex].Decl;
-  AOwnerUnitId := FProcedureBodies[ImportedMatchIndex].OwnerUnitId;
+  ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
+  ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
+  AOwnerUnitId := FProcedureBodies[ImportedSignatureMatchIndex].OwnerUnitId;
   Result := True;
 end;
 
@@ -1429,6 +1457,7 @@ var
   ExpectedKind: string;
   Index: LongInt;
   ParamCount: LongInt;
+  ParamSignature: string;
   Symbol: TSemanticSymbol;
   TypeId: LongInt;
 begin
@@ -1446,6 +1475,7 @@ begin
   else
     ExpectedKind := '';
   ParamCount := CountDeclParams(ADecl);
+  ParamSignature := GetParamSignature(ADecl);
 
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
@@ -1453,7 +1483,8 @@ begin
     if SameText(Symbol.Name, ADecl.Text) and
       ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
       ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind)) and
-      (Symbol.ParamCount = ParamCount) then
+      (Symbol.ParamCount = ParamCount) and
+      SameText(Symbol.ParamSignature, ParamSignature) then
       Exit(Symbol.SymbolId);
   end;
 
@@ -1492,6 +1523,7 @@ begin
     ADecl.ByteOffset
   );
   FModel.SetSymbolParamCount(Result, ParamCount);
+  FModel.SetSymbolParamSignature(Result, ParamSignature);
   FModel.SetSymbolScope(Result, EnsureUnitScope(AOwnerUnitId));
 end;
 
@@ -1525,9 +1557,11 @@ procedure TSemanticAnalyzer.SeedCallBindingsInNode(
 );
 var
   ArgIndex: LongInt;
+  ArgSignature: string;
   BodyNode: TGreenNode;
   Child: TGreenNode;
   DeclNode: TGreenNode;
+  HasArgSignature: Boolean;
   Index: LongInt;
   MethodClass: string;
   OwnerUnitId: string;
@@ -1549,14 +1583,19 @@ begin
     if IsQualifiedCallNode(ANode) then
       TryRegisterMemberCallBinding(ANode, MethodClass)
     else if Pos('.', ANode.Text) = 0 then
+    begin
+      HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
+        ArgSignature,
+        HasArgSignature,
         BodyNode,
         DeclNode,
         OwnerUnitId
       ) then
         RegisterCallBinding(ANode, DeclNode, OwnerUnitId);
+    end;
   end;
 
   for Index := 0 to ANode.ChildCount - 1 do
@@ -2828,6 +2867,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
 
@@ -2889,6 +2929,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
 
@@ -6212,6 +6253,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     ChildIndex: LongInt;
     KindName: string;
     ParamCount: LongInt;
+    ParamSignature: string;
     ScopeId: LongInt;
     Symbol: TSemanticSymbol;
     SymbolId: LongInt;
@@ -6230,13 +6272,15 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       Exit;
 
     ParamCount := CountDeclParams(ANode);
+    ParamSignature := GetParamSignature(ANode);
     for SymbolIndex := 0 to FModel.SymbolCount - 1 do
     begin
       Symbol := FModel.SymbolAt(SymbolIndex);
       if SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
         SameText(Symbol.Name, ANode.Text) and
         SameText(Symbol.Kind, KindName) and
-        (Symbol.ParamCount = ParamCount) then
+        (Symbol.ParamCount = ParamCount) and
+        SameText(Symbol.ParamSignature, ParamSignature) then
         Exit;
     end;
 
@@ -6260,6 +6304,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       ANode.ByteOffset
     );
     FModel.SetSymbolParamCount(SymbolId, ParamCount);
+    FModel.SetSymbolParamSignature(SymbolId, ParamSignature);
 
     if AUnitScopeId > 0 then
       ScopeId := AUnitScopeId

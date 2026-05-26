@@ -921,6 +921,116 @@ begin
   end;
 end;
 
+procedure CheckBareTypedOverloadBindingTargets;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingCount: LongInt;
+  BooleanOffset: LongInt;
+  BooleanSymbolId: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  IntegerOffset: LongInt;
+  IntegerSymbolId: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program BareTypedOverloadCalls;' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure Pick(Value: Boolean);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(1);' + LineEnding +
+    '  Pick(1 = 1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-bare-typed-overload-diagnostics');
+    if Model = nil then
+      Fail('missing-bare-typed-overload-semantic-model');
+
+    IntegerSymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model,
+      'Pick',
+      'procedure',
+      'baretypedoverloadcalls',
+      1,
+      'i'
+    );
+    BooleanSymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model,
+      'Pick',
+      'procedure',
+      'baretypedoverloadcalls',
+      1,
+      'b'
+    );
+    if IntegerSymbolId <= 0 then
+      Fail('missing-integer-bare-overload-symbol');
+    if BooleanSymbolId <= 0 then
+      Fail('missing-boolean-bare-overload-symbol');
+
+    IntegerOffset := Pos('  Pick(1);', SourceText) + Length('  ') - 1;
+    BooleanOffset := Pos('  Pick(1 = 1);', SourceText) + Length('  ') - 1;
+    BindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'call') and SameText(Binding.Name, 'Pick') then
+      begin
+        if (Binding.ByteOffset <> IntegerOffset) and
+          (Binding.ByteOffset <> BooleanOffset) then
+          Continue;
+        Inc(BindingCount);
+        if Binding.ByteOffset = IntegerOffset then
+        begin
+          if Binding.TargetSymbolId <> IntegerSymbolId then
+            Fail('integer-bare-overload-target-mismatch');
+        end
+        else if Binding.ByteOffset = BooleanOffset then
+        begin
+          if Binding.TargetSymbolId <> BooleanSymbolId then
+            Fail('boolean-bare-overload-target-mismatch');
+        end;
+      end;
+    end;
+
+    if BindingCount = 0 then
+      Fail('missing-bare-typed-overload-bindings');
+    if BindingCount <> 2 then
+      Fail('unexpected-bare-typed-overload-binding-count:' +
+        IntToStr(BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckClassMemberCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
@@ -1166,6 +1276,7 @@ begin
     CheckMemberOverloadBindingTargets;
     CheckMemberTypedOverloadBindingTargets;
     CheckOverloadBindings;
+    CheckBareTypedOverloadBindingTargets;
     CheckClassMemberCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
