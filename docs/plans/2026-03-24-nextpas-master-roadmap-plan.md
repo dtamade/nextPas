@@ -13,7 +13,7 @@
 这份计划负责当前 rolling window 里的执行批次。它不改写已完成的 phase1 历史，
 也不把 support/evidence 升格成新的稳定边界。各批次里的 promotion gate /
 已交付描述保留各自批次当时的局部事实；当前 production-path contract
-以最新完成的 `Batch 83` 为准。全局能力目标和每轮批次归属现在由
+以最新完成的 `Batch 84` 为准。全局能力目标和每轮批次归属现在由
 `docs/architecture/nextpas-goal-tree.md` 统一承接；本计划继续负责当前 rolling window 的执行记录。
 
 如果你要看已完成的 phase1 主计划与实施计划，继续读：
@@ -105,9 +105,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 83：nextPas capability goal tree。
+- 当前 rolling window 已推进到 Batch 84：source-owned unknown bare callable diagnostic。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 83` 已完成。
+- `Batch 1` 到 `Batch 84` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -213,7 +213,9 @@
   即使有 builtin return type 也不作为 diagnostic evidence，且 signature mismatch 不注册错误 binding。
   `Batch 82` 把 `nextpas.core.time` 纳入顶层 official verification。`Batch 83` 则把 nextPas 的完整
   能力目标、当前完成度、优先级和每轮报告格式收成 `nextpas-goal-tree.md`，并明确后续非 core
-  工作优先回到 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
+  工作优先回到 semantic binding/type relation 的真实功能切片。`Batch 84` 已把 source-owned unknown
+  bare callable name miss 接进 `sema.unknown-callable`，下一步继续沿 G1.5/G1.6 补 unknown member /
+  no-matching-overload 等真实语义诊断，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 
 ## 执行规则

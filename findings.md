@@ -10,6 +10,13 @@
 
 ## Research Findings
 
+- Batch 84 把 source-owned bare callable name miss 接进 structured diagnostics：当 bare call
+  的名字既不是 root/imported procedure/function、也不是已知 symbol/type/builtin callable 时，
+  semantic analyzer 发出 `sema.unknown-callable`，model status 进入 `failure`，且不会注册 call binding。
+- 本批刻意不把已知非 callable symbol、typecast 形态、function pointer、imported helper no-match 或
+  unknown member 一起归类；这些仍留给后续 G1.5/G1.6 切片。
+- 新增 `unknown-callable-check`，用 `tests/fixtures/unknown_callable/unknown_callable_fail.pas`
+  固定 stage0 failure projection 与 final envelope `unknownCallableCheck=pass`。
 - Batch 83 新增 `docs/architecture/nextpas-goal-tree.md`，把 nextPas 的北极星目标、G0-G8
   能力树、当前完成度、近期优先级和每轮报告格式收成总控地图。
 - 目标树明确后续每轮批次必须绑定目标节点；近期最高价值非 core 路线是继续推进

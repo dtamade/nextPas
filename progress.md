@@ -3,6 +3,35 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 84 unknown bare callable diagnostic)
+
+- **Status:** completed
+- Objective:
+  - 按目标树 G1.5/G1.6，把 source-owned bare callable name miss 从 silent deferred 推进到
+    structured semantic diagnostic。
+- Baseline:
+  - `LookupCallBindingDeclaration(...)` 已能区分 ambiguous overload、wrong argument count 与
+    stable type mismatch，但完全不存在的 bare callable 仍不会发 diagnostic。
+  - `Halt` / `WriteLn` / `Length` 等 builtin、已知 symbol、已知 typecast 边界不能被误伤。
+- Actions taken:
+  - 先写 focused RED：`MissingThing(1)` 必须触发 `sema.unknown-callable`、semantic model
+    status `failure`，且不注册 call binding。
+  - 新增 stage0 fixture `tests/fixtures/unknown_callable/unknown_callable_fail.pas` 与
+    `unknown-callable-check` gate。
+  - `LookupCallBindingDeclaration(...)` 在 root/imported callable 都无匹配，且名字不是已知
+    symbol/type/builtin callable 时返回 `unknown-callable`。
+  - 同步 `sema-specification.md`、goal tree、stage0 README 与持续记录。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-bare-unknown-callable-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 必须输出 `unknown-callable-check=pass`、
+    `unknownCallableCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖 source-owned bare callable name miss，不实现 unknown member、function pointer、
+    typecast lowering、imported helper no-match 或 full overload resolver。
+
 ## Session: 2026-05-26 (Batch 83 capability goal tree)
 
 - **Status:** completed

@@ -943,6 +943,7 @@ var
   ImportedNameCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
+  KnownSymbolId: LongInt;
   RootMatchCount: LongInt;
   RootMatchIndex: LongInt;
   RootNameCount: LongInt;
@@ -1043,6 +1044,15 @@ begin
   if RootNameCount > 0 then
   begin
     AResolutionFailureKind := 'wrong-argument-count';
+    Exit(False);
+  end;
+
+  if (RootNameCount = 0) and (ImportedNameCount = 0) then
+  begin
+    KnownSymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
+    if (KnownSymbolId = 0) and (FModel.FindTypeByName(AName) = 0) and
+      (not IsBuiltinProcedure(AName)) then
+      AResolutionFailureKind := 'unknown-callable';
     Exit(False);
   end;
 
@@ -1956,6 +1966,12 @@ begin
         EmitSemaError(
           'sema.type-mismatch',
           'argument type mismatch for "' + ANode.Text + '"',
+          ANode.ByteOffset
+        )
+      else if SameText(ResolutionFailureKind, 'unknown-callable') then
+        EmitSemaError(
+          'sema.unknown-callable',
+          'unknown callable "' + ANode.Text + '"',
           ANode.ByteOffset
         );
     end;

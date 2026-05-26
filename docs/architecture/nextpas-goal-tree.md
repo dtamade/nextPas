@@ -169,8 +169,10 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 当前状态：
 
 - 已完成 ambiguity、wrong argument count、部分 single-target type mismatch。
+- 已完成 source-owned bare unknown callable 的第一条结构化诊断。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
-  imported target type mismatch、多 target no-matching-overload、unknown callable/member。
+  imported target type mismatch、多 target no-matching-overload、unknown member，以及非 source-owned /
+  typecast / function-pointer 等更复杂 callable 边界。
 
 下一步证据：
 
@@ -188,6 +190,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 当前状态：
 
 - 多类 compiler/sema/toolchain/package/env 错误已有结构化 projection。
+- `sema.unknown-callable` 已覆盖 source-owned bare callable name miss。
 - 语义错误覆盖仍不完整。
 
 下一步证据：

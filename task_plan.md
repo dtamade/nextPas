@@ -15,6 +15,55 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 84 Unknown Bare Callable Diagnostic
+
+### Goal
+
+按 `docs/architecture/nextpas-goal-tree.md` 的 G1.5/G1.6，补上第一条 source-owned unknown
+bare callable 语义诊断：
+
+- `MissingThing(1)` 这类 root source 里没有任何已知 callable/symbol/type/builtin 含义的 bare call
+  必须进入 `sema.unknown-callable`。
+- 诊断进入统一 diagnostics projection，semantic model status 进入 `failure`。
+- 失败调用不注册 `call` binding。
+
+### Architecture Decision
+
+这是 unknown callable 的保守首切片，不是完整 callable resolver：
+
+- 已知 builtin callable 继续 deferred 给现有 runtime/builtin lowering，不报 unknown。
+- 已知 symbol 或 type name 不报 unknown；未来再区分 not-callable、typecast、function pointer。
+- imported helper no-match、unknown member、record/property/array/deref receiver、implicit conversion、
+  no-matching-overload 仍保留给后续 G1.5/G1.6。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 focused RED：bare unknown callable 必须产生 `sema.unknown-callable`
+- [x] 新增 stage0 fail fixture 和 `unknown-callable-check`
+- [x] 在 semantic analyzer 接入保守 unknown-callable failure kind
+- [x] 同步 sema spec、goal tree、stage0 README 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-bare-unknown-callable-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 必须输出 `unknown-callable-check=pass`、
+  `unknownCallableCheck":"pass"`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `core/` 代码
+- 不实现 unknown member
+- 不实现 full overload resolver / implicit conversion / no-matching-overload
+- 不把 typecast、function pointer 或 known non-callable symbol 误归类为 unknown callable
+
 ## Addendum: 2026-05-26 Batch 83 Capability Goal Tree
 
 ### Goal
