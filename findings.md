@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 95 把 `object-free-runtime` 中的 `heap-release true` 推进到 HIR/LLVM 后端可见边界：
+  matching owned `Destroy` 之后现在会追加 `np.system.object_free.release` HIR marker。
+- 新 focused RED 固定旧行为缺口：Batch 94 已有 nil branch 和 guarded `Destroy`，但 builder
+  没有 release marker，LLVM 也没有 `@np_object_free_release` hook，因此失败在
+  `missing-object-free-release-intrinsic`。
+- 修正后 LLVM HIR emitter 会在 `objectfree.destroy.*` 非空分支内按顺序发出
+  `@TObject.Destroy` call 与 `call void @np_object_free_release(ptr ...)`，然后汇合到
+  `objectfree.end.*`；nil receiver 仍直接跳过二者。
+- 当前 `@np_object_free_release` 是内部空 helper，只是稳定 backend/runtime 接入口；真实
+  allocator free、object header ownership、完整 dynamic dispatch runtime 和 implicit
+  `System.pas` backend/link 接管仍未完成。
 - `platform.thread` 现在可以在不直接 `uses` FPC 平台单元的前提下覆盖 thread lifecycle、TLS、
   yield/sleep 和 CPU count；禁止规则由 `test_platform_thread_no_fpc_units` 固定。
 - Windows `CreateThread` 不能接收 Pascal cdecl user proc，也不能靠 32-bit thread exit code 携带

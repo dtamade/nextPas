@@ -17,8 +17,10 @@ var
   LlvmText: string;
   FoundContract: Boolean;
   FoundOwnedDestroy: Boolean;
+  FoundHeapRelease: Boolean;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
-  NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, EndLabelPos: LongInt;
+  NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
+  EndLabelPos, ReleaseHelperPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -72,6 +74,7 @@ begin
 
     FoundContract := False;
     FoundOwnedDestroy := False;
+    FoundHeapRelease := False;
     for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
     begin
       Func := Builder.Module.FunctionAt(FuncIndex);
@@ -117,6 +120,21 @@ begin
             if OperandType.Kind <> htkPointer then
               Fail('object-free-owned-destroy-receiver-not-pointer');
           end;
+          if (Instr.Kind = hikIntrinsic) and
+            SameText(Instr.IntrinsicName, 'np.system.object_free.release') then
+          begin
+            if FoundHeapRelease then
+              Fail('duplicate-object-free-release');
+            FoundHeapRelease := True;
+            if Length(Instr.Operands) <> 1 then
+              Fail('object-free-release-operand-count:' +
+                IntToStr(Length(Instr.Operands)));
+            if Instr.Operands[0].TypeId = 0 then
+              Fail('object-free-release-receiver-type-missing');
+            OperandType := Builder.Module.Types.GetType(Instr.Operands[0].TypeId);
+            if OperandType.Kind <> htkPointer then
+              Fail('object-free-release-receiver-not-pointer');
+          end;
         end;
     end;
 
@@ -124,6 +142,8 @@ begin
       Fail('missing-object-free-hir-intrinsic');
     if not FoundOwnedDestroy then
       Fail('missing-object-free-owned-destroy-intrinsic');
+    if not FoundHeapRelease then
+      Fail('missing-object-free-release-intrinsic');
 
     Emitter := THIRLlvmEmitter.Create(Builder.Module);
     Emitter.EmitModule;
@@ -143,13 +163,22 @@ begin
     DestroyCallPos := FindAfter('@TObject.Destroy', LlvmText, DestroyLabelPos);
     if DestroyCallPos = 0 then
       Fail('missing-object-free-llvm-destroy-call');
+    ReleaseCallPos := FindAfter('call void @np_object_free_release(ptr ',
+      LlvmText, DestroyCallPos);
+    if ReleaseCallPos = 0 then
+      Fail('missing-object-free-llvm-release-call-after-destroy');
     EndLabelPos := FindAfter(LineEnding + 'objectfree.end.', LlvmText,
-      DestroyCallPos);
+      ReleaseCallPos);
     if EndLabelPos = 0 then
-      Fail('missing-object-free-llvm-end-label-after-destroy');
+      Fail('missing-object-free-llvm-end-label-after-release');
     if not ((NullCheckPos < BranchPos) and (BranchPos < DestroyLabelPos) and
-      (DestroyLabelPos < DestroyCallPos) and (DestroyCallPos < EndLabelPos)) then
+      (DestroyLabelPos < DestroyCallPos) and
+      (DestroyCallPos < ReleaseCallPos) and (ReleaseCallPos < EndLabelPos)) then
       Fail('object-free-llvm-guard-order');
+    ReleaseHelperPos := Pos('define internal void @np_object_free_release(ptr %obj)',
+      LlvmText);
+    if ReleaseHelperPos = 0 then
+      Fail('missing-object-free-llvm-release-helper');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

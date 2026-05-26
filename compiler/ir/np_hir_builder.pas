@@ -31,6 +31,7 @@ type
     FPendingObjectFreeDestroyName: string;
     FPendingObjectFreeReceiverName: string;
     FPendingObjectFreeReceiverValue: THIRValueId;
+    FPendingObjectFreeHeapRelease: Boolean;
     FSretValueId: THIRValueId;
 
     FAllocaNames: array of string;
@@ -160,6 +161,7 @@ begin
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
+  FPendingObjectFreeHeapRelease := False;
   SetLength(FAllocaNames, 0);
   SetLength(FAllocaValues, 0);
   SetLength(FRecordAllocaSlots, 0);
@@ -1751,7 +1753,7 @@ var
   ArgValue, PtrVal, LenVal, ObjectFreeReceiverValue: THIRValueId;
   ArgOps: array of THIROperand;
   ArgCount: LongInt;
-  OwnsObjectFreeDestroy: Boolean;
+  OwnsObjectFreeDestroy, OwnsObjectFreeHeapRelease: Boolean;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -1780,11 +1782,14 @@ begin
     SameText(FuncName, FPendingObjectFreeDestroyName) and
     SameText(FirstArgName, FPendingObjectFreeReceiverName);
   ObjectFreeReceiverValue := FPendingObjectFreeReceiverValue;
+  OwnsObjectFreeHeapRelease := OwnsObjectFreeDestroy and
+    FPendingObjectFreeHeapRelease;
   if FPendingObjectFreeDestroyName <> '' then
   begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
     FPendingObjectFreeReceiverValue := 0;
+    FPendingObjectFreeHeapRelease := False;
   end;
 
   ArgCount := 0;
@@ -1892,6 +1897,18 @@ begin
   Instr.CallTarget := FuncName;
   Instr.Operands := ArgOps;
   EmitInstr(Instr);
+
+  if OwnsObjectFreeHeapRelease then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    Instr.IntrinsicName := 'np.system.object_free.release';
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeTypedOperand(ObjectFreeReceiverValue, GetPtrType);
+    EmitInstr(Instr);
+  end;
 end;
 
 procedure THIRBuilder.ProcessObjectFreeRuntime(const ANode: TTypedHirNode);
@@ -1900,12 +1917,15 @@ var
   Instr: THIRInstr;
   LineEnd: LongInt;
   ReceiverPtr, ReceiverSlot: THIRValueId;
+  HeapRelease: Boolean;
 begin
   DestroyName := '';
   ReceiverName := '';
+  HeapRelease := False;
   FPendingObjectFreeDestroyName := '';
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
+  FPendingObjectFreeHeapRelease := False;
   Rest := ANode.Operand;
   while Rest <> '' do
   begin
@@ -1924,7 +1944,9 @@ begin
     if (Length(Line) > 4) and SameText(Copy(Line, 1, 4), 'var ') then
       ReceiverName := Trim(Copy(Line, 5, Length(Line)))
     else if (Length(Line) > 8) and SameText(Copy(Line, 1, 8), 'destroy ') then
-      DestroyName := Trim(Copy(Line, 9, Length(Line)));
+      DestroyName := Trim(Copy(Line, 9, Length(Line)))
+    else if SameText(Line, 'heap-release true') then
+      HeapRelease := True;
   end;
 
   if ReceiverName = '' then
@@ -1958,6 +1980,7 @@ begin
     FPendingObjectFreeDestroyName := DestroyName;
     FPendingObjectFreeReceiverName := ReceiverName;
     FPendingObjectFreeReceiverValue := ReceiverPtr;
+    FPendingObjectFreeHeapRelease := HeapRelease;
   end;
 end;
 
@@ -3219,6 +3242,7 @@ begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
     FPendingObjectFreeReceiverValue := 0;
+    FPendingObjectFreeHeapRelease := False;
   end;
 
   if (ANode.Kind = 'var-decl-runtime') or

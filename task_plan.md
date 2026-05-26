@@ -15,8 +15,63 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 94 Object-free LLVM Nil Guard；Batch 93 Platform Thread FFI Boundary 是
+当前最新本轮为 Batch 95 Object-free Heap-release Hook；Batch 93 Platform Thread FFI Boundary 是
 并行 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 95 Object-free Heap-release Hook
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 `object-free-runtime` 中已经记录的 `heap-release true`
+从语义意图推进到 HIR/LLVM 后端可见边界：
+
+- `THIRBuilder` 在匹配 owned `Destroy` 后，必须基于 `heap-release true` 追加
+  `np.system.object_free.release` intrinsic。
+- `THIRLlvmEmitter` 必须把 release marker 降成非空分支内的
+  `call void @np_object_free_release(ptr ...)`，顺序为 nil check -> destroy label ->
+  `Destroy` call -> release hook -> end label。
+- 本批只建立稳定 backend/runtime helper hook；当前 helper 是内部空实现，不声明真实 allocator
+  free、object header ownership、完整 dynamic dispatch runtime 或完整 `System` 平替已完成。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+object-free lifecycle contract 现在分三段传递：
+
+- semantic typed HIR 继续记录 receiver、effective `Destroy`、`nil-guard true` 与
+  `heap-release true`。
+- `THIRBuilder` 把 `heap-release true` 保存到 pending object-free contract；只有紧随的
+  matching owned `Destroy` 成功消费该 contract 后，才追加 `np.system.object_free.release`。
+- `THIRLlvmEmitter` 允许 owned destroy 与 release marker 留在同一个 `objectfree.destroy.*`
+  非空分支里；release hook 关闭 guard 并汇合到 `objectfree.end.*`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：focused HIR test 必须看到 release intrinsic、LLVM release call 和 release helper
+- [x] 实现 builder 侧 `heap-release true` pending contract 消费
+- [x] 实现 LLVM release hook emission 与内部 helper 边界
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-intrinsic`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不定义 object allocation header / ownership metadata
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 93 Platform Thread FFI Boundary
 

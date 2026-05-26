@@ -111,7 +111,9 @@ target-installed `units/linux-x86_64/System.pas`，普通 `class` 默认继承 `
 contract 记录 nil guard 与 heap release intent；HIR builder 已把该 contract 保留为
 `np.system.object_free` intrinsic marker，带 receiver pointer 与 effective `Destroy` target；
 匹配的后续 `Destroy` lowering 会标记为 `np.system.object_free.destroy` owned marker。
-LLVM HIR emitter 已把这组 marker 降成真实 receiver nil branch，让 `Destroy` call 只在非空分支执行。
+`heap-release true` 会继续投影成 `np.system.object_free.release` marker。LLVM HIR emitter 已把
+这组 marker 降成真实 receiver nil branch，让 `Destroy` call 与 `@np_object_free_release`
+hook 只在非空分支执行；当前 release helper 仍是内部空边界，不是真实 allocator free。
 这个 source-backed truth 现在不再依赖用户显式写 `uses System`；但 implicit runtime 仍保持
 `OriginClass=implicit-runtime`，backend extra assemble/link 不会因此自动把 `System.pas`
 加进每个 program。显式 `uses System` 仍会继续解析真实源码，并可把 implicit runtime 节点升级为

@@ -3,8 +3,38 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 94 object-free LLVM nil guard；Batch 93 platform.thread FFI boundary
+当前最新本轮为 Batch 95 object-free heap-release hook；Batch 93 platform.thread FFI boundary
 是并行 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 95 object-free heap-release hook)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 94 已经 guard 住的 `np.system.object_free` lifecycle group 继续推进到
+    `heap-release true` 后端边界：`Destroy` 后必须有可见 release hook，且 nil receiver
+    必须跳过 Destroy 和 release。
+- Baseline:
+  - semantic typed HIR 已记录 `heap-release true`，但 `THIRBuilder.ProcessObjectFreeRuntime(...)`
+    只保存 receiver / destroy pending state，没有把 heap release intent 投影到 HIR。
+  - LLVM emitter 已生成 nil branch 和 owned destroy call，但没有 release call 或 release helper。
+- Actions taken:
+  - 扩展 focused HIR test：要求 builder 产出 `np.system.object_free.release` marker，并要求
+    LLVM 文本中 `@np_object_free_release(ptr ...)` 出现在 `@TObject.Destroy` 之后、
+    `objectfree.end.*` 之前，同时要求存在内部 release helper 定义。
+  - `THIRBuilder` 新增 pending `heap-release true` 状态；只有 matching owned `Destroy`
+    成功消费 object-free contract 后，才追加 release intrinsic。
+  - `THIRLlvmEmitter` 允许 owned destroy 与 release marker 保持在同一个非空 guard 分支内；
+    release hook 负责关闭 guard 并汇合到 end label。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-release-intrinsic`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批建立的是 backend/runtime release hook boundary；当前 helper 是内部空实现，仍没有真实
+    allocator free、object header ownership、完整 dynamic dispatch runtime 或 implicit `System.pas`
+    backend/link 接管。
+  - 本轮没有修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 93 platform.thread FFI boundary)
 

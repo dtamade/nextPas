@@ -17,6 +17,7 @@ type
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
+    FNeedsObjectFreeRelease: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
@@ -35,11 +36,13 @@ type
     procedure ClosePendingObjectFreeGuard;
     procedure EmitObjectFreeGuardStart(const AInstr: THIRInstr);
     procedure EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
+    procedure EmitObjectFreeRelease(const AInstr: THIRInstr);
     procedure EmitInstr(const AInstr: THIRInstr);
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
     procedure EmitStrConcatHelper;
+    procedure EmitObjectFreeReleaseHelper;
     procedure EmitVmtGlobals;
   public
     constructor Create(AModule: THIRModule);
@@ -62,6 +65,7 @@ begin
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
+  FNeedsObjectFreeRelease := False;
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -162,6 +166,14 @@ end;
 procedure THIRLlvmEmitter.EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
 begin
   EmitCallInstr(AInstr);
+end;
+
+procedure THIRLlvmEmitter.EmitObjectFreeRelease(const AInstr: THIRInstr);
+begin
+  FNeedsObjectFreeRelease := True;
+  if Length(AInstr.Operands) >= 1 then
+    Emit('  call void @np_object_free_release(ptr ' +
+      ValueRef(AInstr.Operands[0].ValueId) + ')');
   ClosePendingObjectFreeGuard;
 end;
 
@@ -171,7 +183,8 @@ var
   I: LongInt;
 begin
   if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
-    SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy')) then
+    (SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') or
+    SameText(AInstr.IntrinsicName, 'np.system.object_free.release'))) then
     ClosePendingObjectFreeGuard;
 
   LlvmType := TypeToLlvm(AInstr.TypeId);
@@ -285,6 +298,8 @@ begin
         EmitObjectFreeGuardStart(AInstr)
       else if SameText(AInstr.IntrinsicName, 'np.system.object_free.destroy') then
         EmitObjectFreeOwnedDestroy(AInstr)
+      else if SameText(AInstr.IntrinsicName, 'np.system.object_free.release') then
+        EmitObjectFreeRelease(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
@@ -692,6 +707,7 @@ begin
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
+  FNeedsObjectFreeRelease := False;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
   FPendingObjectFreeEndLabel := '';
@@ -725,6 +741,9 @@ begin
 
   if FNeedsStrConcat or FNeedsIntToStr then
     EmitStrConcatHelper;
+
+  if FNeedsObjectFreeRelease then
+    EmitObjectFreeReleaseHelper;
 
   if FNeedsStrCmp then
   begin
@@ -959,6 +978,15 @@ begin
   Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %buf, 0');
   Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
   Emit('  ret {ptr, i64} %r2');
+  Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitObjectFreeReleaseHelper;
+begin
+  Emit('');
+  Emit('define internal void @np_object_free_release(ptr %obj) {');
+  Emit('entry:');
+  Emit('  ret void');
   Emit('}');
 end;
 
