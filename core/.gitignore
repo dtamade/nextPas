@@ -1,0 +1,20 @@
+# build output
+build/
+
+# FPC intermediate files (should not appear in src/ but just in case)
+*.o
+*.ppu
+*.rst
+*.compiled
+
+# IDE files
+*.lps
+*.bak
+backup/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Tools
+.ace-tool/
