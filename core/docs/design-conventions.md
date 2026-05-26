@@ -125,7 +125,7 @@ end.
 
 ```
 L0: 内核 (base, errors, platform, mem, log.intf)
-     ↑ 只依赖 FPC RTL
+     ↑ bootstrap 阶段只依赖最低限度宿主能力；platform ABI 通过自有 FFI 声明
 
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
      ↑ 只依赖 L0
@@ -633,7 +633,7 @@ build/
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖
 
-### L0: 内核（只依赖 FPC RTL）
+### L0: 内核（bootstrap 阶段只依赖最低限度宿主能力）
 
 | 模块 | 职责 |
 |------|------|
@@ -746,6 +746,28 @@ nextpas.core/
 - 当前优先实现 Linux x86_64
 - 设计上预留全平台（通过 .inc 平台分支和多态）
 - 目标平台：Linux、macOS、Windows（x86_64、aarch64）
+
+### platform 层不得依赖 FPC 平台单元
+
+`platform` 是 nextPas 标准库接触宿主 ABI 的最底层边界。将来 nextPas
+编译器不会携带 FPC 的 `Linux`、`UnixType`、`PThreads`、`BaseUnix`、
+`Syscall`、`Windows` 等平台单元，所以 `platform` 下的实现单元不得 `uses`
+这些单元。
+
+平台 API 必须通过 nextPas 自己维护的 FFI 单元声明，例如：
+
+- `nextpas.core.platform.posix.ffi`：POSIX 通用 ABI，如 `timespec`、
+  `clock_gettime`、pthread 类型与函数。
+- `nextpas.core.platform.linux.ffi`：Linux 专有 ABI，如 `syscall`、
+  `SYS_futex`、`FUTEX_WAIT`、`FUTEX_WAKE`。
+- Windows 专有 ABI 也必须放入 nextPas 自己的 FFI 单元，不能通过 FPC
+  `Windows` 单元取得声明。
+
+FFI 声明应使用明确的 ABI 类型、调用约定和外部符号名，例如
+`cdecl; external 'c' name 'clock_gettime'` 或
+`cdecl; external 'pthread' name 'pthread_mutex_lock'`。上层 `platform.*`
+实现只依赖这些自有 FFI 单元，并把错误码、超时语义、对象尺寸和对齐要求整理成
+nextPas 自己的稳定契约。
 
 ---
 

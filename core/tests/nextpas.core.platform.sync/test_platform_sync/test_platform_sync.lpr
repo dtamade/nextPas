@@ -123,7 +123,7 @@ begin
 
   platform_mutex_lock(LMutex);
   LRet := platform_condvar_timedwait(LCond, LMutex, 1000000);
-  Check(LRet <> 0, 'timedwait should timeout (1ms)');
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet), 'timedwait should timeout (1ms)');
   platform_mutex_unlock(LMutex);
 
   LRet := platform_condvar_signal(LCond);
@@ -145,11 +145,13 @@ begin
 
   // value != expected: futex returns EAGAIN immediately (not blocked)
   LRet := platform_wait_address32(@LValue, 99, 1000000);
-  Check(LRet <> 0, 'wait should return error when value <> expected (EAGAIN)');
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'wait should return EAGAIN when value <> expected');
 
   // value = expected, no wake: should timeout
   LRet := platform_wait_address32(@LValue, 42, 1000000);
-  Check(LRet <> 0, 'wait should timeout when value = expected and no wake');
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'wait should timeout when value = expected and no wake');
 
   LRet := platform_wake_address_one(@LValue);
   CheckEqual(Int64(0), Int64(LRet), 'wake one');

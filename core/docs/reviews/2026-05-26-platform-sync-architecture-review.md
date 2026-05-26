@@ -16,9 +16,17 @@ For this module, that means:
 
 - correctness before convenience;
 - explicit platform contracts before broad API growth;
+- no dependency on FPC platform units in the `platform` layer;
 - small unsafe/native boundaries with strong tests around them;
 - fast paths that are measurable, not merely clever;
 - portable semantics that do not pretend different kernels behave the same.
+
+Architecture decision added during this hardening pass: `platform` modules must
+not `uses` FPC platform units such as `Linux`, `UnixType`, `PThreads`,
+`BaseUnix`, `Syscall`, or `Windows`. The nextPas compiler and standard library
+will not be able to rely on those FPC units. Native ABI declarations belong in
+nextPas-owned FFI units such as `nextpas.core.platform.posix.ffi`,
+`nextpas.core.platform.linux.ffi`, and the corresponding Windows FFI boundary.
 
 ## Current evidence
 
@@ -82,15 +90,18 @@ Recommended direction:
 
 ### P1: The `UNIX` branch is really Linux-specific
 
-The implementation uses `Linux`, `Syscall`, raw futex, and
-`pthread_condattr_setclock`. That is Linux-oriented code guarded by `UNIX`.
-macOS and BSD should not be implicitly routed through this branch.
+The implementation used `Linux`, `Syscall`, raw futex, and
+`pthread_condattr_setclock`. That was Linux-oriented code guarded by `UNIX`.
+macOS and BSD should not be implicitly routed through this branch, and Linux
+must use nextPas-owned FFI declarations rather than FPC platform units.
 
 Recommended direction:
 
 - Split the implementation by actual target: Linux, Windows, and explicit
   unsupported fallback.
 - Do not use `UNIX` as a synonym for Linux when futex or Linux units are involved.
+- Declare POSIX pthread and clock APIs in `nextpas.core.platform.posix.ffi`.
+- Declare Linux futex/syscall APIs in `nextpas.core.platform.linux.ffi`.
 - Add a compile gate or explicit unsupported diagnostic for macOS until that path
   has its own primitive strategy.
 
@@ -182,6 +193,8 @@ surface narrower and more explicit.
 Recommended file shape:
 
 - `nextpas.core.platform.sync.pas`: public types, constants, and forwarding API.
+- `nextpas.core.platform.posix.ffi.pas`: shared POSIX ABI declarations.
+- `nextpas.core.platform.linux.ffi.pas`: Linux-only ABI declarations.
 - `nextpas.core.platform.sync.linux.inc`: Linux pthread/futex implementation.
 - `nextpas.core.platform.sync.windows.inc`: Windows implementation policy.
 - `nextpas.core.platform.sync.windows.ffi.pas`: Windows external declarations.

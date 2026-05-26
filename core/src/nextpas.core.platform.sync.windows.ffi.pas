@@ -4,8 +4,8 @@ unit nextpas.core.platform.sync.windows.ffi;
 
 interface
 
-uses
-  Windows;
+type
+  DWORD = UInt32;
 
 procedure InitializeSRWLock(SRWLock: Pointer); stdcall; external 'kernel32' name 'InitializeSRWLock';
 procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32' name 'AcquireSRWLockExclusive';
@@ -23,6 +23,11 @@ procedure WakeAllConditionVariable(ConditionVariable: Pointer); stdcall; externa
 function WaitOnAddress(Address: Pointer; CompareAddress: Pointer; AddressSize: PtrUInt; dwMilliseconds: DWORD): LongBool; stdcall; external 'kernel32' name 'WaitOnAddress';
 procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressSingle';
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
+function GetLastError: DWORD; stdcall; external 'kernel32' name 'GetLastError';
+
+const
+  INFINITE = DWORD($FFFFFFFF);
+  ERROR_TIMEOUT = DWORD(1460);
 
 implementation
 

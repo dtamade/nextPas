@@ -4,7 +4,7 @@ program test_platform_sync_sizes;
 
 uses
   SysUtils,
-  {$IFDEF UNIX}PThreads, UnixType,{$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.ffi,{$ENDIF}
   nextpas.core.testing,
   nextpas.core.platform.sync;
 
@@ -32,7 +32,7 @@ begin
   Check((PtrUInt(APtr) mod SizeOf(Pointer)) = 0, AName + ' must be pointer-aligned');
 end;
 
-{$IFDEF UNIX}
+{$IFDEF NEXTPAS_LINUX}
 procedure TestMutexSize;
 begin
   Check(SizeOf(pthread_mutex_t) <= PLATFORM_MUTEX_SIZE,
@@ -74,7 +74,7 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.platform.sync.sizes');
-  {$IFDEF UNIX}
+  {$IFDEF NEXTPAS_LINUX}
   T.Run('Mutex size fits opaque buffer', @TestMutexSize);
   T.Run('RwLock size fits opaque buffer', @TestRwLockSize);
   T.Run('CondVar size fits opaque buffer', @TestCondVarSize);
