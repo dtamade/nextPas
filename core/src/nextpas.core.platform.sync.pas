@@ -157,7 +157,7 @@ end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_tryrdlock(@ARwLock.FOpaque[0]);
+  Result := pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_unlock(var ARwLock: TPlatformRwLock): Int32;
