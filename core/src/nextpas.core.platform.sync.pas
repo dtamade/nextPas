@@ -609,63 +609,39 @@ end;
 { Address-wait (futex on Linux) }
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
-var
-  LTs: timespec;
-  LRet: PtrInt;
 begin
   if AAddr = nil then
     Exit(PLATFORM_ERR_INVALID);
 
-  if ATimeoutNs < 0 then
-  begin
-    LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
-      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG), PtrUInt(UInt32(AExpected)),
-      PtrUInt(0), PtrUInt(0), PtrUInt(0));
-  end
-  else
-  begin
-    LTs.tv_sec := ATimeoutNs div 1000000000;
-    LTs.tv_nsec := ATimeoutNs mod 1000000000;
-    LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
-      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG), PtrUInt(UInt32(AExpected)),
-      PtrUInt(@LTs), PtrUInt(0), PtrUInt(0));
-  end;
-  if LRet >= 0 then
+  Result := linux_futex_wait_i32(AAddr, AExpected, ATimeoutNs);
+  if Result = 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno_value);
+    Result := platform_posix_map_error(Result);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
-var
-  LRet: PtrInt;
 begin
   if AAddr = nil then
     Exit(PLATFORM_ERR_INVALID);
 
-  LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
-    PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(1),
-    PtrUInt(0), PtrUInt(0), PtrUInt(0));
-  if LRet >= 0 then
+  Result := linux_futex_wake_one_i32(AAddr);
+  if Result = 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno_value);
+    Result := platform_posix_map_error(Result);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
-var
-  LRet: PtrInt;
 begin
   if AAddr = nil then
     Exit(PLATFORM_ERR_INVALID);
 
-  LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
-    PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(High(Int32)),
-    PtrUInt(0), PtrUInt(0), PtrUInt(0));
-  if LRet >= 0 then
+  Result := linux_futex_wake_all_i32(AAddr);
+  if Result = 0 then
     Result := 0
   else
-    Result := platform_posix_map_error(platform_posix_errno_value);
+    Result := platform_posix_map_error(Result);
 end;
 {$ENDIF}
 {$ENDIF}

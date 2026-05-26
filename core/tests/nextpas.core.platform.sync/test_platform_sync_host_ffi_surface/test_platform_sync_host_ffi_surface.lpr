@@ -86,6 +86,12 @@ begin
     'linux.ffi must expose FUTEX_WAKE');
   CheckTokenPresent(LLinuxSource, 'platform_posix_errno_value',
     'linux.ffi must expose Linux errno value helper for sync');
+  CheckTokenPresent(LLinuxSource, 'linux_futex_wait_i32',
+    'linux.ffi must expose Linux futex wait helper for sync');
+  CheckTokenPresent(LLinuxSource, 'linux_futex_wake_one_i32',
+    'linux.ffi must expose Linux futex wake-one helper for sync');
+  CheckTokenPresent(LLinuxSource, 'linux_futex_wake_all_i32',
+    'linux.ffi must expose Linux futex wake-all helper for sync');
 
   CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
     'darwin.ffi must expose Darwin errno value helper for sync');
@@ -176,8 +182,12 @@ begin
     'platform.sync must consume host-owned pthread condattr clock binding');
   CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_clock_id',
     'platform.sync must consume host-owned pthread timeout clock policy');
-  CheckTokenPresent(LSyncSource, 'linux_syscall',
-    'platform.sync must consume linux futex bindings through linux.ffi');
+  CheckTokenPresent(LSyncSource, 'linux_futex_wait_i32',
+    'platform.sync must consume Linux futex wait helper through linux.ffi');
+  CheckTokenPresent(LSyncSource, 'linux_futex_wake_one_i32',
+    'platform.sync must consume Linux futex wake-one helper through linux.ffi');
+  CheckTokenPresent(LSyncSource, 'linux_futex_wake_all_i32',
+    'platform.sync must consume Linux futex wake-all helper through linux.ffi');
   CheckTokenPresent(LSyncSource, 'windows_timeout_ns_to_ms',
     'platform.sync must consume Windows wait timeout conversion through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_last_error_is_timeout',
@@ -228,6 +238,12 @@ begin
     'platform.sync must not keep a raw Windows timeout-result token');
   Check(Pos('function platform_timeout_ns_to_ms', LSyncSource) = 0,
     'platform.sync must not keep a local Windows timeout conversion helper');
+  Check(Pos('linux_syscall', LSyncSource) = 0,
+    'platform.sync must not call linux_syscall directly in the Linux consumer');
+  Check(Pos('futex_wait or futex_private_flag', LSyncSource) = 0,
+    'platform.sync must not assemble raw FUTEX_WAIT operations in the Linux consumer');
+  Check(Pos('futex_wake or futex_private_flag', LSyncSource) = 0,
+    'platform.sync must not assemble raw FUTEX_WAKE operations in the Linux consumer');
   Check(Pos('initializesrwlock', LSyncSource) = 0,
     'platform.sync must not call InitializeSRWLock directly in the Windows consumer');
   Check(Pos('acquiresrwlockexclusive', LSyncSource) = 0,

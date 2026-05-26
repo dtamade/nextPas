@@ -4835,3 +4835,33 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（Windows helper ownerization）：pass
 - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
 - `bash build/verify_local.sh`（platform.sync Windows helper ownerization batch）：pass
+
+### Phase 6: Platform Sync Linux Futex Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_sync_host_ffi_surface` 扩成新的 RED gate，要求
+    `linux.ffi` 暴露 `linux_futex_wait_i32`、`linux_futex_wake_one_i32`、
+    `linux_futex_wake_all_i32`，并禁止 `platform.sync` 再直接写 raw
+    `linux_syscall` / `LINUX_SYSCALL_FUTEX` / `FUTEX_*` 组合逻辑。
+  - 同一个 focused gate 也顺手修正成更精确的 owner boundary：不再只说“用了 linux.ffi 就算”，
+    而是明确冻结 futex wait/wake helper 归 `linux.ffi` owner。
+  - `core/src/nextpas.core.platform.linux.ffi.pas` 新增：
+    - `linux_futex_wait_i32`
+    - `linux_futex_wake_one_i32`
+    - `linux_futex_wake_all_i32`
+    把 futex syscall number、opcode 组合、`timespec` timeout 组装和 errno read 收回 host ffi owner。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Linux futex path 改为消费上述 helper；
+    consumer 继续保留 nil/value mismatch 这类 nextPas contract 检查，以及
+    `platform_posix_map_error` 映射，不再直接拼 raw futex syscall。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 Linux futex helper owner boundary 和验证证据写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`（Linux futex helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（Linux futex helper ownerization）：pass
+- `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
+- `bash build/verify_local.sh`（platform.sync Linux futex helper ownerization batch）：pass

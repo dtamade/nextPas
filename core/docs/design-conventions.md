@@ -847,6 +847,13 @@ policy；不要在 consumer 里重新散落 raw `InitializeSRWLock`、
 `AcquireSRWLock*`、`SleepConditionVariableSRW`、`WaitOnAddress`、`WakeByAddress*`
 调用。
 
+同样，Linux futex 的 raw syscall 编号、`FUTEX_*` opcode 与 `syscall(...)` 拼装，也应继续归
+`nextpas.core.platform.linux.ffi` owner。`platform.sync` 可以保留 nil/value mismatch 这类
+nextPas public contract 检查，以及 errno 到 `PLATFORM_ERR_*` 的映射，但不要在 consumer 里重新
+散落 raw `linux_syscall`、`LINUX_SYSCALL_FUTEX`、`FUTEX_WAIT`、`FUTEX_WAKE` 组合逻辑；
+优先消费 `linux_futex_wait_i32`、`linux_futex_wake_one_i32`、`linux_futex_wake_all_i32`
+这类 host-owned helper。
+
 ### `platform.thread` 的边界
 
 `nextpas.core.platform.thread` 只提供宿主线程原语：线程创建、join/detach、当前线程身份、

@@ -38,6 +38,9 @@ function linux_syscall(ANumber: PtrInt; A1: PtrUInt; A2: PtrUInt; A3: PtrUInt; A
 function gettid: Int32; cdecl; external 'c' name 'gettid';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
 function platform_posix_errno_value: Int32; inline;
+function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+function linux_futex_wake_one_i32(AAddr: PInt32): Int32;
+function linux_futex_wake_all_i32(AAddr: PInt32): Int32;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -51,6 +54,56 @@ uses
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_errno_location^;
+end;
+
+function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+var
+  LRet: PtrInt;
+  LTs: timespec;
+begin
+  if ATimeoutNs < 0 then
+    LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
+      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG), PtrUInt(UInt32(AExpected)),
+      PtrUInt(0), PtrUInt(0), PtrUInt(0))
+  else
+  begin
+    LTs.tv_sec := ATimeoutNs div 1000000000;
+    LTs.tv_nsec := ATimeoutNs mod 1000000000;
+    LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
+      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG), PtrUInt(UInt32(AExpected)),
+      PtrUInt(@LTs), PtrUInt(0), PtrUInt(0));
+  end;
+
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function linux_futex_wake_one_i32(AAddr: PInt32): Int32;
+var
+  LRet: PtrInt;
+begin
+  LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
+    PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(1),
+    PtrUInt(0), PtrUInt(0), PtrUInt(0));
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function linux_futex_wake_all_i32(AAddr: PInt32): Int32;
+var
+  LRet: PtrInt;
+begin
+  LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
+    PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(High(Int32)),
+    PtrUInt(0), PtrUInt(0), PtrUInt(0));
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
 end;
 
 function platform_thread_self_token_u64: UInt64; inline;

@@ -1483,3 +1483,20 @@
   consumer 只消费 helper 名称。
 - Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这次 helper
   ownerization 没把 `platform.sync` 的行为、尺寸契约或仓库级主门打坏。
+
+## 2026-05-27 Follow-up Findings 6
+
+- `platform.sync` 的 Linux futex path 之前虽然已经依赖 `linux.ffi` 拥有 syscall binding、
+  futex constants 与 errno helper，但 consumer 仍自己拼 `linux_syscall + FUTEX_* + timespec`，
+  所以 helper ownership 还没像 Windows 那样完全收口。
+- 这轮之后，`linux.ffi` 不只拥有 raw futex ABI truth，还继续拥有
+  `linux_futex_wait_i32`、`linux_futex_wake_one_i32`、`linux_futex_wake_all_i32`；Linux
+  futex opcode 组合、timeout `timespec` 组装与 errno 读取不再散落在 consumer。
+- `platform.sync` 的 Linux consumer 现在更接近“public contract + error mapping consumer”：
+  它继续保留 nil/value mismatch 检查和 `platform_posix_map_error`，但不再直接触碰 raw
+  `linux_syscall` / `LINUX_SYSCALL_FUTEX` / `FUTEX_*` 细节。
+- `test_platform_sync_host_ffi_surface` 现在同时冻结 Windows helper owner boundary 和 Linux
+  futex helper owner boundary，source-surface gate 比之前更接近真正的“host helper ownerization”
+  目标，而不只是“ABI declaration 在 ffi 里”。
+- focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这批
+  Linux futex helper 下沉没有引入 `platform.sync` 行为回归，也没有破坏仓库级验证面。

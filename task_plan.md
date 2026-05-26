@@ -6454,3 +6454,66 @@ Completed; verification passed.
 - 这批不重写 Linux futex 路径
 - 这批不改 `platform.sync` public API
 - 这批不声称新增 Windows runtime evidence；新增的是 Win64 compile-only + Linux 主门证据
+
+## Addendum: 2026-05-27 Platform Sync Linux Futex Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.sync` 的 Linux futex helper 从 consumer 实现层下沉到
+`nextpas.core.platform.linux.ffi`，让 Linux path 与刚收口的 Windows helper owner boundary
+保持同一形状。
+
+### Current Gap
+
+- `platform.sync` 虽然已经通过 `linux.ffi` 拥有 futex ABI declaration、syscall number、
+  `FUTEX_*` 常量和 errno helper，但 Linux address-wait path 仍在 consumer 里直接拼
+  `linux_syscall + FUTEX_* + timespec`。
+- `test_platform_sync_host_ffi_surface` 之前只冻结“使用 `linux.ffi`”这一级，还没有明确要求
+  futex wait/wake helper 本身归 `linux.ffi` owner。
+
+### Architecture Decision
+
+- `linux.ffi` 继续保留 raw futex ABI declaration 与 constants，并新增：
+  - `linux_futex_wait_i32`
+  - `linux_futex_wake_one_i32`
+  - `linux_futex_wake_all_i32`
+- `platform.sync` 继续保留 nextPas public contract 检查（例如 nil/value mismatch）与
+  `platform_posix_map_error` 映射，但不再直接写 raw futex syscall 拼装。
+- 这批不把 POSIX fallback bucket runtime 再抽走；范围只收紧 Linux futex helper boundary。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩 `test_platform_sync_host_ffi_surface`，先把 Linux futex helper owner boundary 打成 RED
+- [x] 在 `linux.ffi` 新增 futex wait/wake helper wrappers
+- [x] 让 `platform.sync` 的 Linux futex path 改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `linux.ffi must expose Linux futex wait helper for sync: linux_futex_wait_i32`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不重写 pthread mutex/rwlock/condvar path
+- 这批不改 `platform.sync` public API
+- 这批不声称新增 Linux futex semantic matrix 以外的平台 runtime evidence
