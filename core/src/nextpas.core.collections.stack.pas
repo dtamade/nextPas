@@ -11,6 +11,7 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
+  nextpas.core.collections.intf,
   nextpas.core.collections.vecdeque;
 
 type

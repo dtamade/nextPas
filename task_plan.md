@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform POSIX Clock/Sync Shared Helper Ownership；并行收口包含
+当前最新本轮为 Collections Interface Ownership Normalization；上一轮 platform 主线包括
+Platform POSIX Clock/Sync Shared Helper Ownership；
 Platform Thread Shared POSIX Helper Ownership；
 Platform Time Windows Math Helper Boundary；
 Platform Sync Windows Timeout Result FFI Ownership、
@@ -30,6 +31,63 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Collections Interface Ownership Normalization
+
+### Goal
+
+继续把从 `fafafa.core` 搬入的 collections 按 nextpas.core 三件套范式规整：
+
+- `ICollection` 与 `IGenericCollection<T>` 的真实接口定义进入 `collections.intf`
+- `collections.base` 不再拥有这些 interface definition
+- 现有 `TCollection` / `TGenericCollection<T>` 代码先保持在 base 内可编译，避免在当前
+  `TCollection` class-signature API 尚未改造前引入 `intf <-> abstract` 循环
+
+### Architecture Decision
+
+- 本轮先切接口 ownership，不强行物理搬迁 class skeleton。
+- 原因：当前接口契约大量返回/接收 `TCollection`；若直接把 class 搬入 `collections.abstract`，
+  `collections.intf` 必须反向引用 `abstract` 才能使用 `TCollection`，而 `abstract` 又必须引用
+  `intf` 来实现接口，形成不符合 `base <- intf <- implementation` 的循环。
+- 因此本轮让 concrete containers 显式依赖 `collections.intf`，并由具体容器类声明自己的 public
+  interface（如 `IVec<T>` / `IHashMap<K,V>` / `IBitSet`），继承自 `TCollection` 的方法继续满足接口。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_abstract`，要求 `ICollection` / `IGenericCollection<T>` 定义位于
+  `collections.intf` 且不在 `collections.base`
+- [x] 把 `ICollection` / `IGenericCollection<T>` 从 `base` 迁入 `intf`
+- [x] `TCollection` / `TGenericCollection<T>` 暂时取消直接 `implements` 迁出的接口，保持 base 无
+  `intf` 依赖
+- [x] 为 `bitset`、`circularbuffer`、`forward_list`、`list`、`priorityqueue`、`stack`、
+  `tree_set`、`treemap` 补显式 `collections.intf` 依赖
+- [x] focused collections tests 通过
+- [x] fresh `make -C core test`
+
+### Verification
+
+- RED:
+  - `make -C tests/nextpas.core.collections/test_abstract clean test`
+    初始失败在 `ICollection interface definition should live in collections.intf`。
+- Focused GREEN:
+  - `make -C tests/nextpas.core.collections/test_abstract clean test`
+  - `make -C tests/nextpas.core.collections/test_facade clean test`
+  - `make -C tests/nextpas.core.collections/test_vec clean test`
+  - `make -C tests/nextpas.core.collections/test_deque clean test`
+  - `make -C tests/nextpas.core.collections/test_hashmap clean test`
+  - `make -C tests/nextpas.core.collections/test_hashset clean test`
+- Full:
+  - fresh `make -C core test` 输出 `All tests passed.`
+
+### Non-goals
+
+- 本轮不重写 `TCollection` class API 中仍使用 `TCollection` 的参数/返回类型。
+- 本轮不把 `TCollection` / `TGenericCollection<T>` 强搬进 `collections.abstract`；下一步应先设计并
+  测试 class API 与 interface API 的过渡边界，再做物理迁移。
 
 ## Addendum: 2026-05-27 Platform POSIX Clock/Sync Shared Helper Ownership
 

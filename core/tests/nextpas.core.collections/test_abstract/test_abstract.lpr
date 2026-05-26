@@ -81,10 +81,33 @@ begin
     'collections.base should not own IGrowthStrategy interface definition');
 end;
 
+procedure TestCollectionInterfacesLiveInIntf;
+var
+  LBaseSource: string;
+  LIntfSource: string;
+begin
+  LBaseSource := ReadSourceFile(ResolveSourcePath(
+    '../../../src/nextpas.core.collections.base.pas',
+    'core/src/nextpas.core.collections.base.pas'));
+  LIntfSource := ReadSourceFile(ResolveSourcePath(
+    '../../../src/nextpas.core.collections.intf.pas',
+    'core/src/nextpas.core.collections.intf.pas'));
+
+  Check(Pos('ICollection = interface', LIntfSource) > 0,
+    'ICollection interface definition should live in collections.intf');
+  Check(Pos('ICollection = interface', LBaseSource) = 0,
+    'collections.base should not own ICollection interface definition');
+  Check(Pos('generic IGenericCollection<T> = interface', LIntfSource) > 0,
+    'IGenericCollection<T> interface definition should live in collections.intf');
+  Check(Pos('generic IGenericCollection<T> = interface', LBaseSource) = 0,
+    'collections.base should not own IGenericCollection<T> interface definition');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.abstract');
   T.Run('exports collection skeleton', @TestAbstractExportsCollectionSkeleton);
   T.Run('exports growth strategies', @TestAbstractExportsGrowthStrategies);
   T.Run('growth strategy interface lives in intf', @TestGrowthStrategyInterfaceLivesInIntf);
+  T.Run('collection interfaces live in intf', @TestCollectionInterfacesLiveInIntf);
   T.Summary;
 end.

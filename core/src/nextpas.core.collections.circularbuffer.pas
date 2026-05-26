@@ -9,7 +9,8 @@ interface
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.collections.base;
+  nextpas.core.collections.base,
+  nextpas.core.collections.intf;
 
 type
   {**

@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform POSIX clock/sync shared helper ownership；并行收口包含
+当前最新本轮为 collections interface ownership normalization；上一轮 platform 主线包括
+platform POSIX clock/sync shared helper ownership；
 platform thread shared POSIX helper ownership；
 platform time windows math helper boundary；
 platform sync windows timeout result ffi ownership、
@@ -19,6 +20,46 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (collections interface ownership normalization)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续按 `base <- intf <- implementation/abstract <- facade` 收拢 collections：把
+    `ICollection` / `IGenericCollection<T>` 的真实 interface ownership 从 `collections.base`
+    迁入 `collections.intf`。
+- Baseline:
+  - growth strategy 已经完成上一刀迁移：`IGrowthStrategy` 在 `intf`，实现策略在 `abstract`。
+  - `base` 仍同时拥有 interface 与 class skeleton；但 `TCollection` class API 又出现在 interface
+    signatures 中，直接搬 class 到 `abstract` 会迫使 `intf` 反向依赖 `abstract`。
+- Actions taken:
+  - 先扩 `test_abstract` 成 RED gate，要求 `ICollection` /
+    `IGenericCollection<T>` 的 interface definition 位于 `collections.intf` 且不在 `base`。
+  - 机械迁移两段 interface definition 到 `core/src/nextpas.core.collections.intf.pas`。
+  - `core/src/nextpas.core.collections.base.pas` 中的 `TCollection` /
+    `TGenericCollection<T>` 先取消直接声明实现迁出的接口，避免 base 引入 `intf`。
+  - `abstract` 的 `ICollection` re-export 改指向 `collections.intf`。
+  - 为直接定义 `ICollection` / `IGenericCollection<T>` 派生接口的子模块补显式
+    `nextpas.core.collections.intf` 依赖：`bitset`、`circularbuffer`、`forward_list`、
+    `list`、`priorityqueue`、`stack`、`tree_set`、`treemap`。
+- Verification:
+  - RED:
+    - `make -C tests/nextpas.core.collections/test_abstract clean test`
+      初始失败在 `ICollection interface definition should live in collections.intf`。
+  - Focused GREEN:
+    - `make -C tests/nextpas.core.collections/test_abstract clean test`
+    - `make -C tests/nextpas.core.collections/test_facade clean test`
+    - `make -C tests/nextpas.core.collections/test_vec clean test`
+    - `make -C tests/nextpas.core.collections/test_deque clean test`
+    - `make -C tests/nextpas.core.collections/test_hashmap clean test`
+    - `make -C tests/nextpas.core.collections/test_hashset clean test`
+  - Full:
+    - fresh `make -C core test` 输出 `All tests passed.`
+- Review:
+  - 这批没有简化 fafafa.core 的容器实现；只是把接口 ownership 切回 nextpas.core 的模块范式。
+  - 下一步要处理的是 class skeleton ownership：先把 public interface contract 中对 `TCollection`
+    class 的耦合设计出兼容过渡，再把 `TCollection` / `TGenericCollection<T>` 物理移向
+    `collections.abstract`。
 
 ## Session: 2026-05-27 (platform POSIX clock/sync shared helper ownership)
 

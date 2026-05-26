@@ -9,6 +9,7 @@ uses
   TypInfo,
   nextpas.core.base,
   nextpas.core.collections.base,
+  nextpas.core.collections.intf,
   nextpas.core.collections.element_manager,
   nextpas.core.collections.rbset,
   nextpas.core.mem.allocator;

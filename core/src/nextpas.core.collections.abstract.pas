@@ -9,7 +9,7 @@ uses
   nextpas.core.collections.intf;
 
 type
-  ICollection = nextpas.core.collections.base.ICollection;
+  ICollection = nextpas.core.collections.intf.ICollection;
 
   TCollection = nextpas.core.collections.base.TCollection;
   TCollectionClass = nextpas.core.collections.base.TCollectionClass;

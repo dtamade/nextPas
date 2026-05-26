@@ -10,7 +10,8 @@ uses
   SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.base;
+  nextpas.core.collections.base,
+  nextpas.core.collections.intf;
 
 type
   {**

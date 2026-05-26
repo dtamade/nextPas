@@ -7,12 +7,18 @@
 - 外部审查报告要求优先关闭 `P0` 验证失真，再关闭 `P1` resolver correctness 问题。
 - 当前阶段的表述必须诚实：
   已经落地的能力可以明确写，仍然 host-backed 或尚未实现的部分不能包装成已完成。
+- Collections 迁移按用户要求以 `fafafa.core` 搬入代码为基础继续重构；不能用自写简化版替代原实现。
 
 ## Research Findings
 
 - platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
   `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
   platform 模块成果混入。
+- `ICollection` 与 `IGenericCollection<T>` 的真实 interface definition 已迁入
+  `nextpas.core.collections.intf`；`collections.base` 不再拥有这些接口定义。
+- 当前不能直接把 `TCollection` / `TGenericCollection<T>` 强搬到 `collections.abstract`：现有
+  interface contracts 大量引用 `TCollection` class，如果 `intf` 为此引用 `abstract`，会和
+  `abstract` 引用 `intf` 形成循环。下一步需要先设计 class API 与 interface API 的过渡边界。
 - 错误的 `codex/platform-time-extras-preview` 分支只存在于隔离 worktree，尚未合入 main；已删除
   该 worktree/branch，避免 stopwatch 示例污染 platform 收口。
 - `platform.time` 的 helper/no-FPC focused tests 原先位于 `core/tests/nextpas.core.time/`，
