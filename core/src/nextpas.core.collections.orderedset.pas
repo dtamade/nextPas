@@ -59,7 +59,6 @@ type
     type
       TInternalMap = specialize TLinkedHashMap<T, Boolean>;
       TPairType = specialize TPair<T, Boolean>;
-      TMapEntryType = specialize TMapEntry<T, Boolean>;
       TInternalArray = specialize TGenericArray<T>;
   private
     FMap: TInternalMap;

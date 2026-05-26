@@ -1587,7 +1587,6 @@ end;
 
 procedure THashSet.AppendToUnChecked(const aDst: TCollection);
 var
-  i: SizeUInt;
   dstSet: specialize THashSet<K>;
   mapIter: specialize TIter<specialize TMapEntry<K, Byte>>;
   entry: specialize TMapEntry<K, Byte>;

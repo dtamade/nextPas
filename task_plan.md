@@ -15,14 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 102 Platform API Boundary Cleanup；Batch 101 Object Release Poison Contract、
+当前最新已合并记录为 Batch 102 Object Release Invalid Boundary 与并行
+Platform API Boundary Cleanup；Batch 101 Object Release Poison Contract、
 Batch 100 Object Release Valid Boundary、Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
-## Addendum: 2026-05-26 Batch 102 Platform API Boundary Cleanup
+## Addendum: 2026-05-26 Batch 102 Object Release Invalid Boundary
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 101 后仍然无声 skip 的 magic mismatch 路径升级成
+compiler-owned invalid-release boundary：
+
+- `@np_object_free_release` 在 header magic mismatch 时必须进入 `invalid:` 块。
+- `invalid:` 块必须调用 `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)`，再汇合到
+  `done:`。
+- 本批只固定 invalid-release ABI 和后续 diagnostics/trap 挂载点，不实现 trap、不抛异常、不接
+  `core/` allocator，也不改变 object header layout。
+
+### Architecture Decision
+
+invalid-release helper 当前是 no-op boundary：
+
+- `raw` 仍是 object header 起点，`size` 和 `magic` 是已经读取出的 header 证据。
+- mismatch path 不再和 nil receiver 一样直接静默进入 `done:`；它先进入唯一的 invalid-release
+  hook，再回到 `done:`。
+- helper 不做额外 dereference，不 poison header，不调用 allocator free；后续 diagnostics/trap 只能从
+  这个边界继续演进。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：magic mismatch 必须进入 `invalid:` 并调用 invalid-release helper
+- [x] 实现 LLVM invalid-release boundary helper
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-header-magic-branch`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不修改或暂存 `core/`
+- 不改变 object header layout
+- 不实现 diagnostics / trap / exception failure path
+- 不实现完整 dynamic dispatch runtime
+
+## Addendum: 2026-05-26 Platform API Boundary Cleanup
 
 ### Goal
 
@@ -79,6 +130,7 @@ Completed; verification passed.
 - 不改 `nextpas.core.time` 的 public API
 - 不改 platform.time ABI/FFI 行为
 - 不声明非 Linux 主机 runtime 已验证
+
 
 ## Addendum: 2026-05-26 Batch 101 Object Release Poison Contract
 

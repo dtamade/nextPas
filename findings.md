@@ -44,6 +44,16 @@
 - platform.time 批次的 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 102 把 `@np_object_free_release` 的 magic mismatch 路径推进成 compiler-owned
+  invalid-release boundary：非法 header 会进入 `invalid:`，调用
+  `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后再汇合到 `done:`。
+- Batch 102 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 新 focused RED 固定旧行为缺口：Batch 101 后的 mismatch path 仍直接跳 `done:`，因此
+  object-free focused test 失败在 `missing-object-free-release-header-magic-branch`。
+- 修正后 invalid-release helper 当前仍是 no-op；它只是 diagnostics/trap/future runtime policy 的
+  唯一挂载点，不是 allocator free、异常抛出、core allocator 接管或完整 validation runtime。
 - Batch 101 把 `@np_object_release_valid` 从 no-op boundary 推进成 valid release 后的 magic poison：
   helper 会定位 header offset 8 并写入 `0`，让重复释放同一 payload pointer 在下一次进入
   `@np_object_free_release` 时走 magic mismatch skip 路径。
