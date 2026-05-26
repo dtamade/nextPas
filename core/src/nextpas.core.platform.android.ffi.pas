@@ -16,6 +16,7 @@ const
   PLATFORM_POSIX_ETIMEDOUT = 110;
 
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno';
+function gettid: Int32; cdecl; external 'c' name 'gettid';
 
 implementation
 

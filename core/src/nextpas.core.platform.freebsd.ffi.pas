@@ -16,6 +16,7 @@ const
   PLATFORM_POSIX_ETIMEDOUT = 60;
 
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
+function pthread_getthreadid_np: Int32; cdecl; external 'pthread' name 'pthread_getthreadid_np';
 
 implementation
 

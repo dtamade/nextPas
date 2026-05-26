@@ -6,6 +6,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.testing,
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.ffi,{$ENDIF}
   nextpas.core.platform.thread;
 
 var
@@ -115,6 +116,10 @@ var
 begin
   LId := platform_thread_id;
   Check(LId <> 0, 'thread_id must be non-zero');
+  CheckEqual(LId, platform_thread_id, 'thread_id must be stable');
+  {$IFDEF NEXTPAS_LINUX}
+  CheckEqual(UInt64(UInt32(gettid)), LId, 'thread_id matches Linux native tid');
+  {$ENDIF}
 end;
 
 procedure TestThreadSelfToken;
@@ -123,7 +128,7 @@ var
 begin
   LSelf := platform_thread_self;
   Check(LSelf <> 0, 'thread self token must be non-zero');
-  CheckEqual(UInt64(platform_thread_id), UInt64(LSelf), 'self token matches current thread id');
+  CheckEqual(UInt64(LSelf), UInt64(platform_thread_self), 'self token is stable for current thread');
 end;
 
 procedure TestCpuCount;

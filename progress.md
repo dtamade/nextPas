@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform FFI owner boundary guard；并行收口包含
-platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
+当前最新本轮为 platform thread native thread id host ffi hardening；并行收口包含
+platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
 Batch 103 object release
@@ -15,6 +15,57 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.thread native thread id host ffi hardening)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform_thread_id` 从“Unix 下把 `pthread_self` 强转一下”收紧成按 host 走 native thread id ABI
+    的 L0 契约，同时把这批 surface 冻进 focused gate。
+- Baseline:
+  - `platform.thread` 已经脱离 FPC 平台单元，但 `platform_thread_id` 在 Unix 路径仍等同于
+    `UInt64(PtrUInt(pthread_self))`。
+  - `platform_thread_self` 已经被明确定义为 unowned token，所以继续把它和 integer thread id
+    混为一谈，会让 Darwin / FreeBSD 这类非整数 `pthread_t` 平台的语义过于含糊。
+- Actions taken:
+  - RED 先落在 focused tests：
+    - `test_platform_thread` 在 Linux 主机上改为要求 `platform_thread_id = gettid`
+    - 新增 `test_platform_thread_host_ffi_surface/`，固定 Linux/Android/macOS/FreeBSD
+      各自 native thread id ABI token 必须存在，且 `platform.thread` 必须消费这些 token
+  - `core/src/nextpas.core.platform.linux.ffi.pas` 与
+    `core/src/nextpas.core.platform.android.ffi.pas` 新增 `gettid`。
+  - `core/src/nextpas.core.platform.darwin.ffi.pas` 新增 `pthread_threadid_np`。
+  - `core/src/nextpas.core.platform.freebsd.ffi.pas` 新增 `pthread_getthreadid_np`。
+  - `core/src/nextpas.core.platform.thread.pas` 现在按 target 选择 host-native thread id ABI；
+    generic Unix fallback 才继续走 `pthread_self` cast。
+  - `core/docs/design-conventions.md` 明确 `platform_thread_id` 是 host-native integer id，
+    不要求与 `platform_thread_self` 同值。
+  - `build/verify_local.sh` 已接入新的
+    `core-platform-thread-host-ffi-surface-check` focused gate，并把
+    `corePlatformThreadHostFfiSurfaceCheck` 写进 final envelope。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+      初始失败在 `Identifier not found "gettid"`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在 `linux.ffi must expose Linux native thread id ABI: function gettid`。
+  - Focused GREEN:
+    - `test_platform_thread` 8/8 pass
+    - `test_platform_thread_host_ffi_surface` 1/1 pass
+    - `test_platform_thread_no_fpc_units` 1/1 pass
+    - `test_platform_thread_l0_boundary` 3/3 pass
+  - Aggregate:
+    - fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出
+      `core-platform-thread-host-ffi-surface-check=pass`、
+      `corePlatformThreadHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.thread` 的 thread id 契约从“Linux 上大概率能用”推进成了“host-owned ABI 更诚实”。
+  - 新增 gate 已正式进入 `verify-local` envelope，后续这条 ABI owner 关系不容易再悄悄退化。
+  - 下一步更值得做的是继续评估 Darwin / FreeBSD / Android 的 compile/runtime matrix 证据，而不只停在
+    source-surface。
 
 ## Session: 2026-05-27 (platform FFI owner boundary guard)
 

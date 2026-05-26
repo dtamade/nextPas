@@ -23,6 +23,7 @@ const
 
 function mach_absolute_time: UInt64; cdecl; external 'c' name 'mach_absolute_time';
 function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; external 'c' name 'mach_timebase_info';
+function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 
 implementation

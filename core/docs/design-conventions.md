@@ -804,6 +804,9 @@ yield/sleep、TLS key 与 CPU count。它不提供任务调度、线程池、cha
 `platform_thread_join` 或 `platform_thread_detach` 完成生命周期收口的 owned handle。
 `platform_thread_self` 返回 `TPlatformThreadToken`，这是当前线程的 unowned identity token，
 不能传给 join/detach，也不能假定它与平台原生可等待 handle 同形。
+`platform_thread_id` 返回宿主提供的 native thread id（例如 Linux/Android `gettid`、macOS
+`pthread_threadid_np`、FreeBSD `pthread_getthreadid_np`）；它是稳定的整数标识，但不要求与
+`platform_thread_self` 同值，也不能把它当作 join/detach handle 使用。
 
 `ThreadPool`、`TChannel`、`Future`、Scheduler、Task 等抽象属于 L1 `nextpas.core.thread`
 或更高层模块。platform.thread 的测试、示例、基准只能验证 L0 线程 API 本身，不能把这些 L1

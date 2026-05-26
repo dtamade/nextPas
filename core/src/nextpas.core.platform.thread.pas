@@ -102,7 +102,21 @@ end;
 
 function platform_thread_id: UInt64;
 begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := UInt64(UInt32(gettid));
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := UInt64(UInt32(gettid));
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := 0;
+  if pthread_threadid_np(nil, @Result) <> 0 then
+    Result := UInt64(platform_thread_self);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := UInt64(UInt32(pthread_getthreadid_np));
+  if Result = 0 then
+    Result := UInt64(platform_thread_self);
+  {$ELSE}
   Result := UInt64(PtrUInt(pthread_self));
+  {$ENDIF}
 end;
 
 procedure platform_thread_yield;

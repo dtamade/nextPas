@@ -39,6 +39,19 @@
 - `platform.time`、`platform.thread`、`platform.sync` 现在都会按 target 选择 host-owned FFI unit；
   generic Unix 分支显式走 `nextpas.core.platform.unix.ffi`，不再从 shared `posix.ffi`
   读取伪通用的 host token。
+- `platform_thread_self` 与 `platform_thread_id` 不是同一个契约：前者是 unowned current-thread
+  token，后者应该尽可能返回宿主 native integer thread id。继续在所有 Unix 平台上把
+  `pthread_self` 强转成 `UInt64` 会把 Darwin / FreeBSD 这类非整数 `pthread_t` 的语义糊成一层。
+- 这批已把 host-native thread id ABI 继续沉进各自 FFI：
+  Linux/Android 走 `gettid`，macOS 走 `pthread_threadid_np`，FreeBSD 走
+  `pthread_getthreadid_np`，generic Unix 才保留 `pthread_self` fallback。
+- 新增 `core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface/`，把
+  host-native thread id declarations 与 `platform.thread` 的消费关系冻结成 source-surface gate；
+  Linux behavior test 也已从“self token == thread id”改成 “`platform_thread_id` 对齐宿主 `gettid`”。
+- fresh `bash build/verify_local.sh` 已再次通过，并把
+  `core-platform-thread-host-ffi-surface-check=pass` /
+  `corePlatformThreadHostFfiSurfaceCheck":"pass"` 纳入 official verification envelope；因此这批
+  不只是局部测试过，而是已经进入仓库级回归面。
 - `platform.sync` 的 Windows ABI 现在也并入统一 `nextpas.core.platform.windows.ffi`：
   `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 与 `GetLastError` 不再留在
   `nextpas.core.platform.sync.windows.ffi` 这种按模块切碎的 FFI 单元里。

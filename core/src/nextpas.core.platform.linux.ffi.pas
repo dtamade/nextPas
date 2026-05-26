@@ -28,6 +28,7 @@ const
   {$ENDIF}
 
 function linux_syscall(ANumber: PtrInt; A1: PtrUInt; A2: PtrUInt; A3: PtrUInt; A4: PtrUInt; A5: PtrUInt; A6: PtrUInt): PtrInt; cdecl; external 'c' name 'syscall';
+function gettid: Int32; cdecl; external 'c' name 'gettid';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
 
 implementation
