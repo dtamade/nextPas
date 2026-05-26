@@ -115,6 +115,7 @@ sema 必须能在编译期求值以下常量表达式：
 - `sema.type-mismatch`：类型不匹配
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
+- `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧
 - `sema.circular-dependency`：循环依赖
 - `sema.unresolved-unit`：unit 无法解析
 - `sema.duplicate-unit-import`：重复导入同一 unit

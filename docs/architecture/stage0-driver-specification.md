@@ -361,8 +361,8 @@ rename preflight 或 completion。
   `runtime-contract-count` 与 `typed-hir-root-name`
 - semantic failure 要先进统一 diagnostics sink，再以
   `failure-kind=semantic-analysis-failed` 退出
-- 当前 failure projection 至少要能暴露 `diagnostic-code=sema.duplicate-declaration`
-  与 `diagnostic-phase=sema`
+- 当前 failure projection 至少要能暴露 `diagnostic-code=sema.duplicate-declaration` /
+  `sema.ambiguous-overload` 与 `diagnostic-phase=sema`
 
 进入 `Batch 7` 之后，这条 build path 继续往前接的最小真实落点是 `MIR` / backend plan /
 toolchain binding skeleton，而不是继续让 `Typed HIR` 之后的 truth 停留在文档里：

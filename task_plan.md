@@ -15,6 +15,65 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 75 Bare Ambiguous Overload Diagnostics
+
+### Goal
+
+把 Batch 74 后仍然“静默不绑定”的第一条 overload 失败边界接进结构化 diagnostics：
+当 bare procedure/function call 在同一优先级内存在同名同参数个数 callable 候选，但当前
+compact argument signature 不能唯一选出 target 时，发出 `sema.ambiguous-overload`。
+
+本批次新增并冻结：
+
+- `LookupCallBindingDeclaration(...)` 在 root/imported 各自优先级内报告
+  `ambiguous-overload` resolution failure，而不是只返回“未绑定”。
+- `SeedCallBindingsInNode(...)` 只在明确的 ambiguous overload failure 上发
+  `sema.ambiguous-overload`，保持普通 unresolved call / builtin / future callable path deferred。
+- `build/verify_local.sh` 新增 `ambiguous-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `ambiguousOverloadCheck`。
+
+### Architecture Decision
+
+这是 semantic diagnostics 的第一条 overload 失败切片，不是完整 overload resolver：
+
+- 只覆盖 bare procedure/function call，不覆盖 member-call overload ambiguity。
+- root callable 仍优先；root 明确 ambiguous 时不会回落 imported 代偿。
+- 同名同 arity 候选存在但 signature match count 为 0 时仍保持 deferred，避免把缺失的
+  conversion/ranking/内建函数能力误报成 ambiguity。
+- 不新增 implicit conversion、default parameter、var/out compatibility、visibility checking 或
+  complete Pascal overload ranking。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 imported `HelperA.Pick(Integer)` / `HelperB.Pick(Integer)` ambiguous diagnostic
+      focused regression
+- [x] 在 bare call lookup 中带出 `ambiguous-overload` failure kind
+- [x] 在 semantic analyzer 中发 `sema.ambiguous-overload`
+- [x] 新增 `tests/fixtures/ambiguous_overload` 与 `ambiguous-overload-check`
+- [x] 同步 semantic model / sema / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 已失败在 `semantic-call-bindings-failure=missing-ambiguous-overload-diagnostic`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `ambiguous-overload-check=pass`、
+  `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 member-call ambiguous overload diagnostics
+- 不实现 no-matching-overload / unresolved callable diagnostics
+- 不把全部 unresolved call 统一报错
+- 不实现 implicit conversion / default parameter / var-out compatibility / visibility checking
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 74 Bare Typed Call Binding
 
 ### Goal

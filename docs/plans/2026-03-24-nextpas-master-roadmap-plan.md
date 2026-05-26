@@ -42,6 +42,7 @@
   `stage0DoctorInvalidArgumentsCheck=pass`、
   `stage0QueryCheck=pass`、`stage0QueryBindingsCheck=pass`、
   `stage0QueryDefinitionsCheck=pass`、
+  `stage0QueryCallBindingsCheck=pass`、
   `stage0QueryMemberCallBindingsCheck=pass`、
   `stage0QueryInvalidArgumentsCheck=pass`、
   `stage0PkgCheck=pass`、`stage0PkgPlanCheck=pass`、
@@ -58,7 +59,8 @@
   `stage0PkgGraphCheck=pass`、`stage0PkgGraphInvalidArgumentsCheck=pass`、
   `stage0PkgMalformedDependenciesCheck=pass`、
   `stage0PkgInvalidArgumentsCheck=pass`、
-  `stage0EnvInvalidArgumentsCheck=pass`、`multipleMissingUnitsCheck=pass` 与
+  `stage0EnvInvalidArgumentsCheck=pass`、`ambiguousOverloadCheck=pass`、
+  `multipleMissingUnitsCheck=pass` 与
   `verify-local=pass` 已继续转绿；`env status`
   readiness evidence 已投影 `environmentStatus`、`toolchainBindingStatus` 与
   `distributionStatus`，`env use` 已把 workspace-local preferred binding selection 写入
@@ -98,9 +100,9 @@
   `pkg inspect / pkg graph` 覆盖 workspace descriptor root 解析到 member package 的 ready 路径，declared
   dependencies fixture 也已让 `doctor` / `pkg inspect / pkg plan / pkg graph` 同时冻结 package manifest root 与
   workspace descriptor root + member package 的 dependency intent 投影。
-- 当前 rolling window 已推进到 Batch 69：self/imported member receiver binding。
+- 当前 rolling window 已推进到 Batch 75：bare ambiguous overload diagnostics。
 - 这份计划从现在起接管”当前主线的批次顺序”。
-- `Batch 1` 到 `Batch 69` 已完成。
+- `Batch 1` 到 `Batch 75` 已完成。
 - 当前滚动批次继续建立在已经存在的
   nextPas-native `rtl/core/base` + `rtl/core/mem` + `rtl/core/text` foundation，以及 refined
   `TargetFacts` / sysroot / LLVM / C interop control plane 之上；近期优先级继续保持
@@ -177,6 +179,9 @@
   同步公开 `paramSignature` / `targetParamSignature`。`Batch 74` 把同一条 compact typed relation
   复用到 bare procedure/function call binding：root callable 继续优先，imported callable 继续要求
   对应优先级内唯一；同名同 arity 多候选时按当前可推断 argument signature 选择唯一 target。
+  `Batch 75` 把 bare callable overload 的第一条失败边界接进 structured diagnostics：同优先级
+  imported callable 同名同 arity 多候选且无法唯一选择时发 `sema.ambiguous-overload`，同时保持
+  no-match / builtin / future callable path deferred，避免把尚未实现的 resolver 能力误报成错误。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

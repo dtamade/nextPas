@@ -84,7 +84,8 @@ type
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;
       const AArgCount: LongInt; const AArgSignature: string;
-      const AHasArgSignature: Boolean; out ABody: TGreenNode;
+      const AHasArgSignature: Boolean; out AResolutionFailureKind: string;
+      out ABody: TGreenNode;
       out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
@@ -825,6 +826,7 @@ function TSemanticAnalyzer.LookupCallBindingDeclaration(
   const AArgCount: LongInt;
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
+  out AResolutionFailureKind: string;
   out ABody: TGreenNode;
   out ADecl: TGreenNode;
   out AOwnerUnitId: string
@@ -844,6 +846,7 @@ begin
   ABody := nil;
   ADecl := nil;
   AOwnerUnitId := '';
+  AResolutionFailureKind := '';
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
   ImportedSignatureMatchCount := 0;
@@ -886,7 +889,12 @@ begin
   begin
     if RootMatchCount = 1 then
       RootSignatureMatchIndex := RootMatchIndex
-    else if (not AHasArgSignature) or (RootSignatureMatchCount <> 1) then
+    else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
+    begin
+      AResolutionFailureKind := 'ambiguous-overload';
+      Exit(False);
+    end
+    else if RootSignatureMatchCount = 0 then
       Exit(False);
 
     ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
@@ -895,9 +903,17 @@ begin
     Exit(True);
   end;
 
+  if ImportedMatchCount = 0 then
+    Exit(False);
+
   if ImportedMatchCount = 1 then
     ImportedSignatureMatchIndex := ImportedMatchIndex
-  else if (not AHasArgSignature) or (ImportedSignatureMatchCount <> 1) then
+  else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
+  begin
+    AResolutionFailureKind := 'ambiguous-overload';
+    Exit(False);
+  end
+  else if ImportedSignatureMatchCount = 0 then
     Exit(False);
 
   ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
@@ -1566,6 +1582,7 @@ var
   MethodClass: string;
   OwnerUnitId: string;
   QualifiedPos: LongInt;
+  ResolutionFailureKind: string;
 begin
   if ANode = nil then
     Exit;
@@ -1590,11 +1607,18 @@ begin
         CallArgumentCount(ANode),
         ArgSignature,
         HasArgSignature,
+        ResolutionFailureKind,
         BodyNode,
         DeclNode,
         OwnerUnitId
       ) then
-        RegisterCallBinding(ANode, DeclNode, OwnerUnitId);
+        RegisterCallBinding(ANode, DeclNode, OwnerUnitId)
+      else if SameText(ResolutionFailureKind, 'ambiguous-overload') then
+        EmitSemaError(
+          'sema.ambiguous-overload',
+          'ambiguous overload for "' + ANode.Text + '"',
+          ANode.ByteOffset
+        );
     end;
   end;
 

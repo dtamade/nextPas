@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 75 把 bare overload binding 的第一条可证明失败边界接进 structured diagnostics：
+  imported bare callable 同名同 arity 多候选且无法唯一选择时，`SeedCallBindingsInNode(...)`
+  会发出 `sema.ambiguous-overload`，model status 进入 `failure`，且不会注册 call binding。
+- `LookupCallBindingDeclaration(...)` 现在通过 `AResolutionFailureKind` 区分“普通未解析/暂不绑定”
+  和“ambiguous-overload”；root callable 仍优先，root 明确 ambiguous 时不会回落 imported。
+- 为避免过早把 future resolver 能力误判成错误，Batch 75 只在无 argument signature 或 signature
+  匹配数超过 1 的同名同 arity 多候选上报 ambiguity；signature match count 为 0 仍保持 deferred。
+- 新增 `ambiguous-overload-check`，用 `tests/fixtures/ambiguous_overload` 固定 stage0 failure
+  projection：`failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.ambiguous-overload`、
+  `diagnostic-phase=sema` 与 final envelope `ambiguousOverloadCheck=pass`。
 - Batch 74 把 Batch 73 的 compact typed argument relation 复用到 bare procedure/function call
   binding：`Pick(1)` 会绑定到 `Pick(Integer)` 的 `i` signature，`Pick(1 = 1)` 会绑定到
   `Pick(Boolean)` 的 `b` signature。

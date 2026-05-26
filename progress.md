@@ -3,6 +3,44 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 75 bare ambiguous overload diagnostics)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 74 后仍然静默 deferred 的第一条 overload failure 接进 structured diagnostics：
+    imported bare callable 同名同 arity 多候选且无法唯一选择时，发出
+    `sema.ambiguous-overload`。
+- Baseline:
+  - Batch 74 已能用 compact `ParamSignature` 在 bare call 同 arity overload 中唯一绑定
+    integer/boolean target。
+  - 当两个 imported units 都暴露 `Pick(Value: Integer)` 时，`Pick(1)` 仍只是无 binding，
+    没有进入 diagnostics sink，也不会让 stage0 failure projection 暴露语义原因。
+- Actions taken:
+  - 先写 focused RED，构造 `HelperA.Pick(Integer)` 与 `HelperB.Pick(Integer)`，
+    要求 root `Pick(1)` 触发 `sema.ambiguous-overload`，semantic model status 为 `failure`，
+    且不产生 call binding。
+  - `LookupCallBindingDeclaration(...)` 新增 `AResolutionFailureKind`，在 root/imported
+    同优先级同名同 arity 多候选且没有唯一 target 时返回 `ambiguous-overload`。
+  - `SeedCallBindingsInNode(...)` 只对 `ambiguous-overload` failure kind 发 semantic error，
+    其它 unresolved call 继续 deferred，避免误伤 builtins 或 future resolver path。
+  - 新增 `tests/fixtures/ambiguous_overload`，并把 `ambiguous-overload-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+  - 同步 semantic model / sema / stage0 developer docs，明确这是第一条 bare overload
+    ambiguity diagnostic，不是完整 resolver ranking。
+- Verification:
+  - RED: focused semantic test 已失败在
+    `semantic-call-bindings-failure=missing-ambiguous-overload-diagnostic`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `ambiguous-overload-check=pass`、
+    `semantic-call-bindings-check=pass`、`smoke-check=pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批没有把所有 unresolved call 变成错误；signature match count 为 0 仍保持 deferred。
+  - 复盘：这轮把“可证明 ambiguous”的 bare overload failure 接进统一 diagnostics/projection，
+    比继续扩大 binding happy path 更能提升 compiler-owned truth 的可解释性；下一步适合继续
+    member-call ambiguity 或 no-matching-overload 的结构化 diagnostics，但必须继续避免误伤
+    builtins 和未来 callable forms。
+
 ## Session: 2026-05-26 (Batch 74 bare typed call binding)
 
 - **Status:** completed

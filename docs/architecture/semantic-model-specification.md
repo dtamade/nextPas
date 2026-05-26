@@ -279,10 +279,12 @@ candidate collection
 - intrinsic-misuse
 - unit-cycle-related semantic failure
 
-当前真实落地的第一条 semantic failure baseline 是：
+当前真实落地的 semantic failure baseline 包括：
 
 - `sema.duplicate-declaration`
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
+- `sema.ambiguous-overload`
+  - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
 
 这里的重点不是今天就冻结完整 code 列表，而是先冻结“语义错误是结构化类别”的事实。
 
