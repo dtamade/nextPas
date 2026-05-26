@@ -186,7 +186,7 @@ begin
   if AState = nil then
     Exit;
 
-  if InterlockedDecrement(AState^.RefCount) = 0 then
+  if windows_atomic_decrement_i32(AState^.RefCount) = 0 then
     Dispose(AState);
 end;
 
@@ -212,7 +212,6 @@ end;
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 var
-  LId: DWORD;
   LState: PWindowsThreadState;
 begin
   AHandle := nil;
@@ -226,15 +225,13 @@ begin
   LState^.ReturnValue := nil;
   LState^.RefCount := 2;
 
-  LState^.Handle := CreateThread(nil, 0, @WindowsThreadEntry, LState, 0, @LId);
-  if LState^.Handle <> nil then
+  Result := windows_thread_create_handle(@WindowsThreadEntry, LState, LState^.Handle);
+  if Result = 0 then
   begin
     AHandle := TPlatformThreadHandle(LState);
-    Result := 0
   end
   else
   begin
-    Result := windows_last_error_i32;
     Dispose(LState);
   end;
 end;
@@ -248,19 +245,14 @@ begin
     Exit(-1);
 
   LState := PWindowsThreadState(AHandle);
-  if windows_wait_for_single_object_is_signaled(
-    WaitForSingleObject(LState^.Handle, INFINITE)) then
+  Result := windows_thread_wait_terminated(LState^.Handle);
+  if Result = 0 then
   begin
     ARetVal := LState^.ReturnValue;
-    if CloseHandle(LState^.Handle) then
-      Result := 0
-    else
-      Result := windows_last_error_i32;
+    Result := windows_thread_close_handle(LState^.Handle);
     LState^.Handle := nil;
     WindowsReleaseThreadState(LState);
   end
-  else
-    Result := windows_last_error_i32;
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
@@ -271,14 +263,12 @@ begin
     Exit(-1);
 
   LState := PWindowsThreadState(AHandle);
-  if CloseHandle(LState^.Handle) then
+  Result := windows_thread_close_handle(LState^.Handle);
+  if Result = 0 then
   begin
     LState^.Handle := nil;
     WindowsReleaseThreadState(LState);
-    Result := 0
-  end
-  else
-    Result := windows_last_error_i32;
+  end;
 end;
 
 function platform_thread_self: TPlatformThreadToken;
@@ -297,14 +287,8 @@ begin
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
-var
-  LMs: DWORD;
 begin
-  if ANanoseconds = 0 then
-    Exit;
-
-  LMs := windows_sleep_ns_to_ms(ANanoseconds);
-  Sleep(LMs);
+  windows_thread_sleep_ns(ANanoseconds);
 end;
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;

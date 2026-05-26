@@ -6388,6 +6388,74 @@ Completed; verification passed.
 - 这批不改 `platform.thread` public API
 - 这批不声称新增 Darwin / FreeBSD / Android runtime evidence
 
+## Addendum: 2026-05-27 Platform Thread Windows Lifecycle Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` 的 Windows handle lifecycle / sleep / atomic refcount helper
+从 consumer 实现层收回 `nextpas.core.platform.windows.ffi`，让 `platform.thread`
+更像 public contract consumer，而不是继续散落 raw WinAPI 调用。
+
+### Current Gap
+
+- `platform.thread` 虽然已经把 Windows wait/error、current-thread id、TLS、CPU count
+  等 helper 收回 host ffi owner，但 Windows 分支仍直接调用
+  `CreateThread`、`WaitForSingleObject`、`CloseHandle`、`Sleep` 与
+  `InterlockedDecrement`。
+- 这意味着 owned thread handle 的底层创建/等待/关闭语义，以及 thread state 的 atomic
+  refcount 细节，仍泄漏在 consumer 里。
+
+### Architecture Decision
+
+- `nextpas.core.platform.windows.ffi` 继续拥有 raw Windows thread lifecycle ABI truth，并新增：
+  - `windows_thread_create_handle`
+  - `windows_thread_wait_terminated`
+  - `windows_thread_close_handle`
+  - `windows_thread_sleep_ns`
+  - `windows_atomic_decrement_i32`
+- `platform.thread` 继续保留 `TPlatformThreadHandle` public contract、Windows thread state
+  record、join/detach 生命周期收口与返回值语义，但不再直接写 raw
+  `CreateThread` / `WaitForSingleObject` / `CloseHandle` / `Sleep` /
+  `InterlockedDecrement`。
+- 这批不改 public API，不重写整个 Windows state machine；范围只收紧 helper ownership。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 Windows lifecycle helper owner boundary 打成 RED
+- [x] 在 `windows.ffi` 新增 Windows thread lifecycle / sleep / atomic helper wrappers
+- [x] 让 `platform.thread` 的 Windows 分支改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `windows.ffi must expose Windows thread create helper: windows_thread_create_handle`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不改 `platform.thread` public API
+- 这批不引入 Windows runtime-only 证据；新增的是 Win64 compile-only + fresh 主门证明
+- 这批不顺手扩到 POSIX pthread lifecycle helper ownerization
+
 ## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
 
 ### Goal Node

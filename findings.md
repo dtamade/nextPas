@@ -1500,3 +1500,25 @@
   目标，而不只是“ABI declaration 在 ffi 里”。
 - focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这批
   Linux futex helper 下沉没有引入 `platform.sync` 行为回归，也没有破坏仓库级验证面。
+
+## 2026-05-27 Follow-up Findings 7
+
+- 当前 live truth 仍然要说清楚：`main` 已经承载多轮 platform ownerization 提交，但
+  `codex/platform-time-integration @ 02be065` 这个旧 worktree 还没有合入 `main`；当前收口的
+  是 `main` 上未提交的 `platform.thread` Windows lifecycle helper batch。
+- `platform.thread` 虽然已经把 wait/error、TLS、CPU count 等 helper 收进 host ffi owner，
+  但如果 consumer 还直接写 `CreateThread`、`WaitForSingleObject`、`CloseHandle`、`Sleep`、
+  `InterlockedDecrement`，那 Windows handle lifecycle / sleep / atomic refcount truth 仍未真正收口。
+- 这轮之后，`nextpas.core.platform.windows.ffi` 继续拥有
+  `windows_thread_create_handle`、`windows_thread_wait_terminated`、
+  `windows_thread_close_handle`、`windows_thread_sleep_ns`、
+  `windows_atomic_decrement_i32`；`platform.thread` 不再直接调用上述 raw WinAPI。
+- `platform.thread` 的 Windows consumer 现在更接近“public contract + lifecycle state
+  consumer”：它继续保留 thread state、join/detach 收口时机和返回值语义，但把 raw Windows
+  handle create/wait/close、sleep rounding 与 atomic refcount 细节都收回 host ffi owner。
+- `test_platform_thread_host_ffi_surface` 现在也把这条 owner boundary 冻成 source-surface
+  contract：既要求 helper 名称存在，也防回归 consumer 重新直接调用 raw
+  `CreateThread` / `WaitForSingleObject` / `CloseHandle` / `Sleep` /
+  `InterlockedDecrement`。
+- focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这批
+  Windows lifecycle helper 下沉没有破坏 `platform.thread` 行为或仓库级主门。

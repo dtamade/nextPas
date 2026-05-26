@@ -164,6 +164,16 @@ begin
     'windows.ffi must expose Windows TLS get helper');
   CheckTokenPresent(LWindowsSource, 'windows_cpu_count_i32',
     'windows.ffi must expose Windows CPU count helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_create_handle',
+    'windows.ffi must expose Windows thread create helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_wait_terminated',
+    'windows.ffi must expose Windows thread wait helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_close_handle',
+    'windows.ffi must expose Windows thread close helper');
+  CheckTokenPresent(LWindowsSource, 'windows_thread_sleep_ns',
+    'windows.ffi must expose Windows thread sleep helper');
+  CheckTokenPresent(LWindowsSource, 'windows_atomic_decrement_i32',
+    'windows.ffi must expose Windows atomic decrement helper');
 
   CheckTokenPresent(LThreadSource, 'function platform_thread_id',
     'platform.thread must continue to expose the thread id contract');
@@ -179,12 +189,6 @@ begin
     'platform.thread must use host-owned CPU count helper');
   Check(Pos('platform_errno_location^', LThreadSource) = 0,
     'platform.thread must not dereference errno storage directly in the consumer');
-  CheckTokenPresent(LThreadSource, 'windows_sleep_ns_to_ms',
-    'platform.thread must consume Windows sleep timeout conversion through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_last_error_i32',
-    'platform.thread must consume Windows last-error conversion through windows.ffi');
-  CheckTokenPresent(LThreadSource, 'windows_wait_for_single_object_is_signaled',
-    'platform.thread must consume Windows wait-result success semantics through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_current_thread_id_u64',
     'platform.thread must consume Windows current-thread id helper through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_thread_yield',
@@ -199,6 +203,16 @@ begin
     'platform.thread must consume Windows TLS get helper through windows.ffi');
   CheckTokenPresent(LThreadSource, 'windows_cpu_count_i32',
     'platform.thread must consume Windows CPU count helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_create_handle',
+    'platform.thread must consume Windows thread create helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_wait_terminated',
+    'platform.thread must consume Windows thread wait helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_close_handle',
+    'platform.thread must consume Windows thread close helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_thread_sleep_ns',
+    'platform.thread must consume Windows thread sleep helper through windows.ffi');
+  CheckTokenPresent(LThreadSource, 'windows_atomic_decrement_i32',
+    'platform.thread must consume Windows atomic decrement helper through windows.ffi');
   Check(Pos('getlasterror', LThreadSource) = 0,
     'platform.thread must not call GetLastError directly in the Windows consumer');
   Check(Pos('wait_object_0', LThreadSource) = 0,
@@ -219,6 +233,16 @@ begin
     'platform.thread must not call TlsGetValue directly in the Windows consumer');
   Check(Pos('getsysteminfo', LThreadSource) = 0,
     'platform.thread must not call GetSystemInfo directly in the Windows consumer');
+  Check(Pos('createthread', LThreadSource) = 0,
+    'platform.thread must not call CreateThread directly in the Windows consumer');
+  Check(Pos('waitforsingleobject', LThreadSource) = 0,
+    'platform.thread must not call WaitForSingleObject directly in the Windows consumer');
+  Check(Pos('closehandle', LThreadSource) = 0,
+    'platform.thread must not call CloseHandle directly in the Windows consumer');
+  Check(Pos('sleep(lms)', LThreadSource) = 0,
+    'platform.thread must not call Sleep directly in the Windows consumer');
+  Check(Pos('interlockeddecrement', LThreadSource) = 0,
+    'platform.thread must not call InterlockedDecrement directly in the Windows consumer');
   Check(Pos('pthread_self', LThreadSource) = 0,
     'platform.thread must not call pthread_self directly in the Unix consumer');
   Check(Pos('sysconf(', LThreadSource) = 0,

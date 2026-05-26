@@ -4865,3 +4865,34 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（Linux futex helper ownerization）：pass
 - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
 - `bash build/verify_local.sh`（platform.sync Linux futex helper ownerization batch）：pass
+
+### Phase 7: Platform Thread Windows Lifecycle Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先再次核对仓库真相：当前 batch 直接发生在 `main` 的 dirty worktree 上，历史
+    `codex/platform-time-integration @ 02be065` 仍未并入 `main`，不能把旧 worktree 的状态误记成
+    本批已经合并。
+  - 先把 `test_platform_thread_host_ffi_surface` 扩成新的 RED gate，要求
+    `windows.ffi` 暴露 `windows_thread_create_handle`、
+    `windows_thread_wait_terminated`、`windows_thread_close_handle`、
+    `windows_thread_sleep_ns`、`windows_atomic_decrement_i32`，同时禁止
+    `platform.thread` 再直接写 raw `CreateThread` / `WaitForSingleObject` /
+    `CloseHandle` / `Sleep` / `InterlockedDecrement`。
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增 Windows lifecycle / sleep / atomic
+    helper wrapper，把 raw WinAPI 调用与 last-error 投影继续收口回 host ffi owner。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Windows 分支改为消费这些 helper；
+    consumer 继续保留 thread state、join/detach 生命周期收口和返回值 contract，不再直接调用
+    raw WinAPI。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 Windows lifecycle helper owner boundary、旧 worktree 未合并真相与
+    fresh verification 证据写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`（Windows lifecycle helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（Windows lifecycle helper ownerization）：pass
+- `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass
+- `bash build/verify_local.sh`（platform.thread Windows lifecycle helper ownerization batch）：pass

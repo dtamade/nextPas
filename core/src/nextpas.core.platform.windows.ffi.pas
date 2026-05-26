@@ -70,6 +70,14 @@ function windows_wait_address_i32(
 function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
 function windows_wake_address_all(const AAddress: PInt32): Int32; inline;
 function windows_current_thread_id_u64: UInt64; inline;
+function windows_thread_create_handle(
+  const AStartAddress: TWinThreadStartRoutine;
+  const AParameter: Pointer;
+  out AHandle: HANDLE): Int32; inline;
+function windows_thread_wait_terminated(const AHandle: HANDLE): Int32; inline;
+function windows_thread_close_handle(const AHandle: HANDLE): Int32; inline;
+procedure windows_thread_sleep_ns(const ANanoseconds: UInt64); inline;
+function windows_atomic_decrement_i32(var AValue: Int32): Int32; inline;
 procedure windows_thread_yield; inline;
 function windows_tls_alloc_key(out AIndex: DWORD): Int32; inline;
 function windows_tls_free_key(const AIndex: DWORD): Int32; inline;
@@ -295,6 +303,55 @@ end;
 function windows_current_thread_id_u64: UInt64; inline;
 begin
   Result := UInt64(GetCurrentThreadId);
+end;
+
+function windows_thread_create_handle(
+  const AStartAddress: TWinThreadStartRoutine;
+  const AParameter: Pointer;
+  out AHandle: HANDLE): Int32; inline;
+var
+  LId: DWORD;
+begin
+  AHandle := nil;
+  LId := 0;
+  AHandle := CreateThread(nil, 0, AStartAddress, AParameter, 0, @LId);
+  if AHandle <> nil then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_thread_wait_terminated(const AHandle: HANDLE): Int32; inline;
+begin
+  if windows_wait_for_single_object_is_signaled(
+    WaitForSingleObject(AHandle, INFINITE)) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_thread_close_handle(const AHandle: HANDLE): Int32; inline;
+begin
+  if CloseHandle(AHandle) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+procedure windows_thread_sleep_ns(const ANanoseconds: UInt64); inline;
+var
+  LMs: DWORD;
+begin
+  if ANanoseconds = 0 then
+    Exit;
+
+  LMs := windows_sleep_ns_to_ms(ANanoseconds);
+  Sleep(LMs);
+end;
+
+function windows_atomic_decrement_i32(var AValue: Int32): Int32; inline;
+begin
+  Result := InterlockedDecrement(AValue);
 end;
 
 procedure windows_thread_yield; inline;

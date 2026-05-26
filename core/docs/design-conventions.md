@@ -875,6 +875,17 @@ yield 这类宿主 helper 也应尽量继续归各自 host ffi owner。像 Windo
 `sysconf(_SC_NPROCESSORS_ONLN)` 的选择与 fallback，不应继续散落在 `platform.thread`
 consumer 里。
 
+Windows 线程生命周期相关的 raw 宿主调用也应继续归
+`nextpas.core.platform.windows.ffi` owner。像 `CreateThread`、
+`WaitForSingleObject`、`CloseHandle`、`Sleep` 与 `InterlockedDecrement`
+这类 API，不应继续直接散落在 `platform.thread` consumer 里；优先由
+`windows_thread_create_handle`、`windows_thread_wait_terminated`、
+`windows_thread_close_handle`、`windows_thread_sleep_ns`、
+`windows_atomic_decrement_i32` 这类 host-owned helper 提供。`platform.thread`
+只继续保留 `TPlatformThreadHandle` 的 public contract、join/detach 收口时机、
+thread entry state 与返回值语义，而不重新承担 Windows handle lifecycle /
+sleep / atomic refcount 的 ABI truth。
+
 `ThreadPool`、`TChannel`、`Future`、Scheduler、Task 等抽象属于 L1 `nextpas.core.thread`
 或更高层模块。platform.thread 的测试、示例、基准只能验证 L0 线程 API 本身，不能把这些 L1
 并发抽象放进 `nextpas.core.platform.*` 命名空间。
