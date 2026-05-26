@@ -3,6 +3,68 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (platform.sync merge-preview closeout)
+
+- **Status:** completed
+- Objective:
+  - 将 `codex/platform-sync-hardening` 择优合并到基于最新 `main` 的
+    `codex/platform-sync-merge-preview`，在不触碰主 checkout 未提交工作的前提下完成收口验证。
+- Baseline:
+  - `main` 已前进到 source-backed `System/TObject`、`ICondVar`、Vec/interface allocator 等新提交。
+  - 主 checkout 仍有未提交同事工作，不能直接在主线合并。
+- Actions taken:
+  - 解决 `core/docs/design-conventions.md`、`task_plan.md`、`progress.md`、`findings.md` 冲突：
+    保留主线较新的 System/TObject 与 semantic 记录，同时补回 platform.sync 的硬规则与验证证据。
+  - 保留 platform.sync 分支的自有 POSIX/Linux/Windows FFI、RWLock read/write release split、
+    14 项接口行为测试、4 项布局测试、example、benchmark 与 official verify gate。
+  - 将 `linux.ffi` 中的 errno Pascal helper 改回纯 external ABI 声明，错误码读取放在
+    `platform.sync` 实现层，保持 FFI 文件职责干净。
+  - 补齐 merge 后主线新增测试项目的单独 Makefile：`atomic`、`hashmap`、`arena`、`pool`、`thread`。
+- Verification:
+  - `sh -n build/verify_local.sh`: pass。
+  - `git diff --check`: pass。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync test`:
+    14 total, 14 passed, 0 failed。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes test`:
+    4 total, 4 passed, 0 failed。
+  - `make -C core/examples/nextpas.core.platform.sync/platform_sync_basics run`: exit 0。
+  - `make -C core/benchmarks/nextpas.core.platform.sync/bench_platform_sync run`:
+    `platform-sync-bench-status=pass`。
+  - `make -C core test`: All tests passed。
+  - `make -C core examples`: All examples compiled。
+  - `make -C core benchmarks`: All benchmarks passed。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`。
+- Review:
+  - `platform.sync` 已从 FPC `Linux/PThreads/UnixType/BaseUnix/Syscall/Windows` 平台单元解耦；
+    剩余 `platform.time` / `platform.thread` 的 FPC 平台单元依赖是独立后续收口项。
+
+## Session: 2026-05-26 (platform.sync worktree-safe local verification)
+
+- **Status:** completed
+- Objective:
+  - 让 `build/verify_local.sh` 在 linked worktree 中也能作为官方 route-truth gate 通过，
+    避免 platform/core 收口分支因为硬编码主 checkout 路径无法合并。
+- Baseline:
+  - fresh `bash build/verify_local.sh` 已证明 stage0 smoke build 成功，但断言
+    `^workspace-root=.*/nextPas$` 导致 `missing-stage0-workspace-root`。
+  - 脚本里还存在多处 `.*/nextPas`、`/home/dtamade/projects/nextPas` 与旧的
+    `core-platform-sync: 7 total` summary。
+- Actions taken:
+  - 在脚本顶部新增 `escape_ere()`，集中派生 `REPO_ROOT`、workspace artifact/output、
+    distribution/runtime 等 literal 与 escaped regex pattern。
+  - 将 stage0 smoke、workspace model、explicit workspace envelope、invalid early failure、
+    env status 与 core text smoke 的硬编码路径改为当前 repo root 派生值。
+  - 将 `core-platform-sync-check` summary 更新为当前 14 项接口覆盖。
+- Verification:
+  - `sh -n build/verify_local.sh`: pass。
+  - 硬编码扫描：`rg '\.\*/nextPas|/home/dtamade/projects/nextPas|nextPas/bin|nextPas/lib|nextPas/share' build/verify_local.sh`
+    无命中。
+  - fresh `bash build/verify_local.sh`: pass，最终输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只调整验证脚本的路径契约和 platform sync summary，不改 compiler/core 行为。
+
 ## Session: 2026-05-26 (Batch 87 source-backed System/TObject truth)
 
 - **Status:** completed

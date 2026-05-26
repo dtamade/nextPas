@@ -122,12 +122,12 @@ end;
 
 procedure TRWLock.ReleaseRead;
 begin
-  platform_rwlock_unlock(FHandle);
+  platform_rwlock_rdunlock(FHandle);
 end;
 
 procedure TRWLock.ReleaseWrite;
 begin
-  platform_rwlock_unlock(FHandle);
+  platform_rwlock_wrunlock(FHandle);
 end;
 
 function TRWLock.ReadLock: ILockGuard;

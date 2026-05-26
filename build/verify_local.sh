@@ -13,6 +13,11 @@ esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+escape_ere() {
+  printf '%s' "$1" | sed 's/[][\\.^$*+?{}()|]/\\&/g'
+}
+
 VERIFY_TMP_ROOT="$REPO_ROOT/.sisyphus/tmp"
 mkdir -p "$VERIFY_TMP_ROOT"
 VERIFY_RUN_TMP_DIR=$(mktemp -d "$VERIFY_TMP_ROOT/verify-local.XXXXXX")
@@ -30,6 +35,22 @@ LEX_BENCH_MIN_MB_PER_SEC=5
 STAGE0_BINARY="$STAGE0_BUILD_DIR/nextpas"
 WORKSPACE_ARTIFACT_ROOT="$REPO_ROOT/.nextpas"
 HOST_FPC_CACHE_ROOT="$WORKSPACE_ARTIFACT_ROOT/cache/host-fpc/$TARGET_ID"
+WORKSPACE_OUTPUT_DIR="$WORKSPACE_ARTIFACT_ROOT/out/$TARGET_ID"
+DISTRIBUTION_BIN_DIR="$REPO_ROOT/bin"
+DISTRIBUTION_LIB_DIR="$REPO_ROOT/lib"
+DISTRIBUTION_SHARE_DIR="$REPO_ROOT/share"
+RUNTIME_ROOT="$DISTRIBUTION_LIB_DIR/nextpas/runtime/$TARGET_ID"
+RUNTIME_LIBC="$RUNTIME_ROOT/libc.so"
+REPO_ROOT_PATTERN=$(escape_ere "$REPO_ROOT")
+WORKSPACE_ARTIFACT_ROOT_PATTERN=$(escape_ere "$WORKSPACE_ARTIFACT_ROOT")
+WORKSPACE_OUTPUT_DIR_PATTERN=$(escape_ere "$WORKSPACE_OUTPUT_DIR")
+DISTRIBUTION_BIN_DIR_PATTERN=$(escape_ere "$DISTRIBUTION_BIN_DIR")
+DISTRIBUTION_LIB_DIR_PATTERN=$(escape_ere "$DISTRIBUTION_LIB_DIR")
+DISTRIBUTION_SHARE_DIR_PATTERN=$(escape_ere "$DISTRIBUTION_SHARE_DIR")
+RUNTIME_ROOT_PATTERN=$(escape_ere "$RUNTIME_ROOT")
+RUNTIME_LIBC_PATTERN=$(escape_ere "$RUNTIME_LIBC")
+REPO_WORKSPACE_ENVELOPE_PATTERN="\"workspaceRoot\":\"$REPO_ROOT_PATTERN\".*\"workspaceDiscoveryKind\":\"explicit-workspace-override\".*\"artifactRoot\":\"$WORKSPACE_ARTIFACT_ROOT_PATTERN\""
+REPO_WORKSPACE_OUTPUT_ENVELOPE_PATTERN="$REPO_WORKSPACE_ENVELOPE_PATTERN.*\"outputDir\":\"$WORKSPACE_OUTPUT_DIR_PATTERN\""
 PACKAGE_MANIFEST_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/package_manifest_source_root"
 PACKAGE_MANIFEST_ARTIFACT_ROOT="$PACKAGE_MANIFEST_FIXTURE_ROOT/.nextpas"
 PACKAGE_NO_SOURCE_ROOTS_FIXTURE_ROOT="$REPO_ROOT/tests/fixtures/package_manifest_no_source_roots"
@@ -231,6 +252,14 @@ CORE_TEXT_SMOKE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_text_smoke"
 CORE_TEXT_SMOKE_BINARY="$CORE_TEXT_SMOKE_BUILD_DIR/core_text_smoke"
 CORE_TIME_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_time_test"
 CORE_TIME_TEST_BINARY="$CORE_TIME_TEST_BUILD_DIR/test_time"
+CORE_PLATFORM_SYNC_TEST_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_test"
+CORE_PLATFORM_SYNC_TEST_BINARY="$CORE_PLATFORM_SYNC_TEST_BUILD_DIR/test_platform_sync"
+CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
+CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
+CORE_PLATFORM_SYNC_WIN64_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_win64"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -286,6 +315,9 @@ SOURCE_DIRECTORY_FALLBACK_WORKSPACE=$(mktemp -d)
 OUT_DIR_OVERRIDE_DIR=$(mktemp -d)
 ROOT_SOURCE_PRECEDENCE_DIR=$(mktemp -d)
 UNIT_ROOT_PRECEDENCE_DIR=$(mktemp -d)
+OUT_DIR_OVERRIDE_DIR_PATTERN=$(escape_ere "$OUT_DIR_OVERRIDE_DIR")
+ROOT_SOURCE_PRECEDENCE_DIR_PATTERN=$(escape_ere "$ROOT_SOURCE_PRECEDENCE_DIR")
+UNIT_ROOT_PRECEDENCE_DIR_PATTERN=$(escape_ere "$UNIT_ROOT_PRECEDENCE_DIR")
 INVALID_OUT_DIR_PATH=$(mktemp)
 INVALID_ARTIFACT_ROOT_WORKSPACE=$(mktemp -d)
 EXPLICIT_UNIT_ROOT_RUN_OUTPUT=$(mktemp)
@@ -479,6 +511,12 @@ cleanup() {
   rm -rf "$STAGE0_PKG_PLAN_MISSING_WORKSPACE"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -rf "$CORE_TEXT_SMOKE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
   rm -rf "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
@@ -698,10 +736,16 @@ require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
+require_path core/src/nextpas.core.platform.linux.ffi.pas
+require_path core/src/nextpas.core.platform.posix.ffi.pas
+require_path core/src/nextpas.core.platform.sync.pas
+require_path core/src/nextpas.core.platform.sync.windows.ffi.pas
 require_path core/src/nextpas.core.platform.time.pas
 require_path core/src/nextpas.core.time.base.pas
 require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
 require_path core/tests/nextpas.core.time/test_time/test_time.lpr
 require_path examples/smoke/hello_with_units.pas
 require_path examples/smoke/external_cdecl_smoke.pas
@@ -1033,10 +1077,10 @@ require_output_pattern '^tool-invocation-plan-ref=plan-build-linux-x86_64-.*-pri
 require_output_pattern '^tool-invocation-plan=.*"planKind":"tool-invocation"' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-plan'
 require_output_pattern '^tool-invocation-plan=.*"planFamily":"bootstrap-native-assemble-link"' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-plan-family'
 require_output_pattern '^tool-invocation-plan=.*"stepId":"host-fpc-emit-asm".*"stepId":"native-assemble".*"stepId":"native-link"' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-plan-step-id'
-require_output_pattern '^workspace-root=.*/nextPas$' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-workspace-root'
+require_output_literal "workspace-root=$REPO_ROOT" "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-workspace-root'
 require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-workspace-discovery-kind'
-require_output_pattern '^artifact-root=.*/nextPas/\.nextpas$' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-artifact-root'
-require_output_pattern '^output-dir=.*/nextPas/\.nextpas/out/linux-x86_64$' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-output-dir'
+require_output_literal "artifact-root=$WORKSPACE_ARTIFACT_ROOT" "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-artifact-root'
+require_output_literal "output-dir=$WORKSPACE_OUTPUT_DIR" "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-output-dir'
 require_output_pattern '^artifact=.*/\.nextpas/out/linux-x86_64/hello$' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-artifact-path'
 require_output_pattern '^backend-primary-artifact-path=.*/\.nextpas/out/linux-x86_64/hello$' "$STAGE0_SMOKE_OUTPUT" 'missing-backend-primary-artifact-path'
 require_output_pattern '^backend-artifacts=.*"path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.s".*"path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.o".*"path":".*/\.nextpas/out/linux-x86_64/hello"' "$STAGE0_SMOKE_OUTPUT" 'missing-backend-artifact-paths'
@@ -1044,7 +1088,7 @@ require_output_pattern '^tool-invocation-plan=.*"-st".*"-Aas".*"-FE.*/\.nextpas/
 require_output_pattern '^tool-invocation-plan=.*"inputs":\[\{"kind":"pascal-source","path":".*/examples/smoke/hello\.pas"\}\]' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-plan-inputs'
 require_output_pattern '^tool-invocation-plan=.*"workingDirectory":".*/\.nextpas/cache/backend/linux-x86_64"' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-working-directory'
 require_output_pattern '^tool-invocation-plan=.*"outputs":\[\{"kind":"assembly-text","path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.s"\},\{"kind":"linker-script","path":".*/\.nextpas/cache/backend/linux-x86_64/hello_link\.res"\}\].*"outputs":\[\{"kind":"object-file","path":".*/\.nextpas/cache/backend/linux-x86_64/hello\.o"\}\].*"outputs":\[\{"kind":"executable","path":".*/\.nextpas/out/linux-x86_64/hello"\}\]' "$STAGE0_SMOKE_OUTPUT" 'missing-tool-invocation-plan-outputs'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":".*/nextPas/\.nextpas/out/linux-x86_64"' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-workspace-envelope'
+require_output_pattern "^command-envelope=.*$REPO_WORKSPACE_OUTPUT_ENVELOPE_PATTERN" "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-workspace-envelope'
 require_output_pattern '^command-envelope=.*"diagnosticErrorCount":0.*"diagnosticWarningCount":0' "$STAGE0_SMOKE_OUTPUT" 'missing-diagnostics-count-envelope-fields'
 require_output_pattern '^command-envelope=.*"searchIndexStatus":"deferred".*"indexedSearchRootCount":0.*"searchIndexScanCount":0' "$STAGE0_SMOKE_OUTPUT" 'missing-search-index-envelope-fields'
 if grep -Eq '^workspace-descriptor-path=' "$STAGE0_SMOKE_OUTPUT"; then
@@ -3571,15 +3615,15 @@ require_output_pattern '^resolver-candidate-count-repeat=1$' "$TOOLCHAIN_CONTRAC
 require_output_pattern '^resolver-search-index-status-after=ready$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-resolver-search-index-status-after'
 require_output_pattern '^resolver-indexed-root-count-after=2$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-resolver-indexed-root-count-after'
 require_output_pattern '^resolver-search-index-scan-count-after-repeat=2$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-resolver-search-index-scan-count-after-repeat'
-require_output_pattern '^workspace-model-explicit-root=.*/nextPas$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-root'
+require_output_literal "workspace-model-explicit-root=$REPO_ROOT" "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-root'
 require_output_pattern '^workspace-model-explicit-discovery-kind=explicit-workspace-override$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-discovery-kind'
 require_output_pattern '^workspace-model-explicit-descriptor-path=$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-descriptor-path'
 require_output_pattern '^workspace-model-explicit-package-manifest-path=$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-package-manifest-path'
 require_output_pattern '^workspace-model-explicit-package-ref-count=0$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-package-ref-count'
 require_output_pattern '^workspace-model-explicit-source-root-count=0$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-source-root-count'
-require_output_pattern '^workspace-model-explicit-artifact-root=.*/nextPas/\.nextpas$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-artifact-root'
-require_output_pattern '^workspace-model-explicit-output-dir=.*/nextPas/\.nextpas/out/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-output-dir'
-require_output_pattern '^workspace-model-explicit-host-cache-root=.*/nextPas/\.nextpas/cache/host-fpc/linux-x86_64$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-host-cache-root'
+require_output_literal "workspace-model-explicit-artifact-root=$WORKSPACE_ARTIFACT_ROOT" "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-artifact-root'
+require_output_literal "workspace-model-explicit-output-dir=$WORKSPACE_OUTPUT_DIR" "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-output-dir'
+require_output_literal "workspace-model-explicit-host-cache-root=$HOST_FPC_CACHE_ROOT" "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-explicit-host-cache-root'
 require_output_pattern '^workspace-model-package-root=.*/tests/fixtures/package_manifest_source_root$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-package-root'
 require_output_pattern '^workspace-model-package-discovery-kind=nearest-package-manifest$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-package-discovery-kind'
 require_output_pattern '^workspace-model-package-package-manifest-path=.*/tests/fixtures/package_manifest_source_root/nextpas\.package\.toml$' "$TOOLCHAIN_CONTRACT_OUTPUT" 'missing-workspace-model-package-manifest-path'
@@ -3830,11 +3874,11 @@ require_output_pattern '"humanSummary":"toolchain.linker-exec-failed: compiler e
 printf 'linker-failure-attribution-check=pass\n'
 
 printf 'core-text-smoke-check=running\n'
-printf 'core-text-smoke-command=fpc -Fu/home/dtamade/projects/nextPas/rtl/core/base -Fu/home/dtamade/projects/nextPas/rtl/core/text tests/rtl/core_text_smoke.pas\n'
+printf 'core-text-smoke-command=fpc -Fu%s/rtl/core/base -Fu%s/rtl/core/text tests/rtl/core_text_smoke.pas\n' "$REPO_ROOT" "$REPO_ROOT"
 mkdir -p "$CORE_TEXT_SMOKE_BUILD_DIR"
 if ! fpc \
-  -Fu/home/dtamade/projects/nextPas/rtl/core/base \
-  -Fu/home/dtamade/projects/nextPas/rtl/core/text \
+  -Fu"$REPO_ROOT/rtl/core/base" \
+  -Fu"$REPO_ROOT/rtl/core/text" \
   -FU"$CORE_TEXT_SMOKE_BUILD_DIR" \
   -FE"$CORE_TEXT_SMOKE_BUILD_DIR" \
   tests/rtl/core_text_smoke.pas >"$CORE_TEXT_SMOKE_OUTPUT" 2>&1; then
@@ -3873,6 +3917,70 @@ fi
 cat "$CORE_TIME_TEST_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.time: 13 total, 13 passed, 0 failed ---$' "$CORE_TIME_TEST_OUTPUT" 'missing-core-time-pass-summary'
 printf 'core-time-check=pass\n'
+
+printf 'core-platform-sync-check=running\n'
+printf 'core-platform-sync-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_TEST_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  fail 'core-platform-sync-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_TEST_BINARY" >>"$CORE_PLATFORM_SYNC_TEST_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+  fail 'core-platform-sync-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync: 14 total, 14 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_TEST_OUTPUT" 'missing-core-platform-sync-pass-summary'
+printf 'core-platform-sync-check=pass\n'
+
+printf 'core-platform-sync-size-check=running\n'
+printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr" \
+  >"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  fail 'core-platform-sync-size-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_SIZE_BINARY" >>"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+  fail 'core-platform-sync-size-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
+printf 'core-platform-sync-size-check=pass\n'
+
+printf 'core-platform-sync-win64-check=running\n'
+if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
+  printf 'core-platform-sync-win64-command=fpc -Twin64 -Cn -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" "$REPO_ROOT"
+  mkdir -p "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
+  if ! fpc \
+    -Twin64 \
+    -Cn \
+    -Fi"$REPO_ROOT/core/src" \
+    -Fu"$REPO_ROOT/core/src" \
+    -FE"$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" \
+    -FU"$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR" \
+    "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+    >"$CORE_PLATFORM_SYNC_WIN64_OUTPUT" 2>&1; then
+    cat "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+    fail 'core-platform-sync-win64-build-failed'
+  fi
+  cat "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
+  printf 'core-platform-sync-win64-check=pass\n'
+else
+  printf 'core-platform-sync-win64-check=skip\n'
+fi
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)
@@ -4275,7 +4383,7 @@ require_output_pattern '^artifact=.*/\.nextpas/out/linux-x86_64/explicit_unit_ro
 require_output_pattern '^output-dir=.*/\.nextpas/out/linux-x86_64$' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-output-dir'
 require_output_pattern '^backend-primary-artifact-path=.*/\.nextpas/out/linux-x86_64/explicit_unit_root_smoke$' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-backend-artifact-path'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/tests/fixtures".*"-Fu.*/tests/fixtures/unit_roots".*"-Fu.*/units/linux-x86_64".*".*/tests/fixtures/explicit_unit_root_smoke\.pas"' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-argv'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":".*/nextPas/\.nextpas/out/linux-x86_64".*"artifact":".*/nextPas/\.nextpas/out/linux-x86_64/explicit_unit_root_smoke".*"searchPathCount":3' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-envelope'
+require_output_pattern "^command-envelope=.*$REPO_WORKSPACE_OUTPUT_ENVELOPE_PATTERN.*\"artifact\":\"$WORKSPACE_OUTPUT_DIR_PATTERN/explicit_unit_root_smoke\".*\"searchPathCount\":3" "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-envelope'
 require_output_pattern '^command-envelope=.*"searchIndexStatus":"partial".*"indexedSearchRootCount":2.*"searchIndexScanCount":2' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-envelope-search-index'
 require_output_pattern '^command-envelope=.*"searchPaths":\[\{"scopeName":"root-source".*"rootPath":".*/tests/fixtures"\},\{"scopeName":"explicit-unit-root".*"provenanceKind":"explicit-unit-root".*"rootPath":".*/tests/fixtures/unit_roots"\},\{"scopeName":"target-installed".*"rootPath":".*/units/linux-x86_64"\}\]' "$EXPLICIT_UNIT_ROOT_OUTPUT" 'missing-explicit-unit-root-envelope-search-paths'
 if grep -Eq '^workspace-descriptor-path=' "$EXPLICIT_UNIT_ROOT_OUTPUT"; then
@@ -4415,7 +4523,7 @@ require_output_pattern '^package-manifest-path=.*/tests/fixtures/package_manifes
 require_output_pattern '^output-dir=.*/\.nextpas/out/linux-x86_64$' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-output-dir'
 require_output_pattern '^artifact=.*/\.nextpas/out/linux-x86_64/package_manifest_source_precedence_smoke$' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-artifact-path'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/tests/fixtures/package_manifest_source_precedence/app".*"-Fu.*/tests/fixtures/package_manifest_source_precedence/src".*"-Fu.*/tests/fixtures/package_manifest_source_precedence/explicit".*"-Fu.*/units/linux-x86_64".*".*/tests/fixtures/package_manifest_source_precedence/app/package_manifest_source_precedence_smoke\.pas"' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-argv'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"packageManifestPath":".*/tests/fixtures/package_manifest_source_precedence/nextpas\.package\.toml".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":".*/nextPas/\.nextpas/out/linux-x86_64".*"artifact":".*/nextPas/\.nextpas/out/linux-x86_64/package_manifest_source_precedence_smoke".*"searchPathCount":4' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-envelope'
+require_output_pattern "^command-envelope=.*\"workspaceRoot\":\"$REPO_ROOT_PATTERN\".*\"workspaceDiscoveryKind\":\"explicit-workspace-override\".*\"packageManifestPath\":\".*/tests/fixtures/package_manifest_source_precedence/nextpas\\.package\\.toml\".*\"artifactRoot\":\"$WORKSPACE_ARTIFACT_ROOT_PATTERN\".*\"outputDir\":\"$WORKSPACE_OUTPUT_DIR_PATTERN\".*\"artifact\":\"$WORKSPACE_OUTPUT_DIR_PATTERN/package_manifest_source_precedence_smoke\".*\"searchPathCount\":4" "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-envelope'
 require_output_pattern '^command-envelope=.*"searchIndexStatus":"partial".*"indexedSearchRootCount":2.*"searchIndexScanCount":2' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-envelope-search-index'
 require_output_pattern '^command-envelope=.*"searchPaths":\[\{"scopeName":"root-source".*"rootPath":".*/tests/fixtures/package_manifest_source_precedence/app"\},\{"scopeName":"package-source-root".*"provenanceKind":"nearest-package-manifest-source-root".*"packageName":"tests\.package-manifest-source-precedence".*"manifestPath":".*/tests/fixtures/package_manifest_source_precedence/nextpas\.package\.toml".*"rootPath":".*/tests/fixtures/package_manifest_source_precedence/src"\},\{"scopeName":"explicit-unit-root".*"rootPath":".*/tests/fixtures/package_manifest_source_precedence/explicit"\},\{"scopeName":"target-installed".*"rootPath":".*/units/linux-x86_64"\}\]' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT" 'missing-package-manifest-source-precedence-envelope-search-paths'
 if grep -Eq '^workspace-descriptor-path=' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT"; then
@@ -4444,7 +4552,7 @@ require_output_pattern '^artifact='"$OUT_DIR_OVERRIDE_DIR"'/hello$' "$OUT_DIR_OV
 require_output_pattern '^output-dir='"$OUT_DIR_OVERRIDE_DIR"'$' "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-output-dir'
 require_output_pattern '^backend-primary-artifact-path='"$OUT_DIR_OVERRIDE_DIR"'/hello$' "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-backend-artifact-path'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/examples/smoke".*"-Fu.*/units/linux-x86_64".*".*/examples/smoke/hello\.pas"' "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-argv'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":"'"$OUT_DIR_OVERRIDE_DIR"'".*"artifact":"'"$OUT_DIR_OVERRIDE_DIR"'/hello".*"searchPathCount":2' "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-envelope'
+require_output_pattern "^command-envelope=.*$REPO_WORKSPACE_ENVELOPE_PATTERN.*\"outputDir\":\"$OUT_DIR_OVERRIDE_DIR_PATTERN\".*\"artifact\":\"$OUT_DIR_OVERRIDE_DIR_PATTERN/hello\".*\"searchPathCount\":2" "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-envelope'
 require_output_pattern '^command-envelope=.*"searchPaths":\[\{"scopeName":"root-source".*"rootPath":".*/examples/smoke"\},\{"scopeName":"target-installed".*"rootPath":".*/units/linux-x86_64"\}\]' "$OUT_DIR_OVERRIDE_OUTPUT" 'missing-out-dir-override-envelope-search-paths'
 if grep -Eq '^workspace-descriptor-path=' "$OUT_DIR_OVERRIDE_OUTPUT"; then
   fail 'unexpected-out-dir-override-workspace-descriptor-path'
@@ -4480,7 +4588,7 @@ require_output_pattern '^search-index-scan-count=1$' "$ROOT_SOURCE_PRECEDENCE_OU
 require_output_pattern '^artifact='"$ROOT_SOURCE_PRECEDENCE_DIR"'/root_source_precedence_smoke$' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-artifact-path'
 require_output_pattern '^output-dir='"$ROOT_SOURCE_PRECEDENCE_DIR"'$' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-output-dir'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/tests/fixtures/root_source_precedence".*"-Fu.*/tests/fixtures/root_source_precedence/explicit".*"-Fu.*/units/linux-x86_64".*".*/tests/fixtures/root_source_precedence/root_source_precedence_smoke\.pas"' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-argv'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":"'"$ROOT_SOURCE_PRECEDENCE_DIR"'".*"artifact":"'"$ROOT_SOURCE_PRECEDENCE_DIR"'/root_source_precedence_smoke".*"searchPathCount":3' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-envelope'
+require_output_pattern "^command-envelope=.*$REPO_WORKSPACE_ENVELOPE_PATTERN.*\"outputDir\":\"$ROOT_SOURCE_PRECEDENCE_DIR_PATTERN\".*\"artifact\":\"$ROOT_SOURCE_PRECEDENCE_DIR_PATTERN/root_source_precedence_smoke\".*\"searchPathCount\":3" "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-envelope'
 require_output_pattern '^command-envelope=.*"searchIndexStatus":"partial".*"indexedSearchRootCount":1.*"searchIndexScanCount":1' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-envelope-search-index'
 require_output_pattern '^command-envelope=.*"searchPaths":\[\{"scopeName":"root-source".*"rootPath":".*/tests/fixtures/root_source_precedence"\},\{"scopeName":"explicit-unit-root".*"provenanceKind":"explicit-unit-root".*"rootPath":".*/tests/fixtures/root_source_precedence/explicit"\},\{"scopeName":"target-installed".*"rootPath":".*/units/linux-x86_64"\}\]' "$ROOT_SOURCE_PRECEDENCE_OUTPUT" 'missing-root-source-precedence-envelope-search-paths'
 if grep -Eq '^workspace-descriptor-path=' "$ROOT_SOURCE_PRECEDENCE_OUTPUT"; then
@@ -4518,7 +4626,7 @@ require_output_pattern '^search-index-scan-count=2$' "$UNIT_ROOT_PRECEDENCE_OUTP
 require_output_pattern '^artifact='"$UNIT_ROOT_PRECEDENCE_DIR"'/unit_root_precedence_smoke$' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-artifact-path'
 require_output_pattern '^output-dir='"$UNIT_ROOT_PRECEDENCE_DIR"'$' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-output-dir'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/tests/fixtures/unit_root_precedence".*"-Fu.*/tests/fixtures/unit_root_precedence/explicit".*"-Fu.*/units/linux-x86_64".*".*/tests/fixtures/unit_root_precedence/unit_root_precedence_smoke\.pas"' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-argv'
-require_output_pattern '^command-envelope=.*"workspaceRoot":".*/nextPas".*"workspaceDiscoveryKind":"explicit-workspace-override".*"artifactRoot":".*/nextPas/\.nextpas".*"outputDir":"'"$UNIT_ROOT_PRECEDENCE_DIR"'".*"artifact":"'"$UNIT_ROOT_PRECEDENCE_DIR"'/unit_root_precedence_smoke".*"searchPathCount":3' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-envelope'
+require_output_pattern "^command-envelope=.*$REPO_WORKSPACE_ENVELOPE_PATTERN.*\"outputDir\":\"$UNIT_ROOT_PRECEDENCE_DIR_PATTERN\".*\"artifact\":\"$UNIT_ROOT_PRECEDENCE_DIR_PATTERN/unit_root_precedence_smoke\".*\"searchPathCount\":3" "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-envelope'
 require_output_pattern '^command-envelope=.*"searchIndexStatus":"partial".*"indexedSearchRootCount":2.*"searchIndexScanCount":2' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-envelope-search-index'
 require_output_pattern '^command-envelope=.*"searchPaths":\[\{"scopeName":"root-source".*"rootPath":".*/tests/fixtures/unit_root_precedence"\},\{"scopeName":"explicit-unit-root".*"provenanceKind":"explicit-unit-root".*"rootPath":".*/tests/fixtures/unit_root_precedence/explicit"\},\{"scopeName":"target-installed".*"rootPath":".*/units/linux-x86_64"\}\]' "$UNIT_ROOT_PRECEDENCE_OUTPUT" 'missing-unit-root-precedence-envelope-search-paths'
 if grep -Eq '^workspace-descriptor-path=' "$UNIT_ROOT_PRECEDENCE_OUTPUT"; then
@@ -4551,15 +4659,15 @@ fi
 cat "$INVALID_UNIT_ROOT_OUTPUT"
 require_output_pattern '^failure-kind=invalid-unit-root$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-failure-kind'
 require_output_pattern '^human-summary=invalid-unit-root: tests/fixtures/does-not-exist$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-human-summary'
-require_output_pattern '^workspace-root=.*/nextPas$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-root'
+require_output_literal "workspace-root=$REPO_ROOT" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-root'
 require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-discovery-kind'
-require_output_pattern '^artifact-root=.*/nextPas/\.nextpas$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-artifact-root'
-require_output_pattern '^output-dir=.*/nextPas/\.nextpas/out/linux-x86_64$' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-output-dir'
+require_output_literal "artifact-root=$WORKSPACE_ARTIFACT_ROOT" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-artifact-root'
+require_output_literal "output-dir=$WORKSPACE_OUTPUT_DIR" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-output-dir'
 require_output_pattern '"failureKind":"invalid-unit-root"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-envelope-field'
-require_output_pattern '"workspaceRoot":".*/nextPas"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-root-envelope-field'
+require_output_pattern "\"workspaceRoot\":\"$REPO_ROOT_PATTERN\"" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-root-envelope-field'
 require_output_pattern '"workspaceDiscoveryKind":"explicit-workspace-override"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-workspace-discovery-envelope-field'
-require_output_pattern '"artifactRoot":".*/nextPas/\.nextpas"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-artifact-root-envelope-field'
-require_output_pattern '"outputDir":".*/nextPas/\.nextpas/out/linux-x86_64"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-output-dir-envelope-field'
+require_output_pattern "\"artifactRoot\":\"$WORKSPACE_ARTIFACT_ROOT_PATTERN\"" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-artifact-root-envelope-field'
+require_output_pattern "\"outputDir\":\"$WORKSPACE_OUTPUT_DIR_PATTERN\"" "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-output-dir-envelope-field'
 require_output_pattern '"humanSummary":"invalid-unit-root: tests/fixtures/does-not-exist"' "$INVALID_UNIT_ROOT_OUTPUT" 'missing-invalid-unit-root-human-summary-envelope-field'
 if grep -Eq '^workspace-descriptor-path=' "$INVALID_UNIT_ROOT_OUTPUT"; then
   fail 'unexpected-invalid-unit-root-workspace-descriptor-path'
@@ -4584,14 +4692,14 @@ fi
 cat "$INVALID_OUT_DIR_OUTPUT"
 require_output_pattern '^failure-kind=invalid-out-dir$' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-failure-kind'
 require_output_pattern '^human-summary=invalid-out-dir: /tmp/' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-human-summary'
-require_output_pattern '^workspace-root=.*/nextPas$' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-root'
+require_output_literal "workspace-root=$REPO_ROOT" "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-root'
 require_output_pattern '^workspace-discovery-kind=explicit-workspace-override$' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-discovery-kind'
-require_output_pattern '^artifact-root=.*/nextPas/\.nextpas$' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-artifact-root'
+require_output_literal "artifact-root=$WORKSPACE_ARTIFACT_ROOT" "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-artifact-root'
 require_output_pattern '^output-dir=/tmp/' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-output-dir'
 require_output_pattern '"failureKind":"invalid-out-dir"' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-envelope-field'
-require_output_pattern '"workspaceRoot":".*/nextPas"' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-root-envelope-field'
+require_output_pattern "\"workspaceRoot\":\"$REPO_ROOT_PATTERN\"" "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-root-envelope-field'
 require_output_pattern '"workspaceDiscoveryKind":"explicit-workspace-override"' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-workspace-discovery-envelope-field'
-require_output_pattern '"artifactRoot":".*/nextPas/\.nextpas"' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-artifact-root-envelope-field'
+require_output_pattern "\"artifactRoot\":\"$WORKSPACE_ARTIFACT_ROOT_PATTERN\"" "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-artifact-root-envelope-field'
 require_output_pattern '"outputDir":"/tmp/' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-output-dir-envelope-field'
 require_output_pattern '"humanSummary":"invalid-out-dir: /tmp/[^"]+"' "$INVALID_OUT_DIR_OUTPUT" 'missing-invalid-out-dir-human-summary-envelope-field'
 if grep -Eq '^workspace-descriptor-path=' "$INVALID_OUT_DIR_OUTPUT"; then
@@ -4773,11 +4881,11 @@ require_output_pattern '^tool-root-kind=distribution-helper-root$' "$STAGE0_ENV_
 require_output_pattern '^runtime-root-kind=distribution-runtime-root$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-root-kind'
 require_output_pattern '^tool-profile-root=.*/build/tool-profiles$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-tool-profile-root'
 require_output_pattern '^toolchain-binding-path=.*/build/toolchains/linux-x86_64-to-linux-x86_64-gnu\.toml$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-binding-path'
-require_output_pattern '^distribution-bin-dir=.*/nextPas/bin$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-bin-dir'
-require_output_pattern '^distribution-lib-dir=.*/nextPas/lib$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-lib-dir'
-require_output_pattern '^distribution-share-dir=.*/nextPas/share$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-share-dir'
-require_output_pattern '^runtime-root=.*/nextPas/lib/nextpas/runtime/linux-x86_64$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-root'
-require_output_pattern '^runtime-libc=.*/nextPas/lib/nextpas/runtime/linux-x86_64/libc\.so$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-libc'
+require_output_literal "distribution-bin-dir=$DISTRIBUTION_BIN_DIR" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-bin-dir'
+require_output_literal "distribution-lib-dir=$DISTRIBUTION_LIB_DIR" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-lib-dir'
+require_output_literal "distribution-share-dir=$DISTRIBUTION_SHARE_DIR" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-distribution-share-dir'
+require_output_literal "runtime-root=$RUNTIME_ROOT" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-root'
+require_output_literal "runtime-libc=$RUNTIME_LIBC" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-libc'
 require_output_pattern '^runtime-libc-present=false$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-runtime-libc-presence'
 require_output_pattern '^environment-readiness=incomplete$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-environment-readiness'
 require_output_pattern '^environment-status=(ready|incomplete)$' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-environment-status'
@@ -4792,8 +4900,8 @@ require_output_pattern '^command-envelope=.*"command":"env"' "$STAGE0_ENV_STATUS
 require_output_pattern '^command-envelope=.*"selector":"status"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-selector'
 require_output_pattern '^command-envelope=.*"target":"linux-x86_64".*"targetConfig":".*/build/targets/linux-x86_64\.toml".*"compiler":"fpc"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-build-context'
 require_output_pattern '^command-envelope=.*"toolchainBindingId":"linux-x86_64-to-linux-x86_64-gnu".*"runtimeSdkId":"linux-x86_64".*"toolProfileRoot":".*/build/tool-profiles"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-toolchain'
-require_output_pattern '^command-envelope=.*"toolchainBindingPath":".*/build/toolchains/linux-x86_64-to-linux-x86_64-gnu\.toml".*"distributionBinDir":".*/nextPas/bin".*"distributionLibDir":".*/nextPas/lib".*"distributionShareDir":".*/nextPas/share"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-distribution'
-require_output_pattern '^command-envelope=.*"runtimeRoot":".*/nextPas/lib/nextpas/runtime/linux-x86_64".*"runtimeLibc":".*/nextPas/lib/nextpas/runtime/linux-x86_64/libc\.so".*"runtimeLibcPresent":false' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-runtime'
+require_output_pattern "^command-envelope=.*\"toolchainBindingPath\":\".*/build/toolchains/linux-x86_64-to-linux-x86_64-gnu\\.toml\".*\"distributionBinDir\":\"$DISTRIBUTION_BIN_DIR_PATTERN\".*\"distributionLibDir\":\"$DISTRIBUTION_LIB_DIR_PATTERN\".*\"distributionShareDir\":\"$DISTRIBUTION_SHARE_DIR_PATTERN\"" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-distribution'
+require_output_pattern "^command-envelope=.*\"runtimeRoot\":\"$RUNTIME_ROOT_PATTERN\".*\"runtimeLibc\":\"$RUNTIME_LIBC_PATTERN\".*\"runtimeLibcPresent\":false" "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-runtime'
 require_output_pattern '^command-envelope=.*"environmentReadiness":"incomplete".*"runtimeSdkStatus":"missing"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-readiness'
 require_output_pattern '^command-envelope=.*"environmentStatus":"(ready|incomplete)"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-environment-status'
 require_output_pattern '^command-envelope=.*"toolchainBindingStatus":"ready"' "$STAGE0_ENV_STATUS_OUTPUT" 'missing-stage0-env-status-envelope-toolchain-binding-status'
