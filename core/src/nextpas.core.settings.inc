@@ -9,6 +9,13 @@
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
+{$IFOPT O+}
+  {$DEFINE FAFAFA_CORE_INLINE}
+{$ENDIF}
+
+{$DEFINE FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$DEFINE FAFAFA_CORE_CONTRACTS}
+
 {$IFDEF DEBUG}
   {$C+}
   {$R+}

@@ -18,11 +18,35 @@ const
   NEXTPAS_CORE_VERSION_PATCH = 0;
   NEXTPAS_CORE_VERSION = '0.1.0';
 
+  MAX_SIZE_INT = High(SizeInt);
+  MAX_SIZE_UINT = High(SizeUInt);
+  MIN_SIZE_INT = Low(SizeInt);
+  SIZE_PTR = SizeOf(Pointer);
+  SIZE_8 = SizeOf(UInt8);
+  SIZE_16 = SizeOf(UInt16);
+  SIZE_32 = SizeOf(UInt32);
+  SIZE_64 = SizeOf(UInt64);
+
 { ============================================================ }
 { Canonical type aliases                                       }
 { ============================================================ }
 
 type
+  ECore = class(Exception);
+  EWow = class(ECore);
+  EArgumentNil = class(ECore);
+  EEmptyCollection = class(ECore);
+  EInvalidArgument = class(ECore);
+  EInvalidResult = class(ECore);
+  ETimeoutError = class(ECore);
+  EInvalidState = class(ECore);
+  EOutOfRange = class(ECore);
+  ENotSupported = class(ECore);
+  ENotCompatible = class(ECore);
+  EInvalidOperation = class(ECore);
+  EOutOfMemory = class(ECore);
+  EOverflow = class(ECore);
+
   THashCode = UInt32;
 
 { ============================================================ }
@@ -52,6 +76,9 @@ type
   generic TComparer<T> = reference to function(const A, B: T): Int32;
   generic TEqualityCheck<T> = reference to function(const A, B: T): Boolean;
   generic THasher<T> = reference to function(const A: T): THashCode;
+  TRandomGeneratorFunc = function(ARange: Int64; AData: Pointer): Int64;
+  TRandomGeneratorMethod = function(ARange: Int64; AData: Pointer): Int64 of object;
+  TRandomGeneratorRefFunc = reference to function(ARange: Int64): Int64;
 
 { ============================================================ }
 { Non-owning byte span (view into existing memory)             }

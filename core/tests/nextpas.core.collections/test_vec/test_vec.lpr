@@ -30,9 +30,9 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(10);
-  LV.Add(20);
-  LV.Add(30);
+  LV.Push(10);
+  LV.Push(20);
+  LV.Push(30);
   CheckEqual(Int64(3), Int64(LV.Count));
   CheckEqual(Int64(10), Int64(LV[0]));
   CheckEqual(Int64(20), Int64(LV[1]));
@@ -44,8 +44,8 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(1);
-  LV.Add(3);
+  LV.Push(1);
+  LV.Push(3);
   LV.Insert(1, 2);
   CheckEqual(Int64(3), Int64(LV.Count));
   CheckEqual(Int64(1), Int64(LV[0]));
@@ -58,9 +58,9 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(10);
-  LV.Add(20);
-  LV.Add(30);
+  LV.Push(10);
+  LV.Push(20);
+  LV.Push(30);
   LV.Delete(1);
   CheckEqual(Int64(2), Int64(LV.Count));
   CheckEqual(Int64(10), Int64(LV[0]));
@@ -72,9 +72,9 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(10);
-  LV.Add(20);
-  LV.Add(30);
+  LV.Push(10);
+  LV.Push(20);
+  LV.Push(30);
   LV.DeleteSwap(0);
   CheckEqual(Int64(2), Int64(LV.Count));
   CheckEqual(Int64(30), Int64(LV[0]));
@@ -86,9 +86,9 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(1);
-  LV.Add(2);
-  LV.Add(3);
+  LV.Push(1);
+  LV.Push(2);
+  LV.Push(3);
   CheckEqual(Int64(3), Int64(LV.Pop));
   CheckEqual(Int64(2), Int64(LV.Count));
   CheckEqual(Int64(2), Int64(LV.Pop));
@@ -102,7 +102,7 @@ var
 begin
   LV := TIntVec.Create;
   for LI := 0 to 999 do
-    LV.Add(LI);
+    LV.Push(LI);
   CheckEqual(Int64(1000), Int64(LV.Count));
   CheckEqual(Int64(0), Int64(LV[0]));
   CheckEqual(Int64(999), Int64(LV[999]));
@@ -113,9 +113,9 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(5);
-  LV.Add(10);
-  LV.Add(15);
+  LV.Push(5);
+  LV.Push(10);
+  LV.Push(15);
   Check(LV.Contains(10));
   Check(not LV.Contains(7));
 end;
@@ -125,11 +125,11 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(100);
-  LV.Add(200);
-  LV.Add(300);
-  CheckEqual(Int64(1), LV.IndexOf(200));
-  CheckEqual(Int64(-1), LV.IndexOf(999));
+  LV.Push(100);
+  LV.Push(200);
+  LV.Push(300);
+  CheckEqual(Int64(1), LV.Find(200));
+  CheckEqual(Int64(-1), LV.Find(999));
 end;
 
 procedure TestReserve;
@@ -147,8 +147,8 @@ var
   LV: IStrVec;
 begin
   LV := TStrVec.Create;
-  LV.Add('hello');
-  LV.Add('world');
+  LV.Push('hello');
+  LV.Push('world');
   CheckEqual(Int64(2), Int64(LV.Count));
   CheckEqual('hello', LV[0]);
   CheckEqual('world', LV[1]);
@@ -159,8 +159,8 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(1);
-  LV.Add(2);
+  LV.Push(1);
+  LV.Push(2);
   LV.Clear;
   Check(LV.IsEmpty);
   Check(LV.Capacity > 0);
@@ -171,7 +171,7 @@ var
   LV: IIntVec;
 begin
   LV := TIntVec.Create;
-  LV.Add(42);
+  LV.Push(42);
   LV := nil;
   // no crash = interface ref-counting freed the object
   Check(True);
