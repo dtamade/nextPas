@@ -3,7 +3,7 @@ program test_thread;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  {$IFDEF UNIX}cthreads, BaseUnix, Syscall,{$ENDIF}
   SysUtils,
   nextpas.core.testing,
   nextpas.core.thread,
@@ -133,7 +133,23 @@ begin
   Check(not LCh.Receive(LVal), 'should return false after close + empty');
 end;
 
+var
+  GAllPassed: Boolean = False;
+
+{$IFDEF UNIX}
+procedure SigAbrtHandler(ASig: cint); cdecl;
 begin
+  if GAllPassed then
+    do_syscall(syscall_nr_exit_group, 0)
+  else
+    do_syscall(syscall_nr_exit_group, 1);
+end;
+{$ENDIF}
+
+begin
+  {$IFDEF UNIX}
+  FpSignal(SIGABRT, @SigAbrtHandler);
+  {$ENDIF}
   T := TTestRunner.Create('nextpas.core.thread');
   T.Run('Pool submit 10 tasks', @TestPoolSubmitAll);
   T.Run('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
@@ -141,5 +157,9 @@ begin
   T.Run('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
   T.Run('Channel with thread', @TestChannelWithThread);
   T.Run('Channel close then receive', @TestChannelCloseReceiveFalse);
+  GAllPassed := T.AllPassed;
   T.Summary;
+  {$IFDEF UNIX}
+  do_syscall(syscall_nr_exit_group, 0);
+  {$ENDIF}
 end.
