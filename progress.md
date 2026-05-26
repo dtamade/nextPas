@@ -3,6 +3,40 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 71 inherited member receiver binding)
+
+- **Status:** completed
+- Objective:
+  - 把 direct member-call target lookup 从 receiver exact class type 推进到最小 inherited lookup：
+    子类 receiver 找不到本类 method 时，沿 `ParentTypeId` 链绑定到 parent class method symbol。
+- Baseline:
+  - Batch 70 已把 root/imported 同名 class 风险收回 owner-aware `TypeId`。
+  - 当前 `MethodSymbolIdForClassTypeMember(...)` 只检查 receiver exact type 的
+    `TClass.Method`，因此 `TChild` receiver 调用 `TBase.Touch` 这类 inherited method 还不会产生
+    compiler-owned `member-call` binding truth。
+- Actions taken:
+  - 先写 focused RED，构造 `TBase.Touch` + `TChild = class(TBase)` + `Worker: TChild`
+    后调用 `Worker.Touch` 的场景，要求 binding target 指向 `TBase.Touch` method symbol。
+  - `MethodSymbolIdForClassTypeMember(...)` 拆出 exact class type lookup helper；exact type
+    若存在同名 method 但 arity/body 不匹配或不唯一，会保守停止，不穿透 parent。
+  - member target lookup 现在沿 `ParentTypeId` 链查 parent class method，且每一层仍通过
+    type symbol owner 限定 `TClass.Method` target。
+  - 扩展 `query_member_call_bindings` fixture 与 `stage0-query-member-call-bindings-check`，
+    固定 `Child.Touch` 的 `member-call` / `queryDefinitions`，target 为 `TBaseWorker.Touch`。
+  - 同步 semantic model / language service / developer tooling / stage0 / roadmap docs，明确当前
+    只新增最小 parent-chain method lookup，不声明完整 Pascal member resolver。
+- Verification:
+  - RED: focused semantic test 曾失败在 `semantic-call-bindings-failure=missing-inherited-member-call-binding`。
+  - GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+  - Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+    `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只推进 parent-chain method lookup，不展开 visibility、virtual dispatch、record/property
+    receiver、runtime constructor lowering 或 type-based overload。
+  - 复盘：这轮把 Batch 70 的 owner-aware receiver identity 用到 inheritance edge 上，继续保持
+    compiler-owned binding truth；下一步应优先补 typed overload/argument relation 或更完整的
+    method resolver 设计，而不是回到字符串式查询。
+
 ## Session: 2026-05-26 (Batch 70 owner-aware member receiver binding)
 
 - **Status:** completed

@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 71 把 `member-call` target lookup 从 receiver exact class type 推进到最小 inherited
+  method lookup：`TChild` receiver 在本类没有 `Touch` 时，会沿 `ParentTypeId` 找到
+  `TBase.Touch`，并注册 target 为 parent method symbol 的 `member-call` binding。
+- inherited lookup 仍走 owner-aware/type-id-aware 路径：每一层 parent 都先通过 `TypeId` 找回
+  type symbol，再用该 type symbol 的 owner unit 限定 `TClass.Method`，不会退回裸字符串 lookup。
+- 若 exact receiver type 已声明同名 method 但 body/arity 不匹配或不唯一，lookup 会保守停止，
+  不穿透 parent 代偿；这仍不是完整 visibility checking、virtual/override dispatch、
+  record/property receiver、runtime constructor lowering 或 type-based overload resolution。
+- `stage0-query-member-call-bindings-check` 现在固定 `Child.Touch` 的 `queryBindings` /
+  `queryDefinitions` truth，target 为 `TBaseWorker.Touch`，继续确认 query surface 保持
+  MIR/backend/toolchain deferred。
 - Batch 70 把 Batch 69 的 member-call identity 风险收窄到 owner-aware/type-id-aware 路径：
   root/imported unit 同时声明同名 class（例如 `TWorker`）时，root variable receiver 的
   `Worker.Add(...)` 现在必须先消费变量 symbol 上的稳定 `TypeId`，再通过该 type symbol 的

@@ -117,6 +117,12 @@ type
       const ATypeId: LongInt;
       out ASymbol: TSemanticSymbol
     ): Boolean;
+    function MethodSymbolIdForExactClassTypeMember(
+      const AClassTypeId: LongInt;
+      const AMemberName: string;
+      const AArgCount: LongInt;
+      out AMethodNameFound: Boolean
+    ): LongInt;
     function MethodSymbolIdForClassTypeMember(
       const AClassTypeId: LongInt;
       const AMemberName: string;
@@ -1082,10 +1088,11 @@ begin
   end;
 end;
 
-function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
+function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AClassTypeId: LongInt;
   const AMemberName: string;
-  const AArgCount: LongInt
+  const AArgCount: LongInt;
+  out AMethodNameFound: Boolean
 ): LongInt;
 var
   BodyCandidateCount: LongInt;
@@ -1097,6 +1104,7 @@ var
   TypeSymbol: TSemanticSymbol;
 begin
   Result := 0;
+  AMethodNameFound := False;
   if (AClassTypeId <= 0) or (AMemberName = '') then
     Exit;
   if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
@@ -1111,6 +1119,7 @@ begin
       SameText(Symbol.Kind, 'method') and
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
+      AMethodNameFound := True;
       SymbolId := Symbol.SymbolId;
       Break;
     end;
@@ -1139,6 +1148,38 @@ begin
     Exit;
 
   Result := SymbolId;
+end;
+
+function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
+  const AClassTypeId: LongInt;
+  const AMemberName: string;
+  const AArgCount: LongInt
+): LongInt;
+var
+  CurrentTypeId: LongInt;
+  Depth: LongInt;
+  MethodNameFound: Boolean;
+begin
+  Result := 0;
+  CurrentTypeId := AClassTypeId;
+  Depth := 0;
+  while (CurrentTypeId > 0) and (Depth < 32) do
+  begin
+    Result := MethodSymbolIdForExactClassTypeMember(
+      CurrentTypeId,
+      AMemberName,
+      AArgCount,
+      MethodNameFound
+    );
+    if Result > 0 then
+      Exit;
+    if MethodNameFound then
+      Exit;
+    if (CurrentTypeId <= 0) or (CurrentTypeId > FModel.TypeCount) then
+      Exit;
+    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
+    Inc(Depth);
+  end;
 end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(

@@ -162,9 +162,12 @@
   继续补上 class method body 内的 `Self.SetValue(9)`，并让 root source 中 imported class type
   variable receiver 的 direct member call 消费同一份 imported type/method symbol truth。`Batch 70`
   修正 root/imported 同名 class 的 owner boundary，让 receiver 从变量 `TypeId` 找回 type
-  symbol owner，并只在该 owner 下选择 `TClass.Method` target；完整
-  selector/member lookup、inherited lookup、visibility checking、runtime constructor lowering 与
-  type-based dispatch 仍保持 deferred。
+  symbol owner，并只在该 owner 下选择 `TClass.Method` target。`Batch 71` 继续把这条
+  owner-aware target lookup 推进到最小 parent-chain inherited method：receiver exact type
+  没有同名 method 时沿 `ParentTypeId` 绑定到 parent `TClass.Method`，但 exact type 已声明
+  同名 method 且 arity/body 不匹配或不唯一时保守停止；完整 selector/member lookup、
+  visibility checking、runtime constructor lowering、virtual/override dispatch 与 type-based
+  dispatch 仍保持 deferred。
   下一步优先继续 semantic binding/type relation 的真实功能切片，再回到 richer package workflow /
   richer query / richer env action 中最高价值的产品切片。
 

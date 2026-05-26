@@ -15,6 +15,59 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 71 Inherited Member Receiver Binding
+
+### Goal
+
+关闭 Batch 70 后最直接的 member-call 缺口：当 receiver 的 declared class type 没有直接声明
+目标 method，但其 parent class 声明了该 method 时，例如 `TChild = class(TBase)` 后
+`Worker: TChild; Worker.Touch;`，binding table 应注册 `member-call`，target 指向
+`TBase.Touch` method symbol。
+
+本批次新增并冻结：
+
+- member target lookup 先查 receiver exact type，再沿 `ParentTypeId` 链查 parent type。
+- parent traversal 仍使用 type symbol owner 限定 `TClass.Method`，不回退到裸字符串 lookup。
+- child exact type 若已声明同名 method 但 arity/body 不唯一，则保守停止，不穿透到 parent 代偿。
+
+### Architecture Decision
+
+这是 inherited lookup 的最小正向边界，不是完整 Pascal member resolver：
+
+- 只覆盖 class parent chain 上已 seed 的 method symbol 与 body declaration argument count。
+- 不实现 visibility rules、override/virtual dispatch semantics、record/property/array/deref receiver、
+  runtime constructor lowering 或 type-based overload resolution。
+- parent chain 设置仍来自声明期 `TypeId` / `ParentTypeId`，不会从 source text 重新猜 class。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `TChild` receiver 调用 inherited `TBase.Touch` 的 focused semantic regression
+- [x] 拆出 exact type method lookup，并区分“没找到 method”和“找到但 arity/实现不匹配”
+- [x] 让 member target lookup 沿 owner-safe `ParentTypeId` 链查找 inherited method
+- [x] focused semantic test 转绿
+- [x] 同步 semantic model / language service / developer tooling docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 曾失败在 `semantic-call-bindings-failure=missing-inherited-member-call-binding`。
+- GREEN focused: focused semantic test 已输出 `semantic-call-bindings-status=pass`。
+- Full: `bash build/verify_local.sh` 已输出 `stage0-query-member-call-bindings-check=pass`、
+  `smoke-check=pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 visibility checking
+- 不实现完整 overload/type dispatch 或 virtual/override dispatch
+- 不实现 record method、property accessor、array/deref receiver
+- 不新增 `LanguageServiceSession` / overlay / incremental invalidation
+- 不执行 MIR、backend、toolchain 或 package workflow mutation
+
 ## Addendum: 2026-05-26 Batch 70 Owner-aware Member Receiver Binding
 
 ### Goal

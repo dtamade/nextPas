@@ -251,8 +251,11 @@ direct member function call、class method body 内的 `Self.SetValue(9)`，还�
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
-完整 inherited/member lookup、visibility checking、runtime constructor lowering、virtual dispatch
-与 type-based overload resolution 仍属于后续 language-service / semantic model 工作。
+当 receiver exact class type 没有同名 method 时，当前还会沿 `ParentTypeId` 链查 parent
+class method，并把 `Child.Touch` 这类 inherited call 投影到 parent method target；exact type
+已有同名 method 但 arity/body 不匹配或不唯一时会保守停止。完整 member resolver、
+visibility checking、runtime constructor lowering、virtual dispatch 与 type-based overload
+resolution 仍属于后续 language-service / semantic model 工作。
 因此成功路径会显示
 `mir-status=deferred`、`backend-plan-status=deferred` 与
 `toolchain-plan-status=deferred`，不会执行 backend 或 toolchain。

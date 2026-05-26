@@ -452,6 +452,96 @@ begin
   end;
 end;
 
+procedure CheckInheritedClassMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  BindingCount: LongInt;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  MethodSymbolId: LongInt;
+  Model: TSemanticModel;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  RootSourceText :=
+    'program InheritedMemberCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TBase = class' + LineEnding +
+    '    procedure Touch;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TChild = class(TBase)' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Touch;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-member-call-diagnostics');
+    if Model = nil then
+      Fail('missing-inherited-member-call-semantic-model');
+
+    MethodSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'TBase.Touch',
+      'method',
+      'inheritedmembercalls'
+    );
+    if MethodSymbolId <= 0 then
+      Fail('missing-inherited-member-call-method-symbol');
+
+    BindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Touch') then
+      begin
+        Inc(BindingCount);
+        if Binding.TargetSymbolId <> MethodSymbolId then
+          Fail('inherited-member-call-target-mismatch');
+        if Binding.ByteOffset <> Pos('Worker.Touch', RootSourceText) +
+          Length('Worker.') - 1 then
+          Fail('inherited-member-call-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if BindingCount = 0 then
+      Fail('missing-inherited-member-call-binding');
+    if BindingCount <> 1 then
+      Fail('unexpected-inherited-member-call-binding-count:' +
+        IntToStr(BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -788,6 +878,7 @@ begin
     CheckImportedUnitCallBinding;
     CheckImportedClassMemberCallBinding;
     CheckOwnerAwareImportedClassMemberCallBinding;
+    CheckInheritedClassMemberCallBinding;
     CheckOverloadBindings;
     CheckClassMemberCallBinding;
 

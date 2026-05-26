@@ -577,8 +577,11 @@ type-name receiver 的 constructor-like member call（例如 `TWorker.Create(42)
 imported class type 作为 root variable type 时的 direct member call，会绑定到
 `TClass.Method` method symbol；若 root 与 imported unit 都声明同名 class，receiver binding
 会从变量 symbol 的 `TypeId` 找回 type symbol owner，并只在该 owner 下选择 method target。
-带参数 method call 只用同名 method body declaration 的 argument count 做唯一匹配。完整 member lookup、inherited lookup、visibility checking、
-property accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
+若 receiver exact class type 没有同名 method，当前会沿 `ParentTypeId` 链查 parent class
+method，并继续按 parent type symbol owner 限定 target；exact type 已声明同名 method 但
+arity/body 不匹配或不唯一时不会穿透 parent。带参数 method call 只用同名 method body
+declaration 的 argument count 做唯一匹配。完整 member resolver、visibility checking、property
+accessor、record method、array/deref receiver、runtime constructor allocation/lowering、
 virtual/override dispatch 与 type-based overload resolution 仍不属于当前 query contract。
 这里的 `analysisSource` 故意不是 `language-service`，因为当前还没有正式
 `LanguageServiceSession`、overlay、incremental invalidation 或 protocol adapter。

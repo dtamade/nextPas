@@ -7,6 +7,11 @@ type
     procedure SetValue(Value: Integer);
     function Add(A, B: Integer): Integer;
   end;
+  TBaseWorker = class
+    procedure Touch;
+  end;
+  TChildWorker = class(TBaseWorker)
+  end;
 
 constructor TWorker.Create(Value: Integer);
 begin
@@ -26,8 +31,13 @@ begin
   Add := A + B;
 end;
 
+procedure TBaseWorker.Touch;
+begin
+end;
+
 var
   Worker: TWorker;
+  Child: TChildWorker;
 
 begin
   Worker := TWorker.Create(42);
@@ -35,4 +45,5 @@ begin
   Worker.SetValue(7);
   Worker.SetValue;
   Halt(Worker.Add(1, 2));
+  Child.Touch;
 end.
