@@ -15,6 +15,69 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-05-26 Batch 87 Source-backed System/TObject Truth
+
+### Goal
+
+推进目标树 G3 / G1.5，把 `Obj.Free` 从“缺 System 基线时临时 deferred”推进到
+nextPas-owned source-backed truth：
+
+- 提供最小 `System.pas` / `TObject` 源码事实，先覆盖 `Create` / `Destroy` / `Free`。
+- 显式 `uses System` 时，resolver / sema 必须消费 target-installed `System.pas`，而不是只看到
+  placeholder unit symbol。
+- 普通 `class` 在已有 source-backed `System.TObject` 时默认继承 `TObject`。
+- `Worker.Free` 必须通过继承 member lookup 绑定到真实 `TObject.Free` method symbol，并能从
+  `query definitions` 回指 `units/linux-x86_64/System.pas`。
+
+### Architecture Decision
+
+这是最小 System/TObject truth，不是完整 FPC `System` 重写：
+
+- canonical 位置落在 `rtl/core/system/System.pas`，target-installed truth 落在
+  `units/linux-x86_64/System.pas`。
+- implicit runtime edge 仍保持 placeholder；本批不让所有 implicit runtime 自动编译/链接
+  `System.pas`，避免扩大到宿主 FPC `System` 影子边界。
+- 当 source-backed `System.TObject` 已进 semantic model 时，class 默认父类由 `TypeId` 指向
+  owner=`system` 的 `TObject`；member lookup 继续沿现有 `ParentTypeId` 链工作。
+- 没有 source-backed System truth 的路径仍保持 `Free` deferred，避免把 runtime baseline 缺口误报成
+  普通 unknown member。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 focused RED：显式 source-backed `System` 下普通 `class` 的 `Worker.Free` 必须绑定到
+      `System.TObject.Free`
+- [x] 新增最小 `rtl/core/system/System.pas` 与 target-installed `units/linux-x86_64/System.pas`
+- [x] 让普通 class 在 source-backed `System.TObject` 已解析时默认继承 `TObject`
+- [x] 新增 stage0 query fixture / gate，固定 `TObject.Free` symbol、`member-call` binding 和
+      definition source path
+- [x] 同步 System / RTL / runtime bootstrap / semantic docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-source-backed-system-free-binding`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Focused stage0 query with freshly rebuilt stage0: `query-bindings` 含 `Free` member-call，
+  `query-definitions` target 为 `TObject.Free`，`targetSourcePath` 为
+  `units/linux-x86_64/System.pas`。
+- Full: fresh `bash build/verify_local.sh` 输出 `stage0-query-system-object-free-check=pass`、
+  `stage0QuerySystemObjectFreeCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 FPC `System`
+- 不把 implicit runtime placeholder 自动升级为 source-backed compile/link
+- 不实现 destructor lowering / virtual dispatch / unit init-fini
+- 不修改 `core/`
+
 ## Addendum: 2026-05-26 Batch 86 Unknown Member Diagnostic
 
 ### Goal

@@ -1074,6 +1074,115 @@ begin
   end;
 end;
 
+procedure CheckSourceBackedSystemObjectFreeMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  Diagnostics: TDiagnosticsSink;
+  FreeBindingCount: LongInt;
+  FreeSymbolId: LongInt;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  SystemPath: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SystemPath := ExpandFileName('units/linux-x86_64/System.pas');
+  SourceText :=
+    'program SourceBackedSystemObjectMemberCall;' + LineEnding +
+    'uses System;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Free;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        Ast.DeclaredName,
+        '',
+        ruoRootSource,
+        'linux-x86_64',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'System',
+        SystemPath,
+        ruoInstalledSource,
+        'linux-x86_64',
+        'unit',
+        2
+      )
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-source-backed-system-free-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-source-backed-system-free-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-source-backed-system-free-model-status:' + Model.Status);
+
+    FreeSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'TObject.Free',
+      'method',
+      'system'
+    );
+    if FreeSymbolId <= 0 then
+      Fail('missing-source-backed-system-free-method-symbol');
+
+    FreeBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Free') then
+      begin
+        Inc(FreeBindingCount);
+        if Binding.TargetSymbolId <> FreeSymbolId then
+          Fail('source-backed-system-free-binding-target-mismatch');
+        if Binding.ByteOffset <> Pos('Free', SourceText) - 1 then
+          Fail('source-backed-system-free-binding-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if FreeBindingCount = 0 then
+      Fail('missing-source-backed-system-free-binding');
+    if FreeBindingCount <> 1 then
+      Fail('unexpected-source-backed-system-free-binding-count:' +
+        IntToStr(FreeBindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckSpecializedGenericMemberCallStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -2493,6 +2602,7 @@ begin
     CheckUnknownMemberDiagnostic;
     CheckKnownFieldMemberCallStaysDeferred;
     CheckSystemObjectFreeMemberCallStaysDeferred;
+    CheckSourceBackedSystemObjectFreeMemberCallBinding;
     CheckSpecializedGenericMemberCallStaysDeferred;
     CheckOverloadBindings;
     CheckBareTypedOverloadBindingTargets;

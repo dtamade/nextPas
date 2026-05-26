@@ -10,6 +10,19 @@
 
 ## Research Findings
 
+- Batch 87 落地第一条 nextPas-owned source-backed `System` truth：`rtl/core/system/System.pas`
+  与 `units/linux-x86_64/System.pas` 现在先提供 `TObject.Create`、`TObject.Destroy` 和
+  `TObject.Free`。
+- 当显式 `uses System` 让 target-installed `System.pas` 进入 `TUnitGraph` / `TSemanticModel`
+  后，普通 `class` 会默认继承 owner=`system` 的 `TObject`；`Worker.Free` 通过现有
+  `ParentTypeId` 继承 member lookup 绑定到真实 `TObject.Free`，不是新增字符串兜底。
+- 新增 `tests/fixtures/system_object_free/system_object_free_binding.pas` 与
+  `stage0-query-system-object-free-check`，固定 `querySymbols` 中的 `TObject.Free` method symbol、
+  `queryBindings` 中的 `Free` member-call，以及 `queryDefinitions.targetSourcePath` 指向
+  `units/linux-x86_64/System.pas`。
+- implicit runtime edge 仍保持 placeholder，本批没有让所有 program 自动编译/链接
+  `System.pas`；没有 source-backed System truth 的路径仍让 `Free` deferred，避免把最低 runtime
+  baseline 缺口误报为普通 unknown member。
 - Batch 86 把 receiver type 已知的 direct class member-call name miss 接进 structured diagnostics：
   `Worker.Missing(1)` 这类 class/parent chain 没有同名 method 的调用会发出
   `sema.unknown-member`，model status 进入 `failure`，且不会注册 `member-call` binding。

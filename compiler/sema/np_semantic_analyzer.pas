@@ -226,6 +226,7 @@ type
       const ATypeName: string;
       const APreferredOwnerUnitId: string
     ): LongInt;
+    function ImplicitSystemObjectParentTypeId(const AClassName: string): LongInt;
     function FindSymbolByName(const AName: string): LongInt;
     procedure ProcessVarSection(const ANode: TGreenNode;
       const AOwnerUnitId: string);
@@ -3222,6 +3223,28 @@ begin
   Result := FModel.FindTypeByName(ATypeName);
 end;
 
+function TSemanticAnalyzer.ImplicitSystemObjectParentTypeId(
+  const AClassName: string
+): LongInt;
+var
+  TypeSymbol: TSemanticSymbol;
+begin
+  Result := 0;
+  if SameText(AClassName, 'TObject') then
+    Exit;
+
+  Result := ResolveTypeIdForOwner('TObject', 'system');
+  if Result <= 0 then
+    Exit;
+  if not TypeSymbolForTypeId(Result, TypeSymbol) then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  if not SameText(TypeSymbol.OwnerUnitId, 'system') then
+    Result := 0;
+end;
+
 function TSemanticAnalyzer.FindSymbolByName(const AName: string): LongInt;
 begin
   if AName = '' then
@@ -3692,6 +3715,7 @@ var
   Child, TypeChild: TGreenNode;
   SymbolId: LongInt;
   TypeId: LongInt;
+  ParentTypeId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -3718,12 +3742,19 @@ begin
         ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId)
       else if TypeChild.NodeKind = gnkClassType then
       begin
+        ParentTypeId := 0;
         if TypeChild.ChildCount > 0 then
         begin
           if TypeChild.ChildAt(0).NodeKind = gnkIdentifier then
-            FModel.SetTypeParent(TypeId,
-              ResolveTypeIdForOwner(TypeChild.ChildAt(0).Text, AOwnerUnitId));
-        end;
+            ParentTypeId := ResolveTypeIdForOwner(
+              TypeChild.ChildAt(0).Text,
+              AOwnerUnitId
+            );
+        end
+        else
+          ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
+        if ParentTypeId > 0 then
+          FModel.SetTypeParent(TypeId, ParentTypeId);
         ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
       end;
     end;

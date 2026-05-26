@@ -33,9 +33,18 @@ FreePascal 兼容表面。
 collections 等开发框架能力；但 `core` 不能反过来成为编译器理解 `TObject`、`Free`、程序入口
 或 unit init/fini 的最低前提。
 
-## 当前占位文件
+## 当前实现文件
 
-- `system_placeholder.pas`：为未来 `System` 相关实现保留仓库位置
+- `System.pas`：当前最小 source-backed `System` truth，先提供 `TObject.Create`、
+  `TObject.Destroy` 和 `TObject.Free` 的对象生命周期符号。
+- `system_placeholder.pas`：保留历史占位入口，后续应逐步让真实 `System.pas` 接管更多
+  runtime baseline。
+- `units/linux-x86_64/System.pas`：target-installed 拷贝，供 resolver / semantic query 在
+  `uses System` 时消费真实 source provenance。
+
+当前这一步已经让显式 source-backed `System` 中的普通 `class` 默认继承 `System.TObject`，
+并让 `Worker.Free` 通过继承 member lookup 绑定到 `TObject.Free`。这不是完整 FPC
+`System`，也还没有把 implicit runtime placeholder 改成自动编译/链接 `System.pas`。
 
 ## 这里现在不做什么
 

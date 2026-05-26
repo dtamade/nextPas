@@ -3,6 +3,43 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 87 source-backed System/TObject truth)
+
+- **Status:** completed
+- Objective:
+  - 按目标树 G3 / G1.5，把最低对象生命周期入口从临时 `Free` deferred 保护推进到
+    nextPas-owned source-backed `System.pas` / `TObject` truth。
+- Baseline:
+  - Batch 86 为避免 `C.Free` 被误报 `sema.unknown-member`，临时让缺 System truth 的
+    `Free` 继续 deferred。
+  - 仓库已有 explicit `System` placeholder 不遮蔽真实源码的 resolver 规则，但
+    `units/linux-x86_64/` 尚无最小 `System.pas`。
+- Actions taken:
+  - 先写 focused RED：显式 source-backed `System` 下，普通 `TWorker = class` 的
+    `Worker.Free` 必须绑定到 owner=`system` 的 `TObject.Free` method symbol。
+  - 新增 `rtl/core/system/System.pas` 与 `units/linux-x86_64/System.pas`，先提供
+    `TObject.Create`、`TObject.Destroy` 和 `TObject.Free`。
+  - `ProcessTypeSection(...)` 在 source-backed `System.TObject` 已解析、且当前 class 没有显式父类时，
+    把默认 `ParentTypeId` 指向 owner=`system` 的 `TObject`；member-call 仍走现有继承 lookup。
+  - 新增 `tests/fixtures/system_object_free/system_object_free_binding.pas` 与
+    `stage0-query-system-object-free-check`，固定 query symbols / bindings / definitions 对
+    `System.TObject.Free` 的投影。
+  - 同步 System / RTL / runtime bootstrap / semantic docs 与 rolling plan。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-source-backed-system-free-binding`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Focused stage0 query with freshly rebuilt stage0 已显示 `TWorker` 的 `typeParentId` 指向
+    `TObject`，`query-bindings` 含 `Free` member-call，`query-definitions` 回指
+    `units/linux-x86_64/System.pas`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `stage0-query-system-object-free-check=pass`、
+    `stage0QuerySystemObjectFreeCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批只打开显式 source-backed `System` 的最小 TObject truth；implicit runtime placeholder
+    仍保持原状，避免把宿主 FPC `System` 影子边界和 link 行为一起扩大。
+  - 没有 source-backed System truth 的路径仍保持 `Free` deferred；这是保护边界，不是最终 resolver。
+
 ## Session: 2026-05-26 (Batch 86 unknown member diagnostic)
 
 - **Status:** completed

@@ -60,10 +60,13 @@ fs/process、time。
 `Free` / destructor / unit init-fini 这些最底层事实，导致自举代码和 `core` 框架仍然必须
 从宿主 FPC RTL 借语义。`System` 平替因此是自举路线的最低依赖，不是外围库任务。
 
-当前仓库里的实现切片故意先从 `rtl/core/base`、`rtl/core/mem` 和 `rtl/core/text`
-开始。这不是范围缩小，而是为了先把 compiler/session、diagnostics、runtime contract
-lowering 真正会反复共享的 result/span/allocation/path discipline 落成 nextPas 自己的
-仓库资产，再继续往 `fs`、`process`、`time` 扩。
+当前仓库里的实现切片已经从 `rtl/core/base`、`rtl/core/mem` 和 `rtl/core/text`
+推进到第一条 source-backed `System` truth：`rtl/core/system/System.pas` 与
+`units/linux-x86_64/System.pas` 先提供 `TObject.Create`、`TObject.Destroy` 和
+`TObject.Free`。这让显式 `uses System` 的语义分析可以把普通 class 的隐式 `TObject`
+父类和 `Obj.Free` 绑定落到真实 symbol 上。它仍不是完整 `System` 重写，也没有把
+implicit runtime placeholder 改成自动编译/链接 `System.pas`；后续应在这个 source-backed
+边界上继续扩展 unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 
