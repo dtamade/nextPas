@@ -9,8 +9,8 @@ nextPas 的唯一基座框架。提供从基础类型到 HTTP 服务、终端 UI
 - L0: `base`、`errors`、`platform`、`mem`、`log.intf`
 - L1: `testing`、`bytes`、`time`、`sync`
 
-顶层 `build/verify_local.sh` 已覆盖 `nextpas.core.time` 与
-`nextpas.core.platform.sync` 的 focused 编译/运行检查。
+顶层 `build/verify_local.sh` 已覆盖 `nextpas.core.time`，以及
+`nextpas.core.platform` 下 `time` / `thread` / `sync` / FFI focused 编译、运行与边界检查。
 
 ## 构建
 

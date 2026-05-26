@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Thread Native Thread ID Host FFI Hardening；并行收口包含
+当前最新本轮为 Platform Time Host FFI Surface Guard；并行收口包含
+Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -26,6 +27,61 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Time Host FFI Surface Guard
+
+### Goal
+
+给 `platform.time` 补上和 `platform.thread` 对等的 host-ffi surface 守卫：
+
+- focused test 必须冻结 `platform.time` 对 POSIX/Darwin/Windows 时钟 ABI 的消费关系
+- `build/verify_local.sh` 必须把这条新 gate 纳入 official envelope
+- `platform.time` 自己的 focused helper tests 要 direct 覆盖 `platform_realtime_ns` 与
+  `platform_monotonic_resolution_ns`
+
+### Architecture Decision
+
+- `platform.time` 的生产实现继续只负责稳定 clock contract 与换算逻辑，不散落 ABI declaration。
+- 宿主 ABI truth 继续归 `platform.posix.ffi`、`platform.darwin.ffi`、`platform.windows.ffi`
+  等 owner 单元；time-focused source-surface 只验证“谁拥有 ABI、谁消费 ABI”。
+- 这批不把 source-surface gate 伪装成 Darwin / FreeBSD / Android 已有真实 runtime 证据。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：确认 `test_platform_time_host_ffi_surface` 目录缺失
+- [x] RED：确认 `build/verify_local.sh` 尚无 time host ffi surface gate
+- [x] 新增 platform.time host ffi surface focused test 与独立 Makefile
+- [x] 给 time helpers 追加 direct public API coverage
+- [x] 把新 gate 接进 `build/verify_local.sh` 与 final envelope
+- [x] 运行 focused tests
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `test -d core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface`
+    初始失败。
+  - `rg -n "core-platform-time-host-ffi-surface-check|corePlatformTimeHostFfiSurfaceCheck" build/verify_local.sh`
+    初始无结果。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    输出 `11 total, 11 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `core-platform-time-host-ffi-surface-check=pass`、
+  `corePlatformTimeHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不修改 `platform.time` 生产 ABI 或换算语义
+- 这批不宣称 Darwin / FreeBSD / Android 已获得新的 host-side runtime 证据
+- 这批不把 L1 `Duration` / `Instant` / `Stopwatch` 混入 platform
 
 ## Addendum: 2026-05-27 Platform Thread Native Thread ID Host FFI Hardening
 

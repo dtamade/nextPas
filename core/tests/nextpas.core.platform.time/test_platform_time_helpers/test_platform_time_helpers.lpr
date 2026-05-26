@@ -88,6 +88,22 @@ begin
   end;
 end;
 
+procedure TestRealtimeClockAvailable;
+var
+  LRealtime: UInt64;
+begin
+  LRealtime := platform_realtime_ns;
+  Check(LRealtime > 0, 'realtime clock should be available');
+end;
+
+procedure TestMonotonicResolutionAvailable;
+var
+  LResolution: UInt64;
+begin
+  LResolution := platform_monotonic_resolution_ns;
+  Check(LResolution >= 1, 'monotonic resolution must be at least 1ns');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.time.helpers');
   T.Run('QPC to ns basic', @TestQpcToNsBasic);
@@ -99,5 +115,7 @@ begin
   T.Run('Timespec to ns basic', @TestTimespecToNsBasic);
   T.Run('Timespec to ns clamps invalid input', @TestTimespecToNsClampsInvalidInput);
   T.Run('Monotonic never goes backward (1000 calls)', @TestMonotonicNeverGoesBackward);
+  T.Run('Realtime clock is available', @TestRealtimeClockAvailable);
+  T.Run('Monotonic resolution is available', @TestMonotonicResolutionAvailable);
   T.Summary;
 end.

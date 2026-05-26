@@ -25,6 +25,14 @@
   `nextpas.core.platform.posix.ffi`，macOS mach timebase 位于
   `nextpas.core.platform.darwin.ffi`，Windows QPC/FILETIME 位于
   `nextpas.core.platform.windows.ffi`。
+- 新增 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`，把
+  `platform.time` 对 `posix.ffi` / `darwin.ffi` / `windows.ffi` 的 clock ABI 消费关系冻结成
+  source-surface gate；fresh `bash build/verify_local.sh` 已把
+  `core-platform-time-host-ffi-surface-check=pass` /
+  `corePlatformTimeHostFfiSurfaceCheck":"pass"` 纳入 official envelope。
+- `test_platform_time_helpers` 现在 direct 覆盖 `platform_realtime_ns` 与
+  `platform_monotonic_resolution_ns`，platform 自己的 focused test 对 public clock API 的接口覆盖更完整，
+  不再主要依赖 example 与 L1 `time` test 间接证明。
 - `nextpas.core.platform.posix.ffi` 现在应只拥有 shared POSIX ABI：`timespec`、
   `clock_gettime/getres`、`nanosleep`、`sched_yield`、`sysconf` 与 pthread
   type/function declarations；host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno 常量和 errno

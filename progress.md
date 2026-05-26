@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform thread native thread id host ffi hardening；并行收口包含
+当前最新本轮为 platform.time host ffi surface guard；并行收口包含
+platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -15,6 +16,49 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.time host ffi surface guard)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 给 `platform.time` 补上和 `platform.thread` 对等的 host-ffi surface guard，并把缺 direct focused
+    coverage 的 public clock API 一起补齐。
+- Baseline:
+  - `platform.time` 已脱离 FPC 平台单元，也有 helper/no-FPC/L0/example/benchmark gates，但还没有
+    focused source-surface test 固定它对 POSIX/Darwin/Windows clock ABI 的消费关系。
+  - `platform_realtime_ns` 与 `platform_monotonic_resolution_ns` 在 platform 自己的 focused test 里
+    还没有 direct check，主要靠 example 与 L1 `time` test 间接覆盖。
+- Actions taken:
+  - 新增 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`，固定：
+    - `posix.ffi` 必须继续暴露 `timespec` / `clock_gettime` / `clock_getres`
+    - `darwin.ffi` 必须继续暴露 `mach_absolute_time` / `mach_timebase_info`
+    - `windows.ffi` 必须继续暴露 `QueryPerformanceFrequency` /
+      `QueryPerformanceCounter` / `GetSystemTimeAsFileTime`
+    - `platform.time` 必须继续消费 host-owned clock ids 与这些 FFI token
+  - `test_platform_time_helpers` 追加 direct checks：
+    `platform_realtime_ns > 0`、`platform_monotonic_resolution_ns >= 1`。
+  - `build/verify_local.sh` 新增
+    `core-platform-time-host-ffi-surface-check`，并把
+    `corePlatformTimeHostFfiSurfaceCheck` 写进 final envelope。
+- Verification:
+  - RED:
+    - `test -d core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface` 初始失败。
+    - `rg -n "core-platform-time-host-ffi-surface-check|corePlatformTimeHostFfiSurfaceCheck" build/verify_local.sh`
+      初始无结果。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+      输出 `11 total, 11 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出
+      `core-platform-time-host-ffi-surface-check=pass`、
+      `corePlatformTimeHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.time` 从“FFI 已经挪对地方了”推进成“time 对宿主 ABI 的消费关系也正式受保护”。
+  - 下一步更值得做的是继续补 Darwin / FreeBSD / Android 的 compile/runtime matrix 证据，而不是只停在
+    source-surface。
 
 ## Session: 2026-05-27 (platform.thread native thread id host ffi hardening)
 
