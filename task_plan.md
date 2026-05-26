@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Thread Sleep EINTR FFI Ownership；并行收口包含
-Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Time Windows FILETIME Host FFI Ownership；并行收口包含
+Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,56 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Time Windows FILETIME Host FFI Ownership
+
+### Goal
+
+继续把 `platform.time` 的宿主时钟真相从实现层字面量收回到 host-specific FFI owner：
+
+- Windows `FILETIME` 的 Unix epoch offset 不能继续裸写在 `platform.time`
+- Windows `FILETIME` 的 tick size（100ns）也不能继续裸写在 `platform.time`
+- focused gate 必须同时冻结 “owner 在 `windows.ffi`” 与 “实现层不回归魔数”
+
+### Architecture Decision
+
+- Windows `FILETIME` 的 API entry points 继续归 `nextpas.core.platform.windows.ffi`。
+- 与该 ABI 绑定的 epoch/tick truth 也归 `nextpas.core.platform.windows.ffi`；这类事实不是 shared
+  clock algebra，而是宿主时间 ABI 的一部分。
+- `platform.time` 继续只负责换算流程与稳定 L0 contract，不再保存 Windows-specific magic number。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 `windows.ffi` 拥有 FILETIME epoch/tick token
+- [x] RED：要求 `platform.time` 消费这些 token，并禁止裸 epoch 魔数回归
+- [x] 将 FILETIME epoch/tick truth 下沉到 `windows.ffi`
+- [x] 调整 `platform.time` 的 Windows realtime 换算逻辑
+- [x] 同步设计约定与 tracking 文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must own the FILETIME unix epoch offset token for platform.time`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不改 `platform.time` 的 public API
+- 这批不宣称新的 Windows runtime 证据矩阵已经补齐
+- 这批不处理 Darwin mach timebase caching policy
 
 ## Addendum: 2026-05-27 Platform Thread Sleep EINTR FFI Ownership
 

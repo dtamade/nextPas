@@ -82,6 +82,10 @@ begin
     'windows.ffi must expose QueryPerformanceCounter for platform.time');
   CheckTokenPresent(LWindowsSource, 'getsystemtimeasfiletime',
     'windows.ffi must expose GetSystemTimeAsFileTime for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_filetime_unix_epoch_offset_100ns',
+    'windows.ffi must own the FILETIME unix epoch offset token for platform.time');
+  CheckTokenPresent(LWindowsSource, 'windows_filetime_nanoseconds_per_tick',
+    'windows.ffi must own the FILETIME tick size token for platform.time');
 
   CheckTokenPresent(LTimeSource, 'nextpas.core.platform.posix.ffi',
     'platform.time must use shared POSIX ffi declarations');
@@ -115,6 +119,12 @@ begin
     'platform.time must call QueryPerformanceCounter through windows.ffi');
   CheckTokenPresent(LTimeSource, 'getsystemtimeasfiletime',
     'platform.time must call GetSystemTimeAsFileTime through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_filetime_unix_epoch_offset_100ns',
+    'platform.time must consume the FILETIME unix epoch offset through windows.ffi');
+  CheckTokenPresent(LTimeSource, 'windows_filetime_nanoseconds_per_tick',
+    'platform.time must consume the FILETIME tick size through windows.ffi');
+  Check(Pos('116444736000000000', LTimeSource) = 0,
+    'platform.time must not keep a raw Windows FILETIME epoch offset literal');
 end;
 
 begin

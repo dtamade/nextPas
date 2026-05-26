@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.thread sleep eintr ffi ownership；并行收口包含
-platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform.time windows filetime host ffi ownership；并行收口包含
+platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,46 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.time windows filetime host ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 继续把 `platform.time` 的宿主 clock truth 从实现层字面量收回到 host-owned FFI owner，先关闭
+    Windows `FILETIME -> Unix ns` 路径里残留的裸 epoch/tick 常量。
+- Baseline:
+  - `platform.time` 已经通过 `windows.ffi` 调 `GetSystemTimeAsFileTime`，但 realtime 换算仍把
+    `116444736000000000` 与 `100` 这两个 Windows FILETIME 语义字面量直接写在实现里。
+- Actions taken:
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增：
+    - `WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS`
+    - `WINDOWS_FILETIME_NANOSECONDS_PER_TICK`
+  - `core/src/nextpas.core.platform.time.pas` 的 Windows realtime 换算改为消费上述 host-owned token，
+    不再保留裸 `FILETIME` epoch offset 字面量。
+  - 扩充 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`：
+    - `windows.ffi` 必须继续拥有这两个 token
+    - `platform.time` 必须继续消费这两个 token
+    - `platform.time` 不得回归裸 `116444736000000000` 字面量
+  - `core/docs/design-conventions.md` 追加规则：Windows `FILETIME` epoch/tick truth 归
+    `windows.ffi` owner，不能继续埋在 `platform.time` 实现里。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must own the FILETIME unix epoch offset token for platform.time`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      1/1 pass
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+      11/11 pass
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.time` 的一个真实宿主 clock magic-number 缝隙收掉了，`windows.ffi` 现在不仅拥有
+    Windows time API entry points，也开始拥有对应的 epoch/tick truth。
+  - 下一步更值的是继续审 `platform.time` / `platform.sync` 里还剩哪些 host policy 仍停在实现层，
+    特别是 Windows timeout/error semantics 和 Darwin timebase 相关事实。
 
 ## Session: 2026-05-27 (platform.thread sleep eintr ffi ownership)
 

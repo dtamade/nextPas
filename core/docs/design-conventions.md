@@ -800,6 +800,10 @@ shared `posix.ffi` 或实现层条件编译里。
 realtime clock、clock resolution，以及不同平台计数器到纳秒的安全转换。它不提供业务语义、
 对象生命周期或便利封装。
 
+像 Windows `FILETIME` 的 Unix epoch offset、tick size（100ns）这类宿主时钟 ABI truth，也必须由
+`nextpas.core.platform.windows.ffi` 这类 host ffi owner 单元提供；`platform.time` 只消费这些 token，
+不能把裸魔数常量继续埋在实现里。
+
 `TDuration`、`TInstant`、`TStopwatch`、Timer 等时间抽象属于 L1 `nextpas.core.time`
 或后续独立的 `nextpas.core.stopwatch` 模块。platform 层的示例、测试和基准只能验证
 platform clock API 本身，不能把这些 L1 API 放进 `nextpas.core.platform.*` 命名空间。

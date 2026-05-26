@@ -36,6 +36,8 @@ const
   WAIT_OBJECT_0 = DWORD(0);
   ERROR_TIMEOUT = DWORD(1460);
   TLS_OUT_OF_INDEXES = DWORD($FFFFFFFF);
+  WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS = UInt64(116444736000000000);
+  WINDOWS_FILETIME_NANOSECONDS_PER_TICK = UInt64(100);
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';

@@ -350,9 +350,8 @@ var
 begin
   GetSystemTimeAsFileTime(LFt);
   LVal := (UInt64(LFt.dwHighDateTime) shl 32) or UInt64(LFt.dwLowDateTime);
-  // FILETIME is 100ns intervals since 1601-01-01
-  // Unix epoch offset: 116444736000000000 * 100ns
-  Result := (LVal - UInt64(116444736000000000)) * UInt64(100);
+  Result := (LVal - WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS)
+    * WINDOWS_FILETIME_NANOSECONDS_PER_TICK;
 end;
 
 function platform_monotonic_resolution_ns: UInt64;
