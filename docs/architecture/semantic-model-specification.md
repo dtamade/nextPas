@@ -305,6 +305,9 @@ candidate collection
     会隐式继承 `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入
     `member-call` binding；缺少 source-backed System truth 的路径仍保持 deferred，避免把 System
     基线缺口误报成普通 unknown member
+  - no-fold typed HIR 现在会让隐式 `System.TObject` 父类的 VMT slot/function metadata 参与
+    class layout，并把 `Obj.Free` lowering 到当前有效 `Destroy` runtime call；只继承
+    `TObject.Destroy` 的普通 class 会落到 `TObject.Destroy`，而不是不存在的子类 destructor
   - 没有 class layout truth 的 alias / generic specialization / record-like receiver 继续 deferred，直到
     generic instantiation、record methods 和完整 member resolver 进入 semantic model
 

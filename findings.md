@@ -10,6 +10,16 @@
 
 ## Research Findings
 
+- Batch 89 把 source-backed implicit `System` 的对象生命周期从 `TObject.Free` binding 推进到
+  no-fold typed HIR 的 effective `Destroy` runtime call：普通 class 没有显式父类时，会继承
+  `System.TObject` 的 VMT slot/function metadata。
+- `compiler/sema/np_semantic_analyzer.pas` 现在让隐式 `ParentTypeId` 也参与 class layout 复制，
+  并让 `Free` lowering 通过 `TClass$vmt_slot_Destroy` / `TClass$vmt_func_<slot>` 选择当前有效
+  destructor；继承路径可落到 `TObject.Destroy`，不再硬写不存在的 `TWorker.Destroy`。
+- 新 focused semantic RED/GREEN 固定这个边界：旧实现失败在
+  `missing-implicit-system-free-inherited-destroy-lowering`，修正后
+  `semantic-call-bindings-status=pass`。这仍不是完整 heap free、nil guard、动态 virtual dispatch
+  runtime 或 backend/link 接管。
 - Batch 88 把 implicit runtime `System` 从无来源 placeholder 推进到 source-backed semantic truth：
   program 即使没有显式 `uses System`，semantic analyzer 也能从
   `units/linux-x86_64/System.pas` 读取 `TObject` / `TObject.Free`。

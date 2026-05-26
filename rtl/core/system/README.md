@@ -43,8 +43,10 @@ collections 等开发框架能力；但 `core` 不能反过来成为编译器理
   source provenance。
 
 当前这一步已经让 implicit runtime 的普通 `class` 默认继承 `System.TObject`，并让
-`Worker.Free` 通过继承 member lookup 绑定到 `TObject.Free`。这不是完整 FPC `System`，
-也还没有把 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍会跳过
+`Worker.Free` 通过继承 member lookup 绑定到 `TObject.Free`。no-fold typed HIR 还会复制
+隐式 `TObject` 父类的 VMT slot/function truth，让只继承 `System.TObject.Destroy` 的普通
+class 可以把 `Worker.Free` lowering 到 `TObject.Destroy` runtime call。这不是完整 FPC
+`System`，也还没有把 implicit runtime 改成自动编译/链接 `System.pas`；backend 仍会跳过
 `OriginClass=implicit-runtime` 的额外 assemble/link。
 
 ## 这里现在不做什么

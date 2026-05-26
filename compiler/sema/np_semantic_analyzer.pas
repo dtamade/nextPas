@@ -3508,6 +3508,7 @@ var
   ClsName, ParentName, ConstName, FieldName: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
+  ParentTypeId: LongInt;
   SymbolId: LongInt;
 begin
   if ANode = nil then
@@ -3515,10 +3516,18 @@ begin
   ClassScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
   ClsName := FModel.TypeAt(ATypeId - 1).Name;
   FieldIndex := 1;
+  ParentName := '';
   if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+    ParentName := ANode.ChildAt(0).Text
+  else if (ATypeId > 0) and (ATypeId <= FModel.TypeCount) then
   begin
-    ParentName := ANode.ChildAt(0).Text;
+    ParentTypeId := FModel.TypeAt(ATypeId - 1).ParentTypeId;
+    if (ParentTypeId > 0) and (ParentTypeId <= FModel.TypeCount) then
+      ParentName := FModel.TypeAt(ParentTypeId - 1).Name;
+  end;
+  if ParentName <> '' then
+  begin
     if FModel.LookupConstValue(ParentName + '$size', ParentFieldVal) then
     begin
       FieldIndex := LongInt(ParentFieldVal) div 8;
@@ -4863,7 +4872,7 @@ var
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
-  Decoded, StringValue, FuncName, ArgName: string;
+  Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
   ParamSnaps: TParamSnapshots;
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
@@ -5769,10 +5778,16 @@ begin
           if FModel.LookupConstValue(
             StringValue + '$vmt_slot_Destroy', Value) then
           begin
-            Operand := StringValue + '.Destroy' + #9 +
+            DestroyFuncName := StringValue + '.Destroy';
+            if FModel.LookupStringConstValue(
+              StringValue + '$vmt_func_' + IntToStr(Value),
+              FuncName
+            ) then
+              DestroyFuncName := FuncName;
+            Operand := DestroyFuncName + #9 +
               'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
             FModel.AddTypedHirNode('call-runtime',
-              StringValue + '.Destroy', 0, 0, Operand);
+              DestroyFuncName, 0, 0, Operand);
           end;
           Continue;
         end;

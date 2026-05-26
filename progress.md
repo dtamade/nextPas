@@ -3,6 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
+## Session: 2026-05-26 (Batch 89 inherited TObject.Destroy Free lowering)
+
+- **Status:** completed
+- Objective:
+  - 按目标树 G3 / G1.5，把 source-backed implicit `System` 的对象生命周期从
+    `TObject.Free` binding 继续推进到 no-fold typed HIR 的 effective `Destroy` runtime call。
+- Baseline:
+  - Batch 88 已让无显式 `uses System` 的普通 class 继承 `System.TObject` 并绑定
+    `Worker.Free` 到真实 `TObject.Free`。
+  - 但 no-fold lowering 只在 class 自己有 `Destroy` VMT slot 时生成 destructor call；
+    普通 class 只继承 `System.TObject.Destroy` 时仍缺少 `Free -> Destroy` lowering 证据。
+- Actions taken:
+  - 新增 focused semantic RED，要求 implicit source-backed `System` 下的 `Worker.Free`
+    生成 `call-runtime` typed HIR，并落到继承的 `TObject.Destroy`。
+  - `ProcessClassFields(...)` 现在会消费隐式 `ParentTypeId`，复制父类 VMT slot/function metadata。
+  - `Free` lowering 现在通过 `TClass$vmt_slot_Destroy` 和 `TClass$vmt_func_<slot>` 选择当前有效
+    destructor function name，不再硬写 `TClass.Destroy`。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-implicit-system-free-inherited-destroy-lowering`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只表达 semantic/HIR lifecycle intent：`Free` 能找到有效 `Destroy` runtime call。
+    它仍不是完整 heap free、nil guard、动态 virtual dispatch runtime 或 backend/link 接管。
+  - `core/` 并行改动保持未触碰、未提交。
+
 ## Session: 2026-05-26 (Batch 88 implicit runtime source-backed System semantics)
 
 - **Status:** completed

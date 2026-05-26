@@ -239,13 +239,14 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   `TObject`/对象生命周期和 `core` 框架的最低依赖，而不是继续依赖宿主 FPC `System`。
 - 最小 source-backed `System.pas` / `TObject` truth 已落地：implicit runtime 语义层会读取
   target-installed `System.pas`，普通 class 默认继承 `System.TObject`，`Obj.Free` 可绑定到
-  真实 `TObject.Free` method symbol；显式 `uses System` 仍可升级到 explicit source provenance。
+  真实 `TObject.Free` method symbol；no-fold typed HIR 也会把继承路径上的 `Free` lowering 到
+  当前有效 `Destroy` runtime call。显式 `uses System` 仍可升级到 explicit source provenance。
 - 新 `core/` 已开始 L0/L1 基础设施。
 - 当前协作边界：core 由 core 负责人写，非 core 批次不直接修改 `core/`。
 
 下一步证据：
 
-- 继续扩展 `System` source truth：`Destroy` lowering、unit init/fini 和 runtime helper 需要进入明确 gate。
+- 继续扩展 `System` source truth：heap free、nil guard、unit init/fini 和 runtime helper 需要进入明确 gate。
 - compiler/tooling 侧只提出 core 需求和 integration contract。
 - 需要 core 改动时，先形成 review/suggestion，不直接落 core 代码。
 

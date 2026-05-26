@@ -65,9 +65,12 @@ fs/process、time。
 `units/linux-x86_64/System.pas` 先提供 `TObject.Create`、`TObject.Destroy` 和
 `TObject.Free`。这让 implicit runtime 的语义分析可以把普通 class 的隐式 `TObject`
 父类和 `Obj.Free` 绑定落到真实 symbol 上，即使 root source 没有显式 `uses System`。
+no-fold typed HIR 现在还会复制隐式 `TObject` 父类的 VMT slot/function truth，并把
+`Obj.Free` lowering 到当前有效 `Destroy` runtime call；只继承 `System.TObject.Destroy`
+的普通 class 会落到 `TObject.Destroy`。
 它仍不是完整 `System` 重写，也没有把 implicit runtime 改成自动编译/链接 `System.pas`；
 backend 仍把 implicit runtime 排除在额外 assemble/link 之外。后续应在这个 source-backed
-边界上继续扩展 unit init/fini、helper 和 lowering。
+边界上继续扩展 heap free、nil guard、unit init/fini、helper 和 lowering。
 
 ## 把 compiler 和 runtime 的边界写成硬约束
 
