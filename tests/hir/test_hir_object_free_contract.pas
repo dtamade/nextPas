@@ -21,9 +21,10 @@ var
   FuncIndex, BlockIndex, InstrIndex: LongInt;
   NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
   EndLabelPos, ReleaseHelperPos, MagicLoadPos, MagicCheckPos, MagicBranchPos,
+  InvalidLabelPos, InvalidBoundaryCallPos, InvalidDoneBranchPos,
   ReleaseLabelPos, ReleaseBoundaryCallPos, ReleaseDoneBranchPos,
   ReleaseBoundaryHelperPos, ReleaseBoundaryMagicSlotPos,
-  ReleaseBoundaryMagicStorePos: LongInt;
+  ReleaseBoundaryMagicStorePos, InvalidBoundaryHelperPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -199,11 +200,25 @@ begin
     if MagicCheckPos = 0 then
       Fail('missing-object-free-release-header-magic-check');
     MagicBranchPos := FindAfter(
-      'br i1 %magic.ok, label %release, label %done', LlvmText, MagicCheckPos);
+      'br i1 %magic.ok, label %release, label %invalid', LlvmText,
+      MagicCheckPos);
     if MagicBranchPos = 0 then
       Fail('missing-object-free-release-header-magic-branch');
-    ReleaseLabelPos := FindAfter(LineEnding + 'release:', LlvmText,
+    InvalidLabelPos := FindAfter(LineEnding + 'invalid:', LlvmText,
       MagicBranchPos);
+    if InvalidLabelPos = 0 then
+      Fail('missing-object-free-release-invalid-label');
+    InvalidBoundaryCallPos := FindAfter(
+      'call void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)',
+      LlvmText, InvalidLabelPos);
+    if InvalidBoundaryCallPos = 0 then
+      Fail('missing-object-free-release-invalid-boundary-call');
+    InvalidDoneBranchPos := FindAfter('br label %done', LlvmText,
+      InvalidBoundaryCallPos);
+    if InvalidDoneBranchPos = 0 then
+      Fail('missing-object-free-release-invalid-joins-done');
+    ReleaseLabelPos := FindAfter(LineEnding + 'release:', LlvmText,
+      InvalidDoneBranchPos);
     if ReleaseLabelPos = 0 then
       Fail('missing-object-free-release-valid-label');
     ReleaseBoundaryCallPos := FindAfter(
@@ -230,6 +245,13 @@ begin
       ReleaseBoundaryMagicSlotPos);
     if ReleaseBoundaryMagicStorePos = 0 then
       Fail('missing-object-free-release-poison-magic-store');
+    InvalidBoundaryHelperPos := FindAfter(
+      'define internal void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)',
+      LlvmText, ReleaseBoundaryHelperPos);
+    if InvalidBoundaryHelperPos = 0 then
+      Fail('missing-object-free-release-invalid-helper');
+    if FindAfter('  ret void', LlvmText, InvalidBoundaryHelperPos) = 0 then
+      Fail('missing-object-free-release-invalid-helper-return');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

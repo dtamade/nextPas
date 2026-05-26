@@ -116,9 +116,10 @@ contract 记录 nil guard 与 heap release intent；HIR builder 已把该 contra
 hook 只在非空分支执行；class allocation lowering 也已先进入 `@np_object_alloc` helper，再由
 helper 申请 16-byte header + payload，写入 payload size 与 magic 后返回 payload pointer。
 release helper 会从 payload pointer 回退读取该 header、校验 magic，并把合法 header 分到
-`release:` 占位块、非法 header 直接分到 `done:`；`release:` 当前调用
+`release:` 占位块、非法 header 分到 `invalid:`；invalid path 会调用
+`@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`。`release:` 当前调用
 `@np_object_release_valid(ptr %raw, i64 %size)`，把已验证 header 交给 compiler-owned release
-boundary，并清零 header magic，让重复释放进入 magic mismatch skip。当前 object alloc/release
+boundary，并清零 header magic，让重复释放进入 invalid-release boundary。当前 object alloc/release
 helpers 仍是最小 ownership contract，不是真实 allocator free、diagnostics/trap failure path 或完整
 validation runtime。
 这个 source-backed truth 现在不再依赖用户显式写 `uses System`；但 implicit runtime 仍保持

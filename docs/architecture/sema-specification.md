@@ -125,7 +125,8 @@ sema 必须能在编译期求值以下常量表达式：
   branch；非空分支会调用 `Destroy` 后进入 `@np_object_free_release` hook。class allocation
   lowering 也已先进入 `@np_object_alloc` helper，并写入 16-byte object header；release helper
   会从 payload pointer 回退读取该 header、校验 magic，并把合法 header 分到 `release:` 占位块、
-  非法 header 直接分到 `done:`；`release:` 当前调用
+  非法 header 分到 `invalid:` 并调用
+  `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`；`release:` 当前调用
   `@np_object_release_valid(ptr %raw, i64 %size)` 并清零 header magic。这是 object lifecycle
   ownership contract，不是 allocator free、diagnostics/trap failure path 或完整 validation runtime
   已完成的证据。

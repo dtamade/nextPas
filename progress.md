@@ -3,12 +3,38 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 101 object release poison contract；Batch 100 object release valid boundary、
+当前最新本轮为 Batch 102 object release invalid boundary；Batch 101 object release poison contract、
+Batch 100 object release valid boundary、
 Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 102 object release invalid boundary)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 在不修改 `core/` 的前提下，把 magic mismatch 的无声 skip 推进成 compiler-owned
+    invalid-release boundary。
+- Baseline:
+  - Batch 101 已让 valid release 后清零 header magic。
+  - 重复释放同一 payload pointer 时，下一次进入 `@np_object_free_release` 会 mismatch，但旧路径仍
+    直接跳到 `done:`，没有 diagnostics/trap 的稳定挂载点。
+- Actions taken:
+  - 扩展 `test_hir_object_free_contract.pas`：要求 magic mismatch 分支进入 `invalid:`，调用
+    `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)`，再汇合到 `done:`。
+  - `THIRLlvmEmitter.EmitObjectFreeReleaseHelper` 已把 mismatch label 改为 `invalid`。
+  - 新增 `EmitObjectReleaseInvalidHelper`，当前 helper 是 no-op，只固定 invalid-release ABI。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-release-header-magic-branch`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只建立 invalid-release boundary；当前仍没有真实 allocator free、diagnostics/trap failure
+    path、core allocator 接管或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 101 object release poison contract)
 

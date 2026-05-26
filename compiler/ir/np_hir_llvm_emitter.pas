@@ -46,6 +46,7 @@ type
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
     procedure EmitObjectReleaseValidHelper;
+    procedure EmitObjectReleaseInvalidHelper;
     procedure EmitVmtGlobals;
   public
     constructor Create(AModule: THIRModule);
@@ -1019,7 +1020,10 @@ begin
   Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  %magic = load i64, ptr %magicp');
   Emit('  %magic.ok = icmp eq i64 %magic, 1313882451');
-  Emit('  br i1 %magic.ok, label %release, label %done');
+  Emit('  br i1 %magic.ok, label %release, label %invalid');
+  Emit('invalid:');
+  Emit('  call void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)');
+  Emit('  br label %done');
   Emit('release:');
   Emit('  call void @np_object_release_valid(ptr %raw, i64 %size)');
   Emit('  br label %done');
@@ -1027,6 +1031,7 @@ begin
   Emit('  ret void');
   Emit('}');
   EmitObjectReleaseValidHelper;
+  EmitObjectReleaseInvalidHelper;
 end;
 
 procedure THIRLlvmEmitter.EmitObjectReleaseValidHelper;
@@ -1036,6 +1041,15 @@ begin
   Emit('entry:');
   Emit('  %released.magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  store i64 0, ptr %released.magicp');
+  Emit('  ret void');
+  Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitObjectReleaseInvalidHelper;
+begin
+  Emit('');
+  Emit('define internal void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic) {');
+  Emit('entry:');
   Emit('  ret void');
   Emit('}');
 end;

@@ -318,7 +318,8 @@ candidate collection
     `@np_object_free_release` hook；class allocation lowering 也已先进入
     `@np_object_alloc(i64 size)` helper。该 helper 当前写入 16-byte header，记录 payload size
     与 magic，release helper 会从 payload pointer 回退读取 header、校验 magic，并把合法 header
-    分到 `release:` 占位块、非法 header 直接分到 `done:`；`release:` 当前调用
+    分到 `release:` 占位块、非法 header 分到 `invalid:` 并调用
+    `@np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)` 后汇合到 `done:`；`release:` 当前调用
     `@np_object_release_valid(ptr %raw, i64 %size)`，并在该 helper 内清零 header magic。当前 object
     alloc/release helpers 仍只是 ownership contract，还不声明真实 allocator free、diagnostics/trap
     failure path 或完整 dynamic dispatch runtime 已完成
