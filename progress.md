@@ -4769,3 +4769,32 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`（host clock helper ownerization）：pass
 - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`：pass
 - `bash build/verify_local.sh`（platform.time host clock helper ownerization batch）：pass
+
+### Phase 4: Platform Thread Host Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先把 `test_platform_thread_host_ffi_surface` 改成 RED，要求 `windows.ffi` 暴露
+    `windows_current_thread_id_u64`、`windows_thread_yield`、`windows_tls_*`、
+    `windows_cpu_count_i32`，并禁止 `platform.thread` 再直接写 raw
+    `GetCurrentThreadId` / `SwitchToThread` / `Tls*` / `GetSystemInfo`。
+  - 同一个 focused gate 再扩到 Unix：要求
+    `linux/android/darwin/freebsd/unix.ffi` 暴露
+    `platform_thread_self_token_u64`、`platform_native_thread_id_u64`、
+    `platform_cpu_count_i32`，并禁止 consumer 再直接写 `pthread_self` / `gettid` /
+    `pthread_threadid_np` / `pthread_getthreadid_np` / `sysconf(...)`。
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增 current-thread id、yield、TLS 与
+    CPU count helper。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    统一新增 self token / native thread id / CPU count helper。
+  - `core/src/nextpas.core.platform.thread.pas` 改为消费这些 host-owned helper，consumer
+    只继续保留 thread state、public API 契约与跨平台 sleep request 组装。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把这轮 owner boundary 写实。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`（host helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（host helper ownerization）：pass
+- `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass

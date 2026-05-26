@@ -1445,3 +1445,21 @@
 - 当前证据边界仍然要诚实：Win64 compile-only 已补跑通过，但 Darwin compile-only 在当前
   Linux 宿主因为缺少 target `System` 单元而拿不到有效编译证据，因此这批没有新增 Darwin
   runtime / compile proof，只新增了 source-surface owner boundary 与 Linux 主门全绿证据。
+
+## 2026-05-27 Follow-up Findings 4
+
+- `platform.thread` 之前已经把 Windows wait/error、sleep timeout、POSIX errno truth 收进了
+  host ffi owner，但 current-thread id、yield、TLS 和 CPU count helper 仍停留在 consumer。
+- 这轮之后，`windows.ffi` 继续拥有 `windows_current_thread_id_u64`、
+  `windows_thread_yield`、`windows_tls_alloc_key`、`windows_tls_free_key`、
+  `windows_tls_set_value`、`windows_tls_get_value` 与 `windows_cpu_count_i32`；
+  `platform.thread` 不再直接写 raw `GetCurrentThreadId` / `SwitchToThread` / `Tls*` /
+  `GetSystemInfo`。
+- Linux/Android/Darwin/FreeBSD/generic Unix 现在也各自拥有
+  `platform_thread_self_token_u64`、`platform_native_thread_id_u64` 与
+  `platform_cpu_count_i32`，所以 consumer 不再直接写 `pthread_self`、`gettid`、
+  `pthread_threadid_np`、`pthread_getthreadid_np` 或 `sysconf(...)`。
+- 现在 `platform.thread` 的 Unix / Windows 分支更像“platform thread contract consumer”
+  而不是零散的宿主 helper 集合；raw helper 的 ABI / fallback / token truth 都继续留在宿主 ffi owner。
+- 这批 focused gate 也同步冻结了新的 owner boundary：`test_platform_thread_host_ffi_surface`
+  现在不仅检查 helper 是否存在，还显式防回归 consumer 重新直接调用上述 raw helper。

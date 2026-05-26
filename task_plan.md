@@ -6323,3 +6323,67 @@ Completed; verification passed.
 - 这批不改 `platform.time` public API
 - 这批不把 `clock_gettime/getres` 从 shared `posix.ffi` 再抽走
 - 这批不声称当前 Linux 宿主已获得 Darwin runtime evidence
+
+## Addendum: 2026-05-27 Platform Thread Host Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.thread` 里仍散落在 consumer 的 Windows / Unix 线程 helper 下沉到各自
+host-owned ffi owner，让 `platform.thread` 更聚焦于 L0 thread contract 和 handle 生命周期。
+
+### Current Gap
+
+- `platform.thread` 虽然已经把 Windows wait/error、sleep timeout 和 POSIX errno truth
+  下沉到了 host ffi，但 consumer 仍直接调用 Windows `GetCurrentThreadId`、
+  `SwitchToThread`、`Tls*`、`GetSystemInfo`。
+- Unix 分支也仍直接调用 `pthread_self`、`gettid`、`pthread_threadid_np`、
+  `pthread_getthreadid_np` 与 `sysconf(...)`，使当前线程 token、native thread id 和
+  CPU count helper 仍泄漏在 consumer。
+
+### Architecture Decision
+
+- Windows current-thread id、yield、TLS alloc/free/set/get、CPU count helper 继续归
+  `nextpas.core.platform.windows.ffi` owner。
+- Linux/Android/Darwin/FreeBSD/generic Unix 统一新增
+  `platform_thread_self_token_u64`、`platform_native_thread_id_u64`、
+  `platform_cpu_count_i32`，把 Unix host helper 继续收进各宿主 ffi owner。
+- `platform.thread` 只继续拥有 create/join/detach state、public API 契约与跨平台
+  `nanosleep` request construction，不再直接散落上述 raw helper 调用。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 Windows / Unix helper owner boundary 打成 RED
+- [x] 在 `windows.ffi` 新增 current-thread / yield / TLS / CPU count helper
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 self token / native id / CPU count helper
+- [x] 让 `platform.thread` 改为消费 host-owned helper
+- [x] 运行 focused tests
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在 `windows.ffi must expose Windows current-thread id helper`
+  - 同一测试扩充 Unix helper gate 后再次 RED，失败在
+    `linux.ffi must expose Linux thread self token helper`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不重写 Windows create/join/detach state machine
+- 这批不改 `platform.thread` public API
+- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence

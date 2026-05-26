@@ -846,6 +846,13 @@ yield/sleep、TLS key 与 CPU count。它不提供任务调度、线程池、cha
 `pthread_threadid_np`、FreeBSD `pthread_getthreadid_np`）；它是稳定的整数标识，但不要求与
 `platform_thread_self` 同值，也不能把它当作 join/detach handle 使用。
 
+同样，当前线程 token、native thread id、TLS key create/free/set/get、CPU count、
+yield 这类宿主 helper 也应尽量继续归各自 host ffi owner。像 Windows
+`GetCurrentThreadId` / `Tls*` / `GetSystemInfo`，以及 Unix
+`pthread_self` / `gettid` / `pthread_threadid_np` / `pthread_getthreadid_np` /
+`sysconf(_SC_NPROCESSORS_ONLN)` 的选择与 fallback，不应继续散落在 `platform.thread`
+consumer 里。
+
 `ThreadPool`、`TChannel`、`Future`、Scheduler、Task 等抽象属于 L1 `nextpas.core.thread`
 或更高层模块。platform.thread 的测试、示例、基准只能验证 L0 线程 API 本身，不能把这些 L1
 并发抽象放进 `nextpas.core.platform.*` 命名空间。

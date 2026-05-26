@@ -97,26 +97,12 @@ end;
 
 function platform_thread_self: TPlatformThreadToken;
 begin
-  Result := TPlatformThreadToken(PtrUInt(pthread_self));
+  Result := TPlatformThreadToken(platform_thread_self_token_u64);
 end;
 
 function platform_thread_id: UInt64;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := UInt64(UInt32(gettid));
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := UInt64(UInt32(gettid));
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := 0;
-  if pthread_threadid_np(nil, @Result) <> 0 then
-    Result := UInt64(platform_thread_self);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := UInt64(UInt32(pthread_getthreadid_np));
-  if Result = 0 then
-    Result := UInt64(platform_thread_self);
-  {$ELSE}
-  Result := UInt64(PtrUInt(pthread_self));
-  {$ENDIF}
+  Result := platform_native_thread_id_u64;
 end;
 
 procedure platform_thread_yield;
@@ -175,14 +161,8 @@ end;
 { CPU }
 
 function platform_cpu_count: Int32;
-var
-  LResult: PtrInt;
 begin
-  LResult := sysconf(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
-  if LResult < 1 then
-    Result := 1
-  else
-    Result := Int32(LResult);
+  Result := platform_cpu_count_i32;
 end;
 
 {$ENDIF}
@@ -303,17 +283,17 @@ end;
 
 function platform_thread_self: TPlatformThreadToken;
 begin
-  Result := TPlatformThreadToken(GetCurrentThreadId);
+  Result := TPlatformThreadToken(windows_current_thread_id_u64);
 end;
 
 function platform_thread_id: UInt64;
 begin
-  Result := UInt64(GetCurrentThreadId);
+  Result := windows_current_thread_id_u64;
 end;
 
 procedure platform_thread_yield;
 begin
-  SwitchToThread;
+  windows_thread_yield;
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
@@ -331,48 +311,33 @@ function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 var
   LIdx: DWORD;
 begin
-  LIdx := TlsAlloc;
-  if LIdx <> TLS_OUT_OF_INDEXES then
+  Result := windows_tls_alloc_key(LIdx);
+  if Result = 0 then
   begin
     AKey := TPlatformTLSKey(LIdx);
-    Result := 0;
   end
   else
-  begin
     AKey := 0;
-    Result := windows_last_error_i32;
-  end;
 end;
 
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
-  if TlsFree(DWORD(AKey)) then
-    Result := 0
-  else
-    Result := windows_last_error_i32;
+  Result := windows_tls_free_key(DWORD(AKey));
 end;
 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
 begin
-  if TlsSetValue(DWORD(AKey), AValue) then
-    Result := 0
-  else
-    Result := windows_last_error_i32;
+  Result := windows_tls_set_value(DWORD(AKey), AValue);
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 begin
-  Result := TlsGetValue(DWORD(AKey));
+  Result := windows_tls_get_value(DWORD(AKey));
 end;
 
 function platform_cpu_count: Int32;
-var
-  LInfo: SYSTEM_INFO;
 begin
-  GetSystemInfo(LInfo);
-  Result := Int32(LInfo.dwNumberOfProcessors);
-  if Result < 1 then
-    Result := 1;
+  Result := windows_cpu_count_i32;
 end;
 
 {$ENDIF}

@@ -44,6 +44,13 @@ function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 function windows_last_error_i32: Int32; inline;
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
+function windows_current_thread_id_u64: UInt64; inline;
+procedure windows_thread_yield; inline;
+function windows_tls_alloc_key(out AIndex: DWORD): Int32; inline;
+function windows_tls_free_key(const AIndex: DWORD): Int32; inline;
+function windows_tls_set_value(const AIndex: DWORD; const AValue: Pointer): Int32; inline;
+function windows_tls_get_value(const AIndex: DWORD): Pointer; inline;
+function windows_cpu_count_i32: Int32; inline;
 function windows_qpc_frequency_u64: UInt64;
 function windows_qpc_counter_u64(out ACounter: UInt64): Boolean;
 function windows_filetime_now_unix_ns: UInt64;
@@ -135,6 +142,59 @@ end;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
 begin
   Result := AWaitResult = WAIT_OBJECT_0;
+end;
+
+function windows_current_thread_id_u64: UInt64; inline;
+begin
+  Result := UInt64(GetCurrentThreadId);
+end;
+
+procedure windows_thread_yield; inline;
+begin
+  SwitchToThread;
+end;
+
+function windows_tls_alloc_key(out AIndex: DWORD): Int32; inline;
+begin
+  AIndex := TlsAlloc;
+  if AIndex <> TLS_OUT_OF_INDEXES then
+    Result := 0
+  else
+  begin
+    AIndex := 0;
+    Result := windows_last_error_i32;
+  end;
+end;
+
+function windows_tls_free_key(const AIndex: DWORD): Int32; inline;
+begin
+  if TlsFree(AIndex) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_tls_set_value(const AIndex: DWORD; const AValue: Pointer): Int32; inline;
+begin
+  if TlsSetValue(AIndex, AValue) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_tls_get_value(const AIndex: DWORD): Pointer; inline;
+begin
+  Result := TlsGetValue(AIndex);
+end;
+
+function windows_cpu_count_i32: Int32; inline;
+var
+  LInfo: SYSTEM_INFO;
+begin
+  GetSystemInfo(LInfo);
+  Result := Int32(LInfo.dwNumberOfProcessors);
+  if Result < 1 then
+    Result := 1;
 end;
 
 function windows_qpc_frequency_u64: UInt64;

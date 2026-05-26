@@ -33,11 +33,17 @@ function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; 
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 function platform_posix_errno_value: Int32; inline;
+function platform_thread_self_token_u64: UInt64; inline;
+function platform_native_thread_id_u64: UInt64; inline;
+function platform_cpu_count_i32: Int32; inline;
 function darwin_mach_monotonic_ns: UInt64;
 function darwin_mach_monotonic_resolution_ns: UInt64;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32;
 
 implementation
+
+uses
+  nextpas.core.platform.posix.ffi;
 
 var
   GDarwinTimebaseNumer: UInt64 = 0;
@@ -46,6 +52,29 @@ var
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_errno_location^;
+end;
+
+function platform_thread_self_token_u64: UInt64; inline;
+begin
+  Result := UInt64(PtrUInt(pthread_self));
+end;
+
+function platform_native_thread_id_u64: UInt64; inline;
+begin
+  Result := 0;
+  if pthread_threadid_np(nil, @Result) <> 0 then
+    Result := platform_thread_self_token_u64;
+end;
+
+function platform_cpu_count_i32: Int32; inline;
+var
+  LResult: PtrInt;
+begin
+  LResult := sysconf(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
+  if LResult < 1 then
+    Result := 1
+  else
+    Result := Int32(LResult);
 end;
 
 function darwin_mul_div_floor(const AValue: UInt64; const AMultiplier: UInt64; const ADivisor: UInt64): UInt64;
