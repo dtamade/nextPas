@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Time Host FFI Surface Guard；并行收口包含
-Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Sync Host FFI Surface Guard；并行收口包含
+Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,61 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Host FFI Surface Guard
+
+### Goal
+
+给 `platform.sync` 补上和 `platform.time` / `platform.thread` 对等的 host-ffi surface 守卫：
+
+- focused test 必须冻结 `platform.sync` 对 Linux futex ABI、Windows wait-on-address ABI、
+  以及 host-owned errno/clock token 的消费关系
+- `build/verify_local.sh` 必须把这条新 gate 纳入 official envelope
+- 这批收口后要把旧 `platform-time-integration` worktree 的 merge 价值说清楚，避免把过期平台分支误认成待合主线
+
+### Architecture Decision
+
+- `platform.sync` 的生产实现继续只负责同步原语契约、等待策略与错误映射，不在实现单元重新散落 ABI declaration。
+- Linux futex ABI 继续归 `nextpas.core.platform.linux.ffi`，Windows wait-address ABI 继续归
+  `nextpas.core.platform.windows.ffi`，shared pthread ABI 继续归 `nextpas.core.platform.posix.ffi`，
+  host-owned errno/clock token 继续归 `android/darwin/freebsd/unix` 等目标 FFI owner 单元。
+- source-surface gate 只冻结“谁拥有 ABI、谁消费 ABI”，不把它伪装成 Darwin / FreeBSD / Android
+  已有新的真实 runtime 证据。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：确认 `test_platform_sync_host_ffi_surface` 目录缺失
+- [x] RED：确认 `build/verify_local.sh` 尚无 sync host ffi surface gate
+- [x] 新增 platform.sync host ffi surface focused test 与独立 Makefile
+- [x] 把新 gate 接进 `build/verify_local.sh` 与 final envelope
+- [x] 运行 focused test
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 复盘 `platform-time-integration` worktree 的 merge 价值
+
+### Verification
+
+- RED:
+  - `test -d core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface`
+    初始失败。
+  - `rg -n "core-platform-sync-host-ffi-surface-check|corePlatformSyncHostFfiSurfaceCheck" build/verify_local.sh`
+    初始无结果。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `core-platform-sync-host-ffi-surface-check=pass`、
+  `corePlatformSyncHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不修改 `platform.sync` 的行为语义或 public API
+- 这批不宣称 Darwin / FreeBSD / Android 已获得新的 host-side runtime 证据
+- 这批不直接整条合并旧 `platform-time-integration` worktree
 
 ## Addendum: 2026-05-27 Platform Time Host FFI Surface Guard
 

@@ -66,6 +66,14 @@
 - `platform.sync` 现已补齐和 `platform.time` / `platform.thread` 同等级的 focused gate：
   behavior、no-FPC、L0 boundary、sizes、Win64 compile-only、example、benchmark 都进入
   official local verification surface。
+- 新增 `core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/`，把
+  `platform.sync` 对 Linux futex ABI、Windows wait-address ABI 与 host-owned errno/clock token 的
+  消费关系冻结成 source-surface gate；fresh `bash build/verify_local.sh` 已把
+  `core-platform-sync-host-ffi-surface-check=pass` /
+  `corePlatformSyncHostFfiSurfaceCheck":"pass"` 纳入 official envelope。
+- `codex/platform-time-integration` 当前不是可直接 merge 的活跃平台分支：`main` 相对它 ahead `51`，
+  它自己只 ahead `1`，且那个唯一提交混有 `demo_stopwatch`、L1 `bench_platform_time` 与广泛
+  Makefile/doc 改动；它更适合作为历史参考，而不是整条合入主线。
 - `platform.sync` 现在还有 generic `NEXTPAS_UNIX` pthread runtime 路径：
   non-Linux Unix 的 `platform_wait_address32` / wake 走 bucketed condvar fallback，Linux 继续默认
   走 futex，但可以通过 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 在 Linux 主机上强制验证
@@ -315,8 +323,8 @@
   external declaration 暴露，读取 errno 的逻辑位于 `platform.sync` 实现层。
 - 主线新增的 `atomic`、`hashmap`、`arena`、`pool`、`thread` 测试项目暴露了 per-project
   Makefile 规则的合并缺口；补齐后 `make -C core test` 已能覆盖全部 core 测试项目。
-- 当前硬规则仍有后续债务：`platform.time` 仍存在 FPC 平台单元依赖，应在新
-  worktree 中继续按 `posix.ffi` / `linux.ffi` / Windows FFI 边界迁移。
+- `platform.time` 脱离 FPC 平台单元这条硬规则债务已经在主线关闭；当前更真实的后续债务是
+  Darwin / FreeBSD / Android 的 compile/runtime 证据矩阵，以及旧 platform worktree 的清理与归档边界。
 - Platform sync closeout 证明 `build/verify_local.sh` 之前不是 stage0 行为失败，而是 verification
   contract 自身把 explicit workspace 固定成 `.*/nextPas`，导致 linked worktree 下误报
   `missing-stage0-workspace-root`。
