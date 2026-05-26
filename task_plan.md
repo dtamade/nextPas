@@ -15,11 +15,57 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 100 Object Release Valid Boundary；Batch 99 Object Header Magic Validation、
+当前最新本轮为 Batch 101 Object Release Poison Contract；Batch 100 Object Release Valid Boundary、
+Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 101 Object Release Poison Contract
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 100 的 no-op valid-release boundary 推进成最小安全行为：
+
+- `@np_object_release_valid(ptr %raw, i64 %size)` 必须在 valid release 后把 header magic 清零。
+- 后续重复释放同一 payload pointer 时，会因为 magic mismatch 走 `done:` skip 路径。
+- 本批仍不实现真实 allocator free，不接入 `core/` allocator，不改变 object header layout。
+
+### Architecture Decision
+
+valid-release helper 当前只做 header poisoning：
+
+- raw pointer 仍是 object header 起点，magic slot 固定为 `raw + 8`。
+- poison 值固定为 `0`，与 live object magic `1313882451` 区分。
+- payload size 保留不变，给后续 diagnostics/statistics/free 继续使用。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：valid release helper 必须定位 magic slot 并 `store i64 0`
+- [x] 实现 LLVM release poison 行为
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-poison-magic-slot`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不修改或暂存 `core/`
+- 不改变 object header layout
+- 不实现 diagnostics / trap / exception failure path
+- 不实现完整 dynamic dispatch runtime
 
 ## Addendum: 2026-05-26 Batch 100 Object Release Valid Boundary
 

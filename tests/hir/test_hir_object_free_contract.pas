@@ -22,7 +22,8 @@ var
   NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
   EndLabelPos, ReleaseHelperPos, MagicLoadPos, MagicCheckPos, MagicBranchPos,
   ReleaseLabelPos, ReleaseBoundaryCallPos, ReleaseDoneBranchPos,
-  ReleaseBoundaryHelperPos: LongInt;
+  ReleaseBoundaryHelperPos, ReleaseBoundaryMagicSlotPos,
+  ReleaseBoundaryMagicStorePos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -219,6 +220,16 @@ begin
       LlvmText, ReleaseHelperPos);
     if ReleaseBoundaryHelperPos = 0 then
       Fail('missing-object-free-release-valid-helper');
+    ReleaseBoundaryMagicSlotPos := FindAfter(
+      '%released.magicp = getelementptr i8, ptr %raw, i64 8', LlvmText,
+      ReleaseBoundaryHelperPos);
+    if ReleaseBoundaryMagicSlotPos = 0 then
+      Fail('missing-object-free-release-poison-magic-slot');
+    ReleaseBoundaryMagicStorePos := FindAfter(
+      'store i64 0, ptr %released.magicp', LlvmText,
+      ReleaseBoundaryMagicSlotPos);
+    if ReleaseBoundaryMagicStorePos = 0 then
+      Fail('missing-object-free-release-poison-magic-store');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally

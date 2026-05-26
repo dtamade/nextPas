@@ -3,11 +3,36 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 100 object release valid boundary；Batch 99 object header magic validation、
+当前最新本轮为 Batch 101 object release poison contract；Batch 100 object release valid boundary、
+Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 101 object release poison contract)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 在不修改 `core/` 的前提下，把 `@np_object_release_valid` 从 no-op boundary 推进成 valid release
+    后 poison header magic 的最小安全行为。
+- Baseline:
+  - Batch 100 已让 magic-valid release 分支调用 `@np_object_release_valid(ptr %raw, i64 %size)`。
+  - 该 helper 仍只是 `ret void`，重复释放同一 payload pointer 时 header magic 仍保持 live magic。
+- Actions taken:
+  - 扩展 `test_hir_object_free_contract.pas`：要求 valid-release helper 通过
+    `%released.magicp = getelementptr i8, ptr %raw, i64 8` 定位 magic slot，并执行
+    `store i64 0, ptr %released.magicp`。
+  - `THIRLlvmEmitter.EmitObjectReleaseValidHelper` 已在返回前清零 header magic。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-object-free-release-poison-magic-slot`。
+  - GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只实现 valid release 后的 magic poison；当前仍没有真实 allocator free、diagnostics/trap
+    failure path、core allocator 接管或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 100 object release valid boundary)
 

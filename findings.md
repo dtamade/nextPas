@@ -22,9 +22,19 @@
   `remainder * multiplier` 会溢出但最终商仍可表示时，走逐位 fallback 而不是直接饱和。
 - `build/verify_local.sh` 已提升 platform time focused gates：time helpers、no-FPC 静态检查和 Win64
   compile-only 都会进入 official local verification。
-- 本批 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
+- platform.time 批次的 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 101 把 `@np_object_release_valid` 从 no-op boundary 推进成 valid release 后的 magic poison：
+  helper 会定位 header offset 8 并写入 `0`，让重复释放同一 payload pointer 在下一次进入
+  `@np_object_free_release` 时走 magic mismatch skip 路径。
+- Batch 101 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `hir-object-free-contract=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 新 focused RED 固定旧行为缺口：Batch 100 的 valid-release helper 只 `ret void`，因此
+  object-free focused test 失败在 `missing-object-free-release-poison-magic-slot`。
+- 修正后 release poison 已是实际运行期状态变化，但仍不是 allocator free、diagnostics/trap failure
+  path、core allocator 接管或完整 dynamic dispatch runtime。
 - Batch 100 把 magic-valid `release:` 占位块推进成 compiler-owned
   `@np_object_release_valid(ptr %raw, i64 %size)` boundary；只有 header magic 校验通过后才会调用，
   参数固定为 header raw pointer 与 payload size。

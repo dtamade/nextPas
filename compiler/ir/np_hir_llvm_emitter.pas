@@ -1034,6 +1034,8 @@ begin
   Emit('');
   Emit('define internal void @np_object_release_valid(ptr %raw, i64 %size) {');
   Emit('entry:');
+  Emit('  %released.magicp = getelementptr i8, ptr %raw, i64 8');
+  Emit('  store i64 0, ptr %released.magicp');
   Emit('  ret void');
   Emit('}');
 end;

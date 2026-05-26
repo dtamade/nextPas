@@ -126,8 +126,9 @@ sema 必须能在编译期求值以下常量表达式：
   lowering 也已先进入 `@np_object_alloc` helper，并写入 16-byte object header；release helper
   会从 payload pointer 回退读取该 header、校验 magic，并把合法 header 分到 `release:` 占位块、
   非法 header 直接分到 `done:`；`release:` 当前调用
-  `@np_object_release_valid(ptr %raw, i64 %size)`。这是 object lifecycle ownership contract，不是
-  allocator free、diagnostics/trap failure path 或完整 validation runtime 已完成的证据。
+  `@np_object_release_valid(ptr %raw, i64 %size)` 并清零 header magic。这是 object lifecycle
+  ownership contract，不是 allocator free、diagnostics/trap failure path 或完整 validation runtime
+  已完成的证据。
 - `sema.incompatible-assignment`：赋值类型不兼容
 - `sema.wrong-argument-count`：实参数量与形参不匹配
 - `sema.ambiguous-overload`：同名同参数个数 callable 候选无法唯一消歧
