@@ -13,6 +13,10 @@ const
   PLATFORM_MUTEX_SIZE   = 40;
   PLATFORM_RWLOCK_SIZE  = 8;
   PLATFORM_CONDVAR_SIZE = 8;
+  {$ELSEIF defined(NEXTPAS_UNIX)}
+  PLATFORM_MUTEX_SIZE   = 64;
+  PLATFORM_RWLOCK_SIZE  = 256;
+  PLATFORM_CONDVAR_SIZE = 64;
   {$ELSE}
   PLATFORM_MUTEX_SIZE   = 64;
   PLATFORM_RWLOCK_SIZE  = 64;
@@ -81,10 +85,10 @@ function platform_wake_address_all(AAddr: PInt32): Int32;
 
 implementation
 
-{$IFDEF NEXTPAS_LINUX}
+{$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.linux.ffi;
+  nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.ffi{$ENDIF};
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -92,56 +96,268 @@ uses
   nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
-{$IFDEF NEXTPAS_LINUX}
+const
+  NANOSECONDS_PER_SECOND = UInt64(1000000000);
 
-function platform_linux_errno: Int32; inline;
+{$IFDEF NEXTPAS_UNIX}
+const
+  POSIX_WAIT_BUCKET_COUNT = 64;
+
+type
+  TPosixWaitBucket = record
+    Mutex: TPlatformMutex;
+    CondVar: TPlatformCondVar;
+    Waiters: Int32;
+    Generation: UInt64;
+  end;
+
+var
+  GPosixWaitBuckets: array[0..POSIX_WAIT_BUCKET_COUNT - 1] of TPosixWaitBucket;
+  GPosixWaitBucketsState: Int32 = 0;
+  GPosixWaitBucketsInitResult: Int32 = 0;
+
+function platform_posix_errno: Int32; inline;
 begin
+  {$IFDEF NEXTPAS_LINUX}
   Result := linux_errno_location^;
+  {$ELSE}
+  Result := posix_errno_location^;
+  {$ENDIF}
 end;
 
-{ Mutex }
+function platform_posix_map_error(const ACode: Int32): Int32; inline;
+begin
+  case ACode of
+    0: Result := 0;
+    POSIX_EAGAIN: Result := PLATFORM_ERR_AGAIN;
+    POSIX_EBUSY: Result := PLATFORM_ERR_BUSY;
+    POSIX_EINVAL: Result := PLATFORM_ERR_INVALID;
+    POSIX_ENOTSUP: Result := PLATFORM_ERR_UNSUPPORTED;
+    POSIX_ETIMEDOUT: Result := PLATFORM_ERR_TIMEOUT;
+  else
+    Result := ACode;
+  end;
+end;
 
-function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
+function platform_posix_timeout_clock_id: Int32; inline;
+begin
+  {$IFDEF NEXTPAS_MACOS}
+  Result := CLOCK_REALTIME;
+  {$ELSE}
+  Result := CLOCK_MONOTONIC;
+  {$ENDIF}
+end;
+
+function platform_posix_now(out ATime: timespec): Int32;
+begin
+  if clock_gettime(platform_posix_timeout_clock_id, @ATime) = 0 then
+    Result := 0
+  else
+    Result := platform_posix_map_error(platform_posix_errno);
+end;
+
+procedure platform_posix_add_timeout(var ATime: timespec; const ANanoseconds: UInt64); inline;
+var
+  LSeconds: UInt64;
+  LNanos: UInt64;
+begin
+  LSeconds := ANanoseconds div NANOSECONDS_PER_SECOND;
+  LNanos := ANanoseconds mod NANOSECONDS_PER_SECOND;
+  ATime.tv_sec := ATime.tv_sec + Int64(LSeconds);
+  ATime.tv_nsec := ATime.tv_nsec + Int64(LNanos);
+  if ATime.tv_nsec >= Int64(NANOSECONDS_PER_SECOND) then
+  begin
+    Inc(ATime.tv_sec);
+    Dec(ATime.tv_nsec, Int64(NANOSECONDS_PER_SECOND));
+  end;
+end;
+
+function platform_posix_timespec_to_ns(const ATime: timespec): UInt64; inline;
+var
+  LSecNs: UInt64;
+begin
+  if (ATime.tv_sec <= 0) and (ATime.tv_nsec <= 0) then
+    Exit(0);
+
+  if ATime.tv_sec > 0 then
+  begin
+    if UInt64(ATime.tv_sec) > High(UInt64) div NANOSECONDS_PER_SECOND then
+      Exit(High(UInt64));
+    LSecNs := UInt64(ATime.tv_sec) * NANOSECONDS_PER_SECOND;
+  end
+  else
+    LSecNs := 0;
+
+  if ATime.tv_nsec > 0 then
+  begin
+    if LSecNs > High(UInt64) - UInt64(ATime.tv_nsec) then
+      Exit(High(UInt64));
+    Result := LSecNs + UInt64(ATime.tv_nsec);
+  end
+  else
+    Result := LSecNs;
+end;
+
+function platform_posix_remaining_ns(const ADeadline: timespec; const ANow: timespec): UInt64; inline;
+var
+  LDeadlineNs: UInt64;
+  LNowNs: UInt64;
+begin
+  LDeadlineNs := platform_posix_timespec_to_ns(ADeadline);
+  LNowNs := platform_posix_timespec_to_ns(ANow);
+  if LDeadlineNs <= LNowNs then
+    Exit(0);
+  Result := LDeadlineNs - LNowNs;
+end;
+
+function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
+begin
+  Result := (PtrUInt(AAddr) shr 2) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
+end;
+
+function platform_posix_mutex_kind(const AKind: Int32): Int32; inline;
+begin
+  case AKind of
+    PLATFORM_MUTEX_NORMAL: Result := PTHREAD_MUTEX_NORMAL;
+    PLATFORM_MUTEX_RECURSIVE: Result := PTHREAD_MUTEX_RECURSIVE;
+  else
+    Result := PTHREAD_MUTEX_ERRORCHECK;
+  end;
+end;
+
+function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 var
   LAttr: pthread_mutexattr_t;
-  LKind: Int32;
 begin
   FillChar(AMutex, SizeOf(AMutex), 0);
-  Result := pthread_mutexattr_init(@LAttr);
-  if Result <> 0 then Exit;
+  Result := platform_posix_map_error(pthread_mutexattr_init(@LAttr));
+  if Result <> 0 then
+    Exit;
   try
-    case AKind of
-      PLATFORM_MUTEX_NORMAL: LKind := PTHREAD_MUTEX_NORMAL;
-      PLATFORM_MUTEX_RECURSIVE: LKind := PTHREAD_MUTEX_RECURSIVE;
-    else
-      LKind := PTHREAD_MUTEX_ERRORCHECK;
-    end;
-    Result := pthread_mutexattr_settype(@LAttr, LKind);
-    if Result <> 0 then Exit;
-    Result := pthread_mutex_init(@AMutex.FOpaque[0], @LAttr);
+    Result := platform_posix_map_error(
+      pthread_mutexattr_settype(@LAttr, platform_posix_mutex_kind(AKind)));
+    if Result <> 0 then
+      Exit;
+    Result := platform_posix_map_error(pthread_mutex_init(@AMutex.FOpaque[0], @LAttr));
   finally
     pthread_mutexattr_destroy(@LAttr);
   end;
 end;
 
+function platform_posix_condvar_init_impl(var ACondVar: TPlatformCondVar): Int32;
+var
+  LAttr: pthread_condattr_t;
+begin
+  FillChar(ACondVar, SizeOf(ACondVar), 0);
+  Result := platform_posix_map_error(pthread_condattr_init(@LAttr));
+  if Result <> 0 then
+    Exit;
+  try
+    {$IFNDEF NEXTPAS_MACOS}
+    Result := platform_posix_map_error(
+      pthread_condattr_setclock(@LAttr, platform_posix_timeout_clock_id));
+    if Result <> 0 then
+      Exit;
+    {$ENDIF}
+    Result := platform_posix_map_error(pthread_cond_init(@ACondVar.FOpaque[0], @LAttr));
+  finally
+    pthread_condattr_destroy(@LAttr);
+  end;
+end;
+
+function platform_posix_condvar_timedwait_abs(
+  var ACondVar: TPlatformCondVar;
+  var AMutex: TPlatformMutex;
+  const ADeadline: timespec): Int32;
+var
+  LDeadline: timespec;
+begin
+  LDeadline := ADeadline;
+  Result := platform_posix_map_error(
+    pthread_cond_timedwait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], @LDeadline));
+end;
+
+procedure platform_posix_wait_buckets_destroy_range(const ALastIndex: Integer);
+var
+  I: Integer;
+begin
+  for I := ALastIndex downto 0 do
+  begin
+    platform_condvar_destroy(GPosixWaitBuckets[I].CondVar);
+    platform_mutex_destroy(GPosixWaitBuckets[I].Mutex);
+  end;
+end;
+
+function platform_posix_wait_buckets_init: Int32;
+var
+  I: Integer;
+begin
+  for I := 0 to POSIX_WAIT_BUCKET_COUNT - 1 do
+  begin
+    GPosixWaitBuckets[I].Waiters := 0;
+    GPosixWaitBuckets[I].Generation := 0;
+    Result := platform_posix_mutex_init_impl(
+      GPosixWaitBuckets[I].Mutex, PLATFORM_MUTEX_NORMAL);
+    if Result <> 0 then
+    begin
+      if I > 0 then
+        platform_posix_wait_buckets_destroy_range(I - 1);
+      Exit;
+    end;
+    Result := platform_posix_condvar_init_impl(GPosixWaitBuckets[I].CondVar);
+    if Result <> 0 then
+    begin
+      platform_mutex_destroy(GPosixWaitBuckets[I].Mutex);
+      if I > 0 then
+        platform_posix_wait_buckets_destroy_range(I - 1);
+      Exit;
+    end;
+  end;
+  Result := 0;
+end;
+
+function platform_posix_ensure_wait_buckets: Int32;
+begin
+  if InterlockedCompareExchange(GPosixWaitBucketsState, 0, 0) = 2 then
+    Exit(GPosixWaitBucketsInitResult);
+
+  if InterlockedCompareExchange(GPosixWaitBucketsState, 1, 0) = 0 then
+  begin
+    GPosixWaitBucketsInitResult := platform_posix_wait_buckets_init;
+    InterlockedExchange(GPosixWaitBucketsState, 2);
+    Exit(GPosixWaitBucketsInitResult);
+  end;
+
+  while InterlockedCompareExchange(GPosixWaitBucketsState, 0, 0) <> 2 do
+    sched_yield;
+  Result := GPosixWaitBucketsInitResult;
+end;
+
+{ Mutex }
+
+function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
+begin
+  Result := platform_posix_mutex_init_impl(AMutex, AKind);
+end;
+
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := pthread_mutex_destroy(@AMutex.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_mutex_destroy(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := pthread_mutex_lock(@AMutex.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_mutex_lock(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := pthread_mutex_trylock(@AMutex.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_mutex_trylock(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := pthread_mutex_unlock(@AMutex.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_mutex_unlock(@AMutex.FOpaque[0]));
 end;
 
 { RWLock }
@@ -149,109 +365,244 @@ end;
 function platform_rwlock_init(var ARwLock: TPlatformRwLock): Int32;
 begin
   FillChar(ARwLock, SizeOf(ARwLock), 0);
-  Result := pthread_rwlock_init(@ARwLock.FOpaque[0], nil);
+  Result := platform_posix_map_error(pthread_rwlock_init(@ARwLock.FOpaque[0], nil));
 end;
 
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_destroy(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_destroy(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_rdlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_rdlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_tryrdlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_tryrdlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_wrlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_wrlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_unlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_unlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := pthread_rwlock_unlock(@ARwLock.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_rwlock_unlock(@ARwLock.FOpaque[0]));
 end;
 
 { CondVar }
 
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
-var
-  LAttr: pthread_condattr_t;
 begin
-  FillChar(ACondVar, SizeOf(ACondVar), 0);
-  Result := pthread_condattr_init(@LAttr);
-  if Result <> 0 then Exit;
-  try
-    Result := pthread_condattr_setclock(@LAttr, CLOCK_MONOTONIC);
-    if Result <> 0 then Exit;
-    Result := pthread_cond_init(@ACondVar.FOpaque[0], @LAttr);
-  finally
-    pthread_condattr_destroy(@LAttr);
-  end;
+  Result := platform_posix_condvar_init_impl(ACondVar);
 end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := pthread_cond_destroy(@ACondVar.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_cond_destroy(@ACondVar.FOpaque[0]));
 end;
 
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;
 begin
-  Result := pthread_cond_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]);
+  Result := platform_posix_map_error(
+    pthread_cond_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]));
 end;
 
-function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
+function platform_condvar_timedwait(
+  var ACondVar: TPlatformCondVar;
+  var AMutex: TPlatformMutex;
+  const ATimeoutNs: Int64): Int32;
 var
-  LTs: timespec;
-  LNow: timespec;
+  LDeadline: timespec;
 begin
   if ATimeoutNs < 0 then
-  begin
-    Result := pthread_cond_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]);
-    Exit;
-  end;
+    Exit(platform_condvar_wait(ACondVar, AMutex));
 
-  Result := clock_gettime(CLOCK_MONOTONIC, @LNow);
+  Result := platform_posix_now(LDeadline);
   if Result <> 0 then
-  begin
-    Result := platform_linux_errno;
     Exit;
-  end;
-  LTs.tv_sec := LNow.tv_sec + (ATimeoutNs div 1000000000);
-  LTs.tv_nsec := LNow.tv_nsec + (ATimeoutNs mod 1000000000);
-  if LTs.tv_nsec >= 1000000000 then
-  begin
-    Inc(LTs.tv_sec);
-    Dec(LTs.tv_nsec, 1000000000);
-  end;
-  Result := pthread_cond_timedwait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], @LTs);
+
+  platform_posix_add_timeout(LDeadline, UInt64(ATimeoutNs));
+  Result := platform_posix_condvar_timedwait_abs(ACondVar, AMutex, LDeadline);
 end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := pthread_cond_signal(@ACondVar.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_cond_signal(@ACondVar.FOpaque[0]));
 end;
 
 function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := pthread_cond_broadcast(@ACondVar.FOpaque[0]);
+  Result := platform_posix_map_error(pthread_cond_broadcast(@ACondVar.FOpaque[0]));
 end;
 
+function platform_posix_wait_address_fallback(
+  AAddr: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+  LDeadline: timespec;
+  LNow: timespec;
+  LRemainingNs: UInt64;
+  LGeneration: UInt64;
+  LRet: Int32;
+  LLocked: Boolean;
+  LWaiting: Boolean;
+  LDone: Boolean;
+begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if AAddr^ <> AExpected then
+    Exit(PLATFORM_ERR_AGAIN);
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index(AAddr)];
+  LLocked := False;
+  LWaiting := False;
+  LDone := False;
+
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  LLocked := True;
+  try
+    if AAddr^ <> AExpected then
+      Result := PLATFORM_ERR_AGAIN
+    else if ATimeoutNs = 0 then
+      Result := PLATFORM_ERR_TIMEOUT
+    else
+    begin
+      Inc(LBucket^.Waiters);
+      LWaiting := True;
+      LGeneration := LBucket^.Generation;
+
+      if ATimeoutNs > 0 then
+      begin
+        Result := platform_posix_now(LDeadline);
+        if Result = 0 then
+          platform_posix_add_timeout(LDeadline, UInt64(ATimeoutNs))
+        else
+          LDone := True;
+      end;
+
+      while (Result = 0) and not LDone do
+      begin
+        if ATimeoutNs < 0 then
+          LRet := platform_condvar_wait(LBucket^.CondVar, LBucket^.Mutex)
+        else
+        begin
+          Result := platform_posix_now(LNow);
+          if Result <> 0 then
+            Break;
+          LRemainingNs := platform_posix_remaining_ns(LDeadline, LNow);
+          if LRemainingNs = 0 then
+          begin
+            Result := PLATFORM_ERR_TIMEOUT;
+            Break;
+          end;
+          LRet := platform_posix_condvar_timedwait_abs(
+            LBucket^.CondVar, LBucket^.Mutex, LDeadline);
+        end;
+
+        if LRet = 0 then
+        begin
+          if (LBucket^.Generation <> LGeneration) or (AAddr^ <> AExpected) then
+            LDone := True;
+        end
+        else if LRet = PLATFORM_ERR_TIMEOUT then
+        begin
+          if (LBucket^.Generation <> LGeneration) or (AAddr^ <> AExpected) then
+            Result := 0
+          else
+            Result := PLATFORM_ERR_TIMEOUT;
+          LDone := True;
+        end
+        else
+        begin
+          Result := LRet;
+          LDone := True;
+        end;
+      end;
+    end;
+  finally
+    if LWaiting then
+      Dec(LBucket^.Waiters);
+    if LLocked then
+      platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
+function platform_posix_wake_address_one_fallback(AAddr: PInt32): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index(AAddr)];
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  try
+    Inc(LBucket^.Generation);
+    if LBucket^.Waiters > 0 then
+      Result := platform_condvar_signal(LBucket^.CondVar)
+    else
+      Result := 0;
+  finally
+    platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
+function platform_posix_wake_address_all_fallback(AAddr: PInt32): Int32;
+var
+  LBucket: ^TPosixWaitBucket;
+begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
+  Result := platform_posix_ensure_wait_buckets;
+  if Result <> 0 then
+    Exit;
+
+  LBucket := @GPosixWaitBuckets[platform_posix_bucket_index(AAddr)];
+  Result := platform_mutex_lock(LBucket^.Mutex);
+  if Result <> 0 then
+    Exit;
+  try
+    Inc(LBucket^.Generation);
+    if LBucket^.Waiters > 0 then
+      Result := platform_condvar_broadcast(LBucket^.CondVar)
+    else
+      Result := 0;
+  finally
+    platform_mutex_unlock(LBucket^.Mutex);
+  end;
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+{$IFNDEF NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK}
 { Address-wait (futex on Linux) }
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
@@ -259,6 +610,9 @@ var
   LTs: timespec;
   LRet: PtrInt;
 begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   if ATimeoutNs < 0 then
   begin
     LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
@@ -276,35 +630,78 @@ begin
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_linux_errno;
+    Result := platform_posix_map_error(platform_posix_errno);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
 var
   LRet: PtrInt;
 begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
     PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(1),
     PtrUInt(0), PtrUInt(0), PtrUInt(0));
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_linux_errno;
+    Result := platform_posix_map_error(platform_posix_errno);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
 var
   LRet: PtrInt;
 begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
   LRet := linux_syscall(LINUX_SYSCALL_FUTEX, PtrUInt(AAddr),
     PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG), PtrUInt(High(Int32)),
     PtrUInt(0), PtrUInt(0), PtrUInt(0));
   if LRet >= 0 then
     Result := 0
   else
-    Result := platform_linux_errno;
+    Result := platform_posix_map_error(platform_posix_errno);
+end;
+{$ENDIF}
+{$ENDIF}
+
+{$IFNDEF NEXTPAS_LINUX}
+{ Address-wait (generic POSIX fallback) }
+function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_posix_wait_address_fallback(AAddr, AExpected, ATimeoutNs);
 end;
 
+function platform_wake_address_one(AAddr: PInt32): Int32;
+begin
+  Result := platform_posix_wake_address_one_fallback(AAddr);
+end;
+
+function platform_wake_address_all(AAddr: PInt32): Int32;
+begin
+  Result := platform_posix_wake_address_all_fallback(AAddr);
+end;
+{$ELSE}
+{$IFDEF NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK}
+{ Address-wait (generic POSIX fallback forced on Linux for verification) }
+function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+begin
+  Result := platform_posix_wait_address_fallback(AAddr, AExpected, ATimeoutNs);
+end;
+
+function platform_wake_address_one(AAddr: PInt32): Int32;
+begin
+  Result := platform_posix_wake_address_one_fallback(AAddr);
+end;
+
+function platform_wake_address_all(AAddr: PInt32): Int32;
+begin
+  Result := platform_posix_wake_address_all_fallback(AAddr);
+end;
+{$ENDIF}
+{$ENDIF}
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -493,7 +890,7 @@ end;
 
 {$ENDIF}
 
-{$IFNDEF NEXTPAS_LINUX}{$IFNDEF NEXTPAS_WINDOWS}
+{$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

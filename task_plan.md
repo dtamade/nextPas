@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 104 Function Result Call Type Mismatch Evidence；并行收口包含
+当前最新本轮为 Platform Sync POSIX Fallback Runtime Coverage；并行收口包含
+Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
 Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
@@ -24,6 +25,63 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Platform Sync POSIX Fallback Runtime Coverage
+
+### Goal
+
+把 `platform.sync` 从 “Linux futex + Windows WaitOnAddress 已落地，其余 Unix 仍是诚实缺口”
+推进到更完整的 L0 runtime 形状：
+
+- non-Linux Unix 获得 pthread-backed address-wait fallback，而不是继续停留在 unsupported stub。
+- Linux 保持 futex 默认实现，但要能在 Linux 主机上强制切到 POSIX fallback 做 host-side 真实验证。
+- 这条 fallback 不只验证 `platform.sync` 自己，也要验证消费它的 `nextpas.core.sync` L1 surface。
+
+### Architecture Decision
+
+- `platform.sync` 继续保持“Linux 默认最快路径 + generic Unix 诚实 fallback”的双层结构，而不是把
+  futex 细节抹平成对所有 Unix 都一样。
+- forced fallback selector 只用于 verification，不改变 Linux 默认 runtime 策略。
+- timeout/error policy 继续由 `platform.sync` 实现层统一；POSIX errno/clock/pthread ABI 仍沉到
+  `nextpas.core.platform.posix.ffi`。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 为 POSIX errno 增加跨平台常量与 `posix_errno_location` 绑定
+- [x] 把 pthread 分支从 Linux-only 扩成 generic `NEXTPAS_UNIX`
+- [x] 为 generic Unix 增加 wait-bucket condvar fallback 的 address wait/wake 实现
+- [x] 为 Linux 增加 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` host-side selector
+- [x] 新增 source guard，固定 forced fallback surface 真实存在
+- [x] 新增 `platform.sync` forced fallback Makefile gate
+- [x] 新增 `nextpas.core.sync` forced fallback Makefile gate
+- [x] 修正 FPC 宿主 pthread 测试 teardown 崩溃
+- [x] 回写 `build/verify_local.sh`
+- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED: `test_platform_sync_posix_surface` 初版失败，因为 `platform.sync` 还没有 generic Unix
+  fallback surface。
+- Debug/Fix: `test_platform_sync_posix_fallback` 初版虽然 14/14 全绿，但进程在退出时 segfault；
+  根因收敛到 FPC 宿主缺少 `cthreads`，修正后 forced fallback tests 稳定通过。
+- GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`、
+  `test_platform_sync_posix_fallback clean test`、`test_platform_sync_posix_surface test`、
+  `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test` 全部通过。
+- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `core-platform-sync-posix-surface-check=pass`、
+  `core-platform-sync-posix-fallback-check=pass`、`core-sync-posix-fallback-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不声称 macOS / FreeBSD / Android 已有真实宿主运行证据
+- 这批不最终冻结 non-Linux Unix 的 opaque size 常量
+- 这批不重构 `platform.sync` public API
+- 这批不引入新的 L1 sync 抽象
 
 ## Addendum: 2026-05-26 Platform Sync FFI Surface Parity
 

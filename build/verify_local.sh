@@ -296,6 +296,9 @@ CORE_PLATFORM_SYNC_NO_FPC_BINARY="$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR/test_plat
 CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_l0_boundary"
 CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY="$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR/test_platform_sync_l0_boundary"
+CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_posix_surface"
+CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY="$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR/test_platform_sync_posix_surface"
 CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
 CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
@@ -307,6 +310,12 @@ CORE_PLATFORM_SYNC_EXAMPLE_BINARY="$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR/platfor
 CORE_PLATFORM_SYNC_BENCH_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_bench"
 CORE_PLATFORM_SYNC_BENCH_BINARY="$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR/bench_platform_sync"
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_posix_fallback"
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY="$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR/test_platform_sync_posix_fallback"
+CORE_SYNC_POSIX_FALLBACK_OUTPUT=$(mktemp)
+CORE_SYNC_POSIX_FALLBACK_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_sync_posix_fallback"
+CORE_SYNC_POSIX_FALLBACK_BINARY="$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR/test_sync_posix_fallback"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -593,10 +602,24 @@ cleanup() {
   rm -rf "$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR"
+  rm -f "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  rm -rf "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
   rm -rf "$HIR_CLASS_ALLOC_BUILD_DIR"
@@ -836,9 +859,11 @@ require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
 require_path core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr
 require_path core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr
+require_path core/tests/nextpas.core.sync/test_sync/test_sync.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
@@ -4386,6 +4411,27 @@ cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
 printf 'core-platform-sync-l0-boundary-check=pass\n'
 
+printf 'core-platform-sync-posix-surface-check=running\n'
+printf 'core-platform-sync-posix-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr" \
+  >"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  fail 'core-platform-sync-posix-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY" >>"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  fail 'core-platform-sync-posix-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.posix_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 'missing-core-platform-sync-posix-surface-pass-summary'
+printf 'core-platform-sync-posix-surface-check=pass\n'
+
 printf 'core-platform-sync-size-check=running\n'
 printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
@@ -4475,6 +4521,52 @@ require_output_pattern '^platform-sync-rwlock-read-unlock-iterations=1000000$' "
 require_output_pattern '^platform-sync-address-mismatch-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-address-iterations'
 require_output_pattern '^platform-sync-bench-status=pass$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-pass'
 printf 'core-platform-sync-bench-check=pass\n'
+
+printf 'core-platform-sync-posix-fallback-check=running\n'
+printf 'core-platform-sync-posix-fallback-command=fpc -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s -o%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR"
+if ! fpc \
+  -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -o"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-platform-sync-posix-fallback-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-platform-sync-posix-fallback-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync: 14 total, 14 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-platform-sync-posix-fallback-pass-summary'
+printf 'core-platform-sync-posix-fallback-check=pass\n'
+
+printf 'core-sync-posix-fallback-check=running\n'
+printf 'core-sync-posix-fallback-command=fpc -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s -o%s %s/core/tests/nextpas.core.sync/test_sync/test_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_SYNC_POSIX_FALLBACK_BINARY" "$REPO_ROOT"
+mkdir -p "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR"
+if ! fpc \
+  -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -FU"$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -o"$CORE_SYNC_POSIX_FALLBACK_BINARY" \
+  "$REPO_ROOT/core/tests/nextpas.core.sync/test_sync/test_sync.lpr" \
+  >"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-sync-posix-fallback-build-failed'
+fi
+if ! "$CORE_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-sync-posix-fallback-run-failed'
+fi
+cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.sync: 10 total, 10 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
+printf 'core-sync-posix-fallback-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)

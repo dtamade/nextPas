@@ -75,11 +75,38 @@ const
   _SC_NPROCESSORS_ONLN = Int32(-1);
   {$ENDIF}
 
+  {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
+  POSIX_EAGAIN    = 11;
+  POSIX_EBUSY     = 16;
+  POSIX_EINVAL    = 22;
+  POSIX_ENOTSUP   = 95;
+  POSIX_ETIMEDOUT = 110;
+  {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  POSIX_EAGAIN    = 35;
+  POSIX_EBUSY     = 16;
+  POSIX_EINVAL    = 22;
+  POSIX_ENOTSUP   = 45;
+  POSIX_ETIMEDOUT = 60;
+  {$ELSE}
+  POSIX_EAGAIN    = 11;
+  POSIX_EBUSY     = 16;
+  POSIX_EINVAL    = 22;
+  POSIX_ENOTSUP   = 95;
+  POSIX_ETIMEDOUT = 110;
+  {$ENDIF}
+
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
 function sched_yield: Int32; cdecl; external 'c' name 'sched_yield';
 function sysconf(name: Int32): PtrInt; cdecl; external 'c' name 'sysconf';
+{$IFDEF NEXTPAS_ANDROID}
+function posix_errno_location: PInt32; cdecl; external 'c' name '__errno';
+{$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+function posix_errno_location: PInt32; cdecl; external 'c' name '__error';
+{$ELSE}
+function posix_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
+{$ENDIF}
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';

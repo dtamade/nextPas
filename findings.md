@@ -31,6 +31,22 @@
 - `platform.sync` 现已补齐和 `platform.time` / `platform.thread` 同等级的 focused gate：
   behavior、no-FPC、L0 boundary、sizes、Win64 compile-only、example、benchmark 都进入
   official local verification surface。
+- `platform.sync` 现在还有 generic `NEXTPAS_UNIX` pthread runtime 路径：
+  non-Linux Unix 的 `platform_wait_address32` / wake 走 bucketed condvar fallback，Linux 继续默认
+  走 futex，但可以通过 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 在 Linux 主机上强制验证
+  fallback surface。
+- `nextpas.core.platform.posix.ffi` 现在拥有跨 Linux/Android、macOS/FreeBSD 的 errno surface：
+  `POSIX_EAGAIN` / `POSIX_EBUSY` / `POSIX_EINVAL` / `POSIX_ENOTSUP` / `POSIX_ETIMEDOUT`
+  与 `posix_errno_location` 已沉到 nextPas-owned FFI，而不是让实现层去猜宿主符号。
+- POSIX fallback timeout 现在围绕绝对 deadline 等待，而不是每次把“剩余相对时间”重新转成新的
+  absolute timeout；这样 repeated wait/signal/recheck 不会把 timeout 一轮轮往后漂。
+- wait-bucket 初始化现在会在失败时回收已初始化 mutex/condvar，避免进程里残留半初始化的
+  fallback runtime 状态。
+- `test_platform_sync` 在 FPC 宿主上需要显式 `cthreads` 才能稳定覆盖 pthread-backed fallback；
+  否则 forced-fallback test 可能在所有断言通过后仍于 runtime teardown 崩溃。
+- 这批仍保留一个明确 residual risk：macOS / FreeBSD / Android 的 opaque size 选择、pthread
+  library 绑定方式与 condvar clock 行为，还需要真实 compile/runtime matrix 证据，不能只靠 Linux
+  forced-fallback 绿灯当成完全闭环。
 - `platform.sync` benchmark 不再直接取用裸 `posix.ffi` 时钟 ABI，而是改走
   `nextpas.core.platform.time` 的 L0 平台时钟源；这样基准仍留在 platform 命名空间内，但不再绕开
   platform 自己的 FFI/contract 边界。

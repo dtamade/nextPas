@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 platform.thread L0 surface coverage；并行收口包含
+当前最新本轮为 platform.sync POSIX fallback runtime coverage；并行收口包含
+platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
@@ -13,6 +14,59 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (platform.sync POSIX fallback runtime coverage)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform.sync` 从“Linux/Windows 两条已落地、其余 Unix 仍是缺口”推进到更诚实的跨平台形状：
+    Linux 继续默认走 futex，generic Unix 获得 pthread-backed wait/wake fallback，并把这条 fallback
+    变成可在 Linux 主机上强制验证的 official surface。
+- Baseline:
+  - `platform.sync` 上一批已经补齐 unified FFI/no-FPC/L0 boundary/example/benchmark，但 runtime
+    行为仍主要只对 Linux futex 与 Windows `WaitOnAddress` 真正闭环。
+  - `nextpas.core.sync` 的 `FutexMutex`、`WaitGroup` 等 L1 代码已经消费
+    `platform_wait_address32` / wake API；如果 generic Unix 没有真实实现，就不能把 macOS /
+    FreeBSD / Android 包装成“只是还没测”的支持状态。
+- Actions taken:
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 追加 `POSIX_EAGAIN` / `POSIX_EBUSY` /
+    `POSIX_EINVAL` / `POSIX_ENOTSUP` / `POSIX_ETIMEDOUT`，并按 Linux/Android、macOS/FreeBSD
+    区分 `posix_errno_location` 外部符号名。
+  - `core/src/nextpas.core.platform.sync.pas` 把 pthread 分支从 Linux-only 扩成
+    `NEXTPAS_UNIX`，为 non-Linux Unix 增加 bucketed condvar fallback 的
+    `platform_wait_address32` / wake 实现；Linux 仍默认走 futex，但可通过
+    `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 强制切到 fallback。
+  - fallback timeout 改成围绕绝对 deadline 等待，避免循环里把相对超时一轮轮往后推；wait-bucket
+    初始化失败时也会回收已初始化对象，避免留下半初始化状态。
+  - `core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr` 补上
+    `{$IFDEF UNIX}cthreads,{$ENDIF}`，让 FPC 宿主上的 pthread-backed forced-fallback coverage
+    不再在测试全部通过后因运行时收尾崩溃。
+  - 新增 `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/`，
+    固定 generic Unix branch、forced fallback selector 与 wait-bucket fallback 都真实存在。
+  - 新增 `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback/` 与
+    `core/tests/nextpas.core.sync/test_sync_posix_fallback/`，把 forced fallback 行为提升成单项目
+    Makefile gate。
+  - `build/verify_local.sh` 新增 `core-platform-sync-posix-surface-check`、
+    `core-platform-sync-posix-fallback-check` 与 `core-sync-posix-fallback-check`。
+- Verification:
+  - RED: `test_platform_sync_posix_surface` 初版失败，因为 `platform.sync` 当时还没有
+    generic Unix wait fallback surface。
+  - Debug/Fix: forced fallback 初版在 `14/14 PASS` 后发生 segfault；加 `cthreads` 后，
+    `test_platform_sync_posix_fallback` 与 `test_sync_posix_fallback` 均稳定通过。
+  - GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`、
+    `test_platform_sync_posix_fallback clean test`、`test_platform_sync_posix_surface test`、
+    `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test` 全部通过。
+  - Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
+    通过。
+  - Full: fresh `bash build/verify_local.sh` 输出 `core-platform-sync-posix-surface-check=pass`、
+    `core-platform-sync-posix-fallback-check=pass`、`core-sync-posix-fallback-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批让 `platform.sync` 对 generic Unix 的 runtime 支持不再停留在“编译得过”层面，L1 `sync`
+    依赖的 address-wait contract 也有了 host-side forced fallback 证据。
+  - 还没闭环的是真实宿主证据：macOS / FreeBSD / Android 的 opaque size、pthread library
+    绑定与 condvar clock 细节仍需要 compile/runtime matrix 验证，不能因为 Linux forced fallback
+    绿了就把这些平台当成 fully proven。
 
 ## Session: 2026-05-26 (platform.sync FFI surface parity)
 
