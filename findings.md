@@ -25,6 +25,14 @@
 - 本批 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 100 把 magic-valid `release:` 占位块推进成 compiler-owned
+  `@np_object_release_valid(ptr %raw, i64 %size)` boundary；只有 header magic 校验通过后才会调用，
+  参数固定为 header raw pointer 与 payload size。
+- 新 focused RED 固定旧行为缺口：Batch 99 的 `release:` 仍只是 `br label %done`，因此
+  object-free focused test 失败在 `missing-object-free-release-valid-boundary-call`。
+- 修正后 valid-release helper 当前仍是 no-op，只是未来 allocator free / poison / statistics 的唯一
+  挂载点；这还不是 allocator free、diagnostics/trap failure path、core allocator 接管或完整 dynamic
+  dispatch runtime。
 - Batch 99 把 `@np_object_free_release` 从 header read contract 推进到 header magic validation
   branch：读取 `%magic` 后会比较 `1313882451`，合法 header 进入 `release:` 占位块，非法 header
   直接汇合到 `done:`。

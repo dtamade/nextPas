@@ -268,7 +268,8 @@ receiver nil branch，让 `Destroy` call 与 `@np_object_free_release` hook 只�
 class allocation lowering 也已先进入 `@np_object_alloc` helper，再由 helper 委托到底层
 `@np_alloc` 申请 16-byte header + payload；allocation helper 会写 payload size 与 magic，
 release helper 会从 payload pointer 回退读取 header、校验 magic，并把合法 header 分到
-`release:` 占位块、非法 header 直接分到 `done:`。当前 object alloc/release helpers 仍是
+`release:` 占位块、非法 header 直接分到 `done:`；`release:` 当前调用
+`@np_object_release_valid(ptr %raw, i64 %size)`。当前 object alloc/release helpers 仍是
 最小 ownership contract，这仍不是 allocator free、diagnostics/trap failure path 或动态
 virtual dispatch runtime。
 完整 member resolver、visibility checking、runtime

@@ -45,6 +45,7 @@ type
     procedure EmitStrConcatHelper;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
+    procedure EmitObjectReleaseValidHelper;
     procedure EmitVmtGlobals;
   public
     constructor Create(AModule: THIRModule);
@@ -1020,8 +1021,19 @@ begin
   Emit('  %magic.ok = icmp eq i64 %magic, 1313882451');
   Emit('  br i1 %magic.ok, label %release, label %done');
   Emit('release:');
+  Emit('  call void @np_object_release_valid(ptr %raw, i64 %size)');
   Emit('  br label %done');
   Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+  EmitObjectReleaseValidHelper;
+end;
+
+procedure THIRLlvmEmitter.EmitObjectReleaseValidHelper;
+begin
+  Emit('');
+  Emit('define internal void @np_object_release_valid(ptr %raw, i64 %size) {');
+  Emit('entry:');
   Emit('  ret void');
   Emit('}');
 end;

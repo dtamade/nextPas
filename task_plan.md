@@ -15,10 +15,61 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 99 Object Header Magic Validation；Batch 98 Platform Time FFI Boundary、
+当前最新本轮为 Batch 100 Object Release Valid Boundary；Batch 99 Object Header Magic Validation、
+Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 100 Object Release Valid Boundary
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把 Batch 99 的 `release:` 占位块升级为 compiler-owned release
+boundary：
+
+- `@np_object_free_release` 只有在 object header magic 校验通过后，才能调用
+  `@np_object_release_valid(ptr %raw, i64 %size)`。
+- 传入 release boundary 的必须是 header raw pointer 与 payload size，避免后续 allocator free
+  重新猜测 object layout。
+- 当前底层仍只有 bump-style `@np_alloc`，没有配对 free；本批只固定 valid-release ABI，不声明真实
+  allocator free 已完成，不修改 `core/`。
+
+### Architecture Decision
+
+释放路径现在分三层固定：
+
+- null receiver 直接进入 `done:`。
+- 非 null receiver 回退读取 header；magic mismatch 直接进入 `done:`。
+- magic match 进入 `release:` 并调用 `@np_object_release_valid(ptr %raw, i64 %size)`；该 helper
+  当前是内部 no-op，占住 future allocator free / poison / statistics 的唯一挂载点。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：valid release 分支必须调用 `@np_object_release_valid(ptr %raw, i64 %size)` 并存在 helper
+- [x] 实现 LLVM release valid boundary helper
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-object-free-release-valid-boundary-call`。
+- GREEN focused: focused HIR test 输出 `hir-object-free-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-object-free-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不修改或暂存 `core/`
+- 不改变 object header layout
+- 不实现 diagnostics / trap / exception failure path
+- 不实现完整 dynamic dispatch runtime
 
 ## Addendum: 2026-05-26 Batch 99 Object Header Magic Validation
 

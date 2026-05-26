@@ -21,7 +21,8 @@ var
   FuncIndex, BlockIndex, InstrIndex: LongInt;
   NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
   EndLabelPos, ReleaseHelperPos, MagicLoadPos, MagicCheckPos, MagicBranchPos,
-  ReleaseLabelPos, ReleaseDoneBranchPos: LongInt;
+  ReleaseLabelPos, ReleaseBoundaryCallPos, ReleaseDoneBranchPos,
+  ReleaseBoundaryHelperPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -204,10 +205,20 @@ begin
       MagicBranchPos);
     if ReleaseLabelPos = 0 then
       Fail('missing-object-free-release-valid-label');
-    ReleaseDoneBranchPos := FindAfter('br label %done', LlvmText,
+    ReleaseBoundaryCallPos := FindAfter(
+      'call void @np_object_release_valid(ptr %raw, i64 %size)', LlvmText,
       ReleaseLabelPos);
+    if ReleaseBoundaryCallPos = 0 then
+      Fail('missing-object-free-release-valid-boundary-call');
+    ReleaseDoneBranchPos := FindAfter('br label %done', LlvmText,
+      ReleaseBoundaryCallPos);
     if ReleaseDoneBranchPos = 0 then
       Fail('missing-object-free-release-valid-joins-done');
+    ReleaseBoundaryHelperPos := FindAfter(
+      'define internal void @np_object_release_valid(ptr %raw, i64 %size)',
+      LlvmText, ReleaseHelperPos);
+    if ReleaseBoundaryHelperPos = 0 then
+      Fail('missing-object-free-release-valid-helper');
 
     WriteLn('hir-object-free-contract-status=pass');
   finally
