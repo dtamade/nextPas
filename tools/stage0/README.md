@@ -265,7 +265,9 @@ class method，并把 `Child.Touch` 这类 inherited call 投影到 parent metho
 `np.system.object_free.destroy` owned marker；`heap-release true` 还会成为
 `np.system.object_free.release` marker。LLVM HIR emitter 已把这组 marker lowering 成
 receiver nil branch，让 `Destroy` call 与 `@np_object_free_release` hook 只在非空分支执行；
-当前 release helper 仍是内部空边界，这仍不是 allocator free 或动态 virtual dispatch runtime。
+class allocation lowering 也已先进入 `@np_object_alloc` helper，再由 helper 委托到底层
+`@np_alloc`；当前 object alloc/release helpers 仍是内部 ABI 边界，这仍不是 object header、
+allocator free 或动态 virtual dispatch runtime。
 完整 member resolver、visibility checking、runtime
 constructor lowering、完整 virtual dispatch 与 type-based overload resolution仍属于后续
 language-service / semantic model 工作。class method overload 目前只按

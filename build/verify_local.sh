@@ -263,6 +263,9 @@ CORE_PLATFORM_SYNC_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_win64
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
+HIR_CLASS_ALLOC_BUILD_DIR=$(mktemp -d)
+HIR_CLASS_ALLOC_BINARY="$HIR_CLASS_ALLOC_BUILD_DIR/test_hir_class_alloc_contract"
+HIR_CLASS_ALLOC_OUTPUT=$(mktemp)
 HIR_OBJECT_FREE_BUILD_DIR=$(mktemp -d)
 HIR_OBJECT_FREE_BINARY="$HIR_OBJECT_FREE_BUILD_DIR/test_hir_object_free_contract"
 HIR_OBJECT_FREE_OUTPUT=$(mktemp)
@@ -522,6 +525,8 @@ cleanup() {
   rm -rf "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
+  rm -rf "$HIR_CLASS_ALLOC_BUILD_DIR"
+  rm -f "$HIR_CLASS_ALLOC_OUTPUT"
   rm -rf "$HIR_OBJECT_FREE_BUILD_DIR"
   rm -f "$HIR_OBJECT_FREE_OUTPUT"
   rm -rf "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
@@ -737,6 +742,7 @@ require_path compiler/backend/np_backend_plan.pas
 require_path compiler/toolchain/np_toolchain_runner.pas
 require_path tests/toolchain/toolchain_contract_smoke.pas
 require_path tests/hir/test_hir_late_alloca_hoist.pas
+require_path tests/hir/test_hir_class_alloc_contract.pas
 require_path tests/hir/test_hir_object_free_contract.pas
 require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
@@ -870,6 +876,24 @@ grep -Eq '^  br i1 %v[0-9]+, label %bb[0-9]+, label %bb[0-9]+$' "$HIR_LATE_ALLOC
   fail 'missing-hir-late-alloca-branch'
 }
 printf 'hir-late-alloca-hoist=pass\n'
+
+printf 'hir-class-alloc-contract=running\n'
+printf 'hir-class-alloc-contract-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_class_alloc_contract.pas\n' "$HIR_CLASS_ALLOC_BUILD_DIR" "$HIR_CLASS_ALLOC_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas
+  fail 'hir-class-alloc-contract-build-failed'
+fi
+if [ ! -x "$HIR_CLASS_ALLOC_BINARY" ]; then
+  fail 'missing-hir-class-alloc-contract-binary'
+fi
+printf 'hir-class-alloc-contract-run-command=%s\n' "$HIR_CLASS_ALLOC_BINARY"
+if ! "$HIR_CLASS_ALLOC_BINARY" >"$HIR_CLASS_ALLOC_OUTPUT" 2>&1; then
+  cat "$HIR_CLASS_ALLOC_OUTPUT"
+  fail 'hir-class-alloc-contract-run-failed'
+fi
+cat "$HIR_CLASS_ALLOC_OUTPUT"
+require_output_pattern '^hir-class-alloc-contract-status=pass$' "$HIR_CLASS_ALLOC_OUTPUT" 'missing-hir-class-alloc-contract-pass'
+printf 'hir-class-alloc-contract=pass\n'
 
 printf 'hir-object-free-contract=running\n'
 printf 'hir-object-free-contract-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_object_free_contract.pas\n' "$HIR_OBJECT_FREE_BUILD_DIR" "$HIR_OBJECT_FREE_BUILD_DIR"

@@ -15,8 +15,59 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 95 Object-free Heap-release Hook；Batch 93 Platform Thread FFI Boundary 是
+当前最新本轮为 Batch 96 Object Allocation Helper Boundary；Batch 93 Platform Thread FFI Boundary 是
 并行 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 96 Object Allocation Helper Boundary
+
+### Goal
+
+继续推进目标树 G3 / G1.5，把对象生命周期 ABI 从释放侧补齐到分配侧：
+
+- `class_alloc` LLVM lowering 必须调用 compiler-owned `@np_object_alloc(i64 size)`。
+- `@np_object_alloc` 当前只作为内部 helper boundary，委托到底层 `@np_alloc`。
+- 这一步只建立 object allocation/release 的成对 runtime 接入口；不声明真实 object header、
+  ownership metadata、allocator free 或完整 dynamic dispatch runtime 已完成。
+- 不修改 `core/`。
+
+### Architecture Decision
+
+对象生命周期边界先分层稳定，再逐步替换底层实现：
+
+- HIR 仍用 `class_alloc` intrinsic 表达 class instance allocation intent。
+- LLVM emitter 不再让 `class_alloc` 直接碰底层 bump allocator，而是生成
+  `call ptr @np_object_alloc(i64 ...)`。
+- `@np_object_alloc` 当前内部调用 `@np_alloc(i64 %size)`；后续 object header、allocator
+  ownership 和释放侧真实 free 都应收敛到这个 helper/ABI，而不是散落到 class lowering 中。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] 写 RED：focused HIR test 必须看到 `@np_object_alloc` call、helper 定义和 `@np_alloc`
+      delegate，并拒绝 class allocation site 直接 `@np_alloc`
+- [x] 实现 LLVM class allocation helper lowering
+- [x] 同步目标树 / runtime / semantic / RTL / stage0 文档与持续记录
+- [x] 运行 focused gate 与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused HIR test 失败在 `missing-hir-class-alloc-object-helper-call`。
+- GREEN focused: focused HIR test 输出 `hir-class-alloc-contract-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出 `hir-class-alloc-contract=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现真实 allocator free
+- 不定义 object allocation header / ownership metadata
+- 不改变 constructor lowering
+- 不实现完整 dynamic virtual dispatch runtime
+- 不让 implicit runtime 自动进入 backend extra assemble/link
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 95 Object-free Heap-release Hook
 

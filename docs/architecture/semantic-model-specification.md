@@ -315,8 +315,10 @@ candidate collection
     lowering 标记成 `np.system.object_free.destroy` owned marker；`heap-release true` 会在
     matching owned destroy 后追加 `np.system.object_free.release` marker。LLVM HIR emitter 已能用
     receiver nil branch 包住 owned destroy call，并在非空分支内发出
-    `@np_object_free_release` hook；当前 release helper 仍是内部空边界，还不声明真实
-    allocator free 或完整 dynamic dispatch runtime 已完成
+    `@np_object_free_release` hook；class allocation lowering 也已先进入
+    `@np_object_alloc(i64 size)` helper，再委托到底层 `@np_alloc`。当前 object alloc/release
+    helpers 仍是内部 ABI 边界，还不声明真实 object header、allocator free 或完整 dynamic
+    dispatch runtime 已完成
   - 没有 class layout truth 的 alias / generic specialization / record-like receiver 继续 deferred，直到
     generic instantiation、record methods 和完整 member resolver 进入 semantic model
 

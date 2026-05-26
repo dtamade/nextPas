@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 96 把 class allocation 的 LLVM lowering 从直接 `@np_alloc` 推进到 compiler-owned
+  `@np_object_alloc` helper boundary。
+- 新 focused RED 固定旧行为缺口：HIR 已有 `class_alloc` intrinsic，但 LLVM emitter 直接生成
+  `call ptr @np_alloc(...)`，因此失败在 `missing-hir-class-alloc-object-helper-call`。
+- 修正后 class allocation site 会生成 `call ptr @np_object_alloc(i64 ...)`，内部
+  `@np_object_alloc(i64 %size)` helper 再委托 `@np_alloc(i64 %size)`；这只是 object
+  allocation/release ABI boundary，不是 object header、ownership metadata 或真实 allocator
+  free 已完成的证据。
 - Batch 95 把 `object-free-runtime` 中的 `heap-release true` 推进到 HIR/LLVM 后端可见边界：
   matching owned `Destroy` 之后现在会追加 `np.system.object_free.release` HIR marker。
 - 新 focused RED 固定旧行为缺口：Batch 94 已有 nil branch 和 guarded `Destroy`，但 builder

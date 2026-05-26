@@ -17,6 +17,7 @@ type
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
+    FNeedsObjectAlloc: Boolean;
     FNeedsObjectFreeRelease: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
@@ -42,6 +43,7 @@ type
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
     procedure EmitStrConcatHelper;
+    procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
     procedure EmitVmtGlobals;
   public
@@ -65,6 +67,7 @@ begin
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
+  FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
@@ -511,9 +514,11 @@ begin
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
         FNeedsStrConcat := True;
+        FNeedsObjectAlloc := True;
         if Length(AInstr.Operands) >= 1 then
           Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call ptr @np_alloc(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
+            ' = call ptr @np_object_alloc(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'vmt_store' then
       begin
@@ -707,6 +712,7 @@ begin
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
+  FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -741,6 +747,9 @@ begin
 
   if FNeedsStrConcat or FNeedsIntToStr then
     EmitStrConcatHelper;
+
+  if FNeedsObjectAlloc then
+    EmitObjectAllocHelper;
 
   if FNeedsObjectFreeRelease then
     EmitObjectFreeReleaseHelper;
@@ -978,6 +987,16 @@ begin
   Emit('  %r1 = insertvalue {ptr, i64} undef, ptr %buf, 0');
   Emit('  %r2 = insertvalue {ptr, i64} %r1, i64 %total, 1');
   Emit('  ret {ptr, i64} %r2');
+  Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitObjectAllocHelper;
+begin
+  Emit('');
+  Emit('define internal ptr @np_object_alloc(i64 %size) {');
+  Emit('entry:');
+  Emit('  %obj = call ptr @np_alloc(i64 %size)');
+  Emit('  ret ptr %obj');
   Emit('}');
 end;
 

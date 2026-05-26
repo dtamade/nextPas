@@ -265,7 +265,7 @@ The lowering pass transforms Pascal semantics into machine operations:
 | String concat | Call @np_str_concat intrinsic |
 | Dynamic array resize | Call @np_dynarray_resize intrinsic |
 | Exception try/except | Invoke + landingpad + resume |
-| Class creation | Call @np_class_alloc → call constructor |
+| Class creation | Call @np_object_alloc → call constructor |
 | Refcount inc/dec | Call @np_refcount_inc / @np_refcount_dec |
 | Record copy | Memcpy or field-by-field copy |
 | Set operations | Bitwise AND/OR/XOR on integer bitmask |

@@ -3,8 +3,34 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 95 object-free heap-release hook；Batch 93 platform.thread FFI boundary
+当前最新本轮为 Batch 96 object allocation helper boundary；Batch 93 platform.thread FFI boundary
 是并行 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 96 object allocation helper boundary)
+
+- **Status:** completed
+- Objective:
+  - 把 Batch 95 已经建立的 object-free release hook 对齐到 allocation side：
+    class allocation site 必须先进入 `@np_object_alloc`，再由 helper 委托到底层 `@np_alloc`。
+- Baseline:
+  - `THIRBuilder.ProcessClassNew(...)` 已用 `class_alloc` intrinsic 表达对象分配 intent。
+  - `THIRLlvmEmitter` 旧实现仍让 `class_alloc` 直接 `call ptr @np_alloc(...)`，导致对象生命周期
+    ABI 在分配侧没有 compiler-owned helper 边界。
+- Actions taken:
+  - 新增 focused HIR test：要求 LLVM 文本包含 class allocation site 的
+    `call ptr @np_object_alloc(i64 ...)`、内部 `@np_object_alloc(i64 %size)` helper，以及 helper
+    内部对 `@np_alloc(i64 %size)` 的委托；同时拒绝 class allocation site 直接 `@np_alloc`。
+  - `THIRLlvmEmitter` 新增 object allocation helper emission flag 和 `EmitObjectAllocHelper(...)`。
+  - `class_alloc` lowering 改为调用 `@np_object_alloc`，底层 bump allocation 仍由 helper 内部委托。
+- Verification:
+  - RED: focused HIR test 失败在 `missing-hir-class-alloc-object-helper-call`。
+  - GREEN focused: focused HIR test 输出 `hir-class-alloc-contract-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出 `hir-class-alloc-contract=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只建立 object allocation/release ABI boundary 的分配侧入口；当前没有 object header、
+    ownership metadata、真实 allocator free 或完整 dynamic dispatch runtime。
+  - 本轮不修改 `core/`。
 
 ## Session: 2026-05-26 (Batch 95 object-free heap-release hook)
 
