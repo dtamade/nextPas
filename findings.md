@@ -1463,3 +1463,23 @@
   而不是零散的宿主 helper 集合；raw helper 的 ABI / fallback / token truth 都继续留在宿主 ffi owner。
 - 这批 focused gate 也同步冻结了新的 owner boundary：`test_platform_thread_host_ffi_surface`
   现在不仅检查 helper 是否存在，还显式防回归 consumer 重新直接调用上述 raw helper。
+
+## 2026-05-27 Follow-up Findings 5
+
+- `platform.sync` 之前虽然已经把 Windows sync ABI declaration 并入统一
+  `nextpas.core.platform.windows.ffi`，但 consumer 仍直接调用
+  `InitializeSRWLock`、`AcquireSRWLock*`、`SleepConditionVariableSRW`、
+  `WaitOnAddress` 与 `WakeByAddress*`；ABI owner 和 helper owner 还没有完全收口到同一层。
+- 这轮之后，`windows.ffi` 不只拥有 raw declaration，还继续拥有
+  `windows_mutex_*`、`windows_rwlock_*`、`windows_condvar_*`、
+  `windows_wait_address_i32` 与 `windows_wake_address_*`；`platform.sync` 不再直接写 raw
+  Windows sync API。
+- `platform.sync` 的 Windows consumer 现在更接近“public contract + policy consumer”：
+  它继续保留 `PLATFORM_ERR_BUSY` / `PLATFORM_ERR_TIMEOUT` 映射、`windows_timeout_ns_to_ms`
+  以及 `windows_last_error_is_timeout` 的策略消费，但把 raw SRWLOCK / condvar /
+  address-wait 调用细节收回 host ffi owner。
+- 这轮 focused gate 也更诚实了：`test_platform_sync_host_ffi_surface` 不再保留
+  “要求出现 raw WaitOnAddress token、同时又禁止直接调用它” 这种自相矛盾断言，而是明确冻结
+  consumer 只消费 helper 名称。
+- Win64 compile-only 与 fresh `bash build/verify_local.sh` 都已通过，说明这次 helper
+  ownerization 没把 `platform.sync` 的行为、尺寸契约或仓库级主门打坏。

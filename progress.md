@@ -4798,3 +4798,40 @@ Hello from nextPas!
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`（host helper ownerization）：pass
 - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`（host helper ownerization）：pass
 - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`：pass
+
+### Phase 5: Platform Sync Windows Helper Ownership
+
+- **Status:** completed
+- Actions taken:
+  - 先核对 `main` 与 worktree 真相：`main` 已经承载前几轮 platform ownerization 提交，
+    但历史 `codex/platform-time-integration @ 02be065` 仍未作为分支直接合入主线，不能混淆成
+    本批已收口对象。
+  - 先把 `test_platform_sync_host_ffi_surface` 扩成更严格的 RED gate，要求
+    `windows.ffi` 暴露 `windows_mutex_*`、`windows_rwlock_*`、`windows_condvar_*`、
+    `windows_wait_address_i32` 与 `windows_wake_address_*`，同时禁止 `platform.sync`
+    再直接写 raw `InitializeSRWLock` / `AcquireSRWLock*` /
+    `SleepConditionVariableSRW` / `WaitOnAddress` / `WakeByAddress*`。
+  - 修正同一 focused gate 里的旧断言漂移：`platform.sync` 不应再既“必须出现 raw
+    WaitOnAddress token”又“禁止直接调用它”；新的 contract 收紧为 consumer 只消费
+    host-owned helper 名称。
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增 Windows sync helper wrapper：
+    - `windows_mutex_init/lock/trylock/unlock`
+    - `windows_rwlock_init/rdlock/tryrdlock/wrlock/trywrlock/rdunlock/wrunlock`
+    - `windows_condvar_init/wait/timedwait_ms/signal/broadcast`
+    - `windows_wait_address_i32`
+    - `windows_wake_address_single/all`
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows 分支改为消费这些 helper；
+    consumer 继续保留 `PLATFORM_ERR_BUSY` / `PLATFORM_ERR_TIMEOUT` 映射，以及
+    `windows_timeout_ns_to_ms` + `windows_last_error_is_timeout` 的策略消费，但不再直接读
+    raw Windows sync API。
+  - 回写 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、
+    `progress.md`，把 `platform.sync` 的 Windows helper owner boundary 写实。
+  - 重新运行 focused tests、Win64 compile-only 与 fresh `bash build/verify_local.sh`，
+    确认主门继续绿色。
+
+## Test Results
+
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`（Windows helper ownerization）：pass
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`（Windows helper ownerization）：pass
+- `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`：pass
+- `bash build/verify_local.sh`（platform.sync Windows helper ownerization batch）：pass

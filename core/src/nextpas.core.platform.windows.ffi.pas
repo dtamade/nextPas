@@ -44,6 +44,31 @@ function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
 function windows_last_error_i32: Int32; inline;
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
+function windows_mutex_init(const AMutex: Pointer): Int32; inline;
+function windows_mutex_lock(const AMutex: Pointer): Int32; inline;
+function windows_mutex_trylock(const AMutex: Pointer): Boolean; inline;
+function windows_mutex_unlock(const AMutex: Pointer): Int32; inline;
+function windows_rwlock_init(const ARwLock: Pointer): Int32; inline;
+function windows_rwlock_rdlock(const ARwLock: Pointer): Int32; inline;
+function windows_rwlock_tryrdlock(const ARwLock: Pointer): Boolean; inline;
+function windows_rwlock_wrlock(const ARwLock: Pointer): Int32; inline;
+function windows_rwlock_trywrlock(const ARwLock: Pointer): Boolean; inline;
+function windows_rwlock_rdunlock(const ARwLock: Pointer): Int32; inline;
+function windows_rwlock_wrunlock(const ARwLock: Pointer): Int32; inline;
+function windows_condvar_init(const ACondVar: Pointer): Int32; inline;
+function windows_condvar_wait(const ACondVar: Pointer; const AMutex: Pointer): Int32; inline;
+function windows_condvar_timedwait_ms(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutMs: DWORD): Int32; inline;
+function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
+function windows_condvar_broadcast(const ACondVar: Pointer): Int32; inline;
+function windows_wait_address_i32(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutMs: DWORD): Int32; inline;
+function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
+function windows_wake_address_all(const AAddress: PInt32): Int32; inline;
 function windows_current_thread_id_u64: UInt64; inline;
 procedure windows_thread_yield; inline;
 function windows_tls_alloc_key(out AIndex: DWORD): Int32; inline;
@@ -142,6 +167,129 @@ end;
 function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): Boolean; inline;
 begin
   Result := AWaitResult = WAIT_OBJECT_0;
+end;
+
+function windows_mutex_init(const AMutex: Pointer): Int32; inline;
+begin
+  InitializeSRWLock(AMutex);
+  Result := 0;
+end;
+
+function windows_mutex_lock(const AMutex: Pointer): Int32; inline;
+begin
+  AcquireSRWLockExclusive(AMutex);
+  Result := 0;
+end;
+
+function windows_mutex_trylock(const AMutex: Pointer): Boolean; inline;
+begin
+  Result := TryAcquireSRWLockExclusive(AMutex);
+end;
+
+function windows_mutex_unlock(const AMutex: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockExclusive(AMutex);
+  Result := 0;
+end;
+
+function windows_rwlock_init(const ARwLock: Pointer): Int32; inline;
+begin
+  InitializeSRWLock(ARwLock);
+  Result := 0;
+end;
+
+function windows_rwlock_rdlock(const ARwLock: Pointer): Int32; inline;
+begin
+  AcquireSRWLockShared(ARwLock);
+  Result := 0;
+end;
+
+function windows_rwlock_tryrdlock(const ARwLock: Pointer): Boolean; inline;
+begin
+  Result := TryAcquireSRWLockShared(ARwLock);
+end;
+
+function windows_rwlock_wrlock(const ARwLock: Pointer): Int32; inline;
+begin
+  AcquireSRWLockExclusive(ARwLock);
+  Result := 0;
+end;
+
+function windows_rwlock_trywrlock(const ARwLock: Pointer): Boolean; inline;
+begin
+  Result := TryAcquireSRWLockExclusive(ARwLock);
+end;
+
+function windows_rwlock_rdunlock(const ARwLock: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockShared(ARwLock);
+  Result := 0;
+end;
+
+function windows_rwlock_wrunlock(const ARwLock: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockExclusive(ARwLock);
+  Result := 0;
+end;
+
+function windows_condvar_init(const ACondVar: Pointer): Int32; inline;
+begin
+  InitializeConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function windows_condvar_wait(const ACondVar: Pointer; const AMutex: Pointer): Int32; inline;
+begin
+  Result := windows_condvar_timedwait_ms(ACondVar, AMutex, INFINITE);
+end;
+
+function windows_condvar_timedwait_ms(
+  const ACondVar: Pointer;
+  const AMutex: Pointer;
+  const ATimeoutMs: DWORD): Int32; inline;
+begin
+  if SleepConditionVariableSRW(ACondVar, AMutex, ATimeoutMs, 0) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_condvar_signal(const ACondVar: Pointer): Int32; inline;
+begin
+  WakeConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function windows_condvar_broadcast(const ACondVar: Pointer): Int32; inline;
+begin
+  WakeAllConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function windows_wait_address_i32(
+  const AAddress: PInt32;
+  const AExpected: Int32;
+  const ATimeoutMs: DWORD): Int32; inline;
+var
+  LExpected: Int32;
+begin
+  LExpected := AExpected;
+  if WaitOnAddress(AAddress, @LExpected, SizeOf(Int32), ATimeoutMs) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_wake_address_single(const AAddress: PInt32): Int32; inline;
+begin
+  WakeByAddressSingle(AAddress);
+  Result := 0;
+end;
+
+function windows_wake_address_all(const AAddress: PInt32): Int32; inline;
+begin
+  WakeByAddressAll(AAddress);
+  Result := 0;
 end;
 
 function windows_current_thread_id_u64: UInt64; inline;

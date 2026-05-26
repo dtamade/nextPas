@@ -6387,3 +6387,70 @@ Completed; verification passed.
 - 这批不重写 Windows create/join/detach state machine
 - 这批不改 `platform.thread` public API
 - 这批不声称新增 Darwin / FreeBSD / Android runtime evidence
+
+## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
+
+### Goal Node
+
+- `G3: RTL、core 和 framework`
+
+### Goal
+
+继续把 `platform.sync` 的 Windows 同步 helper 从 consumer 实现层下沉到
+`nextpas.core.platform.windows.ffi`，让 `platform.sync` 更像 public contract consumer，
+而不是散落 raw WinAPI 调用的脚本层。
+
+### Current Gap
+
+- `platform.sync` 虽然已经把 Windows sync ABI declaration 统一并入
+  `nextpas.core.platform.windows.ffi`，但 Windows 分支仍直接调用
+  `InitializeSRWLock`、`AcquireSRWLock*`、`SleepConditionVariableSRW`、
+  `WaitOnAddress`、`WakeByAddress*`。
+- `test_platform_sync_host_ffi_surface` 之前只冻结了 wait/error/timeout helper，
+  还没有把 mutex/rwlock/condvar/address-wait helper owner boundary 一起锁死。
+
+### Architecture Decision
+
+- `windows.ffi` 继续拥有 raw Windows sync ABI declaration，并新增：
+  - `windows_mutex_*`
+  - `windows_rwlock_*`
+  - `windows_condvar_*`
+  - `windows_wait_address_i32`
+  - `windows_wake_address_*`
+- `platform.sync` 继续保留 nextPas public opaque storage contract、`PLATFORM_ERR_BUSY` /
+  `PLATFORM_ERR_TIMEOUT` 映射，以及 `windows_timeout_ns_to_ms` +
+  `windows_last_error_is_timeout` 这层跨平台 wait policy 消费。
+- 这批不扩到 Linux futex helper ownerization；范围只收紧 Windows sync helper boundary。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 修正 `test_platform_sync_host_ffi_surface` 到正确的 Windows helper contract，并观察 RED
+- [x] 在 `windows.ffi` 新增 Windows mutex/rwlock/condvar/address-wait helper wrappers
+- [x] 让 `platform.sync` 的 Windows 分支改为消费这些 helper
+- [x] 运行 focused tests
+- [x] 运行 Win64 compile-only
+- [x] 运行 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在 `windows.ffi must expose Windows mutex init helper: windows_mutex_init`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Win64 compile-only:
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
+- Full:
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不重写 Linux futex 路径
+- 这批不改 `platform.sync` public API
+- 这批不声称新增 Windows runtime evidence；新增的是 Win64 compile-only + Linux 主门证据

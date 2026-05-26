@@ -714,8 +714,7 @@ end;
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
   FillChar(AMutex, SizeOf(AMutex), 0);
-  InitializeSRWLock(@AMutex.FOpaque[0]);
-  Result := 0;
+  Result := windows_mutex_init(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
@@ -725,13 +724,12 @@ end;
 
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 begin
-  AcquireSRWLockExclusive(@AMutex.FOpaque[0]);
-  Result := 0;
+  Result := windows_mutex_lock(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
 begin
-  if TryAcquireSRWLockExclusive(@AMutex.FOpaque[0]) then
+  if windows_mutex_trylock(@AMutex.FOpaque[0]) then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -739,8 +737,7 @@ end;
 
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 begin
-  ReleaseSRWLockExclusive(@AMutex.FOpaque[0]);
-  Result := 0;
+  Result := windows_mutex_unlock(@AMutex.FOpaque[0]);
 end;
 
 { RWLock - SRWLOCK }
@@ -748,8 +745,7 @@ end;
 function platform_rwlock_init(var ARwLock: TPlatformRwLock): Int32;
 begin
   FillChar(ARwLock, SizeOf(ARwLock), 0);
-  InitializeSRWLock(@ARwLock.FOpaque[0]);
-  Result := 0;
+  Result := windows_rwlock_init(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
@@ -759,13 +755,12 @@ end;
 
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  AcquireSRWLockShared(@ARwLock.FOpaque[0]);
-  Result := 0;
+  Result := windows_rwlock_rdlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  if TryAcquireSRWLockShared(@ARwLock.FOpaque[0]) then
+  if windows_rwlock_tryrdlock(@ARwLock.FOpaque[0]) then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -773,13 +768,12 @@ end;
 
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  AcquireSRWLockExclusive(@ARwLock.FOpaque[0]);
-  Result := 0;
+  Result := windows_rwlock_wrlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  if TryAcquireSRWLockExclusive(@ARwLock.FOpaque[0]) then
+  if windows_rwlock_trywrlock(@ARwLock.FOpaque[0]) then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -787,14 +781,12 @@ end;
 
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  ReleaseSRWLockShared(@ARwLock.FOpaque[0]);
-  Result := 0;
+  Result := windows_rwlock_rdunlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  ReleaseSRWLockExclusive(@ARwLock.FOpaque[0]);
-  Result := 0;
+  Result := windows_rwlock_wrunlock(@ARwLock.FOpaque[0]);
 end;
 
 { CondVar - CONDITION_VARIABLE }
@@ -802,8 +794,7 @@ end;
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
 begin
   FillChar(ACondVar, SizeOf(ACondVar), 0);
-  InitializeConditionVariable(@ACondVar.FOpaque[0]);
-  Result := 0;
+  Result := windows_condvar_init(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
@@ -813,10 +804,7 @@ end;
 
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;
 begin
-  if SleepConditionVariableSRW(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], INFINITE, 0) then
-    Result := 0
-  else
-    Result := windows_last_error_i32;
+  Result := windows_condvar_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]);
 end;
 
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
@@ -825,11 +813,11 @@ var
   LMs: DWORD;
 begin
   LMs := windows_timeout_ns_to_ms(ATimeoutNs);
-  if SleepConditionVariableSRW(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], LMs, 0) then
+  LError := windows_condvar_timedwait_ms(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], LMs);
+  if LError = 0 then
     Result := 0
   else
   begin
-    LError := windows_last_error_i32;
     if windows_last_error_is_timeout(DWORD(LError)) then
       Result := PLATFORM_ERR_TIMEOUT
     else
@@ -839,31 +827,27 @@ end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
 begin
-  WakeConditionVariable(@ACondVar.FOpaque[0]);
-  Result := 0;
+  Result := windows_condvar_signal(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 begin
-  WakeAllConditionVariable(@ACondVar.FOpaque[0]);
-  Result := 0;
+  Result := windows_condvar_broadcast(@ACondVar.FOpaque[0]);
 end;
 
-{ Address-wait (WaitOnAddress on Windows 8+) }
+{ Address-wait (Windows address-wait primitive) }
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 var
   LError: Int32;
   LMs: DWORD;
-  LExpected: Int32;
 begin
-  LExpected := AExpected;
   LMs := windows_timeout_ns_to_ms(ATimeoutNs);
-  if WaitOnAddress(AAddr, @LExpected, SizeOf(Int32), LMs) then
+  LError := windows_wait_address_i32(AAddr, AExpected, LMs);
+  if LError = 0 then
     Result := 0
   else
   begin
-    LError := windows_last_error_i32;
     if windows_last_error_is_timeout(DWORD(LError)) then
       Result := PLATFORM_ERR_TIMEOUT
     else
@@ -873,14 +857,12 @@ end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
 begin
-  WakeByAddressSingle(AAddr);
-  Result := 0;
+  Result := windows_wake_address_single(AAddr);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
 begin
-  WakeByAddressAll(AAddr);
-  Result := 0;
+  Result := windows_wake_address_all(AAddr);
 end;
 
 {$ENDIF}
