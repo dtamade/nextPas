@@ -96,6 +96,26 @@ uses
   nextpas.core.platform.linux.ffi;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_MACOS}
+uses
+  nextpas.core.platform.darwin.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_ANDROID}
+uses
+  nextpas.core.platform.android.ffi;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_FREEBSD}
+uses
+  nextpas.core.platform.freebsd.ffi;
+{$ENDIF}
+
+{$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
+uses
+  nextpas.core.platform.unix.ffi;
+{$ENDIF}
+
 const
   NANOSECONDS_PER_SECOND = UInt64(1000000000);
 
@@ -118,22 +138,18 @@ var
 
 function platform_posix_errno: Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_errno_location^;
-  {$ELSE}
-  Result := posix_errno_location^;
-  {$ENDIF}
+  Result := platform_errno_location^;
 end;
 
 function platform_posix_map_error(const ACode: Int32): Int32; inline;
 begin
   case ACode of
     0: Result := 0;
-    POSIX_EAGAIN: Result := PLATFORM_ERR_AGAIN;
-    POSIX_EBUSY: Result := PLATFORM_ERR_BUSY;
-    POSIX_EINVAL: Result := PLATFORM_ERR_INVALID;
-    POSIX_ENOTSUP: Result := PLATFORM_ERR_UNSUPPORTED;
-    POSIX_ETIMEDOUT: Result := PLATFORM_ERR_TIMEOUT;
+    PLATFORM_POSIX_EAGAIN: Result := PLATFORM_ERR_AGAIN;
+    PLATFORM_POSIX_EBUSY: Result := PLATFORM_ERR_BUSY;
+    PLATFORM_POSIX_EINVAL: Result := PLATFORM_ERR_INVALID;
+    PLATFORM_POSIX_ENOTSUP: Result := PLATFORM_ERR_UNSUPPORTED;
+    PLATFORM_POSIX_ETIMEDOUT: Result := PLATFORM_ERR_TIMEOUT;
   else
     Result := ACode;
   end;
@@ -142,9 +158,9 @@ end;
 function platform_posix_timeout_clock_id: Int32; inline;
 begin
   {$IFDEF NEXTPAS_MACOS}
-  Result := CLOCK_REALTIME;
+  Result := PLATFORM_CLOCK_REALTIME_ID;
   {$ELSE}
-  Result := CLOCK_MONOTONIC;
+  Result := PLATFORM_CLOCK_MONOTONIC_ID;
   {$ENDIF}
 end;
 

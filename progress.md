@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync FFI-owned opaque size derivation；并行收口包含
-platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
+当前最新本轮为 platform host-owned FFI partitioning；并行收口包含
+platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
 Batch 103 object release
@@ -15,6 +15,56 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform host-owned FFI partitioning)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform` 的 per-host clock/sysconf/errno truth 从 shared `posix.ffi` 再拆干净一层，
+    让 `platform.time` / `thread` / `sync` 直接按 target 选择 host-owned FFI unit。
+- Baseline:
+  - `platform.posix.ffi` 上一批虽然已经 target-aware，但仍混着 shared POSIX ABI 与 host-owned
+    `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno constant/binding。
+  - 新增的 host FFI 分层如果不进入 official local gate，很容易退回“源码看着像对了，但 verify
+    没冻结”的状态。
+- Actions taken:
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 移除 host-owned `CLOCK_*`、
+    `_SC_NPROCESSORS_ONLN`、`POSIX_E*` 与 `posix_errno_location`，只保留 shared POSIX ABI。
+  - 扩充 `core/src/nextpas.core.platform.linux.ffi.pas` 与
+    `core/src/nextpas.core.platform.darwin.ffi.pas`，并新增
+    `core/src/nextpas.core.platform.android.ffi.pas`、
+    `core/src/nextpas.core.platform.freebsd.ffi.pas`、
+    `core/src/nextpas.core.platform.unix.ffi.pas`，让 host-owned clock/sysconf/errno/binding
+    各归其位。
+  - `core/src/nextpas.core.platform.time.pas`、
+    `core/src/nextpas.core.platform.thread.pas`、
+    `core/src/nextpas.core.platform.sync.pas` 切到按 target 选择 host-owned FFI unit。
+  - 新增 `core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/`，并把 generic
+    Unix fallback 也纳入 source-surface proof。
+  - `build/verify_local.sh` 新增 `core-platform-ffi-partition-surface-check`、新 FFI 文件的
+    `require_path`，并把 `corePlatformFfiPartitionSurfaceCheck` 纳入 final envelope。
+  - 修正新测试初版只支持从测试目录执行的路径假设，增加 repo-root fallback 路径解析，让
+    per-project Makefile 与 `verify_local` 两条入口都能稳定运行。
+- Verification:
+  - RED: 首次 fresh `bash build/verify_local.sh` 失败在
+    `core-platform-ffi-partition-surface-run-failed`；实际原因是测试读取源码时只认测试目录相对路径。
+  - GREEN focused:
+    `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`、
+    `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
+    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    通过。
+  - Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
+    通过。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `core-platform-ffi-partition-surface-check=pass`、
+    `corePlatformFfiPartitionSurfaceCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 这批把 `platform.posix.ffi` 从“shared ABI + host truth 混合层”收紧成真正的 shared layer，
+    让 host-owned ABI 继续朝按目标单元收拢。
+  - 下一步更值得做的是补 Darwin / FreeBSD / Android 的 compile/runtime matrix 证据，尤其是
+    condvar clock、errno binding、pthread object ABI 的 host-side prove，而不是再把 host token
+    回塞进 shared wrapper。
 
 ## Session: 2026-05-27 (platform.sync FFI-owned opaque size derivation)
 

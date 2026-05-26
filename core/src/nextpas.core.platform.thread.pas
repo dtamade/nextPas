@@ -32,7 +32,12 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.ffi
+  {$ELSEIF defined(NEXTPAS_MACOS)}, nextpas.core.platform.darwin.ffi
+  {$ELSEIF defined(NEXTPAS_ANDROID)}, nextpas.core.platform.android.ffi
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}, nextpas.core.platform.freebsd.ffi
+  {$ELSE}, nextpas.core.platform.unix.ffi{$ENDIF};
 
 type
   PPosixThreadState = ^TPosixThreadState;
@@ -155,7 +160,7 @@ function platform_cpu_count: Int32;
 var
   LResult: PtrInt;
 begin
-  LResult := sysconf(_SC_NPROCESSORS_ONLN);
+  LResult := sysconf(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
   if LResult < 1 then
     Result := 1
   else

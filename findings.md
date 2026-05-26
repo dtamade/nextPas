@@ -25,6 +25,17 @@
   `nextpas.core.platform.posix.ffi`，macOS mach timebase 位于
   `nextpas.core.platform.darwin.ffi`，Windows QPC/FILETIME 位于
   `nextpas.core.platform.windows.ffi`。
+- `nextpas.core.platform.posix.ffi` 现在应只拥有 shared POSIX ABI：`timespec`、
+  `clock_gettime/getres`、`nanosleep`、`sched_yield`、`sysconf` 与 pthread
+  type/function declarations；host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno 常量和 errno
+  symbol binding 已经不应继续留在这里。
+- `core/src/nextpas.core.platform.android.ffi.pas`、
+  `core/src/nextpas.core.platform.freebsd.ffi.pas`、
+  `core/src/nextpas.core.platform.unix.ffi.pas` 已新增；`linux.ffi` 与 `darwin.ffi` 也扩成 host-owned
+  clock/sysconf/errno owner，让 generic Unix fallback 不再偷偷继承 Linux 近似 token。
+- `platform.time`、`platform.thread`、`platform.sync` 现在都会按 target 选择 host-owned FFI unit；
+  generic Unix 分支显式走 `nextpas.core.platform.unix.ffi`，不再从 shared `posix.ffi`
+  读取伪通用的 host token。
 - `platform.sync` 的 Windows ABI 现在也并入统一 `nextpas.core.platform.windows.ffi`：
   `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 与 `GetLastError` 不再留在
   `nextpas.core.platform.sync.windows.ffi` 这种按模块切碎的 FFI 单元里。
@@ -55,7 +66,12 @@
 - 新增 `core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/`，并扩充
   `test_platform_sync_posix_surface`，把 target-specific pthread ABI token 与 public opaque size
   branch 都冻结成 source-surface gate。
+- 新增 `core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/`，把
+  `posix.ffi` shared-vs-host ownership、Linux/macOS/Android/FreeBSD/generic Unix 的 host-owned
+  FFI surface 全部冻结成 source-surface gate；同时测试必须支持“从测试目录运行”和“从 repo root 的
+  official verify 入口运行”两种路径解析。
 - `build/verify_local.sh` 现在不仅运行 sync focused gates，也会把
+  `corePlatformFfiPartitionSurfaceCheck`、
   `corePlatformPosixFfiSurfaceCheck`、`corePlatformSyncCheck`、
   `corePlatformSyncNoFpcCheck`、`corePlatformSyncL0BoundaryCheck`、
   `corePlatformSyncPosixSurfaceCheck`、`corePlatformSyncSizeCheck`、

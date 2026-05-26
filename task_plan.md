@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync FFI-owned Opaque Size Derivation；并行收口包含
-Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
+当前最新本轮为 Platform Host-owned FFI Partitioning；并行收口包含
+Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
 Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
@@ -26,6 +26,63 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Host-owned FFI Partitioning
+
+### Goal
+
+把 `platform` 的宿主 ABI 真相继续从共享 POSIX 包装层里剥离出来：
+
+- `nextpas.core.platform.posix.ffi` 只保留共享 POSIX ABI 声明。
+- Linux、macOS、Android、FreeBSD 与 generic Unix 各自拥有自己的 clock id、`sysconf`
+  id、errno 常量与 errno symbol binding。
+- 这条 ownership 不只停在源码 diff，而要进入 focused gate 和 `verify-local`
+  machine-readable envelope。
+
+### Architecture Decision
+
+- `platform.posix.ffi` 是 shared ABI owner，不再承载 per-host 常量和符号名。
+- host-specific truth 必须放进按目标划分的 `platform.*.ffi.pas`；generic Unix fallback 也要有
+  自己的 `platform.unix.ffi`，避免继续把 Linux 近似值冒充“通用 Unix”。
+- `platform.time`、`platform.thread`、`platform.sync` 只选择并消费对应 host FFI unit，不在实现层
+  重新散落宿主 token。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 从 `platform.posix.ffi` 移出 host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno surface
+- [x] 扩充 `linux.ffi` / `darwin.ffi`，并新增 `android.ffi`、`freebsd.ffi`、`unix.ffi`
+- [x] 让 `platform.time`、`platform.thread`、`platform.sync` 切到 host-owned FFI unit
+- [x] 新增 `test_platform_ffi_partition_surface`
+- [x] 把新 gate 与新文件接进 `build/verify_local.sh`
+- [x] 修正新 gate 只在测试目录下才能解析源码路径的运行入口缺口
+- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED: 首次 fresh `bash build/verify_local.sh` 失败在
+  `core-platform-ffi-partition-surface-run-failed`；根因是新测试只会按测试目录相对路径读取源码，
+  从 repo root 执行时触发 `File not found`。
+- GREEN focused:
+  `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`、
+  `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
+  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  通过。
+- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
+  通过。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `core-platform-ffi-partition-surface-check=pass`、
+  `corePlatformFfiPartitionSurfaceCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不宣称 Darwin / FreeBSD / Android 已有新的 host-side runtime 证据
+- 这批不新增新的 L0 public API
+- 这批不把 source-surface proof 伪装成 cross-target compile/runtime closure
 
 ## Addendum: 2026-05-27 Platform Sync FFI-owned Opaque Size Derivation
 

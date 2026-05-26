@@ -48,7 +48,11 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_MACOS}, nextpas.core.platform.darwin.ffi{$ENDIF};
+  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.ffi
+  {$ELSEIF defined(NEXTPAS_MACOS)}, nextpas.core.platform.darwin.ffi
+  {$ELSEIF defined(NEXTPAS_ANDROID)}, nextpas.core.platform.android.ffi
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}, nextpas.core.platform.freebsd.ffi
+  {$ELSE}, nextpas.core.platform.unix.ffi{$ENDIF};
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -202,7 +206,7 @@ function platform_monotonic_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(CLOCK_MONOTONIC, @LTs) <> 0 then
+  if clock_gettime(PLATFORM_CLOCK_MONOTONIC_ID, @LTs) <> 0 then
   begin
     Result := 0;
     Exit;
@@ -214,7 +218,7 @@ function platform_realtime_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(CLOCK_REALTIME, @LTs) <> 0 then
+  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, @LTs) <> 0 then
   begin
     Result := 0;
     Exit;
@@ -226,7 +230,7 @@ function platform_monotonic_resolution_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_getres(CLOCK_MONOTONIC, @LTs) <> 0 then
+  if clock_getres(PLATFORM_CLOCK_MONOTONIC_ID, @LTs) <> 0 then
   begin
     Result := 1;
     Exit;
@@ -277,7 +281,7 @@ function platform_realtime_ns: UInt64;
 var
   LTs: timespec;
 begin
-  if clock_gettime(CLOCK_REALTIME, @LTs) <> 0 then
+  if clock_gettime(PLATFORM_CLOCK_REALTIME_ID, @LTs) <> 0 then
   begin
     Result := 0;
     Exit;
