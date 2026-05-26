@@ -768,8 +768,8 @@ require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
-require_path core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr
-require_path core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
+require_path core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr
+require_path core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
 require_path core/tests/nextpas.core.time/test_time/test_time.lpr
 require_path examples/smoke/hello_with_units.pas
 require_path examples/smoke/external_cdecl_smoke.pas
@@ -3980,14 +3980,14 @@ require_output_pattern '^--- nextpas\.core\.time: 13 total, 13 passed, 0 failed 
 printf 'core-time-check=pass\n'
 
 printf 'core-platform-time-helpers-check=running\n'
-printf 'core-platform-time-helpers-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$REPO_ROOT"
+printf 'core-platform-time-helpers-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR"
 if ! fpc \
   -Fi"$REPO_ROOT/core/src" \
   -Fu"$REPO_ROOT/core/src" \
   -FE"$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" \
   -FU"$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.time/test_platform_time_helpers/test_platform_time_helpers.lpr" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr" \
   >"$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 2>&1; then
   cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
   fail 'core-platform-time-helpers-build-failed'
@@ -4001,14 +4001,14 @@ require_output_pattern '^--- nextpas\.core\.platform\.time\.helpers: 9 total, 9 
 printf 'core-platform-time-helpers-check=pass\n'
 
 printf 'core-platform-time-no-fpc-check=running\n'
-printf 'core-platform-time-no-fpc-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$REPO_ROOT"
+printf 'core-platform-time-no-fpc-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR"
 if ! fpc \
   -Fi"$REPO_ROOT/core/src" \
   -Fu"$REPO_ROOT/core/src" \
   -FE"$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" \
   -FU"$CORE_PLATFORM_TIME_NO_FPC_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr" \
   >"$CORE_PLATFORM_TIME_NO_FPC_OUTPUT" 2>&1; then
   cat "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
   fail 'core-platform-time-no-fpc-build-failed'

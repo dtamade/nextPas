@@ -15,12 +15,70 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 101 Object Release Poison Contract；Batch 100 Object Release Valid Boundary、
-Batch 99 Object Header Magic Validation、
+当前最新本轮为 Batch 102 Platform API Boundary Cleanup；Batch 101 Object Release Poison Contract、
+Batch 100 Object Release Valid Boundary、Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-26 Batch 102 Platform API Boundary Cleanup
+
+### Goal
+
+纠正 platform 模块的归属边界：`platform` 是 L0 系统平台 API/ABI 适配层，只承载 OS/CPU、
+thread/sync/time clock 等低层契约；`Stopwatch`、`Duration` 等用户便利抽象属于
+`nextpas.core.time` 或后续更高层模块。
+
+本批只做边界收口：
+
+- platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`。
+- `nextpas.core.time/test_time` 继续只覆盖 L1 time public API。
+- 顶层 `build/verify_local.sh` 的 platform time gates 指向 platform 命名空间。
+- 平台设计约定同步 Windows FFI 文件名，并明确 Linux/macOS/Windows/Unix/BSD/Android 目标。
+
+### Architecture Decision
+
+- `platform` 不放 stopwatch 示例，不把 L1 time API 伪装成 platform 成果。
+- platform 子模块的测试、基准、示例命名必须贴着 platform contract；L1 模块使用自己的命名空间。
+- 本批不新增平台 ABI、不改 time/sync/thread 行为，只修正 ownership 和验证入口。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 停止并删除错误的 `platform-time-extras-preview` 切片，确认未合入 main
+- [x] 写 RED：确认 `nextpas.core.platform.time` focused test 目录缺失
+- [x] 将 platform.time helper/no-FPC focused tests 移到 `nextpas.core.platform.time`
+- [x] 同步 `build/verify_local.sh` focused gate 路径
+- [x] 同步平台设计约定中的目标平台和 Windows FFI 文件名
+- [x] 跑 focused platform.time tests
+- [x] 跑 `make -C core test`
+- [x] 跑 `bash build/verify_local.sh`
+- [x] 跑 `make -C core examples` 与 `make -C core benchmarks`
+- [x] 复盘并准备提交/安全合并
+
+### Verification
+
+- RED: `test -d core/tests/nextpas.core.platform.time/test_platform_time_helpers` 失败，确认
+  platform.time tests 仍挂在 L1 time 命名空间。
+- Focused GREEN: `test_platform_time_helpers` 输出 `9 total, 9 passed, 0 failed`；
+  `test_platform_time_no_fpc_units` 输出 `1 total, 1 passed, 0 failed`。
+- Aggregate GREEN: `make -C core test` 输出 `All tests passed.`。
+- Examples/benchmarks GREEN: `make -C core examples` 输出 `All examples compiled.`；
+  `make -C core benchmarks` 输出 `All benchmarks passed.`。
+- Official GREEN: fresh `bash build/verify_local.sh` 输出 `corePlatformTimeHelpersCheck=pass`、
+  `corePlatformTimeNoFpcCheck=pass`、`corePlatformTimeWin64Check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不新增 stopwatch 示例或 benchmark
+- 不改 `nextpas.core.time` 的 public API
+- 不改 platform.time ABI/FFI 行为
+- 不声明非 Linux 主机 runtime 已验证
 
 ## Addendum: 2026-05-26 Batch 101 Object Release Poison Contract
 

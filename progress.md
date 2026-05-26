@@ -3,12 +3,45 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 101 object release poison contract；Batch 100 object release valid boundary、
-Batch 99 object header magic validation、
+当前最新本轮为 Batch 102 platform API boundary cleanup；Batch 101 object release poison contract、
+Batch 100 object release valid boundary、Batch 99 object header magic validation、
 Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-26 (Batch 102 platform API boundary cleanup)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 纠正 platform 模块归属边界：platform 是 L0 系统平台 API/ABI 适配层，不承载
+    `Stopwatch` 这类 L1 convenience API。
+- Baseline:
+  - 错误的 `codex/platform-time-extras-preview` 分支新增了 `demo_stopwatch`，但尚未合入 main。
+  - `platform.time` helper/no-FPC focused tests 位于 `core/tests/nextpas.core.time/` 下，
+    命名空间把 L0 platform contract 和 L1 time API 混在一起。
+- Actions taken:
+  - 删除错误的 `platform-time-extras-preview` worktree 和分支，确认 main 未合入该切片。
+  - 从最新 main 新建 `codex/platform-api-hardening` worktree。
+  - 将 platform.time helper/no-FPC focused tests 迁入
+    `core/tests/nextpas.core.platform.time/`。
+  - 同步 `build/verify_local.sh` 的 platform time focused gate 路径。
+  - 同步 `core/docs/design-conventions.md`：目标平台包含通用 Unix/BSD 与 Android；
+    Windows FFI 文件名改为当前真实的 `nextpas.core.platform.windows.ffi.pas`。
+- Verification:
+  - RED: `test -d core/tests/nextpas.core.platform.time/test_platform_time_helpers` 失败，
+    确认原路径缺失。
+  - Focused GREEN: `test_platform_time_helpers` 9/9 pass；
+    `test_platform_time_no_fpc_units` 1/1 pass。
+  - Aggregate GREEN: `make -C core test` 输出 `All tests passed.`。
+  - Examples/benchmarks GREEN: `make -C core examples` 与 `make -C core benchmarks` 通过。
+  - Full GREEN: fresh `bash build/verify_local.sh` 输出 `corePlatformTimeHelpersCheck=pass`、
+    `corePlatformTimeNoFpcCheck=pass`、`corePlatformTimeWin64Check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只修正 ownership、验证入口和文档，不新增 platform ABI，不修改 time/sync/thread 行为。
+  - platform 是 L0 系统 API/ABI 层；`Stopwatch`/`Duration` 保持在 L1 `nextpas.core.time`
+    或后续更高层模块，不能再作为 platform 成果出现。
 
 ## Session: 2026-05-26 (Batch 101 object release poison contract)
 

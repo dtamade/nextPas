@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
+  `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
+  platform 模块成果混入。
+- 错误的 `codex/platform-time-extras-preview` 分支只存在于隔离 worktree，尚未合入 main；已删除
+  该 worktree/branch，避免 stopwatch 示例污染 platform 收口。
+- `platform.time` 的 helper/no-FPC focused tests 原先位于 `core/tests/nextpas.core.time/`，
+  这会弱化 L0 platform contract 与 L1 time API 的边界；本批迁入
+  `core/tests/nextpas.core.platform.time/`，`nextpas.core.time/test_time` 继续覆盖 L1 public API。
+- `core/docs/design-conventions.md` 中 Windows FFI 示例文件名仍写作 `win32.ffi`，与当前真实
+  `nextpas.core.platform.windows.ffi.pas` 不一致；同时目标平台描述需要显式包含通用 Unix/BSD
+  与 Android。
 - `platform.time` 现在通过 nextPas-owned FFI 单元访问平台 ABI：POSIX clock API 位于
   `nextpas.core.platform.posix.ffi`，macOS mach timebase 位于
   `nextpas.core.platform.darwin.ffi`，Windows QPC/FILETIME 位于
@@ -22,6 +33,14 @@
   `remainder * multiplier` 会溢出但最终商仍可表示时，走逐位 fallback 而不是直接饱和。
 - `build/verify_local.sh` 已提升 platform time focused gates：time helpers、no-FPC 静态检查和 Win64
   compile-only 都会进入 official local verification。
+- Batch 102 已把 platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`，
+  并让 official gates 指向 platform 命名空间；`nextpas.core.time/test_time` 继续只覆盖 L1
+  `time` public API。
+- Batch 102 fresh verification 已闭环：focused platform.time tests、`make -C core test`、
+  `make -C core examples`、`make -C core benchmarks` 均通过，fresh `bash build/verify_local.sh`
+  输出 `corePlatformTimeHelpersCheck=pass`、`corePlatformTimeNoFpcCheck=pass`、
+  `corePlatformTimeWin64Check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 - platform.time 批次的 fresh verification 已闭环：`make -C core test`、`make -C core examples`、
   `make -C core benchmarks` 通过，`bash build/verify_local.sh` 输出
   `verify-local=pass` 与 `human-summary=local verification passed`。

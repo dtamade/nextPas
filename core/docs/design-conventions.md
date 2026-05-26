@@ -745,7 +745,7 @@ nextpas.core/
 - nextPas 编译器基于 LLVM 后端，core 框架要全平台支持
 - 当前优先实现 Linux x86_64
 - 设计上预留全平台（通过 .inc 平台分支和多态）
-- 目标平台：Linux、macOS、Windows（x86_64、aarch64）
+- 目标平台：Linux、macOS、Windows、通用 Unix/BSD 与 Android（x86_64、aarch64）
 
 ### 硬规则：platform 模块不依赖 FPC 单元
 
@@ -760,7 +760,7 @@ nextpas.core/
 src/nextpas.core.platform.posix.ffi.pas   ← POSIX 系统调用（cdecl external 'c'）
 src/nextpas.core.platform.linux.ffi.pas   ← Linux 特有（syscall numbers 等）
 src/nextpas.core.platform.darwin.ffi.pas  ← macOS 特有（mach_* 等）
-src/nextpas.core.platform.win32.ffi.pas   ← Win32 API（stdcall external）
+src/nextpas.core.platform.windows.ffi.pas ← Windows API（stdcall external）
 ```
 
 示例边界：

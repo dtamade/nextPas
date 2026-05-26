@@ -1,6 +1,6 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.time/test_platform_time_no_fpc_units
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.platform.time/test_platform_time_no_fpc_units
 PROGRAM := test_platform_time_no_fpc_units
 SOURCE := $(PROGRAM).lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
