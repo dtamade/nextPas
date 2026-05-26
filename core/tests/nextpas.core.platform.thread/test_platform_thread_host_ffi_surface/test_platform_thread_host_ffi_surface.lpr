@@ -17,6 +17,8 @@ const
   ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
+  WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
+  WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
 
 var
   T: TTestRunner;
@@ -61,12 +63,14 @@ var
   LDarwinSource: string;
   LAndroidSource: string;
   LFreeBSDSource: string;
+  LWindowsSource: string;
 begin
   LThreadSource := ReadSourceFile(ResolveSourcePath(THREAD_SOURCE_PATH_FROM_TEST, THREAD_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
   LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
   LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LLinuxSource, 'function gettid',
     'linux.ffi must expose Linux native thread id ABI');
@@ -98,6 +102,8 @@ begin
     'freebsd.ffi must expose FreeBSD EINTR for retryable nanosleep');
   CheckTokenPresent(LFreeBSDSource, 'platform_errno_location',
     'freebsd.ffi must expose FreeBSD errno binding for retryable nanosleep');
+  CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
+    'windows.ffi must expose Windows sleep timeout conversion policy');
 
   CheckTokenPresent(LThreadSource, 'function platform_thread_id',
     'platform.thread must continue to expose the thread id contract');
@@ -111,6 +117,10 @@ begin
     'platform.thread must use host-owned EINTR token for nanosleep retry semantics');
   CheckTokenPresent(LThreadSource, 'platform_errno_location',
     'platform.thread must use host-owned errno binding for nanosleep retry semantics');
+  CheckTokenPresent(LThreadSource, 'windows_sleep_ns_to_ms',
+    'platform.thread must consume Windows sleep timeout conversion through windows.ffi');
+  Check(Pos('$ffffffff', LThreadSource) = 0,
+    'platform.thread must not keep a raw Windows sleep saturation literal');
 end;
 
 begin

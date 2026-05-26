@@ -29,6 +29,10 @@
   现在这两个宿主时钟 truth 已进入 `nextpas.core.platform.windows.ffi`，`platform.time` 只消费
   `WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS` 与
   `WINDOWS_FILETIME_NANOSECONDS_PER_TICK`。
+- Windows 的 `Sleep` / `WaitOnAddress` / `SleepConditionVariableSRW` timeout 换算 policy 也不该
+  分别散落在 `platform.thread` 与 `platform.sync` 里；现在 `windows.ffi` 继续拥有
+  `windows_sleep_ns_to_ms` 与 `windows_timeout_ns_to_ms`，consumer 不再各自复制向上取整和
+  `INFINITE - 1` 截断语义。
 - 新增 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`，把
   `platform.time` 对 `posix.ffi` / `darwin.ffi` / `windows.ffi` 的 clock ABI 消费关系冻结成
   source-surface gate；fresh `bash build/verify_local.sh` 已把
@@ -37,6 +41,10 @@
 - `test_platform_time_host_ffi_surface` 现在还会额外禁止 `platform.time` 回归裸
   `116444736000000000` 这类 Windows `FILETIME` epoch 魔数；owner boundary 不再只检查符号存在，
   也检查实现层不把宿主 clock truth 再偷拿回来。
+- `test_platform_sync_host_ffi_surface` 与 `test_platform_thread_host_ffi_surface` 现在也会冻结
+  Windows timeout/sleep conversion helper 的 owner boundary：`windows.ffi` 必须继续拥有 helper，
+  `platform.sync` / `platform.thread` 必须继续消费它们，不能回归 local helper 或 raw
+  `$FFFFFFFF` saturation literal。
 - `test_platform_time_helpers` 现在 direct 覆盖 `platform_realtime_ns` 与
   `platform_monotonic_resolution_ns`，platform 自己的 focused test 对 public clock API 的接口覆盖更完整，
   不再主要依赖 example 与 L1 `time` test 间接证明。

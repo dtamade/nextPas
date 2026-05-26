@@ -39,6 +39,9 @@ const
   WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS = UInt64(116444736000000000);
   WINDOWS_FILETIME_NANOSECONDS_PER_TICK = UInt64(100);
 
+function windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
+function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
+
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
 function CloseHandle(hObject: HANDLE): BOOL; stdcall; external 'kernel32' name 'CloseHandle';
@@ -76,5 +79,38 @@ procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' na
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
 
 implementation
+
+const
+  WINDOWS_NANOSECONDS_PER_MILLISECOND = UInt64(1000000);
+
+function windows_positive_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
+var
+  LMs: UInt64;
+begin
+  if ANanoseconds = 0 then
+    Exit(0);
+
+  LMs := ANanoseconds div WINDOWS_NANOSECONDS_PER_MILLISECOND;
+  if (ANanoseconds mod WINDOWS_NANOSECONDS_PER_MILLISECOND) <> 0 then
+    Inc(LMs);
+
+  if LMs >= UInt64(INFINITE) then
+    Result := INFINITE - 1
+  else
+    Result := DWORD(LMs);
+end;
+
+function windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
+begin
+  if ATimeoutNs < 0 then
+    Exit(INFINITE);
+
+  Result := windows_positive_ns_to_ms(UInt64(ATimeoutNs));
+end;
+
+function windows_sleep_ns_to_ms(const ANanoseconds: UInt64): DWORD; inline;
+begin
+  Result := windows_positive_ns_to_ms(ANanoseconds);
+end;
 
 end.

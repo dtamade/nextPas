@@ -327,9 +327,7 @@ begin
   if ANanoseconds = 0 then
     Exit;
 
-  LMs := DWORD(ANanoseconds div 1000000);
-  if (ANanoseconds mod 1000000 > 0) and (LMs < $FFFFFFFF) then
-    Inc(LMs);
+  LMs := windows_sleep_ns_to_ms(ANanoseconds);
   Sleep(LMs);
 end;
 

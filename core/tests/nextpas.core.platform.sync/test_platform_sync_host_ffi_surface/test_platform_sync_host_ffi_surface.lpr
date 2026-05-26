@@ -77,6 +77,8 @@ begin
     'windows.ffi must expose WakeByAddressAll');
   CheckTokenPresent(LWindowsSource, 'getlasterror',
     'windows.ffi must expose GetLastError for sync error mapping');
+  CheckTokenPresent(LWindowsSource, 'windows_timeout_ns_to_ms',
+    'windows.ffi must expose Windows wait timeout conversion policy');
 
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
     'platform.sync must use linux.ffi for Linux futex bindings');
@@ -115,6 +117,10 @@ begin
     'platform.sync must consume WakeByAddressAll through windows.ffi');
   CheckTokenPresent(LSyncSource, 'getlasterror',
     'platform.sync must consume GetLastError through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_timeout_ns_to_ms',
+    'platform.sync must consume Windows wait timeout conversion through windows.ffi');
+  Check(Pos('function platform_timeout_ns_to_ms', LSyncSource) = 0,
+    'platform.sync must not keep a local Windows timeout conversion helper');
 end;
 
 begin

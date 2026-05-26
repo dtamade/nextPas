@@ -714,24 +714,6 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
-function platform_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD;
-var
-  LMs: UInt64;
-begin
-  if ATimeoutNs < 0 then
-    Exit(INFINITE);
-  if ATimeoutNs = 0 then
-    Exit(0);
-
-  LMs := UInt64(ATimeoutNs div 1000000);
-  if (ATimeoutNs mod 1000000) <> 0 then
-    Inc(LMs);
-  if LMs >= UInt64(INFINITE) then
-    Result := INFINITE - 1
-  else
-    Result := DWORD(LMs);
-end;
-
 { Mutex - SRWLOCK based (exclusive only for mutex semantics) }
 
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
@@ -846,7 +828,7 @@ function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: 
 var
   LMs: DWORD;
 begin
-  LMs := platform_timeout_ns_to_ms(ATimeoutNs);
+  LMs := windows_timeout_ns_to_ms(ATimeoutNs);
   if SleepConditionVariableSRW(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], LMs, 0) then
     Result := 0
   else if GetLastError = ERROR_TIMEOUT then
@@ -875,7 +857,7 @@ var
   LExpected: Int32;
 begin
   LExpected := AExpected;
-  LMs := platform_timeout_ns_to_ms(ATimeoutNs);
+  LMs := windows_timeout_ns_to_ms(ATimeoutNs);
   if WaitOnAddress(AAddr, @LExpected, SizeOf(Int32), LMs) then
     Result := 0
   else if GetLastError = ERROR_TIMEOUT then

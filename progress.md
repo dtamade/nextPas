@@ -3,8 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.time windows filetime host ffi ownership；并行收口包含
-platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
+当前最新本轮为 platform windows timeout conversion ffi ownership；并行收口包含
+platform.time windows filetime host ffi ownership、platform.thread sleep eintr ffi ownership、platform.sync pthread capability ffi ownership、platform.sync host ffi surface guard、platform.time host ffi surface guard、platform thread native thread id host ffi hardening、
 platform FFI owner boundary guard、platform host-owned FFI partitioning、platform.sync FFI-owned opaque size derivation、platform POSIX FFI target matrix hardening、platform.sync POSIX fallback runtime coverage、
 platform.sync FFI surface parity、platform.thread L0 surface coverage、
 platform.time L0 surface coverage、platform API boundary cleanup 与 Batch 104 function result call type mismatch evidence；
@@ -16,6 +16,56 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform windows timeout conversion ffi ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 Windows `Sleep` / `WaitOnAddress` / `SleepConditionVariableSRW` 共用的 ns->ms timeout/sleep
+    conversion policy 从 `platform.thread` / `platform.sync` 实现层收回到 `windows.ffi` owner 单元。
+- Baseline:
+  - `platform.sync` 仍保留本地 `platform_timeout_ns_to_ms`，自己处理向上取整、`INFINITE` sentinel 与
+    `INFINITE - 1` 最大有限超时截断。
+  - `platform.thread` 的 Windows `Sleep` 路径也还保留独立的 ns->ms rounding 与 raw `$FFFFFFFF`
+    saturation literal。
+- Actions taken:
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增：
+    - `windows_timeout_ns_to_ms`
+    - `windows_sleep_ns_to_ms`
+    - 内部统一 `windows_positive_ns_to_ms`，承载向上取整与最大有限毫秒截断 policy
+  - `core/src/nextpas.core.platform.sync.pas` 删除本地 `platform_timeout_ns_to_ms`，改为消费
+    `windows_timeout_ns_to_ms`。
+  - `core/src/nextpas.core.platform.thread.pas` 的 Windows sleep 路径改为消费
+    `windows_sleep_ns_to_ms`，不再保留 raw `$FFFFFFFF` saturation literal。
+  - 扩充 `test_platform_sync_host_ffi_surface` 与 `test_platform_thread_host_ffi_surface`，冻结：
+    - `windows.ffi` 必须继续拥有 timeout/sleep conversion helper
+    - `platform.sync` 必须继续消费 `windows_timeout_ns_to_ms`
+    - `platform.thread` 必须继续消费 `windows_sleep_ns_to_ms`
+    - `platform.sync` 不得回归 local timeout helper
+    - `platform.thread` 不得回归 raw `$FFFFFFFF` saturation literal
+  - `core/docs/design-conventions.md` 追加规则：Windows timeout conversion policy 归
+    `windows.ffi` owner，不在 consumer 各自复制。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose Windows sleep timeout conversion policy`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose Windows wait timeout conversion policy`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      1/1 pass
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      1/1 pass
+  - Full:
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 Windows timeout/sleep rounding/saturation policy 收口成 `windows.ffi` 的单一事实源，
+    platform consumer 之间不再各自携带一份宿主语义。
+  - 下一步更值的是继续审 `platform.sync` 的 Windows wait result / last-error mapping，或者
+    `platform.time` 的 Darwin/Windows host-specific capability truth。
 
 ## Session: 2026-05-27 (platform.time windows filetime host ffi ownership)
 

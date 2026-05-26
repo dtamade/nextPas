@@ -15,8 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Time Windows FILETIME Host FFI Ownership；并行收口包含
-Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
+当前最新本轮为 Platform Windows Timeout Conversion FFI Ownership；并行收口包含
+Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
 Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
 Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
@@ -27,6 +27,60 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Windows Timeout Conversion FFI Ownership
+
+### Goal
+
+继续把 Windows host-specific timeout/sleep policy 收回 `windows.ffi` owner 单元：
+
+- `platform.sync` 不再自己拥有 ns->ms timeout helper
+- `platform.thread` 不再自己拥有 Windows sleep rounding/saturation 逻辑
+- `windows.ffi` 统一拥有向上取整、`INFINITE` sentinel 与最大有限毫秒截断 policy
+
+### Architecture Decision
+
+- `Sleep`、`WaitOnAddress`、`SleepConditionVariableSRW` 本身继续是 Windows ABI declaration，归
+  `nextpas.core.platform.windows.ffi`。
+- 与这些 ABI 一起出现的 timeout/sleep conversion truth 也归 `nextpas.core.platform.windows.ffi`；
+  这不是 generic arithmetic，而是 Windows wait API contract 的一部分。
+- `platform.sync` / `platform.thread` 继续只消费 helper/token，不各自复制 Windows policy。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 thread/sync host ffi surface tests，要求 `windows.ffi` 拥有 timeout/sleep helper
+- [x] RED：要求 `platform.sync` / `platform.thread` 消费 helper，并禁止 local helper/raw literal 回归
+- [x] 在 `windows.ffi` 实现统一 timeout/sleep conversion helper
+- [x] 切换 `platform.sync` / `platform.thread` 的 Windows consumer
+- [x] 同步 design/tracking 文档
+- [x] 跑 focused tests
+- [x] 跑 fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must expose Windows sleep timeout conversion policy`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must expose Windows wait timeout conversion policy`。
+- GREEN focused:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    通过。
+- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不改 `platform.sync` / `platform.thread` 的 public API
+- 这批不引入新的 Windows runtime feature detection
+- 这批不处理 wait result / last-error mapping 的进一步 ownerization
 
 ## Addendum: 2026-05-27 Platform Time Windows FILETIME Host FFI Ownership
 
