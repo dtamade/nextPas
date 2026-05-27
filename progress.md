@@ -39,7 +39,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform host ffi gap matrix guard)
 
-- **Status:** implementation verified in isolated worktree; commit and integration pending
+- **Status:** completed; merged to main and cleanup pending
 - Objective:
   - 继续按 `/plan` 推进 platform 模块，但本轮不扩 public API，而是建立
     Platform Host FFI Gap Matrix Guard。
@@ -103,7 +103,20 @@ platform/core 工作流保留下来的已完成记录。
   - 证据边界已经在文档和测试里明确：Linux 是 runtime proof，Win64/simulated hosts 是 compile-only，
     source-surface gate 负责防止 host ABI owner 与 feature unified contract 再次漂移。
 - Next:
-  - 提交当前分支，整合最新 `main@d987e80`，重跑 post-integration focused gates 后择优合并回 main。
+  - 清理 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-matrix` worktree 和
+    `codex/platform-host-gap-matrix` 分支。
+- Integration / post-merge verification:
+  - 本分支 commit `ec1217b` rebase 到 `main@d987e80` 后变为 `253a3fa`。
+  - `codex/platform-host-gap-matrix` 已 fast-forward 合并到 `main@253a3fa`。
+  - post-merge focused verification passed:
+    `test_platform_host_gap_matrix` 3/3 pass，
+    `test_platform_ffi_partition_surface` 1/1 pass，
+    `test_platform_posix_ffi_surface` 1/1 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass，
+    `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
+  - 主 checkout 仍有 unrelated collections WIP：
+    `core/src/nextpas.core.collections.hashset.base.pas`、
+    `core/src/nextpas.core.collections.hashset.intf.pas`；本轮未修改也未提交这些文件。
 
 ## Session: 2026-05-27 (platform.thread base extraction)
 

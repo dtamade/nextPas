@@ -75,9 +75,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Implementation verified in isolated worktree; commit and integration pending in
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-matrix`
-on branch `codex/platform-host-gap-matrix`.
+Completed, committed, fast-forward merged to `main@253a3fa`, and cleanup pending.
 
 ### Planned Steps
 
@@ -104,8 +102,9 @@ on branch `codex/platform-host-gap-matrix`.
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
   - `git diff --check`
-- [ ] commit、整合最新 `main@d987e80`、择优合并回 main
-- [ ] post-merge focused verification 后清理 worktree / branch
+- [x] commit、整合最新 `main@d987e80`、择优合并回 main
+- [x] post-merge focused verification
+- [ ] 清理 worktree / branch
 
 ### Audit Checklist
 
@@ -142,6 +141,18 @@ on branch `codex/platform-host-gap-matrix`.
   - `git diff --check`: pass。
 - `main` 当前已到 `d987e80`，本 worktree 起点是 `cda52dd`；合并前必须先整合最新 main 并重跑
   post-integration focused verification。
+- Integration:
+  - 本分支 rebase 到 `main@d987e80` 后无冲突，提交变为 `253a3fa`。
+  - `codex/platform-host-gap-matrix` 已 fast-forward 合并到 `main@253a3fa`。
+  - post-merge focused verification passed:
+    `test_platform_host_gap_matrix` 3/3 pass，
+    `test_platform_ffi_partition_surface` 1/1 pass，
+    `test_platform_posix_ffi_surface` 1/1 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass，
+    `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
+  - 主 checkout 仍有 unrelated collections WIP：
+    `core/src/nextpas.core.collections.hashset.base.pas`、
+    `core/src/nextpas.core.collections.hashset.intf.pas`；本轮未提交这些文件。
 
 ## Addendum: 2026-05-27 Platform Sync Base Extraction
 
