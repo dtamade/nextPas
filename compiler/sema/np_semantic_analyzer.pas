@@ -1742,7 +1742,13 @@ begin
       AArgSignature,
       AHasArgSignature,
       AHasTypeMismatchEvidence,
-      Depth = 0,
+      (Depth = 0) or (
+        TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) and
+        SameText(
+          TypeSymbol.OwnerUnitId,
+          NormalizeUnitIdentity(FUnitGraph.RootName)
+        )
+      ),
       MethodNameFound,
       AResolutionFailureKind
     );

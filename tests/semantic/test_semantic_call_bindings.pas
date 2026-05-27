@@ -968,7 +968,7 @@ begin
   end;
 end;
 
-procedure CheckInheritedMemberNoMatchingOverloadStaysDeferred;
+procedure CheckInheritedMemberNoMatchingOverloadDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -1012,12 +1012,22 @@ begin
     Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
-    if Diagnostics.HasErrors then
-      Fail('unexpected-inherited-member-no-matching-overload-diagnostic:' +
+    if not Diagnostics.HasErrors then
+      Fail('missing-inherited-member-no-matching-overload-diagnostic');
+    if not SameText(
+      Diagnostics.LastDiagnosticCode,
+      'sema.no-matching-overload'
+    ) then
+      Fail('unexpected-inherited-member-no-matching-overload-diagnostic-code:' +
         Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-inherited-member-no-matching-overload-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('inherited-member-no-matching-overload-diagnostic-missing-name');
     if Model = nil then
       Fail('missing-inherited-member-no-matching-overload-semantic-model');
-    if not SameText(Model.Status, 'ready') then
+    if not SameText(Model.Status, 'failure') then
       Fail('unexpected-inherited-member-no-matching-overload-model-status:' +
         Model.Status);
     if Model.BindingCount <> 0 then
@@ -3985,7 +3995,7 @@ begin
     CheckMemberTypedOverloadBindingTargets;
     CheckAmbiguousMemberOverloadDiagnostic;
     CheckMemberNoMatchingOverloadDiagnostic;
-    CheckInheritedMemberNoMatchingOverloadStaysDeferred;
+    CheckInheritedMemberNoMatchingOverloadDiagnostic;
     CheckUnknownMemberDiagnostic;
     CheckKnownFieldMemberCallStaysDeferred;
     CheckSystemObjectFreeMemberCallStaysDeferred;

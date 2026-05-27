@@ -15,10 +15,10 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 112 Imported Member Wrong Argument Count Diagnostics；Batch 111 Imported Member
-Unknown Member Diagnostics；Batch 110 Imported Member No Matching Overload Diagnostics、Batch 109 Imported
-Member Single-target Type Mismatch Diagnostics、Batch 108 Imported Single-target Type Mismatch Diagnostics、
-Batch 107 Member No Matching Overload Diagnostics；并行收口包含
+当前最新本轮为 Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
+Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
+并行收口包含
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
 Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
@@ -27,6 +27,76 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 113 Inherited Member No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 `sema.no-matching-overload` 从 root-owned exact class direct member-call 推进到第一条 root-owned
+inherited direct member-call 安全边界：当 receiver type 已知、exact receiver type 本身没有同名 method、
+但 parent chain 上存在同名同 arity 的多个 member target，且当前稳定 argument signature 与所有
+inherited candidate signature 都不匹配时，发出 `sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 后调用 `Worker.Pick(True)`，其中
+  `TWorker = class(TBase)` 且 exact receiver type 自身没有 `Pick` 时，必须失败为
+  `sema.no-matching-overload`，且失败调用不注册 `member-call` binding。
+- 只打开 root-owned inherited member no-match；imported inherited member no-match 继续 deferred。
+- `build/verify_local.sh` 新增 `inherited-member-no-matching-overload-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `inheritedMemberNoMatchingOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+- 提速策略固定为沿同一家族 sema diagnostics 连续切批，优先选择只差 provenance /
+  inherited / imported 边界的一刀收口。
+
+### Architecture Decision
+
+这是 inherited member no-match 的第一条 root-owned 切片，不是完整 Pascal inherited resolver：
+
+- 只覆盖 root-owned parent chain direct member-call 的 stable signature no-match。
+- 如果 exact receiver type 自身已声明同名 method，仍按现有“保守停止、不穿透 parent 代偿”边界处理。
+- imported inherited member、record/property/array/deref receiver、implicit conversion、default
+  parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与模板化快节奏执行法
+- [x] RED：把 inherited member no-match deferred guard 翻成正向诊断回归
+- [x] 在 parent-chain member lookup 中为 root-owned inherited path 放开 no-match diagnostic gate
+- [x] 新增 `tests/fixtures/inherited_member_no_matching_overload` 与
+  `inherited-member-no-matching-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-inherited-member-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused: `nextpas build tests/fixtures/inherited_member_no_matching_overload/inherited_member_no_matching_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.no-matching-overload`、
+  `diagnostic-message=no matching overload for "Pick"`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `inherited-member-no-matching-overload-check=pass`、
+  `inheritedMemberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported inherited member no-match 纳入 diagnostics
+- 不打开 exact receiver own-method mismatch 穿透 parent 的代偿路径
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 112 Imported Member Wrong Argument Count Diagnostics
 

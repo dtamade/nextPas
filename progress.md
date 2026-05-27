@@ -3,10 +3,10 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 112 imported member wrong argument count diagnostics；Batch 111 imported member
-unknown-member diagnostics；Batch 110 imported member no matching overload diagnostics、Batch 109 imported
-member single-target type mismatch diagnostics、Batch 108 imported single-target type mismatch diagnostics、
-Batch 107 member no matching overload diagnostics 已完成；并行收口包含
+当前最新本轮为 Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
+member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
+已完成；并行收口包含
 platform.thread L0 surface coverage、platform.time L0 surface coverage 与 platform API boundary cleanup；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
@@ -16,6 +16,50 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 113 inherited member no matching overload diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 root-owned inherited direct member-call 的 stable signature no-match 从 deferred 推进到
+    `sema.no-matching-overload`。
+- Baseline:
+  - Batch 107 已覆盖 root-owned exact class member no matching overload。
+  - 旧实现为了避免过早误报，把 inherited parent overload no-match 收窄回 `Depth = 0` exact receiver；
+    因此 `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 下的 `Worker.Pick(True)` 仍保持 deferred。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续沿用模板化快节奏执行法：
+    `单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify -> review -> commit`。
+  - 先把 `tests/semantic/test_semantic_call_bindings.pas` 里的 inherited deferred guard 翻成正向诊断期望。
+  - RED focused test 失败在
+    `semantic-call-bindings-failure=missing-inherited-member-no-matching-overload-diagnostic`，
+    证明旧实现仍把 root-owned parent-chain no-match 保留为 deferred。
+  - `MethodSymbolIdForClassTypeMember(...)` 现在把 `no-matching-overload` 的 parent-chain gate 收紧为：
+    exact receiver type 继续允许；parent depth 只对 root-owned current type 放开，不顺手打开 imported
+    inherited path。
+  - 新增 `tests/fixtures/inherited_member_no_matching_overload`，并把
+    `inherited-member-no-matching-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-inherited-member-no-matching-overload-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Stage0 focused: `nextpas build tests/fixtures/inherited_member_no_matching_overload/inherited_member_no_matching_overload_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.no-matching-overload`、
+    `diagnostic-message=no matching overload for "Pick"`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `inherited-member-no-matching-overload-check=pass`、
+    `inheritedMemberNoMatchingOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 root-owned inherited member no-match；imported inherited no-match、default parameter
+    ranking、implicit conversion、visibility checking 与更复杂 receiver form 继续 deferred。
+  - exact receiver type 自身已声明同名 method 的路径仍保持现有“保守停止、不穿透 parent 代偿”边界。
+  - 后续继续沿同一家族 sema diagnostics 切批，优先挑只差 provenance / inherited / imported
+    guard 的热点，保持单刀推进速度。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 112 imported member wrong argument count diagnostics)
 

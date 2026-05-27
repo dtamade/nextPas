@@ -93,6 +93,18 @@
 - Batch 112 新增 `imported-member-wrong-argument-count-check`，用 dedicated fixture 固定 stage0
   `sema.wrong-argument-count` projection 与 final envelope
   `importedMemberWrongArgumentCountCheck=pass`。
+- Batch 113 把 root-owned inherited direct member-call 的 stable signature no-match 正式纳入 gate：
+  exact receiver type 自身没有同名 method、但 parent chain 上存在同名同 arity 的多个 member target，
+  且当前稳定 argument signature 与所有 inherited candidate 都不匹配时，`Worker.Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 113 只打开 root-owned inherited member no-match；imported inherited path 继续 deferred，
+  不会被这轮顺手放开。
+- `MethodSymbolIdForClassTypeMember(...)` 现在对 `no-matching-overload` 的 parent-chain gate 做了
+  root-owned 限定：exact receiver 仍可诊断；parent depth 只有 current type owner 属于 root source 时
+  才允许 inherited no-match 投影成 structured diagnostic。
+- Batch 113 新增 `inherited-member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope
+  `inheritedMemberNoMatchingOverloadCheck=pass`。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。
