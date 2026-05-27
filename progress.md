@@ -4,6 +4,7 @@
 2026-05-27 记录为准。
 
 当前最新本轮为 collections interface ownership normalization；上一轮 platform 主线包括
+platform POSIX pthread attr-init shared helper ownership；
 platform POSIX clock/sync shared helper ownership；
 platform thread shared POSIX helper ownership；
 platform time windows math helper boundary；
@@ -60,6 +61,67 @@ platform/core 工作流保留下来的已完成记录。
   - 下一步要处理的是 class skeleton ownership：先把 public interface contract 中对 `TCollection`
     class 的耦合设计出兼容过渡，再把 `TCollection` / `TGenericCollection<T>` 物理移向
     `collections.abstract`。
+
+## Session: 2026-05-27 (platform POSIX pthread attr-init shared helper ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `linux/android/darwin/freebsd/unix.ffi` 里仍然重复的 pthread attr-init glue 收回
+    `nextpas.core.platform.posix.ffi`，让 host ffi 更接近只保留宿主 truth。
+- Baseline:
+  - 前几轮已经把 shared `timespec` 算术、thread glue、clock thin wrapper 与 sync forwarder 拆开了，
+    但 `pthread_mutexattr_* + pthread_mutex_init`、`pthread_condattr_* + pthread_cond_init`
+    这一层 attr-init 样板仍在 5 个 POSIX host ffi 里逐份复制。
+  - 这些样板本身不携带宿主 capability truth；真正变化的只有 public kind 对应的宿主 kind、
+    timeout clock id，以及 condattr setclock binding / capability。
+- Actions taken:
+  - 先把 `test_platform_posix_ffi_surface` 扩成 RED gate，要求 `posix.ffi` 显式暴露：
+    - `TPThreadCondAttrSetClockProc`
+    - `platform_posix_pthread_mutex_init_kind`
+    - `platform_posix_pthread_condvar_init_with_clock`
+  - 再把 `test_platform_sync_host_ffi_surface` 扩成 RED gate，明确要求
+    `linux/android/darwin/freebsd/unix.ffi`：
+    - source 中出现对 shared attr-init helper 的委托 token
+    - 不再自己保留 raw `pthread_mutexattr_*` / `pthread_condattr_*` /
+      `pthread_cond_init` glue
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增上述 shared helper，把 attr-init 样板收成
+    shared owner，同时保留 host truth 以参数形式传入。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    改为委托 shared helper；host ffi 继续只保留 public kind 映射、timeout clock id、
+    condattr setclock binding/capability 与 errno truth。
+  - `core/docs/design-conventions.md` 回写规则：shared `posix.ffi` 可以继续拥有参数化但不携带
+    宿主 truth 的 pthread attr-init glue。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在
+      `posix.ffi must expose shared pthread mutex init-with-kind helper for host ffi owners`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate pthread mutex attr-init glue to shared posix.ffi`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+      `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+      `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+      `corePlatformSyncCheck":"pass"`、
+      `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批把 POSIX host ffi 里还剩的一层高重复 sync glue 又往 shared owner 推进了一步：shared
+    `posix.ffi` 现在不仅拥有 thin forwarder，也拥有参数化的 attr-init skeleton。
+  - 更关键的是，host truth 与 shared glue 的切面现在更清楚了：mutex kind 编号、timeout clock id、
+    condattr setclock binding/capability 仍留在 host owner；attr-init 样板则由 shared owner 统一承载。
 
 ## Session: 2026-05-27 (platform POSIX clock/sync shared helper ownership)
 

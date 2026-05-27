@@ -78,6 +78,8 @@ begin
     AHostLabel + ' must expose pthread mutex init helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init_platform_kind',
     AHostLabel + ' must expose pthread mutex init helper for public kind contract');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_kind',
+    AHostLabel + ' must delegate pthread mutex attr-init glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_destroy',
     AHostLabel + ' must expose pthread mutex destroy helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_lock',
@@ -104,6 +106,8 @@ begin
     AHostLabel + ' must expose pthread rwlock write-unlock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_condvar_init',
     AHostLabel + ' must expose pthread condvar init helper for sync');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_init_with_clock',
+    AHostLabel + ' must delegate pthread condvar attr-init glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_pthread_condvar_destroy',
     AHostLabel + ' must expose pthread condvar destroy helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_condvar_wait',
@@ -148,6 +152,18 @@ begin
     AHostLabel + ' must delegate pthread condvar signal to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_broadcast',
     AHostLabel + ' must delegate pthread condvar broadcast to shared posix.ffi');
+  Check(Pos('pthread_mutexattr_init(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread mutexattr init glue after shared posix ownerization');
+  Check(Pos('pthread_mutexattr_settype(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread mutexattr settype glue after shared posix ownerization');
+  Check(Pos('pthread_mutexattr_destroy(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread mutexattr destroy glue after shared posix ownerization');
+  Check(Pos('pthread_condattr_init(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread condattr init glue after shared posix ownerization');
+  Check(Pos('pthread_condattr_destroy(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread condattr destroy glue after shared posix ownerization');
+  Check(Pos('pthread_cond_init(', ASource) = 0,
+    AHostLabel + ' must not keep raw pthread condvar init glue after shared posix ownerization');
 end;
 
 procedure TestPlatformSyncUsesHostFFISurface;

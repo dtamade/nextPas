@@ -28,6 +28,7 @@ type
   {$ENDIF}
 
   TPThreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
+  TPThreadCondAttrSetClockProc = function(attr: Pointer; clk_id: Int32): Int32; cdecl;
 
   {$IFDEF NEXTPAS_FREEBSD}
   pthread_mutex_t = Pointer;
@@ -194,6 +195,9 @@ function platform_posix_clock_ns_u64(
 function platform_posix_clock_resolution_ns_u64(
   const AClockId: Int32;
   const AErrnoLocation: PInt32): UInt64; inline;
+function platform_posix_pthread_mutex_init_kind(
+  AMutex: Pointer;
+  const AKind: Int32): Int32; inline;
 function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
@@ -205,6 +209,11 @@ function platform_posix_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inlin
 function platform_posix_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
 function platform_posix_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 function platform_posix_pthread_rwlock_unlock(ARwLock: Pointer): Int32; inline;
+function platform_posix_pthread_condvar_init_with_clock(
+  ACondVar: Pointer;
+  const AClockId: Int32;
+  const ASetClockSupported: Int32;
+  const ASetClockProc: TPThreadCondAttrSetClockProc): Int32; inline;
 function platform_posix_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
 function platform_posix_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_condvar_timedwait_abs(
@@ -451,6 +460,25 @@ begin
     Result := 1;
 end;
 
+function platform_posix_pthread_mutex_init_kind(
+  AMutex: Pointer;
+  const AKind: Int32): Int32; inline;
+var
+  LAttr: pthread_mutexattr_t;
+begin
+  Result := pthread_mutexattr_init(@LAttr);
+  if Result <> 0 then
+    Exit;
+  try
+    Result := pthread_mutexattr_settype(@LAttr, AKind);
+    if Result <> 0 then
+      Exit;
+    Result := pthread_mutex_init(AMutex, @LAttr);
+  finally
+    pthread_mutexattr_destroy(@LAttr);
+  end;
+end;
+
 function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 begin
   Result := pthread_mutex_destroy(AMutex);
@@ -504,6 +532,32 @@ end;
 function platform_posix_pthread_rwlock_unlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := pthread_rwlock_unlock(ARwLock);
+end;
+
+function platform_posix_pthread_condvar_init_with_clock(
+  ACondVar: Pointer;
+  const AClockId: Int32;
+  const ASetClockSupported: Int32;
+  const ASetClockProc: TPThreadCondAttrSetClockProc): Int32; inline;
+var
+  LAttr: pthread_condattr_t;
+begin
+  Result := pthread_condattr_init(@LAttr);
+  if Result <> 0 then
+    Exit;
+  try
+    if ASetClockSupported <> 0 then
+    begin
+      if not Assigned(ASetClockProc) then
+        Exit(-1);
+      Result := ASetClockProc(@LAttr, AClockId);
+      if Result <> 0 then
+        Exit;
+    end;
+    Result := pthread_cond_init(ACondVar, @LAttr);
+  finally
+    pthread_condattr_destroy(@LAttr);
+  end;
 end;
 
 function platform_posix_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;

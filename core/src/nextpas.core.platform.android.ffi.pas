@@ -224,20 +224,8 @@ begin
 end;
 
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
-var
-  LAttr: pthread_mutexattr_t;
 begin
-  Result := pthread_mutexattr_init(@LAttr);
-  if Result <> 0 then
-    Exit;
-  try
-    Result := pthread_mutexattr_settype(@LAttr, AKind);
-    if Result <> 0 then
-      Exit;
-    Result := pthread_mutex_init(AMutex, @LAttr);
-  finally
-    pthread_mutexattr_destroy(@LAttr);
-  end;
+  Result := platform_posix_pthread_mutex_init_kind(AMutex, AKind);
 end;
 
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
@@ -301,23 +289,12 @@ begin
 end;
 
 function platform_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
-var
-  LAttr: pthread_condattr_t;
 begin
-  Result := pthread_condattr_init(@LAttr);
-  if Result <> 0 then
-    Exit;
-  try
-    if PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
-    begin
-      Result := platform_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
-      if Result <> 0 then
-        Exit;
-    end;
-    Result := pthread_cond_init(ACondVar, @LAttr);
-  finally
-    pthread_condattr_destroy(@LAttr);
-  end;
+  Result := platform_posix_pthread_condvar_init_with_clock(
+    ACondVar,
+    PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
+    PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED,
+    @platform_pthread_condattr_setclock);
 end;
 
 function platform_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;

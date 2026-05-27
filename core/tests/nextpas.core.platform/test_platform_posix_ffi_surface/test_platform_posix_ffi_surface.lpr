@@ -116,6 +116,8 @@ begin
     'posix.ffi must expose shared POSIX clock resolution-ns helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_destroy',
     'posix.ffi must expose shared pthread mutex destroy helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_init_kind',
+    'posix.ffi must expose shared pthread mutex init-with-kind helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_lock',
     'posix.ffi must expose shared pthread mutex lock helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_trylock',
@@ -140,6 +142,8 @@ begin
     'posix.ffi must expose shared pthread condvar destroy helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_wait',
     'posix.ffi must expose shared pthread condvar wait helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_init_with_clock',
+    'posix.ffi must expose shared pthread condvar init-with-timeout-clock helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_timedwait_abs',
     'posix.ffi must expose shared pthread condvar timedwait helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_condvar_signal',

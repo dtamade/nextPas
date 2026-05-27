@@ -16,6 +16,7 @@
 fresh `bash build/verify_local.sh` 为准。
 
 当前最新本轮为 Collections Interface Ownership Normalization；上一轮 platform 主线包括
+Platform POSIX Pthread Attr-init Shared Helper Ownership；
 Platform POSIX Clock/Sync Shared Helper Ownership；
 Platform Thread Shared POSIX Helper Ownership；
 Platform Time Windows Math Helper Boundary；
@@ -88,6 +89,93 @@ Completed; verification passed.
 - 本轮不重写 `TCollection` class API 中仍使用 `TCollection` 的参数/返回类型。
 - 本轮不把 `TCollection` / `TGenericCollection<T>` 强搬进 `collections.abstract`；下一步应先设计并
   测试 class API 与 interface API 的过渡边界，再做物理迁移。
+
+## Addendum: 2026-05-27 Platform POSIX Pthread Attr-init Shared Helper Ownership
+
+### Goal
+
+继续把 POSIX host ffi 中仍然重复的 pthread attr-init glue 收回 shared owner：
+
+- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制
+  `pthread_mutexattr_init/settype/destroy + pthread_mutex_init`
+- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制
+  `pthread_condattr_init/destroy + pthread_cond_init` 与 optional
+  `pthread_condattr_setclock` 外壳
+- host ffi 继续只保留宿主 truth：public kind 到宿主 kind 的映射、timeout clock id、
+  condattr setclock binding/capability
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 本轮新增：
+  - `TPThreadCondAttrSetClockProc`
+  - `platform_posix_pthread_mutex_init_kind`
+  - `platform_posix_pthread_condvar_init_with_clock`
+- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
+  `platform.sync` 消费，但：
+  - `platform_pthread_mutex_init` 改为委托 shared
+    `platform_posix_pthread_mutex_init_kind`
+  - `platform_pthread_condvar_init` 改为委托 shared
+    `platform_posix_pthread_condvar_init_with_clock`
+- host ffi 继续保留：
+  - `platform_pthread_mutex_init_platform_kind` 中的宿主 kind truth
+  - `platform_pthread_condattr_setclock` 绑定与
+    `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` /
+    `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`
+- 这批不改变 `platform.sync` public API，也不新增新的平台 ABI declaration family。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared pthread attr-init helper
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared pthread attr-init helper
+- [x] 在 `posix.ffi` 实现 shared pthread attr-init helper
+- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared attr-init helper
+- [x] focused：`test_platform_posix_ffi_surface` /
+  `test_platform_sync_host_ffi_surface` /
+  `test_platform_sync` /
+  `test_platform_thread_host_ffi_surface` /
+  `test_platform_time_host_ffi_surface` /
+  `test_platform_simulated_host_compile_matrix` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在
+    `posix.ffi must expose shared pthread mutex init-with-kind helper for host ffi owners`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate pthread mutex attr-init glue to shared posix.ffi`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
+    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+    `corePlatformSyncCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 这批不改变 `platform.sync` public contract
+- 这批不把 `platform_pthread_mutex_init_platform_kind` 的宿主 kind truth 移出 host ffi owner
+- 这批不把 Darwin / Android / FreeBSD / generic Unix 的 compile-only proof 包装成新的 runtime evidence
 
 ## Addendum: 2026-05-27 Platform POSIX Clock/Sync Shared Helper Ownership
 

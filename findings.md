@@ -1787,3 +1787,34 @@
 - 当前证据边界仍要诚实：这轮新增的是 owner boundary / compile coherence / Linux runtime 行为的进一步收紧，
   不是新的 Darwin / Android / FreeBSD runtime 证据；这些宿主仍主要由 source-surface contract 与
   compile-only proof 覆盖。
+
+## 2026-05-27 Follow-up Findings 17
+
+- 在 clock thin wrapper、sync forwarder 和 thread glue 都下沉之后，POSIX host ffi 里剩下最显著的重复
+  已经缩到 pthread attr-init skeleton：`pthread_mutexattr_init/settype/destroy + pthread_mutex_init`
+  和 `pthread_condattr_init/destroy + pthread_cond_init`。
+- 这层样板本身不携带宿主 truth。真正因宿主而变的仍只是 public kind 对应的宿主 mutex kind、timeout
+  clock id，以及 `pthread_condattr_setclock` binding / capability。把样板收回 shared
+  `nextpas.core.platform.posix.ffi`，比继续在 5 个 host ffi owner 内复制更符合当前边界模型。
+- 这轮之后，`nextpas.core.platform.posix.ffi` 新增了
+  `TPThreadCondAttrSetClockProc`、
+  `platform_posix_pthread_mutex_init_kind` 与
+  `platform_posix_pthread_condvar_init_with_clock`。`linux/android/darwin/freebsd/unix.ffi`
+  继续暴露既有 public helper 名，但实现改成对这些 shared helper 的薄委托。
+- 这也让 host truth 的落点更稳定了：`platform_pthread_mutex_init_platform_kind` 仍留在 host ffi owner
+  承载 kind numbering truth；`platform_pthread_condattr_setclock` binding 和
+  `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` /
+  `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED` 也仍然留在 host owner，不会被 shared helper 反向吞掉。
+- `test_platform_posix_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 这轮一起升级成更硬的
+  source-surface gate：不仅要求新 shared helper 存在，也明确禁止 POSIX host ffi 继续保留 raw
+  `pthread_mutexattr_*` / `pthread_condattr_*` / `pthread_cond_init` glue。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与 fresh
+  `bash build/verify_local.sh` 都已通过；official envelope 继续保持
+  `corePlatformPosixFfiSurfaceCheck":"pass"`、
+  `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
+  `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
+  `corePlatformSyncCheck":"pass"` 与
+  `verify-local=pass`。
+- 当前证据边界仍要诚实：这轮新增的是 owner boundary / compile coherence / Linux runtime 行为的继续收紧，
+  不是新的 Darwin / Android / FreeBSD / Windows runtime proof；这些宿主仍主要由 source-surface
+  contract 与 compile-only 证据覆盖。

@@ -948,6 +948,13 @@ mutex attr / cond attr 初始化、condattr clock capability、timeout clock id 
 宿主 capability 差异，只统一承载 raw pthread 调用；各 host ffi owner 只把宿主 truth 叠在外层，
 再把 shared forwarder 委托出去。
 
+同理，只要 helper 本身不内嵌宿主 truth，shared `posix.ffi` 也可以继续拥有参数化的 attr-init glue，
+例如 `platform_posix_pthread_mutex_init_kind` 与
+`platform_posix_pthread_condvar_init_with_clock`。这类 helper 统一承载
+`pthread_mutexattr_*` / `pthread_condattr_*` / `pthread_cond_init` 的通用样板；各 host ffi owner
+继续只提供 public kind 到宿主 kind 的映射、timeout clock id、condattr setclock binding 与
+capability token，再把这些 truth 作为参数交给 shared helper。
+
 因此，优先消费 `platform_pthread_timeout_clock_now`、
 `platform_pthread_mutex_init_platform_kind`、`platform_pthread_mutex_*`、
 `platform_pthread_rwlock_*`、`platform_pthread_condvar_*` 这类 helper；`platform.sync`
