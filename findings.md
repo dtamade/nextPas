@@ -554,6 +554,29 @@
   `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 176 把 class method body 内 bare implicit-self unknown-member 矩阵推进到 imported
+  `project-source` unit method body：root source `uses Worker;`，imported `Worker.pas` 的
+  `procedure TWorker.Run; begin Missing; end;` 必须失败为 `sema.unknown-member`，semantic
+  model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 176 focused RED 暴露根因：`SeedImportedUnitBodies` 已登记 imported callable body，但
+  `SeedCallBindings` 只遍历 root AST，imported class method body 内 bare call 未进入
+  call-binding / diagnostic traversal。
+- Batch 176 的修复保持 narrow owner-aware：`SeedCallBindingsInNode`、member-call binding 与
+  implicit-self fallback 都携带 current owner unit；`Self` receiver 按当前 owner unit 解析 type；
+  imported `project-source` 的 class-qualified procedure body 额外进入 traversal，installed-source
+  body diagnostics 继续不扩张。
+- Batch 176 同步把 provenance guard 从 `ImportedUnitAllowsTypeMismatchDiagnostic` 重命名为
+  `OwnerUnitAllowsProjectSourceDiagnostic`，因为该 guard 已覆盖 wrong-argument-count /
+  type-mismatch / no-match / ambiguity / invalid-call-shape / unknown-member 等普通 source-owned
+  semantic diagnostics，而不再只是 type-mismatch。
+- Batch 176 新增 `tests/fixtures/imported_unit_body_implicit_self_unknown_member` 与
+  `imported-unit-body-implicit-self-unknown-member-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`。
+- Batch 176 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

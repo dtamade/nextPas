@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 175 Inherited Implicit-self Bare Method Unknown Member Diagnostics；Batch 174 Installed-source Inherited Known Property Invalid Call Shape Deferred Guard；Batch 173 Imported Inherited Known Property Invalid Call Shape Diagnostics；Batch 172 Installed-source Inherited Known Field Invalid Call Shape Deferred Guard；Batch 171 Imported Inherited Known Field Invalid Call Shape Diagnostics；Batch 170 Installed-source Known Property Invalid Call Shape Deferred Guard；Batch 169 Imported Known Property Invalid Call Shape Diagnostics；Batch 168 Installed-source Known Field Invalid Call Shape Deferred Guard；Batch 167 Imported Known Field Invalid Call Shape Diagnostics；Batch 166 Installed-source Function Result Wrong Argument Count Deferred Guard；Batch 165 Imported Function Result Wrong Argument Count Diagnostics；Batch 164 Installed-source Inherited Member Function Result Wrong Argument Count Deferred Guard；Batch 163 Imported Inherited Member Function Result Wrong Argument Count Diagnostics；Batch 162 Installed-source Member Function Result Wrong Argument Count Deferred Guard；Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics；Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard；Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard；Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard；Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics；Batch 156 Imported Member Function Result No Matching Overload Diagnostics；Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard；Batch 154 Imported Function Result Ambiguous Overload Diagnostics；Batch 153 Installed-source Function Result No Matching Overload Deferred Guard；Batch 152 Imported Function Result No Matching Overload Diagnostics；Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard；Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard；Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics；Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard；Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics；Batch 146 Installed-source Inherited Member Function Result Deferred Guard；Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics；Batch 144 Imported Member Function Result Type Mismatch Diagnostics；Batch 143 Imported Function Result Type Mismatch Diagnostics；Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 141 Installed-source Bare Unknown Callable Deferred Guard；Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard；Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 176 Imported Unit Method Body Implicit-self Unknown Member Diagnostics；Batch 175 Inherited Implicit-self Bare Method Unknown Member Diagnostics；Batch 174 Installed-source Inherited Known Property Invalid Call Shape Deferred Guard；Batch 173 Imported Inherited Known Property Invalid Call Shape Diagnostics；Batch 172 Installed-source Inherited Known Field Invalid Call Shape Deferred Guard；Batch 171 Imported Inherited Known Field Invalid Call Shape Diagnostics；Batch 170 Installed-source Known Property Invalid Call Shape Deferred Guard；Batch 169 Imported Known Property Invalid Call Shape Diagnostics；Batch 168 Installed-source Known Field Invalid Call Shape Deferred Guard；Batch 167 Imported Known Field Invalid Call Shape Diagnostics；Batch 166 Installed-source Function Result Wrong Argument Count Deferred Guard；Batch 165 Imported Function Result Wrong Argument Count Diagnostics；Batch 164 Installed-source Inherited Member Function Result Wrong Argument Count Deferred Guard；Batch 163 Imported Inherited Member Function Result Wrong Argument Count Diagnostics；Batch 162 Installed-source Member Function Result Wrong Argument Count Deferred Guard；Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics；Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard；Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard；Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard；Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics；Batch 156 Imported Member Function Result No Matching Overload Diagnostics；Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard；Batch 154 Imported Function Result Ambiguous Overload Diagnostics；Batch 153 Installed-source Function Result No Matching Overload Deferred Guard；Batch 152 Imported Function Result No Matching Overload Diagnostics；Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard；Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard；Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics；Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard；Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics；Batch 146 Installed-source Inherited Member Function Result Deferred Guard；Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics；Batch 144 Imported Member Function Result Type Mismatch Diagnostics；Batch 143 Imported Function Result Type Mismatch Diagnostics；Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 141 Installed-source Bare Unknown Callable Deferred Guard；Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard；Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,80 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Batch 176 Imported Unit Method Body Implicit-self Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 Batch 175 的 inherited class-context unknown-member 继续推进到 imported `project-source`
+unit method body：
+
+- root source `uses Worker;`，imported `Worker.pas` 声明 `TWorker = class procedure Run; end`。
+- `procedure TWorker.Run; begin Missing; end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.unknown-member`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“连续小格流水线”：每轮只推进上轮 non-goal 中最贴近、source-owned、误报风险低的一格，减少重新找任务的成本。
+- 先写 focused semantic regression；如果 GREEN，直接 promotion 到 dedicated imported-unit fixture /
+  `verify_local.sh` official gate。
+- 如果 RED，只最小修改 imported unit body seeding / implicit-self diagnostic propagation，不碰 `core/`，
+  不扩大到 installed-source provenance，也不处理 imported unit body 的其它 overload failure kind。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、连续小格流水线、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self unknown-member focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`tests/semantic/test_semantic_call_bindings.pas` 失败在
+  `semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-unknown-member-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_unknown_member/imported_unit_body_implicit_self_unknown_member_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.unknown-member` 与
+  `diagnostic-message=unknown member "Missing"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Root cause：`SeedImportedUnitBodies` 已经登记 imported unit type/method/body truth，但
+  `SeedCallBindings` 只遍历 root AST，imported unit class method body 内的 bare call 没有进入
+  call-binding / diagnostics pass。
+- Fix：call-binding traversal 携带 current owner unit；`Self` receiver 用当前 owner 解析 type；
+  imported `project-source` class-qualified procedure body 额外进入 traversal，同时保持
+  installed-source provenance 不扩张。
+- Review：提交前检查确认本批没有 `core/` 改动；provenance guard 重命名为
+  `OwnerUnitAllowsProjectSourceDiagnostic`，避免 unknown-member / overload 路径继续复用
+  type-mismatch 专名。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 imported unit method body 的 type-mismatch / no-match / ambiguity / arity miss
+- 不修改 `core/`
 
 ## Addendum: 2026-05-28 Batch 175 Inherited Implicit-self Bare Method Unknown Member Diagnostics
 

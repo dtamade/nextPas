@@ -25,7 +25,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 ## 当前全局位置
 
-截至 2026-05-27，当前 live baseline 是：
+截至 2026-05-28，当前 live baseline 是：
 
 - 当前完成批次、验证证据和提交点以 `progress.md` / `task_plan.md` 的最新记录为准。
 - fresh `bash build/verify_local.sh` 是本地权威 gate；每轮收口必须重新跑并记录
@@ -172,6 +172,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 已完成 ambiguity、wrong argument count、root-owned stable no matching overload、部分 single-target
   type mismatch。
 - 已完成 source-owned bare unknown callable 与 direct class unknown member 的第一条结构化诊断。
+- `sema.unknown-member` 已推进到 class method body bare implicit-self、inherited class context，
+  以及 imported `project-source` unit method body 的 owner-aware traversal。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
   imported/member target no-match、non-project-source imported target type mismatch，以及非 source-owned /
   typecast / function-pointer 等更复杂 callable 边界。
@@ -193,7 +195,9 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 - 多类 compiler/sema/toolchain/package/env 错误已有结构化 projection。
 - `sema.unknown-callable` 已覆盖 source-owned bare callable name miss。
-- `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss。
+- `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss、class
+  method body bare implicit-self name miss、inherited class context，以及 imported
+  `project-source` unit method body。
 - 语义错误覆盖仍不完整。
 
 下一步证据：
