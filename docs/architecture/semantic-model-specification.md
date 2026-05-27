@@ -97,6 +97,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match evidence。
   imported `installed-source` single-target
   type mismatch、single-target arity miss、bare callable ambiguity、bare callable no-match、
+  inherited member-call overload-set no-match（即使 argument evidence 是 root-owned 零参
+  内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
@@ -356,6 +358,8 @@ candidate collection
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence 且所有 target signature 都不匹配的场景
+  - imported `installed-source` inherited member-call overload set 继续 deferred，即使同形状
+    argument evidence 已可推断，也不提前发 ordinary no-match diagnostic
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
   - 当当前 unit graph 含有 `installed-source` import 时，bare callable name miss 继续保守不绑定，

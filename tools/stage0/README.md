@@ -252,7 +252,8 @@ argument evidence；当 target 来自 imported `project-source` 单一 callable�
 target 或 inherited direct member-call target 时，同一类 root-owned function-result evidence 也会投影为 `sema.type-mismatch`；
 当 imported `project-source` inherited member-call overload set 的所有同 arity target 都不匹配时，
 同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；无法推断、
-imported `installed-source` target、imported/带参/member function result 或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
+imported `installed-source` target 或 inherited installed-source overload set、imported/带参/member function result
+或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
