@@ -236,6 +236,29 @@ begin
   end;
 end;
 
+procedure TestInsertFromSelfPointerCopiesSnapshot;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.PushBack(3);
+
+    LD.InsertFrom(1, LD.GetPtr(0), 2);
+
+    CheckEqual(Int64(5), Int64(LD.Count), 'count after self pointer insert');
+    CheckEqual(Int64(1), Int64(LD.Get(0)), 'item 0');
+    CheckEqual(Int64(1), Int64(LD.Get(1)), 'inserted item 0');
+    CheckEqual(Int64(2), Int64(LD.Get(2)), 'inserted item 1');
+    CheckEqual(Int64(2), Int64(LD.Get(3)), 'shifted item 1');
+    CheckEqual(Int64(3), Int64(LD.Get(4)), 'shifted item 2');
+  finally
+    LD.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -252,5 +275,6 @@ begin
   T.Run('AppendFrom zero count is no-op', @TestAppendFromZeroCountIsNoOp);
   T.Run('LoadFromPointer nil failure keeps contents', @TestLoadFromPointerNilFailureKeepsContents);
   T.Run('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
+  T.Run('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
   T.Summary;
 end.

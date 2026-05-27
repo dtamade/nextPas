@@ -6442,6 +6442,7 @@ var
   i: SizeUInt;
   LPtr: PByte;
   LPhysicalIndex: SizeUInt;
+  LSnapshot: TVecDeque;
 begin
   { 在指定位置插入指针数据 }
   if aPtr = nil then
@@ -6452,6 +6453,18 @@ begin
 
   if aCount = 0 then
     Exit;
+
+  if IsOverlap(aPtr, aCount) then
+  begin
+    LSnapshot := TVecDeque.Create(aCount, FBuffer.GetAllocator, FGrowStrategy);
+    try
+      LSnapshot.PushBack(aPtr, aCount);
+      Insert(aIndex, LSnapshot.GetMemory, aCount);
+    finally
+      LSnapshot.Free;
+    end;
+    Exit;
+  end;
 
   // 确保有足够容量
   EnsureCapacity(FCount + aCount);
