@@ -68,7 +68,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Completed; branch verification passed in `codex/platform-sync-windows-wait-result` from `main@6818cd9`.
+Completed; merged to `main@1c18f86` and cleanup done.
 
 ### Planned Steps
 
@@ -94,7 +94,7 @@ Completed; branch verification passed in `codex/platform-sync-windows-wait-resul
   - `make -C core examples`
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
-- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+- [x] commit、择优合并回 `main`、清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -136,6 +136,16 @@ Completed; branch verification passed in `codex/platform-sync-windows-wait-resul
   - `make -C core benchmarks` 输出 `All benchmarks passed.`。
   - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
     `human-summary=local verification passed`。
+- Post-merge verification on `main@1c18f86`:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+  - `git diff --check` clean。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-windows-wait-result`
+    worktree 已移除，`codex/platform-sync-windows-wait-result` 分支已删除。
 
 ## Addendum: 2026-05-27 Platform Sync POSIX Wait-Bucket Policy Ownership
 

@@ -35,7 +35,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 
-- **Status:** completed; branch verification passed in isolated worktree
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform owner audit，这轮收紧 Windows `WaitOnAddress` result boundary：
     host ffi 继续拥有 raw API/timeout/last-error truth，`platform.sync` 继续拥有 public
@@ -92,6 +92,17 @@ platform/core 工作流保留下来的已完成记录。
     `platform.sync`，避免 Windows `WaitOnAddress` 的 raw success 语义把 mismatch 投影成 success。
   - host `.ffi` 继续只处理 raw ABI、timeout 与 last-error，不承载 nextPas public
     `PLATFORM_ERR_AGAIN` 策略。
+- Merge / cleanup:
+  - `codex/platform-sync-windows-wait-result` rebase 到 `main@b32d4fc` 后 fast-forward 合并进
+    `main@1c18f86`。
+  - main post-merge focused verification passed:
+    `test_platform_sync_host_ffi_surface` 1/1 pass，
+    `test_platform_sync` 14/14 pass，
+    `test_platform_simulated_host_compile_matrix` pass，
+    `git diff --check` clean。
+  - 已移除
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-windows-wait-result`
+    worktree，并删除 `codex/platform-sync-windows-wait-result` 分支。
 
 ## Session: 2026-05-27 (platform.sync POSIX wait-bucket policy ownership)
 
