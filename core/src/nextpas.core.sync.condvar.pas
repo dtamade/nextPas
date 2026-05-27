@@ -15,12 +15,9 @@ type
    *}
   TCondVar = class(TInterfacedObject, ICondVar)
   private
-    FHandle: TPlatformCondVar;
-    FMutexHandle: TPlatformMutex;
-    FHasInternalMutex: Boolean;
+    FSequence: Int32;
   public
     constructor Create;
-    destructor Destroy; override;
     procedure Wait(const AMutex: IMutex);
     function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
     procedure Signal;
@@ -29,60 +26,52 @@ type
 
 implementation
 
-uses
-  SysUtils, nextpas.core.errors, nextpas.core.sync.mutex;
-
 { TCondVar }
 
 constructor TCondVar.Create;
-var
-  LRet: Int32;
 begin
   inherited Create;
-  LRet := platform_condvar_init(FHandle);
-  if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TCondVar.Create failed: %d', [LRet]);
-  platform_mutex_init(FMutexHandle, PLATFORM_MUTEX_NORMAL);
-  FHasInternalMutex := True;
-end;
-
-destructor TCondVar.Destroy;
-begin
-  platform_condvar_destroy(FHandle);
-  if FHasInternalMutex then
-    platform_mutex_destroy(FMutexHandle);
-  inherited;
+  FSequence := 0;
 end;
 
 procedure TCondVar.Wait(const AMutex: IMutex);
+var
+  LSequence: Int32;
 begin
-  platform_mutex_lock(FMutexHandle);
+  LSequence := InterlockedCompareExchange(FSequence, 0, 0);
   AMutex.Release;
-  platform_condvar_wait(FHandle, FMutexHandle);
-  platform_mutex_unlock(FMutexHandle);
-  AMutex.Acquire;
+  try
+    platform_wait_address32(@FSequence, LSequence, -1);
+  finally
+    AMutex.Acquire;
+  end;
 end;
 
 function TCondVar.WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
 var
+  LSequence: Int32;
   LRet: Int32;
 begin
-  platform_mutex_lock(FMutexHandle);
+  LSequence := InterlockedCompareExchange(FSequence, 0, 0);
   AMutex.Release;
-  LRet := platform_condvar_timedwait(FHandle, FMutexHandle, ATimeoutNs);
-  platform_mutex_unlock(FMutexHandle);
-  AMutex.Acquire;
-  Result := LRet = 0;
+  try
+    LRet := platform_wait_address32(@FSequence, LSequence, ATimeoutNs);
+  finally
+    AMutex.Acquire;
+  end;
+  Result := (LRet = 0) or (LRet = PLATFORM_ERR_AGAIN);
 end;
 
 procedure TCondVar.Signal;
 begin
-  platform_condvar_signal(FHandle);
+  InterlockedIncrement(FSequence);
+  platform_wake_address_one(@FSequence);
 end;
 
 procedure TCondVar.Broadcast;
 begin
-  platform_condvar_broadcast(FHandle);
+  InterlockedIncrement(FSequence);
+  platform_wake_address_all(@FSequence);
 end;
 
 end.

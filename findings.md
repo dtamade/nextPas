@@ -2208,3 +2208,30 @@
 - 收口前剩余风险在集成窗口：需要 rebase 最新 `main` 并确认主 checkout 没有会被覆盖的同事/用户
   WIP，再 fast-forward 或 merge。合并后必须重跑 focused Wave 3 gate、`git diff --check` 和
   official verify，确认 route truth 在主线仍成立。
+
+## 2026-05-27 Follow-up Findings 31
+
+- Rebase 后 full `make -C core test` 暴露了一个与 Wave 3 无直接关系但会污染收口可信度的并发缺陷：
+  `tests/nextpas.core.thread/test_thread` 偶发卡在 `TestPoolSubmitAll` 的 `TThreadPool.Shutdown`。
+  LLDB 证据显示主线程在 `platform_thread_join`，一个 worker 仍在 `TCondVar.Wait` /
+  `pthread_cond_wait`。
+- 根因是高层 `nextpas.core.sync.condvar.TCondVar` 使用内部 mutex 桥接外部 `IMutex`：`Wait` 先锁内部
+  mutex，再释放 caller mutex，再进入 `pthread_cond_wait`。signal/broadcast 如果落在释放 caller mutex
+  与实际等待之间，会被 POSIX condvar 丢掉，进而让 thread pool worker 永久睡眠。
+- 修复方向应保持在 nextPas 抽象层：`TCondVar` 改成 monotonic sequence + `platform_wait_address32` /
+  `platform_wake_address_*`，不直接依赖 FPC platform units，也不把 raw pthread ABI 泄漏到 `nextpas.core.sync`。
+- 新增的确定性回归比重跑 flaky 更有价值：测试 mutex 在 `Release` 中调用 `Signal`，旧实现稳定失败，
+  新实现把 already-changed sequence 映射为成功 wake 后通过。这条测试同时覆盖 Linux futex 与 forced
+  POSIX fallback route。
+
+## 2026-05-27 Follow-up Findings 32
+
+- Condvar 修复后首轮 fresh `bash build/verify_local.sh` 的失败不是实现回归，而是 official route 的
+  summary 断言漂移：`core-sync-posix-fallback-check` 已真实运行
+  `--- nextpas.core.sync: 11 total, 11 passed, 0 failed ---`，但脚本仍要求旧的
+  `10 total, 10 passed, 0 failed`。
+- `build/verify_local.sh` 应跟随 public sync test contract 更新为 11 项；这个 gate 的价值是防止
+  forced POSIX fallback 被悄悄跳过或测试数量回退，而不是冻结过期的测试总数。
+- 更新 summary 后的 official verification 已通过，final envelope 同时保留
+  `corePlatformHostAbiWave3StatCheck":"pass"` 与 `coreSyncPosixFallbackCheck":"pass"`。这说明本轮
+  Wave 3 raw ABI route truth 和 condvar fallback route truth 都已经回到同一个官方收口面。

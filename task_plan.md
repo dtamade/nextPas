@@ -96,7 +96,12 @@ remain pending.
 - [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
 - [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
 - [x] focused verification、full verification
-- [ ] commit、rebase latest main、merge、post-merge verification、cleanup
+- [x] commit feature branch and rebase latest `main`
+- [x] investigate rebase full-test hang and fix high-level condvar lost-wake regression
+- [x] rerun full verification after condvar fix
+- [x] sync `build/verify_local.sh` forced POSIX fallback summary to the new
+  11-test `nextpas.core.sync` contract
+- [ ] amend/commit final feature branch, merge, post-merge verification, cleanup
 
 ### Audit Checklist
 
@@ -122,6 +127,43 @@ remain pending.
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave3StatCheck":"pass"`.
+- Rebase over `main@12f5640` completed without conflicts. During rebase
+  verification, `make -C core test` exposed a real flaky hang in
+  `tests/nextpas.core.thread/test_thread`: `TestPoolSubmitAll` blocked in
+  `TThreadPool.Shutdown` because a worker missed the high-level condvar
+  broadcast. This is not caused by Wave 3 file-status ABI, but it made full
+  verification unreliable.
+- The condvar root cause was fixed in `nextpas.core.sync.condvar`: the high-level
+  `TCondVar` no longer bridges an external `IMutex` through an unrelated
+  internal mutex, which could lose a signal between `AMutex.Release` and
+  `pthread_cond_wait`. It now uses a monotonic sequence plus
+  `platform_wait_address32` / wake helpers, keeping the wait on nextPas platform
+  abstractions and avoiding direct FPC platform units.
+- Regression added to `core/tests/nextpas.core.sync/test_sync`: a test mutex
+  signals during `Release`, and `WaitTimeout` must observe that signal. The
+  test failed against the old implementation and passes after the fix.
+- First fresh `bash build/verify_local.sh` after the condvar regression failed
+  at `missing-core-sync-posix-fallback-pass-summary`: the forced POSIX fallback
+  route correctly ran 11 sync tests, but the official route still expected the
+  old `10 total, 10 passed, 0 failed` summary. The route expectation is now
+  updated to `11 total, 11 passed, 0 failed`.
+- Final pre-merge verification in the isolated worktree passed:
+  - `git diff --check`
+  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+    `11 total, 11 passed, 0 failed`
+  - `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test`:
+    `11 total, 11 passed, 0 failed`
+  - `make -C core/tests/nextpas.core.thread/test_thread clean test`:
+    `6 total, 6 passed, 0 failed`
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+    `5 total, 5 passed, 0 failed`
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave3StatCheck":"pass"` and
+    `coreSyncPosixFallbackCheck":"pass"`.
 
 ### Recovery Entry
 

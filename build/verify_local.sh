@@ -4964,7 +4964,7 @@ if ! "$CORE_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&
   fail 'core-sync-posix-fallback-run-failed'
 fi
 cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.sync: 10 total, 10 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
+require_output_pattern '^--- nextpas\.core\.sync: 11 total, 11 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
 printf 'core-sync-posix-fallback-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'

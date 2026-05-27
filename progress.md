@@ -1087,8 +1087,59 @@ platform/core 工作流保留下来的已完成记录。
   - raw OS API 仍不进入 runtime unit tests；新增的 size gate 只验证 nextPas-owned record layout，
     不调用 OS API。
 - Current next action:
-  - 运行 `git diff --check`，审查 diff 并提交 feature branch。
-  - rebase latest `main`，安全时合并、post-merge verification、cleanup。
+  - feature commit `be18aad` created, then rebased over `main@12f5640` as
+    `fa6451a` without conflicts.
+  - Rebase verification exposed a real full-test hang in
+    `tests/nextpas.core.thread/test_thread`: `TestPoolSubmitAll` blocked in
+    `TThreadPool.Shutdown`; LLDB showed main thread in `platform_thread_join`
+    while a worker remained in `TCondVar.Wait` / `pthread_cond_wait`.
+  - Root cause: high-level `nextpas.core.sync.condvar.TCondVar` used an
+    unrelated internal mutex while releasing the caller `IMutex`, so a signal or
+    broadcast could be lost between caller-mutex release and the actual
+    `pthread_cond_wait`.
+  - RED regression added to `core/tests/nextpas.core.sync/test_sync`: a test
+    mutex signals from `Release`, and `WaitTimeout` must observe the signal.
+    With the old implementation it failed:
+    `11 total, 10 passed, 1 failed`.
+  - GREEN: `TCondVar` now uses a monotonic `FSequence` plus
+    `platform_wait_address32` / `platform_wake_address_*`; `PLATFORM_ERR_AGAIN`
+    from an already-changed sequence is treated as a successful wake.
+  - Focused GREEN after fix:
+    - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+      `11 total, 11 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test`:
+      `11 total, 11 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.thread/test_thread clean test`:
+      `6 total, 6 passed, 0 failed`.
+  - Full GREEN after fix:
+    - `make -C core test`: `All tests passed.`
+    - `make -C core examples`: `All examples compiled.`
+    - `make -C core benchmarks`: `All benchmarks passed.`
+  - Fresh `bash build/verify_local.sh` then failed at
+    `missing-core-sync-posix-fallback-pass-summary` because the forced POSIX
+    fallback route now runs 11 sync tests while the script still expected the
+    old 10-test summary. `build/verify_local.sh` has been updated to expect
+    `--- nextpas.core.sync: 11 total, 11 passed, 0 failed ---`.
+  - Final pre-merge verification after updating `verify_local`:
+    - `git diff --check`: pass.
+    - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+      `11 total, 11 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test`:
+      `11 total, 11 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.thread/test_thread clean test`:
+      `6 total, 6 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+      `5 total, 5 passed, 0 failed`.
+    - `make -C core test`: `All tests passed.`
+    - `make -C core examples`: `All examples compiled.`
+    - `make -C core benchmarks`: `All benchmarks passed.`
+    - `bash build/verify_local.sh`: `verify-local=pass`,
+      `human-summary=local verification passed`, final envelope includes
+      `corePlatformHostAbiWave3StatCheck":"pass"` and
+      `coreSyncPosixFallbackCheck":"pass"`.
+  - Next: commit the condvar/route-truth fix, confirm main checkout is clean,
+    merge the feature branch into `main`, run post-merge focused/official gates,
+    then remove the temporary worktree and branch.
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 

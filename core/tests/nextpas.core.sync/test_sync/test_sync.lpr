@@ -11,6 +11,47 @@ uses
 var
   T: TTestRunner;
 
+type
+  TSignalOnReleaseMutex = class(TInterfacedObject, ILock, IMutex)
+  private
+    FCondVar: ICondVar;
+    FReleased: Boolean;
+  public
+    constructor Create(const ACondVar: ICondVar);
+    procedure Acquire;
+    function TryAcquire: Boolean;
+    procedure Release;
+    function Lock: ILockGuard;
+    property Released: Boolean read FReleased;
+  end;
+
+constructor TSignalOnReleaseMutex.Create(const ACondVar: ICondVar);
+begin
+  inherited Create;
+  FCondVar := ACondVar;
+  FReleased := False;
+end;
+
+procedure TSignalOnReleaseMutex.Acquire;
+begin
+end;
+
+function TSignalOnReleaseMutex.TryAcquire: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TSignalOnReleaseMutex.Release;
+begin
+  FReleased := True;
+  FCondVar.Signal;
+end;
+
+function TSignalOnReleaseMutex.Lock: ILockGuard;
+begin
+  Result := nil;
+end;
+
 procedure TestMutexBasic;
 var
   LM: IMutex;
@@ -175,6 +216,19 @@ begin
   end;
 end;
 
+procedure TestCondVarDoesNotLoseSignalDuringRelease;
+var
+  LCond: ICondVar;
+  LMutex: TSignalOnReleaseMutex;
+begin
+  LCond := CondVar;
+  LMutex := TSignalOnReleaseMutex.Create(LCond);
+
+  Check(LCond.WaitTimeout(LMutex, 20000000),
+    'condvar wait must observe a signal sent while releasing the caller mutex');
+  Check(LMutex.Released, 'test mutex must be released before waiting');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.sync');
   T.Run('Mutex basic', @TestMutexBasic);
@@ -187,5 +241,6 @@ begin
   T.Run('RWLock guard (RAII)', @TestRWLockGuard);
   T.Run('WaitGroup basic', @TestWaitGroupBasic);
   T.Run('WaitGroup multiple', @TestWaitGroupMultiple);
+  T.Run('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
   T.Summary;
 end.
