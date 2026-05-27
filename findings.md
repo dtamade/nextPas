@@ -72,6 +72,22 @@
   `implicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 133 固定下一轮加速方法：沿 G1.5/G1.6 的同一路径矩阵补格，优先选相邻批次已经证明
+  failure propagation / stable evidence 成熟的缺口；先 focused probe，GREEN 就 promotion 到 official
+  gate，RED 才做最小 analyzer 修复。
+- Batch 133 证明 exact current-class bare implicit-self method call 的普通 literal mismatch 已天然成立：
+  `procedure TWorker.Run; begin Pick(True); end;` 中，当前 class 的 `Pick(Integer)` 与 Boolean literal
+  会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126 的 implicit-self failure
+  propagation 与 stable literal argument signature 已覆盖 current class exact method target。
+- Batch 133 新增 `tests/fixtures/implicit_self_bare_method_type_mismatch` 与
+  `implicit-self-bare-method-type-mismatch-check`，final envelope 新增
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`。
+- Batch 133 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-type-mismatch-check=pass`、
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

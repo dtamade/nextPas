@@ -257,8 +257,8 @@ method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑�
 method），还覆盖 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
 same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
 单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
-`Touch(Integer)`，或 `Pick(Flag);` 中 `Flag` 是 root-owned 零参 Boolean function result），
-且不会注册错误 binding。
+`Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`，或 `Pick(Flag);`
+中 `Flag` 是 root-owned 零参 Boolean function result），且不会注册错误 binding。
 若同一路径找到 inherited method name 但 arity 不兼容，会失败为
 `sema.wrong-argument-count`（例如 `Touch;` 调 `Touch(Integer)`），同样不会注册错误 binding。
 若同一路径找到多个 inherited method target 但 stable argument signature 全不匹配，会失败为

@@ -118,8 +118,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、已声明内建标量/字符串变量/参数、
   或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
   `sema.type-mismatch`，同一条 failure kind 也会从 class method body 的 bare implicit-self
-  fallback 透传出来，例如 inherited `Touch(True);`，以及 `Pick(Flag);` 中 `Flag` 是
-  root-owned 零参 Boolean function result 的当前 class method 场景；receiver exact type 或 class method body bare
+  fallback 透传出来，例如当前 class 的 `Pick(True);`、inherited `Touch(True);`，以及
+  `Pick(Flag);` 中 `Flag` 是 root-owned 零参 Boolean function result 的当前 class method 场景；
+  receiver exact type 或 class method body bare
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
   `sema.no-matching-overload`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
@@ -317,7 +318,7 @@ candidate collection
     当前 argument signature 来自稳定事实且与 target param signature 明确不兼容的场景
   - 也用于 class method body 内 bare implicit-self method call 找到 root-owned 单一 target，
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
-    包含 root-owned 零参内建标量/字符串 function result
+    包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result
 - `sema.no-matching-overload`
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景

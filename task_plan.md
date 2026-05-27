@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,72 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行“同路径矩阵 + promotion-first”的加速策略，把 exact current-class bare implicit-self
+method call 的最普通 literal type mismatch 固定为 official gate：
+
+- `procedure TWorker.Run; begin Pick(True); end;`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- `True` 是 builtin Boolean literal stable evidence
+- 调用必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮的加速思路是“矩阵补格”：优先选择同一路径中已被相邻批次证明实现接近的缺口，
+  先 focused probe；若已 GREEN，则只 promotion 到 official gate；若 RED，再最小修复。
+- 只承诺 exact current-class implicit-self method call + builtin literal stable evidence。
+- 不扩展 imported / installed-source、implicit conversion、default parameter ranking、var/out
+  compatibility、visibility checking、record/property/array/deref receiver 或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 `Pick(True);` exact implicit-self
+      type-mismatch 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-type-mismatch-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_type_mismatch/implicit_self_bare_method_type_mismatch_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.type-mismatch`、`diagnostic-message=argument type mismatch for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `implicit-self-bare-method-type-mismatch-check=pass`、
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 full overload ranking
+- 不扩大到 imported / installed-source / record / property / array / deref receiver
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics
 
