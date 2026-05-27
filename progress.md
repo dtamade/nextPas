@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform POSIX timeout deadline helper ownership；上一轮包括
+当前最新本轮为 platform.time host-ffi facade collapse；上一轮包括
+platform POSIX timeout deadline helper ownership、
 collections interface ownership normalization、
 platform POSIX errno/mutex projection shared helper ownership；
 platform POSIX pthread attr-init shared helper ownership；
@@ -23,6 +24,50 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.time host-ffi facade collapse)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `platform.time` 最后一层按 target 复制的 façade body 折成单层 host-ffi delegation，
+    让 consumer 的实现边界和文档要求完全一致。
+- Baseline:
+  - `platform.time` 之前已经只消费 host-owned
+    `platform_clock_monotonic_ns_u64` /
+    `platform_clock_realtime_ns_u64` /
+    `platform_clock_monotonic_resolution_ns_u64`，
+    但仍然在 `NEXTPAS_POSIX_CLOCK`、`NEXTPAS_MACOS`、`NEXTPAS_WINDOWS` 三个分支里分别保留了同构 wrapper。
+  - 这不会造成功能错误，但会让 source-surface 比真实边界更嘈杂，也会继续给后续 owner-boundary 审查制造
+    “同一 contract 多份实现体”的假象。
+- Actions taken:
+  - 先把 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/` 扩成 RED gate，
+    新增 token 计数断言，要求：
+    - `result := platform_clock_monotonic_ns_u64;`
+    - `result := platform_clock_realtime_ns_u64;`
+    - `result := platform_clock_monotonic_resolution_ns_u64;`
+    在 `platform.time` 中各只出现一次。
+  - `core/src/nextpas.core.platform.time.pas` 收成单层 `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate：
+    `NEXTPAS_UNIX` 与 `NEXTPAS_WINDOWS` 共享同一组 public façade body，unsupported target 继续 `{$FATAL ...}`。
+  - 保持 `nextpas.core.platform.windows.math` 边界不变：它仍是纯数学 sibling helper，不伪装成 ffi owner。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在新的 single-body count assertions。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/build/review-win64-time -FE/home/dtamade/projects/nextPas/build/review-win64-time -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
+  - Full:
+    - fresh `make -C core test` 输出 `All tests passed.`
+    - fresh `make -C core examples` 输出 `All examples compiled.`
+    - fresh `make -C core benchmarks` 输出 `All benchmarks passed.`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批没有继续发散 owner 边界，而是把已经定下来的 boundary 做到了 source 级别也干净：
+    `platform.time` 现在不只是语义上薄 delegation，连实现体数量也和那条语义对齐了。
+  - `platform-time-integration` 旧 worktree 依旧不是这轮的合并落点；live truth 还是当前 `main`
+    才是 platform ownerization 的持续主线。当前 `main...codex/platform-time-integration = 81:1`。
 
 ## Session: 2026-05-27 (platform POSIX timeout deadline helper ownership)
 
@@ -803,7 +848,7 @@ platform/core 工作流保留下来的已完成记录。
   - `build/verify_local.sh` 新增
     `core-platform-sync-host-ffi-surface-check`，并把
     `corePlatformSyncHostFfiSurfaceCheck` 写进 final envelope。
-  - 复查 `codex/platform-time-integration`：当前 `main` 相对它 ahead `51`，它自己只 ahead `1`；
+  - 复查 `codex/platform-time-integration`：当前 `main` 相对它 ahead `81`，它自己只 ahead `1`；
     那个唯一提交还混有 `demo_stopwatch`、L1 `bench_platform_time` 与广泛 Makefile/doc 改动，因此不是
     可以直接 merge 的活跃平台分支。
 - Verification:

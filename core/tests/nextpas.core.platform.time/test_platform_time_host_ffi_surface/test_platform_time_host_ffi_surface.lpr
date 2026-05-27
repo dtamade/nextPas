@@ -62,6 +62,26 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+function CountToken(const ASource, AToken: string): Integer;
+var
+  LFoundAt: SizeInt;
+  LSlice: string;
+  LToken: string;
+begin
+  Result := 0;
+  LSlice := ASource;
+  LToken := LowerCase(AToken);
+  repeat
+  begin
+    LFoundAt := Pos(LToken, LSlice);
+    if LFoundAt = 0 then
+      Exit;
+    Inc(Result);
+    Delete(LSlice, 1, LFoundAt + Length(LToken) - 1);
+  end;
+  until False;
+end;
+
 procedure CheckPosixClockHelperSet(
   const ASource, AHostLabel: string;
   const ARequireSharedResolutionProjection: Boolean);
@@ -196,6 +216,12 @@ begin
     'platform.time must consume Windows QPC resolution helper through windows.ffi');
   CheckTokenPresent(LTimeSource, 'platform_posix_timespec_to_ns_u64',
     'platform.time must consume shared POSIX timespec conversion helper through posix.ffi');
+  Check(CountToken(LTimeSource, 'result := platform_clock_monotonic_ns_u64;') = 1,
+    'platform.time must keep a single host-ffi monotonic facade body');
+  Check(CountToken(LTimeSource, 'result := platform_clock_realtime_ns_u64;') = 1,
+    'platform.time must keep a single host-ffi realtime facade body');
+  Check(CountToken(LTimeSource, 'result := platform_clock_monotonic_resolution_ns_u64;') = 1,
+    'platform.time must keep a single host-ffi monotonic-resolution facade body');
   Check(Pos('mach_absolute_time(', LTimeSource) = 0,
     'platform.time must not call mach_absolute_time directly in the consumer');
   Check(Pos('mach_timebase_info(', LTimeSource) = 0,

@@ -86,84 +86,29 @@ begin
   Result := platform_posix_timespec_to_ns_u64(@LTime);
 end;
 
-{ ============================================================ }
-{ POSIX: host-owned clock helper wrappers                      }
-{ ============================================================ }
-{$IFDEF NEXTPAS_POSIX_CLOCK}
-
-function platform_monotonic_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_ns_u64;
-end;
-
-function platform_realtime_ns: UInt64;
-begin
-  Result := platform_clock_realtime_ns_u64;
-end;
-
-function platform_monotonic_resolution_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_resolution_ns_u64;
-end;
-
+{$IFDEF NEXTPAS_UNIX}
+  {$DEFINE NEXTPAS_PLATFORM_TIME_HOST_FFI}
 {$ENDIF}
-
-{ ============================================================ }
-{ macOS: mach_absolute_time + host-owned realtime helper       }
-{ ============================================================ }
-{$IFDEF NEXTPAS_MACOS}
-function platform_monotonic_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_ns_u64;
-end;
-
-function platform_realtime_ns: UInt64;
-begin
-  Result := platform_clock_realtime_ns_u64;
-end;
-
-function platform_monotonic_resolution_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_resolution_ns_u64;
-end;
-
-{$ENDIF}
-
-{ ============================================================ }
-{ Windows: QueryPerformanceCounter (div/mod safe conversion)   }
-{ ============================================================ }
 {$IFDEF NEXTPAS_WINDOWS}
-{**
- * @desc QPC → nanoseconds 无溢出换算
- * @note 使用 div/mod 分段：(counter div freq) * 1e9 + (counter mod freq) * 1e9 / freq
- *       避免 counter * 1e9 的 UInt64 溢出
- *}
-function platform_monotonic_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_ns_u64;
-end;
-
-function platform_realtime_ns: UInt64;
-begin
-  Result := platform_clock_realtime_ns_u64;
-end;
-
-function platform_monotonic_resolution_ns: UInt64;
-begin
-  Result := platform_clock_monotonic_resolution_ns_u64;
-end;
-
+  {$DEFINE NEXTPAS_PLATFORM_TIME_HOST_FFI}
 {$ENDIF}
-
-{ ============================================================ }
-{ Unsupported platform: compile-time error                     }
-{ ============================================================ }
-{$IFNDEF NEXTPAS_POSIX_CLOCK}
-{$IFNDEF NEXTPAS_MACOS}
-{$IFNDEF NEXTPAS_WINDOWS}
+{$IFNDEF NEXTPAS_PLATFORM_TIME_HOST_FFI}
   {$FATAL 'nextpas.core.platform.time: unsupported platform. Implement for your target.'}
 {$ENDIF}
-{$ENDIF}
-{$ENDIF}
+
+function platform_monotonic_ns: UInt64;
+begin
+  Result := platform_clock_monotonic_ns_u64;
+end;
+
+function platform_realtime_ns: UInt64;
+begin
+  Result := platform_clock_realtime_ns_u64;
+end;
+
+function platform_monotonic_resolution_ns: UInt64;
+begin
+  Result := platform_clock_monotonic_resolution_ns_u64;
+end;
 
 end.

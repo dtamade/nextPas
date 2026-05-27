@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform POSIX Timeout Deadline Helper Ownership；上一轮包括
+当前最新本轮为 Platform Time Host-FFI Facade Collapse；上一轮包括
+Platform POSIX Timeout Deadline Helper Ownership、
 Collections Interface Ownership Normalization、
 Platform POSIX Pthread Attr-init Shared Helper Ownership；
 Platform POSIX Errno/Mutex Projection Shared Helper Ownership；
@@ -34,6 +35,67 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Time Host-FFI Facade Collapse
+
+### Goal
+
+继续把 `platform.time` consumer 收窄成真正的薄 host-ffi façade：
+
+- 不再按 POSIX / Darwin / Windows 逐段复制三组完全同构的 wrapper body
+- `platform_monotonic_ns` / `platform_realtime_ns` /
+  `platform_monotonic_resolution_ns` 各只保留一个实现体
+- compile-time gate 只反映真实已支持宿主：`NEXTPAS_UNIX` 或 `NEXTPAS_WINDOWS`
+- 保持 `platform.time` 仍是 L0 平台时钟 façade，而不是重新混入宿主拼装细节
+
+### Architecture Decision
+
+- `linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 继续拥有统一命名的
+  `platform_clock_*_ns_u64` helper，仍是时钟结果的单一事实源。
+- `platform.time` 只保留 public clock contract 与单层 delegation，不再为不同 target 保留多份相同
+  wrapper body。
+- `nextpas.core.platform.windows.math` 继续作为纯 helper sibling 保留；它不是 raw ABI owner，
+  不应为了“platform.time 更薄”而伪装成 `*.ffi.pas`。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求三组 public façade body 各只出现一次
+- [x] 折叠 `platform.time` 中按 target 复制的三组 wrapper body
+- [x] 用统一 `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate 表达受支持宿主
+- [x] 保持 public API 与 `windows.math` 边界不变
+- [x] focused：`test_platform_time_host_ffi_surface` /
+  `test_platform_time_helpers` /
+  `test_platform_simulated_host_compile_matrix` / Win64 compile-only 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在新增的 single host-ffi façade body 计数断言。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/build/review-win64-time -FE/home/dtamade/projects/nextPas/build/review-win64-time -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 这批不改 `platform.time` public API 名称
+- 这批不把 `windows.math` 并进 `windows.ffi`
+- 这批不把 simulated host compile-only 包装成真实 Darwin/Android/FreeBSD runtime 证据
 
 ## Addendum: 2026-05-27 Platform POSIX Timeout Deadline Helper Ownership
 

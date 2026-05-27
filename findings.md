@@ -52,6 +52,9 @@
   source-surface gate；fresh `bash build/verify_local.sh` 已把
   `core-platform-time-host-ffi-surface-check=pass` /
   `corePlatformTimeHostFfiSurfaceCheck":"pass"` 纳入 official envelope。
+- `platform.time` 现在连 public façade body 的重复都收掉了：`platform_monotonic_ns`、
+  `platform_realtime_ns`、`platform_monotonic_resolution_ns` 各只保留一个实现体，并由统一
+  `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate 覆盖 `NEXTPAS_UNIX` / `NEXTPAS_WINDOWS` 两类受支持宿主。
 - `test_platform_time_host_ffi_surface` 现在还会额外禁止 `platform.time` 回归裸
   `116444736000000000` 这类 Windows `FILETIME` epoch 魔数；owner boundary 不再只检查符号存在，
   也检查实现层不把宿主 clock truth 再偷拿回来。
@@ -120,7 +123,7 @@
   fresh `bash build/verify_local.sh` 都已通过；official envelope 现在包含
   `corePlatformSimulatedHostCompileMatrixCheck":"pass"`。
 - 当前 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-time-integration`
-  仍未合入 `main`；`main...codex/platform-time-integration = 71:1`，说明它已经明显落后主线。它那 1 个独有
+  仍未合入 `main`；`main...codex/platform-time-integration = 81:1`，说明它已经明显落后主线。它那 1 个独有
   提交混有 `demo_stopwatch`、L1 time benchmark 与过期的 platform.time 收口方式，不能整条合并；如果还要
   参考，只能按模块边界择优吸收。
 - `platform_thread_self` 与 `platform_thread_id` 不是同一个契约：前者是 unowned current-thread
@@ -156,7 +159,7 @@
   消费关系冻结成 source-surface gate；fresh `bash build/verify_local.sh` 已把
   `core-platform-sync-host-ffi-surface-check=pass` /
   `corePlatformSyncHostFfiSurfaceCheck":"pass"` 纳入 official envelope。
-- `codex/platform-time-integration` 当前不是可直接 merge 的活跃平台分支：`main` 相对它 ahead `51`，
+- `codex/platform-time-integration` 当前不是可直接 merge 的活跃平台分支：`main` 相对它 ahead `81`，
   它自己只 ahead `1`，且那个唯一提交混有 `demo_stopwatch`、L1 `bench_platform_time` 与广泛
   Makefile/doc 改动；它更适合作为历史参考，而不是整条合入主线。
 - `platform.sync` 现在还有 generic `NEXTPAS_UNIX` pthread runtime 路径：
