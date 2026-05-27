@@ -2311,3 +2311,19 @@
   `corePlatformHostAbiWave4PathsCheck":"pass"`。
 - 合并应 fast-forward 进行；合并后要重新跑 focused gate 与 official verification，确保主线上的
   route truth 仍成立。
+
+## 2026-05-28 Follow-up Findings 38
+
+- Wave 4 已 fast-forward merge 到主线，commit 为
+  `71c7a62 platform: add host path ABI wave 4`。合并后又有 unrelated collections commit 推进
+  main 到 `0768e2b`，但 `71c7a62` 仍是当前 main 祖先。
+- Post-merge verification 在干净 detached worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-postmerge-verify`
+  上执行，避免主 checkout 中 collections 工作影响证据。`git diff --check` 通过，focused Wave 4
+  gate 仍为 `5 total, 5 passed, 0 failed`，fresh `bash build/verify_local.sh` 输出
+  `verify-local=pass` 与 `human-summary=local verification passed`，final envelope 继续包含
+  `corePlatformHostAbiWave4PathsCheck":"pass"`。
+- 临时 worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths` 与
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-postmerge-verify`
+  已删除，分支 `codex/platform-host-abi-wave4-paths` 已删除，`git worktree prune` 已执行。

@@ -46,7 +46,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-28 (platform host abi completeness wave 4)
 
-- **Status:** feature commit and latest-main rebase verification completed; merge / post-merge verification pending
+- **Status:** completed; merged and cleaned up
 - Objective:
   - 按 `core/docs/platform-ffi-import-workflow.md` 启动第四批 host ABI completeness。
   - 本轮聚焦 directory/path raw ABI inventory，不新增 `platform.file` public contract，不新增 raw
@@ -137,6 +137,26 @@ platform/core 工作流保留下来的已完成记录。
     `corePlatformHostAbiWave4PathsCheck":"pass"`。
   - 合并前必须确认 fast-forward，不覆盖并行 worktree/主线工作，并在合并后做 post-merge focused
     gate / official route verification。
+- Merge / post-merge:
+  - Wave 4 以 fast-forward 方式合入主线，commit 为
+    `71c7a62 platform: add host path ABI wave 4`。
+  - 为避免主 checkout 的并行 collections WIP/提交污染验证，创建干净 detached
+    post-merge worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-postmerge-verify`
+    指向 `71c7a62`。
+  - Post-merge focused verification passed:
+    `git diff --check` and
+    `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths clean test`
+    (`5 total, 5 passed, 0 failed`).
+  - Post-merge official verification passed:
+    `bash build/verify_local.sh` 输出 `verify-local=pass`、
+    `human-summary=local verification passed`，final envelope 继续包含
+    `corePlatformHostAbiWave4PathsCheck":"pass"`。
+  - 验证后主线又被 unrelated collections commit 推进到 `main@0768e2b`；
+    `71c7a62` 仍是当前 `main` 祖先。
+  - 已删除 Wave 4 feature worktree、post-merge verify worktree 和
+    `codex/platform-host-abi-wave4-paths` 分支；当前剩余并行 worktree 是
+    `collections-refactor` 与 `sema-no-matching-overload`。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 2)
 

@@ -83,8 +83,7 @@ OS API 作为 runtime unit test 目标。后续统一文件/路径 API 应另起
 
 ### Status
 
-Feature commit, latest-main rebase, and rebase verification completed; merge /
-post-merge verification / cleanup are still pending.
+Completed and merged.
 
 - Worktree:
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths`
@@ -104,7 +103,7 @@ post-merge verification / cleanup are still pending.
 - [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
 - [x] focused verification、full verification
 - [x] commit feature branch and rebase latest `main`
-- [ ] merge, post-merge verification, cleanup
+- [x] merge, post-merge verification, cleanup
 
 ### Audit Checklist
 
@@ -135,6 +134,12 @@ post-merge verification / cleanup are still pending.
   Wave 4 again completed without conflicts. Fresh `git diff --check main..HEAD`,
   focused Wave 4 gate, and `bash build/verify_local.sh` passed again; the official
   envelope still contains `corePlatformHostAbiWave4PathsCheck":"pass"`.
+- Wave 4 fast-forward merged as `71c7a62 platform: add host path ABI wave 4`.
+  Post-merge verification ran from a clean detached worktree at that commit:
+  `git diff --check`, focused Wave 4 gate, and `bash build/verify_local.sh` all
+  passed; final envelope still contains `corePlatformHostAbiWave4PathsCheck":"pass"`.
+- After post-merge verification, main advanced further to `main@0768e2b` through an
+  unrelated collections commit; `71c7a62` remains an ancestor of current `main`.
 
 ### Retrospective
 
@@ -142,8 +147,10 @@ post-merge verification / cleanup are still pending.
 `platform.file` / `platform.path` contract，也没有让 `platform.time` / `platform.sync` /
 `platform.thread` 消费这组 ABI。一次风险点是 `build/verify_local.sh` 曾被机械插入扩大成大 diff；
 已收敛回最小 route-truth diff，并用 `sh -n build/verify_local.sh` 与 fresh full verification 证明。
-集成窗口内主线前进过 collections commits；本轮通过重复 rebase 保持在最新 main 之上。合并必须
-保持 fast-forward，并在合并后做 post-merge verification。
+集成窗口内主线前进过 collections commits；本轮通过重复 rebase 保持在最新 main 之上，并最终
+fast-forward 合并。为避免主 checkout 的并行 collections 工作污染验证，post-merge official
+verification 在干净 detached worktree 上执行。Wave 4 临时 worktree 与 post-merge verify
+worktree 均已删除，`codex/platform-host-abi-wave4-paths` 分支已删除。
 
 ### Recovery Entry
 
