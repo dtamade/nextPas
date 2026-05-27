@@ -401,7 +401,8 @@ candidate collection
 - `sema.unknown-member`
   - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
   - 也用于 class method body 内 bare implicit-self method call 中，当前 `Self` class/parent chain
-    没有同名 method 的场景；例如 `procedure TWorker.Run; begin Missing; end;`
+    没有同名 method 的场景；例如 `procedure TWorker.Run; begin Missing; end;`，以及
+    `TWorker = class(TBaseWorker)` 时沿 parent chain 也找不到 `Missing`
   - implicit runtime 已能读取 source-backed nextPas `System` / `TObject` truth；普通 `class`
     会隐式继承 `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入
     `member-call` binding；缺少 source-backed System truth 的路径仍保持 deferred，避免把 System

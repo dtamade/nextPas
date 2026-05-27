@@ -539,6 +539,21 @@
 - Batch 174 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 175 把 class method body 内 bare implicit-self unknown-member 矩阵从 exact current class
+  推进到 inherited class context：`TWorker = class(TBaseWorker)` 且 `TWorker.Run` 内 bare
+  `Missing;` 在当前 class 与 parent chain 都找不到同名 method 时，会失败为
+  `sema.unknown-member`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 175 focused semantic 与 stage0 focused probe 直接 GREEN，证明 Batch 130 的
+  implicit-self unknown-member emission 已覆盖 inherited class context；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 175 新增 `tests/fixtures/inherited_implicit_self_bare_method_unknown_member` 与
+  `inherited-implicit-self-bare-method-unknown-member-check`，final envelope 新增
+  `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`。
+- Batch 175 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-unknown-member-check=pass`、
+  `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

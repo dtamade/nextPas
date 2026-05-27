@@ -931,7 +931,7 @@ imported direct member function-result wrong argument count
 project-source known field/property member call、imported project-source inherited known field member call 及
 inherited known field/property member call 断言
 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
-和 class method body 内 bare implicit-self unknown member 断言
+和 class method body 内 bare implicit-self unknown member（含 inherited class context）断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言

@@ -8548,6 +8548,77 @@ begin
   end;
 end;
 
+procedure CheckInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedImplicitSelfBareMethodUnknownMember;' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBaseWorker.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Missing;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-inherited-implicit-self-bare-method-unknown-member-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.unknown-member') then
+      Fail('unexpected-inherited-implicit-self-bare-method-unknown-member-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-inherited-implicit-self-bare-method-unknown-member-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Missing', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('inherited-implicit-self-bare-method-unknown-member-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-inherited-implicit-self-bare-method-unknown-member-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-inherited-implicit-self-bare-method-unknown-member-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-inherited-implicit-self-bare-method-unknown-member-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInheritedImplicitSelfBareMethodCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
@@ -10000,6 +10071,7 @@ begin
     CheckInstalledSourceUnknownCallableStaysDeferred;
     CheckImplicitSelfBareMethodCallBinding;
     CheckImplicitSelfBareMethodUnknownMemberDiagnostic;
+    CheckInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallBinding;
     CheckInheritedImplicitSelfBareMethodCallArgumentBinding;
     CheckImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic;
