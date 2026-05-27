@@ -60,6 +60,8 @@ end;
 
 procedure CheckSharedPosixThreadDelegation(const ASource, AHostLabel: string);
 begin
+  CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
+    AHostLabel + ' must delegate errno-value load to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_thread_self_token_u64',
     AHostLabel + ' must delegate pthread self-token projection to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_sysconf_positive_i32',
@@ -82,6 +84,8 @@ begin
     AHostLabel + ' must delegate pthread TLS set glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_tls_get',
     AHostLabel + ' must delegate pthread TLS get glue to shared posix.ffi');
+  Check(Pos('result := platform_errno_location^;', ASource) = 0,
+    AHostLabel + ' must not keep a local errno-value load body after shared posix ownerization');
 end;
 
 procedure TestPlatformThreadUsesHostThreadIdFFI;

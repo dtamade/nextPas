@@ -114,10 +114,14 @@ begin
     'posix.ffi must expose shared POSIX clock nanosecond helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_clock_resolution_ns_u64',
     'posix.ffi must expose shared POSIX clock resolution-ns helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_errno_value_from_location',
+    'posix.ffi must expose shared POSIX errno-value load helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_destroy',
     'posix.ffi must expose shared pthread mutex destroy helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_init_kind',
     'posix.ffi must expose shared pthread mutex init-with-kind helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_init_public_kind',
+    'posix.ffi must expose shared pthread mutex init-with-public-kind helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_lock',
     'posix.ffi must expose shared pthread mutex lock helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_trylock',

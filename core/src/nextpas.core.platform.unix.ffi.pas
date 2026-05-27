@@ -93,7 +93,7 @@ implementation
 
 function platform_posix_errno_value: Int32; inline;
 begin
-  Result := platform_errno_location^;
+  Result := platform_posix_errno_value_from_location(platform_errno_location);
 end;
 
 function platform_thread_self_token_u64: UInt64; inline;
@@ -210,16 +210,13 @@ begin
 end;
 
 function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
-var
-  LHostKind: Int32;
 begin
-  case AKind of
-    0: LHostKind := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
-    2: LHostKind := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
-  else
-    LHostKind := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
-  end;
-  Result := platform_pthread_mutex_init(AMutex, LHostKind);
+  Result := platform_posix_pthread_mutex_init_public_kind(
+    AMutex,
+    AKind,
+    PLATFORM_PTHREAD_MUTEX_NORMAL_KIND,
+    PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND,
+    PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND);
 end;
 
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;

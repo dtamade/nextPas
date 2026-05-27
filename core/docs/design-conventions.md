@@ -955,6 +955,15 @@ mutex attr / cond attr 初始化、condattr clock capability、timeout clock id 
 继续只提供 public kind 到宿主 kind 的映射、timeout clock id、condattr setclock binding 与
 capability token，再把这些 truth 作为参数交给 shared helper。
 
+同样，只要 helper 本身不携带宿主 truth，shared `posix.ffi` 也可以继续拥有更薄的一层参数化
+projection skeleton，例如 `platform_posix_errno_value_from_location` 与
+`platform_posix_pthread_mutex_init_public_kind`。前者只统一承载
+`errno-location -> current errno value` 的解引用样板；后者只统一承载 public mutex kind
+`(normal/errorcheck/recursive)` 到 caller-supplied host kind token 的投影，再复用 shared
+`platform_posix_pthread_mutex_init_kind`。各 host ffi owner 继续只保留 `platform_errno_location`
+symbol binding 与 `PLATFORM_PTHREAD_MUTEX_*_KIND` 这类宿主 truth，不再各自复制同一份 load/case
+skeleton。
+
 因此，优先消费 `platform_pthread_timeout_clock_now`、
 `platform_pthread_mutex_init_platform_kind`、`platform_pthread_mutex_*`、
 `platform_pthread_rwlock_*`、`platform_pthread_condvar_*` 这类 helper；`platform.sync`

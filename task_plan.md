@@ -17,6 +17,7 @@ fresh `bash build/verify_local.sh` 为准。
 
 当前最新本轮为 Collections Interface Ownership Normalization；上一轮 platform 主线包括
 Platform POSIX Pthread Attr-init Shared Helper Ownership；
+Platform POSIX Errno/Mutex Projection Shared Helper Ownership；
 Platform POSIX Clock/Sync Shared Helper Ownership；
 Platform Thread Shared POSIX Helper Ownership；
 Platform Time Windows Math Helper Boundary；
@@ -32,6 +33,91 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform POSIX Errno/Mutex Projection Shared Helper Ownership
+
+### Goal
+
+继续把 POSIX host ffi 中还剩的一层重复 skeleton 收回 shared owner：
+
+- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制 `errno-location^` 的 value load body
+- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制 public mutex kind
+  `(normal/errorcheck/recursive)` 到宿主 pthread kind 的 `case` 投影样板
+- host ffi 继续只保留真正的宿主 truth：`platform_errno_location` binding 与
+  `PLATFORM_PTHREAD_MUTEX_*_KIND` 常量
+
+### Architecture Decision
+
+- `nextpas.core.platform.posix.ffi` 本轮新增：
+  - `platform_posix_errno_value_from_location`
+  - `platform_posix_pthread_mutex_init_public_kind`
+- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
+  `platform.thread` / `platform.sync` 消费，但：
+  - `platform_posix_errno_value` 改为委托 shared
+    `platform_posix_errno_value_from_location`
+  - `platform_pthread_mutex_init_platform_kind` 改为委托 shared
+    `platform_posix_pthread_mutex_init_public_kind`
+- host ffi 继续保留：
+  - `platform_errno_location` 的宿主符号绑定
+  - `PLATFORM_PTHREAD_MUTEX_NORMAL_KIND` /
+    `PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND` /
+    `PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND`
+- 这批不改变 `platform.thread` / `platform.sync` public API，也不改变宿主 truth 的 owner。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared errno/mutex projection helper
+- [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 POSIX host ffi 委托 shared errno value load helper
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared errno/mutex projection helper
+- [x] 在 `posix.ffi` 实现 shared errno/mutex projection helper
+- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared projection helper
+- [x] focused：`test_platform_posix_ffi_surface` /
+  `test_platform_thread_host_ffi_surface` /
+  `test_platform_sync_host_ffi_surface` /
+  `test_platform_thread` /
+  `test_platform_sync` /
+  `test_platform_time_host_ffi_surface` /
+  `test_platform_simulated_host_compile_matrix` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在
+    `posix.ffi must expose shared POSIX errno-value load helper for host ffi owners`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate errno-value load to shared posix.ffi`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must delegate errno-value load to shared posix.ffi`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 这批不把 `platform_errno_location` binding 从 host ffi owner 移出
+- 这批不把 `PLATFORM_PTHREAD_MUTEX_*_KIND` 的宿主 truth 移出 host ffi owner
+- 这批不把 host clock id、timeout clock id、condattr capability 重新收窄进 shared owner
 
 ## Addendum: 2026-05-27 Collections Interface Ownership Normalization
 

@@ -195,9 +195,16 @@ function platform_posix_clock_ns_u64(
 function platform_posix_clock_resolution_ns_u64(
   const AClockId: Int32;
   const AErrnoLocation: PInt32): UInt64; inline;
+function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;
 function platform_posix_pthread_mutex_init_kind(
   AMutex: Pointer;
   const AKind: Int32): Int32; inline;
+function platform_posix_pthread_mutex_init_public_kind(
+  AMutex: Pointer;
+  const APublicKind: Int32;
+  const ANormalKind: Int32;
+  const ARecursiveKind: Int32;
+  const AErrorCheckKind: Int32): Int32; inline;
 function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
@@ -460,6 +467,13 @@ begin
     Result := 1;
 end;
 
+function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;
+begin
+  if AErrnoLocation = nil then
+    Exit(0);
+  Result := AErrnoLocation^;
+end;
+
 function platform_posix_pthread_mutex_init_kind(
   AMutex: Pointer;
   const AKind: Int32): Int32; inline;
@@ -477,6 +491,24 @@ begin
   finally
     pthread_mutexattr_destroy(@LAttr);
   end;
+end;
+
+function platform_posix_pthread_mutex_init_public_kind(
+  AMutex: Pointer;
+  const APublicKind: Int32;
+  const ANormalKind: Int32;
+  const ARecursiveKind: Int32;
+  const AErrorCheckKind: Int32): Int32; inline;
+var
+  LHostKind: Int32;
+begin
+  case APublicKind of
+    0: LHostKind := ANormalKind;
+    2: LHostKind := ARecursiveKind;
+  else
+    LHostKind := AErrorCheckKind;
+  end;
+  Result := platform_posix_pthread_mutex_init_kind(AMutex, LHostKind);
 end;
 
 function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;

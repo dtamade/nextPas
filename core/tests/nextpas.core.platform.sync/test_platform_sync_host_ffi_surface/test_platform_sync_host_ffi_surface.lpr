@@ -60,6 +60,8 @@ end;
 
 procedure CheckPosixSyncHelperSet(const ASource, AHostLabel: string);
 begin
+  CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
+    AHostLabel + ' must delegate errno-value load to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_size',
     AHostLabel + ' must expose pthread mutex storage size for sync');
   CheckTokenPresent(ASource, 'platform_pthread_rwlock_size',
@@ -80,6 +82,8 @@ begin
     AHostLabel + ' must expose pthread mutex init helper for public kind contract');
   CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_kind',
     AHostLabel + ' must delegate pthread mutex attr-init glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_public_kind',
+    AHostLabel + ' must delegate public mutex kind projection to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_destroy',
     AHostLabel + ' must expose pthread mutex destroy helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_lock',
@@ -164,6 +168,10 @@ begin
     AHostLabel + ' must not keep raw pthread condattr destroy glue after shared posix ownerization');
   Check(Pos('pthread_cond_init(', ASource) = 0,
     AHostLabel + ' must not keep raw pthread condvar init glue after shared posix ownerization');
+  Check(Pos('result := platform_errno_location^;', ASource) = 0,
+    AHostLabel + ' must not keep a local errno-value load body after shared posix ownerization');
+  Check(Pos('case akind of', ASource) = 0,
+    AHostLabel + ' must not keep a local public mutex kind mapping body after shared posix ownerization');
 end;
 
 procedure TestPlatformSyncUsesHostFFISurface;

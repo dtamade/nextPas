@@ -70,6 +70,14 @@
   `platform_posix_pthread_yield`、
   `platform_posix_pthread_sleep_ns` 与
   `platform_posix_pthread_tls_create/destroy/set/get`。
+- 这轮之后，shared `posix.ffi` 还进一步统一承载了两层不携带宿主 truth 的 projection skeleton：
+  `platform_posix_errno_value_from_location` 与
+  `platform_posix_pthread_mutex_init_public_kind`。前者只做 `errno-location -> value` 的通用 load，
+  后者只做 public mutex kind 到 caller-supplied host kind token 的通用投影，再复用
+  `platform_posix_pthread_mutex_init_kind`。
+- 对应地，`linux/android/darwin/freebsd/unix.ffi` 现在不再各自复制
+  `Result := platform_errno_location^` 与 public mutex kind 的 `case AKind of` skeleton；host ffi
+  继续只保留 `platform_errno_location` symbol binding 与 `PLATFORM_PTHREAD_MUTEX_*_KIND` 这类宿主 truth。
 - `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
   `linux/android/darwin/freebsd/unix.ffi` 统一暴露
   `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。

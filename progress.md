@@ -4,6 +4,7 @@
 2026-05-27 记录为准。
 
 当前最新本轮为 collections interface ownership normalization；上一轮 platform 主线包括
+platform POSIX errno/mutex projection shared helper ownership；
 platform POSIX pthread attr-init shared helper ownership；
 platform POSIX clock/sync shared helper ownership；
 platform thread shared POSIX helper ownership；
@@ -21,6 +22,70 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform POSIX errno/mutex projection shared helper ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 `linux/android/darwin/freebsd/unix.ffi` 中还剩的薄重复 skeleton
+    `errno-location^` value load 与 public mutex kind 投影样板收回
+    `nextpas.core.platform.posix.ffi`，让 host ffi 更接近只保留宿主 truth。
+- Baseline:
+  - 前几轮已经把 thread glue、clock/sync thin wrapper 与 pthread attr-init skeleton 拆到了 shared
+    `posix.ffi`，但各 host ffi 里仍然逐份复制：
+    - `Result := platform_errno_location^`
+    - `case AKind of ...` 把 public mutex kind 投影成宿主 pthread kind
+  - 这两层样板本身不携带宿主 truth；真正变化的只有 errno symbol binding 与
+    `PLATFORM_PTHREAD_MUTEX_*_KIND` 常量。
+- Actions taken:
+  - 先把 `test_platform_posix_ffi_surface` 扩成 RED gate，要求 `posix.ffi` 显式暴露：
+    - `platform_posix_errno_value_from_location`
+    - `platform_posix_pthread_mutex_init_public_kind`
+  - 再把 `test_platform_thread_host_ffi_surface` 与
+    `test_platform_sync_host_ffi_surface` 扩成 RED gate，明确要求
+    `linux/android/darwin/freebsd/unix.ffi`：
+    - source 中出现对上述 shared helper 的委托 token
+    - 不再自己保留 `Result := platform_errno_location^`
+    - 不再自己保留 public mutex kind 的 `case AKind of` skeleton
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 新增上述 shared helper，把 errno value load 与
+    public mutex kind projection skeleton 收成 shared owner，同时把宿主 truth 保留为参数。
+  - `core/src/nextpas.core.platform.linux.ffi.pas`、
+    `android.ffi.pas`、`darwin.ffi.pas`、`freebsd.ffi.pas`、`unix.ffi.pas`
+    改为委托 shared helper；host ffi 继续只保留 errno symbol binding 与
+    `PLATFORM_PTHREAD_MUTEX_*_KIND` 常量。
+  - `core/docs/design-conventions.md` 回写规则：shared `posix.ffi` 可以继续拥有不携带宿主 truth 的
+    errno/mutex projection skeleton。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在
+      `posix.ffi must expose shared POSIX errno-value load helper for host ffi owners`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate errno-value load to shared posix.ffi`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must delegate errno-value load to shared posix.ffi`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+- Review:
+  - 这批进一步把 POSIX host ffi 内部残留的“名字已经 host-owned、实现仍在逐份复制”的小样板收掉了：
+    shared `posix.ffi` 现在不只拥有 thread/clock/sync/attr-init helper，也拥有参数化的 errno value load
+    与 public mutex kind projection skeleton。
+  - 更重要的是，host truth 与 shared glue 的切面又清了一格：`platform_errno_location` binding 和
+    `PLATFORM_PTHREAD_MUTEX_*_KIND` 继续留在 host owner；同一份 `load/case` skeleton 则由 shared owner
+    统一承载。
 
 ## Session: 2026-05-27 (collections interface ownership normalization)
 
