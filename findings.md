@@ -491,6 +491,21 @@
 - Batch 170 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 171 把 known non-callable invalid-call-shape 推进到 imported `project-source` inherited
+  field：imported `TBaseWorker.Value: Integer` 通过 `TWorker = class(TBaseWorker)` 被 root source
+  调成 `Worker.Value(1)` 时，会失败为 `sema.invalid-call-shape`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 171 focused semantic 与 stage0 focused probe 直接 GREEN，证明现有 parent-chain known
+  non-method member path 已覆盖 imported `project-source` inherited field；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 171 新增 `tests/fixtures/imported_inherited_known_field_member_call` 与
+  `imported-inherited-known-field-member-call-check`，final envelope 新增
+  `importedInheritedKnownFieldMemberCallCheck":"pass"`。
+- Batch 171 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-known-field-member-call-check=pass`、
+  `importedInheritedKnownFieldMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

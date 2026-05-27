@@ -269,6 +269,7 @@ class variable receiver 的 method statement call，包括 argument-count matche
 direct member function call、class method body 内的 `Self.SetValue(9)` 与 bare implicit-self
 method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑定到 inherited
 method），还覆盖 imported `project-source` direct known field/property 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source` inherited known field 被当作 call 使用时的
 `sema.invalid-call-shape` gate，以及 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
 same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
 单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
@@ -926,7 +927,8 @@ imported direct member function-result wrong argument count
 断言同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数/函数结果形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
 `semantic-analysis-failed` + `sema.unknown-callable`，再对 known field/property member call、imported
-project-source known field/property member call 及 inherited known field/property member call 断言
+project-source known field/property member call、imported project-source inherited known field member call 及
+inherited known field/property member call 断言
 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
 和 class method body 内 bare implicit-self unknown member 断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对
