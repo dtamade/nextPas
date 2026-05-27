@@ -253,6 +253,21 @@
   `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
   `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 semantic analyzer，
   也没有修改 `core/`。
+- Batch 126 证明 inherited implicit-self bare method call 的失败路径需要显式透传 lookup
+  failure kind：`TBaseWorker.Touch(Value: Integer)` 可见、`TWorker.Run` 内写 `Touch(True);`
+  时，旧实现会 silent deferred，因为 implicit-self fallback 只返回 Boolean。
+- `TryRegisterImplicitSelfBareMethodCallBinding(...)` 现在返回 failure kind、callee name 与 callee
+  offset；当 parent-chain lookup 证明单一 target 的 stable signature 不兼容时，
+  `SeedCallBindingsInNode(...)` 会发 `sema.type-mismatch`，且不会注册失败 `member-call` binding。
+- Batch 126 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_type_mismatch` 与
+  `inherited-implicit-self-bare-method-type-mismatch-check`，stage0 probe 已输出
+  `diagnostic-code=sema.type-mismatch` 与
+  `diagnostic-message=argument type mismatch for "Touch"`。
+- Batch 126 fresh `bash build/verify_local.sh` 已输出
+  `inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass"`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败

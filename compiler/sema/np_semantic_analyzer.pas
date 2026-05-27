@@ -179,7 +179,10 @@ type
     ): Boolean;
     function TryRegisterImplicitSelfBareMethodCallBinding(
       const ACallNode: TGreenNode;
-      const ACurrentMethodClass: string
+      const ACurrentMethodClass: string;
+      out AResolutionFailureKind: string;
+      out AFailureName: string;
+      out AFailureOffset: LongInt
     ): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
@@ -1886,7 +1889,10 @@ end;
 
 function TSemanticAnalyzer.TryRegisterImplicitSelfBareMethodCallBinding(
   const ACallNode: TGreenNode;
-  const ACurrentMethodClass: string
+  const ACurrentMethodClass: string;
+  out AResolutionFailureKind: string;
+  out AFailureName: string;
+  out AFailureOffset: LongInt
 ): Boolean;
 var
   ArgCount: LongInt;
@@ -1895,10 +1901,12 @@ var
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
   ReceiverTypeId: LongInt;
-  ResolutionFailureKind: string;
   TargetSymbolId: LongInt;
 begin
   Result := False;
+  AResolutionFailureKind := '';
+  AFailureName := '';
+  AFailureOffset := 0;
   if (ACurrentMethodClass = '') or (ACallNode = nil) or
     not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) then
     Exit;
@@ -1906,6 +1914,8 @@ begin
   CallName := BareCallCalleeName(ACallNode);
   if CallName = '' then
     Exit;
+  AFailureName := CallName;
+  AFailureOffset := ACallNode.ByteOffset;
 
   ReceiverTypeId := TypeIdForMemberReceiver('Self', ACurrentMethodClass);
   if ReceiverTypeId <= 0 then
@@ -1915,7 +1925,6 @@ begin
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
     CallArgumentSignatureIsStable(ACallNode);
-  ResolutionFailureKind := '';
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
     CallName,
@@ -1923,7 +1932,7 @@ begin
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
-    ResolutionFailureKind
+    AResolutionFailureKind
   );
   if TargetSymbolId <= 0 then
     Exit;
@@ -2210,6 +2219,8 @@ begin
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
+      MemberFailureName := ANode.Text;
+      MemberFailureOffset := ANode.ByteOffset;
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       HasTypeMismatchEvidence := HasArgSignature and
         CallArgumentSignatureIsStable(ANode);
@@ -2233,35 +2244,38 @@ begin
            SameText(ResolutionFailureKind, 'unknown-callable')) then
           ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
             ANode,
-            MethodClass
+            MethodClass,
+            ResolutionFailureKind,
+            MemberFailureName,
+            MemberFailureOffset
           );
         if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'ambiguous-overload') then
           EmitSemaError(
             'sema.ambiguous-overload',
-            'ambiguous overload for "' + ANode.Text + '"',
-            ANode.ByteOffset
+            'ambiguous overload for "' + MemberFailureName + '"',
+            MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'wrong-argument-count') then
           EmitSemaError(
             'sema.wrong-argument-count',
-            'wrong number of arguments for "' + ANode.Text + '"',
-            ANode.ByteOffset
+            'wrong number of arguments for "' + MemberFailureName + '"',
+            MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'type-mismatch') then
           EmitSemaError(
             'sema.type-mismatch',
-            'argument type mismatch for "' + ANode.Text + '"',
-            ANode.ByteOffset
+            'argument type mismatch for "' + MemberFailureName + '"',
+            MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'no-matching-overload') then
           EmitSemaError(
             'sema.no-matching-overload',
-            'no matching overload for "' + ANode.Text + '"',
-            ANode.ByteOffset
+            'no matching overload for "' + MemberFailureName + '"',
+            MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'unknown-callable') and

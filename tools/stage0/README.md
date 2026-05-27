@@ -255,6 +255,9 @@ class variable receiver 的 method statement call，包括 argument-count matche
 direct member function call、class method body 内的 `Self.SetValue(9)` 与 bare implicit-self
 method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑定到 inherited
 method），还覆盖 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
+same path 的 inherited bare implicit-self method call 若 stable argument signature 与 root-owned
+单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
+`Touch(Integer)`），且不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。

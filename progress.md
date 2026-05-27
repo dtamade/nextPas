@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 126 inherited implicit self bare method type mismatch diagnostics；Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,49 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 126 inherited implicit self bare method type mismatch diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.4 Semantic model`
+- Objective:
+  - 把 inherited implicit-self bare method call 的成功绑定补上同一路径的失败诊断，例如
+    `TBaseWorker.Touch(Value: Integer)` 与 `procedure TWorker.Run; begin Touch(True); end;`
+    时，`Touch(True);` 必须失败为 `sema.type-mismatch`，且不注册错误 `member-call` binding。
+- Baseline:
+  - Batch 125 已让 `Touch(7);` 绑定到 parent class 上的 integer overload。
+  - RED 证明旧的 implicit-self fallback 在 target lookup 失败时没有把 failure kind 传回
+    diagnostic emission，导致 `Touch(True);` silent deferred。
+- Actions taken:
+  - 按 `/plan` 固定本轮只收 inherited implicit-self bare method argument type-mismatch，并采用
+    `单热点 / TDD RED / 最小修复 / promotion-first`。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckInheritedImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic`。
+  - RED focused 输出
+    `semantic-call-bindings-failure=missing-inherited-implicit-self-bare-method-call-argument-type-mismatch-diagnostic`。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 让
+    `TryRegisterImplicitSelfBareMethodCallBinding(...)` 返回
+    `ResolutionFailureKind`、failure name 与 failure offset，并复用已有 bare-call diagnostic emission。
+  - GREEN focused 输出 `semantic-call-bindings-status=pass`。
+  - 新增 `tests/fixtures/inherited_implicit_self_bare_method_type_mismatch`，并把
+    `inherited-implicit-self-bare-method-type-mismatch-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Fresh stage0 probe 已输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.type-mismatch` 与
+    `diagnostic-message=argument type mismatch for "Touch"`。
+  - Fresh `bash build/verify_local.sh` 已输出
+    `inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass"`、
+    `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 这轮是 failure propagation 修复，不改变 inherited implicit-self success binding。
+  - 普通 bare call failure path 仍初始化为 `ANode.Text` / `ANode.ByteOffset`，避免影响已有诊断。
+  - Diff 范围限定在 semantic analyzer、focused semantic test、dedicated fixture、verify gate、
+    semantic/stage0 文档与持续状态记录；没有修改 `core/`。
 
 ## Session: 2026-05-27 (Batch 125 inherited implicit self bare method call argument binding)
 
