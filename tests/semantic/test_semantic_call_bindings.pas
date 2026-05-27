@@ -4572,6 +4572,95 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceFunctionResultWrongArgumentCountStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  HelperPath: string;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-imported-function-result-wrong-argument-count-' +
+    IntToStr(Random(MaxInt));
+  HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
+  RootSourceText :=
+    'program InstalledImportedFunctionResultWrongArgumentCountCalls;' +
+    LineEnding +
+    'uses Helper;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(Flag, Flag);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    HelperPath,
+    'unit Helper;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledImportedFunctionResultWrongArgumentCountCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Helper', HelperPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-imported-function-result-wrong-argument-count-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-imported-function-result-wrong-argument-count-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-imported-function-result-wrong-argument-count-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-imported-function-result-wrong-argument-count-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnknownMemberDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -9107,6 +9196,7 @@ begin
     CheckImportedFunctionResultCallTypeMismatchDiagnostic;
     CheckImportedFunctionResultWrongArgumentCountDiagnostic;
     CheckInstalledSourceFunctionResultCallTypeMismatchStaysDeferred;
+    CheckInstalledSourceFunctionResultWrongArgumentCountStaysDeferred;
     CheckImportedUnknownMemberDiagnostic;
     CheckInstalledSourceUnknownMemberStaysDeferred;
     CheckImportedInheritedUnknownMemberDiagnostic;
