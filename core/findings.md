@@ -20,6 +20,7 @@
 
 - `collections` is interface-first: normal users should receive interfaces from factories and should not need to instantiate implementation classes directly.
 - Short factories such as `Vec<T>` are rejected for now because the family cannot stay clean around Pascal keywords such as `set`; `MakeXxx` is the unified factory naming family.
+- The facade should not keep compatibility aliases for rejected short factories. Since the framework is unreleased, stale public constructors should be removed instead of carried as API baggage.
 - A working public implementation such as `TreeMap`, `LinkedHashMap`, `VecDeque`, or `SkipList` should expose a matching public factory.
 - Default semantic factories are acceptable when useful, for example `MakeMap<K,V>` as the recommended default map. These must clearly document which concrete implementation they currently choose.
 - Do not add `IMap<K,V>`, `ISet<T>`, `IOrderedMap<K,V>`, or similar default semantic interface aliases at this stage. FPC generic alias and interface identity risks make this a poor fit for the current facade.

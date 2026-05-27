@@ -13,27 +13,27 @@ procedure TestFacadeFactoriesReturnPublicInterfaces;
 var
   LValue: Integer;
 begin
-  with specialize Vec<Integer> do
+  with specialize MakeVec<Integer> do
   begin
     Push(10);
     CheckEqual(Int64(1), Int64(Count), 'vec count');
     CheckEqual(Int64(10), Int64(Get(0)), 'vec value');
   end;
 
-  with specialize Map<Integer, Integer> do
+  with specialize MakeHashMap<Integer, Integer> do
   begin
     Put(1, 100);
     Check(Get(1, LValue), 'map get');
     CheckEqual(Int64(100), Int64(LValue), 'map value');
   end;
 
-  with specialize Set_<Integer> do
+  with specialize MakeHashSet<Integer> do
   begin
     Check(Add(7), 'set add');
     Check(Contains(7), 'set contains');
   end;
 
-  with specialize Deque<Integer> do
+  with specialize MakeDeque<Integer> do
   begin
     PushBack(1);
     PushFront(0);
