@@ -323,6 +323,10 @@ candidate collection
     `TObject.Destroy` 的普通 class 会落到 `TObject.Destroy`，而不是不存在的子类 destructor
   - `Obj.Free` 同时会生成 `object-free-runtime` typed HIR node，DisplayName 为
     `np.system.object_free`，Operand 记录 receiver、effective `Destroy`、nil guard 和 heap release
+- `sema.invalid-call-shape`
+  - 先用于 direct class member-call 中 receiver 类型已知、class layout truth 已知，且同名 field/property
+    已知存在但不是 callable 的场景；例如 `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`
+  - specialized generic receiver、record/property/array/deref receiver 与更完整 member access 仍继续 deferred
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
     receiver pointer operand 与 effective `Destroy` target，并把紧随其后的匹配 `Destroy`
     lowering 标记成 `np.system.object_free.destroy` owned marker；`heap-release true` 会在

@@ -114,6 +114,7 @@ sema 必须能在编译期求值以下常量表达式：
 - `sema.duplicate-declaration`：同一 scope 中重复声明
 - `sema.undeclared-identifier`：标识符未声明
 - `sema.type-mismatch`：类型不匹配
+- `sema.invalid-call-shape`：调用形状非法，例如已知 non-callable member 被当作 call
 - `sema.unknown-callable`：调用目标不是当前可解析的 procedure/function 或内建 callable
 - `sema.unknown-member`：receiver 类型已知但当前 class/parent chain 上没有可解析的成员 callable
   （implicit runtime 已能读取 source-backed nextPas `System` / `TObject`，普通 class 的

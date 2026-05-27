@@ -1737,7 +1737,10 @@ begin
   while (CurrentTypeId > 0) and (Depth < 32) do
   begin
     if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
+    begin
+      AResolutionFailureKind := 'invalid-call-shape';
       Exit;
+    end;
 
     Result := MethodSymbolIdForExactClassTypeMember(
       CurrentTypeId,
@@ -2106,6 +2109,12 @@ begin
         EmitSemaError(
           'sema.unknown-member',
           'unknown member "' + MemberFailureName + '"',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'invalid-call-shape') then
+        EmitSemaError(
+          'sema.invalid-call-shape',
+          'member "' + MemberFailureName + '" is not callable',
           MemberFailureOffset
         );
     end

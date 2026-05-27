@@ -750,7 +750,7 @@ key/value 行反推结果对象。
 `object-file` artifact，为 future native link selection 提前冻结 object-level input truth。
 
 失败路径当前也会在 stderr 上补出最小失败投影，例如 `status=failure`、`result=failure`、
-`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.no-matching-overload|sema.wrong-argument-count|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
+`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.no-matching-overload|sema.wrong-argument-count|sema.invalid-call-shape|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
 `diagnostic-phase=syntax|resolution|sema|toolchain`、`command-outcome=failure`、`command-envelope=<json>` 和
 `human-summary=<message>`，再附上原始失败消息。
 
@@ -887,7 +887,8 @@ type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
 同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
-`semantic-analysis-failed` + `sema.unknown-callable`，再对 direct class unknown member 断言
+`semantic-analysis-failed` + `sema.unknown-callable`，再对 known field member call 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member 断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言

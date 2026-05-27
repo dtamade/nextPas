@@ -166,6 +166,17 @@
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。
+- Batch 119 把 known non-callable member-call 的第一条 direct class field/property 边界接进结构化
+  diagnostics：当 receiver type 已知、class layout truth 已知，且同名 field/property 已知存在但被当成
+  call 使用时，`Worker.Value(1)` 会失败为 `sema.invalid-call-shape`，且不注册失败 `member-call`
+  binding。
+- 这次实现直接复用了现有 `ClassTypeHasKnownNonMethodMember(...)` guard：它不再 silent deferred，而是对
+  已知 non-callable member 带出 `invalid-call-shape` failure kind，避免把这类边界误报成
+  `sema.unknown-member`。
+- Batch 119 新增 `tests/fixtures/known_field_member_call` 与 `known-field-member-call-check`，把这条新
+  diagnostics 正式纳入 final envelope `knownFieldMemberCallCheck=pass`。
+- `System.Free` 与 specialized generic member-call 继续 deferred；这一批只收 known field/property
+  member call 的最小稳定边界，不冒进到更复杂 receiver 或完整 member access 语义。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败

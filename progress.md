@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,49 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 119 known field member invalid-call-shape)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把第一条 known non-callable member-call 从 deferred 推进到结构化 diagnostics，同时继续保持
+    `System.Free` 与 specialized generic member-call deferred。
+- Baseline:
+  - 现有 `ClassTypeHasKnownNonMethodMember(...)` guard 会把 `Worker.Value(1)` 这类已知 field/property call
+    直接压成 deferred，避免误报 `sema.unknown-member`，但这条用户可见边界还没有正式 diagnostics。
+  - Batch 118 已完成 imported inherited unknown-member，当前最高价值新热点转为 known non-callable。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并沿用提速策略：先 focused RED 判断缺口，再做最小实现。
+  - 把 `tests/semantic/test_semantic_call_bindings.pas` 中 known field member-call regression 从 deferred
+    改成要求 `sema.invalid-call-shape`。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 让已知 non-callable member 走
+    `invalid-call-shape` failure kind，并投影为 `sema.invalid-call-shape` /
+    `member "Value" is not callable`。
+  - 新增 `tests/fixtures/known_field_member_call`，并把 `known-field-member-call-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+  - 同步 sema/semantic model 规范、stage0 README 与持续记录。
+- Verification:
+  - RED：focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-known-field-member-call-diagnostic`。
+  - GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/known_field_member_call/known_field_member_call_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.invalid-call-shape`、
+    `diagnostic-message=member "Value" is not callable`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `known-field-member-call-check=pass`、
+    `knownFieldMemberCallCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮说明 known non-callable 不能继续靠 promotion-only；它有明确 guard，需要最小实现升级。
+  - 新 diagnostic 没有误伤 `System.Free` 与 specialized generic 这两条已知 deferred 边界，切口保持窄而稳。
+  - 下一轮最自然的热点是继续 known non-callable 家族，或转向 visibility / complex receiver forms 中
+    下一条最可控的 direct user-facing diagnostics。
 
 ## Session: 2026-05-27 (Batch 118 imported inherited unknown-member diagnostics)
 

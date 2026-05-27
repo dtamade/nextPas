@@ -28,6 +28,75 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Addendum: 2026-05-27 Batch 119 Known Field Member Invalid Call Shape
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把第一条 known non-callable member-call 从 deferred 推进到结构化 diagnostics：当 receiver type 已知、
+class layout truth 已知，且同名 field/property 已知存在但被当成 call 使用时，固定失败为
+`sema.invalid-call-shape`，同时继续保持 `System.Free` 与 specialized generic member-call deferred。
+
+本批次新增并冻结：
+
+- `Worker.Value(1);`，其中 `TWorker.Value: Integer` 已知存在但不是 callable 时，必须失败为
+  `sema.invalid-call-shape`，且失败调用不注册 `member-call` binding。
+- `build/verify_local.sh` 新增 `known-field-member-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `knownFieldMemberCallCheck`。
+- `Worker.Free;` 与 specialized generic member-call 继续保持 deferred，不顺手扩大范围。
+
+### Architecture Decision
+
+这是 known non-callable 的最小切片，不是完整 member access 设计：
+
+- 只收 direct class field/property name 已知但不可调用的第一条安全边界。
+- 不把它误归类成 `unknown-member`，而是使用更准确的 `sema.invalid-call-shape`。
+- 不顺手扩大到 record/property access、generic specialization、visibility、array/deref receiver
+  或更完整 member resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] RED：把 known field member-call focused semantic regression 从 deferred 改成
+      `sema.invalid-call-shape`
+- [x] 在 `compiler/sema/np_semantic_analyzer.pas` 对已知 non-callable member 带出
+      `invalid-call-shape` failure kind
+- [x] 新增 `tests/fixtures/known_field_member_call` 与 `known-field-member-call-check`
+- [x] 同步 sema/spec/stage0 README 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED：focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-known-field-member-call-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/known_field_member_call/known_field_member_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、
+  `diagnostic-message=member "Value" is not callable`。
+- Full：fresh `bash build/verify_local.sh` 必须输出
+  `known-field-member-call-check=pass`、
+  `knownFieldMemberCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不扩大到 `System.Free` / specialized generic member-call
+- 不实现完整 field/property access 语义
+- 不修改 `core/`
+
 ## Addendum: 2026-05-27 Batch 118 Imported Inherited Unknown Member Diagnostics
 
 ### Goal Nodes

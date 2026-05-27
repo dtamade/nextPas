@@ -1110,7 +1110,7 @@ begin
   end;
 end;
 
-procedure CheckKnownFieldMemberCallStaysDeferred;
+procedure CheckKnownFieldMemberCallDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -1145,12 +1145,19 @@ begin
     Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
-    if Diagnostics.HasErrors then
-      Fail('unexpected-known-field-member-call-diagnostic:' +
+    if not Diagnostics.HasErrors then
+      Fail('missing-known-field-member-call-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.invalid-call-shape') then
+      Fail('unexpected-known-field-member-call-diagnostic-code:' +
         Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-known-field-member-call-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Value', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('known-field-member-call-diagnostic-missing-name');
     if Model = nil then
       Fail('missing-known-field-member-call-semantic-model');
-    if not SameText(Model.Status, 'ready') then
+    if not SameText(Model.Status, 'failure') then
       Fail('unexpected-known-field-member-call-model-status:' + Model.Status);
     if Model.BindingCount <> 0 then
       Fail('unexpected-known-field-member-call-binding-count:' +
@@ -4980,7 +4987,7 @@ begin
     CheckMemberNoMatchingOverloadDiagnostic;
     CheckInheritedMemberNoMatchingOverloadDiagnostic;
     CheckUnknownMemberDiagnostic;
-    CheckKnownFieldMemberCallStaysDeferred;
+    CheckKnownFieldMemberCallDiagnostic;
     CheckSystemObjectFreeMemberCallStaysDeferred;
     CheckSourceBackedSystemObjectFreeMemberCallBinding;
     CheckImplicitSystemObjectFreeLowersToInheritedDestroy;
