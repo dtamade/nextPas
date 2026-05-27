@@ -21,7 +21,7 @@ type
    *   - PopFront/PopBack: O(1)
    *   - Front/Back: O(1)
    *   - Get/Put: O(1) 随机访问
-   *   - Insert/Remove: O(n)
+   *   - Insert/RemoveAt: O(n)
    *
    * @threadsafety 非线程安全
    * @see TVecDeque 具体实现
@@ -64,8 +64,8 @@ type
     function Get(aIndex: SizeUInt): T;
     function TryGet(aIndex: SizeUInt; var aElement: T): Boolean;
     procedure Insert(aIndex: SizeUInt; const aElement: T);
-    function Remove(aIndex: SizeUInt): T;
-    function TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+    function RemoveAt(aIndex: SizeUInt): T;
+    function TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
 
     // 容量与尺寸管理
     procedure Reserve(aAdditional: SizeUInt);

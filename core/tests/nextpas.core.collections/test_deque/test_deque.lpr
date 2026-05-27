@@ -76,7 +76,7 @@ begin
   CheckEqual(Int64(100), Int64(LD.Get(0)), 'item 0');
   CheckEqual(Int64(200), Int64(LD.Get(1)), 'item 1');
   CheckEqual(Int64(300), Int64(LD.Get(2)), 'item 2');
-  LD.Remove(1);
+  LD.RemoveAt(1);
   LD.Insert(1, 999);
   CheckEqual(Int64(999), Int64(LD.Get(1)), 'replace item 1');
 end;

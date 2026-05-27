@@ -224,8 +224,8 @@ begin
   begin
     if Vec[i] = aValue then
     begin
-      // Use RemoveSwap for O(1) removal (order doesn't matter for MultiMap)
-      Vec.RemoveSwap(i, TempValue);
+      // Use SwapRemoveAt for O(1) removal (order doesn't matter for MultiMap)
+      Vec.SwapRemoveAt(i, TempValue);
       Dec(FTotalValueCount);
 
       // 如果Vec为空,移除整个键

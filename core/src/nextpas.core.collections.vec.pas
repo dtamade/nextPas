@@ -520,16 +520,16 @@ type
     procedure DeleteSwap(aIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure DeleteSwap(aIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    procedure RemoveCopy(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveCopy(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveArray(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Remove(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  Remove(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveArraySwap(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveSwap(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  RemoveSwap(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  RemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  SwapRemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     { 函数式编程方法 }
     function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -1833,30 +1833,30 @@ begin
   DeleteSwap(aIndex, 1);
 end;
 
-procedure TVec.RemoveCopy(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
+procedure TVec.RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
 
   if aDst = nil then
-    raise EInvalidArgument.Create('TVec.RemoveCopy: destination is nil');
+    raise EInvalidArgument.Create('TVec.RemoveCopyAt: destination is nil');
 
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TVec.RemoveCopy: index out of bounds');
+    raise EOutOfRange.Create('TVec.RemoveCopyAt: index out of bounds');
 
   if aCount > (FCount - aIndex) then
-    raise EOutOfRange.Create('TVec.RemoveCopy: count out of bounds');
+    raise EOutOfRange.Create('TVec.RemoveCopyAt: count out of bounds');
 
   ReadUnchecked(aIndex, aDst, aCount);
   Delete(aIndex, aCount);
 end;
 
-procedure TVec.RemoveCopy(aIndex: SizeUInt; aDst: Pointer);
+procedure TVec.RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer);
 begin
-  RemoveCopy(aIndex, aDst, 1);
+  RemoveCopyAt(aIndex, aDst, 1);
 end;
 
-procedure TVec.RemoveArray(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVec.RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt);
 var
   LLen: SizeInt;
 begin
@@ -1868,43 +1868,43 @@ begin
   if LLen <> aCount then
     SetLength(aElements, aCount);
 
-  RemoveCopy(aIndex, @aElements[0], aCount);
+  RemoveCopyAt(aIndex, @aElements[0], aCount);
 end;
 
-procedure TVec.Remove(aIndex: SizeUInt; var aElement: T);
+procedure TVec.RemoveAt(aIndex: SizeUInt; var aElement: T);
 begin
-  RemoveCopy(aIndex, @aElement, 1);
+  RemoveCopyAt(aIndex, @aElement, 1);
 end;
 
-function TVec.Remove(aIndex: SizeUInt): T;
+function TVec.RemoveAt(aIndex: SizeUInt): T;
 begin
-  RemoveCopy(aIndex, @Result);
+  RemoveCopyAt(aIndex, @Result);
 end;
 
-procedure TVec.RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
+procedure TVec.SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
 
   if aDst = nil then
-    raise EInvalidArgument.Create('TVec.RemoveCopySwap: destination is nil');
+    raise EInvalidArgument.Create('TVec.SwapRemoveCopyAt: destination is nil');
 
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TVec.RemoveCopySwap: index out of bounds');
+    raise EOutOfRange.Create('TVec.SwapRemoveCopyAt: index out of bounds');
 
   if aCount > (FCount - aIndex) then
-    raise EOutOfRange.Create('TVec.RemoveCopySwap: count out of bounds');
+    raise EOutOfRange.Create('TVec.SwapRemoveCopyAt: count out of bounds');
 
   ReadUnchecked(aIndex, aDst, aCount);
   DeleteSwap(aIndex, aCount);
 end;
 
-procedure TVec.RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer);
+procedure TVec.SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer);
 begin
-  RemoveCopySwap(aIndex, aDst, 1);
+  SwapRemoveCopyAt(aIndex, aDst, 1);
 end;
 
-procedure TVec.RemoveArraySwap(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVec.SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt);
 var
   LLen: SizeInt;
 begin
@@ -1916,17 +1916,17 @@ begin
   if LLen <> aCount then
     SetLength(aElements, aCount);
 
-  RemoveCopySwap(aIndex, @aElements[0], aCount);
+  SwapRemoveCopyAt(aIndex, @aElements[0], aCount);
 end;
 
-procedure TVec.RemoveSwap(aIndex: SizeUInt; var aElement: T);
+procedure TVec.SwapRemoveAt(aIndex: SizeUInt; var aElement: T);
 begin
-  RemoveCopySwap(aIndex, @aElement, 1);
+  SwapRemoveCopyAt(aIndex, @aElement, 1);
 end;
 
-function TVec.RemoveSwap(aIndex: SizeUInt): T;
+function TVec.SwapRemoveAt(aIndex: SizeUInt): T;
 begin
-  RemoveCopySwap(aIndex, @Result);
+  SwapRemoveCopyAt(aIndex, @Result);
 end;
 
 { 函数式编程方法实现 }

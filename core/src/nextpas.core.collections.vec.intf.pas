@@ -716,10 +716,10 @@ type
     procedure DeleteSwap(aIndex: SizeUInt); overload;
 
 
-    { 关于 Delete 和 Remove 的说明 "擦掉"和"移走" }
+    { 关于 Delete 和 RemoveAt 的说明 "擦掉"和"移走" }
 
     {**
-     * RemoveCopy
+     * RemoveCopyAt
      *
      * @desc 移除指定位置指定数量的元素并拷贝到指定指针内存
      *
@@ -729,16 +729,16 @@ type
      *   aCount  要移除的元素数量
      *
      * @remark
-     *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 RemoveCopySwap
+     *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 SwapRemoveCopyAt
      *   请确保aDst指向的内存空间足够容纳aCount个元素
      *   如果移除失败会抛出异常
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveCopy(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
 
     {**
-     * RemoveCopy
+     * RemoveCopyAt
      *
      * @desc 移除指定位置的元素并拷贝到指定指针内存
      *
@@ -747,16 +747,16 @@ type
      *   aDst   保存元素的内存指针
      *
      * @remark
-     *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 RemoveCopySwap
+     *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 SwapRemoveCopyAt
      *   请确保aDst指向的内存空间足够容纳1个元素
      *   如果移除失败会抛出异常
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveCopy(aIndex: SizeUInt; aDst: Pointer); overload;
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
 
     {**
-     * RemoveArray
+     * RemoveArrayAt
      *
      * @desc 移除指定位置指定数量的元素并拷贝到指定数组内存
      *
@@ -771,10 +771,10 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveArray(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
     {**
-     * Remove
+     * RemoveAt
      *
      * @desc 移除指定位置的元素并拷贝到指定元素变量
      *
@@ -787,10 +787,10 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure Remove(aIndex: SizeUInt; var aElement: T); overload;
+    procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload;
 
     {**
-     * Remove
+     * RemoveAt
      *
      * @desc 移除指定位置的元素
      *
@@ -804,12 +804,12 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    function Remove(aIndex: SizeUInt): T; overload;
+    function RemoveAt(aIndex: SizeUInt): T; overload;
 
 
 
     {**
-     * RemoveCopySwap
+     * SwapRemoveCopyAt
      *
      * @desc 移除指定位置指定数量的元素并拷贝到指定指针,并用最后一个元素填充删除数据的位置(交换)
      *
@@ -824,10 +824,10 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
 
     {**
-     * RemoveCopySwap
+     * SwapRemoveCopyAt
      *
      * @desc 移除指定位置的元素并拷贝到指定指针,并用最后一个元素填充删除数据的位置(交换)
      *
@@ -841,11 +841,11 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveCopySwap(aIndex: SizeUInt; aDst: Pointer); overload;
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
 
 
     {**
-     * RemoveArraySwap
+     * SwapRemoveArrayAt
      *
      * @desc 移除指定位置指定数量的元素,并用最后一个元素填充删除的位置(交换)
      *
@@ -860,10 +860,10 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveArraySwap(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
     {**
-     * RemoveSwap
+     * SwapRemoveAt
      *
      * @desc 移除指定位置的元素并用最后一个元素填充删除的位置(交换)
      *
@@ -876,10 +876,10 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    procedure RemoveSwap(aIndex: SizeUInt; var aElement: T); overload;
+    procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload;
 
     {**
-     * RemoveSwap
+     * SwapRemoveAt
      *
      * @desc 移除指定位置的元素并用最后一个元素填充删除的位置(交换)
      *
@@ -893,7 +893,7 @@ type
      *   如果移除的元素数量大于容器数量会抛出异常
      *   如果移除的元素数量小于0会抛出异常
      *}
-    function RemoveSwap(aIndex: SizeUInt): T; overload;
+    function SwapRemoveAt(aIndex: SizeUInt): T; overload;
 
     {**
      * Filter

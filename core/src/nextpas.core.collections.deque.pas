@@ -83,8 +83,8 @@ type
     function Get(aIndex: SizeUInt): T;
     function TryGet(aIndex: SizeUInt; var aElement: T): Boolean;
     procedure Insert(aIndex: SizeUInt; const aElement: T);
-    function Remove(aIndex: SizeUInt): T;
-    function TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+    function RemoveAt(aIndex: SizeUInt): T;
+    function TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
 
     procedure Reserve(aAdditional: SizeUInt);
     procedure ReserveExact(aAdditional: SizeUInt);
@@ -324,18 +324,18 @@ begin
   FDeque.Insert(aIndex, aElement);
 end;
 
-function TArrayDeque.Remove(aIndex: SizeUInt): T;
+function TArrayDeque.RemoveAt(aIndex: SizeUInt): T;
 begin
   if aIndex >= FDeque.Count then
-    raise EOutOfRange.CreateFmt('TArrayDeque.Remove: index %d out of range [0..%d)', [aIndex, FDeque.Count]);
-  Result := FDeque.Remove(aIndex);
+    raise EOutOfRange.CreateFmt('TArrayDeque.RemoveAt: index %d out of range [0..%d)', [aIndex, FDeque.Count]);
+  Result := FDeque.RemoveAt(aIndex);
 end;
 
-function TArrayDeque.TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+function TArrayDeque.TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
 begin
   if aIndex >= FDeque.Count then
     Exit(False);
-  aElement := FDeque.Remove(aIndex);
+  aElement := FDeque.RemoveAt(aIndex);
   Result := True;
 end;
 

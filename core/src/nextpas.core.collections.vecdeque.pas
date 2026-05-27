@@ -44,7 +44,7 @@ type
    *   - PushFront/PushBack: O(1) 摊销, O(n) 最坏（扩容时）
    *   - PopFront/PopBack: O(1)
    *   - Get/Put: O(1)
-   *   - Insert/Remove: O(n)
+   *   - Insert/RemoveAt: O(n)
    *   - Reserve: O(n)
    *   - Rotate: O(n)
    *
@@ -327,8 +327,8 @@ type
     procedure ShrinkToFit;
     procedure ShrinkToFitExact;
     function InsertElement(aIndex: SizeUInt; const aElement: T): SizeUInt;
-    function Remove(aIndex: SizeUInt): T;
-    function RemoveSwap(aIndex: SizeUInt): T;
+    function RemoveAt(aIndex: SizeUInt): T;
+    function SwapRemoveAt(aIndex: SizeUInt): T;
     function Add(const aElement: T): SizeUInt;
 
     { IQueue<T> 队列接口实现 }
@@ -351,7 +351,7 @@ type
     function Back: T; overload;
     function Back(var aElement: T): Boolean; overload;
     function TryGet(aIndex: SizeUInt; var aElement: T): Boolean;
-    function TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+    function TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
     procedure Resize(aNewSize: SizeUInt; const aValue: T);
     // IDeque<T> 接口要求的方法
     procedure Append(const aOther: TQueueIntf);
@@ -756,15 +756,15 @@ type
     procedure DeleteSwap(aIndex: SizeUInt; aCount: SizeUInt);
     procedure DeleteSwap(aIndex: SizeUInt);
 
-    // Remove 系列方法（重载已存在的方法）
-    procedure RemoveCopy(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
-    procedure RemoveCopy(aIndex: SizeUInt; aPtr: Pointer);
-    procedure RemoveArray(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
-    procedure Remove(aIndex: SizeUInt; var aElement: T);
-    procedure RemoveCopySwap(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
-    procedure RemoveCopySwap(aIndex: SizeUInt; aPtr: Pointer);
-    procedure RemoveArraySwap(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
-    procedure RemoveSwap(aIndex: SizeUInt; var aElement: T);
+    // RemoveAt 系列方法（重载已存在的方法）
+    procedure RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
+    procedure RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer);
+    procedure RemoveArrayAt(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
+    procedure RemoveAt(aIndex: SizeUInt; var aElement: T);
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer);
+    procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
+    procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T);
 
 
     // IGenericCollection 兼容的按值移除（返回是否移除至少1个）
@@ -2739,13 +2739,13 @@ begin
   Result := aIndex;
 end;
 
-function TVecDeque.Remove(aIndex: SizeUInt): T;
+function TVecDeque.RemoveAt(aIndex: SizeUInt): T;
 var
   i, j: SizeUInt;
   LPhysicalI, LPhysicalIPlus1, LPhysicalJ, LPhysicalJMinus1: SizeUInt;
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.Remove: index %d out of range [0..%d]', [aIndex, FCount - 1]);
+    raise EOutOfRange.CreateFmt('TVecDeque.RemoveAt: index %d out of range [0..%d]', [aIndex, FCount - 1]);
 
   Result := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
 
@@ -2779,12 +2779,12 @@ begin
   Dec(FCount);
 end;
 
-function TVecDeque.RemoveSwap(aIndex: SizeUInt): T;
+function TVecDeque.SwapRemoveAt(aIndex: SizeUInt): T;
 var
   LPhysicalIndex, LPhysicalLast: SizeUInt;
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveSwap: index %d out of range [0..%d]', [aIndex, FCount - 1]);
+    raise EOutOfRange.CreateFmt('TVecDeque.SwapRemoveAt: index %d out of range [0..%d]', [aIndex, FCount - 1]);
 
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   Result := FBuffer.GetUnchecked(LPhysicalIndex);
@@ -3590,7 +3590,7 @@ begin
   if aIndex = 0 then
     Exit;
 
-  LElement := Remove(aIndex);
+  LElement := RemoveAt(aIndex);
   PushFront(LElement); // explicit index remove; RemoveValue refers to by-value removal
 end;
 
@@ -3604,7 +3604,7 @@ begin
   if aIndex = FCount - 1 then
     Exit;
 
-  LElement := Remove(aIndex);
+  LElement := RemoveAt(aIndex);
   PushBack(LElement);
 end;
 
@@ -7016,8 +7016,8 @@ begin
   DeleteSwap(aIndex, 1);
 end;
 
-// Remove 系列方法实现
-procedure TVecDeque.RemoveCopy(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
+// RemoveAt 系列方法实现
+procedure TVecDeque.RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
@@ -7025,11 +7025,11 @@ var
   LElementSize: SizeUInt;
 begin
   if aPtr = nil then
-    raise EArgumentNil.Create('TVecDeque.RemoveCopy: aPtr is nil');
+    raise EArgumentNil.Create('TVecDeque.RemoveCopyAt: aPtr is nil');
   if aCount = 0 then
     Exit;
   if aIndex + aCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveCopy: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.RemoveCopyAt: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   // ✅ 优化：使用双切片批量复制，避免逐个元素操作
@@ -7050,12 +7050,12 @@ begin
   Delete(aIndex, aCount);
 end;
 
-procedure TVecDeque.RemoveCopy(aIndex: SizeUInt; aPtr: Pointer);
+procedure TVecDeque.RemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer);
 begin
-  RemoveCopy(aIndex, aPtr, 1);
+  RemoveCopyAt(aIndex, aPtr, 1);
 end;
 
-procedure TVecDeque.RemoveArray(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVecDeque.RemoveArrayAt(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -7063,7 +7063,7 @@ begin
   if aCount = 0 then
     Exit;
   if aIndex + aCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveArray: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.RemoveArrayAt: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   {$PUSH}{$WARN 5093 OFF}
@@ -7079,11 +7079,11 @@ begin
   Delete(aIndex, aCount);
 end;
 
-procedure TVecDeque.Remove(aIndex: SizeUInt; var aElement: T);
+procedure TVecDeque.RemoveAt(aIndex: SizeUInt; var aElement: T);
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.Remove: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  aElement := Remove(aIndex);
+    raise EOutOfRange.CreateFmt('TVecDeque.RemoveAt: index %d out of range [0..%d]', [aIndex, FCount - 1]);
+  aElement := RemoveAt(aIndex);
 end;
 
 
@@ -7140,17 +7140,17 @@ begin
   Result := False;
 end;
 {$ENDIF}
-procedure TVecDeque.RemoveCopySwap(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
+procedure TVecDeque.SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer; aCount: SizeUInt);
 var
   i: SizeUInt;
   LPtr: PByte;
   LPhysicalIndex: SizeUInt;
 begin
   if aPtr = nil then
-    raise EArgumentNil.Create('TVecDeque.RemoveCopySwap: aPtr is nil');
+    raise EArgumentNil.Create('TVecDeque.SwapRemoveCopyAt: aPtr is nil');
   if aCount = 0 then Exit;
   if aIndex + aCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveCopySwap: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.SwapRemoveCopyAt: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   // 先拷贝
@@ -7166,19 +7166,19 @@ begin
   DeleteSwap(aIndex, aCount);
 end;
 
-procedure TVecDeque.RemoveCopySwap(aIndex: SizeUInt; aPtr: Pointer);
+procedure TVecDeque.SwapRemoveCopyAt(aIndex: SizeUInt; aPtr: Pointer);
 begin
-  RemoveCopySwap(aIndex, aPtr, 1);
+  SwapRemoveCopyAt(aIndex, aPtr, 1);
 end;
 
-procedure TVecDeque.RemoveArraySwap(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVecDeque.SwapRemoveArrayAt(aIndex: SizeUInt; var aArray: specialize TGenericArray<T>; aCount: SizeUInt);
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
 begin
   if aCount = 0 then Exit;
   if aIndex + aCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveArraySwap: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.SwapRemoveArrayAt: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
   {$PUSH}{$WARN 5093 OFF}
@@ -7194,10 +7194,10 @@ begin
   DeleteSwap(aIndex, aCount);
 end;
 
-procedure TVecDeque.RemoveSwap(aIndex: SizeUInt; var aElement: T);
+procedure TVecDeque.SwapRemoveAt(aIndex: SizeUInt; var aElement: T);
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.RemoveSwap: index %d out of range [0..%d]', [aIndex, FCount - 1]);
+    raise EOutOfRange.CreateFmt('TVecDeque.SwapRemoveAt: index %d out of range [0..%d]', [aIndex, FCount - 1]);
   aElement := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
   DeleteSwap(aIndex, 1);
 end;
@@ -8020,11 +8020,11 @@ begin
     Result := False;
 end;
 
-function TVecDeque.TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+function TVecDeque.TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
 begin
   if aIndex < GetCount then
   begin
-    aElement := Remove(aIndex);
+    aElement := RemoveAt(aIndex);
     Result := True;
   end
   else
@@ -8587,7 +8587,7 @@ end;
 
 procedure TVecDeque.RemoveRange(aIndex, aCount: SizeUInt; aPtr: Pointer);
 begin
-  RemoveCopy(aIndex, aPtr, aCount);  // 复用现有优化实现
+  RemoveCopyAt(aIndex, aPtr, aCount);  // 复用现有优化实现
 end;
 
 procedure TVecDeque.RemoveRange(aIndex, aCount: SizeUInt; var aArray: specialize TGenericArray<T>);

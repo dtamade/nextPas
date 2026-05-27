@@ -128,3 +128,5 @@
 - Final indexed sequence APIs should use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for indexed extraction.
 - Do not keep `Remove(Index)` alongside `RemoveAt(Index)` as a public synonym. The framework is unreleased, so there is no compatibility burden that justifies carrying duplicate names.
 - Value-based `Remove(Value)` belongs only to containers whose contract is explicitly value/key lookup and removal.
+- Positional pointer/array extraction helpers should also carry `At`: `RemoveCopyAt` and `RemoveArrayAt` for order-preserving extraction; `SwapRemoveAt`, `SwapRemoveCopyAt`, and `SwapRemoveArrayAt` for order-unstable extraction. This keeps the whole indexed extraction family visibly separate from value/key removal.
+- The pure rename batch should not hide a larger API addition. `Deque` and `VecDeque` already had a non-throwing indexed extraction method and now expose it as `TryRemoveAt`; `Vec` still needs a separate decision/batch for adding `TryRemoveAt` and possibly `TrySwapRemoveAt`.

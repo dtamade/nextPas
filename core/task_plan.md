@@ -12,11 +12,11 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Copied Macro Names
+### Current Micro Batch: Indexed Extraction Naming
 
-- [x] Migrate collections source from copied `FAFAFA_CORE_*` / `FAFAFA_COLLECTIONS_*` macro names to canonical `NEXTPAS_*` names.
-- [x] Keep old `FAFAFA_CORE_*` compatibility definitions temporarily in `nextpas.core.settings.inc` because `mem` still uses them.
-- [x] Do not rename mem/platform/compiler macro references in this collections batch.
+- [x] Rename positional extraction methods from copied `Remove` / `RemoveSwap` names to `RemoveAt` / `SwapRemoveAt`.
+- [x] Rename positional pointer/array extraction helpers to `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`.
+- [x] Keep key/value based `Remove(Key)` / `Remove(Value)` APIs unchanged.
 
 ### Phase 1: Structural Ownership
 

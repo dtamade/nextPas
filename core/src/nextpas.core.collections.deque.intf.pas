@@ -46,8 +46,8 @@ type
     function Get(aIndex: SizeUInt): T;
     function TryGet(aIndex: SizeUInt; var aElement: T): Boolean;
     procedure Insert(aIndex: SizeUInt; const aElement: T);
-    function Remove(aIndex: SizeUInt): T;
-    function TryRemove(aIndex: SizeUInt; var aElement: T): Boolean;
+    function RemoveAt(aIndex: SizeUInt): T;
+    function TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
 
     // 容量与尺寸管理
     procedure Reserve(aAdditional: SizeUInt);

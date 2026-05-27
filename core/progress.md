@@ -36,11 +36,14 @@
 - Removed rejected short facade factories from `nextpas.core.collections`: `Vec`, `Deque`, `Map`, `Set_`, `OrdMap`, and `OrdSet` are no longer exported. The facade test now uses the accepted `MakeXxx` factory family.
 - Implemented the next naming cleanup batch across collections source units: copied `FAFAFA_CORE_*` and `FAFAFA_COLLECTIONS_*` conditional symbols are now `NEXTPAS_CORE_*` or `NEXTPAS_COLLECTIONS_*` as appropriate.
 - Added canonical `NEXTPAS_CORE_INLINE`, `NEXTPAS_CORE_ANONYMOUS_REFERENCES`, and `NEXTPAS_CORE_CONTRACTS` definitions to `nextpas.core.settings.inc` while keeping temporary `FAFAFA_CORE_*` compatibility aliases for non-collections copied modules such as `mem`.
+- Started the indexed extraction naming batch. Surface review found positional `Remove`/`RemoveSwap` APIs on `Vec`, `VecDeque`, and `Deque`, plus an internal `MultiMap` use of vector swap-removal. Key/value `Remove` APIs in maps, sets, trie, cache, and forward list remain out of scope and should keep their names.
+- Implemented the indexed extraction naming batch: positional extraction now uses `RemoveAt` / `SwapRemoveAt`, pointer and array extraction helpers now use `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`, `Deque.TryRemove` is now `TryRemoveAt`, and `MultiMap` now calls `Vec.SwapRemoveAt` internally.
+- Verified the batch with residual scans for old positional names, `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 
 - Continue the naming cleanup implementation one batch at a time.
-- Next mechanical batch: continue public interface naming cleanup with the planned indexed-extraction rename family (`Remove`/`RemoveSwap` toward `RemoveAt`/`SwapRemoveAt`) after reviewing the exact interface and implementation surface.
+- Next interface-tuning batch: decide whether to add missing `TryRemoveAt` / `TrySwapRemoveAt` methods to `Vec` and whether `Deque` / `VecDeque` should expose a symmetric swap-removal try API.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.
