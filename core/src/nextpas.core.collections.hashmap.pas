@@ -172,8 +172,8 @@ type
   public
     // TCollection overrides (public in base)
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
     {**
      * PtrIter
      *
@@ -591,7 +591,7 @@ begin
   end;
 end;
 
-procedure THashMap.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure THashMap.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   i: SizeUInt;
   pEntry: ^TEntry;
@@ -607,7 +607,7 @@ begin
   end;
 end;
 
-procedure THashMap.AppendToUnChecked(const aDst: TCollection);
+procedure THashMap.AppendToUnchecked(const aDst: TCollection);
 var
   i: SizeUInt;
   dstMap: specialize THashMap<K, V>;
@@ -629,7 +629,7 @@ begin
   begin
     // 对于其他类型的容器，我们无法直接支持
     // 因为 THashMap<K,V> 的元素类型是 TEntry<K,V>，而不是单个类型
-    raise EInvalidOperation.Create('THashMap.AppendToUnChecked: cannot append to incompatible container type');
+    raise EInvalidOperation.Create('THashMap.AppendToUnchecked: cannot append to incompatible container type');
   end;
 end;
 

@@ -113,7 +113,7 @@ type
     procedure InitializeElements(aDst: Pointer; aElementCount: SizeUInt);
 
     {**
-     * InitializeElementsUnChecked
+     * InitializeElementsUnchecked
      *
      * @desc
      *   Initializes all elements in a memory block. (Unchecked version for performance).
@@ -130,7 +130,7 @@ type
      *   This is the unchecked version. The caller must ensure all parameters are valid.
      *   这是无检查版本. 调用者必须自行保证所有参数的有效性.
      *}
-    procedure InitializeElementsUnChecked(aDst: Pointer; aElementCount: SizeUInt);
+    procedure InitializeElementsUnchecked(aDst: Pointer; aElementCount: SizeUInt);
 
     {**
      * FinalizeManagedElements
@@ -161,7 +161,7 @@ type
     procedure FinalizeManagedElements(aDst: Pointer; aElementCount: SizeUInt);
 
     {**
-     * FinalizeManagedElementsUnChecked
+     * FinalizeManagedElementsUnchecked
      *
      * @desc
      *   Finalizes all managed-type elements in a memory block. (Unchecked version for performance).
@@ -178,7 +178,7 @@ type
      *   This is the unchecked version. The caller must ensure all parameters are valid.
      *   这是无检查版本. 调用者必须自行保证所有参数的有效性.
      *}
-    procedure FinalizeManagedElementsUnChecked(aDst: Pointer; aElementCount: SizeUInt);
+    procedure FinalizeManagedElementsUnchecked(aDst: Pointer; aElementCount: SizeUInt);
 
     {**
      * AllocElements
@@ -359,7 +359,7 @@ type
     procedure CopyElements(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
 
     {**
-     * CopyElementsUnChecked
+     * CopyElementsUnchecked
      *
      * @desc
      *   Copies elements, safely handling overlaps. (Unchecked version for performance).
@@ -379,7 +379,7 @@ type
      *   This is the unchecked version. The caller must ensure all parameters are valid.
      *   这是无检查版本. 调用者必须自行保证所有参数的有效性.
      *}
-    procedure CopyElementsUnChecked(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
+    procedure CopyElementsUnchecked(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
 
     {**
      * CopyElementsNonOverlap
@@ -411,7 +411,7 @@ type
     procedure CopyElementsNonOverlap(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
 
     {**
-     * CopyElementsNonOverlapUnChecked
+     * CopyElementsNonOverlapUnchecked
      *
      * @desc
      *   Copies elements, assuming no overlap. (Unchecked version for performance).
@@ -431,7 +431,7 @@ type
      *   This is the unchecked version. The caller must ensure all parameters are valid and regions do not overlap.
      *   这是无检查版本. 调用者必须自行保证所有参数有效且区域不重叠.
      *}
-    procedure CopyElementsNonOverlapUnChecked(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
+    procedure CopyElementsNonOverlapUnchecked(aSrc, aDst: specialize TGenericHelper<T>.PElement; aElementCount: SizeUInt);
 
     {**
      * FillElements

@@ -25,7 +25,7 @@ type
      *
      * @remark
      *   此方法进行索引越界检查.
-     *   为追求极致性能, 可使用 `GetUnChecked` 或通过 `GetMemory` 直接访问指针.
+     *   为追求极致性能, 可使用 `GetUnchecked` 或通过 `GetMemory` 直接访问指针.
      *   示例: `LValue := LArray.GetMemory[aIndex];`
      *
      * @exceptions
@@ -34,7 +34,7 @@ type
     function Get(aIndex: SizeUInt): T;
 
     {**
-     * GetUnChecked
+     * GetUnchecked
      *
      * @desc 获取指定索引处的元素 (不安全快速版本)
      *
@@ -48,7 +48,7 @@ type
      *   此方法不执行任何边界检查. 调用者必须自行确保 `aIndex` 在有效范围内.
      *   传递无效索引将导致未定义行为 (如访问冲突、数据损坏).
      *}
-    function GetUnChecked(aIndex: SizeUInt): T;
+    function GetUnchecked(aIndex: SizeUInt): T;
 
     {**
      * Put
@@ -62,7 +62,7 @@ type
      * @remark
      *   此方法进行索引越界检查.
      *   对于托管类型, 此过程会正确处理旧元素的释放和新元素的引用计数.
-     *   为追求极致性能, 可使用 `PutUnChecked` 或通过 `GetMemory` 直接访问指针.
+     *   为追求极致性能, 可使用 `PutUnchecked` 或通过 `GetMemory` 直接访问指针.
      *   示例: `LArray.GetMemory[aIndex] := aElement;`
      *
      * @exceptions
@@ -71,7 +71,7 @@ type
     procedure Put(aIndex: SizeUInt; const aElement: T);
 
     {**
-     * PutUnChecked
+     * PutUnchecked
      *
      * @desc 设置指定索引处的元素(不安全快速版本)
      *
@@ -84,7 +84,7 @@ type
      *   此方法不执行任何边界检查. 调用者必须自行确保 `aIndex` 在有效范围内.
      *   传递无效索引将导致未定义行为.
      *}
-    procedure PutUnChecked(aIndex: SizeUInt; const aElement: T);
+    procedure PutUnchecked(aIndex: SizeUInt; const aElement: T);
 
     {**
      * GetMemory
@@ -120,7 +120,7 @@ type
     function GetPtr(aIndex: SizeUInt): specialize TElementRef<T>.PElement;
 
     {**
-     * GetPtrUnChecked
+     * GetPtrUnchecked
      *
      * @desc 获取指向指定索引处元素的指针 (不安全快速版本)
      *
@@ -133,7 +133,7 @@ type
      *   **警告: 返回的指针是易变的, 且此方法不进行边界检查.**
      *   调用者必须自行确保 `aIndex` 有效, 且不能长期持有返回的指针.
      *}
-    function GetPtrUnChecked(aIndex: SizeUInt): specialize TElementRef<T>.PElement;
+    function GetPtrUnchecked(aIndex: SizeUInt): specialize TElementRef<T>.PElement;
 
     {**
      * Resize
@@ -194,7 +194,7 @@ type
     procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
 
     {**
-     * OverwriteUnChecked
+     * OverwriteUnchecked
      *
      * @desc 在容器内指定位置覆写一段来自外部指针的元素 (不安全快速版本).
      *
@@ -204,11 +204,11 @@ type
      *   aCount 要复制的元素数量
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
 
     {**
      * Overwrite
@@ -230,7 +230,7 @@ type
     procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload;
 
     {**
-     * OverwriteUnChecked
+     * OverwriteUnchecked
      *
      * @desc 在容器内指定位置覆写一个动态数组的全部内容 (不安全快速版本).
      *
@@ -239,11 +239,11 @@ type
      *   aSrc 包含源数据的动态数组.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload;
 
     {**
      * Overwrite
@@ -291,11 +291,11 @@ type
      *   aCount  要从 `aSrc` 复制并覆写的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
     {**
      * Read
@@ -318,7 +318,7 @@ type
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 
     {**
-     * ReadUnChecked
+     * ReadUnchecked
      *
      * @desc 将容器内指定范围的元素复制到外部内存 (无检查版本).
      *
@@ -329,11 +329,11 @@ type
 
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
 
 
     { 非异常批量导入/追加（集合重载） - 接口便捷方法，转发至基类实现 }
@@ -362,7 +362,7 @@ type
     procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
     {**
-     * ReadUnChecked
+     * ReadUnchecked
      *
      * @desc 将容器内指定范围的元素读取到一个动态数组中 (无检查版本).
      *
@@ -372,11 +372,11 @@ type
      *   aCount  要读取的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
     {**
      * Swap
@@ -388,7 +388,7 @@ type
      *   aIndex2 第二个元素的索引 (0-based).
      *
      * @remark
-     *   为追求极致性能, 可使用 `SwapUnChecked` 版本.
+     *   为追求极致性能, 可使用 `SwapUnchecked` 版本.
      *
      * @exceptions
      *   EOutOfRange       索引/范围越界.
@@ -397,7 +397,7 @@ type
     procedure Swap(aIndex1, aIndex2: SizeUInt); overload;
 
     {**
-     * SwapUnChecked
+     * SwapUnchecked
      *
      * @desc 交换两个指定索引处的元素(无检查版本)
      *
@@ -406,12 +406,12 @@ type
      *   aIndex2 第二个元素的索引 (0-based).
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须自行确保索引有效且不相等.
      *   传递无效参数将导致未定义行为.
      *}
-    procedure SwapUnChecked(aIndex1, aIndex2: SizeUInt);
+    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt);
 
     {**
      * Swap
@@ -474,7 +474,7 @@ type
     procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt);
 
     {**
-     * CopyUnChecked
+     * CopyUnchecked
      *
      * @desc 在容器内部复制元素(无检查版本)
      *
@@ -487,7 +487,7 @@ type
      *   此函数的行为类似于 C 语言的 `memmove`, 能正确处理源和目标范围重叠的情况.
      *   传递无效参数将导致未定义行为.
      *}
-    procedure CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
+    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 
 
 
@@ -533,7 +533,7 @@ type
     procedure Fill(aIndex, aCount: SizeUInt; const aElement: T); overload;
 
     {**
-     * FillUnChecked
+     * FillUnchecked
      *
      * @desc 用指定元素填充容器的指定范围 (无检查版本).
      *
@@ -543,11 +543,11 @@ type
      *   aElement 用于填充的元素值.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   此操作会覆盖指定范围内的所有现有元素.
      *}
-    procedure FillUnChecked(aIndex, aCount: SizeUInt; const aElement: T);
+    procedure FillUnchecked(aIndex, aCount: SizeUInt; const aElement: T);
 
 
     {**
@@ -584,7 +584,7 @@ type
     procedure Zero(aIndex, aCount: SizeUInt); overload;
 
     {**
-     * ZeroUnChecked
+     * ZeroUnchecked
      *
      * @desc 将容器内指定范围的元素写零 (无检查版本).
      *
@@ -593,10 +593,10 @@ type
      *   aCount  元素数量
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    procedure ZeroUnChecked(aIndex, aCount: SizeUInt); overload;
+    procedure ZeroUnchecked(aIndex, aCount: SizeUInt); overload;
 
 
     { Reverse 反转 }
@@ -629,7 +629,7 @@ type
     procedure Reverse(aStartIndex, aCount: SizeUInt); overload;
 
     {**
-     * ReverseUnChecked
+     * ReverseUnchecked
      *
      * @desc 反转容器中指定范围内的元素顺序 (无检查版本).
      *
@@ -638,10 +638,10 @@ type
      *   aCount      要反转的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    procedure ReverseUnChecked(aStartIndex, aCount: SizeUInt);
+    procedure ReverseUnchecked(aStartIndex, aCount: SizeUInt);
 
     { ForEach 遍历 }
 
@@ -776,7 +776,7 @@ type
     {$ENDIF}
 
     {**
-     * ForEachUnChecked
+     * ForEachUnchecked
      *
      * @desc 从指定索引开始, 对容器的每个后续元素执行一个回调 (过程指针版本, 无检查版本).
      *
@@ -789,13 +789,13 @@ type
      * @return 若遍历完成 (回调从未返回 `False`), 则返回 `True`; 否则返回 `False`.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
 
     {**
-     * ForEachUnChecked
+     * ForEachUnchecked
      *
      * @desc 从指定索引开始, 对容器的每个后续元素执行一个回调 (对象方法版本, 无检查版本).
      *
@@ -808,14 +808,14 @@ type
      * @return 若遍历完成 (回调从未返回 `False`), 则返回 `True`; 否则返回 `False`.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * ForEachUnChecked
+     * ForEachUnchecked
      *
      * @desc 从指定索引开始, 对容器的每个后续元素执行一个回调 (匿名方法版本, 无检查版本).
      *
@@ -827,11 +827,11 @@ type
      * @return 若遍历完成 (回调从未返回 `False`), 则返回 `True`; 否则返回 `False`.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     { Contains 包含 }
@@ -1013,7 +1013,7 @@ type
     {$ENDIF}
 
     {**
-     * ContainsUnChecked
+     * ContainsUnchecked
      *
      * @desc 在指定范围内检查元素是否存在 (使用默认比较器, 跳过边界检查).
      *
@@ -1027,13 +1027,13 @@ type
      * @remark
      *   此接口内部会根据元素类型自动选择合适的默认比较器.
      *   对于复杂类型, 强烈建议使用提供自定义比较器的重载版本.
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
 
     {**
-     * ContainsUnChecked
+     * ContainsUnchecked
      *
      * @desc 在指定范围内检查元素是否存在 (使用自定义比较器, 跳过边界检查).
      *
@@ -1048,13 +1048,13 @@ type
      *
      * @remark
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
 
     {**
-     * ContainsUnChecked
+     * ContainsUnchecked
      *
      * @desc 在指定范围内检查元素是否存在 (使用自定义比较器, 跳过边界检查).
      *
@@ -1069,14 +1069,14 @@ type
      *
      * @remark
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * ContainsUnChecked
+     * ContainsUnchecked
      *
      * @desc 在指定范围内检查元素是否存在 (使用自定义比较器, 跳过边界检查).
      *
@@ -1090,15 +1090,15 @@ type
      *
      * @remark
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     {**
-     * FindIFUnChecked
+     * FindIFUnchecked
      *
      * @desc 在指定范围内查找满足条件的元素 (跳过边界检查).
      *
@@ -1111,17 +1111,17 @@ type
      * @return 如果找到满足条件的元素, 返回其索引; 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindIFNotUnChecked
+     * FindIFNotUnchecked
      *
      * @desc 在指定范围内查找不满足条件的元素 (跳过边界检查).
      *
@@ -1134,17 +1134,17 @@ type
      * @return 如果找到不满足条件的元素, 返回其索引; 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindLastUnChecked
+     * FindLastUnchecked
      *
      * @desc 在指定范围内从后向前查找元素 (跳过边界检查).
      *
@@ -1158,18 +1158,18 @@ type
      * @return 如果找到元素, 返回其索引; 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindLastIFUnChecked
+     * FindLastIFUnchecked
      *
      * @desc 在指定范围内从后向前查找满足条件的元素 (跳过边界检查).
      *
@@ -1182,17 +1182,17 @@ type
      * @return 如果找到满足条件的元素, 返回其索引; 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindLastIFNotUnChecked
+     * FindLastIFNotUnchecked
      *
      * @desc 在指定范围内从后向前查找不满足条件的元素 (跳过边界检查).
      *
@@ -1205,17 +1205,17 @@ type
      * @return 如果找到不满足条件的元素, 返回其索引; 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * CountOfUnChecked
+     * CountOfUnchecked
      *
      * @desc 在指定范围内计算指定元素的数量 (跳过边界检查).
      *
@@ -1229,18 +1229,18 @@ type
      * @return 找到的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * CountIfUnChecked
+     * CountIfUnchecked
      *
      * @desc 在指定范围内计算满足条件的元素数量 (跳过边界检查).
      *
@@ -1253,17 +1253,17 @@ type
      * @return 满足条件的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * ReplaceUnChecked
+     * ReplaceUnchecked
      *
      * @desc 在指定范围内替换元素 (跳过边界检查).
      *
@@ -1278,18 +1278,18 @@ type
      * @return 替换的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * ReplaceIFUnChecked
+     * ReplaceIFUnchecked
      *
      * @desc 在指定范围内替换满足条件的元素 (跳过边界检查).
      *
@@ -1303,17 +1303,17 @@ type
      * @return 替换的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * IsSortedUnChecked
+     * IsSortedUnchecked
      *
      * @desc 检查指定范围内的元素是否已排序 (跳过边界检查).
      *
@@ -1326,18 +1326,18 @@ type
      * @return 如果已排序返回 True, 否则返回 False.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     {**
-     * BinarySearchUnChecked
+     * BinarySearchUnchecked
      *
      * @desc 在已排序的指定范围内进行二分查找 (跳过边界检查).
      *
@@ -1351,19 +1351,19 @@ type
      * @return 如果找到返回元素索引, 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保范围内的元素已排序.
      *}
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * BinarySearchInsertUnChecked
+     * BinarySearchInsertUnchecked
      *
      * @desc 在已排序的指定范围内查找插入位置 (跳过边界检查).
      *
@@ -1377,19 +1377,19 @@ type
      * @return 返回应该插入的位置索引.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保范围内的元素已排序.
      *}
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * ShuffleUnChecked
+     * ShuffleUnchecked
      *
      * @desc 随机打乱指定范围内的元素 (跳过边界检查).
      *
@@ -1400,14 +1400,14 @@ type
      *   aData       传递给回调的用户自定义数据.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
     { find 查找 }
@@ -1712,7 +1712,7 @@ type
     {$ENDIF}
 
     {**
-     * FindUnChecked
+     * FindUnchecked
      *
      * @desc 在指定范围内搜索元素, 并返回其首次出现的索引 (无检查版本).
      *
@@ -1724,15 +1724,15 @@ type
      * @return 如果找到, 返回元素的索引 (0-based); 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   此接口内部会根据元素类型自动选择合适的默认比较器.
      *}
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
 
     {**
-     * FindUnChecked
+     * FindUnchecked
      *
      * @desc 在指定范围内搜索元素, 并返回其首次出现的索引 (使用自定义比较器, 无检查版本).
      *
@@ -1746,15 +1746,15 @@ type
      * @return 如果找到, 返回元素的索引 (0-based); 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
      *}
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
 
     {**
-     * FindUnChecked
+     * FindUnchecked
      *
      * @desc 在指定范围内搜索元素, 并返回其首次出现的索引 (使用自定义比较器, 无检查版本).
      *
@@ -1768,16 +1768,16 @@ type
      * @return 如果找到, 返回元素的索引 (0-based); 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
      *}
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * FindUnChecked
+     * FindUnchecked
      *
      * @desc 在指定范围内搜索元素, 并返回其首次出现的索引 (使用自定义比较器, 无检查版本).
      *
@@ -1790,13 +1790,13 @@ type
      * @return 如果找到, 返回元素的索引 (0-based); 否则返回 -1.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
      *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     { FindIf 查找 }
@@ -2580,10 +2580,10 @@ type
     procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
 
-    { SortUnChecked 无检查排序 - 跳过边界检查，追求极致性能 }
+    { SortUnchecked 无检查排序 - 跳过边界检查，追求极致性能 }
 
     {**
-     * SortUnChecked
+     * SortUnchecked
      *
      * @desc 对指定范围内的元素进行排序 (使用默认比较器, 无检查版本).
      *
@@ -2592,16 +2592,16 @@ type
      *   aCount      要排序的元素数量.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   此接口内部会根据元素类型自动选择合适的默认比较器.
      *   排序算法为稳定的快速排序, 平均时间复杂度为 O(n log n).
      *}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt); overload;
 
     {**
-     * SortUnChecked
+     * SortUnchecked
      *
      * @desc 对指定范围内的元素进行排序 (使用自定义比较器, 无检查版本).
      *
@@ -2612,16 +2612,16 @@ type
      *   aData       传递给回调过程的用户自定义数据.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aComparer` 应在第一个元素小于第二个元素时返回负值, 相等时返回 0, 大于时返回正值.
      *   排序算法为稳定的快速排序, 平均时间复杂度为 O(n log n).
      *}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
 
     {**
-     * SortUnChecked
+     * SortUnchecked
      *
      * @desc 对指定范围内的元素进行排序 (使用自定义比较器, 无检查版本).
      *
@@ -2632,17 +2632,17 @@ type
      *   aData       传递给回调过程的用户自定义数据.
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aComparer` 应在第一个元素小于第二个元素时返回负值, 相等时返回 0, 大于时返回正值.
      *   排序算法为稳定的快速排序, 平均时间复杂度为 O(n log n).
      *}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * SortUnChecked
+     * SortUnchecked
      *
      * @desc 对指定范围内的元素进行排序 (使用自定义比较器, 无检查版本).
      *
@@ -2652,14 +2652,14 @@ type
      *   aComparer   用于比较两个元素的自定义回调 (匿名方法版本).
      *
      * @remark
-     *   **UnChecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
-     *   详见 docs/UnChecked_Methods_Summary.md。
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aComparer` 应在第一个元素小于第二个元素时返回负值, 相等时返回 0, 大于时返回正值.
      *   排序算法为稳定的快速排序, 平均时间复杂度为 O(n log n).
      *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
 
     { BinarySearch 二分查找 }

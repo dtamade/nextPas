@@ -90,7 +90,7 @@ type
     function HasNext: Boolean; inline;
 
     {**
-     * InitUnChecked
+     * InitUnchecked
      *
      * @desc 无检查初始化节点（无安全检查版本）
      *
@@ -102,7 +102,7 @@ type
      *   此版本跳过所有安全检查，仅用于性能关键路径
      *   调用者必须确保参数的有效性
      *}
-    procedure InitUnChecked(const aData: T; aNext: Pointer); inline;
+    procedure InitUnchecked(const aData: T; aNext: Pointer); inline;
 
   end;
 
@@ -188,7 +188,7 @@ type
     function HasNext: Boolean; inline;
 
     {**
-     * UnlinkUnChecked
+     * UnlinkUnchecked
      *
      * @desc 无检查将当前节点从链表中断开连接（优化版本）
      *
@@ -197,7 +197,7 @@ type
      *   优化版本：减少内存访问次数，提高缓存效率
      *   调用者需要手动调用 Clear 来清空节点
      *}
-    procedure UnlinkUnChecked; inline;
+    procedure UnlinkUnchecked; inline;
 
     {**
      * Unlink
@@ -569,7 +569,7 @@ begin
   Next := aNext;
 end;
 
-procedure TSingleLinkedNode.InitUnChecked(const aData: T; aNext: Pointer);
+procedure TSingleLinkedNode.InitUnchecked(const aData: T; aNext: Pointer);
 begin
   // 无检查版本：直接赋值，无任何检查
   Data := aData;
@@ -663,7 +663,7 @@ begin
   Result := Next <> nil;
 end;
 
-procedure TDoubleLinkedNode.UnlinkUnChecked;
+procedure TDoubleLinkedNode.UnlinkUnchecked;
 type
   PDoubleNode = ^TDoubleNode;
   TDoubleNode = specialize TDoubleLinkedNode<T>;
@@ -684,7 +684,7 @@ end;
 procedure TDoubleLinkedNode.Unlink;
 begin
   // 兼容版本：调用无检查版本
-  UnlinkUnChecked;
+  UnlinkUnchecked;
 end;
 
 { TTreeNode<T> - 极高性能实现 }

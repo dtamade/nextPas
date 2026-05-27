@@ -66,8 +66,8 @@ type
     function PtrIter: TPtrIter; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     property Capacity: SizeUInt read GetCapacity;
   end;
@@ -311,7 +311,7 @@ begin
     Move(FItems[0], aDst^, LCopyCount * SizeOf(T));
 end;
 
-procedure TPriorityQueue.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TPriorityQueue.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 type
   PT = ^T;
 var
@@ -328,14 +328,14 @@ begin
   end;
 end;
 
-procedure TPriorityQueue.AppendToUnChecked(const aDst: TCollection);
+procedure TPriorityQueue.AppendToUnchecked(const aDst: TCollection);
 var
   i: SizeUInt;
 begin
   if aDst = nil then
     Exit;
   for i := 0 to FCount - 1 do
-    aDst.AppendUnChecked(@FItems[i], 1);
+    aDst.AppendUnchecked(@FItems[i], 1);
 end;
 
 end.

@@ -108,8 +108,8 @@ type
 
     // Abstract methods from base classes
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
     procedure DoZero; override;
     procedure DoReverse; override;
 
@@ -404,7 +404,7 @@ begin
   Result := False;
 end;
 
-procedure TLinkedHashMap.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TLinkedHashMap.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   i: SizeUInt;
   LEntry: ^TEntryType;
@@ -420,7 +420,7 @@ begin
   end;
 end;
 
-procedure TLinkedHashMap.AppendToUnChecked(const aDst: TCollection);
+procedure TLinkedHashMap.AppendToUnchecked(const aDst: TCollection);
 var
   LCurrent: PNode;
   LDstMap: TLinkedHashMap;
@@ -443,7 +443,7 @@ begin
     LCurrent := FHead;
     while LCurrent <> nil do
     begin
-      aDst.AppendUnChecked(@LCurrent^.Pair, 1);
+      aDst.AppendUnchecked(@LCurrent^.Pair, 1);
       LCurrent := PNode(LCurrent^.Next);
     end;
   end;

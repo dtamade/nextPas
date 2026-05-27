@@ -113,25 +113,25 @@ type
     function  IsCompatible(aDst: TCollection): Boolean; virtual;
 
     procedure LoadFrom(const aSrc: Pointer; aElementCount: SizeUInt); virtual; overload;
-    procedure LoadFromUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); virtual; overload;
+    procedure LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); virtual; overload;
     function  TryLoadFrom(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; virtual; overload;
     procedure Append(const aSrc: Pointer; aElementCount: SizeUInt); virtual; overload;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); virtual; abstract; overload;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); virtual; abstract; overload;
     function  TryAppend(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; virtual; overload;
 
     procedure LoadFrom(const aSrc: TCollection); overload;
-    procedure LoadFromUnChecked(const aSrc: TCollection); virtual; overload;
+    procedure LoadFromUnchecked(const aSrc: TCollection); virtual; overload;
     function  TryLoadFrom(const aSrc: TCollection): Boolean; overload;
 
     procedure Append(const aSrc: TCollection); overload;
-    procedure AppendUnChecked(const aSrc: TCollection); virtual;
+    procedure AppendUnchecked(const aSrc: TCollection); virtual;
     function  TryAppend(const aSrc: TCollection): Boolean; overload;
 
     procedure AppendTo(const aDst: TCollection);
-    procedure AppendToUnChecked(const aDst: TCollection); virtual; abstract;
+    procedure AppendToUnchecked(const aDst: TCollection); virtual; abstract;
 
     procedure SaveTo(aDst: TCollection); overload;
-    procedure SaveToUnChecked(aDst: TCollection); virtual;
+    procedure SaveToUnchecked(aDst: TCollection); virtual;
 
     //function Equals(Obj: TObject): Boolean; virtual;
 
@@ -1247,13 +1247,13 @@ begin
     exit;
   end;
 
-  LoadFromUnChecked(aSrc, aElementCount);
+  LoadFromUnchecked(aSrc, aElementCount);
 end;
 
-procedure TCollection.LoadFromUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TCollection.LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 begin
   Clear;
-  AppendUnChecked(aSrc, aElementCount);
+  AppendUnchecked(aSrc, aElementCount);
 end;
 
 
@@ -1270,7 +1270,7 @@ begin
   end;
   if IsOverlap(aSrc, aElementCount) then Exit;
   try
-    LoadFromUnChecked(aSrc, aElementCount);
+    LoadFromUnchecked(aSrc, aElementCount);
     Result := True;
   except
     Result := False;
@@ -1290,7 +1290,7 @@ begin
   if IsAddOverflow(GetCount, aElementCount) then Exit;
   if IsOverlap(aSrc, aElementCount) then Exit;
   try
-    AppendUnChecked(aSrc, aElementCount);
+    AppendUnchecked(aSrc, aElementCount);
     Result := True;
   except
     Result := False;
@@ -1314,7 +1314,7 @@ begin
   if IsOverlap(aSrc, aElementCount) then
     raise EInvalidArgument.Create('TCollection.Append: source memory overlaps with container memory');
 
-  AppendUnChecked(aSrc, aElementCount);
+  AppendUnchecked(aSrc, aElementCount);
 end;
 
 procedure TCollection.LoadFrom(const aSrc: TCollection);
@@ -1335,12 +1335,12 @@ begin
     exit;
   end;
 
-  LoadFromUnChecked(aSrc);
+  LoadFromUnchecked(aSrc);
 end;
 
-procedure TCollection.LoadFromUnChecked(const aSrc: TCollection);
+procedure TCollection.LoadFromUnchecked(const aSrc: TCollection);
 begin
-  aSrc.SaveToUnChecked(Self);
+  aSrc.SaveToUnchecked(Self);
 end;
 
 procedure TCollection.Append(const aSrc: TCollection);
@@ -1361,15 +1361,15 @@ begin
   if IsAddOverflow(GetCount, aSrc.GetCount) then
     raise EOverflow.Create('TCollection.Append: Failed to append: aCollection is too large(Overflow)');
 
-  AppendUnChecked(aSrc);
+  AppendUnchecked(aSrc);
 end;
 
-procedure TCollection.AppendUnChecked(const aSrc: TCollection);
+procedure TCollection.AppendUnchecked(const aSrc: TCollection);
 begin
   if aSrc.IsEmpty then
     exit;
 
-  aSrc.AppendToUnChecked(Self);
+  aSrc.AppendToUnchecked(Self);
 end;
 
 procedure TCollection.AppendTo(const aDst: TCollection);
@@ -1380,7 +1380,7 @@ begin
   if not IsCompatible(aDst) then
     raise ENotCompatible.Create('TCollection.AppendTo: Failed to append: aCollection is not compatible');
 
-  AppendToUnChecked(aDst);
+  AppendToUnchecked(aDst);
 end;
 
 procedure TCollection.SaveTo(aDst: TCollection);
@@ -1394,17 +1394,17 @@ begin
   if not IsCompatible(aDst) then
     raise ENotCompatible.Create('TCollection.SaveTo: Failed to save: aCollection is not compatible');
 
-  SaveToUnChecked(aDst);
+  SaveToUnchecked(aDst);
 end;
 
-procedure TCollection.SaveToUnChecked(aDst: TCollection);
+procedure TCollection.SaveToUnchecked(aDst: TCollection);
 begin
   aDst.Clear;
 
   if IsEmpty then
     exit;
 
-  aDst.AppendUnChecked(Self);
+  aDst.AppendUnchecked(Self);
 end;
 
 
@@ -1437,7 +1437,7 @@ begin
     Exit;
   end;
   try
-    LoadFromUnChecked(aSrc);
+    LoadFromUnchecked(aSrc);
     Result := True;
   except
     Result := False;
@@ -1458,7 +1458,7 @@ begin
   end;
   if IsAddOverflow(GetCount, aSrc.GetCount) then Exit;
   try
-    AppendUnChecked(aSrc);
+    AppendUnchecked(aSrc);
     Result := True;
   except
     Result := False;

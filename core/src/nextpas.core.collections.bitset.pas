@@ -60,8 +60,8 @@ type
 
     // Abstract methods from TCollection
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     property BitCapacity: SizeUInt read GetBitCapacity;
   end;
@@ -383,7 +383,7 @@ begin
   Result := False;
 end;
 
-procedure TBitSet.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TBitSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   i: SizeUInt;
   LSrcWords: ^UInt64;
@@ -401,7 +401,7 @@ begin
   end;
 end;
 
-procedure TBitSet.AppendToUnChecked(const aDst: TCollection);
+procedure TBitSet.AppendToUnchecked(const aDst: TCollection);
 var
   LDstBitSet: TBitSet;
   i: SizeUInt;

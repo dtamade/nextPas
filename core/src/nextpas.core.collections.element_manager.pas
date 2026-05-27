@@ -54,7 +54,7 @@ interface
     FIsManagedType:   Boolean;
     FElementTypeInfo: PTypeInfo;
   private
-    procedure CopyElementsUnCheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
   public
     constructor Create(aAllocator: IAllocator); overload;
     constructor Create; overload;
@@ -65,9 +65,9 @@ interface
     function  GetElementTypeInfo: PTypeInfo; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
 
     procedure InitializeElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure InitializeElementsUnChecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure InitializeElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
     procedure FinalizeManagedElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure FinalizeManagedElementsUnChecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure FinalizeManagedElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
 
     function  AllocElements(aElementCount: SizeUInt): PElement; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
     function  AllocElement: PElement; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
@@ -78,10 +78,10 @@ interface
     function  IsOverlap(aSrc, aDst: Pointer; aElementCount: SizeUInt): Boolean; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
 
     procedure CopyElements(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure CopyElementsUnChecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElementsUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
 
     procedure CopyElementsNonOverlap(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure CopyElementsNonOverlapUnChecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElementsNonOverlapUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
 
     procedure FillElements(aDst: Pointer; aValue: T; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
     procedure ZeroElements(aDst: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
@@ -124,10 +124,10 @@ begin
   if aPtr = nil then
     raise EArgumentNil.Create('TElementManager.InitializeElements: aPtr is nil');
 
-  InitializeElementsUnChecked(aPtr, aElementCount);
+  InitializeElementsUnchecked(aPtr, aElementCount);
 end;
 
-procedure TElementManager.InitializeElementsUnChecked(aPtr: Pointer; aElementCount: SizeUInt);
+procedure TElementManager.InitializeElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt);
 begin
   if aElementCount = 1 then
     Initialize(T(aPtr^))
@@ -143,10 +143,10 @@ begin
   if aPtr = nil then
     raise EArgumentNil.Create('TElementManager.FinalizeManagedElements: aPtr is nil');
 
-  FinalizeManagedElementsUnChecked(aPtr, aElementCount);
+  FinalizeManagedElementsUnchecked(aPtr, aElementCount);
 end;
 
-procedure TElementManager.FinalizeManagedElementsUnChecked(aPtr: Pointer; aElementCount: SizeUInt);
+procedure TElementManager.FinalizeManagedElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt);
 begin
   if aElementCount = 0 then
     exit;
@@ -157,7 +157,7 @@ begin
     FinalizeArray(aPtr, FElementTypeInfo, aElementCount);
 end;
 
-procedure TElementManager.CopyElementsNonOverlapUnChecked(aSrc, aDst: PElement; aElementCount: SizeUInt);
+procedure TElementManager.CopyElementsNonOverlapUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt);
 begin
   if aElementCount = 0 then
     exit;
@@ -221,7 +221,7 @@ begin
   end;
 end;
 
-procedure TElementManager.CopyElementsUnCheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt);
+procedure TElementManager.CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt);
 var
   LPSrcTail:        ^T;
   LPDstTail:        ^T;
@@ -267,14 +267,14 @@ begin
     { 大重叠 }
     if LIsReverse then
     begin
-      FinalizeManagedElementsUnChecked(aDst, LOverlapCount);
+      FinalizeManagedElementsUnchecked(aDst, LOverlapCount);
       nextpas.core.mem.utils.CopyUnChecked(aSrc, aDst, LOverlapCount * FElementSize);
       nextpas.core.mem.utils.Zero(LPDstTail - LNonOverlapCount, LNonOverlapCount * FElementSize);
       CopyArray(LPDstTail - LNonOverlapCount, LPSrcTail - LNonOverlapCount, FElementTypeInfo, LNonOverlapCount);
     end
     else
     begin
-      FinalizeManagedElementsUnChecked(LPDstTail - LNonOverlapCount, LNonOverlapCount);
+      FinalizeManagedElementsUnchecked(LPDstTail - LNonOverlapCount, LNonOverlapCount);
       nextpas.core.mem.utils.CopyUnChecked(aSrc + LNonOverlapCount, aDst + LNonOverlapCount, LOverlapCount * FElementSize);
       nextpas.core.mem.utils.Zero(aDst, LNonOverlapCount * FElementSize);
       CopyArray(aDst, aSrc, FElementTypeInfo, LNonOverlapCount);
@@ -309,7 +309,7 @@ begin
   Result := FAllocator.GetMem(aElementCount * FElementSize);
 
   if (Result <> nil) and FIsManagedType then
-    InitializeElementsUnChecked(Result, aElementCount);
+    InitializeElementsUnchecked(Result, aElementCount);
 end;
 
 function TElementManager.AllocElement: PElement;
@@ -396,18 +396,18 @@ begin
   if aSrc = aDst then
     raise EInvalidArgument.Create('TElementManager.CopyElements: aSrc and aDst are the same');
 
-  CopyElementsUnChecked(aSrc, aDst, aElementCount);
+  CopyElementsUnchecked(aSrc, aDst, aElementCount);
 end;
 
-procedure TElementManager.CopyElementsUnChecked(aSrc, aDst: PElement; aElementCount: SizeUInt);
+procedure TElementManager.CopyElementsUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt);
 begin
   if aElementCount = 0 then
     exit;
 
   if IsOverlap(aSrc, aDst, aElementCount) then
-    CopyElementsUnCheckedInternal(aSrc, aDst, aElementCount)
+    CopyElementsUncheckedInternal(aSrc, aDst, aElementCount)
   else
-    CopyElementsNonOverlapUnChecked(aSrc, aDst, aElementCount); // 不重叠,直接拷贝
+    CopyElementsNonOverlapUnchecked(aSrc, aDst, aElementCount); // 不重叠,直接拷贝
 end;
 
 procedure TElementManager.CopyElementsNonOverlap(aSrc, aDst: PElement; aElementCount: SizeUInt);
@@ -424,7 +424,7 @@ begin
   if aSrc = aDst then
     raise EInvalidArgument.Create('TElementManager.CopyElementsNonOverlap: aSrc and aDst are the same');
 
-  CopyElementsNonOverlapUnChecked(aSrc, aDst, aElementCount);
+  CopyElementsNonOverlapUnchecked(aSrc, aDst, aElementCount);
 end;
 
 procedure TElementManager.FillElements(aDst: Pointer; aValue: T; aElementCount: SizeUInt);
@@ -451,7 +451,7 @@ begin
       while LBlockSize < aElementCount do
       begin
         LSize := Min(LBlockSize, aElementCount - LBlockSize);
-        CopyElementsNonOverlapUnChecked(LPDst, Pointer(LPDst + LBlockSize), LSize);
+        CopyElementsNonOverlapUnchecked(LPDst, Pointer(LPDst + LBlockSize), LSize);
         inc(LBlockSize, LSize);
       end;
     end;
@@ -477,7 +477,7 @@ begin
     raise EArgumentNil.Create('TElementManager.ZeroElements: aDst is nil');
 
   if FIsManagedType then
-    FinalizeManagedElementsUnChecked(aDst, aElementCount)
+    FinalizeManagedElementsUnchecked(aDst, aElementCount)
   else
   begin
     case FElementSize of

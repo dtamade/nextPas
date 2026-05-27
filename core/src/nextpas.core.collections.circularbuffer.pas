@@ -193,8 +193,8 @@ type
     // ICollection / TCollection
     function PtrIter: TPtrIter; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
   protected
     // 实现抽象方法（TCollection）
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
@@ -251,7 +251,7 @@ begin
 
     // 覆盖模式：移除最旧元素
     if GetIsManagedType then
-      GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[FHead], 1);
+      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
 
     FHead := WrapIndex(FHead + 1);
     Dec(FCount);
@@ -273,7 +273,7 @@ begin
   Result := FBuffer[FHead];
 
   if GetIsManagedType then
-    GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[FHead], 1);
+    GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
 
   FHead := WrapIndex(FHead + 1);
   Dec(FCount);
@@ -287,7 +287,7 @@ begin
   aElement := FBuffer[FHead];
 
   if GetIsManagedType then
-    GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[FHead], 1);
+    GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], 1);
 
   FHead := WrapIndex(FHead + 1);
   Dec(FCount);
@@ -331,14 +331,14 @@ begin
     if FHead < FTail then
     begin
       // 连续区间
-      GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[FHead], FCount);
+      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], FCount);
     end
     else
     begin
       // 分为两段
-      GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[FHead], FCapacity - FHead);
+      GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[FHead], FCapacity - FHead);
       if FTail > 0 then
-        GetElementManager.FinalizeManagedElementsUnChecked(@FBuffer[0], FTail);
+        GetElementManager.FinalizeManagedElementsUnchecked(@FBuffer[0], FTail);
     end;
   end;
 
@@ -450,7 +450,7 @@ begin
   end;
 end;
 
-procedure TCircularBuffer.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TCircularBuffer.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   i: SizeUInt;
   pSrc: ^T;
@@ -463,15 +463,15 @@ begin
   end;
 end;
 
-procedure TCircularBuffer.AppendToUnChecked(const aDst: TCollection);
+procedure TCircularBuffer.AppendToUnchecked(const aDst: TCollection);
 var
   Arr: TInternalArray;
 begin
   // 将当前缓冲区内容追加到目标集合
-  // 这需要目标集合支持AppendUnChecked
+  // 这需要目标集合支持AppendUnchecked
   Arr := ToArray;
   if Length(Arr) > 0 then
-    aDst.AppendUnChecked(@Arr[0], Length(Arr));
+    aDst.AppendUnchecked(@Arr[0], Length(Arr));
 end;
 
 procedure TCircularBuffer.DoZero;

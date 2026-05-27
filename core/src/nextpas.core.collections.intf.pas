@@ -236,7 +236,7 @@ type
     procedure LoadFrom(const aSrc: Pointer; aElementCount: SizeUInt); overload;
 
     {**
-    * LoadFromUnChecked
+    * LoadFromUnchecked
     *
     * @desc
     *   Clears the current collection and loads elements from a raw memory buffer (fast, unchecked version).
@@ -257,7 +257,7 @@ type
     *   EOutOfMemory  If memory allocation fails.
     *                 如果内存分配失败.
     *}
-    procedure LoadFromUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
+    procedure LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
 
     {**
     * Append
@@ -294,7 +294,7 @@ type
     procedure Append(const aSrc: Pointer; aElementCount: SizeUInt); overload;
 
     {**
-    * AppendUnChecked
+    * AppendUnchecked
     *
     * @desc
     *   Appends elements from a raw memory buffer (fast, unchecked version).
@@ -317,7 +317,7 @@ type
     *   EOutOfRange  If the operation causes a range overflow.
     *                如果操作导致范围越界.
     *}
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
 
     {**
     * LoadFrom
@@ -352,7 +352,7 @@ type
     procedure LoadFrom(const aSrc: TCollection); overload;
 
     {**
-    * LoadFromUnChecked
+    * LoadFromUnchecked
     *
     * @desc
     *   Clears the current collection and loads all elements from a source collection (fast, unchecked version).
@@ -370,7 +370,7 @@ type
     *   EOutOfMemory  If memory allocation fails.
     *                 如果内存分配失败.
     *}
-    procedure LoadFromUnChecked(const aSrc: TCollection); overload;
+    procedure LoadFromUnchecked(const aSrc: TCollection); overload;
 
     {**
     * SaveTo
@@ -400,7 +400,7 @@ type
     procedure SaveTo(aDst: TCollection); overload;
 
     {**
-    * SaveToUnChecked
+    * SaveToUnchecked
     *
     * @desc
     *   Clears the destination collection and copies all elements into it (fast, unchecked version).
@@ -414,7 +414,7 @@ type
     *   This procedure performs no checks. The caller must ensure safety.
     *   此过程不执行任何检查. 调用者必须自行保证安全.
     *}
-    procedure SaveToUnChecked(aDst: TCollection);
+    procedure SaveToUnchecked(aDst: TCollection);
 
     {**
     * Append
@@ -447,7 +447,7 @@ type
     procedure Append(const aSrc: TCollection); overload;
 
     {**
-    * AppendUnChecked
+    * AppendUnchecked
     *
     * @desc
     *   Appends all elements from a source collection (fast, unchecked version).
@@ -465,7 +465,7 @@ type
     *   EOutOfMemory  If memory allocation fails.
     *                 如果内存分配失败.
     *}
-    procedure AppendUnChecked(const aSrc: TCollection); overload;
+    procedure AppendUnchecked(const aSrc: TCollection); overload;
 
     {**
     * AppendTo
@@ -498,7 +498,7 @@ type
     procedure AppendTo(const aDst: TCollection); overload;
 
     {**
-    * AppendToUnChecked
+    * AppendToUnchecked
     *
     * @desc
     *   Appends all elements to a destination collection (fast, unchecked version).
@@ -516,7 +516,7 @@ type
     *   EOutOfMemory  If memory allocation fails.
     *                 如果内存分配失败.
     *}
-    procedure AppendToUnChecked(const aDst: TCollection); overload;
+    procedure AppendToUnchecked(const aDst: TCollection); overload;
 
     property Count:     SizeUInt   read GetCount;
     property Data:      Pointer    read GetData write SetData;

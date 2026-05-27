@@ -218,7 +218,7 @@ type
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
 
     {**
-     * AppendUnChecked
+     * AppendUnchecked
      *
      * @desc 从数组缓冲区追加键值对（无检查版本）
      *
@@ -228,10 +228,10 @@ type
      *
      * @precondition aSrc 指向有效的 TMapEntry<K,V> 数组
      *}
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
 
     {**
-     * AppendToUnChecked
+     * AppendToUnchecked
      *
      * @desc 将当前元素追加到目标容器（无检查版本）
      *
@@ -240,7 +240,7 @@ type
      *
      * @precondition aDst 是兼容的 TTreeMap 实例
      *}
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     { ITreeMap 接口实现 - 详见 ITreeMap 文档 }
     function GetLowerBound(const aKey: K; out aValue: V): Boolean; overload;
@@ -1232,7 +1232,7 @@ begin
   end;
 end;
 
-procedure TTreeMap.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TTreeMap.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   LSrcEntry: PEntryType;
   i: SizeUInt;
@@ -1248,7 +1248,7 @@ begin
   end;
 end;
 
-procedure TTreeMap.AppendToUnChecked(const aDst: TCollection);
+procedure TTreeMap.AppendToUnchecked(const aDst: TCollection);
 type
   PNodeType = TRedBlackTreeType.PNode;
 var
@@ -1264,7 +1264,7 @@ begin
   begin
     LEntry.Key := LNode^.Key;
     LEntry.Value := LNode^.Value;
-    aDst.AppendUnChecked(@LEntry, 1);
+    aDst.AppendUnchecked(@LEntry, 1);
     LNode := FTree.GetSuccessor(LNode);
   end;
 end;

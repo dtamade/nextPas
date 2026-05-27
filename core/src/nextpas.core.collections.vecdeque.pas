@@ -142,7 +142,7 @@ type
 
     { 批量移除操作 - 使用 Range 命名范式 }
     procedure RemoveRange(aIndex, aCount: SizeUInt);
-    procedure RemoveRangeUnChecked(aIndex, aCount: SizeUInt);
+    procedure RemoveRangeUnchecked(aIndex, aCount: SizeUInt);
     function PopFrontRange(aCount: SizeUInt): SizeUInt;
     function PopBackRange(aCount: SizeUInt): SizeUInt;
     procedure PopFrontRange(aCount: SizeUInt; const aTarget: TCollection);
@@ -229,9 +229,9 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: TCollection); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendUnchecked(const aSrc: TCollection); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     { 高性能批量操作接口 - 提供更高效的数据转移方式 }
     { LoadFrom: 直接加载数据到容器（替换当前内容） }
@@ -246,43 +246,43 @@ type
     procedure InsertFrom(aIndex: SizeUInt; const aSrc: array of T);
 
     { IGenericCollection<T> 接口实现 }
-    procedure SaveToUnChecked(aDst: TCollection); override;
+    procedure SaveToUnchecked(aDst: TCollection); override;
 
     { IArray<T> 接口实现 }
     function GetMemory: PElement;
     function Get(aIndex: SizeUInt): T;
-    function GetUnChecked(aIndex: SizeUInt): T;
+    function GetUnchecked(aIndex: SizeUInt): T;
     procedure Put(aIndex: SizeUInt; const aElement: T);
-    procedure PutUnChecked(aIndex: SizeUInt; const aElement: T);
+    procedure PutUnchecked(aIndex: SizeUInt; const aElement: T);
     function GetPtr(aIndex: SizeUInt): PElement;
-    function GetPtrUnChecked(aIndex: SizeUInt): PElement;
+    function GetPtrUnchecked(aIndex: SizeUInt): PElement;
     procedure Resize(aNewSize: SizeUInt);
     procedure Ensure(aIndex: SizeUInt);
     procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
     procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload;
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload;
     procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
-    procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
     procedure Read(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt); overload;
-    procedure ReadUnChecked(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt); overload;
     procedure Swap(aIndex1, aIndex2: SizeUInt); overload;
-    procedure SwapUnChecked(aIndex1, aIndex2: SizeUInt); overload;
+    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt); overload;
     procedure Swap(aIndex1, aIndex2, aCount: SizeUInt); overload;
     procedure Swap(aSrcIndex, aDstIndex, aCount, aStride: SizeUInt); overload;
     procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt); overload;
-    procedure CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt); overload;
+    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt); overload;
     procedure Fill(aIndex: SizeUInt; const aElement: T); overload;
     procedure Fill(aIndex, aCount: SizeUInt; const aElement: T); overload;
-    procedure FillUnChecked(aIndex, aCount: SizeUInt; const aElement: T); overload;
+    procedure FillUnchecked(aIndex, aCount: SizeUInt; const aElement: T); overload;
     procedure Zero(aIndex: SizeUInt); overload;
     procedure Zero(aIndex, aCount: SizeUInt); overload;
-    procedure ZeroUnChecked(aIndex, aCount: SizeUInt); overload;
+    procedure ZeroUnchecked(aIndex, aCount: SizeUInt); overload;
     procedure Reverse(aIndex: SizeUInt); overload;
     procedure Reverse(aIndex, aCount: SizeUInt); overload;
-    procedure ReverseUnChecked(aIndex, aCount: SizeUInt); overload;
+    procedure ReverseUnchecked(aIndex, aCount: SizeUInt); overload;
 
     { Search and algorithm methods }
     function ForEach(aIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;
@@ -291,9 +291,9 @@ type
     function ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;
     function ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean; overload;
     function ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean; overload;
-    function ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;
-    function ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean; overload;
-    function ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean; overload;
+    function ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean; overload;
 
     function Contains(const aElement: T; aIndex: SizeUInt): Boolean; overload;
     function Contains(const aElement: T; aIndex: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean; overload;
@@ -303,17 +303,17 @@ type
     function Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean; overload;
     function Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean; overload;
     function Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean; overload;
 
-    function FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
-    function FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
-    function FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
-    function FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
-    function FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
-    function FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
+    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
+    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
+    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
+    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
+    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
+    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
 
     { IVec<T> 接口实现 }
     function GetCapacity: SizeUInt;
@@ -379,7 +379,7 @@ type
 
     // Read 方法
     procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
-    procedure ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 
     // Find 系列方法
     function Find(const aValue: T): SizeInt;
@@ -395,11 +395,11 @@ type
     function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
     function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
-    // FindUnChecked 系列方法
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
+    // FindUnchecked 系列方法
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
     // FindIF 系列方法
     function FindIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
@@ -441,10 +441,10 @@ type
     function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
     function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
-    function FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
-    function FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
-    function FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
-    function FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
+    function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+    function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
+    function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
+    function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
     // FindLastIF 系列方法
     function FindLastIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
@@ -457,9 +457,9 @@ type
     function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
     function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
     // FindLastIFNot 系列方法
     function FindLastIFNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
@@ -472,9 +472,9 @@ type
     function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
     function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
     // CountOf 系列方法
     function CountOf(const aValue: T; aStartIndex: SizeUInt): SizeUInt;
@@ -486,10 +486,10 @@ type
     function CountOf(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
     function CountOf(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 
-    function CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
-    function CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
-    function CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
-    function CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
+    function CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+    function CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
+    function CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
+    function CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 
     // CountIf 系列方法
     function CountIf(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
@@ -499,9 +499,9 @@ type
     function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
     function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 
     // Replace 系列方法
     procedure Replace(const aOldValue, aNewValue: T; aStartIndex: SizeUInt);
@@ -513,10 +513,10 @@ type
     procedure Replace(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer);
     procedure Replace(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc);
 
-    function ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
-    function ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
-    function ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
-    function ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
+    function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+    function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
+    function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
+    function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 
     // ReplaceIF 系列方法
     procedure ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
@@ -526,9 +526,9 @@ type
     procedure ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
     procedure ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
 
-    function ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
-    function ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
-    function ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 
     // IsSorted 系列方法
     function IsSorted(aStartIndex: SizeUInt): Boolean;
@@ -540,10 +540,10 @@ type
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
 
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): Boolean;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): Boolean;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
 
     // BinarySearch 系列方法
     function BinarySearch(const aValue: T; aStartIndex: SizeUInt): SizeInt;
@@ -555,10 +555,10 @@ type
     function BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
     function BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 
-    function BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
-    function BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
-    function BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
-    function BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
+    function BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+    function BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
+    function BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
+    function BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 
     // BinarySearchInsert 系列方法
     function BinarySearchInsert(const aValue: T; aStartIndex: SizeUInt): SizeInt;
@@ -570,10 +570,10 @@ type
     function BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
     function BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 
-    function BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
-    function BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
-    function BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
-    function BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
+    function BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+    function BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
+    function BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
+    function BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 
     // Shuffle 系列方法
     procedure Shuffle(aStartIndex: SizeUInt);
@@ -585,10 +585,10 @@ type
     procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
     procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
 
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt);
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt);
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
 
     // 基础方法（无参数版本）
     function CountOf(const aValue: T): SizeUInt;
@@ -643,11 +643,11 @@ type
     procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer);
     procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc);
 
-    // SortUnChecked 系列方法
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt);
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer);
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc);
+    // SortUnchecked 系列方法
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt);
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer);
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc);
 
     // 其他缺失的方法
     function TryReserveExact(aCapacity: SizeUInt): Boolean;
@@ -872,14 +872,14 @@ begin
   if FHead <= LTailIndex then
   begin
     // 连续
-    aPtr1 := FBuffer.GetPtrUnChecked(FHead);
+    aPtr1 := FBuffer.GetPtrUnchecked(FHead);
     aLen1 := FCount;
     Exit;
   end;
   // 跨环：两段
-  aPtr1 := FBuffer.GetPtrUnChecked(FHead);
+  aPtr1 := FBuffer.GetPtrUnchecked(FHead);
   aLen1 := FBuffer.GetCount - FHead;
-  aPtr2 := FBuffer.GetPtrUnChecked(0);
+  aPtr2 := FBuffer.GetPtrUnchecked(0);
   aLen2 := FTail;
 end;
 
@@ -894,14 +894,14 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 连续
-    aPtr1 := FBuffer.GetPtrUnChecked(LStartPhysical);
+    aPtr1 := FBuffer.GetPtrUnchecked(LStartPhysical);
     aLen1 := aCount;
     Exit;
   end;
   // 跨环：两段
-  aPtr1 := FBuffer.GetPtrUnChecked(LStartPhysical);
+  aPtr1 := FBuffer.GetPtrUnchecked(LStartPhysical);
   aLen1 := FBuffer.GetCount - LStartPhysical;
-  aPtr2 := FBuffer.GetPtrUnChecked(0);
+  aPtr2 := FBuffer.GetPtrUnchecked(0);
   aLen2 := aCount - aLen1;
 end;
 
@@ -1022,7 +1022,7 @@ begin
       // 情况1：数据是连续的 [____XXXX____]
       // 选择最优放置策略：居中放置以便两端都有增长空间
       LNewHead := (aNewCapacity - FCount) div 2;
-      LNewBuffer.OverwriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), FCount);
+      LNewBuffer.OverwriteUnchecked(LNewHead, FBuffer.GetPtrUnchecked(FHead), FCount);
       FHead := LNewHead;
       FTail := LNewHead + FCount;
     end
@@ -1042,8 +1042,8 @@ begin
       case LOptimalStrategy of
         0: // 连续放置在开头
         begin
-          LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-          LNewBuffer.OverwriteUnChecked(LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+          LNewBuffer.OverwriteUnchecked(0, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
+          LNewBuffer.OverwriteUnchecked(LFirstPartSize, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
           FHead := 0;
           FTail := FCount;
         end;
@@ -1051,8 +1051,8 @@ begin
         1: // 连续放置在中间（推荐）
         begin
           LNewHead := (aNewCapacity - FCount) div 2;
-          LNewBuffer.OverwriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-          LNewBuffer.OverwriteUnChecked(LNewHead + LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+          LNewBuffer.OverwriteUnchecked(LNewHead, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
+          LNewBuffer.OverwriteUnchecked(LNewHead + LFirstPartSize, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
           FHead := LNewHead;
           FTail := LNewHead + FCount;
         end;
@@ -1062,15 +1062,15 @@ begin
           // 将较大的段放在开头，较小的段放在末尾
           if LFirstPartSize >= LSecondPartSize then
           begin
-            LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-            LNewBuffer.OverwriteUnChecked(aNewCapacity - LSecondPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+            LNewBuffer.OverwriteUnchecked(0, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
+            LNewBuffer.OverwriteUnchecked(aNewCapacity - LSecondPartSize, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
             FHead := 0;
             FTail := aNewCapacity - LSecondPartSize;
           end
           else
           begin
-            LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
-            LNewBuffer.OverwriteUnChecked(aNewCapacity - LFirstPartSize, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
+            LNewBuffer.OverwriteUnchecked(0, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
+            LNewBuffer.OverwriteUnchecked(aNewCapacity - LFirstPartSize, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
             FHead := aNewCapacity - LFirstPartSize;
             FTail := LSecondPartSize;
           end;
@@ -1122,9 +1122,9 @@ begin
     // 使用逻辑→物理映射，确保跨环时正确交换
     LPi := GetPhysicalIndex(i);
     LPj := GetPhysicalIndex(j);
-    LTemp := FBuffer.GetUnChecked(LPi);
-    FBuffer.PutUnChecked(LPi, FBuffer.GetUnChecked(LPj));
-    FBuffer.PutUnChecked(LPj, LTemp);
+    LTemp := FBuffer.GetUnchecked(LPi);
+    FBuffer.PutUnchecked(LPi, FBuffer.GetUnchecked(LPj));
+    FBuffer.PutUnchecked(LPj, LTemp);
     Inc(i);
     Dec(j);
   end;
@@ -1144,7 +1144,7 @@ begin
 
   for i := 0 to aCount - 1 do
   begin
-    FBuffer.PutUnChecked(aDstIndex + i, PElement(LSrcPtr)^);
+    FBuffer.PutUnchecked(aDstIndex + i, PElement(LSrcPtr)^);
     Dec(LSrcPtr, LElementSize);
   end;
 end;
@@ -1163,7 +1163,7 @@ begin
 
   for i := 0 to aCount - 1 do
   begin
-    FBuffer.PutUnChecked(aDstIndex + i, PElement(LSrcPtr)^);
+    FBuffer.PutUnchecked(aDstIndex + i, PElement(LSrcPtr)^);
     Inc(LSrcPtr, LElementSize);
   end;
 end;
@@ -1186,8 +1186,8 @@ begin
     LSrcPhysical := GetPhysicalIndex(i);
     LDstPhysical := GetPhysicalIndex(i + aCount);
 
-    LElement := FBuffer.GetUnChecked(LSrcPhysical);
-    FBuffer.PutUnChecked(LDstPhysical, LElement);
+    LElement := FBuffer.GetUnchecked(LSrcPhysical);
+    FBuffer.PutUnchecked(LDstPhysical, LElement);
   end;
 end;
 
@@ -1209,8 +1209,8 @@ begin
     LSrcPhysical := GetPhysicalIndex(i);
     LDstPhysical := GetPhysicalIndex(i - aCount);
 
-    LElement := FBuffer.GetUnChecked(LSrcPhysical);
-    FBuffer.PutUnChecked(LDstPhysical, LElement);
+    LElement := FBuffer.GetUnchecked(LSrcPhysical);
+    FBuffer.PutUnchecked(LDstPhysical, LElement);
   end;
 end;
 
@@ -1231,7 +1231,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    FBuffer.PutUnChecked(LPhysicalIndex, PElement(LPtr)^);
+    FBuffer.PutUnchecked(LPhysicalIndex, PElement(LPtr)^);
     Inc(LPtr, SizeOf(T));
   end;
 
@@ -1279,7 +1279,7 @@ begin
   else
     LPhysicalIndex := (FHead + LLogicalIndex) mod FBuffer.GetCount;
 
-  Result := FBuffer.GetPtrUnChecked(LPhysicalIndex);
+  Result := FBuffer.GetPtrUnchecked(LPhysicalIndex);
 end;
 
 function TVecDeque.DoIterMoveNext(aIter: PPtrIter): Boolean;
@@ -1331,7 +1331,7 @@ begin
   begin
     // 情况1：数据是连续的 [____XXXX____]
     // 一次性填充整个连续区域
-    FBuffer.FillUnChecked(FHead, FCount, aElement);
+    FBuffer.FillUnchecked(FHead, FCount, aElement);
   end
   else
   begin
@@ -1342,11 +1342,11 @@ begin
 
     // 填充第一段：从FHead到缓冲区末尾
     if LFirstPartSize > 0 then
-      FBuffer.FillUnChecked(FHead, LFirstPartSize, aElement);
+      FBuffer.FillUnchecked(FHead, LFirstPartSize, aElement);
 
     // 填充第二段：从缓冲区开头到FTail
     if LSecondPartSize > 0 then
-      FBuffer.FillUnChecked(0, LSecondPartSize, aElement);
+      FBuffer.FillUnchecked(0, LSecondPartSize, aElement);
   end;
 end;
 
@@ -1364,7 +1364,7 @@ begin
   begin
     // 情况1：数据是连续的 [____XXXX____]
     // 一次性清零整个连续区域
-    FBuffer.ZeroUnChecked(FHead, FCount);
+    FBuffer.ZeroUnchecked(FHead, FCount);
   end
   else
   begin
@@ -1375,11 +1375,11 @@ begin
 
     // 清零第一段：从FHead到缓冲区末尾
     if LFirstPartSize > 0 then
-      FBuffer.ZeroUnChecked(FHead, LFirstPartSize);
+      FBuffer.ZeroUnchecked(FHead, LFirstPartSize);
 
     // 清零第二段：从缓冲区开头到FTail
     if LSecondPartSize > 0 then
-      FBuffer.ZeroUnChecked(0, LSecondPartSize);
+      FBuffer.ZeroUnchecked(0, LSecondPartSize);
   end;
 end;
 
@@ -1405,9 +1405,9 @@ begin
 
     while i < j do
     begin
-      LTemp := FBuffer.GetUnChecked(i);
-      FBuffer.PutUnChecked(i, FBuffer.GetUnChecked(j));
-      FBuffer.PutUnChecked(j, LTemp);
+      LTemp := FBuffer.GetUnchecked(i);
+      FBuffer.PutUnchecked(i, FBuffer.GetUnchecked(j));
+      FBuffer.PutUnchecked(j, LTemp);
       Inc(i);
       Dec(j);
     end;
@@ -1426,9 +1426,9 @@ begin
       LPhysicalI := GetPhysicalIndex(i);
       LPhysicalJ := GetPhysicalIndex(j);
 
-      LTemp := FBuffer.GetUnChecked(LPhysicalI);
-      FBuffer.PutUnChecked(LPhysicalI, FBuffer.GetUnChecked(LPhysicalJ));
-      FBuffer.PutUnChecked(LPhysicalJ, LTemp);
+      LTemp := FBuffer.GetUnchecked(LPhysicalI);
+      FBuffer.PutUnchecked(LPhysicalI, FBuffer.GetUnchecked(LPhysicalJ));
+      FBuffer.PutUnchecked(LPhysicalJ, LTemp);
       Inc(i);
       Dec(j);
     end;
@@ -1584,7 +1584,7 @@ begin
     Move(LPtr2^, LDstPtr^, LLen2 * LElementSize);
 end;
 
-procedure TVecDeque.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TVecDeque.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 begin
   if aElementCount = 0 then
     Exit;
@@ -1593,7 +1593,7 @@ begin
   PushBack(aSrc, aElementCount);
 end;
 
-procedure TVecDeque.AppendToUnChecked(const aDst: TCollection);
+procedure TVecDeque.AppendToUnchecked(const aDst: TCollection);
 var
   LPtr1, LPtr2: PElement;
   LLen1, LLen2: SizeUInt;
@@ -1602,11 +1602,11 @@ begin
     Exit;
   // 使用统一的两段切片拆分
   GetTwoSlices(LPtr1, LLen1, LPtr2, LLen2);
-  if LLen1 > 0 then aDst.AppendUnChecked(LPtr1, LLen1);
-  if LLen2 > 0 then aDst.AppendUnChecked(LPtr2, LLen2);
+  if LLen1 > 0 then aDst.AppendUnchecked(LPtr1, LLen1);
+  if LLen2 > 0 then aDst.AppendUnchecked(LPtr2, LLen2);
 end;
 
-procedure TVecDeque.AppendUnChecked(const aSrc: TCollection);
+procedure TVecDeque.AppendUnchecked(const aSrc: TCollection);
 var
   LSrcVecDeque: TVecDeque;
   LSrcArray: TInternalArray;
@@ -1635,7 +1635,7 @@ begin
   else
   begin
     // 通用路径：使用祖先类的默认实现
-    inherited AppendUnChecked(aSrc);
+    inherited AppendUnchecked(aSrc);
   end;
 end;
 
@@ -1803,9 +1803,9 @@ end;
 
 { IGenericCollection<T> 接口实现 }
 
-procedure TVecDeque.SaveToUnChecked(aDst: TCollection);
+procedure TVecDeque.SaveToUnchecked(aDst: TCollection);
 begin
-  AppendToUnChecked(aDst);
+  AppendToUnchecked(aDst);
 end;
 
 { IArray<T> 接口实现 }
@@ -1824,36 +1824,36 @@ function TVecDeque.Get(aIndex: SizeUInt): T;
 begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Get: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  Result := GetUnChecked(aIndex);
+  Result := GetUnchecked(aIndex);
 end;
 
-function TVecDeque.GetUnChecked(aIndex: SizeUInt): T;
+function TVecDeque.GetUnchecked(aIndex: SizeUInt): T;
 begin
-  Result := FBuffer.GetUnChecked(GetPhysicalIndex(aIndex));
+  Result := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
 end;
 
 procedure TVecDeque.Put(aIndex: SizeUInt; const aElement: T);
 begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Put: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  PutUnChecked(aIndex, aElement);
+  PutUnchecked(aIndex, aElement);
 end;
 
-procedure TVecDeque.PutUnChecked(aIndex: SizeUInt; const aElement: T);
+procedure TVecDeque.PutUnchecked(aIndex: SizeUInt; const aElement: T);
 begin
-  FBuffer.PutUnChecked(GetPhysicalIndex(aIndex), aElement);
+  FBuffer.PutUnchecked(GetPhysicalIndex(aIndex), aElement);
 end;
 
 function TVecDeque.GetPtr(aIndex: SizeUInt): PElement;
 begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.GetPtr: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  Result := GetPtrUnChecked(aIndex);
+  Result := GetPtrUnchecked(aIndex);
 end;
 
-function TVecDeque.GetPtrUnChecked(aIndex: SizeUInt): PElement;
+function TVecDeque.GetPtrUnchecked(aIndex: SizeUInt): PElement;
 begin
-  Result := FBuffer.GetPtrUnChecked(GetPhysicalIndex(aIndex));
+  Result := FBuffer.GetPtrUnchecked(GetPhysicalIndex(aIndex));
 end;
 
 procedure TVecDeque.Resize(aNewSize: SizeUInt);
@@ -1874,10 +1874,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVecDeque.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -1895,7 +1895,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要覆写的范围是连续的
-    Move(LSrcPtr^, FBuffer.GetPtrUnChecked(LStartPhysical)^, aCount * LElementSize);
+    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, aCount * LElementSize);
   end
   else
   begin
@@ -1904,12 +1904,12 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 覆写第一段：从起始位置到缓冲区末尾
-    Move(LSrcPtr^, FBuffer.GetPtrUnChecked(LStartPhysical)^, LFirstPartSize * LElementSize);
+    Move(LSrcPtr^, FBuffer.GetPtrUnchecked(LStartPhysical)^, LFirstPartSize * LElementSize);
     Inc(LSrcPtr, LFirstPartSize * LElementSize);
 
     // 覆写第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      Move(LSrcPtr^, FBuffer.GetPtrUnChecked(0)^, LSecondPartSize * LElementSize);
+      Move(LSrcPtr^, FBuffer.GetPtrUnchecked(0)^, LSecondPartSize * LElementSize);
   end;
 end;
 
@@ -1918,14 +1918,14 @@ begin
   Overwrite(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
 end;
 
-  { UnChecked: 调用方必须确保前置条件：
+  { Unchecked: 调用方必须确保前置条件：
     - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[Low(aSrc)] 未定义
     - 覆写范围 [aIndex, aIndex + Length(aSrc) - 1] 在当前计数/容量映射的有效范围内（VecDeque 为环缓，覆盖可能跨两段）
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVecDeque.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverwriteUnChecked(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
+  OverwriteUnchecked(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
 end;
 
 procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
@@ -1946,13 +1946,13 @@ begin
   i := aIndex;
   while LIterator.MoveNext and (i < FCount) do
   begin
-    FBuffer.PutUnChecked(GetPhysicalIndex(i), PElement(LIterator.GetCurrent)^);
+    FBuffer.PutUnchecked(GetPhysicalIndex(i), PElement(LIterator.GetCurrent)^);
     Inc(i);
   end;
   // zero-allocation iterator: nothing to finalize
 end;
 
-procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVecDeque.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   i: SizeUInt;
   LIterator: TPtrIter;
@@ -1967,7 +1967,7 @@ begin
   i := aIndex;
   while LIterator.MoveNext and (LCopiedCount < aCount) and (i < FCount) do
   begin
-    FBuffer.PutUnChecked(GetPhysicalIndex(i), PElement(LIterator.GetCurrent)^);
+    FBuffer.PutUnchecked(GetPhysicalIndex(i), PElement(LIterator.GetCurrent)^);
     Inc(i);
     Inc(LCopiedCount);
   end;
@@ -1980,10 +1980,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
 end;
 
-procedure TVecDeque.ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
+procedure TVecDeque.ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -2003,16 +2003,16 @@ begin
   LEndPhysical := GetPhysicalIndex(aIndex + aCount - 1);
   if LStartPhysical <= LEndPhysical then
   begin
-    Move(FBuffer.GetPtrUnChecked(LStartPhysical)^, LDstPtr^, aCount * LElementSize);
+    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, aCount * LElementSize);
   end
   else
   begin
     LFirstPartSize := FBuffer.GetCount - LStartPhysical;
     LSecondPartSize := aCount - LFirstPartSize;
-    Move(FBuffer.GetPtrUnChecked(LStartPhysical)^, LDstPtr^, LFirstPartSize * LElementSize);
+    Move(FBuffer.GetPtrUnchecked(LStartPhysical)^, LDstPtr^, LFirstPartSize * LElementSize);
     Inc(LDstPtr, LFirstPartSize * LElementSize);
     if LSecondPartSize > 0 then
-      Move(FBuffer.GetPtrUnChecked(0)^, LDstPtr^, LSecondPartSize * LElementSize);
+      Move(FBuffer.GetPtrUnchecked(0)^, LDstPtr^, LSecondPartSize * LElementSize);
   end;
 end;
 
@@ -2021,10 +2021,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
 end;
 
-procedure TVecDeque.ReadUnChecked(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt);
+procedure TVecDeque.ReadUnchecked(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -2041,7 +2041,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要读取的范围是连续的
-    aDst.AppendUnChecked(FBuffer.GetPtrUnChecked(LStartPhysical), aCount);
+    aDst.AppendUnchecked(FBuffer.GetPtrUnchecked(LStartPhysical), aCount);
   end
   else
   begin
@@ -2050,11 +2050,11 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 读取第一段：从起始位置到缓冲区末尾
-    aDst.AppendUnChecked(FBuffer.GetPtrUnChecked(LStartPhysical), LFirstPartSize);
+    aDst.AppendUnchecked(FBuffer.GetPtrUnchecked(LStartPhysical), LFirstPartSize);
 
     // 读取第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      aDst.AppendUnChecked(FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+      aDst.AppendUnchecked(FBuffer.GetPtrUnchecked(0), LSecondPartSize);
   end;
 end;
 
@@ -2062,10 +2062,10 @@ procedure TVecDeque.Swap(aIndex1, aIndex2: SizeUInt);
 begin
   if (aIndex1 >= FCount) or (aIndex2 >= FCount) then
     raise EOutOfRange.Create('TVecDeque.Swap: index out of range');
-  SwapUnChecked(aIndex1, aIndex2);
+  SwapUnchecked(aIndex1, aIndex2);
 end;
 
-procedure TVecDeque.SwapUnChecked(aIndex1, aIndex2: SizeUInt);
+procedure TVecDeque.SwapUnchecked(aIndex1, aIndex2: SizeUInt);
 var
   LTemp: T;
   LPhysical1, LPhysical2: SizeUInt;
@@ -2074,9 +2074,9 @@ begin
   LPhysical1 := GetPhysicalIndex(aIndex1);
   LPhysical2 := GetPhysicalIndex(aIndex2);
 
-  LTemp := FBuffer.GetUnChecked(LPhysical1);
-  FBuffer.PutUnChecked(LPhysical1, FBuffer.GetUnChecked(LPhysical2));
-  FBuffer.PutUnChecked(LPhysical2, LTemp);
+  LTemp := FBuffer.GetUnchecked(LPhysical1);
+  FBuffer.PutUnchecked(LPhysical1, FBuffer.GetUnchecked(LPhysical2));
+  FBuffer.PutUnchecked(LPhysical2, LTemp);
 end;
 
 procedure TVecDeque.Swap(aIndex1, aIndex2, aCount: SizeUInt);
@@ -2094,9 +2094,9 @@ begin
     LPhysical1 := GetPhysicalIndex(aIndex1 + i);
     LPhysical2 := GetPhysicalIndex(aIndex2 + i);
 
-    LTemp := FBuffer.GetUnChecked(LPhysical1);
-    FBuffer.PutUnChecked(LPhysical1, FBuffer.GetUnChecked(LPhysical2));
-    FBuffer.PutUnChecked(LPhysical2, LTemp);
+    LTemp := FBuffer.GetUnchecked(LPhysical1);
+    FBuffer.PutUnchecked(LPhysical1, FBuffer.GetUnchecked(LPhysical2));
+    FBuffer.PutUnchecked(LPhysical2, LTemp);
   end;
 end;
 
@@ -2112,9 +2112,9 @@ begin
     LPhysicalSrc := GetPhysicalIndex(aSrcIndex + i * aStride);
     LPhysicalDst := GetPhysicalIndex(aDstIndex + i * aStride);
 
-    LTemp := FBuffer.GetUnChecked(LPhysicalSrc);
-    FBuffer.PutUnChecked(LPhysicalSrc, FBuffer.GetUnChecked(LPhysicalDst));
-    FBuffer.PutUnChecked(LPhysicalDst, LTemp);
+    LTemp := FBuffer.GetUnchecked(LPhysicalSrc);
+    FBuffer.PutUnchecked(LPhysicalSrc, FBuffer.GetUnchecked(LPhysicalDst));
+    FBuffer.PutUnchecked(LPhysicalDst, LTemp);
   end;
 end;
 
@@ -2122,10 +2122,10 @@ procedure TVecDeque.Copy(aSrcIndex, aDstIndex, aCount: SizeUInt);
 begin
   if (aSrcIndex + aCount > FCount) or (aDstIndex + aCount > FCount) then
     raise EOutOfRange.Create('TVecDeque.Copy: range out of bounds');
-  CopyUnChecked(aSrcIndex, aDstIndex, aCount);
+  CopyUnchecked(aSrcIndex, aDstIndex, aCount);
 end;
 
-procedure TVecDeque.CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
+procedure TVecDeque.CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 var
   i: SizeUInt;
   LSrcPhysical, LDstPhysical: SizeUInt;
@@ -2141,7 +2141,7 @@ begin
     repeat
       LSrcPhysical := GetPhysicalIndex(aSrcIndex + i);
       LDstPhysical := GetPhysicalIndex(aDstIndex + i);
-      FBuffer.PutUnChecked(LDstPhysical, FBuffer.GetUnChecked(LSrcPhysical));
+      FBuffer.PutUnchecked(LDstPhysical, FBuffer.GetUnchecked(LSrcPhysical));
       if i = 0 then Break;
       Dec(i);
     until False;
@@ -2154,7 +2154,7 @@ begin
     begin
       LSrcPhysical := GetPhysicalIndex(aSrcIndex + i);
       LDstPhysical := GetPhysicalIndex(aDstIndex + i);
-      FBuffer.PutUnChecked(LDstPhysical, FBuffer.GetUnChecked(LSrcPhysical));
+      FBuffer.PutUnchecked(LDstPhysical, FBuffer.GetUnchecked(LSrcPhysical));
     end;
   end;
 end;
@@ -2163,7 +2163,7 @@ procedure TVecDeque.Fill(aIndex: SizeUInt; const aElement: T);
 begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Fill: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  FBuffer.PutUnChecked(GetPhysicalIndex(aIndex), aElement);
+  FBuffer.PutUnchecked(GetPhysicalIndex(aIndex), aElement);
 end;
 
 procedure TVecDeque.Fill(aIndex, aCount: SizeUInt; const aElement: T);
@@ -2171,10 +2171,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Fill: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  FillUnChecked(aIndex, aCount, aElement);
+  FillUnchecked(aIndex, aCount, aElement);
 end;
 
-procedure TVecDeque.FillUnChecked(aIndex, aCount: SizeUInt; const aElement: T);
+procedure TVecDeque.FillUnchecked(aIndex, aCount: SizeUInt; const aElement: T);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -2188,7 +2188,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要填充的范围是连续的
-    FBuffer.FillUnChecked(LStartPhysical, aCount, aElement);
+    FBuffer.FillUnchecked(LStartPhysical, aCount, aElement);
   end
   else
   begin
@@ -2197,11 +2197,11 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 填充第一段：从起始位置到缓冲区末尾
-    FBuffer.FillUnChecked(LStartPhysical, LFirstPartSize, aElement);
+    FBuffer.FillUnchecked(LStartPhysical, LFirstPartSize, aElement);
 
     // 填充第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      FBuffer.FillUnChecked(0, LSecondPartSize, aElement);
+      FBuffer.FillUnchecked(0, LSecondPartSize, aElement);
   end;
 end;
 
@@ -2217,10 +2217,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Zero: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  ZeroUnChecked(aIndex, aCount);
+  ZeroUnchecked(aIndex, aCount);
 end;
 
-procedure TVecDeque.ZeroUnChecked(aIndex, aCount: SizeUInt);
+procedure TVecDeque.ZeroUnchecked(aIndex, aCount: SizeUInt);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -2234,7 +2234,7 @@ begin
   if LStartPhysical <= LEndPhysical then
   begin
     // 情况1：要清零的范围是连续的
-    FBuffer.ZeroUnChecked(LStartPhysical, aCount);
+    FBuffer.ZeroUnchecked(LStartPhysical, aCount);
   end
   else
   begin
@@ -2243,11 +2243,11 @@ begin
     LSecondPartSize := aCount - LFirstPartSize;           // 从缓冲区开头的剩余部分
 
     // 清零第一段：从起始位置到缓冲区末尾
-    FBuffer.ZeroUnChecked(LStartPhysical, LFirstPartSize);
+    FBuffer.ZeroUnchecked(LStartPhysical, LFirstPartSize);
 
     // 清零第二段：从缓冲区开头
     if LSecondPartSize > 0 then
-      FBuffer.ZeroUnChecked(0, LSecondPartSize);
+      FBuffer.ZeroUnchecked(0, LSecondPartSize);
   end;
 end;
 
@@ -2263,10 +2263,10 @@ begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Reverse: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  ReverseUnChecked(aIndex, aCount);
+  ReverseUnchecked(aIndex, aCount);
 end;
 
-procedure TVecDeque.ReverseUnChecked(aIndex, aCount: SizeUInt);
+procedure TVecDeque.ReverseUnchecked(aIndex, aCount: SizeUInt);
 var
   i, j: SizeUInt;
 begin
@@ -2278,7 +2278,7 @@ begin
 
   while i < j do
   begin
-    SwapUnChecked(i, j);
+    SwapUnchecked(i, j);
     Inc(i);
     Dec(j);
   end;
@@ -2305,24 +2305,24 @@ function TVecDeque.ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.ForEach: range out of bounds');
-  Result := ForEachUnChecked(aIndex, aCount, aPredicate, aData);
+  Result := ForEachUnchecked(aIndex, aCount, aPredicate, aData);
 end;
 
 function TVecDeque.ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.ForEach: range out of bounds');
-  Result := ForEachUnChecked(aIndex, aCount, aPredicate, aData);
+  Result := ForEachUnchecked(aIndex, aCount, aPredicate, aData);
 end;
 
 function TVecDeque.ForEach(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.ForEach: range out of bounds');
-  Result := ForEachUnChecked(aIndex, aCount, aPredicate);
+  Result := ForEachUnchecked(aIndex, aCount, aPredicate);
 end;
 
-function TVecDeque.ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean;
+function TVecDeque.ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2331,7 +2331,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := False;
       Exit;
@@ -2340,7 +2340,7 @@ begin
   Result := True;
 end;
 
-function TVecDeque.ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean;
+function TVecDeque.ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2349,7 +2349,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := False;
       Exit;
@@ -2358,7 +2358,7 @@ begin
   Result := True;
 end;
 
-function TVecDeque.ForEachUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean;
+function TVecDeque.ForEachUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2367,7 +2367,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex)) then
     begin
       Result := False;
       Exit;
@@ -2402,31 +2402,31 @@ function TVecDeque.Contains(const aElement: T; aIndex, aCount: SizeUInt): Boolea
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.Contains: range out of bounds');
-  Result := ContainsUnChecked(aElement, aIndex, aCount);
+  Result := ContainsUnchecked(aElement, aIndex, aCount);
 end;
 
 function TVecDeque.Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.Contains: range out of bounds');
-  Result := ContainsUnChecked(aElement, aIndex, aCount, aEquals, aData);
+  Result := ContainsUnchecked(aElement, aIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.Contains: range out of bounds');
-  Result := ContainsUnChecked(aElement, aIndex, aCount, aEquals, aData);
+  Result := ContainsUnchecked(aElement, aIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.Contains(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean;
 begin
   if aIndex + aCount > FCount then
     raise EOutOfRange.Create('TVecDeque.Contains: range out of bounds');
-  Result := ContainsUnChecked(aElement, aIndex, aCount, aEquals);
+  Result := ContainsUnchecked(aElement, aIndex, aCount, aEquals);
 end;
 
-function TVecDeque.ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt): Boolean;
+function TVecDeque.ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt): Boolean;
 var
   i: SizeUInt;
   LCurrentElement: T;
@@ -2436,7 +2436,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   for i := 0 to aCount - 1 do
   begin
-    LCurrentElement := FBuffer.GetUnChecked(LPhysicalIndex);
+    LCurrentElement := FBuffer.GetUnchecked(LPhysicalIndex);
     if CompareMem(@aElement, @LCurrentElement, GetElementSize) then
       Exit(True);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
@@ -2444,7 +2444,7 @@ begin
   Result := False;
 end;
 
-function TVecDeque.ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean;
+function TVecDeque.ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2453,7 +2453,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   for i := 0 to aCount - 1 do
   begin
-    if aEquals(aElement, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aElement, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := True;
       Exit;
@@ -2463,7 +2463,7 @@ begin
   Result := False;
 end;
 
-function TVecDeque.ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean;
+function TVecDeque.ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2472,7 +2472,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if aEquals(aElement, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aElement, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := True;
       Exit;
@@ -2481,7 +2481,7 @@ begin
   Result := False;
 end;
 
-function TVecDeque.ContainsUnChecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean;
+function TVecDeque.ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2490,7 +2490,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   for i := 0 to aCount - 1 do
   begin
-    if aEquals(aElement, FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if aEquals(aElement, FBuffer.GetUnchecked(LPhysicalIndex)) then
       Exit(True);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
@@ -2499,7 +2499,7 @@ end;
 
 { Find methods }
 
-function TVecDeque.FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
+function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2508,7 +2508,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   for i := 0 to aCount - 1 do
   begin
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2518,7 +2518,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
+function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2527,7 +2527,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2536,7 +2536,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
+function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2545,7 +2545,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex)) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2554,7 +2554,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
+function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2563,7 +2563,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2572,7 +2572,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
+function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2581,7 +2581,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2590,7 +2590,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
+function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2599,7 +2599,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex)) then
     begin
       Result := Int64(aIndex + i);
       Exit;
@@ -2720,7 +2720,7 @@ begin
     begin
       LPhysicalI := GetPhysicalIndex(i);
       LPhysicalIPlus1 := GetPhysicalIndex(i + 1);
-      FBuffer.PutUnChecked(LPhysicalI, FBuffer.GetUnChecked(LPhysicalIPlus1));
+      FBuffer.PutUnchecked(LPhysicalI, FBuffer.GetUnchecked(LPhysicalIPlus1));
     end;
   end
   else
@@ -2730,11 +2730,11 @@ begin
     begin
       LPhysicalI := GetPhysicalIndex(i);
       LPhysicalIMinus1 := GetPhysicalIndex(i - 1);
-      FBuffer.PutUnChecked(LPhysicalI, FBuffer.GetUnChecked(LPhysicalIMinus1));
+      FBuffer.PutUnchecked(LPhysicalI, FBuffer.GetUnchecked(LPhysicalIMinus1));
     end;
   end;
 
-  FBuffer.PutUnChecked(GetPhysicalIndex(aIndex), aElement);
+  FBuffer.PutUnchecked(GetPhysicalIndex(aIndex), aElement);
   Inc(FCount);
   Result := aIndex;
 end;
@@ -2747,7 +2747,7 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Remove: index %d out of range [0..%d]', [aIndex, FCount - 1]);
 
-  Result := FBuffer.GetUnChecked(GetPhysicalIndex(aIndex));
+  Result := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
 
   // 如果移除位置在前半部分，向后移动头部
   if aIndex <= FCount div 2 then
@@ -2759,7 +2759,7 @@ begin
     begin
       LPhysicalJ := GetPhysicalIndex(j);
       LPhysicalJMinus1 := GetPhysicalIndex(j - 1);
-      FBuffer.PutUnChecked(LPhysicalJ, FBuffer.GetUnChecked(LPhysicalJMinus1));
+      FBuffer.PutUnchecked(LPhysicalJ, FBuffer.GetUnchecked(LPhysicalJMinus1));
       Dec(j);
     end;
 
@@ -2772,7 +2772,7 @@ begin
     begin
       LPhysicalI := GetPhysicalIndex(i);
       LPhysicalIPlus1 := GetPhysicalIndex(i + 1);
-      FBuffer.PutUnChecked(LPhysicalI, FBuffer.GetUnChecked(LPhysicalIPlus1));
+      FBuffer.PutUnchecked(LPhysicalI, FBuffer.GetUnchecked(LPhysicalIPlus1));
     end;
   end;
 
@@ -2787,13 +2787,13 @@ begin
     raise EOutOfRange.CreateFmt('TVecDeque.RemoveSwap: index %d out of range [0..%d]', [aIndex, FCount - 1]);
 
   LPhysicalIndex := GetPhysicalIndex(aIndex);
-  Result := FBuffer.GetUnChecked(LPhysicalIndex);
+  Result := FBuffer.GetUnchecked(LPhysicalIndex);
 
   // 用最后一个元素替换被移除的元素 - 优化：减少 GetPhysicalIndex 调用
   if aIndex < FCount - 1 then
   begin
     LPhysicalLast := GetPhysicalIndex(FCount - 1);
-    FBuffer.PutUnChecked(LPhysicalIndex, FBuffer.GetUnChecked(LPhysicalLast));
+    FBuffer.PutUnchecked(LPhysicalIndex, FBuffer.GetUnchecked(LPhysicalLast));
   end;
 
   Dec(FCount);
@@ -2866,7 +2866,7 @@ begin
 
   // 双指针设计：先移动head，再放置元素
   FHead := WrapSub(FHead, 1);
-  FBuffer.PutUnChecked(FHead, aElement);
+  FBuffer.PutUnchecked(FHead, aElement);
   Inc(FCount);
 end;
 
@@ -2933,7 +2933,7 @@ var
   begin
     LSrc := PByte(aSrcPtr);
     for j := 0 to aCount - 1 do
-      FBuffer.OverwriteUnChecked(aDstIndex + j, LSrc + (aCount - 1 - j) * LElementSize, 1);
+      FBuffer.OverwriteUnchecked(aDstIndex + j, LSrc + (aCount - 1 - j) * LElementSize, 1);
   end;
 
 begin
@@ -2991,7 +2991,7 @@ begin
     EnsureCapacity(FCount + 1);
 
   // 双指针设计：直接在FTail位置放置元素
-  FBuffer.PutUnChecked(FTail, aElement);
+  FBuffer.PutUnchecked(FTail, aElement);
   FTail := WrapAdd(FTail, 1);
   Inc(FCount);
 end;
@@ -3020,7 +3020,7 @@ begin
   if LElementCount <= LAvailableSpace then
   begin
     // 情况1：有足够空间在尾部连续放置 - 使用块复制
-    FBuffer.OverwriteUnChecked(FTail, LSrcPtr, LElementCount);
+    FBuffer.OverwriteUnchecked(FTail, LSrcPtr, LElementCount);
     FTail := WrapAdd(FTail, LElementCount);
   end
   else
@@ -3030,10 +3030,10 @@ begin
     LSecondPartSize := LElementCount - LFirstPartSize;
 
     // 第一部分：复制到尾部剩余空间
-    FBuffer.OverwriteUnChecked(FTail, LSrcPtr, LFirstPartSize);
+    FBuffer.OverwriteUnchecked(FTail, LSrcPtr, LFirstPartSize);
 
     // 第二部分：复制到缓冲区开头
-    FBuffer.OverwriteUnChecked(0,
+    FBuffer.OverwriteUnchecked(0,
       Pointer(PByte(LSrcPtr) + LFirstPartSize * SizeOf(T)),
       LSecondPartSize);
 
@@ -3073,7 +3073,7 @@ begin
   if aElementCount <= LAvailableSpace then
   begin
     // 情况1：有足够空间在尾部连续放置
-    FBuffer.OverwriteUnChecked(FTail, aSrc, aElementCount);
+    FBuffer.OverwriteUnchecked(FTail, aSrc, aElementCount);
     FTail := WrapAdd(FTail, aElementCount);
   end
   else
@@ -3083,10 +3083,10 @@ begin
     LSecondPartSize := aElementCount - LFirstPartSize;
 
     // 第一部分：放到尾部剩余空间
-    FBuffer.OverwriteUnChecked(FTail, aSrc, LFirstPartSize);
+    FBuffer.OverwriteUnchecked(FTail, aSrc, LFirstPartSize);
 
     // 第二部分：放到缓冲区开头
-    FBuffer.OverwriteUnChecked(0, PByte(aSrc) + LFirstPartSize * GetElementSize, LSecondPartSize);
+    FBuffer.OverwriteUnchecked(0, PByte(aSrc) + LFirstPartSize * GetElementSize, LSecondPartSize);
 
     FTail := LSecondPartSize;
   end;
@@ -3099,9 +3099,9 @@ begin
   if IsEmpty then
     raise EOutOfRange.Create('TVecDeque.PopFront: deque is empty');
 
-  Result := FBuffer.GetUnChecked(FHead);
+  Result := FBuffer.GetUnchecked(FHead);
   if GetIsManagedType then
-    ZeroUnChecked(0, 1);
+    ZeroUnchecked(0, 1);
   FHead := WrapAdd(FHead, 1);
   Dec(FCount);
 end;
@@ -3114,9 +3114,9 @@ begin
     Exit;
   end;
 
-  aElement := FBuffer.GetUnChecked(FHead);
+  aElement := FBuffer.GetUnchecked(FHead);
   if GetIsManagedType then
-    ZeroUnChecked(0, 1);
+    ZeroUnchecked(0, 1);
   FHead := WrapAdd(FHead, 1);
   Dec(FCount);
   Result := True;
@@ -3128,9 +3128,9 @@ begin
     raise EOutOfRange.Create('TVecDeque.PopBack: deque is empty');
 
   FTail := WrapSub(FTail, 1);
-  Result := FBuffer.GetUnChecked(FTail);
+  Result := FBuffer.GetUnchecked(FTail);
   if GetIsManagedType then
-    FBuffer.ZeroUnChecked(FTail, 1);
+    FBuffer.ZeroUnchecked(FTail, 1);
   Dec(FCount);
 end;
 
@@ -3143,9 +3143,9 @@ begin
   end;
 
   FTail := WrapSub(FTail, 1);
-  aElement := FBuffer.GetUnChecked(FTail);
+  aElement := FBuffer.GetUnchecked(FTail);
   if GetIsManagedType then
-    FBuffer.ZeroUnChecked(FTail, 1);
+    FBuffer.ZeroUnchecked(FTail, 1);
   Dec(FCount);
   Result := True;
 end;
@@ -3155,7 +3155,7 @@ begin
   if FCount = 0 then
     raise EOutOfRange.Create('TVecDeque.PeekFront: deque is empty');
 
-  Result := FBuffer.GetUnChecked(FHead);
+  Result := FBuffer.GetUnchecked(FHead);
 end;
 
 function TVecDeque.PeekFront(out aElement: T): Boolean;
@@ -3166,7 +3166,7 @@ begin
     Exit;
   end;
 
-  aElement := FBuffer.GetUnChecked(FHead);
+  aElement := FBuffer.GetUnchecked(FHead);
   Result := True;
 end;
 
@@ -3176,7 +3176,7 @@ begin
     raise EOutOfRange.Create('TVecDeque.PeekBack: deque is empty');
 
   // 修复：FTail指向下一个插入位置，最后一个元素在WrapSub(FTail, 1)
-  Result := FBuffer.GetUnChecked(WrapSub(FTail, 1));
+  Result := FBuffer.GetUnchecked(WrapSub(FTail, 1));
 end;
 
 function TVecDeque.PeekBack(out aElement: T): Boolean;
@@ -3188,7 +3188,7 @@ begin
   end;
 
   // 修复：FTail指向下一个插入位置，最后一个元素在WrapSub(FTail, 1)
-  aElement := FBuffer.GetUnChecked(WrapSub(FTail, 1));
+  aElement := FBuffer.GetUnchecked(WrapSub(FTail, 1));
   Result := True;
 end;
 
@@ -3289,10 +3289,10 @@ begin
     raise EOutOfRange.CreateFmt('TVecDeque.RemoveRange: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
 
-  RemoveRangeUnChecked(aIndex, aCount);
+  RemoveRangeUnchecked(aIndex, aCount);
 end;
 
-procedure TVecDeque.RemoveRangeUnChecked(aIndex, aCount: SizeUInt);
+procedure TVecDeque.RemoveRangeUnchecked(aIndex, aCount: SizeUInt);
 var
   LElementsAfter: SizeUInt;
   LElementsBefore: SizeUInt;
@@ -3303,7 +3303,7 @@ begin
     Exit;
 
   if GetIsManagedType then
-    ZeroUnChecked(aIndex, aCount);
+    ZeroUnchecked(aIndex, aCount);
 
   LElementsBefore := aIndex;
   LElementsAfter := FCount - aIndex - aCount;
@@ -3319,7 +3319,7 @@ begin
       repeat
         LPhysicalJPlusCount := GetPhysicalIndex(j + aCount);
         LPhysicalJ := GetPhysicalIndex(j);
-        FBuffer.PutUnChecked(LPhysicalJPlusCount, FBuffer.GetUnChecked(LPhysicalJ));
+        FBuffer.PutUnchecked(LPhysicalJPlusCount, FBuffer.GetUnchecked(LPhysicalJ));
         if j = 0 then Break;
         Dec(j);
       until False;
@@ -3335,7 +3335,7 @@ begin
     begin
       LPhysicalIMinusCount := GetPhysicalIndex(i - aCount);
       LPhysicalI := GetPhysicalIndex(i);
-      FBuffer.PutUnChecked(LPhysicalIMinusCount, FBuffer.GetUnChecked(LPhysicalI));
+      FBuffer.PutUnchecked(LPhysicalIMinusCount, FBuffer.GetUnchecked(LPhysicalI));
     end;
   end;
 
@@ -3352,7 +3352,7 @@ begin
   if Result > 0 then
   begin
     if GetIsManagedType then
-      ZeroUnChecked(0, Result);
+      ZeroUnchecked(0, Result);
     FHead := WrapAdd(FHead, Result);
     Dec(FCount, Result);
 
@@ -3367,7 +3367,7 @@ begin
   if Result > 0 then
   begin
     if GetIsManagedType then
-      ZeroUnChecked(FCount - Result, Result);
+      ZeroUnchecked(FCount - Result, Result);
     Dec(FCount, Result);
     FTail := WrapSub(FTail, Result);  // ✅ 修复：正确更新 FTail 指针
 
@@ -3392,11 +3392,11 @@ begin
   GetTwoSlices(0, LActualCount, LPtr1, LLen1, LPtr2, LLen2);
 
   // 批量添加到目标容器
-  if LLen1 > 0 then aTarget.AppendUnChecked(LPtr1, LLen1);
-  if LLen2 > 0 then aTarget.AppendUnChecked(LPtr2, LLen2);
+  if LLen1 > 0 then aTarget.AppendUnchecked(LPtr1, LLen1);
+  if LLen2 > 0 then aTarget.AppendUnchecked(LPtr2, LLen2);
 
   if GetIsManagedType then
-    ZeroUnChecked(0, LActualCount);
+    ZeroUnchecked(0, LActualCount);
 
   // 更新状态
   FHead := WrapAdd(FHead, LActualCount);
@@ -3424,11 +3424,11 @@ begin
   GetTwoSlices(LStartIndex, LActualCount, LPtr1, LLen1, LPtr2, LLen2);
 
   // 批量添加到目标容器
-  if LLen1 > 0 then aTarget.AppendUnChecked(LPtr1, LLen1);
-  if LLen2 > 0 then aTarget.AppendUnChecked(LPtr2, LLen2);
+  if LLen1 > 0 then aTarget.AppendUnchecked(LPtr1, LLen1);
+  if LLen2 > 0 then aTarget.AppendUnchecked(LPtr2, LLen2);
 
   if GetIsManagedType then
-    ZeroUnChecked(LStartIndex, LActualCount);
+    ZeroUnchecked(LStartIndex, LActualCount);
 
   // 更新状态
   FTail := WrapSub(FTail, LActualCount);
@@ -3530,7 +3530,7 @@ begin
   for i := aIndex to FCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(i);
-    Result.PushBack(FBuffer.GetUnChecked(LPhysicalIndex));
+    Result.PushBack(FBuffer.GetUnchecked(LPhysicalIndex));
   end;
 
   // 从当前VecDeque中移除这些元素
@@ -3549,20 +3549,20 @@ begin
       begin
         // 在前面合并：将aOther的元素添加到前面
         for i := aOther.GetCount - 1 downto 0 do
-          PushFront(aOther.GetUnChecked(i));
+          PushFront(aOther.GetUnchecked(i));
       end;
     mpBack:
       begin
         // 在后面合并：将aOther的元素添加到后面
         for i := 0 to aOther.GetCount - 1 do
-          PushBack(aOther.GetUnChecked(i));
+          PushBack(aOther.GetUnchecked(i));
       end;
     mpReplace:
       begin
         // 替换：清空当前内容，复制aOther的内容
         Clear;
         for i := 0 to aOther.GetCount - 1 do
-          PushBack(aOther.GetUnChecked(i));
+          PushBack(aOther.GetUnchecked(i));
       end;
   end;
 end;
@@ -3700,7 +3700,7 @@ begin
 end;
 
 // CountOf 系列方法实现
-function TVecDeque.CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TVecDeque.CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -3720,7 +3720,7 @@ begin
     // 情况1：要搜索的范围是连续的 - 优化内存访问
     for i := LStartPhysical to LStartPhysical + aCount - 1 do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
         Inc(Result);
     end;
   end
@@ -3733,20 +3733,20 @@ begin
     // 搜索第一段：从起始位置到缓冲区末尾
     for i := LStartPhysical to FBuffer.GetCount - 1 do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
         Inc(Result);
     end;
 
     // 搜索第二段：从缓冲区开头
     for i := 0 to LSecondPartSize - 1 do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
         Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
+function TVecDeque.CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3756,12 +3756,12 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
       Inc(Result);
   end;
 end;
 
-function TVecDeque.CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
+function TVecDeque.CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3771,12 +3771,12 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
       Inc(Result);
   end;
 end;
 
-function TVecDeque.CountOfUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
+function TVecDeque.CountOfUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3786,13 +3786,13 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aValue, FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if aEquals(aValue, FBuffer.GetUnchecked(LPhysicalIndex)) then
       Inc(Result);
   end;
 end;
 
 // CountIf 系列方法实现
-function TVecDeque.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+function TVecDeque.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3805,12 +3805,12 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
       Inc(Result);
   end;
 end;
 
-function TVecDeque.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+function TVecDeque.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3823,12 +3823,12 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
       Inc(Result);
   end;
 end;
 
-function TVecDeque.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+function TVecDeque.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3841,13 +3841,13 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex)) then
       Inc(Result);
   end;
 end;
 
 // Replace 系列方法实现
-function TVecDeque.ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TVecDeque.ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 var
   i: SizeUInt;
 begin
@@ -3857,15 +3857,15 @@ begin
 
   for i := 0 to aCount - 1 do
   begin
-    if CompareMem(@aOldValue, GetPtrUnChecked(aStartIndex + i), GetElementSize) then
+    if CompareMem(@aOldValue, GetPtrUnchecked(aStartIndex + i), GetElementSize) then
     begin
-      PutUnChecked(aStartIndex + i, aNewValue);
+      PutUnchecked(aStartIndex + i, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
+function TVecDeque.ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3878,15 +3878,15 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aOldValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aOldValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
-      FBuffer.PutUnChecked(LPhysicalIndex, aNewValue);
+      FBuffer.PutUnchecked(LPhysicalIndex, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
+function TVecDeque.ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3899,15 +3899,15 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aOldValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aOldValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
-      FBuffer.PutUnChecked(LPhysicalIndex, aNewValue);
+      FBuffer.PutUnchecked(LPhysicalIndex, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.ReplaceUnChecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
+function TVecDeque.ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3920,16 +3920,16 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aOldValue, FBuffer.GetUnChecked(LPhysicalIndex)) then
+    if aEquals(aOldValue, FBuffer.GetUnchecked(LPhysicalIndex)) then
     begin
-      FBuffer.PutUnChecked(LPhysicalIndex, aNewValue);
+      FBuffer.PutUnchecked(LPhysicalIndex, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
 // ReplaceIF 系列方法实现
-function TVecDeque.ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3942,15 +3942,15 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
-      FBuffer.PutUnChecked(LPhysicalIndex, aNewValue);
+      FBuffer.PutUnchecked(LPhysicalIndex, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
 begin
@@ -3960,15 +3960,15 @@ begin
 
   for i := 0 to aCount - 1 do
   begin
-    if aPredicate(GetUnChecked(aStartIndex + i), aData) then
+    if aPredicate(GetUnchecked(aStartIndex + i), aData) then
     begin
-      PutUnChecked(aStartIndex + i, aNewValue);
+      PutUnchecked(aStartIndex + i, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
-function TVecDeque.ReplaceIFUnChecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 var
   i: SizeUInt;
 begin
@@ -3978,16 +3978,16 @@ begin
 
   for i := 0 to aCount - 1 do
   begin
-    if aPredicate(GetUnChecked(aStartIndex + i)) then
+    if aPredicate(GetUnchecked(aStartIndex + i)) then
     begin
-      PutUnChecked(aStartIndex + i, aNewValue);
+      PutUnchecked(aStartIndex + i, aNewValue);
       Inc(Result);
     end;
   end;
 end;
 
 // IsSorted 系列方法实现
-function TVecDeque.IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean;
+function TVecDeque.IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean;
 var
   i: SizeUInt;
   LPhysical1, LPhysical2: SizeUInt;
@@ -4000,13 +4000,13 @@ begin
   begin
     LPhysical1 := GetPhysicalIndex(aStartIndex + i - 1);
     LPhysical2 := GetPhysicalIndex(aStartIndex + i);
-    if FInternalComparer(FBuffer.GetUnChecked(LPhysical1), FBuffer.GetUnChecked(LPhysical2)) > 0 then
+    if FInternalComparer(FBuffer.GetUnchecked(LPhysical1), FBuffer.GetUnchecked(LPhysical2)) > 0 then
       Exit(False);
   end;
   Result := True;
 end;
 
-function TVecDeque.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): Boolean;
+function TVecDeque.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): Boolean;
 var
   i: SizeUInt;
   LPhysical1, LPhysical2: SizeUInt;
@@ -4019,13 +4019,13 @@ begin
   begin
     LPhysical1 := GetPhysicalIndex(aStartIndex + i - 1);
     LPhysical2 := GetPhysicalIndex(aStartIndex + i);
-    if aComparer(FBuffer.GetUnChecked(LPhysical1), FBuffer.GetUnChecked(LPhysical2), aData) > 0 then
+    if aComparer(FBuffer.GetUnchecked(LPhysical1), FBuffer.GetUnchecked(LPhysical2), aData) > 0 then
       Exit(False);
   end;
   Result := True;
 end;
 
-function TVecDeque.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
+function TVecDeque.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
 var
   i: SizeUInt;
 begin
@@ -4034,13 +4034,13 @@ begin
 
   for i := 1 to aCount - 1 do
   begin
-    if aComparer(GetUnChecked(aStartIndex + i - 1), GetUnChecked(aStartIndex + i), aData) > 0 then
+    if aComparer(GetUnchecked(aStartIndex + i - 1), GetUnchecked(aStartIndex + i), aData) > 0 then
       Exit(False);
   end;
   Result := True;
 end;
 
-function TVecDeque.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
+function TVecDeque.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
 var
   i: SizeUInt;
 begin
@@ -4049,14 +4049,14 @@ begin
 
   for i := 1 to aCount - 1 do
   begin
-    if aComparer(GetUnChecked(aStartIndex + i - 1), GetUnChecked(aStartIndex + i)) > 0 then
+    if aComparer(GetUnchecked(aStartIndex + i - 1), GetUnchecked(aStartIndex + i)) > 0 then
       Exit(False);
   end;
   Result := True;
 end;
 
 // BinarySearch 系列方法实现
-function TVecDeque.BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVecDeque.BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4073,7 +4073,7 @@ begin
   begin
     Mid := Left + (Right - Left) div 2;
     LPhysicalMid := GetPhysicalIndex(Mid);
-    CompareResult := FInternalComparer(FBuffer.GetUnChecked(LPhysicalMid), aValue);
+    CompareResult := FInternalComparer(FBuffer.GetUnchecked(LPhysicalMid), aValue);
 
     if CompareResult = 0 then
       Exit(SizeInt(Mid))
@@ -4088,7 +4088,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
+function TVecDeque.BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4102,7 +4102,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue, aData);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue, aData);
 
     if CompareResult = 0 then
       Exit(SizeInt(Mid))
@@ -4119,7 +4119,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
+function TVecDeque.BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4133,7 +4133,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue, aData);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue, aData);
 
     if CompareResult = 0 then
       Exit(SizeInt(Mid))
@@ -4150,7 +4150,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.BinarySearchUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
+function TVecDeque.BinarySearchUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4164,7 +4164,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue);
 
     if CompareResult = 0 then
       Exit(SizeInt(Mid))
@@ -4182,7 +4182,7 @@ begin
 end;
 
 // BinarySearchInsert 系列方法实现
-function TVecDeque.BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVecDeque.BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4199,7 +4199,7 @@ begin
   begin
     Mid := Left + (Right - Left) div 2;
     LPhysicalMid := GetPhysicalIndex(Mid);
-    CompareResult := FInternalComparer(FBuffer.GetUnChecked(LPhysicalMid), aValue);
+    CompareResult := FInternalComparer(FBuffer.GetUnchecked(LPhysicalMid), aValue);
 
     if CompareResult < 0 then
       Left := Mid + 1
@@ -4209,7 +4209,7 @@ begin
   Result := SizeInt(Left);
 end;
 
-function TVecDeque.BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
+function TVecDeque.BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4223,7 +4223,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue, aData);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue, aData);
 
     if CompareResult < 0 then
       Left := Mid + 1
@@ -4238,7 +4238,7 @@ begin
   Result := SizeInt(Left);
 end;
 
-function TVecDeque.BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
+function TVecDeque.BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4252,7 +4252,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue, aData);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue, aData);
 
     if CompareResult < 0 then
       Left := Mid + 1
@@ -4267,7 +4267,7 @@ begin
   Result := SizeInt(Left);
 end;
 
-function TVecDeque.BinarySearchInsertUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
+function TVecDeque.BinarySearchInsertUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
 var
   Left, Right, Mid: SizeUInt;
   CompareResult: Integer;
@@ -4281,7 +4281,7 @@ begin
   while Left <= Right do
   begin
     Mid := Left + (Right - Left) div 2;
-    CompareResult := aComparer(GetUnChecked(Mid), aValue);
+    CompareResult := aComparer(GetUnchecked(Mid), aValue);
 
     if CompareResult < 0 then
       Left := Mid + 1
@@ -4297,7 +4297,7 @@ begin
 end;
 
 // Shuffle 系列方法实现
-procedure TVecDeque.ShuffleUnChecked(aStartIndex, aCount: SizeUInt);
+procedure TVecDeque.ShuffleUnchecked(aStartIndex, aCount: SizeUInt);
 var
   i, j: SizeUInt;
 begin
@@ -4308,11 +4308,11 @@ begin
   for i := aCount - 1 downto 1 do
   begin
     j := System.Random(Integer(i + 1));
-    SwapUnChecked(aStartIndex + i, aStartIndex + j);
+    SwapUnchecked(aStartIndex + i, aStartIndex + j);
   end;
 end;
 
-procedure TVecDeque.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
+procedure TVecDeque.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
 var
   i, j: SizeUInt;
 begin
@@ -4323,11 +4323,11 @@ begin
   for i := aCount - 1 downto 1 do
   begin
     j := aRandomGenerator(i + 1, aData);
-    SwapUnChecked(aStartIndex + i, aStartIndex + j);
+    SwapUnchecked(aStartIndex + i, aStartIndex + j);
   end;
 end;
 
-procedure TVecDeque.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
+procedure TVecDeque.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
 var
   i, j: SizeUInt;
 begin
@@ -4338,11 +4338,11 @@ begin
   for i := aCount - 1 downto 1 do
   begin
     j := aRandomGenerator(i + 1, aData);
-    SwapUnChecked(aStartIndex + i, aStartIndex + j);
+    SwapUnchecked(aStartIndex + i, aStartIndex + j);
   end;
 end;
 
-procedure TVecDeque.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
+procedure TVecDeque.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
 var
   i, j: SizeUInt;
 begin
@@ -4353,7 +4353,7 @@ begin
   for i := aCount - 1 downto 1 do
   begin
     j := aRandomGenerator(i + 1);
-    SwapUnChecked(aStartIndex + i, aStartIndex + j);
+    SwapUnchecked(aStartIndex + i, aStartIndex + j);
   end;
 end;
 
@@ -4369,10 +4369,10 @@ begin
     raise EOutOfRange.CreateFmt('TVecDeque.Read: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, GetCount - 1]);
 
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
 end;
 
-procedure TVecDeque.ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVecDeque.ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 var
   i: SizeUInt;
 begin
@@ -4383,7 +4383,7 @@ begin
   // 复制元素
   for i := 0 to aCount - 1 do
   begin
-    aDst[i] := GetUnChecked(aIndex + i);
+    aDst[i] := GetUnchecked(aIndex + i);
   end;
 end;
 
@@ -4455,7 +4455,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := FindUnChecked(aValue, aStartIndex, aCount);
+  Result := FindUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TVecDeque.Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
@@ -4482,7 +4482,7 @@ begin
     // 全范围搜索：返回第一次出现
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i), aData) then
+      if aEquals(aValue, GetUnchecked(i), aData) then
       begin
         Result := SizeInt(i);
         Exit;
@@ -4496,7 +4496,7 @@ begin
     LMaxIndex := -1;
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i), aData) then
+      if aEquals(aValue, GetUnchecked(i), aData) then
         LMaxIndex := i;
     end;
     Result := LMaxIndex;
@@ -4527,7 +4527,7 @@ begin
     // 全范围搜索：返回第一次出现
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i), aData) then
+      if aEquals(aValue, GetUnchecked(i), aData) then
       begin
         Result := SizeInt(i);
         Exit;
@@ -4541,7 +4541,7 @@ begin
     LMaxIndex := -1;
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i), aData) then
+      if aEquals(aValue, GetUnchecked(i), aData) then
         LMaxIndex := i;
     end;
     Result := LMaxIndex;
@@ -4572,7 +4572,7 @@ begin
     // 全范围搜索：返回第一次出现
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i)) then
+      if aEquals(aValue, GetUnchecked(i)) then
       begin
         Result := SizeInt(i);
         Exit;
@@ -4586,21 +4586,21 @@ begin
     LMaxIndex := -1;
     for i := aStartIndex to aStartIndex + aCount - 1 do
     begin
-      if aEquals(aValue, GetUnChecked(i)) then
+      if aEquals(aValue, GetUnchecked(i)) then
         LMaxIndex := i;
     end;
     Result := LMaxIndex;
   end;
 end;
 
-function TVecDeque.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVecDeque.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 var
   i: SizeUInt;
 begin
   // 使用默认的内存比较
   for i := 0 to aCount - 1 do
   begin
-    if CompareMem(@aValue, GetPtrUnChecked(aStartIndex + i), GetElementSize) then
+    if CompareMem(@aValue, GetPtrUnchecked(aStartIndex + i), GetElementSize) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4609,7 +4609,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4618,7 +4618,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4627,7 +4627,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4636,7 +4636,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aEquals(aValue, FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aEquals(aValue, FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4645,13 +4645,13 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
+function TVecDeque.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
   for i := 0 to aCount - 1 do
   begin
-    if aEquals(aValue, GetUnChecked(aStartIndex + i)) then
+    if aEquals(aValue, GetUnchecked(aStartIndex + i)) then
     begin
       Result := SizeInt(aStartIndex + i);  // 返回逻辑索引
       Exit;
@@ -4660,7 +4660,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVecDeque.FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4671,7 +4671,7 @@ begin
   // 修复：使用安全的循环避免无符号整数下溢
   i := aCount - 1;
   repeat
-    if CompareMem(@aValue, GetPtrUnChecked(aStartIndex + i), GetElementSize) then
+    if CompareMem(@aValue, GetPtrUnchecked(aStartIndex + i), GetElementSize) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4683,7 +4683,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4694,7 +4694,7 @@ begin
   // 修复：使用安全的循环避免无符号整数下溢
   i := aCount - 1;
   repeat
-    if aEquals(aValue, GetUnChecked(aStartIndex + i), aData) then
+    if aEquals(aValue, GetUnchecked(aStartIndex + i), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4706,7 +4706,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4717,7 +4717,7 @@ begin
   // 修复：使用安全的循环避免无符号整数下溢
   i := aCount - 1;
   repeat
-    if aEquals(aValue, GetUnChecked(aStartIndex + i), aData) then
+    if aEquals(aValue, GetUnchecked(aStartIndex + i), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4729,7 +4729,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
+function TVecDeque.FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4740,7 +4740,7 @@ begin
   // 修复：使用安全的循环避免无符号整数下溢
   i := aCount - 1;
   repeat
-    if aEquals(aValue, GetUnChecked(aStartIndex + i)) then
+    if aEquals(aValue, GetUnchecked(aStartIndex + i)) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4752,7 +4752,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4764,7 +4764,7 @@ begin
   i := aCount - 1;
   repeat
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4775,7 +4775,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4784,7 +4784,7 @@ begin
 
   i := aCount - 1;
   repeat
-    if aPredicate(GetUnChecked(aStartIndex + i), aData) then
+    if aPredicate(GetUnchecked(aStartIndex + i), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4795,7 +4795,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4804,7 +4804,7 @@ begin
 
   i := aCount - 1;
   repeat
-    if aPredicate(GetUnChecked(aStartIndex + i)) then
+    if aPredicate(GetUnchecked(aStartIndex + i)) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4815,7 +4815,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4826,7 +4826,7 @@ begin
   i := aCount - 1;
   repeat
     LPhysicalIndex := GetPhysicalIndex(aStartIndex + i);
-    if not aPredicate(FBuffer.GetUnChecked(LPhysicalIndex), aData) then
+    if not aPredicate(FBuffer.GetUnchecked(LPhysicalIndex), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4837,7 +4837,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4846,7 +4846,7 @@ begin
 
   i := aCount - 1;
   repeat
-    if not aPredicate(GetUnChecked(aStartIndex + i), aData) then
+    if not aPredicate(GetUnchecked(aStartIndex + i), aData) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4857,7 +4857,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4866,7 +4866,7 @@ begin
 
   i := aCount - 1;
   repeat
-    if not aPredicate(GetUnChecked(aStartIndex + i)) then
+    if not aPredicate(GetUnchecked(aStartIndex + i)) then
     begin
       Result := SizeInt(aStartIndex + i);
       Exit;
@@ -4913,7 +4913,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnChecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
 end;
 
 procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
@@ -4927,7 +4927,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnChecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
 end;
 
 procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
@@ -4941,7 +4941,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnChecked(aNewValue, aStartIndex, aCount, aPredicate);
+  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate);
 end;
 
 // IsSorted 系列方法实现
@@ -4988,7 +4988,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := IsSortedUnChecked(aStartIndex, aCount);
+  Result := IsSortedUnchecked(aStartIndex, aCount);
 end;
 
 function TVecDeque.IsSorted(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): Boolean;
@@ -5002,7 +5002,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.IsSorted(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): Boolean;
@@ -5016,7 +5016,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.IsSorted(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): Boolean;
@@ -5030,7 +5030,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer);
 end;
 
 // FindIF 系列方法实现
@@ -5086,7 +5086,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
@@ -5103,7 +5103,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
@@ -5120,7 +5120,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnChecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate);
   Result := SizeInt(TempResult);
 end;
 
@@ -5177,7 +5177,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
@@ -5194,7 +5194,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
@@ -5211,7 +5211,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate);
   Result := SizeInt(TempResult);
 end;
 
@@ -5291,7 +5291,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := FindLastUnChecked(aValue, aStartIndex, aCount);
+  Result := FindLastUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TVecDeque.FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeInt;
@@ -5305,7 +5305,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := FindLastUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FindLastUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
@@ -5319,7 +5319,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := FindLastUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FindLastUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
@@ -5333,7 +5333,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := FindLastUnChecked(aValue, aStartIndex, aCount, aEquals);
+  Result := FindLastUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 
 // FindLastIF 系列方法实现
@@ -5383,7 +5383,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
@@ -5397,7 +5397,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
@@ -5411,7 +5411,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnChecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate);
   Result := TempResult;
 end;
 
@@ -5462,7 +5462,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
@@ -5476,7 +5476,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
@@ -5490,7 +5490,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate);
   Result := TempResult;
 end;
 
@@ -5538,7 +5538,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountOfUnChecked(aValue, aStartIndex, aCount);
+  Result := CountOfUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TVecDeque.CountOf(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer): SizeUInt;
@@ -5552,7 +5552,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountOfUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := CountOfUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.CountOf(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
@@ -5566,7 +5566,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountOfUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := CountOfUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TVecDeque.CountOf(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
@@ -5580,7 +5580,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountOfUnChecked(aValue, aStartIndex, aCount, aEquals);
+  Result := CountOfUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 
 // CountIf 系列方法实现
@@ -5619,7 +5619,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TVecDeque.CountIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
@@ -5633,7 +5633,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TVecDeque.CountIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
@@ -5647,7 +5647,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate);
 end;
 
 // Replace 系列方法实现
@@ -5694,7 +5694,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceUnChecked(aOldValue, aNewValue, aStartIndex, aCount);
+  ReplaceUnchecked(aOldValue, aNewValue, aStartIndex, aCount);
 end;
 
 procedure TVecDeque.Replace(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsFunc; aData: Pointer);
@@ -5708,7 +5708,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceUnChecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals, aData);
+  ReplaceUnchecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 procedure TVecDeque.Replace(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer);
@@ -5722,7 +5722,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceUnChecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals, aData);
+  ReplaceUnchecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 procedure TVecDeque.Replace(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc);
@@ -5736,7 +5736,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceUnChecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals);
+  ReplaceUnchecked(aOldValue, aNewValue, aStartIndex, aCount, aEquals);
 end;
 
 // 基础方法（无参数版本）实现
@@ -5763,19 +5763,19 @@ end;
 function TVecDeque.CountIF(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
-  Result := CountIfUnChecked(0, FCount, aPredicate, aData);
+  Result := CountIfUnchecked(0, FCount, aPredicate, aData);
 end;
 
 function TVecDeque.CountIF(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
-  Result := CountIfUnChecked(0, FCount, aPredicate, aData);
+  Result := CountIfUnchecked(0, FCount, aPredicate, aData);
 end;
 
 function TVecDeque.CountIF(aPredicate: TPredicateRefFunc): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
-  Result := CountIfUnChecked(0, FCount, aPredicate);
+  Result := CountIfUnchecked(0, FCount, aPredicate);
 end;
 
 procedure TVecDeque.Replace(const aOldValue, aNewValue: T);
@@ -5839,49 +5839,49 @@ end;
 function TVecDeque.BinarySearch(const aValue: T): SizeInt;
 begin
   { 使用内部默认比较器进行二分查找 }
-  Result := BinarySearchUnChecked(aValue, 0, FCount);
+  Result := BinarySearchUnchecked(aValue, 0, FCount);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aComparer: TCompareFunc; aData: Pointer): SizeInt;
 begin
   { 二分查找 }
-  Result := BinarySearchUnChecked(aValue, 0, FCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, 0, FCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aComparer: TCompareMethod; aData: Pointer): SizeInt;
 begin
   { 二分查找 }
-  Result := BinarySearchUnChecked(aValue, 0, FCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, 0, FCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aComparer: TCompareRefFunc): SizeInt;
 begin
   { 二分查找 }
-  Result := BinarySearchUnChecked(aValue, 0, FCount, aComparer);
+  Result := BinarySearchUnchecked(aValue, 0, FCount, aComparer);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T): SizeInt;
 begin
   { 使用内部默认比较器进行二分查找插入位置 }
-  Result := BinarySearchInsertUnChecked(aValue, 0, FCount);
+  Result := BinarySearchInsertUnchecked(aValue, 0, FCount);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aComparer: TCompareFunc; aData: Pointer): SizeInt;
 begin
   { 二分查找插入位置 }
-  Result := BinarySearchInsertUnChecked(aValue, 0, FCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, 0, FCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aComparer: TCompareMethod; aData: Pointer): SizeInt;
 begin
   { 二分查找插入位置 }
-  Result := BinarySearchInsertUnChecked(aValue, 0, FCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, 0, FCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aComparer: TCompareRefFunc): SizeInt;
 begin
   { 二分查找插入位置 }
-  Result := BinarySearchInsertUnChecked(aValue, 0, FCount, aComparer);
+  Result := BinarySearchInsertUnchecked(aValue, 0, FCount, aComparer);
 end;
 
 procedure TVecDeque.Shuffle;
@@ -5914,10 +5914,10 @@ begin
     LPhysicalI := GetPhysicalIndex(i);
     LPhysicalJ := GetPhysicalIndex(j);
 
-    LElement1 := FBuffer.GetUnChecked(LPhysicalI);
-    LElement2 := FBuffer.GetUnChecked(LPhysicalJ);
-    FBuffer.PutUnChecked(LPhysicalI, LElement2);
-    FBuffer.PutUnChecked(LPhysicalJ, LElement1);
+    LElement1 := FBuffer.GetUnchecked(LPhysicalI);
+    LElement2 := FBuffer.GetUnchecked(LPhysicalJ);
+    FBuffer.PutUnchecked(LPhysicalI, LElement2);
+    FBuffer.PutUnchecked(LPhysicalJ, LElement1);
   end;
 end;
 
@@ -5940,10 +5940,10 @@ begin
     LPhysicalI := GetPhysicalIndex(i);
     LPhysicalJ := GetPhysicalIndex(j);
 
-    LElement1 := FBuffer.GetUnChecked(LPhysicalI);
-    LElement2 := FBuffer.GetUnChecked(LPhysicalJ);
-    FBuffer.PutUnChecked(LPhysicalI, LElement2);
-    FBuffer.PutUnChecked(LPhysicalJ, LElement1);
+    LElement1 := FBuffer.GetUnchecked(LPhysicalI);
+    LElement2 := FBuffer.GetUnchecked(LPhysicalJ);
+    FBuffer.PutUnchecked(LPhysicalI, LElement2);
+    FBuffer.PutUnchecked(LPhysicalJ, LElement1);
   end;
 end;
 
@@ -5966,10 +5966,10 @@ begin
     LPhysicalI := GetPhysicalIndex(i);
     LPhysicalJ := GetPhysicalIndex(j);
 
-    LElement1 := FBuffer.GetUnChecked(LPhysicalI);
-    LElement2 := FBuffer.GetUnChecked(LPhysicalJ);
-    FBuffer.PutUnChecked(LPhysicalI, LElement2);
-    FBuffer.PutUnChecked(LPhysicalJ, LElement1);
+    LElement1 := FBuffer.GetUnchecked(LPhysicalI);
+    LElement2 := FBuffer.GetUnchecked(LPhysicalJ);
+    FBuffer.PutUnchecked(LPhysicalI, LElement2);
+    FBuffer.PutUnchecked(LPhysicalJ, LElement1);
   end;
 end;
 
@@ -6093,8 +6093,8 @@ begin
   SortWith(aStartIndex, aCount, saIntroSort, aComparer);
 end;
 
-// SortUnChecked 系列方法实现
-procedure TVecDeque.SortUnChecked(aStartIndex, aCount: SizeUInt);
+// SortUnchecked 系列方法实现
+procedure TVecDeque.SortUnchecked(aStartIndex, aCount: SizeUInt);
 begin
   { 无边界检查的排序，使用默认比较器 }
   if aCount <= 1 then
@@ -6102,7 +6102,7 @@ begin
   DoQuickSort(aStartIndex, aStartIndex + aCount - 1, nil, nil);
 end;
 
-procedure TVecDeque.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
+procedure TVecDeque.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
 begin
   { 无边界检查的排序，使用自定义比较器 }
   if aCount <= 1 then
@@ -6110,7 +6110,7 @@ begin
   DoQuickSort(aStartIndex, aStartIndex + aCount - 1, aComparer, aData);
 end;
 
-procedure TVecDeque.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer);
+procedure TVecDeque.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer);
 var
   LContext: TCompareMethodContext;
 begin
@@ -6122,7 +6122,7 @@ begin
   DoQuickSort(aStartIndex, aStartIndex + aCount - 1, @CompareMethodAdapter, @LContext);
 end;
 
-procedure TVecDeque.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc);
+procedure TVecDeque.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc);
 begin
   { 无边界检查的排序，使用自定义比较函数引用 }
   if aCount <= 1 then
@@ -6169,11 +6169,11 @@ begin
 
   // 批量填充第一段：从当前尾部到缓冲区末尾
   if LFirstPartSize > 0 then
-    FBuffer.FillUnChecked(LStartTail, LFirstPartSize, aValue);
+    FBuffer.FillUnchecked(LStartTail, LFirstPartSize, aValue);
 
   // 批量填充第二段：从缓冲区开头
   if LSecondPartSize > 0 then
-    FBuffer.FillUnChecked(0, LSecondPartSize, aValue);
+    FBuffer.FillUnchecked(0, LSecondPartSize, aValue);
 
   // 更新状态
   FTail := WrapAdd(FTail, aCount);
@@ -6211,10 +6211,10 @@ begin
     LPhysical1 := GetPhysicalIndex(aIndex1 + i);
     LPhysical2 := GetPhysicalIndex(aIndex2 + i);
 
-    LElement1 := FBuffer.GetUnChecked(LPhysical1);
-    LElement2 := FBuffer.GetUnChecked(LPhysical2);
-    FBuffer.PutUnChecked(LPhysical1, LElement2);
-    FBuffer.PutUnChecked(LPhysical2, LElement1);
+    LElement1 := FBuffer.GetUnchecked(LPhysical1);
+    LElement2 := FBuffer.GetUnchecked(LPhysical2);
+    FBuffer.PutUnchecked(LPhysical1, LElement2);
+    FBuffer.PutUnchecked(LPhysical2, LElement1);
   end;
 end;
 
@@ -6241,7 +6241,7 @@ begin
     // 情况1：数据是连续的 - 优化内存访问
     for i := FHead to LTailIndex do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
       begin
         Result := SizeInt(i - FHead);
         Exit;
@@ -6256,7 +6256,7 @@ begin
     // 搜索第一段：从FHead到缓冲区末尾
     for i := FHead to FBuffer.GetCount - 1 do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
       begin
         Result := SizeInt(i - FHead);
         Exit;
@@ -6266,7 +6266,7 @@ begin
     // 搜索第二段：从缓冲区开头到FTail
     for i := 0 to FTail - 1 do
     begin
-      if CompareMem(@aValue, FBuffer.GetPtrUnChecked(i), LElementSize) then
+      if CompareMem(@aValue, FBuffer.GetPtrUnchecked(i), LElementSize) then
       begin
         Result := SizeInt(LFirstPartSize + i);
         Exit;
@@ -6289,7 +6289,7 @@ begin
   i := FCount;
   repeat
     Dec(i);
-    LElement := FBuffer.GetUnChecked(GetPhysicalIndex(i));
+    LElement := FBuffer.GetUnchecked(GetPhysicalIndex(i));
     if CompareMem(@LElement, @aValue, GetElementSize) then
     begin
       Result := SizeInt(i);
@@ -6460,7 +6460,7 @@ begin
   for i := 0 to High(aArray) do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    FBuffer.PutUnChecked(LPhysicalIndex, aArray[i]);
+    FBuffer.PutUnchecked(LPhysicalIndex, aArray[i]);
   end;
 
   Inc(FCount, LInsertCount);
@@ -6509,7 +6509,7 @@ begin
   while (LCopied < LInsertCount) and LIter.MoveNext do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + LCopied);
-    FBuffer.PutUnChecked(LPhysicalIndex, PElement(LIter.GetCurrent)^);
+    FBuffer.PutUnchecked(LPhysicalIndex, PElement(LIter.GetCurrent)^);
     Inc(LCopied);
   end;
 
@@ -6546,7 +6546,7 @@ begin
     FCount := aIndex + aCount;
 
   // 复用覆盖写入逻辑（环形两段写）
-  OverwriteUnChecked(aIndex, aPtr, aCount);
+  OverwriteUnchecked(aIndex, aPtr, aCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aArray: array of T);
@@ -6563,7 +6563,7 @@ begin
   if aIndex + LCount > FCount then
     FCount := aIndex + LCount;
 
-  OverwriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
+  OverwriteUnchecked(aIndex, @aArray[Low(aArray)], LCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aCollection: TCollection);
@@ -6582,7 +6582,7 @@ begin
   if aIndex + LCount > FCount then
     FCount := aIndex + LCount;
 
-  OverwriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnchecked(aIndex, aCollection, LCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aCollection: TCollection; aStartIndex: SizeUInt);
@@ -6617,7 +6617,7 @@ begin
   LCopied := 0;
   while (LCopied < LCount) and LIter.MoveNext do
   begin
-    FBuffer.PutUnChecked(GetPhysicalIndex(aIndex + LCopied), PElement(LIter.GetCurrent)^);
+    FBuffer.PutUnchecked(GetPhysicalIndex(aIndex + LCopied), PElement(LIter.GetCurrent)^);
     Inc(LCopied);
   end;
 
@@ -6634,7 +6634,7 @@ begin
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   if aCount = 0 then
     Exit;
-  OverwriteUnChecked(aIndex, aPtr, aCount);
+  OverwriteUnchecked(aIndex, aPtr, aCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aArray: array of T);
@@ -6647,7 +6647,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverwriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
+  OverwriteUnchecked(aIndex, @aArray[Low(aArray)], LCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aCollection: TCollection);
@@ -6662,7 +6662,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverwriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnchecked(aIndex, aCollection, LCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aCollection: TCollection; aStartIndex: SizeUInt);
@@ -6680,7 +6680,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverwriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnchecked(aIndex, aCollection, LCount);
 end;
 
 // Push 系列方法实现
@@ -6732,7 +6732,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    Move(FBuffer.GetPtrUnChecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
+    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
     Inc(LPtr, SizeOf(T));
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
@@ -6767,7 +6767,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    aArray[i] := FBuffer.GetUnChecked(LPhysicalIndex);
+    aArray[i] := FBuffer.GetUnchecked(LPhysicalIndex);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
@@ -6785,7 +6785,7 @@ begin
     Exit;
   end;
 
-  aElement := FBuffer.GetUnChecked(GetPhysicalIndex(FCount - 1));
+  aElement := FBuffer.GetUnchecked(GetPhysicalIndex(FCount - 1));
   Dec(FCount);
   Result := True;
 end;
@@ -6815,7 +6815,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    Move(FBuffer.GetPtrUnChecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
+    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
     Inc(LPtr, SizeOf(T));
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
@@ -6848,7 +6848,7 @@ begin
   LPhysicalIndex := GetPhysicalIndex(FCount - aCount);
   for i := 0 to aCount - 1 do
   begin
-    aArray[i] := FBuffer.GetUnChecked(LPhysicalIndex);
+    aArray[i] := FBuffer.GetUnchecked(LPhysicalIndex);
     LPhysicalIndex := WrapAdd(LPhysicalIndex, 1);
   end;
 
@@ -6864,7 +6864,7 @@ begin
     Exit;
   end;
 
-  aElement := FBuffer.GetUnChecked(FHead);
+  aElement := FBuffer.GetUnchecked(FHead);
   Result := True;
 end;
 
@@ -6995,8 +6995,8 @@ begin
     LSrcPhysical := GetPhysicalIndex(FCount - 1 - i);
     LDstPhysical := GetPhysicalIndex(aIndex + i);
 
-    LElement := FBuffer.GetUnChecked(LSrcPhysical);
-    FBuffer.PutUnChecked(LDstPhysical, LElement);
+    LElement := FBuffer.GetUnchecked(LSrcPhysical);
+    FBuffer.PutUnchecked(LDstPhysical, LElement);
   end;
 
   // 如果是托管类型，清理末尾元素
@@ -7073,7 +7073,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    aArray[i] := FBuffer.GetUnChecked(LPhysicalIndex);
+    aArray[i] := FBuffer.GetUnchecked(LPhysicalIndex);
   end;
 
   Delete(aIndex, aCount);
@@ -7158,7 +7158,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    Move(FBuffer.GetPtrUnChecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
+    Move(FBuffer.GetPtrUnchecked(LPhysicalIndex)^, LPtr^, SizeOf(T));
     Inc(LPtr, SizeOf(T));
   end;
 
@@ -7188,7 +7188,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    aArray[i] := FBuffer.GetUnChecked(LPhysicalIndex);
+    aArray[i] := FBuffer.GetUnchecked(LPhysicalIndex);
   end;
 
   DeleteSwap(aIndex, aCount);
@@ -7198,7 +7198,7 @@ procedure TVecDeque.RemoveSwap(aIndex: SizeUInt; var aElement: T);
 begin
   if aIndex >= FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.RemoveSwap: index %d out of range [0..%d]', [aIndex, FCount - 1]);
-  aElement := FBuffer.GetUnChecked(GetPhysicalIndex(aIndex));
+  aElement := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
   DeleteSwap(aIndex, 1);
 end;
 
@@ -7246,7 +7246,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
@@ -7260,7 +7260,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
@@ -7274,7 +7274,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
@@ -7288,7 +7288,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer);
 end;
 
 // BinarySearchInsert 系列方法实现
@@ -7335,7 +7335,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeInt;
@@ -7349,7 +7349,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareMethod; aData: Pointer): SizeInt;
@@ -7363,7 +7363,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TVecDeque.BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: TCompareRefFunc): SizeInt;
@@ -7377,7 +7377,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer);
 end;
 
 // Shuffle 系列方法实现
@@ -7424,7 +7424,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ShuffleUnChecked(aStartIndex, aCount);
+  ShuffleUnchecked(aStartIndex, aCount);
 end;
 
 procedure TVecDeque.Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
@@ -7438,7 +7438,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
 
 procedure TVecDeque.Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
@@ -7452,7 +7452,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
 
 procedure TVecDeque.Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
@@ -7466,7 +7466,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator);
 end;
 
 // 高级排序算法实现
@@ -7595,10 +7595,10 @@ begin
   LPhysical1 := GetPhysicalIndex(aIndex1);
   LPhysical2 := GetPhysicalIndex(aIndex2);
 
-  LElement1 := FBuffer.GetUnChecked(LPhysical1);
-  LElement2 := FBuffer.GetUnChecked(LPhysical2);
-  FBuffer.PutUnChecked(LPhysical1, LElement2);
-  FBuffer.PutUnChecked(LPhysical2, LElement1);
+  LElement1 := FBuffer.GetUnchecked(LPhysical1);
+  LElement2 := FBuffer.GetUnchecked(LPhysical2);
+  FBuffer.PutUnchecked(LPhysical1, LElement2);
+  FBuffer.PutUnchecked(LPhysical2, LElement1);
 end;
 
 function TVecDeque.DoIntroSortDepthLimit(aCount: SizeUInt): Integer;
@@ -7628,20 +7628,20 @@ begin
   for i := aLeft + 1 to aRight do
   begin
     LPhysicalI := GetPhysicalIndex(i);
-    LKey := FBuffer.GetUnChecked(LPhysicalI);
+    LKey := FBuffer.GetUnchecked(LPhysicalI);
     j := i;
 
     while (j > aLeft) and
-          (DoCompare(FBuffer.GetUnChecked(GetPhysicalIndex(j - 1)), LKey, aComparer, aData) > 0) do
+          (DoCompare(FBuffer.GetUnchecked(GetPhysicalIndex(j - 1)), LKey, aComparer, aData) > 0) do
     begin
       LPhysicalJ := GetPhysicalIndex(j);
       LPhysicalJMinus1 := GetPhysicalIndex(j - 1);
-      FBuffer.PutUnChecked(LPhysicalJ, FBuffer.GetUnChecked(LPhysicalJMinus1));
+      FBuffer.PutUnchecked(LPhysicalJ, FBuffer.GetUnchecked(LPhysicalJMinus1));
       Dec(j);
     end;
 
     LPhysicalJ := GetPhysicalIndex(j);
-    FBuffer.PutUnChecked(LPhysicalJ, LKey);
+    FBuffer.PutUnchecked(LPhysicalJ, LKey);
   end;
 end;
 
@@ -7662,14 +7662,14 @@ begin
 
   // 选择中间元素作为基准，移到末尾
   DoSwap((aLeft + aRight) div 2, aRight);
-  LPivot := FBuffer.GetUnChecked(GetPhysicalIndex(aRight));
+  LPivot := FBuffer.GetUnchecked(GetPhysicalIndex(aRight));
   i := aLeft;
 
   // 优化：减少 GetPhysicalIndex 调用
   for j := aLeft to aRight - 1 do
   begin
     LJPhysical := GetPhysicalIndex(j);
-    LCompareResult := DoCompare(FBuffer.GetUnChecked(LJPhysical), LPivot, aComparer, aData);
+    LCompareResult := DoCompare(FBuffer.GetUnchecked(LJPhysical), LPivot, aComparer, aData);
     if LCompareResult < 0 then  // 严格小于，改善重复元素处理
     begin
       if i <> j then
@@ -7742,8 +7742,8 @@ begin
   if (LLeft < aHeapSize) then
   begin
     LPhysicalLeft := GetPhysicalIndex(LLeft);
-    if DoCompare(FBuffer.GetUnChecked(LPhysicalLeft),
-                 FBuffer.GetUnChecked(LPhysicalLargest), aComparer, aData) > 0 then
+    if DoCompare(FBuffer.GetUnchecked(LPhysicalLeft),
+                 FBuffer.GetUnchecked(LPhysicalLargest), aComparer, aData) > 0 then
     begin
       LLargest := LLeft;
       LPhysicalLargest := LPhysicalLeft;
@@ -7753,8 +7753,8 @@ begin
   if (LRight < aHeapSize) then
   begin
     LPhysicalRight := GetPhysicalIndex(LRight);
-    if DoCompare(FBuffer.GetUnChecked(LPhysicalRight),
-                 FBuffer.GetUnChecked(LPhysicalLargest), aComparer, aData) > 0 then
+    if DoCompare(FBuffer.GetUnchecked(LPhysicalRight),
+                 FBuffer.GetUnchecked(LPhysicalLargest), aComparer, aData) > 0 then
       LLargest := LRight;
   end;
 
@@ -7788,16 +7788,16 @@ var
       // 检查左子节点
       if (LLeft < aLeft + aSize) then
       begin
-        if DoCompare(FBuffer.GetUnChecked(GetPhysicalIndex(LLeft)),
-                     FBuffer.GetUnChecked(GetPhysicalIndex(LLargest)), aComparer, aData) > 0 then
+        if DoCompare(FBuffer.GetUnchecked(GetPhysicalIndex(LLeft)),
+                     FBuffer.GetUnchecked(GetPhysicalIndex(LLargest)), aComparer, aData) > 0 then
           LLargest := LLeft;
       end;
 
       // 检查右子节点
       if (LRight < aLeft + aSize) then
       begin
-        if DoCompare(FBuffer.GetUnChecked(GetPhysicalIndex(LRight)),
-                     FBuffer.GetUnChecked(GetPhysicalIndex(LLargest)), aComparer, aData) > 0 then
+        if DoCompare(FBuffer.GetUnchecked(GetPhysicalIndex(LRight)),
+                     FBuffer.GetUnchecked(GetPhysicalIndex(LLargest)), aComparer, aData) > 0 then
           LLargest := LRight;
       end;
 
@@ -7864,12 +7864,12 @@ begin
   for i := 0 to LLeftSize - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aLeft + i);
-    LTemp[i] := FBuffer.GetUnChecked(LPhysicalIndex);
+    LTemp[i] := FBuffer.GetUnchecked(LPhysicalIndex);
   end;
   for j := 0 to LRightSize - 1 do
   begin
     LPhysicalIndex := GetPhysicalIndex(aMid + 1 + j);
-    LTemp[LLeftSize + j] := FBuffer.GetUnChecked(LPhysicalIndex);
+    LTemp[LLeftSize + j] := FBuffer.GetUnchecked(LPhysicalIndex);
   end;
 
   // 归并临时数组回原数组
@@ -7881,12 +7881,12 @@ begin
     LPhysicalK := GetPhysicalIndex(k);
     if DoCompare(LTemp[i], LTemp[j], aComparer, aData) <= 0 then
     begin
-      FBuffer.PutUnChecked(LPhysicalK, LTemp[i]);
+      FBuffer.PutUnchecked(LPhysicalK, LTemp[i]);
       Inc(i);
     end
     else
     begin
-      FBuffer.PutUnChecked(LPhysicalK, LTemp[j]);
+      FBuffer.PutUnchecked(LPhysicalK, LTemp[j]);
       Inc(j);
     end;
     Inc(k);
@@ -7896,7 +7896,7 @@ begin
   while i < LLeftSize do
   begin
     LPhysicalK := GetPhysicalIndex(k);
-    FBuffer.PutUnChecked(LPhysicalK, LTemp[i]);
+    FBuffer.PutUnchecked(LPhysicalK, LTemp[i]);
     Inc(i);
     Inc(k);
   end;
@@ -7904,7 +7904,7 @@ begin
   while j < LLeftSize + LRightSize do
   begin
     LPhysicalK := GetPhysicalIndex(k);
-    FBuffer.PutUnChecked(LPhysicalK, LTemp[j]);
+    FBuffer.PutUnchecked(LPhysicalK, LTemp[j]);
     Inc(j);
     Inc(k);
   end;
@@ -8013,7 +8013,7 @@ function TVecDeque.TryGet(aIndex: SizeUInt; var aElement: T): Boolean;
 begin
   if aIndex < GetCount then
   begin
-    aElement := GetUnChecked(aIndex);
+    aElement := GetUnchecked(aIndex);
     Result := True;
   end
   else
@@ -8169,10 +8169,10 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    LCurrentValue := GetUnChecked(i);
+    LCurrentValue := GetUnchecked(i);
     if FInternalComparer(LCurrentValue, LMinValue) < 0 then
       LMinValue := LCurrentValue;
   end;
@@ -8187,11 +8187,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue, aData) < 0 then
-      LMinValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMinValue, aData) < 0 then
+      LMinValue := GetUnchecked(i);
   end;
   Result := LMinValue;
 end;
@@ -8204,11 +8204,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue, aData) < 0 then
-      LMinValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMinValue, aData) < 0 then
+      LMinValue := GetUnchecked(i);
   end;
   Result := LMinValue;
 end;
@@ -8222,11 +8222,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue) < 0 then
-      LMinValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMinValue) < 0 then
+      LMinValue := GetUnchecked(i);
   end;
   Result := LMinValue;
 end;
@@ -8241,10 +8241,10 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    LCurrentValue := GetUnChecked(i);
+    LCurrentValue := GetUnchecked(i);
     if FInternalComparer(LCurrentValue, LMaxValue) > 0 then
       LMaxValue := LCurrentValue;
   end;
@@ -8259,11 +8259,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue, aData) > 0 then
-      LMaxValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMaxValue, aData) > 0 then
+      LMaxValue := GetUnchecked(i);
   end;
   Result := LMaxValue;
 end;
@@ -8276,11 +8276,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue, aData) > 0 then
-      LMaxValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMaxValue, aData) > 0 then
+      LMaxValue := GetUnchecked(i);
   end;
   Result := LMaxValue;
 end;
@@ -8294,11 +8294,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue) > 0 then
-      LMaxValue := GetUnChecked(i);
+    if aComparer(GetUnchecked(i), LMaxValue) > 0 then
+      LMaxValue := GetUnchecked(i);
   end;
   Result := LMaxValue;
 end;
@@ -8316,11 +8316,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   LMinIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    LCurrentValue := GetUnChecked(i);
+    LCurrentValue := GetUnchecked(i);
     if FInternalComparer(LCurrentValue, LMinValue) < 0 then
     begin
       LMinValue := LCurrentValue;
@@ -8339,13 +8339,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   LMinIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue, aData) < 0 then
+    if aComparer(GetUnchecked(i), LMinValue, aData) < 0 then
     begin
-      LMinValue := GetUnChecked(i);
+      LMinValue := GetUnchecked(i);
       LMinIndex := i;
     end;
   end;
@@ -8361,13 +8361,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   LMinIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue, aData) < 0 then
+    if aComparer(GetUnchecked(i), LMinValue, aData) < 0 then
     begin
-      LMinValue := GetUnChecked(i);
+      LMinValue := GetUnchecked(i);
       LMinIndex := i;
     end;
   end;
@@ -8384,13 +8384,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
 
-  LMinValue := GetUnChecked(0);
+  LMinValue := GetUnchecked(0);
   LMinIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMinValue) < 0 then
+    if aComparer(GetUnchecked(i), LMinValue) < 0 then
     begin
-      LMinValue := GetUnChecked(i);
+      LMinValue := GetUnchecked(i);
       LMinIndex := i;
     end;
   end;
@@ -8408,11 +8408,11 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    LCurrentValue := GetUnChecked(i);
+    LCurrentValue := GetUnchecked(i);
     if FInternalComparer(LCurrentValue, LMaxValue) > 0 then
     begin
       LMaxValue := LCurrentValue;
@@ -8431,13 +8431,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue, aData) > 0 then
+    if aComparer(GetUnchecked(i), LMaxValue, aData) > 0 then
     begin
-      LMaxValue := GetUnChecked(i);
+      LMaxValue := GetUnchecked(i);
       LMaxIndex := i;
     end;
   end;
@@ -8453,13 +8453,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue, aData) > 0 then
+    if aComparer(GetUnchecked(i), LMaxValue, aData) > 0 then
     begin
-      LMaxValue := GetUnChecked(i);
+      LMaxValue := GetUnchecked(i);
       LMaxIndex := i;
     end;
   end;
@@ -8476,13 +8476,13 @@ begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
 
-  LMaxValue := GetUnChecked(0);
+  LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
   for i := 1 to FCount - 1 do
   begin
-    if aComparer(GetUnChecked(i), LMaxValue) > 0 then
+    if aComparer(GetUnchecked(i), LMaxValue) > 0 then
     begin
-      LMaxValue := GetUnChecked(i);
+      LMaxValue := GetUnchecked(i);
       LMaxIndex := i;
     end;
   end;
@@ -8501,8 +8501,8 @@ begin
   try
     for i := 0 to FCount - 1 do
     begin
-      if aPredicate(GetUnChecked(i), aData) then
-        LResult.PushUnChecked(GetUnChecked(i));
+      if aPredicate(GetUnchecked(i), aData) then
+        LResult.PushUnchecked(GetUnchecked(i));
     end;
     Result := LResult;
   except
@@ -8520,8 +8520,8 @@ begin
   try
     for i := 0 to FCount - 1 do
     begin
-      if aPredicate(GetUnChecked(i), aData) then
-        LResult.PushUnChecked(GetUnChecked(i));
+      if aPredicate(GetUnchecked(i), aData) then
+        LResult.PushUnchecked(GetUnchecked(i));
     end;
     Result := LResult;
   except
@@ -8540,8 +8540,8 @@ begin
   try
     for i := 0 to FCount - 1 do
     begin
-      if aPredicate(GetUnChecked(i)) then
-        LResult.PushUnChecked(GetUnChecked(i));
+      if aPredicate(GetUnchecked(i)) then
+        LResult.PushUnchecked(GetUnchecked(i));
     end;
     Result := LResult;
   except
@@ -8628,8 +8628,8 @@ begin
 
   // 使用双切片高效复制到目标容器
   GetTwoSlices(aIndex, aCount, LPtr1, LLen1, LPtr2, LLen2);
-  if LLen1 > 0 then aTarget.AppendUnChecked(LPtr1, LLen1);
-  if LLen2 > 0 then aTarget.AppendUnChecked(LPtr2, LLen2);
+  if LLen1 > 0 then aTarget.AppendUnchecked(LPtr1, LLen1);
+  if LLen2 > 0 then aTarget.AppendUnchecked(LPtr2, LLen2);
 
   // 删除该范围
   Delete(aIndex, aCount);
@@ -8672,7 +8672,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
   Result := False;
 end;
@@ -8682,7 +8682,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
   Result := False;
 end;
@@ -8693,7 +8693,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i)) then
+    if aPredicate(GetUnchecked(i)) then
       Exit(True);
   Result := False;
 end;
@@ -8704,7 +8704,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i), aData) then
+    if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
   Result := True;
 end;
@@ -8714,7 +8714,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i), aData) then
+    if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
   Result := True;
 end;
@@ -8725,7 +8725,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i)) then
+    if not aPredicate(GetUnchecked(i)) then
       Exit(False);
   Result := True;
 end;
@@ -8737,10 +8737,10 @@ var
 begin
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   Resize(j);
@@ -8752,10 +8752,10 @@ var
 begin
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   Resize(j);
@@ -8768,10 +8768,10 @@ var
 begin
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i)) then
+    if aPredicate(GetUnchecked(i)) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   Resize(j);
@@ -8791,7 +8791,7 @@ begin
   LResult := specialize TVec<T>.Create(aCount, GetAllocator, nil);
   try
     for i := 0 to aCount - 1 do
-      LResult.PushUnChecked(GetUnChecked(aStart + i));
+      LResult.PushUnchecked(GetUnchecked(aStart + i));
 
     Delete(aStart, aCount);
     Result := LResult;
@@ -8871,7 +8871,7 @@ begin
   try
     // 复制元素到新 Vec
     for i := aIndex to FCount - 1 do
-      LResult.PushUnChecked(GetUnChecked(i));
+      LResult.PushUnchecked(GetUnchecked(i));
 
     // 截断原 VecDeque 到 [0, aIndex)
     Truncate(aIndex);
@@ -8911,14 +8911,14 @@ function TVecDeque.First: T;
 begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.First: collection is empty');
-  Result := GetUnChecked(0);
+  Result := GetUnchecked(0);
 end;
 
 function TVecDeque.Last: T;
 begin
   if FCount = 0 then
     raise EInvalidOperation.Create('TVecDeque.Last: collection is empty');
-  Result := GetUnChecked(FCount - 1);
+  Result := GetUnchecked(FCount - 1);
 end;
 
 end.

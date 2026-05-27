@@ -62,8 +62,8 @@ type
   public
     // TCollection overrides (public in base)
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     function PtrIter: TPtrIter; override;
 
@@ -257,7 +257,7 @@ begin
   end;
 end;
 
-procedure THashSet.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure THashSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   I: SizeUInt;
   PKey: ^K;
@@ -272,7 +272,7 @@ begin
   end;
 end;
 
-procedure THashSet.AppendToUnChecked(const aDst: TCollection);
+procedure THashSet.AppendToUnchecked(const aDst: TCollection);
 var
   LDstSet: specialize THashSet<K>;
   LMapIter: specialize TIter<specialize TMapEntry<K, Byte>>;
@@ -291,7 +291,7 @@ begin
     end;
   end
   else
-    raise EInvalidOperation.Create('THashSet.AppendToUnChecked: cannot append to incompatible container type');
+    raise EInvalidOperation.Create('THashSet.AppendToUnchecked: cannot append to incompatible container type');
 end;
 
 function THashSet.Add(const AKey: K): Boolean;

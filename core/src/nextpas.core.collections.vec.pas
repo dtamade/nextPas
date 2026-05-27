@@ -129,43 +129,43 @@ type
     function  Count: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure LoadFromUnChecked(const aSrc: Pointer; aCount: SizeUInt); override; overload;
-    procedure AppendUnChecked(const aSrc: Pointer; aCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
-    procedure SaveToUnChecked(aDst: TCollection); override;
+    procedure LoadFromUnchecked(const aSrc: Pointer; aCount: SizeUInt); override; overload;
+    procedure AppendUnchecked(const aSrc: Pointer; aCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
+    procedure SaveToUnchecked(aDst: TCollection); override;
 
     function  GetMemory: PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  Get(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetUnChecked(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetUnchecked(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Put(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure PutUnChecked(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure PutUnchecked(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  GetPtr(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetPtrUnChecked(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetPtrUnchecked(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     // Read-only view into a contiguous subrange (zero-copy)
     function  SliceView(aIndex, aCount: SizeUInt): TSpan; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Resize(aNewSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Ensure(aCount: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Swap(aIndex1, aIndex2: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapUnChecked(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Swap(aIndex1, aIndex2, aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Swap(aIndex1, aIndex2, aCount, aSwapBufferSize: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Fill(aIndex: SizeUInt; const aValue: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Fill(aIndex, aCount: SizeUInt; const aValue: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -475,28 +475,28 @@ type
     procedure ResizeExact(aNewSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Insert(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnChecked(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure InsertUnchecked(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Insert(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Insert(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Write(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Write(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Write(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Write(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteExact(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Push(const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Push(const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -574,192 +574,192 @@ type
     function Last: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     { 高性能无检查方法 }
-    procedure PushUnChecked(const aElement: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure PushUnchecked(const aElement: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
-    { UnChecked 算法方法 - 跳过边界检查，追求极致性能 }
+    { Unchecked 算法方法 - 跳过边界检查，追求极致性能 }
 
     {**
-     * FindUnChecked
+     * FindUnchecked
      * @desc 无检查版本的查找方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * ForEachUnChecked
+     * ForEachUnchecked
      * @desc 无检查版本的遍历方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     {**
-     * SortUnChecked
+     * SortUnchecked
      * @desc 无检查版本的排序方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt); overload;
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
 
     {**
-     * ContainsUnChecked
+     * ContainsUnchecked
      * @desc 无检查版本的包含检查方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     {**
-     * ZeroUnChecked
+     * ZeroUnchecked
      * @desc 无检查版本的清零方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    procedure ZeroUnChecked(aIndex, aCount: SizeUInt);
+    procedure ZeroUnchecked(aIndex, aCount: SizeUInt);
 
     {**
-     * FindIFUnChecked, FindIFNotUnChecked, FindLastUnChecked, FindLastIFUnChecked, FindLastIFNotUnChecked
+     * FindIFUnchecked, FindIFNotUnchecked, FindLastUnchecked, FindLastIFUnchecked, FindLastIFNotUnchecked
      * @desc 无检查版本的查找方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * CountOfUnChecked, CountIfUnChecked
+     * CountOfUnchecked, CountIfUnchecked
      * @desc 无检查版本的计数方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * FillUnChecked
+     * FillUnchecked
      * @desc 无检查版本的填充方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    procedure FillUnChecked(aStartIndex, aCount: SizeUInt; const aElement: T);
+    procedure FillUnchecked(aStartIndex, aCount: SizeUInt; const aElement: T);
 
     {**
-     * ReplaceUnChecked, ReplaceIFUnChecked
+     * ReplaceUnchecked, ReplaceIFUnchecked
      * @desc 无检查版本的替换方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
-     * IsSortedUnChecked
+     * IsSortedUnchecked
      * @desc 无检查版本的排序检查方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     {**
-     * BinarySearchUnChecked, BinarySearchInsertUnChecked
+     * BinarySearchUnchecked, BinarySearchInsertUnchecked
      * @desc 无检查版本的二分查找方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * ShuffleUnChecked
+     * ShuffleUnchecked
      * @desc 无检查版本的随机打乱方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
     {**
-     * ReverseUnChecked
+     * ReverseUnchecked
      * @desc 无检查版本的反转方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    procedure ReverseUnChecked(aStartIndex, aCount: SizeUInt);
+    procedure ReverseUnchecked(aStartIndex, aCount: SizeUInt);
 
     property Capacity:                SizeUInt        read GetCapacity     write SetCapacity;
     property GrowStrategy:            IGrowthStrategy read GetGrowStrategy write SetGrowStrategy;
@@ -879,7 +879,7 @@ end;
 function TVec.DoIterGetCurrent(aIter: PPtrIter): Pointer;
 begin
   {$PUSH}{$WARN 4055 OFF}
-  Result := FBuf.GetPtrUnChecked(SizeUInt(aIter^.Data));
+  Result := FBuf.GetPtrUnchecked(SizeUInt(aIter^.Data));
   {$POP}
 end;
 
@@ -972,38 +972,38 @@ begin
   FBuf.SerializeToArrayBuffer(aDst, aCount);
 end;
 
-procedure TVec.LoadFromUnChecked(const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.LoadFromUnchecked(const aSrc: Pointer; aCount: SizeUInt);
 begin
-  FBuf.LoadFromUnChecked(aSrc, aCount);
+  FBuf.LoadFromUnchecked(aSrc, aCount);
   FCount := aCount;
 end;
 
-procedure TVec.AppendUnChecked(const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.AppendUnchecked(const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
 
   Reserve(aCount);
-  OverwriteUnChecked(FCount, aSrc, aCount);
+  OverwriteUnchecked(FCount, aSrc, aCount);
   Inc(FCount, aCount);
 end;
 
-procedure TVec.AppendToUnChecked(const aDst: TCollection);
+procedure TVec.AppendToUnchecked(const aDst: TCollection);
 begin
   if FCount = 0 then
     exit;
 
-  aDst.AppendUnChecked(GetMemory, FCount);
+  aDst.AppendUnchecked(GetMemory, FCount);
 end;
 
 { IGenericCollection - 直接委托给TArray }
 
-procedure TVec.SaveToUnChecked(aDst: TCollection);
+procedure TVec.SaveToUnchecked(aDst: TCollection);
 begin
   if FCount = 0 then
     aDst.Clear
   else
-    aDst.LoadFromUnChecked(GetMemory, FCount);
+    aDst.LoadFromUnchecked(GetMemory, FCount);
 end;
 
 { IArray - 直接委托给TArray }
@@ -1018,12 +1018,12 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TVec.Get: aIndex out of bounds');
 
-  Result := GetUnChecked(aIndex);
+  Result := GetUnchecked(aIndex);
 end;
 
-function TVec.GetUnChecked(aIndex: SizeUInt): T;
+function TVec.GetUnchecked(aIndex: SizeUInt): T;
 begin
-  Result := FBuf.GetUnChecked(aIndex);
+  Result := FBuf.GetUnchecked(aIndex);
 end;
 
 procedure TVec.Put(aIndex: SizeUInt; const aValue: T);
@@ -1031,12 +1031,12 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TVec.Put: aIndex out of bounds');
 
-  PutUnChecked(aIndex, aValue);
+  PutUnchecked(aIndex, aValue);
 end;
 
-procedure TVec.PutUnChecked(aIndex: SizeUInt; const aValue: T);
+procedure TVec.PutUnchecked(aIndex: SizeUInt; const aValue: T);
 begin
-  FBuf.PutUnChecked(aIndex, aValue);
+  FBuf.PutUnchecked(aIndex, aValue);
 end;
 
 function TVec.GetPtr(aIndex: SizeUInt): PElement;
@@ -1044,12 +1044,12 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TVec.GetPtr: aIndex out of bounds');
 
-  Result := GetPtrUnChecked(aIndex);
+  Result := GetPtrUnchecked(aIndex);
 end;
 
-function TVec.GetPtrUnChecked(aIndex: SizeUInt): PElement;
+function TVec.GetPtrUnchecked(aIndex: SizeUInt): PElement;
 begin
-  Result := FBuf.GetPtrUnChecked(aIndex);
+  Result := FBuf.GetPtrUnchecked(aIndex);
 end;
 
 function TVec.SliceView(aIndex, aCount: SizeUInt): TSpan;
@@ -1068,7 +1068,7 @@ begin
     LEnd := FCount;
 
   LElemSize := GetElementSize;
-  LPtr := FBuf.GetPtrUnChecked(aIndex);
+  LPtr := FBuf.GetPtrUnchecked(aIndex);
   Result := TSpan.FromPointer(LPtr, LEnd - aIndex, LElemSize);
 end;
 
@@ -1078,12 +1078,12 @@ begin
     exit;
 
   if (aNewSize < FCount) and (GetIsManagedType) then
-    GetElementManager.FinalizeManagedElementsUnChecked(FBuf.GetPtrUnChecked(aNewSize), FCount - aNewSize)
+    GetElementManager.FinalizeManagedElementsUnchecked(FBuf.GetPtrUnchecked(aNewSize), FCount - aNewSize)
   else if aNewSize > FCount then
   begin
     Reserve(aNewSize - FCount);
     // 初始化新增范围，确保托管类型被正确初始化，非托管类型置零
-    GetElementManager.InitializeElementsUnChecked(FBuf.GetPtrUnChecked(FCount), aNewSize - FCount);
+    GetElementManager.InitializeElementsUnchecked(FBuf.GetPtrUnchecked(FCount), aNewSize - FCount);
   end;
 
   FCount := aNewSize;
@@ -1275,11 +1275,11 @@ begin
 
   // 如果需要缩容（减少元素数），处理托管类型
   if (aNewSize < FCount) and GetIsManagedType then
-    GetElementManager.FinalizeManagedElementsUnChecked(FBuf.GetPtrUnChecked(aNewSize), FCount - aNewSize);
+    GetElementManager.FinalizeManagedElementsUnchecked(FBuf.GetPtrUnchecked(aNewSize), FCount - aNewSize);
 
   // 如果需要扩容（增加元素数），初始化新元素
   if aNewSize > FCount then
-    GetElementManager.InitializeElementsUnChecked(FBuf.GetPtrUnChecked(FCount), aNewSize - FCount);
+    GetElementManager.InitializeElementsUnchecked(FBuf.GetPtrUnchecked(FCount), aNewSize - FCount);
 
   // 只改变 FCount，不改变容量（除非之前需要扩容）
   FCount := aNewSize;
@@ -1384,7 +1384,7 @@ begin
 
   LOldCount := FCount;
   Resize(LOldCount + aCount);
-  aSrc.SerializeToArrayBuffer(FBuf.GetPtrUnChecked(LOldCount), aCount);
+  aSrc.SerializeToArrayBuffer(FBuf.GetPtrUnchecked(LOldCount), aCount);
 end;
 
 function TVec.TryPop(var aDst: T): Boolean;
@@ -1402,7 +1402,7 @@ begin
   if Result then
   begin
     LIndex := FCount - aCount;
-    ReadUnChecked(LIndex, aDst, aCount);
+    ReadUnchecked(LIndex, aDst, aCount);
     Resize(LIndex);
   end;
 end;
@@ -1461,7 +1461,7 @@ begin
 
   LP := PeekRange(aCount);
   // PeekRange 已经检查了边界，这里 LP 不会为 nil
-  GetElementManager.CopyElementsNonOverlapUnChecked(LP, aDst, aCount);
+  GetElementManager.CopyElementsNonOverlapUnchecked(LP, aDst, aCount);
   Result := True;
 end;
 
@@ -1488,7 +1488,7 @@ begin
   if (aCount = 0) or (aCount > FCount) then
     exit(nil);
 
-  Result := GetPtrUnChecked(FCount - aCount);
+  Result := GetPtrUnchecked(FCount - aCount);
 end;
 
 
@@ -1497,9 +1497,9 @@ begin
   Insert(aIndex, @aElement, 1);
 end;
 
-procedure TVec.InsertUnChecked(aIndex: SizeUInt; const aElement: T);
+procedure TVec.InsertUnchecked(aIndex: SizeUInt; const aElement: T);
 begin
-  InsertUnChecked(aIndex, @aElement, 1);
+  InsertUnchecked(aIndex, @aElement, 1);
 end;
 
 procedure TVec.Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
@@ -1513,10 +1513,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.Insert: index out of bounds');
 
-  InsertUnChecked(aIndex, aSrc, aCount);
+  InsertUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.InsertUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.InsertUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LOldCount: SizeUInt;
 begin
@@ -1558,10 +1558,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.Insert: index out of bounds');
 
-  InsertUnChecked(aIndex, aSrc, aCount);
+  InsertUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.InsertUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.InsertUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   LOldCount: SizeUInt;
 begin
@@ -1571,7 +1571,7 @@ begin
   if aIndex < LOldCount then
     Copy(aIndex, aIndex + aCount, LOldCount - aIndex);
 
-  aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
+  aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 end;
 
 { IVec - Write 系列（需要动态扩容的特殊逻辑）}
@@ -1587,10 +1587,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.Write: index out of bounds');
 
-  WriteUnChecked(aIndex, aSrc, aCount);
+  WriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.WriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1601,7 +1601,7 @@ begin
   if LCapacity < LEnd then
     Reserve(LEnd - LCapacity);
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -1616,17 +1616,17 @@ begin
   if LLen = 0 then
     exit;
 
-  WriteUnChecked(aIndex, @aSrc[0], LLen);
+  WriteUnchecked(aIndex, @aSrc[0], LLen);
 end;
 
-  { UnChecked: 调用方必须确保前置条件：
+  { Unchecked: 调用方必须确保前置条件：
     - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
     - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在有效范围内，或调用方先行 Reserve/SetCapacity
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TVec.WriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVec.WriteUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  WriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  WriteUnchecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
 procedure TVec.Write(aIndex: SizeUInt; const aSrc: TCollection);
@@ -1654,10 +1654,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.Write: index out of bounds');
 
-  WriteUnChecked(aIndex, aSrc, aCount);
+  WriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.WriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1668,7 +1668,7 @@ begin
   if LCapacity < LEnd then
     Reserve(LEnd - LCapacity);
 
-  aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
+  aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -1685,10 +1685,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.WriteExact: index out of bounds');
 
-  WriteExactUnChecked(aIndex, aSrc, aCount);
+  WriteExactUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.WriteExactUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1699,7 +1699,7 @@ begin
   if LCapacity < LEnd then
     SetCapacity(LEnd);
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -1717,14 +1717,14 @@ begin
   WriteExact(aIndex, @aSrc[0], LLen);
 end;
 
-  { UnChecked: 调用方必须确保前置条件：
+  { Unchecked: 调用方必须确保前置条件：
     - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
-    - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在 [0..Capacity) 内；WriteExactUnChecked 不会自动扩容
+    - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在 [0..Capacity) 内；WriteExactUnchecked 不会自动扩容
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVec.WriteExactUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  WriteExactUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  WriteExactUnchecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
 procedure TVec.WriteExact(aIndex: SizeUInt; const aSrc: TCollection);
@@ -1752,10 +1752,10 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.Create('TVec.WriteExact: index out of bounds');
 
-  WriteExactUnChecked(aIndex, aSrc, aCount);
+  WriteExactUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.WriteExactUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1766,7 +1766,7 @@ begin
   if LCapacity < LEnd then
     SetCapacity(LEnd);
 
-  aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
+  aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -1847,7 +1847,7 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TVec.RemoveCopy: count out of bounds');
 
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
   Delete(aIndex, aCount);
 end;
 
@@ -1895,7 +1895,7 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TVec.RemoveCopySwap: count out of bounds');
 
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
   DeleteSwap(aIndex, aCount);
 end;
 
@@ -1943,8 +1943,8 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnChecked(i), aData) then  // 直接使用引用，避免拷贝
-        LResult.PushUnChecked(GetUnChecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i), aData) then  // 直接使用引用，避免拷贝
+        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
 
     // 收缩到实际大小
     LResult.ShrinkToFit;
@@ -1967,8 +1967,8 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnChecked(i), aData) then  // 直接使用引用，避免拷贝
-        LResult.PushUnChecked(GetUnChecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i), aData) then  // 直接使用引用，避免拷贝
+        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
 
     // 收缩到实际大小
     LResult.ShrinkToFit;
@@ -1992,8 +1992,8 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnChecked(i)) then         // 直接使用引用，避免拷贝
-        LResult.PushUnChecked(GetUnChecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i)) then         // 直接使用引用，避免拷贝
+        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
 
     // 收缩到实际大小
     LResult.ShrinkToFit;
@@ -2010,7 +2010,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
   Result := False;
 end;
@@ -2020,7 +2020,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
   Result := False;
 end;
@@ -2031,7 +2031,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i)) then
+    if aPredicate(GetUnchecked(i)) then
       Exit(True);
   Result := False;
 end;
@@ -2042,7 +2042,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i), aData) then
+    if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
   Result := True;
 end;
@@ -2052,7 +2052,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i), aData) then
+    if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
   Result := True;
 end;
@@ -2063,7 +2063,7 @@ var
   i: SizeUInt;
 begin
   for i := 0 to FCount - 1 do
-    if not aPredicate(GetUnChecked(i)) then
+    if not aPredicate(GetUnchecked(i)) then
       Exit(False);
   Result := True;
 end;
@@ -2079,10 +2079,10 @@ begin
 
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   // 调整大小，自动处理托管类型清理
@@ -2097,10 +2097,10 @@ begin
 
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i), aData) then
+    if aPredicate(GetUnchecked(i), aData) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   // 调整大小，自动处理托管类型清理
@@ -2116,10 +2116,10 @@ begin
 
   j := 0;
   for i := 0 to FCount - 1 do
-    if aPredicate(GetUnChecked(i)) then
+    if aPredicate(GetUnchecked(i)) then
     begin
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   // 调整大小，自动处理托管类型清理
@@ -2145,13 +2145,13 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     for i := 0 to aCount - 1 do
-      LResult.PushUnChecked(GetUnChecked(aStart + i));
+      LResult.PushUnchecked(GetUnchecked(aStart + i));
 
     // 移动后续元素（如果有的话）
     if aStart + aCount < FCount then
     begin
       for i := aStart + aCount to FCount - 1 do
-        PutUnChecked(i - aCount, GetUnChecked(i));
+        PutUnchecked(i - aCount, GetUnchecked(i));
     end;
 
     // 调整大小
@@ -2236,7 +2236,7 @@ begin
     // 注意：使用 LSplitCount > 0 检查避免无符号整数下溢
     if LSplitCount > 0 then
       for i := 0 to LSplitCount - 1 do
-        LResult.PushUnChecked(GetUnChecked(aIndex + i));
+        LResult.PushUnchecked(GetUnchecked(aIndex + i));
 
     // 截断原向量到 [0, aIndex)
     Truncate(aIndex);
@@ -2286,11 +2286,11 @@ begin
   for i := 1 to FCount - 1 do
   begin
     // 使用内存比较判断是否相等
-    if not CompareMem(GetPtrUnChecked(i), GetPtrUnChecked(j - 1), GetElementSize) then
+    if not CompareMem(GetPtrUnchecked(i), GetPtrUnchecked(j - 1), GetElementSize) then
     begin
       // 元素不同，保留
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   end;
@@ -2316,11 +2316,11 @@ begin
   for i := 1 to FCount - 1 do
   begin
     // 使用自定义比较函数判断是否相等
-    if not aEquals(GetUnChecked(i), GetUnChecked(j - 1), aData) then
+    if not aEquals(GetUnchecked(i), GetUnchecked(j - 1), aData) then
     begin
       // 元素不同，保留
       if i <> j then
-        PutUnChecked(j, GetUnChecked(i));
+        PutUnchecked(j, GetUnchecked(i));
       Inc(j);
     end;
   end;
@@ -2344,7 +2344,7 @@ begin
   // 空向量直接返回，避免无效索引访问
   if FCount > 0 then
     for i := 0 to FCount - 1 do
-      Result[i] := GetUnChecked(i);
+      Result[i] := GetUnchecked(i);
 end;
 
 function TVec.Clone: TCollection;
@@ -2357,7 +2357,7 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
-      LResult.OverwriteUnChecked(0, GetMemory, FCount);
+      LResult.OverwriteUnchecked(0, GetMemory, FCount);
     LResult.FCount := FCount;
     Result := LResult;
   except
@@ -2370,21 +2370,21 @@ function TVec.First: T;
 begin
   if FCount = 0 then
     raise EEmptyCollection.Create('TVec: collection is empty');
-  Result := GetUnChecked(0);
+  Result := GetUnchecked(0);
 end;
 
 function TVec.Last: T;
 begin
   if FCount = 0 then
     raise EEmptyCollection.Create('TVec: collection is empty');
-  Result := GetUnChecked(FCount - 1);
+  Result := GetUnchecked(FCount - 1);
 end;
 
 { 高性能无检查方法实现 }
 
-procedure TVec.PushUnChecked(const aElement: T);
+procedure TVec.PushUnchecked(const aElement: T);
 begin
-  PutUnChecked(FCount, aElement);
+  PutUnchecked(FCount, aElement);
   Inc(FCount);
 end;
 
@@ -2402,12 +2402,12 @@ begin
   if aCount > FCount - aIndex then
     raise EOutOfRange.Create('TVec.Overwrite: count out of bounds');
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
-  FBuf.OverwriteUnChecked(aIndex, aSrc, aCount);
+  FBuf.OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
 procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: array of T);
@@ -2418,7 +2418,7 @@ begin
 
   if LLen = 0 then
     exit;
-  { UnChecked: 调用方必须确保前置条件：
+  { Unchecked: 调用方必须确保前置条件：
     - aSrc 非空（Length(aSrc) > 0），否则引用 @aSrc[0] 未定义
     - 覆写范围 [aIndex, aIndex + Length(aSrc) - 1] 在有效范围内
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
@@ -2427,9 +2427,9 @@ begin
   Overwrite(aIndex, @aSrc[0], LLen);
 end;
 
-procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVec.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverwriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  OverwriteUnchecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
 procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
@@ -2457,12 +2457,12 @@ begin
   if aCount > FCount - aIndex then
     raise EOutOfRange.Create('TVec.Overwrite: count out of bounds');
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
-  aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
+  aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 end;
 
 procedure TVec.Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
@@ -2479,12 +2479,12 @@ begin
   if aCount > FCount - aIndex then
     raise EOutOfRange.Create('TVec.Read: count out of bounds');
 
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
 end;
 
-procedure TVec.ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
+procedure TVec.ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
-  FBuf.ReadUnChecked(aIndex, aDst, aCount);
+  FBuf.ReadUnchecked(aIndex, aDst, aCount);
 end;
 
 procedure TVec.Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
@@ -2502,10 +2502,10 @@ begin
   Read(aIndex, @aDst[0], aCount);
 end;
 
-procedure TVec.ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TVec.ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 begin
   SetLength(aDst, aCount);
-  ReadUnChecked(aIndex, @aDst[0], aCount);
+  ReadUnchecked(aIndex, @aDst[0], aCount);
 end;
 
 procedure TVec.Swap(aIndex1, aIndex2: SizeUInt);
@@ -2513,12 +2513,12 @@ begin
   if (aIndex1 >= FCount) or (aIndex2 >= FCount) then
     raise EOutOfRange.Create('TVec.Swap: index out of bounds');
 
-  SwapUnChecked(aIndex1, aIndex2);
+  SwapUnchecked(aIndex1, aIndex2);
 end;
 
-procedure TVec.SwapUnChecked(aIndex1, aIndex2: SizeUInt);
+procedure TVec.SwapUnchecked(aIndex1, aIndex2: SizeUInt);
 begin
-  FBuf.SwapUnChecked(aIndex1, aIndex2);
+  FBuf.SwapUnchecked(aIndex1, aIndex2);
 end;
 
 procedure TVec.Swap(aIndex1, aIndex2, aCount: SizeUInt);
@@ -2554,12 +2554,12 @@ begin
   if aCount > (FCount - aDstIndex) then
     raise EOutOfRange.Create('TVec.Copy: count out of bounds');
 
-  CopyUnChecked(aSrcIndex, aDstIndex, aCount);
+  CopyUnchecked(aSrcIndex, aDstIndex, aCount);
 end;
 
-procedure TVec.CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
+procedure TVec.CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 begin
-  FBuf.CopyUnChecked(aSrcIndex, aDstIndex, aCount);
+  FBuf.CopyUnchecked(aSrcIndex, aDstIndex, aCount);
 end;
 
 procedure TVec.Fill(aIndex: SizeUInt; const aValue: T);
@@ -2732,27 +2732,27 @@ begin
 end;
 {$ENDIF}
 
-{ FindUnChecked 无检查查找 - 跳过边界检查，追求极致性能 }
+{ FindUnchecked 无检查查找 - 跳过边界检查，追求极致性能 }
 
-function TVec.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVec.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
-  Result := FBuf.FindUnChecked(aValue, aStartIndex, aCount);
+  Result := FBuf.FindUnchecked(aValue, aStartIndex, aCount);
 end;
 
-function TVec.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FBuf.FindUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
-function TVec.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FBuf.FindUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindUnChecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
+function TVec.FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindUnChecked(aValue, aStartIndex, aCount, aEquals);
+  Result := FBuf.FindUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -4406,338 +4406,338 @@ begin
 end;
 {$ENDIF}
 
-{ UnChecked 算法方法实现 - 跳过边界检查，追求极致性能 }
+{ Unchecked 算法方法实现 - 跳过边界检查，追求极致性能 }
 
-function TVec.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
+function TVec.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ForEachUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
+function TVec.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
-end;
-
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean;
-begin
-  Result := FBuf.ForEachUnChecked(aStartIndex, aCount, aPredicate);
-end;
-{$ENDIF}
-
-procedure TVec.SortUnChecked(aStartIndex, aCount: SizeUInt);
-begin
-  FBuf.SortUnChecked(aStartIndex, aCount);
-end;
-
-procedure TVec.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
-begin
-  FBuf.SortUnChecked(aStartIndex, aCount, aComparer, aData);
-end;
-
-procedure TVec.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
-begin
-  FBuf.SortUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.ForEachUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TVec.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>);
+function TVec.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 begin
-  FBuf.SortUnChecked(aStartIndex, aCount, aComparer);
+  Result := FBuf.ForEachUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean;
+procedure TVec.SortUnchecked(aStartIndex, aCount: SizeUInt);
 begin
-  Result := FBuf.ContainsUnChecked(aElement, aStartIndex, aCount);
+  FBuf.SortUnchecked(aStartIndex, aCount);
 end;
 
-function TVec.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
+procedure TVec.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
 begin
-  Result := FBuf.ContainsUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  FBuf.SortUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
-function TVec.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
+procedure TVec.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
 begin
-  Result := FBuf.ContainsUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  FBuf.SortUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean;
+procedure TVec.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>);
 begin
-  Result := FBuf.ContainsUnChecked(aElement, aStartIndex, aCount, aEquals);
+  FBuf.SortUnchecked(aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
-procedure TVec.ZeroUnChecked(aIndex, aCount: SizeUInt);
+function TVec.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean;
 begin
-  FBuf.ZeroUnChecked(aIndex, aCount);
+  Result := FBuf.ContainsUnchecked(aElement, aStartIndex, aCount);
 end;
 
-function TVec.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ContainsUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
-function TVec.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ContainsUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
-  Result := FBuf.FindIFUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.ContainsUnchecked(aElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
-function TVec.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+procedure TVec.ZeroUnchecked(aIndex, aCount: SizeUInt);
 begin
-  Result := FBuf.FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  FBuf.ZeroUnchecked(aIndex, aCount);
 end;
 
-function TVec.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+end;
+
+function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+begin
+  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastUnChecked(aElement, aStartIndex, aCount);
+  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
-end;
-
-function TVec.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
-begin
-  Result := FBuf.FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
+function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindLastUnChecked(aElement, aStartIndex, aCount, aEquals);
+  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-procedure TVec.FillUnChecked(aStartIndex, aCount: SizeUInt; const aElement: T);
+function TVec.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
-  FBuf.FillUnChecked(aStartIndex, aCount, aElement);
+  Result := FBuf.FindLastUnchecked(aElement, aStartIndex, aCount);
 end;
 
-function TVec.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
-function TVec.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastUnchecked(aElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
-function TVec.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+procedure TVec.FillUnchecked(aStartIndex, aCount: SizeUInt; const aElement: T);
 begin
-  Result := FBuf.FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  FBuf.FillUnchecked(aStartIndex, aCount, aElement);
 end;
 
-function TVec.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+end;
+
+function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+begin
+  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.CountOfUnChecked(aElement, aStartIndex, aCount);
+  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
+function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
-end;
-
-function TVec.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FBuf.CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
+function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.CountOfUnChecked(aElement, aStartIndex, aCount, aEquals);
+  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TVec.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 begin
-  Result := FBuf.CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.CountOfUnchecked(aElement, aStartIndex, aCount);
 end;
 
-function TVec.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TVec.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.CountOfUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
+end;
+
+function TVec.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
+begin
+  Result := FBuf.CountOfUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TVec.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
-  Result := FBuf.CountIfUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.CountOfUnchecked(aElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
-function TVec.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TVec.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount);
+  Result := FBuf.CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
+function TVec.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
-end;
-
-function TVec.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FBuf.ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
+  Result := FBuf.CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
+function TVec.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
-  Result := FBuf.ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals);
+  Result := FBuf.CountIfUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TVec.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount);
 end;
 
-function TVec.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TVec.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
+end;
+
+function TVec.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
+begin
+  Result := FBuf.ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TVec.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate);
+  Result := FBuf.ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
-function TVec.IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean;
+function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.IsSortedUnChecked(aStartIndex, aCount);
+  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
+function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
-end;
-
-function TVec.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
-begin
-  Result := FBuf.IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean;
+function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
-  Result := FBuf.IsSortedUnChecked(aStartIndex, aCount, aComparer);
+  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVec.IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean;
 begin
-  Result := FBuf.BinarySearchUnChecked(aElement, aStartIndex, aCount);
+  Result := FBuf.IsSortedUnchecked(aStartIndex, aCount);
 end;
 
-function TVec.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
+function TVec.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.BinarySearchUnChecked(aElement, aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
-function TVec.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
+function TVec.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
 begin
-  Result := FBuf.BinarySearchUnChecked(aElement, aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
+function TVec.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean;
 begin
-  Result := FBuf.BinarySearchUnChecked(aElement, aStartIndex, aCount, aComparer);
+  Result := FBuf.IsSortedUnchecked(aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
-function TVec.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TVec.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
-  Result := FBuf.BinarySearchInsertUnChecked(aElement, aStartIndex, aCount);
+  Result := FBuf.BinarySearchUnchecked(aElement, aStartIndex, aCount);
 end;
 
-function TVec.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
+function TVec.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.BinarySearchInsertUnChecked(aElement, aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.BinarySearchUnchecked(aElement, aStartIndex, aCount, aComparer, aData);
 end;
 
-function TVec.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
+function TVec.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.BinarySearchInsertUnChecked(aElement, aStartIndex, aCount, aComparer, aData);
+  Result := FBuf.BinarySearchUnchecked(aElement, aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
+function TVec.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.BinarySearchInsertUnChecked(aElement, aStartIndex, aCount, aComparer);
+  Result := FBuf.BinarySearchUnchecked(aElement, aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
-procedure TVec.ShuffleUnChecked(aStartIndex, aCount: SizeUInt);
+function TVec.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
-  FBuf.ShuffleUnChecked(aStartIndex, aCount);
+  Result := FBuf.BinarySearchInsertUnchecked(aElement, aStartIndex, aCount);
 end;
 
-procedure TVec.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
+function TVec.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
-  FBuf.ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  Result := FBuf.BinarySearchInsertUnchecked(aElement, aStartIndex, aCount, aComparer, aData);
 end;
 
-procedure TVec.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
+function TVec.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
-  FBuf.ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  Result := FBuf.BinarySearchInsertUnchecked(aElement, aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TVec.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
+function TVec.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
-  FBuf.ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator);
+  Result := FBuf.BinarySearchInsertUnchecked(aElement, aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
-procedure TVec.ReverseUnChecked(aStartIndex, aCount: SizeUInt);
+procedure TVec.ShuffleUnchecked(aStartIndex, aCount: SizeUInt);
 begin
-  FBuf.ReverseUnChecked(aStartIndex, aCount);
+  FBuf.ShuffleUnchecked(aStartIndex, aCount);
+end;
+
+procedure TVec.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
+begin
+  FBuf.ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
+end;
+
+procedure TVec.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
+begin
+  FBuf.ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
+end;
+
+{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+procedure TVec.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
+begin
+  FBuf.ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator);
+end;
+{$ENDIF}
+
+procedure TVec.ReverseUnchecked(aStartIndex, aCount: SizeUInt);
+begin
+  FBuf.ReverseUnchecked(aStartIndex, aCount);
 end;
 
 end.

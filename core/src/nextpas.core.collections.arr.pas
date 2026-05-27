@@ -12,7 +12,7 @@ uses
   nextpas.core.collections.arr.base,
   nextpas.core.collections.arr.intf;
 
-procedure MemCopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
+procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
 function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
@@ -87,12 +87,12 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure LoadFromUnChecked(const aSrc: Pointer; aCount: SizeUInt); override; overload;
-    procedure AppendUnChecked(const aSrc: Pointer; aCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure LoadFromUnchecked(const aSrc: Pointer; aCount: SizeUInt); override; overload;
+    procedure AppendUnchecked(const aSrc: Pointer; aCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     { IGenericCollection }
-    procedure SaveToUnChecked(aDst: TCollection); override;
+    procedure SaveToUnchecked(aDst: TCollection); override;
 
     { 容器方法... 只需要重写  doXXX }
 
@@ -101,16 +101,16 @@ type
 
     function  GetMemory: PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  Get(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetUnChecked(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetUnchecked(aIndex: SizeUInt): T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Put(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure PutUnChecked(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure PutUnchecked(aIndex: SizeUInt; const aValue: T); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  GetPtr(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetPtrUnChecked(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetPtrUnchecked(aIndex: SizeUInt): PElement; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Resize(aNewSize: SizeUInt);
     procedure Ensure(aCount: SizeUInt);
 
     procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     // Non-throwing bulk ops (pointer overloads), forwarding to TCollection.Try*
@@ -122,25 +122,25 @@ type
     function  TryLoadFrom(const aSrc: TCollection): Boolean;
     function  TryAppend(const aSrc: TCollection): Boolean;
 
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
 
     procedure Swap(aIndex1, aIndex2: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapUnChecked(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Swap(aIndex1, aIndex2, aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Swap(aIndex1, aIndex2, aCount, aSwapBufferSize: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
 
     procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt);
-    procedure CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
+    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 
 
     procedure Fill(aIndex: SizeUInt; const aValue: T); overload;
@@ -467,122 +467,122 @@ type
     procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
-    { UnChecked 算法方法 - 跳过边界检查，追求极致性能 }
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    { Unchecked 算法方法 - 跳过边界检查，追求极致性能 }
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
+    function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
+    function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
+    function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
+    procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
+    function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt); overload;
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
+    procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
 
-    procedure FillUnChecked(aIndex, aCount: SizeUInt; const aElement: T);
-    procedure ZeroUnChecked(aIndex, aCount: SizeUInt);
-    procedure ReverseUnChecked(aStartIndex, aCount: SizeUInt);
+    procedure FillUnchecked(aIndex, aCount: SizeUInt; const aElement: T);
+    procedure ZeroUnchecked(aIndex, aCount: SizeUInt);
+    procedure ReverseUnchecked(aStartIndex, aCount: SizeUInt);
 
     property Items[aIndex: SizeUInt]: T           read Get write Put; default;
     property Ptr[aIndex: SizeUInt]:   PElement read GetPtr;
@@ -594,7 +594,7 @@ type
 
 implementation
 
-procedure MemCopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
+procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
 begin
   CopyUnChecked(aSrc, aDst, aSize);
 end;
@@ -607,7 +607,7 @@ end;
 function TArray.DoIterGetCurrent(aIter: PPtrIter): Pointer;
 begin
   {$PUSH}{$WARN 4055 OFF}
-  Result := GetPtrUnChecked(SizeUInt(aIter^.Data));
+  Result := GetPtrUnchecked(SizeUInt(aIter^.Data));
   {$POP}
 end;
 
@@ -630,9 +630,9 @@ end;
 
 procedure TArray.DoSwapRaw(const aIndex1, aIndex2: SizeUInt);
 begin
-  FSwapValueCache := GetUnChecked(aIndex1);
-  PutUnChecked(aIndex1, GetUnChecked(aIndex2));
-  PutUnChecked(aIndex2, FSwapValueCache);
+  FSwapValueCache := GetUnchecked(aIndex1);
+  PutUnchecked(aIndex1, GetUnchecked(aIndex2));
+  PutUnchecked(aIndex2, FSwapValueCache);
 end;
 
 procedure TArray.DoSwapPtrUInt(const aIndex1, aIndex2: SizeUInt);
@@ -640,8 +640,8 @@ var
   LP1: PPtrUInt;
   LP2: PPtrUInt;
 begin
-  LP1               := PPtrUInt(GetPtrUnChecked(aIndex1));
-  LP2               := PPtrUInt(GetPtrUnChecked(aIndex2));
+  LP1               := PPtrUInt(GetPtrUnchecked(aIndex1));
+  LP2               := PPtrUInt(GetPtrUnchecked(aIndex2));
   FSwapPointerCache := LP1^;
   LP1^              := LP2^;
   LP2^              := FSwapPointerCache;
@@ -652,12 +652,12 @@ var
   LP1: PElement;
   LP2: PElement;
 begin
-  LP1 := GetPtrUnChecked(aIndex1);
-  LP2 := GetPtrUnChecked(aIndex2);
+  LP1 := GetPtrUnchecked(aIndex1);
+  LP2 := GetPtrUnchecked(aIndex2);
 
-  MemCopyUnChecked(LP1, FSwapBufferCache, FElementSizeCache);
-  MemCopyUnChecked(LP2, LP1, FElementSizeCache);
-  MemCopyUnChecked(FSwapBufferCache, LP2, FElementSizeCache);
+  MemCopyUnchecked(LP1, FSwapBufferCache, FElementSizeCache);
+  MemCopyUnchecked(LP2, LP1, FElementSizeCache);
+  MemCopyUnchecked(FSwapBufferCache, LP2, FElementSizeCache);
 end;
 
 function TArray.IsOverlap(const aSrc: Pointer; aCount: SizeUInt): Boolean;
@@ -679,7 +679,7 @@ end;
 
 procedure TArray.DoFill(aIndex, aCount: SizeUInt; const aElement: T);
 begin
-  FElementManager.FillElements(GetPtrUnChecked(aIndex), aElement, aCount);
+  FElementManager.FillElements(GetPtrUnchecked(aIndex), aElement, aCount);
 end;
 
 procedure TArray.DoZero();
@@ -689,7 +689,7 @@ end;
 
 procedure TArray.DoZero(aIndex, aCount: SizeUInt);
 begin
-  FElementManager.ZeroElements(GetPtrUnChecked(aIndex), aCount);
+  FElementManager.ZeroElements(GetPtrUnchecked(aIndex), aCount);
 end;
 
 procedure TArray.DoReverse;
@@ -710,7 +710,7 @@ begin
 
   for i := 0 to LSwapCount - 1 do
   begin
-    SwapUnChecked(LLeft, LRight);
+    SwapUnchecked(LLeft, LRight);
     Inc(LLeft);
     Dec(LRight);
   end;
@@ -729,7 +729,7 @@ begin
     Exit(True);
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
-    if not aProxy(aPredicate, GetUnChecked(i), aData) then
+    if not aProxy(aPredicate, GetUnchecked(i), aData) then
       exit(False);
 
   Result := True;
@@ -753,7 +753,7 @@ begin
   i := aStartIndex;
   while i < LEndIndex do
   begin
-    if aProxy(aEquals, aElement, GetUnChecked(i), aData) then
+    if aProxy(aEquals, aElement, GetUnchecked(i), aData) then
       exit(i);
     Inc(i);
   end;
@@ -769,7 +769,7 @@ begin
     Exit(-1);
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
-    if aProxy(aPredicate, GetUnChecked(i), aData) then
+    if aProxy(aPredicate, GetUnchecked(i), aData) then
       exit(i);
 
   Result := -1;
@@ -783,7 +783,7 @@ begin
     Exit(-1);
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
-    if not aProxy(aPredicate, GetUnChecked(i), aData) then
+    if not aProxy(aPredicate, GetUnchecked(i), aData) then
       exit(i);
 
   Result := -1;
@@ -797,7 +797,7 @@ begin
     Exit(-1);
 
   for i := aStartIndex + aCount - 1 downto aStartIndex do
-    if aProxy(aEquals, aElement, GetUnChecked(i), aData) then
+    if aProxy(aEquals, aElement, GetUnchecked(i), aData) then
       exit(i);
 
   Result := -1;
@@ -811,7 +811,7 @@ begin
     Exit(-1);
 
   for i := aStartIndex + aCount - 1 downto aStartIndex do
-    if aProxy(aPredicate, GetUnChecked(i), aData) then
+    if aProxy(aPredicate, GetUnchecked(i), aData) then
       exit(i);
 
   Result := -1;
@@ -825,7 +825,7 @@ begin
     Exit(-1);
 
   for i := aStartIndex + aCount - 1 downto aStartIndex do
-    if not aProxy(aPredicate, GetUnChecked(i), aData) then
+    if not aProxy(aPredicate, GetUnchecked(i), aData) then
       exit(i);
 
   Result := -1;
@@ -846,7 +846,7 @@ begin
     Exit;
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
-    if aProxy(aEquals, aElement, GetUnChecked(i), aData) then
+    if aProxy(aEquals, aElement, GetUnchecked(i), aData) then
       Inc(Result);
 end;
 
@@ -866,7 +866,7 @@ begin
 
   LEndIndex := aStartIndex + aCount - 1;
   for i := aStartIndex to LEndIndex do
-    if aProxy(aPredicate, GetUnChecked(i), aData) then
+    if aProxy(aPredicate, GetUnchecked(i), aData) then
       Inc(Result);
 end;
 
@@ -885,7 +885,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
 
     if aProxy(aEquals, aElement, LP^, aData) then
       LP^ := aNewElement;
@@ -907,7 +907,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
 
     if aProxy(aPredicate, LP^, aData) then
       LP^ := aNewElement;
@@ -923,8 +923,8 @@ begin
   if aCount < 2 then
     Exit(True);
 
-  LPCurrent := GetPtrUnChecked(aStartIndex);
-  LPNext    := GetPtrUnChecked(aStartIndex + 1);
+  LPCurrent := GetPtrUnchecked(aStartIndex);
+  LPNext    := GetPtrUnchecked(aStartIndex + 1);
   LEndIndex := aStartIndex + aCount - 2;
 
   for i := aStartIndex to LEndIndex do
@@ -1017,7 +1017,7 @@ begin
       if i <= j then
       begin
         if i <> j then
-          SwapUnChecked(i, j);
+          SwapUnchecked(i, j);
         Inc(i);
         Dec(j);
       end;
@@ -1067,7 +1067,7 @@ var
 begin
   LL := aStartIndex;
   LR := aStartIndex + aCount;
-  LP := GetPtrUnChecked(0);
+  LP := GetPtrUnchecked(0);
 
   while LL < LR do
   begin
@@ -1098,7 +1098,7 @@ begin
     Exit;
 
   for i := (aStartIndex + aCount - 1) downto (aStartIndex + 1) do
-    SwapUnChecked(i, aStartIndex + aProxy(aRandomGenerator, i - aStartIndex + 1, aData));
+    SwapUnchecked(i, aStartIndex + aProxy(aRandomGenerator, i - aStartIndex + 1, aData));
 end;
 
 constructor TArray.Create(aAllocator: IAllocator; aData: Pointer);
@@ -1192,16 +1192,16 @@ begin
   if aCount > FCount then
     raise EOutOfRange.Create('TArray.SerializeToArrayBuffer: aCount out of bounds');
 
-  FElementManager.CopyElementsNonOverlapUnChecked(FMemory, aDst, aCount);
+  FElementManager.CopyElementsNonOverlapUnchecked(FMemory, aDst, aCount);
 end;
 
-procedure TArray.LoadFromUnChecked(const aSrc: Pointer; aCount: SizeUInt);
+procedure TArray.LoadFromUnchecked(const aSrc: Pointer; aCount: SizeUInt);
 begin
   Resize(aCount);
-  OverwriteUnChecked(0, aSrc, aCount);
+  OverwriteUnchecked(0, aSrc, aCount);
 end;
 
-procedure TArray.AppendUnChecked(const aSrc: Pointer; aCount: SizeUInt);
+procedure TArray.AppendUnchecked(const aSrc: Pointer; aCount: SizeUInt);
 var
   LCount:       SizeUInt;
   LIndex:       SizeUInt;
@@ -1218,29 +1218,29 @@ begin
 
     {$PUSH}{$WARN 4055 OFF}
     if (PtrUInt(aSrc) mod LElementSize) <> 0 then
-      raise EInvalidArgument.Create('TArray.AppendUnChecked: aSrc is not aligned');
+      raise EInvalidArgument.Create('TArray.AppendUnchecked: aSrc is not aligned');
 
     LIndex := (PtrUInt(aSrc) - PtrUInt(FMemory)) div LElementSize;
     {$POP}
     if (LIndex >= LCount) or (aCount > (LCount - LIndex)) then
-      raise EOutOfRange.Create('TArray.AppendUnChecked: bounds out of range');
+      raise EOutOfRange.Create('TArray.AppendUnchecked: bounds out of range');
 
     Resize(LCount + aCount);
-    CopyUnChecked(LIndex, LCount, aCount);
+    CopyUnchecked(LIndex, LCount, aCount);
   end
   else
   begin
     Resize(LCount + aCount);
-    OverwriteUnChecked(LCount, aSrc, aCount);
+    OverwriteUnchecked(LCount, aSrc, aCount);
   end;
 end;
 
-procedure TArray.AppendToUnChecked(const aDst: TCollection);
+procedure TArray.AppendToUnchecked(const aDst: TCollection);
 begin
   if (FCount = 0) then
     exit;
 
-  aDst.AppendUnChecked(FMemory, FCount);
+  aDst.AppendUnchecked(FMemory, FCount);
 end;
 
 function TArray.PtrIter: TPtrIter;
@@ -1248,12 +1248,12 @@ begin
   Result.Init(Self, @DoIterGetCurrent, @DoIterMoveNext, Pointer(0));
 end;
 
-procedure TArray.SaveToUnChecked(aDst: TCollection);
+procedure TArray.SaveToUnchecked(aDst: TCollection);
 begin
   if FCount = 0 then
     aDst.Clear
   else
-    aDst.LoadFromUnChecked(FMemory, FCount);
+    aDst.LoadFromUnchecked(FMemory, FCount);
 end;
 
 
@@ -1288,9 +1288,9 @@ begin
   Result := GetPtr(aIndex)^;
 end;
 
-function TArray.GetUnChecked(aIndex: SizeUInt): T;
+function TArray.GetUnchecked(aIndex: SizeUInt): T;
 begin
-  Result := GetPtrUnChecked(aIndex)^;
+  Result := GetPtrUnchecked(aIndex)^;
 end;
 
 procedure TArray.Put(aIndex: SizeUInt; const aValue: T);
@@ -1298,9 +1298,9 @@ begin
   GetPtr(aIndex)^ := aValue;
 end;
 
-procedure TArray.PutUnChecked(aIndex: SizeUInt; const aValue: T);
+procedure TArray.PutUnchecked(aIndex: SizeUInt; const aValue: T);
 begin
-  GetPtrUnChecked(aIndex)^ := aValue;
+  GetPtrUnchecked(aIndex)^ := aValue;
 end;
 
 function TArray.GetPtr(aIndex: SizeUInt): PElement;
@@ -1308,10 +1308,10 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TArray.GetPtr: index out of range');
 
-  Result := GetPtrUnChecked(aIndex);
+  Result := GetPtrUnchecked(aIndex);
 end;
 
-function TArray.GetPtrUnChecked(aIndex: SizeUInt): PElement;
+function TArray.GetPtrUnchecked(aIndex: SizeUInt): PElement;
 begin
   Result := PElement(FMemory) + aIndex;
 end;
@@ -1358,7 +1358,7 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TArray.Fill: aIndex + aCount out of range');
 
-  FillUnChecked(aIndex, aCount, aValue);
+  FillUnchecked(aIndex, aCount, aValue);
 end;
 
 
@@ -1367,7 +1367,7 @@ begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TArray.Zero: aIndex out of range');
 
-  ZeroUnChecked(aIndex, FCount - aIndex);
+  ZeroUnchecked(aIndex, FCount - aIndex);
 end;
 
 procedure TArray.Zero(aIndex, aCount: SizeUInt);
@@ -1381,7 +1381,7 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TArray.Zero: aIndex + aCount out of range');
 
-  ZeroUnChecked(aIndex, aCount);
+  ZeroUnchecked(aIndex, aCount);
 end;
 
 procedure TArray.Swap(aIndex1, aIndex2: SizeUInt);
@@ -1392,10 +1392,10 @@ begin
   if aIndex1 = aIndex2 then
     raise EInvalidArgument.Create('TArray.Swap: same index');
 
-  SwapUnChecked(aIndex1, aIndex2);
+  SwapUnchecked(aIndex1, aIndex2);
 end;
 
-procedure TArray.SwapUnChecked(aIndex1, aIndex2: SizeUInt);
+procedure TArray.SwapUnchecked(aIndex1, aIndex2: SizeUInt);
 begin
   FSwapMethod(aIndex1, aIndex2);
 end;
@@ -1450,17 +1450,17 @@ begin
 
     try
       { 分块交换元素 }
-      LP1 := PByte(GetPtrUnChecked(aIndex1));
-      LP2 := PByte(GetPtrUnChecked(aIndex2));
+      LP1 := PByte(GetPtrUnchecked(aIndex1));
+      LP2 := PByte(GetPtrUnchecked(aIndex2));
 
       while LRemainSize > 0 do
       begin
         if LBufferSize > LRemainSize then
           LBufferSize  := LRemainSize;
 
-        MemCopyUnChecked(LP1,     LBuffer, LBufferSize);
-        MemCopyUnChecked(LP2,     LP1,     LBufferSize);
-        MemCopyUnChecked(LBuffer, LP2,     LBufferSize);
+        MemCopyUnchecked(LP1,     LBuffer, LBufferSize);
+        MemCopyUnchecked(LP2,     LP1,     LBufferSize);
+        MemCopyUnchecked(LBuffer, LP2,     LBufferSize);
 
         Inc(LP1, LBufferSize);
         Inc(LP2, LBufferSize);
@@ -1472,7 +1472,7 @@ begin
     end;
   end
   else
-    SwapUnChecked(aIndex1, aIndex2);
+    SwapUnchecked(aIndex1, aIndex2);
 end;
 
 procedure TArray.Copy(aSrcIndex, aDstIndex, aCount: SizeUInt);
@@ -1495,12 +1495,12 @@ begin
   if aSrcIndex = aDstIndex then
     raise EInvalidArgument.Create('TArray.Copy: same index');
 
-  CopyUnChecked(aSrcIndex, aDstIndex, aCount);
+  CopyUnchecked(aSrcIndex, aDstIndex, aCount);
 end;
 
-procedure TArray.CopyUnChecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
+procedure TArray.CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 begin
-  FElementManager.CopyElementsUnChecked(GetPtrUnChecked(aSrcIndex), GetPtrUnChecked(aDstIndex), aCount);
+  FElementManager.CopyElementsUnchecked(GetPtrUnchecked(aSrcIndex), GetPtrUnchecked(aDstIndex), aCount);
 end;
 
 procedure TArray.Reverse(aStartIndex: SizeUInt);
@@ -1522,7 +1522,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Reverse: aStartIndex + aCount out of range');
 
-  ReverseUnChecked(aStartIndex, aCount);
+  ReverseUnchecked(aStartIndex, aCount);
 end;
 
 function TArray.ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
@@ -1562,7 +1562,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
-  Result := ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := ForEachUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
@@ -1576,7 +1576,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
-  Result := ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := ForEachUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -1591,7 +1591,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
-  Result := ForEachUnChecked(aStartIndex, aCount, aPredicate);
+  Result := ForEachUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -1640,7 +1640,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
-  Result := ContainsUnChecked(aValue, aStartIndex, aCount);
+  Result := ContainsUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TArray.Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
@@ -1654,7 +1654,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
-  Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := ContainsUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TArray.Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
@@ -1668,7 +1668,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
-  Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := ContainsUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -1683,7 +1683,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
-  Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals);
+  Result := ContainsUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -1766,7 +1766,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
-  Result := FindUnChecked(aValue, aStartIndex, aCount);
+  Result := FindUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TArray.Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
@@ -1780,7 +1780,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
-  Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FindUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TArray.Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
@@ -1794,7 +1794,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
-  Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
+  Result := FindUnchecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -1809,7 +1809,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
-  Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals);
+  Result := FindUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -1877,7 +1877,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
-  Result := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
@@ -1891,7 +1891,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
-  Result := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -1906,7 +1906,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
-  Result := FindIFUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FindIFUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -1975,7 +1975,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
-  Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
@@ -1989,7 +1989,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
-  Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2004,7 +2004,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
-  Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FindIFNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2087,7 +2087,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
-  Result := FindLastUnChecked(aElement, aStartIndex, aCount);
+  Result := FindLastUnchecked(aElement, aStartIndex, aCount);
 end;
 
 function TArray.FindLast(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
@@ -2101,7 +2101,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
-  Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := FindLastUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TArray.FindLast(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
@@ -2115,7 +2115,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
-  Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := FindLastUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2130,7 +2130,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
-  Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals);
+  Result := FindLastUnchecked(aElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -2197,7 +2197,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
-  Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
@@ -2211,7 +2211,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
-  Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2226,7 +2226,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
-  Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FindLastIFUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2293,7 +2293,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
-  Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
@@ -2307,7 +2307,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
-  Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2322,7 +2322,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
-  Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate);
+  Result := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2371,7 +2371,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
-  Result := CountOfUnChecked(aElement, aStartIndex, aCount);
+  Result := CountOfUnchecked(aElement, aStartIndex, aCount);
 end;
 
 function TArray.CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
@@ -2385,7 +2385,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
-  Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := CountOfUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 function TArray.CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
@@ -2399,7 +2399,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
-  Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
+  Result := CountOfUnchecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2414,7 +2414,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
-  Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals);
+  Result := CountOfUnchecked(aElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -2455,7 +2455,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 function TArray.CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
@@ -2469,7 +2469,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2485,7 +2485,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
-  Result := CountIfUnChecked(aStartIndex, aCount, aPredicate);
+  Result := CountIfUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2535,7 +2535,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
-  ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount);
+  ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount);
 end;
 
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer);
@@ -2549,7 +2549,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
-  ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
+  ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer);
@@ -2563,7 +2563,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
-  ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
+  ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2578,7 +2578,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
-  ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals);
+  ReplaceUnchecked(aElement, aNewElement, aStartIndex, aCount, aEquals);
 end;
 {$ENDIF}
 
@@ -2619,7 +2619,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
-  ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
 procedure TArray.ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
@@ -2633,7 +2633,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
-  ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2648,7 +2648,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
-  ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate);
+  ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2731,7 +2731,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
-  Result := IsSortedUnChecked(aStartIndex, aCount);
+  Result := IsSortedUnchecked(aStartIndex, aCount);
 end;
 
 function TArray.IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
@@ -2745,7 +2745,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 function TArray.IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
@@ -2759,7 +2759,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2774,7 +2774,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
-  Result := IsSortedUnChecked(aStartIndex, aCount, aComparer);
+  Result := IsSortedUnchecked(aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
@@ -2858,7 +2858,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
-  SortUnChecked(aStartIndex, aCount);
+  SortUnchecked(aStartIndex, aCount);
 end;
 
 procedure TArray.Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
@@ -2872,7 +2872,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
-  SortUnChecked(aStartIndex, aCount, aComparer, aData);
+  SortUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 procedure TArray.Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
@@ -2886,7 +2886,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
-  SortUnChecked(aStartIndex, aCount, aComparer, aData);
+  SortUnchecked(aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -2901,7 +2901,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
-  SortUnChecked(aStartIndex, aCount, aComparer);
+  SortUnchecked(aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
@@ -2984,7 +2984,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TArray.BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
@@ -2998,7 +2998,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TArray.BinarySearch(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
@@ -3012,7 +3012,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -3027,7 +3027,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
-  Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer);
+  Result := BinarySearchUnchecked(aValue, aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
@@ -3110,7 +3110,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount);
 end;
 
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
@@ -3124,7 +3124,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
@@ -3138,7 +3138,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -3153,7 +3153,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
-  Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer);
+  Result := BinarySearchInsertUnchecked(aValue, aStartIndex, aCount, aComparer);
 end;
 {$ENDIF}
 
@@ -3250,7 +3250,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
 
 procedure TArray.Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
@@ -3264,7 +3264,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
@@ -3279,7 +3279,7 @@ begin
   if aCount > (FCount - aStartIndex) then
     raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
-  ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator);
+  ShuffleUnchecked(aStartIndex, aCount, aRandomGenerator);
 end;
 {$ENDIF}
 
@@ -3297,12 +3297,12 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TArray.Overwrite: bounds out of range');
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TArray.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
-  FElementManager.CopyElementsUnChecked(aSrc, GetPtrUnChecked(aIndex), aCount);
+  FElementManager.CopyElementsUnchecked(aSrc, GetPtrUnchecked(aIndex), aCount);
 end;
 
 procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: array of T);
@@ -3315,14 +3315,14 @@ begin
   Overwrite(aIndex, @aSrc[0], LLen);
 end;
 
-  { UnChecked 统一约定：
+  { Unchecked 统一约定：
     - 不进行参数/边界/空指针检查；调用方需保证前置条件
     - open array 版本要求 aSrc 非空，否则 @aSrc[0] 未定义
-    - 详见 docs/UnChecked_Methods_Summary.md }
+    - 详见 docs/Unchecked_Methods_Summary.md }
 
-procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TArray.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverwriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  OverwriteUnchecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
 procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
@@ -3350,12 +3350,12 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TArray.Overwrite: bounds out of range');
 
-  OverwriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnchecked(aIndex, aSrc, aCount);
 end;
 
-procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TArray.OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
-  aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
+  aSrc.SerializeToArrayBuffer(GetPtrUnchecked(aIndex), aCount);
 end;
 
 procedure TArray.Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
@@ -3372,12 +3372,12 @@ begin
   if aCount > (FCount - aIndex) then
     raise EOutOfRange.Create('TArray.Read: bounds out of range');
 
-  ReadUnChecked(aIndex, aDst, aCount);
+  ReadUnchecked(aIndex, aDst, aCount);
 end;
 
-procedure TArray.ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
+procedure TArray.ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
-  FElementManager.CopyElementsUnChecked(GetPtrUnChecked(aIndex), aDst, aCount);
+  FElementManager.CopyElementsUnchecked(GetPtrUnchecked(aIndex), aDst, aCount);
 end;
 
 procedure TArray.Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
@@ -3395,205 +3395,205 @@ begin
   Read(aIndex, @aDst[0], aCount);
 end;
 
-procedure TArray.ReadUnChecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
+procedure TArray.ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt);
 begin
   SetLength(aDst, aCount);
-  ReadUnChecked(aIndex, @aDst[0], aCount);
+  ReadUnchecked(aIndex, @aDst[0], aCount);
 end;
 
-{ UnChecked 算法方法实现 - 跳过边界检查，追求极致性能 }
+{ Unchecked 算法方法实现 - 跳过边界检查，追求极致性能 }
 
-function TArray.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean;
+function TArray.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): Boolean;
 begin
   Result := DoContains(@DoEqualsDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
+function TArray.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
 begin
   Result := DoContains(@DoEqualsFuncProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
-function TArray.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
+function TArray.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
 begin
   Result := DoContains(@DoEqualsMethodProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.ContainsUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean;
+function TArray.ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
   Result := DoContains(@DoEqualsRefFuncProxy, aElement, aStartIndex, aCount, @aEquals, nil);
 end;
 {$ENDIF}
 
-function TArray.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindIF(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindIF(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TArray.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   Result := DoFindIF(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindIFNot(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindIFNot(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TArray.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   Result := DoFindIFNot(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TArray.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
   Result := DoFindLast(@DoEqualsDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLast(@DoEqualsFuncProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
-function TArray.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLast(@DoEqualsMethodProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindLastUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
+function TArray.FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
   Result := DoFindLast(@DoEqualsRefFuncProxy, aElement, aStartIndex, aCount, @aEquals, nil);
 end;
 {$ENDIF}
 
-function TArray.FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TArray.FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
   Result := DoFind(@DoEqualsDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFind(@DoEqualsFuncProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
-function TArray.FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFind(@DoEqualsMethodProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
+function TArray.FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
   Result := DoFind(@DoEqualsRefFuncProxy, aElement, aStartIndex, aCount, @aEquals, nil);
 end;
 {$ENDIF}
 
-function TArray.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLastIF(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLastIF(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindLastIFUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TArray.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   Result := DoFindLastIF(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TArray.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLastIFNot(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TArray.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoFindLastIFNot(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.FindLastIFNotUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TArray.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   Result := DoFindLastIFNot(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TArray.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 begin
   Result := DoCountOf(@DoEqualsDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
+function TArray.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 begin
   Result := DoCountOf(@DoEqualsFuncProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
-function TArray.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
+function TArray.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
 begin
   Result := DoCountOf(@DoEqualsMethodProxy, aElement, aStartIndex, aCount, @aEquals, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.CountOfUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
+function TArray.CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
   Result := DoCountOf(@DoEqualsRefFuncProxy, aElement, aStartIndex, aCount, @aEquals, nil);
 end;
 {$ENDIF}
 
-function TArray.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
+function TArray.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
 begin
   Result := DoForEach(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
+function TArray.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
 begin
   Result := DoForEach(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.ForEachUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean;
+function TArray.ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 begin
   Result := DoForEach(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TArray.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
   Result := DoCountIF(@DoPredicateFuncProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
-function TArray.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TArray.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
   Result := DoCountIF(@DoPredicateMethodProxy, aStartIndex, aCount, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.CountIfUnChecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TArray.CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
   Result := DoCountIF(@DoPredicateRefFuncProxy, aStartIndex, aCount, @aPredicate, nil);
 end;
 {$ENDIF}
 
-function TArray.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
+function TArray.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3605,7 +3605,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoEqualsDefaultProxy(nil, aElement, LP^, nil) then
     begin
       LP^ := aNewElement;
@@ -3614,7 +3614,7 @@ begin
   end;
 end;
 
-function TArray.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
+function TArray.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3626,7 +3626,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoEqualsFuncProxy(@aEquals, aElement, LP^, aData) then
     begin
       LP^ := aNewElement;
@@ -3635,7 +3635,7 @@ begin
   end;
 end;
 
-function TArray.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
+function TArray.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3647,7 +3647,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoEqualsMethodProxy(@aEquals, aElement, LP^, aData) then
     begin
       LP^ := aNewElement;
@@ -3657,7 +3657,7 @@ begin
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.ReplaceUnChecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
+function TArray.ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3669,7 +3669,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoEqualsRefFuncProxy(@aEquals, aElement, LP^, nil) then
     begin
       LP^ := aNewElement;
@@ -3679,7 +3679,7 @@ begin
 end;
 {$ENDIF}
 
-function TArray.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TArray.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3691,7 +3691,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoPredicateFuncProxy(@aPredicate, LP^, aData) then
     begin
       LP^ := aNewElement;
@@ -3700,7 +3700,7 @@ begin
   end;
 end;
 
-function TArray.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TArray.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3712,7 +3712,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoPredicateMethodProxy(@aPredicate, LP^, aData) then
     begin
       LP^ := aNewElement;
@@ -3722,7 +3722,7 @@ begin
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.ReplaceIFUnChecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TArray.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 var
   i: SizeUInt;
   LP: PElement;
@@ -3734,7 +3734,7 @@ begin
 
   for i := aStartIndex to aStartIndex + aCount - 1 do
   begin
-    LP := GetPtrUnChecked(i);
+    LP := GetPtrUnchecked(i);
     if DoPredicateRefFuncProxy(@aPredicate, LP^, nil) then
     begin
       LP^ := aNewElement;
@@ -3744,129 +3744,129 @@ begin
 end;
 {$ENDIF}
 
-procedure TArray.SortUnChecked(aStartIndex, aCount: SizeUInt);
+procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt);
 begin
   DoSort(@DoCompareDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
 
-procedure TArray.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
+procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
 begin
   DoSort(@DoCompareFuncProxy, aStartIndex, aCount, @aComparer, aData);
 end;
 
-procedure TArray.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
+procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
 begin
   DoSort(@DoCompareMethodProxy, aStartIndex, aCount, @aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TArray.SortUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>);
+procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>);
 begin
   DoSort(@DoCompareRefFuncProxy, aStartIndex, aCount, @aComparer, nil);
 end;
 {$ENDIF}
 
-function TArray.IsSortedUnChecked(aStartIndex, aCount: SizeUInt): Boolean;
+function TArray.IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean;
 begin
   Result := DoIsSorted(@DoCompareDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
+function TArray.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
 begin
   Result := DoIsSorted(@DoCompareFuncProxy, aStartIndex, aCount, @aComparer, aData);
 end;
 
-function TArray.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
+function TArray.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
 begin
   Result := DoIsSorted(@DoCompareMethodProxy, aStartIndex, aCount, @aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.IsSortedUnChecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean;
+function TArray.IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean;
 begin
   Result := DoIsSorted(@DoCompareRefFuncProxy, aStartIndex, aCount, @aComparer, nil);
 end;
 {$ENDIF}
 
-function TArray.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TArray.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
   Result := DoBinarySearch(@DoCompareDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
+function TArray.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoBinarySearch(@DoCompareFuncProxy, aElement, aStartIndex, aCount, @aComparer, aData);
 end;
 
-function TArray.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
+function TArray.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoBinarySearch(@DoCompareMethodProxy, aElement, aStartIndex, aCount, @aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.BinarySearchUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
+function TArray.BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
   Result := DoBinarySearch(@DoCompareRefFuncProxy, aElement, aStartIndex, aCount, @aComparer, nil);
 end;
 {$ENDIF}
 
-function TArray.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
+function TArray.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt;
 begin
   Result := DoBinarySearchInsert(@DoCompareDefaultProxy, aElement, aStartIndex, aCount, nil, nil);
 end;
 
-function TArray.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
+function TArray.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   Result := DoBinarySearchInsert(@DoCompareFuncProxy, aElement, aStartIndex, aCount, @aComparer, aData);
 end;
 
-function TArray.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
+function TArray.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
   Result := DoBinarySearchInsert(@DoCompareMethodProxy, aElement, aStartIndex, aCount, @aComparer, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TArray.BinarySearchInsertUnChecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
+function TArray.BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
   Result := DoBinarySearchInsert(@DoCompareRefFuncProxy, aElement, aStartIndex, aCount, @aComparer, nil);
 end;
 {$ENDIF}
 
-procedure TArray.ShuffleUnChecked(aStartIndex, aCount: SizeUInt);
+procedure TArray.ShuffleUnchecked(aStartIndex, aCount: SizeUInt);
 begin
   DoShuffle(@DoRandomGeneratorDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
 
-procedure TArray.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
+procedure TArray.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
 begin
   DoShuffle(@DoRandomGeneratorFuncProxy, aStartIndex, aCount, @aRandomGenerator, aData);
 end;
 
-procedure TArray.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
+procedure TArray.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
 begin
   DoShuffle(@DoRandomGeneratorMethodProxy, aStartIndex, aCount, @aRandomGenerator, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TArray.ShuffleUnChecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
+procedure TArray.ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
 begin
   DoShuffle(@DoRandomGeneratorRefFuncProxy, aStartIndex, aCount, @aRandomGenerator, nil);
 end;
 {$ENDIF}
 
-procedure TArray.FillUnChecked(aIndex, aCount: SizeUInt; const aElement: T);
+procedure TArray.FillUnchecked(aIndex, aCount: SizeUInt; const aElement: T);
 begin
   // Route through the same optimized path as checked Fill to ensure
   // consistent behavior for managed/unmanaged types and better performance.
   DoFill(aIndex, aCount, aElement);
 end;
 
-procedure TArray.ZeroUnChecked(aIndex, aCount: SizeUInt);
+procedure TArray.ZeroUnchecked(aIndex, aCount: SizeUInt);
 begin
   DoZero(aIndex, aCount);
 end;
 
-procedure TArray.ReverseUnChecked(aStartIndex, aCount: SizeUInt);
+procedure TArray.ReverseUnchecked(aStartIndex, aCount: SizeUInt);
 begin
   DoReverse(aStartIndex, aCount);
 end;

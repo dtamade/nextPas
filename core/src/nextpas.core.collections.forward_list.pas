@@ -10,10 +10,10 @@ unit nextpas.core.collections.forward_list;
  * - 最小必需：Front/PushFront/PopFront
  * - 扩展能力：InsertAfter/EraseAfter/Remove/RemoveIf/Find/FindIf/Sort/Unique/Merge/Splice/Resize 等
  * - 无 Back/PushBack/PopBack（单向链表特性）
- * - Checked vs UnChecked：
+ * - Checked vs Unchecked：
  *   - Checked 负责参数/状态检查；空表 Pop/Front 抛出 EInvalidOperation
  *   - Try* 形式返回 False，不抛异常
- *   - UnChecked 不做检查，仅在必要处对零长度做 no-op
+ *   - Unchecked 不做检查，仅在必要处对零长度做 no-op
  *
  * 异常与安全
  * - 迭代期间修改：遵循具体实现文档，通常不保证并发安全
@@ -141,11 +141,11 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     { IGenericCollection<T> 接口实现 }
-    procedure SaveToUnChecked(aDst: TCollection); override;
+    procedure SaveToUnchecked(aDst: TCollection); override;
     function  ToArray: specialize TGenericArray<T>; override;
 
     { IForwardList<T> 接口实现 }
@@ -166,11 +166,11 @@ type
     function  EmplaceAfterEx(aPosition: TIter; const aElement: T): TIter; inline;
 
     { 高性能方法（无安全检查版本）}
-    procedure PushFrontUnChecked(const aElement: T); inline;
-    function  PopFrontUnChecked: T; inline;
-    procedure EmplaceFrontUnChecked(const aElement: T); inline;
-    procedure PushFrontRangeUnChecked(const aArray: array of T);
-    procedure ClearUnChecked;
+    procedure PushFrontUnchecked(const aElement: T); inline;
+    function  PopFrontUnchecked: T; inline;
+    procedure EmplaceFrontUnchecked(const aElement: T); inline;
+    procedure PushFrontRangeUnchecked(const aArray: array of T);
+    procedure ClearUnchecked;
 
     function  InsertAfter(aPosition: TIter; const aElement: T): TIter;
     function  InsertAfter(aPosition: TIter; aCount: SizeUInt; const aElement: T): TIter;
@@ -692,7 +692,7 @@ begin
   end;
 end;
 
-procedure TForwardList.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TForwardList.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   LSrcPtr: PByte;
   i: SizeUInt;
@@ -723,11 +723,11 @@ begin
   end;
 {$IFDEF DEBUG}
 if not DebugValidateTail then
-  raise EWow.Create('TForwardList.AppendUnChecked: tail invariant broken');
+  raise EWow.Create('TForwardList.AppendUnchecked: tail invariant broken');
 {$ENDIF}
 end;
 
-procedure TForwardList.AppendToUnChecked(const aDst: TCollection);
+procedure TForwardList.AppendToUnchecked(const aDst: TCollection);
 var
   LCount, LBufCap, LFill: SizeUInt;
   LBuf: array of T;
@@ -761,7 +761,7 @@ begin
 
     if LFill = LBufCap then
     begin
-      aDst.AppendUnChecked(@LBuf[0], LFill);
+      aDst.AppendUnchecked(@LBuf[0], LFill);
       LFill := 0;
     end;
 
@@ -770,15 +770,15 @@ begin
 
   // 处理最后一批
   if LFill > 0 then
-    aDst.AppendUnChecked(@LBuf[0], LFill);
+    aDst.AppendUnchecked(@LBuf[0], LFill);
 end;
 
 { TForwardList<T> - IGenericCollection<T> 接口实现 }
 
-procedure TForwardList.SaveToUnChecked(aDst: TCollection);
+procedure TForwardList.SaveToUnchecked(aDst: TCollection);
 begin
   aDst.Clear;
-  AppendToUnChecked(aDst);
+  AppendToUnchecked(aDst);
 end;
 
 function TForwardList.ToArray: specialize TGenericArray<T>;
@@ -824,7 +824,7 @@ begin
     FLast := FHead;
 end;
 
-procedure TForwardList.PushFrontUnChecked(const aElement: T);
+procedure TForwardList.PushFrontUnchecked(const aElement: T);
 var
   LNewNode: PSingleNode;
 begin
@@ -852,7 +852,7 @@ begin
     FLast := nil;
 end;
 
-function TForwardList.PopFrontUnChecked: T;
+function TForwardList.PopFrontUnchecked: T;
 var
   LOldHead: PSingleNode;
 begin
@@ -2820,18 +2820,18 @@ begin
   PushFront(aElement);
 end;
 
-procedure TForwardList.EmplaceFrontUnChecked(const aElement: T);
+procedure TForwardList.EmplaceFrontUnchecked(const aElement: T);
 begin
-  // 无检查版本：直接调用 PushFrontUnChecked 以获得最佳性能
-  PushFrontUnChecked(aElement);
+  // 无检查版本：直接调用 PushFrontUnchecked 以获得最佳性能
+  PushFrontUnchecked(aElement);
 end;
 
-{ UnChecked: 调用方必须确保前置条件：
+{ Unchecked: 调用方必须确保前置条件：
   - aArray 非空（Length(aArray) > 0），否则引用 aArray[Low(aArray)] 未定义
   - 单向链表仅支持头部插入，语义遵循 PushFront；逻辑位置需由调用方保证
   - 本方法不做参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TForwardList.PushFrontRangeUnChecked(const aArray: array of T);
+procedure TForwardList.PushFrontRangeUnchecked(const aArray: array of T);
 var
   LI: Integer;
   LNewNode: PSingleNode;
@@ -2855,11 +2855,11 @@ begin
     FLast := LNewTail;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.PushFrontRangeUnChecked: tail invariant broken');
+    raise EWow.Create('TForwardList.PushFrontRangeUnchecked: tail invariant broken');
   {$ENDIF}
 end;
 
-procedure TForwardList.ClearUnChecked;
+procedure TForwardList.ClearUnchecked;
 var
   LCurrent, LNext: PSingleNode;
 begin
@@ -2876,7 +2876,7 @@ begin
   FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.ClearUnChecked: tail invariant broken');
+    raise EWow.Create('TForwardList.ClearUnchecked: tail invariant broken');
   {$ENDIF}
 end;
 

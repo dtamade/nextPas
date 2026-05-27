@@ -202,8 +202,8 @@ type
     // 实现抽象方法（TCollection）
     function PtrIter: TPtrIter; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
   protected
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
@@ -452,7 +452,7 @@ begin
   end;
 end;
 
-procedure TOrderedSet.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TOrderedSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   i: SizeUInt;
   pSrc: ^T;
@@ -465,13 +465,13 @@ begin
   end;
 end;
 
-procedure TOrderedSet.AppendToUnChecked(const aDst: TCollection);
+procedure TOrderedSet.AppendToUnchecked(const aDst: TCollection);
 var
   Arr: TInternalArray;
 begin
   Arr := ToArray;
   if Length(Arr) > 0 then
-    aDst.AppendUnChecked(@Arr[0], Length(Arr));
+    aDst.AppendUnchecked(@Arr[0], Length(Arr));
 end;
 
 procedure TOrderedSet.DoZero;

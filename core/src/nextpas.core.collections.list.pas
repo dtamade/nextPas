@@ -9,9 +9,9 @@ unit nextpas.core.collections.list;
  * 语义约定
  * - PushFront/PushBack/PopFront/PopBack：O(1) 双端操作；Front/Back 不移除
  * - Overwrite vs Write：链表为节点结构，通常不提供 Overwrite 批量覆盖；插入/删除为主
- * - Checked vs UnChecked：
+ * - Checked vs Unchecked：
  *   - Checked 负责参数/状态检查，抛出 EOutOfRange/EArgumentNil/EInvalidArgument 等一致异常
- *   - UnChecked 不做任何检查，仅在必要处对零长度做 no-op
+ *   - Unchecked 不做任何检查，仅在必要处对零长度做 no-op
  *
  * 异常与安全
  * - 空表 Pop/Front/Back：Checked 抛出 EOutOfRange；Try* 返回 False
@@ -120,8 +120,8 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
     function  Clone: TCollection; override;
 
     { IList<T> 接口实现 }
@@ -137,12 +137,12 @@ type
     function  TryPopBack(out aElement: T): Boolean;
 
     { 高性能方法（无安全检查版本）}
-    procedure PushFrontUnChecked(const aElement: T); inline;
-    procedure PushBackUnChecked(const aElement: T); inline;
-    function  PopFrontUnChecked: T; inline;
-    function  PopBackUnChecked: T; inline;
-    procedure PushRangeUnChecked(const aArray: array of T);
-    procedure ClearUnChecked;
+    procedure PushFrontUnchecked(const aElement: T); inline;
+    procedure PushBackUnchecked(const aElement: T); inline;
+    function  PopFrontUnchecked: T; inline;
+    function  PopBackUnchecked: T; inline;
+    procedure PushRangeUnchecked(const aArray: array of T);
+    procedure ClearUnchecked;
 
     { 类型安全的克隆操作 }
     function  CloneList: TList;
@@ -244,25 +244,25 @@ var
 begin
   Create;
   for LI := Low(aSrc) to High(aSrc) do
-    PushBackUnChecked(aSrc[LI]);
+    PushBackUnchecked(aSrc[LI]);
 end;
 
 constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt);
 begin
   Create;
-  AppendUnChecked(aSrc, aElementCount);
+  AppendUnchecked(aSrc, aElementCount);
 end;
 
 constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator);
 begin
   Create(aAllocator);
-  AppendUnChecked(aSrc, aElementCount);
+  AppendUnchecked(aSrc, aElementCount);
 end;
 
 constructor TList.Create(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aData: Pointer);
 begin
   Create(aAllocator, aData);
-  AppendUnChecked(aSrc, aElementCount);
+  AppendUnchecked(aSrc, aElementCount);
 end;
 
 destructor TList.Destroy;
@@ -321,7 +321,7 @@ begin
   end;
 end;
 
-procedure TList.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TList.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   LSrcArray: ^T;
   LI: SizeUInt;
@@ -331,10 +331,10 @@ begin
 
   LSrcArray := aSrc;
   for LI := 0 to aElementCount - 1 do
-    PushBackUnChecked(LSrcArray[LI]);
+    PushBackUnchecked(LSrcArray[LI]);
 end;
 
-procedure TList.AppendToUnChecked(const aDst: TCollection);
+procedure TList.AppendToUnchecked(const aDst: TCollection);
 var
   LCurrent: PDoubleNode;
 begin
@@ -344,7 +344,7 @@ begin
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
-    aDst.AppendUnChecked(@LCurrent^.Data, 1);
+    aDst.AppendUnchecked(@LCurrent^.Data, 1);
     LCurrent := PDoubleNode(LCurrent^.GetNext);
   end;
   end;
@@ -383,7 +383,7 @@ begin
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
-    Result.PushBackUnChecked(LCurrent^.Data);
+    Result.PushBackUnchecked(LCurrent^.Data);
     LCurrent := PDoubleNode(LCurrent^.GetNext);
   end;
 end;
@@ -504,7 +504,7 @@ end;
 
 { TList<T> - 高性能方法（无安全检查版本）}
 
-procedure TList.PushFrontUnChecked(const aElement: T);
+procedure TList.PushFrontUnchecked(const aElement: T);
 var
   LNewNode: PDoubleNode;
 begin
@@ -519,7 +519,7 @@ begin
   Inc(FCount);
 end;
 
-procedure TList.PushBackUnChecked(const aElement: T);
+procedure TList.PushBackUnchecked(const aElement: T);
 var
   LNewNode: PDoubleNode;
 begin
@@ -534,7 +534,7 @@ begin
   Inc(FCount);
 end;
 
-function TList.PopFrontUnChecked: T;
+function TList.PopFrontUnchecked: T;
 var
   LOldHead: PDoubleNode;
 begin
@@ -551,7 +551,7 @@ begin
   Dec(FCount);
 end;
 
-function TList.PopBackUnChecked: T;
+function TList.PopBackUnchecked: T;
 var
   LOldTail: PDoubleNode;
 begin
@@ -568,20 +568,20 @@ begin
   Dec(FCount);
 end;
 
-{ UnChecked: 调用方必须确保前置条件：
+{ Unchecked: 调用方必须确保前置条件：
   - aArray 非空（Length(aArray) > 0），否则引用 aArray[Low(aArray)] 未定义
   - 插入序列的范围由调用方保证可用（链表结构无容量概念，但逻辑位置需有效）
   - 本方法不做参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TList.PushRangeUnChecked(const aArray: array of T);
+procedure TList.PushRangeUnchecked(const aArray: array of T);
 var
   LI: Integer;
 begin
   for LI := Low(aArray) to High(aArray) do
-    PushBackUnChecked(aArray[LI]);
+    PushBackUnchecked(aArray[LI]);
 end;
 
-procedure TList.ClearUnChecked;
+procedure TList.ClearUnchecked;
 var
   LCurrent, LNext: PDoubleNode;
 begin

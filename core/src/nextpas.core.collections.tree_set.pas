@@ -96,17 +96,17 @@ type
     function Clone: TCollection;
     function IsCompatible(aDst: TCollection): Boolean;
     procedure LoadFrom(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure LoadFromUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
+    procedure LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
     procedure Append(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
     procedure LoadFrom(const aSrc: TCollection); overload;
-    procedure LoadFromUnChecked(const aSrc: TCollection); overload;
+    procedure LoadFromUnchecked(const aSrc: TCollection); overload;
     procedure SaveTo(aDst: TCollection); overload;
-    procedure SaveToUnChecked(aDst: TCollection);
+    procedure SaveToUnchecked(aDst: TCollection);
     procedure Append(const aSrc: TCollection); overload;
-    procedure AppendUnChecked(const aSrc: TCollection); overload;
+    procedure AppendUnchecked(const aSrc: TCollection); overload;
     procedure AppendTo(const aDst: TCollection); overload;
-    procedure AppendToUnChecked(const aDst: TCollection); overload;
+    procedure AppendToUnchecked(const aDst: TCollection); overload;
   end;
 
 implementation
@@ -377,9 +377,9 @@ begin
   FImpl.LoadFrom(aSrc, aElementCount);
 end;
 
-procedure TTreeSet.LoadFromUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TTreeSet.LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 begin
-  FImpl.LoadFromUnChecked(aSrc, aElementCount);
+  FImpl.LoadFromUnchecked(aSrc, aElementCount);
 end;
 
 procedure TTreeSet.Append(const aSrc: Pointer; aElementCount: SizeUInt);
@@ -387,9 +387,9 @@ begin
   FImpl.Append(aSrc, aElementCount);
 end;
 
-procedure TTreeSet.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TTreeSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 begin
-  FImpl.AppendUnChecked(aSrc, aElementCount);
+  FImpl.AppendUnchecked(aSrc, aElementCount);
 end;
 
 procedure TTreeSet.LoadFrom(const aSrc: TCollection);
@@ -397,9 +397,9 @@ begin
   FImpl.LoadFrom(aSrc);
 end;
 
-procedure TTreeSet.LoadFromUnChecked(const aSrc: TCollection);
+procedure TTreeSet.LoadFromUnchecked(const aSrc: TCollection);
 begin
-  FImpl.LoadFromUnChecked(aSrc);
+  FImpl.LoadFromUnchecked(aSrc);
 end;
 
 procedure TTreeSet.SaveTo(aDst: TCollection);
@@ -407,9 +407,9 @@ begin
   FImpl.SaveTo(aDst);
 end;
 
-procedure TTreeSet.SaveToUnChecked(aDst: TCollection);
+procedure TTreeSet.SaveToUnchecked(aDst: TCollection);
 begin
-  FImpl.SaveToUnChecked(aDst);
+  FImpl.SaveToUnchecked(aDst);
 end;
 
 procedure TTreeSet.Append(const aSrc: TCollection);
@@ -417,9 +417,9 @@ begin
   FImpl.Append(aSrc);
 end;
 
-procedure TTreeSet.AppendUnChecked(const aSrc: TCollection);
+procedure TTreeSet.AppendUnchecked(const aSrc: TCollection);
 begin
-  FImpl.AppendUnChecked(aSrc);
+  FImpl.AppendUnchecked(aSrc);
 end;
 
 procedure TTreeSet.AppendTo(const aDst: TCollection);
@@ -427,9 +427,9 @@ begin
   FImpl.AppendTo(aDst);
 end;
 
-procedure TTreeSet.AppendToUnChecked(const aDst: TCollection);
+procedure TTreeSet.AppendToUnchecked(const aDst: TCollection);
 begin
-  FImpl.AppendToUnChecked(aDst);
+  FImpl.AppendToUnchecked(aDst);
 end;
 
 // Set operations

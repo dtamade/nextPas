@@ -321,11 +321,11 @@ type
      * @remark
      *   这些方法跳过所有安全检查以获得最佳性能
      *   调用者必须确保参数和状态的有效性
-     *   遵循项目 UnChecked 命名规范
+     *   遵循项目 Unchecked 命名规范
      *}
 
     {**
-     * PushFrontUnChecked
+     * PushFrontUnchecked
      *
      * @desc 在链表头部插入一个元素（无安全检查版本）
      *
@@ -336,10 +336,10 @@ type
      *   此操作的时间复杂度为 O(1)
      *   跳过所有安全检查以获得最佳性能
      *}
-    procedure PushFrontUnChecked(const aElement: T);
+    procedure PushFrontUnchecked(const aElement: T);
 
     {**
-     * PopFrontUnChecked
+     * PopFrontUnchecked
      *
      * @desc 移除并返回链表头部的元素（无安全检查版本）
      *
@@ -350,10 +350,10 @@ type
      *   跳过空链表检查以获得最佳性能
      *   调用者必须确保链表非空
      *}
-    function PopFrontUnChecked: T;
+    function PopFrontUnchecked: T;
 
     {**
-     * EmplaceFrontUnChecked
+     * EmplaceFrontUnchecked
      *
      * @desc 在链表头部就地构造一个元素（无安全检查版本）
      *
@@ -364,10 +364,10 @@ type
      *   此操作的时间复杂度为 O(1)
      *   跳过所有安全检查以获得最佳性能
      *}
-    procedure EmplaceFrontUnChecked(const aElement: T);
+    procedure EmplaceFrontUnchecked(const aElement: T);
 
     {**
-     * PushFrontRangeUnChecked
+     * PushFrontRangeUnchecked
      *
      * @desc 批量在链表头部插入元素（无安全检查版本）
      *
@@ -379,10 +379,10 @@ type
      *   跳过所有安全检查以获得最佳性能
      *   元素按数组顺序插入，最后一个元素成为新的头部
      *}
-    procedure PushFrontRangeUnChecked(const aArray: array of T);
+    procedure PushFrontRangeUnchecked(const aArray: array of T);
 
     {**
-     * ClearUnChecked
+     * ClearUnchecked
      *
      * @desc 清空链表（无安全检查版本）
      *
@@ -391,7 +391,7 @@ type
      *   跳过所有安全检查以获得最佳性能
      *   直接释放所有节点，不进行额外验证
      *}
-    procedure ClearUnChecked;
+    procedure ClearUnchecked;
 
   end;
 

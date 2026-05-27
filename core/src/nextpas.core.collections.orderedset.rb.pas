@@ -47,8 +47,8 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
     procedure DoReverse; override;
     function  IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
     procedure DoZero; override; // semantics: for ordered set, Zero = Clear
@@ -224,7 +224,7 @@ end;
 
 procedure TRBTreeSet.FinalizeAdapter(var V: T);
 begin
-  GetElementManager.FinalizeManagedElementsUnChecked(@V, 1);
+  GetElementManager.FinalizeManagedElementsUnchecked(@V, 1);
 end;
 
 function TRBTreeSet.PtrIter: TPtrIter;
@@ -259,7 +259,7 @@ begin
   end;
 end;
 
-procedure TRBTreeSet.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TRBTreeSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   I: SizeUInt;
   P: ^T;
@@ -273,7 +273,7 @@ begin
   end;
 end;
 
-procedure TRBTreeSet.AppendToUnChecked(const aDst: TCollection);
+procedure TRBTreeSet.AppendToUnchecked(const aDst: TCollection);
 var
   LIter: TPtrIter;
   PElem: ^T;
@@ -283,7 +283,7 @@ begin
   while LIter.MoveNext do
   begin
     PElem := LIter.GetCurrent;
-    aDst.AppendUnChecked(PElem, 1);
+    aDst.AppendUnchecked(PElem, 1);
   end;
 end;
 

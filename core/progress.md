@@ -29,11 +29,13 @@
 
 - Implemented the second naming cleanup batch across collections source units: copied `OverWrite` identifiers, comments, internal calls, and exception messages are now spelled `Overwrite`.
 - Kept `OverwriteOldest` circular-buffer policy names unchanged because they are a separate public concept, not the contiguous block overwrite operation.
+- Implemented the third naming cleanup batch across collections source units: copied `UnChecked` identifiers, comments, internal calls, exception messages, and interface declarations are now spelled `Unchecked`.
+- Kept calls to `nextpas.core.mem.utils.CopyUnChecked` unchanged because that symbol belongs to the `mem` module and is outside this collections-only batch.
 
 ## Next
 
 - Continue the naming cleanup implementation one batch at a time.
-- Next mechanical batch: `UnChecked` -> `Unchecked`, handled separately because it touches many interface implementation bindings.
+- Next mechanical batch: normalize algorithm `IF` spellings such as `FindIF`/`FindIFNot` and `ReplaceIF` after reviewing their callback overload families.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

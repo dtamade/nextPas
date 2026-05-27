@@ -71,8 +71,8 @@ type
     function  GetCount: SizeUInt; override;
     procedure Clear; override;
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
-    procedure AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
-    procedure AppendToUnChecked(const aDst: TCollection); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
     procedure DoReverse; override;
     function  IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
     procedure DoZero; override;
@@ -236,7 +236,7 @@ begin
   end;
 end;
 
-procedure TRBTreeMap.AppendUnChecked(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TRBTreeMap.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var I: SizeUInt; P: PEntry;
 begin
   if (aSrc = nil) or (aElementCount = 0) then Exit;
@@ -248,7 +248,7 @@ begin
   end;
 end;
 
-procedure TRBTreeMap.AppendToUnChecked(const aDst: TCollection);
+procedure TRBTreeMap.AppendToUnchecked(const aDst: TCollection);
 var LIter: TPtrIter; PElem: PEntry;
 begin
   if FTree.GetCount = 0 then Exit;
@@ -256,7 +256,7 @@ begin
   while LIter.MoveNext do
   begin
     PElem := LIter.GetCurrent;
-    aDst.AppendUnChecked(PElem, 1);
+    aDst.AppendUnchecked(PElem, 1);
   end;
 end;
 
