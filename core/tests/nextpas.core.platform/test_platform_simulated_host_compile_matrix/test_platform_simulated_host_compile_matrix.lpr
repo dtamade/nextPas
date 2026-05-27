@@ -57,6 +57,7 @@ program test_platform_simulated_host_compile_matrix;
 {$ENDIF}
 
 uses
+  nextpas.core.platform,
   nextpas.core.platform.time,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync
@@ -80,6 +81,11 @@ var
   LError: Int32;
   LThreadId: UInt64;
   LCpuCount: Int32;
+  LOSKind: TOSKind;
+  LCPUArch: TCPUArch;
+  LEndian: TEndianness;
+  LOSName: string;
+  LCPUName: string;
 {$IFDEF SIM_EXPECT_DARWIN}
   LDarwinTokenAlign: TPlatformPThreadTokenAlign;
 {$ENDIF}
@@ -94,6 +100,11 @@ var
 {$ENDIF}
 
 begin
+  LOSKind := CurrentOS;
+  LCPUArch := CurrentCPU;
+  LEndian := CurrentEndian;
+  LOSName := OSName;
+  LCPUName := CPUName;
   LMonotonicNs := platform_monotonic_ns;
   LRealtimeNs := platform_realtime_ns;
   LResolutionNs := platform_monotonic_resolution_ns;
@@ -134,6 +145,10 @@ begin
 {$ENDIF}
 
   if (LError <> High(Int32)) and (LCpuCount = High(Int32)) and
+     (Ord(LOSKind) = Ord(High(TOSKind))) and
+     (Ord(LCPUArch) = Ord(High(TCPUArch))) and
+     (Ord(LEndian) = Ord(High(TEndianness))) and
+     (LOSName = '') and (LCPUName = '') and
      (LMonotonicNs = High(UInt64)) and (LRealtimeNs = High(UInt64)) and
      (LResolutionNs = High(UInt64)) and (LThreadId = High(UInt64)) then
     Halt(1);

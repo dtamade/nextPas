@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync base extraction；上一轮包括
+当前最新本轮为 platform facade info boundary；上一轮包括
+platform.sync base extraction；
 platform.thread base extraction；
 platform.sync Windows wait-address public result boundary；
 platform.sync POSIX wait-bucket policy ownership；
@@ -124,7 +125,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform.sync base extraction)
 
-- **Status:** code and verification completed in isolated worktree; commit/merge cleanup remains
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块结构范式，把 `platform.sync` 的 public carrier type、
     opaque size、mutex kind 与 public error constant 抽到
@@ -187,10 +188,109 @@ platform/core 工作流保留下来的已完成记录。
     `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_win64 clean test`。
     这不是代码失败；Win64 compile-only coverage 由 official
     `build/verify_local.sh` 中的 `corePlatformSyncWin64Check=pass` 覆盖。
+- Merge / post-merge verification:
+  - `codex/platform-sync-base` commit `9312764` 已 fast-forward 合并进 `main@9312764`。
+  - post-merge focused verification passed:
+    `test_platform_sync_host_ffi_surface` 1/1 pass，
+    `test_platform_sync_no_fpc_units` 2/2 pass，
+    `test_platform_sync_l0_boundary` 4/4 pass，
+    `test_platform_sync` 14/14 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass，
+    `git diff --check` pass。
+  - 主 checkout 仍有 unrelated collections WIP；本轮未修改也未提交这些文件。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-base` worktree 已删除，
+    `codex/platform-sync-base` 分支已删除。
 - Next:
-  - commit 本轮，择优合并回 `main`，清理 `platform-sync-base` worktree/branch。
   - 下一轮 platform 优先做 facade/base 结构完整性巡检，或继续推进
     Windows/macOS/Linux/Android/FreeBSD host FFI surface parity。
+
+## Session: 2026-05-27 (platform facade info boundary)
+
+- **Status:** branch verification and latest-main rebase verification completed; merge/cleanup pending
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块结构范式，把顶层 `nextpas.core.platform` 中的
+    OS/CPU/endian 查询与名字映射逻辑抽到 `nextpas.core.platform.info`。
+  - `platform.base` 继续只拥有 enum/constant truth；`platform.pas` 保持调用方兼容的
+    public re-export 和 inline 转发，不再承载 `case CurrentOS` / `case CurrentCPU` 逻辑。
+- Baseline / worktree:
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info`
+    on `codex/platform-facade-info` from `main@9312764`。
+  - 主 checkout 有 unrelated collections WIP，包括 collections 源码和测试改动，以及
+    `GTAGS/GPATH/GRTAGS` untracked 文件；本轮不触碰。
+- Audit so far:
+  - `core/src/nextpas.core.platform.pas` 当前直接实现 `CurrentOS`、`CurrentCPU`、
+    `CurrentEndian`、`OSName`、`CPUName`，其中 `OSName` / `CPUName` 包含名字映射逻辑。
+  - `core/src/nextpas.core.platform.base.pas` 已经拥有 `TOSKind`、`TCPUArch`、
+    `TEndianness` 与 `CURRENT_*` compile-time constant。
+  - 这类 inquiry API 是 L0 platform public contract，不是 host raw ABI；应由
+    `nextpas.core.platform.info` 这样的实现子模块承载，顶层 facade 只转发。
+- Planned RED:
+  - 新增 `test_platform_facade_surface` 固定 `platform.info` source-surface、facade 转发、
+    不创建 `platform.info.ffi/intf/base`、不依赖 FPC 平台单元。
+  - 扩 `test_platform_ffi_owner_boundary`，把 `platform.info` 纳入 non-ffi platform source audit。
+  - 扩 `test_platform_simulated_host_compile_matrix`，让顶层 facade/info 在 simulated Darwin /
+    Android / FreeBSD / Unix compile proof 中被编译。
+- Notes:
+  - 首次尝试用单个大 patch 同时改测试与 `build/verify_local.sh` 失败，原因是 final
+    command-envelope JSON 长行上下文匹配不稳；改为分块应用，避免重复同一失败方式。
+- RED:
+  - `test_platform_facade_surface` 初始失败：
+    `platform.info source must exist` 与 `platform facade must re-export platform.info`。
+  - `test_platform_ffi_owner_boundary` 初始失败：
+    `platform source audit must see the core non-ffi units...`，因为尚未有
+    `nextpas.core.platform.info.pas`。
+  - `test_platform_simulated_host_compile_matrix` 首次扩展时暴露 enum constructor 不是 facade
+    “开箱即用”导出；本轮目标是让 facade/info 进入 compile proof，不把 enum constructor re-export
+    另开一刀混入，因此 matrix 改用 `Ord(High(...))` 形式后通过。
+- Actions taken:
+  - 新增 `core/src/nextpas.core.platform.info.pas`，只依赖 `nextpas.core.platform.base`，
+    拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、`OSName`、`CPUName` 的纯 Pascal 实现。
+  - 修改 `core/src/nextpas.core.platform.pas`，interface uses `platform.info`，implementation
+    只把 info API inline forward 到 `nextpas.core.platform.info`。
+  - 新增 `core/tests/nextpas.core.platform/test_platform_facade_surface/`，固定
+    `platform.info` owner、顶层 facade thin-forward、`platform.base` 纯类型/常量职责。
+  - `test_platform_ffi_owner_boundary` 纳入 `nextpas.core.platform.info.pas`。
+  - `test_platform_simulated_host_compile_matrix` 通过 `uses nextpas.core.platform` 和调用
+    `CurrentOS` / `CurrentCPU` / `CurrentEndian` / `OSName` / `CPUName`，把顶层 facade/info
+    纳入 Darwin/Android/FreeBSD/generic Unix compile proof。
+  - `build/verify_local.sh` 新增 `core/src/nextpas.core.platform.info.pas` required path、
+    `core-platform-facade-surface-check` 和 `corePlatformFacadeSurfaceCheck` official envelope。
+  - `core/docs/design-conventions.md` 写入顶层 platform facade/base/info 分工。
+- Focused GREEN so far:
+  - `test_platform_facade_surface`: `3 total, 3 passed, 0 failed`。
+  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
+  - `test_platform`: output includes `PASS: all platform tests passed`。
+  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
+- Final branch verification:
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`；official envelope 中
+    `corePlatformFacadeSurfaceCheck`、`corePlatformFfiOwnerBoundaryCheck`、
+    `corePlatformSimulatedHostCompileMatrixCheck`、`corePlatformTime*`、
+    `corePlatformThread*`、`corePlatformSync*` 均为 `pass`。
+  - `git diff --check` pass。
+- Pre-merge review:
+  - 复核 `core/src/nextpas.core.platform.info.pas`：只 uses `nextpas.core.platform.base`，
+    不含 `external`，不引用 host FFI，也没有 time/thread/sync 依赖。
+  - 复核 `core/src/nextpas.core.platform.pas`：顶层 facade 保留 public type alias 和 API 名称，
+    info API 只 inline forward 到 `platform.info`，time API 继续 forward 到 `platform.time`。
+  - 复核新 `test_platform_facade_surface`、扩展后的 owner-boundary 和 simulated-host matrix：
+    它们固定了 `platform.info` owner、禁止 `platform.info.base/intf/ffi`、禁止 facade 回归
+    OS/CPU name mapping，并把顶层 facade/info 纳入 Darwin/Android/FreeBSD/generic Unix compile proof。
+  - 多代理 code-review 工具可发现，但当前工具规则要求只有用户明确授权代理/分派时才能 spawn；
+    因此合并前采用本地 review，未启动子代理。
+- Latest-main integration:
+  - `codex/platform-facade-info` 已 rebase 到 `main@db454df`，无冲突；新的提交为
+    `e04ab83 platform: split top-level info facade`。
+  - post-rebase focused verification passed:
+    `test_platform_facade_surface` 3/3，
+    `test_platform_ffi_owner_boundary` 2/2，
+    `test_platform_simulated_host_compile_matrix` pass，
+    `test_platform` 输出 `PASS: all platform tests passed`，
+    `git diff --check` pass。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 

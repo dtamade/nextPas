@@ -32,6 +32,15 @@
   kind 与 `PLATFORM_ERR_*` 归 `nextpas.core.platform.sync.base`。`platform.sync` 只 re-export
   并实现统一 sync API；这个 base 单元不是 host ABI owner，不新增 `platform.sync.ffi` 或
   `platform.sync.intf`。
+- 顶层 `platform` 的 OS/CPU/endian inquiry 也需要按职责拆分：`platform.base` 只拥有
+  `TOSKind`、`TCPUArch`、`TEndianness` 与 `CURRENT_*` compile-time truth；
+  `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、`OSName`、
+  `CPUName` 的纯 Pascal 实现；`nextpas.core.platform` 顶层 facade 只 re-export/inline forward。
+  这个 `info` 单元不是 host ABI owner，不新增 `platform.info.ffi`、`platform.info.intf` 或
+  `platform.info.base`。
+- `test_platform_facade_surface` 与 `build/verify_local.sh` 现在把顶层 platform facade/info 边界
+  变成 official gate：`platform.info` 必须存在并拥有 info logic，`platform.pas` 必须保持 thin
+  forwarding，final verify envelope 必须包含 `corePlatformFacadeSurfaceCheck`。
 - Windows `WaitOnAddress` 的 raw success/timeout/last-error truth 属于 `windows.ffi`，但
   `platform_wait_address32` 的 nil/mismatch/timeout/wake public result contract 属于
   `platform.sync`。因此 Windows wait path 必须像 Linux futex 与 POSIX fallback 一样，在调用

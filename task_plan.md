@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync Base Extraction；上一轮包括
+当前最新本轮为 Platform Facade Info Boundary；上一轮包括
+Platform Sync Base Extraction；
 Platform Thread Base Extraction、
 Platform Sync Windows Wait-Address Public Result Boundary、
 Platform Sync POSIX Wait-Bucket Policy Ownership、
@@ -74,7 +75,7 @@ constant 从行为实现单元中抽到 `platform.sync.base`，让 sync 子模�
 
 ### Status
 
-Code and verification completed in `codex/platform-sync-base`; commit/merge cleanup remains.
+Completed, committed, merged to `main@9312764`, and worktree/branch cleanup done.
 
 ### Planned Steps
 
@@ -108,8 +109,8 @@ Code and verification completed in `codex/platform-sync-base`; commit/merge clea
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
   - `git diff --check`
-- [ ] commit、择优合并回 `main`
-- [ ] 清理 worktree / 分支
+- [x] commit、择优合并回 `main`
+- [x] 清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -159,6 +160,117 @@ Code and verification completed in `codex/platform-sync-base`; commit/merge clea
     `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_win64 clean test`；
     这不是代码失败，实际 Win64 compile-only coverage 由 `build/verify_local.sh` 的
     `corePlatformSyncWin64Check=pass` 覆盖。
+
+## Addendum: 2026-05-27 Platform Facade Info Boundary
+
+### Goal
+
+把顶层 `nextpas.core.platform` 中的 OS/CPU/endian 查询与名字映射逻辑收口到
+`nextpas.core.platform.info`，让顶层 platform facade 更接近模块结构范式：
+
+- `nextpas.core.platform.base` 继续只拥有 `TOSKind`、`TCPUArch`、`TEndianness` 与
+  `CURRENT_*` 常量。
+- `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
+  `OSName`、`CPUName` 的纯 Pascal 实现。
+- `nextpas.core.platform` 只 re-export public types，并 inline 转发到 `platform.info` 与
+  `platform.time`。
+- 不新增 `platform.info.base`、`platform.info.intf` 或 `platform.info.ffi`；`info` 不拥有
+  foreign ABI，也没有 Pascal interface contract。
+
+### Architecture Decision
+
+- 顶层 OS/CPU/endian inquiry 是 platform L0 public contract，但不是 host raw ABI；它依赖
+  `platform.base` 的 compile-time truth，不应散在 facade 中。
+- `platform.info` 不依赖 FPC 平台/RTL 绑定单元，不含 `external` declaration，不引用
+  `platform.<host>.ffi`。
+- `platform.pas` 可以保留 inline 转发函数，因为 FPC 不支持自动 re-export；但不能保留
+  `case CurrentOS` / `case CurrentCPU` 这类业务逻辑。
+- 这轮不改变 public API 名称和返回值，不引入 stopwatch/duration 等 L1 抽象，不测试 raw OS API。
+
+### Status
+
+Implementation, branch verification, and latest-main rebase verification completed in
+`codex/platform-facade-info`; merge/cleanup pending.
+
+### Planned Steps
+
+- [x] 从 `main@9312764` 开 isolated worktree：
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info`
+- [x] 校准当前主 checkout：存在 unrelated collections WIP，本轮不触碰
+- [x] 更新本文件中上一轮 sync-base 的 merged/cleanup 状态，消除滞后计划记录
+- [x] RED：新增 `test_platform_facade_surface`，要求 `platform.info` 存在并拥有 info API 逻辑，
+  `platform.pas` 只转发，不再包含 OS/CPU name `case` 逻辑
+- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.info.pas` 纳入
+  non-ffi owner audit
+- [x] GREEN：新增 `core/src/nextpas.core.platform.info.pas`，并修改
+  `core/src/nextpas.core.platform.pas` 只 re-export/forward
+- [x] 扩 `test_platform_simulated_host_compile_matrix`，让顶层 platform facade/info 也进入
+  simulated host compile proof
+- [x] 更新 `build/verify_local.sh` required path、focused gate 与 final envelope
+- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates：
+  - `make -C core/tests/nextpas.core.platform/test_platform_facade_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform clean test`
+- [x] 跑 full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+  - `git diff --check`
+- [x] rebase 到最新 `main@db454df` 并跑 post-rebase focused gates
+- [ ] commit、择优合并回 `main`
+- [ ] 清理 worktree / 分支
+
+### Audit Checklist
+
+- [x] `platform.info` 只依赖 `platform.base`
+- [x] `platform.info` 不含 `external`、host FFI import 或 FPC 平台单元 import
+- [x] `platform.pas` 不再包含 `case CurrentOS` / `case CurrentCPU` 逻辑
+- [x] `platform.pas` 继续兼容 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、`OSName`、`CPUName`
+  与 time public API
+- [x] 顶层 facade/info 进入 owner-boundary、facade-surface、simulated-host compile 与 official
+  local verification
+
+### Implementation Notes
+
+- RED proof:
+  - `test_platform_facade_surface` 初始失败：
+    `platform.info source must exist` 与 `platform facade must re-export platform.info`。
+  - `test_platform_ffi_owner_boundary` 初始失败：
+    `platform source audit must see the core non-ffi units...`。
+- GREEN focused:
+  - `test_platform_facade_surface`: `3 total, 3 passed, 0 failed`。
+  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
+  - `test_platform`: output includes `PASS: all platform tests passed`。
+  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`，final envelope includes
+    `corePlatformFacadeSurfaceCheck":"pass"`。
+  - `git diff --check`: pass。
+- Pre-merge review:
+  - 合并前重新检查 `platform.info`、顶层 facade、facade surface test、owner-boundary test、
+    simulated-host compile matrix、`build/verify_local.sh` 与设计文档 diff；未发现需要阻断合并的问题。
+  - 多代理 code-review 工具虽可发现，但当前工具规则要求只有用户明确授权代理/分派时才能 spawn；
+    因此本轮采用本地合并前 review，不启动子代理。
+- Post-rebase focused verification on `main@db454df`:
+  - `make -C core/tests/nextpas.core.platform/test_platform_facade_surface clean test`:
+    `3 total, 3 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    `simulated-host-compile-matrix-status=pass`。
+  - `make -C core/tests/nextpas.core.platform/test_platform clean test`:
+    output includes `PASS: all platform tests passed`。
+  - `git diff --check`: pass。
+- Note:
+  - 扩 matrix 时暴露 enum constructor 不会随 type alias 变成真正“开箱即用” re-export；本轮只把
+    facade/info 纳入 compile proof，未改变 enum constructor public usage contract。
 
 ## Addendum: 2026-05-27 Platform Thread Base Extraction
 

@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.platform.base,
+  nextpas.core.platform.info,
   nextpas.core.platform.time;
 
 type
@@ -28,40 +29,27 @@ implementation
 
 function CurrentOS: TOSKind;
 begin
-  Result := CURRENT_OS;
+  Result := nextpas.core.platform.info.CurrentOS;
 end;
 
 function CurrentCPU: TCPUArch;
 begin
-  Result := CURRENT_CPU;
+  Result := nextpas.core.platform.info.CurrentCPU;
 end;
 
 function CurrentEndian: TEndianness;
 begin
-  Result := CURRENT_ENDIAN;
+  Result := nextpas.core.platform.info.CurrentEndian;
 end;
 
 function OSName: string;
 begin
-  case CurrentOS of
-    osLinux: Result := 'Linux';
-    osMacOS: Result := 'macOS';
-    osWindows: Result := 'Windows';
-    osAndroid: Result := 'Android';
-    osUnix: Result := 'Unix';
-  else
-    Result := 'Unknown';
-  end;
+  Result := nextpas.core.platform.info.OSName;
 end;
 
 function CPUName: string;
 begin
-  case CurrentCPU of
-    cpuX86_64: Result := 'x86_64';
-    cpuAArch64: Result := 'aarch64';
-  else
-    Result := 'Unknown';
-  end;
+  Result := nextpas.core.platform.info.CPUName;
 end;
 
 function platform_monotonic_ns: UInt64;

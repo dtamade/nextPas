@@ -102,6 +102,7 @@ var
   LSource: string;
   LFoundPlatform: Boolean;
   LFoundPlatformBase: Boolean;
+  LFoundPlatformInfo: Boolean;
   LFoundPlatformTime: Boolean;
   LFoundPlatformTimeBase: Boolean;
   LFoundPlatformTimeHost: Boolean;
@@ -130,6 +131,7 @@ begin
   LSourceDir := ResolveSourceDir;
   LFoundPlatform := False;
   LFoundPlatformBase := False;
+  LFoundPlatformInfo := False;
   LFoundPlatformTime := False;
   LFoundPlatformTimeBase := False;
   LFoundPlatformTimeHost := False;
@@ -172,6 +174,8 @@ begin
         LFoundPlatform := True
       else if LFileName = 'nextpas.core.platform.base.pas' then
         LFoundPlatformBase := True
+      else if LFileName = 'nextpas.core.platform.info.pas' then
+        LFoundPlatformInfo := True
       else if LFileName = 'nextpas.core.platform.time.pas' then
         LFoundPlatformTime := True
       else if LFileName = 'nextpas.core.platform.time.base.pas' then
@@ -235,11 +239,12 @@ begin
     FindClose(LSearch);
   end;
 
-  Check(LNonFfiCount >= 18, 'platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units');
+  Check(LNonFfiCount >= 19, 'platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units');
   Check(LFfiCount >= 7, 'platform source audit must see the host/shared ffi owner units');
 
   Check(LFoundPlatform, 'platform source audit must include nextpas.core.platform.pas');
   Check(LFoundPlatformBase, 'platform source audit must include nextpas.core.platform.base.pas');
+  Check(LFoundPlatformInfo, 'platform source audit must include nextpas.core.platform.info.pas');
   Check(LFoundPlatformTime, 'platform source audit must include nextpas.core.platform.time.pas');
   Check(LFoundPlatformTimeBase, 'platform source audit must include nextpas.core.platform.time.base.pas');
   Check(LFoundPlatformTimeHost, 'platform source audit must include nextpas.core.platform.time.host.pas');
