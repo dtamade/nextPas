@@ -35,6 +35,8 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 - Open generic interface aliases such as `generic IVec<T> = ...` are not currently safe in FPC 3.3.1. Do not force derived-interface facade shells without discussing interface identity and return-type implications.
 - Callback function types with identical signatures are accepted by FPC and are safe for facade re-export.
+- Public factory naming discussion currently favors `MakeXxx` only. Short factories such as `Vec<T>` and `Set_<T>` are rejected for now because the family cannot stay clean and consistent around Pascal keywords.
+- Users should eventually be able to use the public collections API from the facade without importing child `.intf` units, but current FPC behavior blocks direct generic interface visibility. This remains unresolved.
 
 ## Verification Commands
 

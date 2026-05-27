@@ -7,9 +7,12 @@
 - Confirmed that FPC 3.3.1 cannot safely express open generic facade aliases for child-unit interfaces.
 - Updated `nextpas.core.collections` to explicitly expose public callback types used by collections factories and algorithms.
 - Verified the facade callback compile probe and existing collections facade test.
+- Discussed factory naming and interface-first direction. Current direction: interface-first remains desired; short factories are rejected because names like `Set_` are not acceptable; `MakeXxx` is the likely clean public factory family.
+- Confirmed with a local probe that users cannot currently declare `IVec<T>` from `nextpas.core.collections` alone. This is recorded for later architecture resolution.
 
 ## Next
 
+- Continue the interface design discussion one decision at a time before more code changes.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

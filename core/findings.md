@@ -3,9 +3,11 @@
 ## 2026-05-27: facade re-export limits under FPC 3.3.1
 
 - `uses nextpas.core.collections` does not automatically expose generic interfaces from child units such as `IVec<T>` or `ILruCache<K,V>`.
+- A direct probe with only `uses nextpas.core.collections` and `var V: specialize IVec<Integer>;` fails with `Identifier not found "IVec"`.
 - Open generic aliases like `generic IVec<T> = specialize IVec<T>` do not compile in current FPC 3.3.1 syntax.
 - Derived facade interfaces compile only in narrow unqualified cases, but they would create a distinct interface type and can change the contract of factories returning the original child-unit interfaces. Treat this as a separate design decision.
 - Function/procedure callback types with identical signatures are assignment-compatible, so facade-level callback type re-export is a safe low-risk improvement.
+- Decision for now: record this as an unresolved public-interface design problem and continue interface design discussion before changing the architecture.
 
 ## 2026-05-27: hashmap / treemap / lrucache base-intf ownership
 
