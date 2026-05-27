@@ -9,16 +9,28 @@ uses
 const
   SYNC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.pas';
   SYNC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.pas';
+  LINUX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
+  LINUX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.base.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
   LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
+  DARWIN_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.base.pas';
+  DARWIN_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.base.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
+  ANDROID_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.base.pas';
+  ANDROID_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.base.pas';
   ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
   ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
+  FREEBSD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.base.pas';
+  FREEBSD_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.base.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
+  UNIX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.base.pas';
+  UNIX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.base.pas';
   UNIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.ffi.pas';
   UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
+  WINDOWS_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.base.pas';
+  WINDOWS_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.base.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
 
@@ -58,22 +70,22 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
-procedure CheckPosixSyncHelperSet(const ASource, AHostLabel: string);
+procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel: string);
 begin
   CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
     AHostLabel + ' must delegate errno-value load to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_size',
-    AHostLabel + ' must expose pthread mutex storage size for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_size',
-    AHostLabel + ' must expose pthread rwlock storage size for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_size',
-    AHostLabel + ' must expose pthread condvar storage size for sync');
-  CheckTokenPresent(ASource, 'tplatformpthreadmutexalign',
-    AHostLabel + ' must expose pthread mutex align carrier type for sync');
-  CheckTokenPresent(ASource, 'tplatformpthreadrwlockalign',
-    AHostLabel + ' must expose pthread rwlock align carrier type for sync');
-  CheckTokenPresent(ASource, 'tplatformpthreadcondvaralign',
-    AHostLabel + ' must expose pthread condvar align carrier type for sync');
+  CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_size',
+    AHostLabel + ' base must expose pthread mutex storage size for sync');
+  CheckTokenPresent(ABaseSource, 'platform_pthread_rwlock_size',
+    AHostLabel + ' base must expose pthread rwlock storage size for sync');
+  CheckTokenPresent(ABaseSource, 'platform_pthread_condvar_size',
+    AHostLabel + ' base must expose pthread condvar storage size for sync');
+  CheckTokenPresent(ABaseSource, 'tplatformpthreadmutexalign',
+    AHostLabel + ' base must expose pthread mutex align carrier type for sync');
+  CheckTokenPresent(ABaseSource, 'tplatformpthreadrwlockalign',
+    AHostLabel + ' base must expose pthread rwlock align carrier type for sync');
+  CheckTokenPresent(ABaseSource, 'tplatformpthreadcondvaralign',
+    AHostLabel + ' base must expose pthread condvar align carrier type for sync');
   CheckTokenPresent(ASource, 'platform_pthread_timeout_clock_now',
     AHostLabel + ' must expose pthread timeout clock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_timeout_deadline_after_ns',
@@ -185,19 +197,31 @@ end;
 procedure TestPlatformSyncUsesHostFFISurface;
 var
   LSyncSource: string;
+  LLinuxBaseSource: string;
   LLinuxSource: string;
+  LDarwinBaseSource: string;
   LDarwinSource: string;
+  LAndroidBaseSource: string;
   LAndroidSource: string;
+  LFreeBSDBaseSource: string;
   LFreeBSDSource: string;
+  LUnixBaseSource: string;
   LUnixSource: string;
+  LWindowsBaseSource: string;
   LWindowsSource: string;
 begin
   LSyncSource := ReadSourceFile(ResolveSourcePath(SYNC_SOURCE_PATH_FROM_TEST, SYNC_SOURCE_PATH_FROM_ROOT));
+  LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LDarwinBaseSource := ReadSourceFile(ResolveSourcePath(DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
+  LAndroidBaseSource := ReadSourceFile(ResolveSourcePath(ANDROID_BASE_SOURCE_PATH_FROM_TEST, ANDROID_BASE_SOURCE_PATH_FROM_ROOT));
   LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDBaseSource := ReadSourceFile(ResolveSourcePath(FREEBSD_BASE_SOURCE_PATH_FROM_TEST, FREEBSD_BASE_SOURCE_PATH_FROM_ROOT));
   LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LUnixBaseSource := ReadSourceFile(ResolveSourcePath(UNIX_BASE_SOURCE_PATH_FROM_TEST, UNIX_BASE_SOURCE_PATH_FROM_ROOT));
   LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsBaseSource := ReadSourceFile(ResolveSourcePath(WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LLinuxSource, 'function linux_syscall',
@@ -216,20 +240,20 @@ begin
     'linux.ffi must expose Linux futex wake-one helper for sync');
   CheckTokenPresent(LLinuxSource, 'linux_futex_wake_all_i32',
     'linux.ffi must expose Linux futex wake-all helper for sync');
-  CheckPosixSyncHelperSet(LLinuxSource, 'linux.ffi');
+  CheckPosixSyncHelperSet(LLinuxSource, LLinuxBaseSource, 'linux');
 
   CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
     'darwin.ffi must expose Darwin errno value helper for sync');
-  CheckPosixSyncHelperSet(LDarwinSource, 'darwin.ffi');
+  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin');
   CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
     'android.ffi must expose Android errno value helper for sync');
-  CheckPosixSyncHelperSet(LAndroidSource, 'android.ffi');
+  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
     'freebsd.ffi must expose FreeBSD errno value helper for sync');
-  CheckPosixSyncHelperSet(LFreeBSDSource, 'freebsd.ffi');
+  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd');
   CheckTokenPresent(LUnixSource, 'platform_posix_errno_value',
     'unix.ffi must expose generic Unix errno value helper for sync');
-  CheckPosixSyncHelperSet(LUnixSource, 'unix.ffi');
+  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix');
 
   CheckTokenPresent(LWindowsSource, 'waitonaddress',
     'windows.ffi must expose WaitOnAddress');
@@ -305,18 +329,18 @@ begin
     'windows.ffi must expose Windows wake-address-single helper');
   CheckTokenPresent(LWindowsSource, 'windows_wake_address_all',
     'windows.ffi must expose Windows wake-address-all helper');
-  CheckTokenPresent(LWindowsSource, 'platform_windows_mutex_size',
-    'windows.ffi must expose Windows mutex storage size for sync');
-  CheckTokenPresent(LWindowsSource, 'platform_windows_rwlock_size',
-    'windows.ffi must expose Windows rwlock storage size for sync');
-  CheckTokenPresent(LWindowsSource, 'platform_windows_condvar_size',
-    'windows.ffi must expose Windows condvar storage size for sync');
-  CheckTokenPresent(LWindowsSource, 'tplatformwindowsmutexalign',
-    'windows.ffi must expose Windows mutex align carrier type for sync');
-  CheckTokenPresent(LWindowsSource, 'tplatformwindowsrwlockalign',
-    'windows.ffi must expose Windows rwlock align carrier type for sync');
-  CheckTokenPresent(LWindowsSource, 'tplatformwindowscondvaralign',
-    'windows.ffi must expose Windows condvar align carrier type for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_mutex_size',
+    'windows.base must expose Windows mutex storage size for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_rwlock_size',
+    'windows.base must expose Windows rwlock storage size for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_condvar_size',
+    'windows.base must expose Windows condvar storage size for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsmutexalign',
+    'windows.base must expose Windows mutex align carrier type for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsrwlockalign',
+    'windows.base must expose Windows rwlock align carrier type for sync');
+  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowscondvaralign',
+    'windows.base must expose Windows condvar align carrier type for sync');
 
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
     'platform.sync must use linux.ffi for Linux futex bindings');

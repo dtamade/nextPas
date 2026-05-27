@@ -9,16 +9,28 @@ uses
 const
   THREAD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.pas';
   THREAD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
+  LINUX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
+  LINUX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.base.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
   LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
+  DARWIN_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.base.pas';
+  DARWIN_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.base.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
+  ANDROID_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.base.pas';
+  ANDROID_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.base.pas';
   ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
   ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
+  FREEBSD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.base.pas';
+  FREEBSD_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.base.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
   FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
+  UNIX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.base.pas';
+  UNIX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.base.pas';
   UNIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.ffi.pas';
   UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
+  WINDOWS_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.base.pas';
+  WINDOWS_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.base.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.ffi.pas';
 
@@ -91,19 +103,31 @@ end;
 procedure TestPlatformThreadUsesHostThreadIdFFI;
 var
   LThreadSource: string;
+  LLinuxBaseSource: string;
   LLinuxSource: string;
+  LDarwinBaseSource: string;
   LDarwinSource: string;
+  LAndroidBaseSource: string;
   LAndroidSource: string;
+  LFreeBSDBaseSource: string;
   LFreeBSDSource: string;
+  LUnixBaseSource: string;
   LUnixSource: string;
+  LWindowsBaseSource: string;
   LWindowsSource: string;
 begin
   LThreadSource := ReadSourceFile(ResolveSourcePath(THREAD_SOURCE_PATH_FROM_TEST, THREAD_SOURCE_PATH_FROM_ROOT));
+  LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LDarwinBaseSource := ReadSourceFile(ResolveSourcePath(DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
+  LAndroidBaseSource := ReadSourceFile(ResolveSourcePath(ANDROID_BASE_SOURCE_PATH_FROM_TEST, ANDROID_BASE_SOURCE_PATH_FROM_ROOT));
   LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDBaseSource := ReadSourceFile(ResolveSourcePath(FREEBSD_BASE_SOURCE_PATH_FROM_TEST, FREEBSD_BASE_SOURCE_PATH_FROM_ROOT));
   LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LUnixBaseSource := ReadSourceFile(ResolveSourcePath(UNIX_BASE_SOURCE_PATH_FROM_TEST, UNIX_BASE_SOURCE_PATH_FROM_ROOT));
   LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsBaseSource := ReadSourceFile(ResolveSourcePath(WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LLinuxSource, 'function gettid',
@@ -140,10 +164,10 @@ begin
     'linux.ffi must expose Linux pthread TLS set helper');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_get',
     'linux.ffi must expose Linux pthread TLS get helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_token_size',
-    'linux.ffi must expose Linux pthread token storage size');
-  CheckTokenPresent(LLinuxSource, 'tplatformpthreadtokenalign',
-    'linux.ffi must expose Linux pthread token align carrier type');
+  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_token_size',
+    'linux.base must expose Linux pthread token storage size');
+  CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadtokenalign',
+    'linux.base must expose Linux pthread token align carrier type');
   CheckSharedPosixThreadDelegation(LLinuxSource, 'linux.ffi');
 
   CheckTokenPresent(LAndroidSource, 'function gettid',
@@ -180,10 +204,10 @@ begin
     'android.ffi must expose Android pthread TLS set helper');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_get',
     'android.ffi must expose Android pthread TLS get helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_token_size',
-    'android.ffi must expose Android pthread token storage size');
-  CheckTokenPresent(LAndroidSource, 'tplatformpthreadtokenalign',
-    'android.ffi must expose Android pthread token align carrier type');
+  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_token_size',
+    'android.base must expose Android pthread token storage size');
+  CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadtokenalign',
+    'android.base must expose Android pthread token align carrier type');
   CheckSharedPosixThreadDelegation(LAndroidSource, 'android.ffi');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
@@ -218,10 +242,10 @@ begin
     'darwin.ffi must expose Darwin pthread TLS set helper');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_get',
     'darwin.ffi must expose Darwin pthread TLS get helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_token_size',
-    'darwin.ffi must expose Darwin pthread token storage size');
-  CheckTokenPresent(LDarwinSource, 'tplatformpthreadtokenalign',
-    'darwin.ffi must expose Darwin pthread token align carrier type');
+  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_token_size',
+    'darwin.base must expose Darwin pthread token storage size');
+  CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadtokenalign',
+    'darwin.base must expose Darwin pthread token align carrier type');
   CheckSharedPosixThreadDelegation(LDarwinSource, 'darwin.ffi');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
@@ -255,10 +279,10 @@ begin
     'freebsd.ffi must expose FreeBSD pthread TLS set helper');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_get',
     'freebsd.ffi must expose FreeBSD pthread TLS get helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_token_size',
-    'freebsd.ffi must expose FreeBSD pthread token storage size');
-  CheckTokenPresent(LFreeBSDSource, 'tplatformpthreadtokenalign',
-    'freebsd.ffi must expose FreeBSD pthread token align carrier type');
+  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_token_size',
+    'freebsd.base must expose FreeBSD pthread token storage size');
+  CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadtokenalign',
+    'freebsd.base must expose FreeBSD pthread token align carrier type');
   CheckSharedPosixThreadDelegation(LFreeBSDSource, 'freebsd.ffi');
   CheckTokenPresent(LUnixSource, 'platform_thread_self_token_u64',
     'unix.ffi must expose generic Unix thread self token helper');
@@ -284,10 +308,10 @@ begin
     'unix.ffi must expose generic Unix pthread TLS set helper');
   CheckTokenPresent(LUnixSource, 'platform_pthread_tls_get',
     'unix.ffi must expose generic Unix pthread TLS get helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_token_size',
-    'unix.ffi must expose generic Unix pthread token storage size');
-  CheckTokenPresent(LUnixSource, 'tplatformpthreadtokenalign',
-    'unix.ffi must expose generic Unix pthread token align carrier type');
+  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_token_size',
+    'unix.base must expose generic Unix pthread token storage size');
+  CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadtokenalign',
+    'unix.base must expose generic Unix pthread token align carrier type');
   CheckSharedPosixThreadDelegation(LUnixSource, 'unix.ffi');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
@@ -299,12 +323,12 @@ begin
     'windows.ffi must expose Windows current-thread id helper');
   CheckTokenPresent(LWindowsSource, 'windows_thread_yield',
     'windows.ffi must expose Windows thread yield helper');
-  CheckTokenPresent(LWindowsSource, 'tplatformwindowsthreadproc',
-    'windows.ffi must expose a Windows user-thread proc carrier type');
-  CheckTokenPresent(LWindowsSource, 'pplatformwindowsthreadstate',
-    'windows.ffi must expose a Windows thread state pointer type');
-  CheckTokenPresent(LWindowsSource, 'tplatformwindowsthreadstate',
-    'windows.ffi must expose a Windows thread state carrier record');
+  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsthreadproc',
+    'windows.base must expose a Windows user-thread proc carrier type');
+  CheckTokenPresent(LWindowsBaseSource, 'pplatformwindowsthreadstate',
+    'windows.base must expose a Windows thread state pointer type');
+  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsthreadstate',
+    'windows.base must expose a Windows thread state carrier record');
   CheckTokenPresent(LWindowsSource, 'windows_tls_alloc_key',
     'windows.ffi must expose Windows TLS alloc helper');
   CheckTokenPresent(LWindowsSource, 'windows_tls_free_key',

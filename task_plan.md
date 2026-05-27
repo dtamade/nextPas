@@ -8053,3 +8053,72 @@ Completed; verification passed.
 - 这批不改 `platform.time` public API
 - 这批不宣称 Darwin / FreeBSD / Android / Windows 新增 runtime truth
 - 这批不把 `TDuration`、`TInstant`、`TStopwatch` 或其他 L1 时间抽象带回 platform
+
+## Addendum: 2026-05-27 Platform Host Base/FFI Split
+
+### Goal
+
+把 `platform.<host>.ffi` 继续拆成更符合四件套范式的 host owner：
+
+- `platform.<host>.base` 承载宿主常量、record、ABI scalar/type alias、opaque carrier、
+  size/align token 与 capability token。
+- `platform.<host>.ffi` 只承载 external declaration 与围绕宿主 ABI 的 thin helper。
+- `platform.time`、`platform.sync`、`platform.thread` 作为跨宿主统一 contract，直接消费
+  `platform.<host>.base` / `platform.<host>.ffi`，不再把 feature-specific ffi 作为默认形态。
+
+### Architecture Decision
+
+- 新增 `posix/linux/darwin/android/freebsd/unix/windows.base`，把原来散落在 `.ffi` 的
+  ABI 载体、opaque storage、size/align token、clock/sysconf/errno/futex/Windows 常量迁入 base。
+- `.ffi` 明确 `uses` 自己的 host `.base`，需要 POSIX 共享 ABI 形状时再 `uses posix.base`。
+- `platform.sync` 的 interface 只引用 host `.base` 暴露 public opaque storage，implementation
+  再引用 host `.ffi`；避免 public surface 因为类型常量而拉入 raw external owner。
+- source-surface gates 升级为同时冻结 base 文件存在性、`.ffi -> .base` 消费关系，以及
+  feature consumer 不回退到重复 ABI 载体。
+
+### Status
+
+Completed; verification passed in isolated worktree.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_ffi_partition_surface`，要求 host base files 存在并被 `.ffi` 消费
+- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 base 视为非 FFI owner 并冻结 owner 边界
+- [x] 新增 7 个 host/shared base 单元并迁移 ABI 常量/类型/opaque carrier
+- [x] 更新 time/sync/thread consumer 与 host ffi uses 关系
+- [x] 更新 source-surface、simulated-host、sync/thread/time focused tests
+- [x] 更新 `build/verify_local.sh` 与设计文档
+- [x] 运行 focused tests、full core test/example/benchmark、fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    初始失败在缺少 `nextpas.core.platform.posix.base.pas`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    初始失败在 base absence / non-ffi owner count
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
+- Full:
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不新增 `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`
+- 这批不改变 time/sync/thread public API
+- 这批不宣称新增 macOS / FreeBSD / Android / Windows runtime 证据

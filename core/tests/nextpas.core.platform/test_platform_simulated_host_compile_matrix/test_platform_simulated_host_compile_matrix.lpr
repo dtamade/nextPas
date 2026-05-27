@@ -60,10 +60,10 @@ uses
   nextpas.core.platform.time,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync
-  {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.ffi{$ENDIF}
-  {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.ffi{$ENDIF}
-  {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.ffi{$ENDIF}
-  {$IFDEF SIM_EXPECT_UNIX}, nextpas.core.platform.unix.ffi{$ENDIF}
+  {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.base, nextpas.core.platform.darwin.ffi{$ENDIF}
+  {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.base, nextpas.core.platform.android.ffi{$ENDIF}
+  {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.base, nextpas.core.platform.freebsd.ffi{$ENDIF}
+  {$IFDEF SIM_EXPECT_UNIX}, nextpas.core.platform.unix.base, nextpas.core.platform.unix.ffi{$ENDIF}
   ;
 
 var

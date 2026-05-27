@@ -1853,3 +1853,24 @@
 - 当前证据边界仍要诚实：这轮新增的是 owner boundary / compile coherence / Linux runtime 行为的继续收紧，
   不是新的 Darwin / Android / FreeBSD / Windows runtime proof；这些宿主仍主要由 source-surface
   contract 与 compile-only 证据覆盖。
+
+## 2026-05-27 Follow-up Findings 18
+
+- `platform.<host>.ffi` 继续同时承载常量、record、opaque carrier、size/align token 与 external
+  declaration，会让四件套范式在 platform 模块里失效；正确收口是新增
+  `platform.<host>.base`，把宿主定义和 ABI 载体迁出去。
+- `platform.time`、`platform.sync`、`platform.thread` 不是各自拥有 foreign ABI 的 feature owner，而是
+  对 Linux、Windows、macOS、Android、FreeBSD、generic Unix 的统一 platform API contract。它们应消费
+  `platform.<host>.base` / `platform.<host>.ffi`，默认不再创建
+  `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`。
+- `platform.sync` 的 public interface 尤其要保持轻：公开 opaque storage 常量和类型时只引用 host
+  `.base`，implementation 再引用 `.ffi`，避免 raw external owner 被 public surface 顺手拉进来。
+- `posix.base` 应只放真正跨 POSIX 宿主共享的 ABI 形状，例如 `timespec`、pthread opaque carrier、
+  callback signature 与 shared align carrier；mutex kind、timeout clock id、condattr capability 这类
+  host truth 必须留在各自 `linux/darwin/android/freebsd/unix.base`。
+- 这轮 source-surface gate 已经升级到检查 7 个 base 文件存在性、`.ffi` 对 `.base` 的消费关系、
+  FFI owner boundary，以及 simulated host compile matrix；fresh `make -C core test`、
+  `make -C core examples`、`make -C core benchmarks` 与 fresh `bash build/verify_local.sh` 均通过，
+  `verify-local=pass` 已拿到。
+- 当前证据边界仍要诚实：这轮主要证明 owner boundary、Linux runtime 行为、Win64 compile-only 与
+  multi-host simulated compile coherence；没有新增 macOS / Android / FreeBSD / Windows runtime proof。

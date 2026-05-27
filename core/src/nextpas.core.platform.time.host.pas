@@ -22,6 +22,7 @@ function platform_timespec_to_ns(
 implementation
 
 uses
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.platform.windows.ffi

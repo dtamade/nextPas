@@ -7,6 +7,8 @@ uses
   nextpas.core.testing;
 
 const
+  POSIX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.base.pas';
+  POSIX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.base.pas';
   POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
 
@@ -32,13 +34,13 @@ begin
   end;
 end;
 
-function ResolvePosixFFISourcePath: string;
+function ResolveSourcePath(const APathFromTest, APathFromRoot: string): string;
 begin
-  if FileExists(POSIX_FFI_SOURCE_PATH_FROM_TEST) then
-    Exit(POSIX_FFI_SOURCE_PATH_FROM_TEST);
-  if FileExists(POSIX_FFI_SOURCE_PATH_FROM_ROOT) then
-    Exit(POSIX_FFI_SOURCE_PATH_FROM_ROOT);
-  Result := POSIX_FFI_SOURCE_PATH_FROM_TEST;
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
 end;
 
 procedure CheckTokenPresent(const ASource, AToken, AMessage: string);
@@ -53,31 +55,39 @@ end;
 
 procedure TestPosixFFIExposesTargetMatrix;
 var
+  LBaseSource: string;
   LSource: string;
 begin
-  LSource := ReadSourceFile(ResolvePosixFFISourcePath);
+  LBaseSource := ReadSourceFile(ResolveSourcePath(
+    POSIX_BASE_SOURCE_PATH_FROM_TEST,
+    POSIX_BASE_SOURCE_PATH_FROM_ROOT));
+  LSource := ReadSourceFile(ResolveSourcePath(
+    POSIX_FFI_SOURCE_PATH_FROM_TEST,
+    POSIX_FFI_SOURCE_PATH_FROM_ROOT));
 
-  CheckTokenPresent(LSource, 'nextpas_android',
-    'posix.ffi must carry an Android-specific pthread ABI branch');
-  CheckTokenPresent(LSource, 'nextpas_freebsd',
-    'posix.ffi must carry a FreeBSD-specific pthread ABI branch');
-  CheckTokenPresent(LSource, 'nextpas_macos',
-    'posix.ffi must carry a macOS-specific pthread ABI branch');
+  CheckTokenPresent(LSource, 'nextpas.core.platform.posix.base',
+    'posix.ffi must consume shared POSIX base ABI shapes');
+  CheckTokenPresent(LBaseSource, 'nextpas_android',
+    'posix.base must carry an Android-specific pthread ABI branch');
+  CheckTokenPresent(LBaseSource, 'nextpas_freebsd',
+    'posix.base must carry a FreeBSD-specific pthread ABI branch');
+  CheckTokenPresent(LBaseSource, 'nextpas_macos',
+    'posix.base must carry a macOS-specific pthread ABI branch');
 
-  CheckTokenPresent(LSource, 'pthread_rwlockattr_t',
-    'posix.ffi must declare pthread rwlock attribute storage');
-  CheckTokenPresent(LSource, 'array[0..199] of byte',
-    'posix.ffi must preserve the macOS rwlock opaque size');
-  CheckTokenPresent(LSource, 'pthread_mutex_t = pointer;',
-    'posix.ffi must model FreeBSD pthread mutex handles as pointers');
-  CheckTokenPresent(LSource, 'pthread_cond_t = pointer;',
-    'posix.ffi must model FreeBSD pthread condvar handles as pointers');
-  CheckTokenPresent(LSource, 'pthread_rwlock_t = pointer;',
-    'posix.ffi must model FreeBSD pthread rwlock handles as pointers');
-  CheckTokenPresent(LSource, 'pthread_mutexattr_t = ptrint;',
-    'posix.ffi must model Android pthread mutex attributes as long-sized values');
-  CheckTokenPresent(LSource, 'pthread_mutexattr_t = int32;',
-    'posix.ffi must model Linux pthread mutex attributes as 32-bit values');
+  CheckTokenPresent(LBaseSource, 'pthread_rwlockattr_t',
+    'posix.base must declare pthread rwlock attribute storage');
+  CheckTokenPresent(LBaseSource, 'array[0..199] of byte',
+    'posix.base must preserve the macOS rwlock opaque size');
+  CheckTokenPresent(LBaseSource, 'pthread_mutex_t = pointer;',
+    'posix.base must model FreeBSD pthread mutex handles as pointers');
+  CheckTokenPresent(LBaseSource, 'pthread_cond_t = pointer;',
+    'posix.base must model FreeBSD pthread condvar handles as pointers');
+  CheckTokenPresent(LBaseSource, 'pthread_rwlock_t = pointer;',
+    'posix.base must model FreeBSD pthread rwlock handles as pointers');
+  CheckTokenPresent(LBaseSource, 'pthread_mutexattr_t = ptrint;',
+    'posix.base must model Android pthread mutex attributes as long-sized values');
+  CheckTokenPresent(LBaseSource, 'pthread_mutexattr_t = int32;',
+    'posix.base must model Linux pthread mutex attributes as 32-bit values');
   CheckTokenPresent(LSource, 'platform_posix_timespec_to_ns_u64',
     'posix.ffi must expose shared timespec-to-ns conversion for platform consumers');
   CheckTokenPresent(LSource, 'platform_posix_timespec_add_ns',

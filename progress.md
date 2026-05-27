@@ -5973,3 +5973,55 @@ Hello from nextPas!
     contract 层”，host ffi owner 的时钟 ownership 更完整了。
   - 下一步更值的是评估 `platform.time` public pure helper 是否需要继续抽成共享 math owner，或者转向
     `platform.sync` / `platform.thread` 剩余的 host policy ownerization。
+
+### Phase 15: Platform Host Base/FFI Split
+
+- **Status:** completed; verification passed in isolated worktree
+- Actions taken:
+  - 按用户确认的架构规则收口：`platform.time`、`platform.sync`、`platform.thread` 是跨宿主统一
+    API contract；host ABI truth 按宿主归入 `platform.<host>.base` /
+    `platform.<host>.ffi`，不在 feature 子模块后面重复拆 `*.ffi`。
+  - 新增 `core/src/nextpas.core.platform.posix.base.pas`、
+    `linux.base`、`darwin.base`、`android.base`、`freebsd.base`、`unix.base` 与
+    `windows.base`。
+  - 从 `posix.ffi` 迁出 `timespec`、`PTimeSpec`、pthread opaque carrier、pthread callback
+    signature、size/align carrier 等共享 ABI 形状；从各 host `.ffi` 迁出 host 常量、errno/futex、
+    clock/sysconf token、pthread capability token、Windows scalar/record/opaque storage token。
+  - 更新 host `.ffi` 让其显式消费对应 `.base`，并让 `platform.time.host`、`platform.thread`、
+    `platform.sync` 按 public/interface 与 implementation 边界分别消费 `.base` / `.ffi`。
+  - 更新 `core/docs/design-conventions.md`，写明 host base/ffi owner 模型，以及 feature 子模块默认不创建
+    `platform.<feature>.ffi` 的规则。
+  - 扩充 `test_platform_ffi_partition_surface`、`test_platform_ffi_owner_boundary`、
+    `test_platform_posix_ffi_surface`、`test_platform_simulated_host_compile_matrix`、
+    time/thread/sync host ffi surface 与 sync size/behavior tests，冻结这条新边界。
+  - `build/verify_local.sh` 的输入检查加入 7 个 host/shared base 文件。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+      初始失败在缺少 `nextpas.core.platform.posix.base.pas`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      初始失败在 base absence / non-ffi owner count
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`
+    - `make -C core examples` 输出 `All examples compiled.`
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`
+- Review:
+  - 这批把 platform 模块的 L0 ownership 从“host ffi 同时塞常量/类型/API”推进成更干净的
+    `base + ffi` 分层，符合项目四件套范式，也避免后续在 time/sync/thread 里重新长出重复 ABI。
+  - 下一步应继续做 host-specific ABI audit：先查 `platform.*` 是否还有 consumer 内 raw OS token，
+    再补 Windows/macOS/Android/FreeBSD 更强 compile/runtime matrix。

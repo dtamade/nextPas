@@ -32,26 +32,31 @@ implementation
 
 {$IFDEF NEXTPAS_LINUX}
 uses
+  nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_MACOS}
 uses
+  nextpas.core.platform.darwin.base,
   nextpas.core.platform.darwin.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_ANDROID}
 uses
+  nextpas.core.platform.android.base,
   nextpas.core.platform.android.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
+  nextpas.core.platform.freebsd.base,
   nextpas.core.platform.freebsd.ffi;
 {$ENDIF}
 
 {$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
 uses
+  nextpas.core.platform.unix.base,
   nextpas.core.platform.unix.ffi;
 {$ENDIF}
 
@@ -167,6 +172,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;

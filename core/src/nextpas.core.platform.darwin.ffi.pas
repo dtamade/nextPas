@@ -5,51 +5,9 @@ unit nextpas.core.platform.darwin.ffi;
 interface
 
 uses
+  nextpas.core.platform.darwin.base,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
-
-type
-  TPlatformPThreadTokenAlign = record
-    Value: pthread_t;
-  end;
-
-  TPlatformPThreadMutexAlign = record
-    Value: pthread_mutex_t;
-  end;
-
-  TPlatformPThreadRwLockAlign = record
-    Value: pthread_rwlock_t;
-  end;
-
-  TPlatformPThreadCondVarAlign = record
-    Value: pthread_cond_t;
-  end;
-
-  mach_timebase_info_data_t = record
-    numer: UInt32;
-    denom: UInt32;
-  end;
-
-const
-  PLATFORM_CLOCK_REALTIME_ID = Int32(0);
-  PLATFORM_CLOCK_MONOTONIC_ID = Int32(1);
-  PLATFORM_SYSCONF_NPROCESSORS_ONLN = Int32(58);
-  PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID = PLATFORM_CLOCK_REALTIME_ID;
-  PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0;
-
-  PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 0;
-  PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 1;
-  PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 2;
-  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
-  PLATFORM_PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
-  PLATFORM_PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
-  PLATFORM_PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
-
-  PLATFORM_POSIX_EAGAIN = 35;
-  PLATFORM_POSIX_EBUSY = 16;
-  PLATFORM_POSIX_EINTR = 4;
-  PLATFORM_POSIX_EINVAL = 22;
-  PLATFORM_POSIX_ENOTSUP = 45;
-  PLATFORM_POSIX_ETIMEDOUT = 60;
 
 function mach_absolute_time: UInt64; cdecl; external 'c' name 'mach_absolute_time';
 function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; external 'c' name 'mach_timebase_info';

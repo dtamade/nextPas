@@ -4,7 +4,7 @@ program test_platform_sync_sizes;
 
 uses
   SysUtils,
-  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.ffi,{$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base,{$ENDIF}
   nextpas.core.testing,
   nextpas.core.platform.sync;
 

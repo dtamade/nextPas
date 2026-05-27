@@ -5,46 +5,9 @@ unit nextpas.core.platform.freebsd.ffi;
 interface
 
 uses
+  nextpas.core.platform.freebsd.base,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
-
-type
-  TPlatformPThreadTokenAlign = record
-    Value: pthread_t;
-  end;
-
-  TPlatformPThreadMutexAlign = record
-    Value: pthread_mutex_t;
-  end;
-
-  TPlatformPThreadRwLockAlign = record
-    Value: pthread_rwlock_t;
-  end;
-
-  TPlatformPThreadCondVarAlign = record
-    Value: pthread_cond_t;
-  end;
-
-const
-  PLATFORM_CLOCK_REALTIME_ID = Int32(0);
-  PLATFORM_CLOCK_MONOTONIC_ID = Int32(4);
-  PLATFORM_SYSCONF_NPROCESSORS_ONLN = Int32(58);
-  PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID = PLATFORM_CLOCK_MONOTONIC_ID;
-  PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1;
-
-  PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 1;
-  PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 2;
-  PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 3;
-  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
-  PLATFORM_PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
-  PLATFORM_PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
-  PLATFORM_PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
-
-  PLATFORM_POSIX_EAGAIN = 35;
-  PLATFORM_POSIX_EBUSY = 16;
-  PLATFORM_POSIX_EINTR = 4;
-  PLATFORM_POSIX_EINVAL = 22;
-  PLATFORM_POSIX_ENOTSUP = 45;
-  PLATFORM_POSIX_ETIMEDOUT = 60;
 
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 function pthread_getthreadid_np: Int32; cdecl; external 'pthread' name 'pthread_getthreadid_np';

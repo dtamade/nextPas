@@ -5,7 +5,7 @@ program test_platform_sync;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
-  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.ffi,{$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi,{$ENDIF}
   nextpas.core.testing,
   nextpas.core.platform.sync;
 

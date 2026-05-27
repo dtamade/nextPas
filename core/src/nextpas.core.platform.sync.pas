@@ -6,32 +6,32 @@ interface
 
 {$IFDEF NEXTPAS_LINUX}
 uses
-  nextpas.core.platform.linux.ffi;
+  nextpas.core.platform.linux.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_MACOS}
 uses
-  nextpas.core.platform.darwin.ffi;
+  nextpas.core.platform.darwin.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_ANDROID}
 uses
-  nextpas.core.platform.android.ffi;
+  nextpas.core.platform.android.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
-  nextpas.core.platform.freebsd.ffi;
+  nextpas.core.platform.freebsd.base;
 {$ENDIF}
 
 {$IF defined(NEXTPAS_UNIX) and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_ANDROID) and not defined(NEXTPAS_FREEBSD)}
 uses
-  nextpas.core.platform.unix.ffi;
+  nextpas.core.platform.unix.base;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.base;
 {$ENDIF}
 
 type
@@ -136,7 +136,25 @@ implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.ffi
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  , nextpas.core.platform.darwin.ffi
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.android.ffi
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  , nextpas.core.platform.freebsd.ffi
+  {$ELSE}
+  , nextpas.core.platform.unix.ffi
+  {$ENDIF}
+  ;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_UNIX}

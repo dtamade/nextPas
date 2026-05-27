@@ -880,6 +880,13 @@ require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
+require_path core/src/nextpas.core.platform.posix.base.pas
+require_path core/src/nextpas.core.platform.linux.base.pas
+require_path core/src/nextpas.core.platform.darwin.base.pas
+require_path core/src/nextpas.core.platform.android.base.pas
+require_path core/src/nextpas.core.platform.freebsd.base.pas
+require_path core/src/nextpas.core.platform.unix.base.pas
+require_path core/src/nextpas.core.platform.windows.base.pas
 require_path core/src/nextpas.core.platform.linux.ffi.pas
 require_path core/src/nextpas.core.platform.posix.ffi.pas
 require_path core/src/nextpas.core.platform.darwin.ffi.pas
