@@ -89,7 +89,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
   `sema.type-mismatch`；root source 没有同名 callable、imported `project-source` 单一 target
   但调用 arity 不在 target 可接受区间内时发 `sema.wrong-argument-count`，arity 已匹配但稳定
-  argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported `installed-source`
+  argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported `project-source`
+  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match evidence。
+  imported `installed-source`
   single-target arity miss 继续 deferred，不发 `sema.wrong-argument-count`；imported 同名同 arity 多候选、稳定
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
