@@ -12,7 +12,13 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Indexed Extraction Naming
+### Current Micro Batch: Vec Try Indexed Extraction
+
+- [x] Add `TryRemoveAt(Index, var Element): Boolean` to `IVec<T>` / `TVec<T>`.
+- [x] Add `TrySwapRemoveAt(Index, var Element): Boolean` to `IVec<T>` / `TVec<T>`.
+- [x] Do not add new `VecDeque` / `Deque` swap-removal try API in this batch; their ring-buffer indexing semantics stay weaker than `Vec`.
+
+### Completed Micro Batch: Indexed Extraction Naming
 
 - [x] Rename positional extraction methods from copied `Remove` / `RemoveSwap` names to `RemoveAt` / `SwapRemoveAt`.
 - [x] Rename positional pointer/array extraction helpers to `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`.
@@ -60,6 +66,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Unsafe fast-path methods use `Unchecked` as one word, for example `GetUnchecked`, `PutUnchecked`, `ReadUnchecked`, and `SortUnchecked`. Current copied `UnChecked` spellings are transitional and should be renamed as a complete interface-tuning batch.
 - Naming cleanup must be done as complete mechanical batches rather than piecemeal edits: `UnChecked` -> `Unchecked`, `OverWrite` -> `Overwrite`, `FindIF`/`FindIFNot` -> `FindIf`/`FindIfNot`, `CountIF` -> `CountIf`, `ReplaceIF` -> `ReplaceIf`, `SizeUint` -> `SizeUInt`, and spacing such as `aIndex:SizeUInt` -> `aIndex: SizeUInt`. Update interface declarations, implementation methods, docs/comments, factories/tests/examples that reference the public names, and then run compile verification.
 - Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Final indexed sequence APIs use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for positional extraction. Do not keep `Remove(Index)` as a public indexed-extraction synonym: the framework is unreleased and has no compatibility burden, so stale duplicate names should be removed during interface tuning. Value-based `Remove(Value)` belongs only to containers that explicitly support value lookup/removal semantics.
+- `Vec` exposes `TryRemoveAt` and `TrySwapRemoveAt` because indexed extraction is a core contiguous-vector operation. `Deque` / `VecDeque` should not receive a symmetric `TrySwapRemoveAt` in this batch: their ring-buffer indexing semantics are weaker, and adding the API would imply a stronger Vec-like positional contract than we currently want.
 
 ## Verification Commands
 

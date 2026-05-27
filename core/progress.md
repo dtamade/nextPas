@@ -39,11 +39,13 @@
 - Started the indexed extraction naming batch. Surface review found positional `Remove`/`RemoveSwap` APIs on `Vec`, `VecDeque`, and `Deque`, plus an internal `MultiMap` use of vector swap-removal. Key/value `Remove` APIs in maps, sets, trie, cache, and forward list remain out of scope and should keep their names.
 - Implemented the indexed extraction naming batch: positional extraction now uses `RemoveAt` / `SwapRemoveAt`, pointer and array extraction helpers now use `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`, `Deque.TryRemove` is now `TryRemoveAt`, and `MultiMap` now calls `Vec.SwapRemoveAt` internally.
 - Verified the batch with residual scans for old positional names, `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
+- Added `TryRemoveAt` and `TrySwapRemoveAt` to `IVec<T>` / `TVec<T>` only. `VecDeque` / `Deque` did not receive a new swap-removal try API because their ring-buffer indexing semantics stay intentionally weaker than `Vec`.
+- Verified the Vec try indexed extraction batch with `git diff --check`, symbol scan, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 
 - Continue the naming cleanup implementation one batch at a time.
-- Next interface-tuning batch: decide whether to add missing `TryRemoveAt` / `TrySwapRemoveAt` methods to `Vec` and whether `Deque` / `VecDeque` should expose a symmetric swap-removal try API.
+- Next interface-tuning batch: continue reviewing Vec and array-family method naming/ownership after the try indexed extraction gap.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

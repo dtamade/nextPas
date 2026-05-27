@@ -525,11 +525,13 @@ type
     procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  RemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  SwapRemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     { 函数式编程方法 }
     function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -1881,6 +1883,15 @@ begin
   RemoveCopyAt(aIndex, @Result);
 end;
 
+function TVec.TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
+begin
+  if aIndex >= FCount then
+    exit(False);
+
+  RemoveCopyAt(aIndex, @aElement, 1);
+  Result := True;
+end;
+
 procedure TVec.SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
@@ -1927,6 +1938,15 @@ end;
 function TVec.SwapRemoveAt(aIndex: SizeUInt): T;
 begin
   SwapRemoveCopyAt(aIndex, @Result);
+end;
+
+function TVec.TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean;
+begin
+  if aIndex >= FCount then
+    exit(False);
+
+  SwapRemoveCopyAt(aIndex, @aElement, 1);
+  Result := True;
 end;
 
 { 函数式编程方法实现 }

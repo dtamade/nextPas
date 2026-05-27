@@ -130,3 +130,10 @@
 - Value-based `Remove(Value)` belongs only to containers whose contract is explicitly value/key lookup and removal.
 - Positional pointer/array extraction helpers should also carry `At`: `RemoveCopyAt` and `RemoveArrayAt` for order-preserving extraction; `SwapRemoveAt`, `SwapRemoveCopyAt`, and `SwapRemoveArrayAt` for order-unstable extraction. This keeps the whole indexed extraction family visibly separate from value/key removal.
 - The pure rename batch should not hide a larger API addition. `Deque` and `VecDeque` already had a non-throwing indexed extraction method and now expose it as `TryRemoveAt`; `Vec` still needs a separate decision/batch for adding `TryRemoveAt` and possibly `TrySwapRemoveAt`.
+
+## 2026-05-28: Vec try indexed extraction
+
+- `Vec` should expose non-throwing single-element indexed extraction as `TryRemoveAt(Index, var Element): Boolean` and `TrySwapRemoveAt(Index, var Element): Boolean`.
+- `TryRemoveAt` preserves order and mirrors `RemoveAt`; `TrySwapRemoveAt` may reorder and mirrors `SwapRemoveAt`.
+- Invalid indexes return `False`. Valid indexes remove the element and return `True`.
+- Do not add `TrySwapRemoveAt` to `Deque` / `VecDeque` in this batch. Ring-buffer deques retain weaker indexed semantics than contiguous vectors, and a symmetric swap-removal try API would overstate their vector-like contract.

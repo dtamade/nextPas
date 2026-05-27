@@ -806,6 +806,23 @@ type
      *}
     function RemoveAt(aIndex: SizeUInt): T; overload;
 
+    {**
+     * TryRemoveAt
+     *
+     * @desc 尝试移除指定位置的元素并拷贝到指定元素变量
+     *
+     * @params
+     *   aIndex   要移除的元素位置
+     *   aElement 保存元素的元素变量
+     *
+     * @return 成功移除返回 True；索引越界返回 False
+     *
+     * @remark
+     *   非抛异常形式的 RemoveAt
+     *   保持剩余元素顺序
+     *}
+    function TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload;
+
 
 
     {**
@@ -894,6 +911,23 @@ type
      *   如果移除的元素数量小于0会抛出异常
      *}
     function SwapRemoveAt(aIndex: SizeUInt): T; overload;
+
+    {**
+     * TrySwapRemoveAt
+     *
+     * @desc 尝试移除指定位置的元素并用最后一个元素填充删除的位置(交换)
+     *
+     * @params
+     *   aIndex   要移除的元素位置
+     *   aElement 保存元素的元素变量
+     *
+     * @return 成功移除返回 True；索引越界返回 False
+     *
+     * @remark
+     *   非抛异常形式的 SwapRemoveAt
+     *   会破坏元素顺序
+     *}
+    function TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload;
 
     {**
      * Filter
