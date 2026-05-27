@@ -70,7 +70,7 @@ platform 子模块继续符合“facade/base/implementation”结构范式：
 
 ### Status
 
-Completed in isolated worktree; branch verification passed, merge pending.
+Completed; merged to `main@de7efaa`, cleanup pending.
 
 ### Planned Steps
 
@@ -98,7 +98,8 @@ Completed in isolated worktree; branch verification passed, merge pending.
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
   - `git diff --check`
-- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+- [x] commit、择优合并回 `main`
+- [ ] 清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -136,6 +137,17 @@ Completed in isolated worktree; branch verification passed, merge pending.
     `corePlatformThreadExampleCheck=pass`、`corePlatformThreadBenchCheck=pass` 与
     `corePlatformSimulatedHostCompileMatrixCheck=pass`。
   - `git diff --check` clean。
+- Merge / post-merge:
+  - `de7efaa platform: move thread carrier types to base` 已 fast-forward 合并进 main。
+  - post-merge focused gates 通过：
+    `test_platform_thread_host_ffi_surface` 1/1，
+    `test_platform_thread_no_fpc_units` 2/2，
+    `test_platform_thread_l0_boundary` 4/4，
+    `test_platform_thread` 8/8，
+    `test_platform_ffi_owner_boundary` 2/2，
+    `test_platform_simulated_host_compile_matrix` pass。
+  - 主 checkout 存在 unrelated `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`
+    WIP，本轮不纳入提交。
 
 ## Addendum: 2026-05-27 Platform Sync Windows Wait-Address Public Result Boundary
 

@@ -36,7 +36,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform.thread base extraction)
 
-- **Status:** completed in isolated worktree; branch verification passed, merge pending
+- **Status:** completed; merged to main and cleanup pending
 - Objective:
   - 继续按 `/plan` 推进 platform 模块结构范式，把 `platform.thread` 的 public carrier type
     抽到 `nextpas.core.platform.thread.base`，让 `platform.thread` 和 `platform.time` 一样遵循
@@ -107,8 +107,20 @@ platform/core 工作流保留下来的已完成记录。
     runtime 语义，也没有新增 feature-specific `platform.thread.ffi` 或 `platform.thread.intf`。
   - `platform.thread.base` 现在进入 source-surface、owner-boundary、no-FPC、L0-boundary 和
     simulated-host compile proof，后续回归会更早暴露。
+- Merge / post-merge verification:
+  - `codex/platform-thread-base` commit `de7efaa` 已 fast-forward 合并进 `main@de7efaa`。
+  - post-merge focused verification passed:
+    `test_platform_thread_host_ffi_surface` 1/1 pass，
+    `test_platform_thread_no_fpc_units` 2/2 pass，
+    `test_platform_thread_l0_boundary` 4/4 pass，
+    `test_platform_thread` 8/8 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass，
+    `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
+  - 主 checkout 仍有 unrelated user/teammate WIP：
+    `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`；本轮未修改也未提交该文件。
 - Next:
-  - commit，fast-forward merge 回 main，跑 post-merge focused verification，清理 worktree/branch。
+  - 提交本收口记录后，清理 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base`
+    worktree 和 `codex/platform-thread-base` 分支。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 
