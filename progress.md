@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,49 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 118 imported inherited unknown-member diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 imported inherited direct member-call 的 source-owned name miss 正式接进 semantic regression 与
+    stage0 verify gate，同时保持 installed-source inherited unknown-member 继续 deferred。
+- Baseline:
+  - Batch 111 已覆盖 imported exact member unknown-member。
+  - Batch 114-117 已连续覆盖 imported inherited no-match / ambiguity / arity miss / type-mismatch。
+  - focused semantic regression 证明 `Worker.Missing(1)` 在 imported inherited `project-source`
+    路径已天然失败为 `sema.unknown-member`，但这条边界尚未进入 official verification surface。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续采用“probe 后 promotion”提速法。
+  - 复查相邻模板后发现：stage0 build 不能直接证明 installed-source inherited deferred，因为它会把相邻
+    unit 文件当 root-source 吸入；因此本轮对 installed-source deferred 采用 focused semantic regression
+    作为权威真相。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加 imported inherited project-source
+    regression，以及 installed-source deferred guard。
+  - 新增 `tests/fixtures/imported_inherited_unknown_member`，并把
+    `imported-inherited-unknown-member-check` 纳入 `build/verify_local.sh` 与 final envelope。
+  - 本批没有修改 `compiler/sema/np_semantic_analyzer.pas`；核心语义逻辑保持不变。
+- Verification:
+  - GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/imported_inherited_unknown_member/imported_inherited_unknown_member_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.unknown-member`、
+    `diagnostic-message=unknown member "Missing"`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `imported-inherited-unknown-member-check=pass`、
+    `importedInheritedUnknownMemberCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮再次验证了当前最快的推进法：对 imported inherited 相邻 diagnostics 边界，先用 focused semantic
+    regression 判真相；若 project-source 行为已天然成立，则直接 promotion 到 stage0/verify gate。
+  - installed-source deferred 仍然要用 semantic regression 判定，不适合用 stage0 fixture 硬 probe，
+    因为同目录 unit 会天然被当作 root-source 搜到，结论会失真。
+  - 下一轮可以继续沿同一家族，优先扫 imported inherited 剩余 deferred 边界，或转向更高价值但更难的
+    known non-callable / visibility / complex receiver forms。
 
 ## Session: 2026-05-27 (Batch 117 imported inherited member type mismatch diagnostics)
 

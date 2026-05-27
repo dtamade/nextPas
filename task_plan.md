@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,80 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 118 Imported Inherited Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported inherited direct member-call 的 `sema.unknown-member` 正式纳入官方验证面：当 receiver type
+已知、exact receiver type 自身没有同名 method、parent chain 上也不存在同名 inherited member 时，
+固定 project-source 路径失败为 `sema.unknown-member`，同时继续保证 installed-source inherited
+unknown-member 保守 deferred。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Missing(1);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Missing`，且 `TBase` 也没有 `Missing` 时，必须失败为 `sema.unknown-member`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` inherited unknown-member 继续 deferred，不发 diagnostics，也不注册错误
+  binding。
+- `build/verify_local.sh` 新增 `imported-inherited-unknown-member-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `importedInheritedUnknownMemberCheck`。
+- 本批继续沿用“probe 后 promotion”提速法：先验证能力是否天然成立；若已成立，则直接 promotion 到
+  semantic/stage0/verify contract。
+
+### Architecture Decision
+
+这是 imported inherited unknown-member 的 verification promotion 批次，不是新的 member resolver 设计：
+
+- 只把已存在的 imported `project-source` inherited name miss 行为提升到 official gate。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 incomplete imported truth 提前报成
+  ordinary unknown-member。
+- 不顺手扩大到 known non-callable、visibility、record/property/array/deref receiver 或更完整 member
+  resolver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：先验证 project-source inherited name miss 当前是否已天然产生 `sema.unknown-member`
+- [x] semantic：新增 imported inherited project-source regression
+- [x] semantic：新增 imported inherited installed-source deferred guard
+- [x] 新增 `tests/fixtures/imported_inherited_unknown_member` 与
+  `imported-inherited-unknown-member-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Probe：focused semantic regression 已证明 imported inherited `project-source`
+  `Worker.Missing(1)` 会失败为 `sema.unknown-member`，同时 installed-source inherited unknown-member
+  继续保持 deferred。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_unknown_member/imported_inherited_unknown_member_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.unknown-member`、
+  `diagnostic-message=unknown member "Missing"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-unknown-member-check=pass`、
+  `importedInheritedUnknownMemberCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不把 imported `installed-source` inherited unknown-member 纳入 diagnostics
+- 不扩大到 known non-callable / visibility / 更复杂 receiver form
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 117 Imported Inherited Member Type Mismatch Diagnostics
 

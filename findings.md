@@ -151,6 +151,16 @@
   `tests/fixtures/imported_inherited_member_type_mismatch_call` 与
   `imported-inherited-member-type-mismatch-call-check`，把这条已存在行为正式纳入 final envelope
   `importedInheritedMemberTypeMismatchCallCheck=pass`。
+- imported inherited `project-source` 的 unknown-member 在当前实现里也已经天然成立：对
+  `TWorker = class(TBase)` 且 parent chain 中不存在 `Missing` 的场景，`Worker.Missing(1)` 的
+  semantic regression 与 stage0 build 都会直接输出 `sema.unknown-member`，不需要再改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` unknown-member 继续保持 deferred；focused semantic regression
+  证明 `ruoInstalledSource` parent owner 不会被提前投影成 ordinary unknown-member，也不会注册错误
+  `member-call` binding。
+- Batch 118 新增 `tests/fixtures/imported_inherited_unknown_member` 与
+  `imported-inherited-unknown-member-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedUnknownMemberCheck=pass`。
 - 同一家族 sema diagnostics 的加速办法已经更具体了：对只差 provenance / inherited / imported 的相邻
   边界，先做 probe；若能力天然成立，就直接 promotion 到 official gate；只有 probe 失败时才进入最小实现修复。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
