@@ -73,6 +73,7 @@ function windows_mutex_init(const AMutex: Pointer): Int32; inline;
 function windows_mutex_lock(const AMutex: Pointer): Int32; inline;
 function windows_mutex_trylock(const AMutex: Pointer): Boolean; inline;
 function windows_mutex_unlock(const AMutex: Pointer): Int32; inline;
+function windows_mutex_destroy(const AMutex: Pointer): Int32; inline;
 function windows_rwlock_init(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_rdlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_tryrdlock(const ARwLock: Pointer): Boolean; inline;
@@ -80,7 +81,9 @@ function windows_rwlock_wrlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_trywrlock(const ARwLock: Pointer): Boolean; inline;
 function windows_rwlock_rdunlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_wrunlock(const ARwLock: Pointer): Int32; inline;
+function windows_rwlock_destroy(const ARwLock: Pointer): Int32; inline;
 function windows_condvar_init(const ACondVar: Pointer): Int32; inline;
+function windows_condvar_destroy(const ACondVar: Pointer): Int32; inline;
 function windows_condvar_wait(const ACondVar: Pointer; const AMutex: Pointer): Int32; inline;
 function windows_condvar_timedwait_ms(
   const ACondVar: Pointer;
@@ -290,6 +293,11 @@ begin
   Result := 0;
 end;
 
+function windows_mutex_destroy(const AMutex: Pointer): Int32; inline;
+begin
+  Result := 0;
+end;
+
 function windows_rwlock_init(const ARwLock: Pointer): Int32; inline;
 begin
   InitializeSRWLock(ARwLock);
@@ -330,9 +338,19 @@ begin
   Result := 0;
 end;
 
+function windows_rwlock_destroy(const ARwLock: Pointer): Int32; inline;
+begin
+  Result := 0;
+end;
+
 function windows_condvar_init(const ACondVar: Pointer): Int32; inline;
 begin
   InitializeConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function windows_condvar_destroy(const ACondVar: Pointer): Int32; inline;
+begin
   Result := 0;
 end;
 

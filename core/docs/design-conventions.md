@@ -919,7 +919,7 @@ platform clock API 本身，不能把这些 L1 API 放进 `nextpas.core.platform
 它不提供 monitor、semaphore、channel、thread pool、scheduler 或其他 L1/L2 并发抽象。
 
 Windows `SRWLOCK`、`CONDITION_VARIABLE`、`WaitOnAddress` 的 raw ABI 声明，以及围绕它们的
-init/lock/unlock/wait/wake helper，都应尽量继续归
+init/lock/trylock/unlock/destroy/wait/wake helper，都应尽量继续归
 `nextpas.core.platform.windows.ffi` owner。`platform.sync` 只消费像
 `windows_mutex_*`、`windows_rwlock_*`、`windows_condvar_*`、
 `windows_wait_address_i32`、`windows_wake_address_*` 这类 host-owned helper，并保留

@@ -612,7 +612,7 @@ end;
 
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := 0;
+  Result := windows_mutex_destroy(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
@@ -643,7 +643,7 @@ end;
 
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := 0;
+  Result := windows_rwlock_destroy(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
@@ -692,7 +692,7 @@ end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := 0;
+  Result := windows_condvar_destroy(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;

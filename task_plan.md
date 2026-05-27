@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Time Host-FFI Facade Collapse；上一轮包括
+当前最新本轮为 Platform Sync Windows Destroy Helper Ownership；上一轮包括
+Platform Time Host-FFI Facade Collapse；
 Platform POSIX Timeout Deadline Helper Ownership、
 Collections Interface Ownership Normalization、
 Platform POSIX Pthread Attr-init Shared Helper Ownership；
@@ -35,6 +36,62 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Windows Destroy Helper Ownership
+
+### Goal
+
+把 Windows sync 三个“宿主无需 destroy”的 helper family 也收回 `windows.ffi` owner：
+
+- `platform.sync` 不再在 Windows consumer 里直接保留 mutex/rwlock/condvar destroy no-op
+- `windows.ffi` 显式拥有 `windows_mutex_destroy` / `windows_rwlock_destroy` /
+  `windows_condvar_destroy`
+- `platform.sync` 的 Windows helper family 继续更完整地落在 host ffi owner 上
+
+### Architecture Decision
+
+- Windows `SRWLOCK` / `CONDITION_VARIABLE` 的“无需销毁”也是宿主语义的一部分，虽然实现是 no-op，
+  但 owner 仍应归 `nextpas.core.platform.windows.ffi`。
+- `platform.sync` 继续保留 public opaque storage contract、busy/timeout error mapping 与跨平台
+  wait policy；但 destroy family 不再停留在 consumer。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 destroy helper，且
+  `platform.sync` Windows 分支消费这些 helper
+- [x] 在 `windows.ffi` 增加 mutex/rwlock/condvar destroy helper
+- [x] 让 `platform.sync` Windows destroy 分支改为 delegation
+- [x] 更新 design/tracking 文档
+- [x] focused：`test_platform_sync_host_ffi_surface` / `test_platform_sync` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must expose Windows mutex destroy helper: windows_mutex_destroy`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 这批不把 Windows trylock busy-result 映射移出 `platform.sync`
+- 这批不把 POSIX errno 到 `PLATFORM_ERR_*` 的映射移出 `platform.sync`
+- 这批不改变 Windows public opaque storage contract
 
 ## Addendum: 2026-05-27 Platform Time Host-FFI Facade Collapse
 

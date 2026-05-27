@@ -47,6 +47,10 @@
   分别散落在 `platform.thread` 与 `platform.sync` 里；现在 `windows.ffi` 继续拥有
   `windows_sleep_ns_to_ms` 与 `windows_timeout_ns_to_ms`，consumer 不再各自复制向上取整和
   `INFINITE - 1` 截断语义。
+- Windows `SRWLOCK` / `CONDITION_VARIABLE` 的“无需显式 destroy”也是宿主语义，不该继续留在
+  `platform.sync` consumer 里写三处 `Result := 0`。现在 `windows.ffi` 显式拥有
+  `windows_mutex_destroy`、`windows_rwlock_destroy`、`windows_condvar_destroy`，Windows sync helper
+  family 在 ffi owner 侧更完整了。
 - 新增 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`，把
   `platform.time` 对 `posix.ffi` / `darwin.ffi` / `windows.ffi` 的 clock ABI 消费关系冻结成
   source-surface gate；fresh `bash build/verify_local.sh` 已把

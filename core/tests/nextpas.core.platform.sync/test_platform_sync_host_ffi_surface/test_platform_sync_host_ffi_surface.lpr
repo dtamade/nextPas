@@ -255,6 +255,8 @@ begin
     'windows.ffi must expose Windows mutex trylock helper');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_unlock',
     'windows.ffi must expose Windows mutex unlock helper');
+  CheckTokenPresent(LWindowsSource, 'windows_mutex_destroy',
+    'windows.ffi must expose Windows mutex destroy helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_init',
     'windows.ffi must expose Windows rwlock init helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_rdlock',
@@ -269,6 +271,8 @@ begin
     'windows.ffi must expose Windows rwlock read-unlock helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_wrunlock',
     'windows.ffi must expose Windows rwlock write-unlock helper');
+  CheckTokenPresent(LWindowsSource, 'windows_rwlock_destroy',
+    'windows.ffi must expose Windows rwlock destroy helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_init',
     'windows.ffi must expose Windows condvar init helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_wait',
@@ -283,6 +287,8 @@ begin
     'windows.ffi must expose Windows condvar signal helper');
   CheckTokenPresent(LWindowsSource, 'windows_condvar_broadcast',
     'windows.ffi must expose Windows condvar broadcast helper');
+  CheckTokenPresent(LWindowsSource, 'windows_condvar_destroy',
+    'windows.ffi must expose Windows condvar destroy helper');
   CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32',
     'windows.ffi must expose Windows wait-address helper');
   CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_ns',
@@ -379,6 +385,8 @@ begin
     'platform.sync must consume Windows mutex trylock helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_unlock',
     'platform.sync must consume Windows mutex unlock helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_mutex_destroy',
+    'platform.sync must consume Windows mutex destroy helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_init',
     'platform.sync must consume Windows rwlock init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_rdlock',
@@ -393,6 +401,8 @@ begin
     'platform.sync must consume Windows rwlock read-unlock helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_wrunlock',
     'platform.sync must consume Windows rwlock write-unlock helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_rwlock_destroy',
+    'platform.sync must consume Windows rwlock destroy helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_init',
     'platform.sync must consume Windows condvar init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_wait',
@@ -403,6 +413,8 @@ begin
     'platform.sync must consume Windows condvar signal helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_condvar_broadcast',
     'platform.sync must consume Windows condvar broadcast helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_condvar_destroy',
+    'platform.sync must consume Windows condvar destroy helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wait_address_i32_timeout_result',
     'platform.sync must consume Windows wait-address timeout-mapping helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_single',
