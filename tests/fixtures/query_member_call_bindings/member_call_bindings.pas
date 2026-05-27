@@ -15,6 +15,7 @@ type
     procedure Touch;
   end;
   TChildWorker = class(TBaseWorker)
+    procedure Run;
   end;
 
 constructor TWorker.Create(Value: Integer);
@@ -54,6 +55,11 @@ end;
 
 procedure TBaseWorker.Touch;
 begin
+end;
+
+procedure TChildWorker.Run;
+begin
+  Touch;
 end;
 
 var

@@ -6296,6 +6296,22 @@ MEMBER_TOUCH_OFFSET=$(awk '
     offset += length($0) + 1;
   }
 ' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
+MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET=$(awk '
+  BEGIN { offset = 0; in_child_run = 0 }
+  {
+    if (index($0, "procedure TChildWorker.Run;") > 0) {
+      in_child_run = 1;
+    } else if (in_child_run && index($0, "end;") > 0) {
+      in_child_run = 0;
+    }
+    idx = index($0, "  Touch;");
+    if (in_child_run && idx > 0) {
+      print offset + idx + length("  ") - 1;
+      exit;
+    }
+    offset += length($0) + 1;
+  }
+' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
 MEMBER_PICK_ZERO_OFFSET=$(awk '
   BEGIN { offset = 0 }
   {
@@ -6336,6 +6352,7 @@ require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-binding'
+require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-binding'
@@ -6346,6 +6363,7 @@ require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-definition'
+require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":0.*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"b\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-definition'
@@ -6356,6 +6374,7 @@ require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"me
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-binding-envelope'
+require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-binding-envelope'
@@ -6366,6 +6385,7 @@ require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingK
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-definition-envelope'
+require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":0.*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"b\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-definition-envelope'

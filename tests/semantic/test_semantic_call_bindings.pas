@@ -4835,6 +4835,103 @@ begin
   end;
 end;
 
+procedure CheckInheritedImplicitSelfBareMethodCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  TouchBindingCount: LongInt;
+  TouchOffset: LongInt;
+  TouchSymbolId: LongInt;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedImplicitSelfBareMethodCallBinding;' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBaseWorker.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-inherited-implicit-self-bare-method-call-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-model-status:' +
+        Model.Status);
+    TouchSymbolId := SymbolIdByNameAndKind(
+      Model,
+      'TBaseWorker.Touch',
+      'method'
+    );
+    if TouchSymbolId <= 0 then
+      Fail('missing-inherited-implicit-self-bare-method-call-target-symbol');
+    TouchOffset := Pos('  Touch;', SourceText) + Length('  ') - 1;
+    TouchBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Touch') then
+      begin
+        Inc(TouchBindingCount);
+        if Binding.TargetSymbolId <> TouchSymbolId then
+          Fail('inherited-implicit-self-bare-method-call-target-mismatch');
+        if Binding.ByteOffset <> TouchOffset then
+          Fail('inherited-implicit-self-bare-method-call-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if TouchBindingCount = 0 then
+      Fail('missing-inherited-implicit-self-bare-method-call-binding');
+    if TouchBindingCount <> 1 then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-binding-count:' +
+        IntToStr(TouchBindingCount));
+    if Model.BindingCount <> 1 then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-model-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckMemberParameterCallTypeMismatchDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -5258,6 +5355,7 @@ begin
     CheckBareParameterCallTypeMismatchDiagnostic;
     CheckBareUnknownCallableDiagnostic;
     CheckImplicitSelfBareMethodCallBinding;
+    CheckInheritedImplicitSelfBareMethodCallBinding;
     CheckMemberParameterCallTypeMismatchDiagnostic;
     CheckBareFunctionResultTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;
