@@ -56,6 +56,27 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
   `STARTUPINFOA`, `STARTUPINFOW`, `CreateProcessA`, `CreateProcessW`,
   `GetStartupInfoA`, `GetStartupInfoW`, `TerminateProcess`,
   `GetExitCodeProcess`, and `ExitProcess`.
+- Platform Host ABI Completeness Wave 7 covers the process wait-status raw ABI
+  inventory for host `base` owners and shared POSIX math helpers. POSIX host
+  `base` units now carry `WNOHANG`, `WUNTRACED`, `SIGHUP`, `SIGINT`, `SIGKILL`,
+  `SIGTERM`, and host-specific `SIGCHLD` as
+  `PLATFORM_WAIT_NOHANG`, `PLATFORM_WAIT_UNTRACED`,
+  `PLATFORM_SIGNAL_HANGUP`, `PLATFORM_SIGNAL_INTERRUPT`,
+  `PLATFORM_SIGNAL_KILL`, `PLATFORM_SIGNAL_TERMINATE`, and
+  `PLATFORM_SIGNAL_CHILD`. Linux and Android use `SIGCHLD = 17`; Darwin and
+  FreeBSD use `SIGCHLD = 20`; generic Unix keeps the Linux-style fallback until
+  a specific host is promoted. Shared POSIX math now owns FPC wait-status macro
+  projections for `WEXITSTATUS`, `WTERMSIG`, `WSTOPSIG`, `WIFEXITED`,
+  `WIFSIGNALED`, `WIFSTOPPED`, `WCOREDUMP`, `W_EXITCODE`, and `W_STOPCODE`.
+  Windows base now carries `WAIT_TIMEOUT`, `WAIT_FAILED`, `STILL_ACTIVE`,
+  `SYNCHRONIZE`, `PROCESS_TERMINATE`, and `DUPLICATE_SAME_ACCESS`. This remains
+  source-surface and compile evidence with no public platform.process contract.
+- Wave 7 source evidence tokens are synchronized with the evidence index:
+  `WNOHANG`, `WUNTRACED`, `WEXITSTATUS`, `WTERMSIG`, `WSTOPSIG`,
+  `WIFEXITED`, `WIFSIGNALED`, `WIFSTOPPED`, `WCOREDUMP`, `W_EXITCODE`,
+  `W_STOPCODE`, `SIGHUP`, `SIGINT`, `SIGKILL`, `SIGTERM`, `SIGCHLD`,
+  `WAIT_TIMEOUT`, `WAIT_FAILED`, `STILL_ACTIVE`, `SYNCHRONIZE`,
+  `PROCESS_TERMINATE`, and `DUPLICATE_SAME_ACCESS`.
 - Platform Host ABI Completeness Wave 5 covers the environment ABI raw inventory for
   host `ffi` owners. POSIX hosts now expose delegated helpers for `getenv`,
   `setenv`, `unsetenv`, and `putenv`. FPC Unix source directly declares `getenv`;

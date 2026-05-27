@@ -15,6 +15,17 @@ procedure platform_posix_timespec_add_ns(var ATime: timespec; const ANanoseconds
 function platform_posix_timespec_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   const ANow: PTimeSpec): UInt64; inline;
+function platform_posix_wait_exit_status(const AStatus: Int32): Int32; inline;
+function platform_posix_wait_term_signal(const AStatus: Int32): Int32; inline;
+function platform_posix_wait_stop_signal(const AStatus: Int32): Int32; inline;
+function platform_posix_wait_if_exited(const AStatus: Int32): Boolean; inline;
+function platform_posix_wait_if_signaled(const AStatus: Int32): Boolean; inline;
+function platform_posix_wait_if_stopped(const AStatus: Int32): Boolean; inline;
+function platform_posix_wait_core_dumped(const AStatus: Int32): Boolean; inline;
+function platform_posix_wait_exit_code(
+  const AReturnCode: Int32;
+  const ASignal: Int32): Int32; inline;
+function platform_posix_wait_stop_code(const ASignal: Int32): Int32; inline;
 
 implementation
 
@@ -66,6 +77,53 @@ begin
   if LDeadlineNs <= LNowNs then
     Exit(0);
   Result := LDeadlineNs - LNowNs;
+end;
+
+function platform_posix_wait_exit_status(const AStatus: Int32): Int32; inline;
+begin
+  Result := (AStatus and $FF00) shr 8;
+end;
+
+function platform_posix_wait_term_signal(const AStatus: Int32): Int32; inline;
+begin
+  Result := AStatus and $7F;
+end;
+
+function platform_posix_wait_stop_signal(const AStatus: Int32): Int32; inline;
+begin
+  Result := platform_posix_wait_exit_status(AStatus);
+end;
+
+function platform_posix_wait_if_exited(const AStatus: Int32): Boolean; inline;
+begin
+  Result := platform_posix_wait_term_signal(AStatus) = 0;
+end;
+
+function platform_posix_wait_if_signaled(const AStatus: Int32): Boolean; inline;
+begin
+  Result := ((AStatus and $FF) <> $7F) and ((AStatus and $7F) <> 0);
+end;
+
+function platform_posix_wait_if_stopped(const AStatus: Int32): Boolean; inline;
+begin
+  Result := (AStatus and $FF) = $7F;
+end;
+
+function platform_posix_wait_core_dumped(const AStatus: Int32): Boolean; inline;
+begin
+  Result := (AStatus and PLATFORM_WAIT_CORE_FLAG) <> 0;
+end;
+
+function platform_posix_wait_exit_code(
+  const AReturnCode: Int32;
+  const ASignal: Int32): Int32; inline;
+begin
+  Result := (AReturnCode shl 8) or ASignal;
+end;
+
+function platform_posix_wait_stop_code(const ASignal: Int32): Int32; inline;
+begin
+  Result := (ASignal shl 8) or $7F;
 end;
 
 end.

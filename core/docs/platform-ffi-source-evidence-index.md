@@ -76,6 +76,43 @@ platform.process contract in this wave.
   `GetExitCodeProcess`, and `ExitProcess`. Wave 6 intentionally does not add
   non-FPC `windows_*process*` result wrappers.
 
+### Platform Host ABI Completeness Wave 7: process wait-status raw ABI inventory
+
+Wave 7 extends the process-control inventory with raw process wait-status
+helpers, wait option tokens, POSIX signal tokens, and Windows wait/status/access
+constants. It still does not create a public `platform.process` contract.
+
+- POSIX wait option tokens stay in host `base` units: `WNOHANG` and
+  `WUNTRACED` become `PLATFORM_WAIT_NOHANG` and `PLATFORM_WAIT_UNTRACED`.
+  Evidence starts in FPC `rtl/linux/ostypes.inc`, `rtl/bsd/ostypes.inc`, and
+  `packages/libc/src/bwaitflagsh.inc`.
+- POSIX signal tokens stay in host `base` units: `SIGHUP`, `SIGINT`,
+  `SIGKILL`, `SIGTERM`, and host-specific `SIGCHLD` become
+  `PLATFORM_SIGNAL_HANGUP`, `PLATFORM_SIGNAL_INTERRUPT`,
+  `PLATFORM_SIGNAL_KILL`, `PLATFORM_SIGNAL_TERMINATE`, and
+  `PLATFORM_SIGNAL_CHILD`. Linux evidence starts in `rtl/linux/signal.inc`;
+  Darwin evidence starts in `rtl/darwin/signal.inc`; FreeBSD evidence starts in
+  `rtl/freebsd/signal.inc`. Android follows the current Linux/Bionic-style
+  nextPas host evidence for this wave, while generic Unix keeps the Linux-style
+  fallback until a more specific host owner is promoted.
+- POSIX wait-status macro arithmetic lives in
+  `nextpas.core.platform.posix.math`: `platform_posix_wait_exit_status`,
+  `platform_posix_wait_term_signal`, `platform_posix_wait_stop_signal`,
+  `platform_posix_wait_if_exited`, `platform_posix_wait_if_signaled`,
+  `platform_posix_wait_if_stopped`, `platform_posix_wait_core_dumped`,
+  `platform_posix_wait_exit_code`, and `platform_posix_wait_stop_code`.
+  Evidence starts in FPC `packages/libc/src/bwaitflags.inc`,
+  `packages/libc/src/bwaitstatus.inc`, `packages/libc/src/bwaitstatush.inc`,
+  and `rtl/unix/unix.pp`, where `WEXITSTATUS`, `WTERMSIG`, `WSTOPSIG`,
+  `WIFEXITED`, `WIFSIGNALED`, `WIFSTOPPED`, `WCOREDUMP`, `W_EXITCODE`, and
+  `W_STOPCODE` are defined.
+- Windows wait and process-status constants live in
+  `nextpas.core.platform.windows.base`: `WAIT_TIMEOUT`, `WAIT_FAILED`,
+  `STILL_ACTIVE`, `SYNCHRONIZE`, `PROCESS_TERMINATE`, and
+  `DUPLICATE_SAME_ACCESS`. Evidence starts in FPC
+  `rtl/win/wininc/defines.inc`, with existing raw process entrypoints still
+  owned by `nextpas.core.platform.windows.ffi`.
+
 ### Platform Host ABI Completeness Wave 5: environment ABI raw inventory
 
 Wave 5 imports the environment ABI raw inventory that future environment or

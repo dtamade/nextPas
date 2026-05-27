@@ -1,51 +1,50 @@
-# nextpas.core collections progress
-
-## 2026-05-27
-
-- Continued the collections-only cleanup after the smallvec/trie base split.
-- Audited `hashmap`, `treemap`, and `lrucache` `.base/.intf/.pas` responsibility boundaries.
-- Confirmed that FPC 3.3.1 cannot safely express open generic facade aliases for child-unit interfaces.
-- Updated `nextpas.core.collections` to explicitly expose public callback types used by collections factories and algorithms.
-- Verified the facade callback compile probe and existing collections facade test.
-- Discussed factory naming and interface-first direction. Current direction: interface-first remains desired; short factories are rejected because names like `Set_` are not acceptable; `MakeXxx` is the likely clean public factory family.
-- Confirmed with a local probe that users cannot currently declare `IVec<T>` from `nextpas.core.collections` alone. This is recorded for later architecture resolution.
-- Added design decisions from discussion: every public working container implementation needs a public factory, and default semantic factories are allowed if their concrete mapping is documented.
-- Agreed not to add default semantic interface aliases for now. `MakeMap` may return `IHashMap`; no separate `IMap` alias is introduced yet.
-- Agreed that map-like `Get`/`Put` and `TryGetValue`/`AddOrAssign` have distinct semantics and should not be treated as duplicate aliases in the final interface.
-- Agreed that array-like indexed access does not need a base `TryGet`: invalid indexes are caller errors, checked `Get`/`Put` throw, and callers that need a non-throwing branch should check `Count` before indexing. `Unchecked` remains the explicit unsafe fast path.
-- Agreed that unsafe fast-path method names use `Unchecked` as one word. Copied `UnChecked` spellings are transitional and should be renamed consistently during interface tuning.
-- Corrected sequence mutation semantics after reviewing current `Vec`/`VecDeque` contracts: `Delete(Index)` discards by position, while copied `Remove(Index): T` extracts by position. Final indexed sequence APIs should use `RemoveAt(Index): T` / `TryRemoveAt(Index, out Element): Boolean`; `Remove(Index)` should be removed during interface tuning instead of kept as compatibility baggage. Value-based `Remove(Value)` is not the default indexed sequence meaning.
-- Agreed that rich method-style algorithms and the three callback overload families should remain part of the container API experience. The next tuning target is cleaner interface appearance, inheritance clarity, and shared algorithm implementation reuse, not moving useful algorithms away from containers or reducing API count for its own sake. Redundant, wrong, confusing, or low-value APIs can still be removed.
-- Agreed that `IArray<T>` is the rich capability base for mutable, indexable, contiguous-storage array-like sequences. `Vec` should inherit and reuse this layer; non-contiguous indexed containers such as ring-buffer deque implementations should not inherit it because they cannot honestly promise contiguous memory APIs such as `GetMemory`.
-- Agreed that `TryLoadFrom` and `TryAppend` are natural common collection capabilities rather than array-only clutter. They should remain available and be regularized at the common collection/interface ownership layer during interface tuning.
-- Agreed to preserve the distinct block operation semantics: `Overwrite` writes inside an existing range without changing `Count`, `Read` copies out, `Copy` copies internally, `Write` may extend using normal growth, and `WriteExact` may extend with exact capacity growth. `Overwrite` belongs to contiguous array capability; `Write`/`WriteExact` belong to growable vector-style capability.
-- Agreed on size/capacity vocabulary: `Resize` changes logical `Count`; `EnsureCapacity` ensures absolute capacity; `Reserve` ensures append headroom (`Count + Additional`); `Exact` variants bypass the growth strategy; shrink/free-buffer operations belong to growable vector-style containers, not the array capability base.
-- Reviewed `IVec<T>` dynamic sequence methods and recorded the interface direction: preserve the rich Vec sequence API, keep `Push`/`Pop`/`Peek`, distinguish `Delete` from `RemoveAt`, use explicit swap-removal naming for order-unstable extraction, keep `Drain`/`SplitOff`/`Splice`/`Retain`/`Filter`/`Dedup`, and regularize zero-count batch no-op behavior.
-- Recorded the naming cleanup batch: `UnChecked` to `Unchecked`, `OverWrite` to `Overwrite`, `FindIF`/`CountIF`/`ReplaceIF` to `FindIf`/`CountIf`/`ReplaceIf`, `SizeUint` to `SizeUInt`, and parameter spacing cleanup. This should be done as a complete mechanical refactor with compile verification.
-- Implemented the first low-risk naming cleanup batch across collections source units: `SizeUint` is now `SizeUInt`, and missing parameter spacing such as `aIndex:SizeUInt` was normalized in `arr`, `vec`, and `vecdeque` units.
-- Verified the batch with `make -C tests/nextpas.core.collections/test_vec test`, `make -C tests/nextpas.core.collections/test_deque test`, `make -C tests/nextpas.core.collections/test_facade test`, and full `make test`; all completed with zero failures.
+# nextpas.core platform progress
 
 ## 2026-05-28
 
-- Implemented the second naming cleanup batch across collections source units: copied `OverWrite` identifiers, comments, internal calls, and exception messages are now spelled `Overwrite`.
-- Kept `OverwriteOldest` circular-buffer policy names unchanged because they are a separate public concept, not the contiguous block overwrite operation.
-- Implemented the third naming cleanup batch across collections source units: copied `UnChecked` identifiers, comments, internal calls, exception messages, and interface declarations are now spelled `Unchecked`.
-- Kept calls to `nextpas.core.mem.utils.CopyUnChecked` unchanged because that symbol belongs to the `mem` module and is outside this collections-only batch.
-- Implemented the fourth naming cleanup batch across collections source units: copied algorithm names now use PascalCase `If` spellings (`FindIf`, `FindIfNot`, `FindLastIf`, `FindLastIfNot`, `CountIf`, and `ReplaceIf`), including unchecked variants, internal `Do*` hooks, comments, and exception text.
-- Confirmed there are no remaining `FindIF`, `FindLastIF`, `CountIF`, or `ReplaceIF` spellings in collections source or existing collections tests.
-- Removed rejected short facade factories from `nextpas.core.collections`: `Vec`, `Deque`, `Map`, `Set_`, `OrdMap`, and `OrdSet` are no longer exported. The facade test now uses the accepted `MakeXxx` factory family.
-- Implemented the next naming cleanup batch across collections source units: copied `FAFAFA_CORE_*` and `FAFAFA_COLLECTIONS_*` conditional symbols are now `NEXTPAS_CORE_*` or `NEXTPAS_COLLECTIONS_*` as appropriate.
-- Added canonical `NEXTPAS_CORE_INLINE`, `NEXTPAS_CORE_ANONYMOUS_REFERENCES`, and `NEXTPAS_CORE_CONTRACTS` definitions to `nextpas.core.settings.inc` while keeping temporary `FAFAFA_CORE_*` compatibility aliases for non-collections copied modules such as `mem`.
-- Started the indexed extraction naming batch. Surface review found positional `Remove`/`RemoveSwap` APIs on `Vec`, `VecDeque`, and `Deque`, plus an internal `MultiMap` use of vector swap-removal. Key/value `Remove` APIs in maps, sets, trie, cache, and forward list remain out of scope and should keep their names.
-- Implemented the indexed extraction naming batch: positional extraction now uses `RemoveAt` / `SwapRemoveAt`, pointer and array extraction helpers now use `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`, `Deque.TryRemove` is now `TryRemoveAt`, and `MultiMap` now calls `Vec.SwapRemoveAt` internally.
-- Verified the batch with residual scans for old positional names, `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
-- Added `TryRemoveAt` and `TrySwapRemoveAt` to `IVec<T>` / `TVec<T>` only. `VecDeque` / `Deque` did not receive a new swap-removal try API because their ring-buffer indexing semantics stay intentionally weaker than `Vec`.
-- Verified the Vec try indexed extraction batch with `git diff --check`, symbol scan, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
+- Previous completed baseline from handoff: Wave 6 process-control raw ABI was
+  merged to `main@79f1a05` as `platform: add process ABI wave 6`.
+- Created and resumed worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave7-process-status`
+  on branch `codex/platform-host-abi-wave7-process-status`.
+- Confirmed current worktree is clean and based on `main@79f1a05`.
+- Confirmed other active worktrees exist for `collections-refactor` and
+  `sema-no-matching-overload`; this platform work remains isolated.
+- Recovered the user decision for this wave: FPC source is the correctness
+  authority for raw platform API definitions. nextPas should not add runtime
+  tests to prove copied constants, record layouts, or raw ABI macro logic.
+- Replaced stale collections planning files in this worktree with the active
+  platform ABI import plan so future sessions can resume the correct thread.
+- Added the Wave 7 source-surface guard and ran it once before implementation.
+  It failed as expected on missing POSIX wait/status tokens, missing Windows
+  wait/status constants, missing docs, and missing `verify_local` route. The
+  `platform.process` / `platform.process.ffi` absence check already passed.
+- Imported Wave 7 definitions into nextPas-owned platform owners:
+  POSIX wait core flag in `posix.base`, FPC wait-status macro projections in
+  `posix.math`, POSIX wait/signal constants in each POSIX host `.base`, and
+  Windows wait/status/access constants in `windows.base`.
+- Updated `docs/platform-ffi-source-evidence-index.md`,
+  `docs/platform-host-ffi-gap-matrix.md`, and `build/verify_local.sh` for Wave
+  7 route truth.
+- Focused verification passed:
+  `test_platform_host_abi_wave7_process_status`,
+  `test_platform_host_gap_matrix`, `test_platform_ffi_source_evidence_index`,
+  `test_platform_ffi_import_workflow`, and
+  `test_platform_simulated_host_compile_matrix`.
+- Full verification passed in the isolated worktree:
+  `git diff --check`, `make -C core test`, `make -C core examples`,
+  `make -C core benchmarks`, and `bash build/verify_local.sh`.
+- `verify_local` reported `verify-local=pass`,
+  `human-summary=local verification passed`, and the final envelope includes
+  `corePlatformHostAbiWave7ProcessStatusCheck`.
+- After synchronizing `/plan` records, reran `git diff --check` and the focused
+  Wave 7/doc/compile guards:
+  `test_platform_host_abi_wave7_process_status`,
+  `test_platform_host_gap_matrix`, `test_platform_ffi_source_evidence_index`,
+  `test_platform_ffi_import_workflow`, and
+  `test_platform_simulated_host_compile_matrix`; all passed.
 
 ## Next
 
-- Continue the naming cleanup implementation one batch at a time.
-- Next interface-tuning batch: continue reviewing Vec and array-family method naming/ownership after the try indexed extraction gap.
-- Continue the structural audit across remaining containers.
-- Build a full facade public-surface map before deciding how to handle open generic interface visibility.
-- Keep implementation tuning until after interface and architecture review are agreed.
+- Review the final diff, commit Wave 7, merge it back to `main`, run post-merge
+  verification, and clean the temporary worktree.
