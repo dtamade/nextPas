@@ -200,7 +200,7 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
   `GetFullPathNameW`.
 - Platform Host ABI Completeness Wave 1 covers process id, `timeval`, mmap, and
   dynamic loader inventory for host `base/ffi` owners. POSIX hosts now carry
-  `pid_t`, RTLD constants, `platform_process_id`, `platform_parent_process_id`,
+  `pid_t`, RTLD constants, host-prefixed process id helpers,
   mmap helpers, and dynamic loader helpers; Windows carries process id,
   `LoadLibraryA`, `GetProcAddress`, `FreeLibrary`, `VirtualAlloc`,
   `VirtualFree`, and `VirtualProtect` inventory. This is source-surface and

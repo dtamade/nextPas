@@ -99,8 +99,8 @@ function platform_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int3
 function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
-function platform_process_id: TPlatformProcessId; inline;
-function platform_parent_process_id: TPlatformProcessId; inline;
+function freebsd_process_id: TPlatformProcessId; inline;
+function freebsd_parent_process_id: TPlatformProcessId; inline;
 function platform_mmap(
   AAddress: Pointer;
   const ALength: PtrUInt;
@@ -179,12 +179,12 @@ begin
   Result := platform_posix_errno_value_from_location(platform_errno_location);
 end;
 
-function platform_process_id: TPlatformProcessId; inline;
+function freebsd_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getpid;
 end;
 
-function platform_parent_process_id: TPlatformProcessId; inline;
+function freebsd_parent_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getppid;
 end;

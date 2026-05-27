@@ -89,10 +89,16 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure CheckProcessTimevalMmapAndDlOwnerTokens(
   const ABase,
   AFfi,
   AHostName,
+  AHostPrefix,
   ARtldLazy,
   ARtldNow,
   ARtldLocal,
@@ -109,10 +115,14 @@ begin
   CheckTokenPresent(ABase, 'platform_rtld_global = int32(' + ARtldGlobal + ')',
     AHostName + ' base must own RTLD_GLOBAL');
 
-  CheckTokenPresent(AFfi, 'function platform_process_id',
-    AHostName + ' ffi must expose process id helper');
-  CheckTokenPresent(AFfi, 'function platform_parent_process_id',
-    AHostName + ' ffi must expose parent process id helper');
+  CheckTokenPresent(AFfi, 'function ' + AHostPrefix + '_process_id',
+    AHostName + ' ffi must expose host-owned process id helper');
+  CheckTokenPresent(AFfi, 'function ' + AHostPrefix + '_parent_process_id',
+    AHostName + ' ffi must expose host-owned parent process id helper');
+  CheckTokenAbsent(AFfi, 'function platform_process_id',
+    AHostName + ' ffi must not expose unified-looking process id helper');
+  CheckTokenAbsent(AFfi, 'function platform_parent_process_id',
+    AHostName + ' ffi must not expose unified-looking parent process id helper');
   CheckTokenPresent(AFfi, 'function platform_mmap',
     AHostName + ' ffi must expose mmap helper');
   CheckTokenPresent(AFfi, 'function platform_munmap',
@@ -226,11 +236,11 @@ begin
   CheckTokenPresent(LPosixFfi, 'function mprotect',
     'posix.ffi must own shared mprotect binding');
 
-  CheckProcessTimevalMmapAndDlOwnerTokens(LLinuxBase, LLinuxFfi, 'Linux', '1', '2', '0', '$100');
-  CheckProcessTimevalMmapAndDlOwnerTokens(LAndroidBase, LAndroidFfi, 'Android', '1', '2', '0', '$100');
-  CheckProcessTimevalMmapAndDlOwnerTokens(LDarwinBase, LDarwinFfi, 'Darwin', '1', '2', '4', '8');
-  CheckProcessTimevalMmapAndDlOwnerTokens(LFreeBSDBase, LFreeBSDFfi, 'FreeBSD', '1', '2', '0', '$100');
-  CheckProcessTimevalMmapAndDlOwnerTokens(LUnixBase, LUnixFfi, 'generic Unix', '1', '2', '0', '$100');
+  CheckProcessTimevalMmapAndDlOwnerTokens(LLinuxBase, LLinuxFfi, 'Linux', 'linux', '1', '2', '0', '$100');
+  CheckProcessTimevalMmapAndDlOwnerTokens(LAndroidBase, LAndroidFfi, 'Android', 'android', '1', '2', '0', '$100');
+  CheckProcessTimevalMmapAndDlOwnerTokens(LDarwinBase, LDarwinFfi, 'Darwin', 'darwin', '1', '2', '4', '8');
+  CheckProcessTimevalMmapAndDlOwnerTokens(LFreeBSDBase, LFreeBSDFfi, 'FreeBSD', 'freebsd', '1', '2', '0', '$100');
+  CheckProcessTimevalMmapAndDlOwnerTokens(LUnixBase, LUnixFfi, 'generic Unix', 'unix', '1', '2', '0', '$100');
 
   CheckTokenPresent(LWindowsBase, 'platform_windows_mem_commit',
     'Windows base must own MEM_COMMIT');

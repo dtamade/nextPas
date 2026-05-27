@@ -1,5 +1,25 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 12 process-id owner-name cleanup
+
+- Wave 12 corrects a boundary inconsistency left by the early raw ABI import
+  waves: POSIX host FFI units exposed `platform_process_id` and
+  `platform_parent_process_id`, but no public `platform.process` contract
+  exists yet.
+- Process-id raw ABI still belongs to host owners. The declarations remain thin
+  projections over FPC-backed `getpid` / `getppid` evidence, but their names now
+  use the host owner prefix: `linux_process_id`, `android_process_id`,
+  `darwin_process_id`, `freebsd_process_id`, and `unix_process_id`, plus the
+  matching `*_parent_process_id` helpers.
+- This cleanup intentionally does not runtime-test process IDs. FPC source is
+  the authority for `getpid` / `getppid`; nextPas guards source ownership,
+  documentation truth, absence of unified-looking process helper leaks, and
+  compile coherence.
+- This wave is deliberately narrow. Other historical host FFI helpers still use
+  `platform_*` naming and need later owner-by-owner cleanup, but process-id was
+  fixed first because `platform_process_*` directly implies a public process
+  abstraction that has not been designed.
+
 ## 2026-05-28: Wave 11 POSIX signal-control decisions
 
 - Wave 11 follows Wave 7. Wave 7 copied host signal numbers and wait-status

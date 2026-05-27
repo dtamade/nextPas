@@ -95,8 +95,8 @@ function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Point
 function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
-function platform_process_id: TPlatformProcessId; inline;
-function platform_parent_process_id: TPlatformProcessId; inline;
+function android_process_id: TPlatformProcessId; inline;
+function android_parent_process_id: TPlatformProcessId; inline;
 function platform_mmap(
   AAddress: Pointer;
   const ALength: PtrUInt;
@@ -276,12 +276,12 @@ begin
   Result := android_fstat(AFileDescriptor, ABuffer);
 end;
 
-function platform_process_id: TPlatformProcessId; inline;
+function android_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getpid;
 end;
 
-function platform_parent_process_id: TPlatformProcessId; inline;
+function android_parent_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getppid;
 end;

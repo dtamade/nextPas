@@ -103,8 +103,8 @@ function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 function darwin_mach_monotonic_ns: UInt64;
 function darwin_mach_monotonic_resolution_ns: UInt64;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl;
-function platform_process_id: TPlatformProcessId; inline;
-function platform_parent_process_id: TPlatformProcessId; inline;
+function darwin_process_id: TPlatformProcessId; inline;
+function darwin_parent_process_id: TPlatformProcessId; inline;
 function platform_mmap(
   AAddress: Pointer;
   const ALength: PtrUInt;
@@ -182,12 +182,12 @@ var
   GDarwinTimebaseNumer: UInt64 = 0;
   GDarwinTimebaseDenom: UInt64 = 0;
 
-function platform_process_id: TPlatformProcessId; inline;
+function darwin_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getpid;
 end;
 
-function platform_parent_process_id: TPlatformProcessId; inline;
+function darwin_parent_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getppid;
 end;

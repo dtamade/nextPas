@@ -9,14 +9,13 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 11 merged to `main` as `96c3c1e`
-  (`platform: add POSIX signal-control ABI wave 11`). Post-merge verification
-  passed on `main@96c3c1e`; the Wave 11 worktree and branch were removed.
+- Current status: Wave 12 started from `main@0da1a4a` in isolated worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-purity-wave12`
+  on branch `codex/platform-host-ffi-purity-wave12`.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 11, POSIX signal-control
-  raw ABI inventory, closed. Next platform wave should start from latest
-  `main`.
+- Current wave: Platform Host ABI Completeness Wave 12, host FFI process-id
+  helper ownership cleanup, in progress.
 
 ## Architecture Rules
 
@@ -40,12 +39,40 @@ the integration boundary.
 - Raw FPC API definitions do not need runtime tests in nextPas. If FPC carries
   the API, constant, record, or macro logic, nextPas treats that definition as
   correct.
+- Source import from FPC is evidence work, not rediscovery work. Do not add
+  runtime probes just to prove FPC-owned raw OS API definitions again.
 - Tests for raw ABI import waves are source-surface and route guards only:
   ownership placement, documentation synchronization, absence of feature-specific
   FFI units, absence of FPC platform-unit dependencies, and compile coherence.
 - Runtime behavior tests belong to unified nextPas public contracts only.
 
 ## Current Phase
+
+### Wave 12: host FFI process-id helper ownership cleanup
+
+- [x] Open isolated worktree from latest `main`.
+- [x] Reconfirm goal-tree anchors: G3 core/runtime/framework, G7 FPC
+  compatibility, G0 quality discipline.
+- [x] Select boundary cleanup from the Wave 11 retrospective: POSIX host FFI
+  process-id helpers must use host prefixes and must not look like a public
+  unified `platform.process` contract.
+- [x] Add RED source-surface guard to Wave 1 host ABI test.
+- [x] Rename POSIX host `platform_process_id` /
+  `platform_parent_process_id` helpers to host-prefixed names:
+  `linux_*`, `android_*`, `darwin_*`, `freebsd_*`, and `unix_*`.
+- [x] Update source evidence, gap matrix, and goal-tree route truth.
+- [x] Run focused and full verification.
+- [ ] Commit, merge to `main`, post-merge verify, clean the worktree, and
+  delete the feature branch.
+
+#### Wave 12 Verification Boundary
+
+- This is owner-boundary cleanup for an existing raw ABI wave, not runtime
+  process behavior testing.
+- FPC source remains the correctness authority for `getpid` / `getppid`.
+  Wave 12 tests guard nextPas naming/owner discipline: host FFI process-id
+  helpers are host-prefixed, while unified `platform_process_*` names remain
+  absent until a real public `platform.process` design exists.
 
 ### Wave 11: POSIX signal-control raw ABI
 
@@ -150,6 +177,7 @@ the integration boundary.
 
 - `git diff --check`
 - `sh -n build/verify_local.sh`
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`
@@ -164,6 +192,12 @@ the integration boundary.
 
 ### Verification Evidence
 
+- Wave 12 RED:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+  failed as expected on missing `linux_process_id`.
+- Wave 12 GREEN:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+  `3 total, 3 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
   `7 total, 7 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`:
@@ -189,9 +223,11 @@ the integration boundary.
 - `make -C core benchmarks`: `All benchmarks passed.`
 - `bash build/verify_local.sh`: `verify-local=pass`,
   `human-summary=local verification passed`, final envelope includes
+  `corePlatformHostAbiWave1Check`,
   `corePlatformHostAbiWave9LinuxStatCheck`,
-  `corePlatformHostAbiWave10PosixStatHostsCheck`, and
-  `corePlatformHostAbiWave11SignalControlCheck`.
+  `corePlatformHostAbiWave10PosixStatHostsCheck`,
+  `corePlatformHostAbiWave11SignalControlCheck`, and
+  `corePlatformSimulatedHostCompileMatrixCheck`.
 - Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final
   envelope reports `verify-local=pass`, `human-summary=local verification
   passed`, and includes `corePlatformHostAbiWave9LinuxStatCheck`.
@@ -209,3 +245,4 @@ the integration boundary.
 | Active planning files still described collections work in the Wave 7 platform worktree. | Session recovery | Replaced the active plan with platform ABI Wave 7 scope before implementation. |
 | Cleanup command removed tracked `build/` files while clearing generated artifacts. | Wave 10 post-merge cleanup | Immediately restored tracked `build/` with `git restore build`; avoid broad `rm -rf build` in future cleanups. |
 | Tried to patch Darwin `pthread_sigmask` external library after it had already been corrected to FPC's libc route. | Wave 11 review | Re-read the file and kept the already-correct `external 'c'` declaration. |
+| `make -C core test` stopped at the Wave 11 goal-tree guard after Wave 12 updated the current platform ABI paragraph. | Wave 12 full verification | Kept Wave 12 as current state and restored the exact historical phrase `Platform Host ABI Completeness Wave 11` so the previous wave's route truth remains recoverable. |

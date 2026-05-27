@@ -2,6 +2,44 @@
 
 ## 2026-05-28
 
+- Started Wave 12 from `main@0da1a4a` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-purity-wave12`
+  on branch `codex/platform-host-ffi-purity-wave12`.
+- Re-read goal-tree G3 and the active platform ABI plan. The next move should
+  keep platform as a nextPas-owned raw OS API foundation while preventing
+  feature-like helper names from leaking out of host FFI.
+- Selected Wave 12 as a narrow owner-boundary cleanup before more FPC API
+  import: rename POSIX host process-id helpers away from
+  `platform_process_id` / `platform_parent_process_id`.
+- RED result:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+  compiled and failed as expected with `3 total, 2 passed, 1 failed`; the
+  failure was missing `linux_process_id`.
+- Renamed the POSIX host process-id helpers:
+  `linux_process_id`, `linux_parent_process_id`,
+  `android_process_id`, `android_parent_process_id`,
+  `darwin_process_id`, `darwin_parent_process_id`,
+  `freebsd_process_id`, `freebsd_parent_process_id`,
+  `unix_process_id`, and `unix_parent_process_id`.
+- Updated `core/docs/platform-ffi-source-evidence-index.md` and
+  `core/docs/platform-host-ffi-gap-matrix.md` so the evidence route no longer
+  documents the old unified-looking process-id helper names as desired shape.
+- GREEN result:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+  passed with `3 total, 3 passed, 0 failed`.
+- Reconfirmed the raw FPC API verification boundary after user review: copied
+  FPC platform APIs, constants, records, aliases, and raw ABI routes are treated
+  as correct by source evidence. nextPas tests should guard owner placement,
+  naming, dependency purity, compile coherence, docs truth, and unified public
+  contracts, not runtime-probe raw OS APIs to re-prove FPC.
+- Updated `docs/architecture/nextpas-goal-tree.md` to record Wave 12 as the
+  current platform host ABI import state.
+- First full `make -C core test` attempt stopped at the Wave 11 signal-control
+  goal-tree guard: the Wave 12 goal-tree edit had removed the exact historical
+  phrase `Platform Host ABI Completeness Wave 11`. Root cause was docs route
+  truth drift, not production code. Restored that phrase while keeping Wave 12
+  as the current platform host ABI state.
+
 - Started Wave 11 from `main@4923adc` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave11-signal-control`
   on branch `codex/platform-host-abi-wave11-signal-control`.

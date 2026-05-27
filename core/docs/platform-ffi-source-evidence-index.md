@@ -434,8 +434,12 @@ because they needed a later, narrower evidence pass. Wave 2 now covers
   generic Unix path uses long-sized fields.
 - Shared process id declarations use FPC `rtl/unix/oscdeclh.inc`, where
   `FpGetpid` and `FpGetppid` bind to `getpid` and `getppid`. Host `base` units
-  own `pid_t` / `TPlatformProcessId`, and host `ffi` units expose
-  `platform_process_id` and `platform_parent_process_id`.
+  own `pid_t` / `TPlatformProcessId`, and host `ffi` units expose host-prefixed projections such as
+  `linux_process_id`, `android_process_id`, `darwin_process_id`,
+  `freebsd_process_id`, and `unix_process_id` plus matching
+  `*_parent_process_id` helpers. The old `platform_process_id` naming is
+  deliberately forbidden because it looks like a public unified
+  `platform.process` contract.
 - Shared mmap declarations use FPC `rtl/unix/baseunix.pp` for `PROT_READ`,
   `PROT_WRITE`, `PROT_EXEC`, `PROT_NONE`, `MAP_SHARED`, `MAP_PRIVATE`, and
   `MAP_FAILED`; FPC `rtl/unix/oscdeclh.inc` records `fpmmap`, `fpmunmap`, and
