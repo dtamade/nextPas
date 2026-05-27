@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Time Facade/Base/Host Shape Normalization；上一轮包括
+当前最新本轮为 Platform Behavior Tests Abstract API Boundary；上一轮包括
+Platform Time Facade/Base/Host Shape Normalization；
 Platform Sync Windows Busy-result Helper Ownership；
 Platform Sync Windows Destroy Helper Ownership；
 Platform Time Host-FFI Facade Collapse；
@@ -38,6 +39,67 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Behavior Tests Abstract API Boundary
+
+### Goal
+
+把用户刚定下来的测试边界落到规则和代码里：
+
+- FPC 源码和平台单元是 ABI 依据，不是 platform 生产代码依赖。
+- raw 系统 API / FFI 声明不做 nextPas runtime 单元测试目标。
+- `platform.time`、`platform.sync`、`platform.thread` 的行为测试只覆盖统一抽象 public API。
+- source-surface / compile-only gate 只用于冻结 owner boundary 和编译一致性，不包装成系统 API
+  语义测试。
+
+### Architecture Decision
+
+- 行为测试不能为了方便绕过抽象层去 import `nextpas.core.platform.<host>.ffi`。
+- 并发测试需要 worker 时，应通过 `platform.thread` 创建和 join，而不是直接调用 `pthread_create` /
+  `pthread_join`。
+- `platform.thread_id` 的 native-id 取证继续由 source-surface guard 和 FPC 源码依据承担；runtime
+  behavior test 只验证 nextPas public contract（非零、稳定等）。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_ffi_owner_boundary`，禁止 platform behavior tests import host FFI 或直接调
+  raw pthread/gettid
+- [x] `test_platform_sync` 改为用 `platform.thread` 创建/join worker
+- [x] `test_platform_thread` 移除 Linux FFI oracle 和 raw `gettid` 断言
+- [x] 更新 `docs/design-conventions.md`、`findings.md`、`progress.md`
+- [x] focused：`test_platform_ffi_owner_boundary` / `test_platform_sync` / `test_platform_thread`
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+- [x] commit
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    初始失败在
+    `platform.sync behavior test must not import shared POSIX ffi`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+- Full:
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 不删除 source-surface guard；它们不是系统 API runtime 单元测试，而是 owner boundary 冻结。
+- 不宣称新增 Windows/Darwin/FreeBSD/Android runtime evidence。
+- 不降低 `platform.time` / `platform.sync` / `platform.thread` public API 行为覆盖率。
 
 ## Addendum: 2026-05-27 Platform Time Facade/Base/Host Shape Normalization
 
@@ -8122,3 +8184,71 @@ Completed; verification passed in isolated worktree.
 - 这批不新增 `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`
 - 这批不改变 time/sync/thread public API
 - 这批不宣称新增 macOS / FreeBSD / Android / Windows runtime 证据
+
+## Addendum: 2026-05-27 Platform POSIX Math Helper Split
+
+### Goal
+
+修正 `platform.time.host` 为了纯 `timespec -> ns` 换算而无条件拉入 `posix.ffi` 的边界问题：
+
+- 纯 POSIX timespec 数学放入 helper-only `nextpas.core.platform.posix.math`。
+- `posix.ffi` 继续拥有 POSIX external declaration 和贴近 external 的共享 helper。
+- `platform.time.host` 对 public timespec 换算只依赖 `posix.math`，只有 Unix host clock 分支才拉入
+  `posix.ffi`。
+
+### Architecture Decision
+
+- 新增 `core/src/nextpas.core.platform.posix.math.pas`，承载
+  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns` 与
+  `platform_posix_timespec_remaining_ns_u64`。
+- `posix.ffi` 改为消费 `posix.math`，不再定义这些纯数学 helper。
+- `platform.time.host` 的 uses 边界改为：
+  - unconditionally consume `posix.base` / `posix.math`
+  - only under `NEXTPAS_UNIX` consume `posix.ffi` and host ffi owners
+- `build/verify_local.sh` 的输入面加入 `posix.math`。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 time/posix/owner source-surface tests，要求 `posix.math` 存在
+- [x] RED：要求 `posix.ffi` 不再定义纯 timespec 数学 helper
+- [x] 新增 `posix.math` 并迁移 pure helper
+- [x] 更新 `posix.ffi` 和 `platform.time.host` uses 边界
+- [x] 运行 affected focused tests
+- [x] 运行 full core test/example/benchmark 和 fresh `bash build/verify_local.sh`
+- [x] 合并前更新最终验证证据
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    初始失败在 `File not found`
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在 `File not found`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    初始失败在 helper-only math unit 计数不足
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 这批不新增 feature-specific `platform.time.ffi`
+- 这批不改变 public time/sync/thread API
+- 这批不宣称新增 Windows runtime link evidence；先用 source-surface、Linux runtime 和 compile-only
+  matrix 收紧边界

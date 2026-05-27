@@ -5,8 +5,8 @@ program test_platform_sync;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
-  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base, nextpas.core.platform.posix.ffi,{$ENDIF}
   nextpas.core.testing,
+  nextpas.core.platform.thread,
   nextpas.core.platform.sync;
 
 var
@@ -288,7 +288,7 @@ var
   LMutex: TPlatformMutex;
   LCond: TPlatformCondVar;
   LState: TCondWaitState;
-  LHandle: pthread_t;
+  LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
 begin
   platform_mutex_init(LMutex);
@@ -299,7 +299,7 @@ begin
   LState.WaitRet := WAIT_PENDING;
 
   platform_mutex_lock(LMutex);
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle, nil, @CondWaitThread, @LState)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle, @CondWaitThread, @LState)),
     'create waiter');
   platform_mutex_unlock(LMutex);
 
@@ -308,7 +308,7 @@ begin
   CheckEqual(Int64(0), Int64(platform_condvar_signal(LCond)), 'signal');
   platform_mutex_unlock(LMutex);
 
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle, @LRetVal)), 'join waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle, LRetVal)), 'join waiter');
   CheckEqual(Int64(0), Int64(LState.WaitRet), 'waiter should wake from signal');
 
   platform_condvar_destroy(LCond);
@@ -321,8 +321,8 @@ var
   LCond: TPlatformCondVar;
   LState1: TCondWaitState;
   LState2: TCondWaitState;
-  LHandle1: pthread_t;
-  LHandle2: pthread_t;
+  LHandle1: TPlatformThreadHandle;
+  LHandle2: TPlatformThreadHandle;
   LRetVal: Pointer;
 begin
   platform_mutex_init(LMutex);
@@ -334,9 +334,9 @@ begin
   LState2 := LState1;
 
   platform_mutex_lock(LMutex);
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle1, nil, @CondWaitThread, @LState1)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle1, @CondWaitThread, @LState1)),
     'create first waiter');
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle2, nil, @CondWaitThread, @LState2)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle2, @CondWaitThread, @LState2)),
     'create second waiter');
   platform_mutex_unlock(LMutex);
 
@@ -346,8 +346,8 @@ begin
   CheckEqual(Int64(0), Int64(platform_condvar_broadcast(LCond)), 'broadcast');
   platform_mutex_unlock(LMutex);
 
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle1, @LRetVal)), 'join first waiter');
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle2, @LRetVal)), 'join second waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle1, LRetVal)), 'join first waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle2, LRetVal)), 'join second waiter');
   CheckEqual(Int64(0), Int64(LState1.WaitRet), 'first waiter should wake');
   CheckEqual(Int64(0), Int64(LState2.WaitRet), 'second waiter should wake');
 
@@ -393,7 +393,7 @@ procedure TestAddressWakeOneReleasesWaiter;
 var
   LValue: Int32;
   LState: TAddressWaitState;
-  LHandle: pthread_t;
+  LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
 begin
   LValue := 0;
@@ -401,11 +401,11 @@ begin
   LState.Ready := 0;
   LState.WaitRet := WAIT_PENDING;
 
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle, nil, @AddressWaitThread, @LState)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle, @AddressWaitThread, @LState)),
     'create waiter');
   WaitForReady(LState.Ready, 'address waiter');
   WakeOneUntilDone(@LValue, LState, 'wake one should release waiter');
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle, @LRetVal)), 'join waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle, LRetVal)), 'join waiter');
 end;
 
 procedure TestAddressWakeAllReleasesWaiters;
@@ -413,8 +413,8 @@ var
   LValue: Int32;
   LState1: TAddressWaitState;
   LState2: TAddressWaitState;
-  LHandle1: pthread_t;
-  LHandle2: pthread_t;
+  LHandle1: TPlatformThreadHandle;
+  LHandle2: TPlatformThreadHandle;
   LRetVal: Pointer;
 begin
   LValue := 0;
@@ -423,15 +423,15 @@ begin
   LState1.WaitRet := WAIT_PENDING;
   LState2 := LState1;
 
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle1, nil, @AddressWaitThread, @LState1)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle1, @AddressWaitThread, @LState1)),
     'create first waiter');
-  CheckEqual(Int64(0), Int64(pthread_create(@LHandle2, nil, @AddressWaitThread, @LState2)),
+  CheckEqual(Int64(0), Int64(platform_thread_create(LHandle2, @AddressWaitThread, @LState2)),
     'create second waiter');
   WaitForReady(LState1.Ready, 'first address waiter');
   WaitForReady(LState2.Ready, 'second address waiter');
   WakeAllUntilDone(@LValue, LState1, LState2);
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle1, @LRetVal)), 'join first waiter');
-  CheckEqual(Int64(0), Int64(pthread_join(LHandle2, @LRetVal)), 'join second waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle1, LRetVal)), 'join first waiter');
+  CheckEqual(Int64(0), Int64(platform_thread_join(LHandle2, LRetVal)), 'join second waiter');
 end;
 {$ENDIF}
 

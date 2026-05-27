@@ -23,6 +23,8 @@ const
   UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
+  POSIX_MATH_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.math.pas';
+  POSIX_MATH_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.math.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
   DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
@@ -128,6 +130,7 @@ var
   LFreeBSDSource: string;
   LUnixSource: string;
   LPosixSource: string;
+  LPosixMathSource: string;
   LDarwinSource: string;
   LWindowsSource: string;
   LWindowsMathSource: string;
@@ -140,6 +143,7 @@ begin
   LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
   LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
   LPosixSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LPosixMathSource := ReadSourceFile(ResolveSourcePath(POSIX_MATH_SOURCE_PATH_FROM_TEST, POSIX_MATH_SOURCE_PATH_FROM_ROOT));
   LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsMathSource := ReadSourceFile(ResolveSourcePath(WINDOWS_MATH_SOURCE_PATH_FROM_TEST, WINDOWS_MATH_SOURCE_PATH_FROM_ROOT));
@@ -150,8 +154,10 @@ begin
     'posix.ffi must expose clock_gettime for platform.time');
   CheckTokenPresent(LPosixSource, 'clock_getres',
     'posix.ffi must expose clock_getres for platform.time');
-  CheckTokenPresent(LPosixSource, 'platform_posix_timespec_to_ns_u64',
-    'posix.ffi must expose shared timespec conversion helper for platform.time');
+  CheckTokenPresent(LPosixSource, 'nextpas.core.platform.posix.math',
+    'posix.ffi must delegate pure POSIX timespec math through helper-only posix.math');
+  CheckTokenPresent(LPosixMathSource, 'platform_posix_timespec_to_ns_u64',
+    'posix.math must expose shared timespec conversion helper for platform.time');
   CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi', True);
   CheckPosixClockHelperSet(LAndroidSource, 'android.ffi', True);
   CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi', True);
@@ -232,7 +238,9 @@ begin
     'platform.time facade must forward timespec conversion API to platform.time.host');
 
   CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.posix.ffi',
-    'platform.time.host must use shared POSIX ffi declarations');
+    'platform.time.host must use shared POSIX ffi declarations for Unix clock owners');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.posix.math',
+    'platform.time.host must use helper-only posix.math for pure timespec conversion');
   CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.linux.ffi',
     'platform.time.host must bind Linux host-owned clock ids through linux.ffi');
   CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.darwin.ffi',
@@ -258,7 +266,9 @@ begin
   CheckTokenPresent(LTimeHostSource, 'windows_qpc_resolution_ns',
     'platform.time.host must consume Windows QPC resolution helper through windows.ffi');
   CheckTokenPresent(LTimeHostSource, 'platform_posix_timespec_to_ns_u64',
-    'platform.time.host must consume shared POSIX timespec conversion helper through posix.ffi');
+    'platform.time.host must consume shared POSIX timespec conversion helper through posix.math');
+  Check(Pos('{$ifdef nextpas_unix}', LTimeHostSource) < Pos('nextpas.core.platform.posix.ffi', LTimeHostSource),
+    'platform.time.host must only pull posix.ffi inside the Unix host-ffi branch');
   Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_ns_u64;') = 1,
     'platform.time.host must keep a single host-ffi monotonic body');
   Check(CountToken(LTimeHostSource, 'result := platform_clock_realtime_ns_u64;') = 1,

@@ -9,6 +9,12 @@ uses
 const
   SOURCE_DIR_FROM_TEST = '../../../src';
   SOURCE_DIR_FROM_ROOT = 'core/src';
+  PLATFORM_TIME_HELPERS_TEST_FROM_TEST = '../../nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr';
+  PLATFORM_TIME_HELPERS_TEST_FROM_ROOT = 'core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr';
+  PLATFORM_SYNC_BEHAVIOR_TEST_FROM_TEST = '../../nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr';
+  PLATFORM_SYNC_BEHAVIOR_TEST_FROM_ROOT = 'core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr';
+  PLATFORM_THREAD_BEHAVIOR_TEST_FROM_TEST = '../../nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr';
+  PLATFORM_THREAD_BEHAVIOR_TEST_FROM_ROOT = 'core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr';
 
 var
   T: TTestRunner;
@@ -41,6 +47,15 @@ begin
   Result := SOURCE_DIR_FROM_TEST;
 end;
 
+function ResolvePath(const APathFromTest, APathFromRoot: string): string;
+begin
+  if FileExists(APathFromTest) then
+    Exit(APathFromTest);
+  if FileExists(APathFromRoot) then
+    Exit(APathFromRoot);
+  Result := APathFromTest;
+end;
+
 procedure CheckTokenPresent(const ASource, AToken, AMessage: string);
 begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
@@ -49,6 +64,33 @@ end;
 procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
 begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckBehaviorTestHasNoHostFFI(const APath, AName: string);
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(APath);
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.posix.ffi',
+    AName + ' behavior test must not import shared POSIX ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.linux.ffi',
+    AName + ' behavior test must not import Linux ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.darwin.ffi',
+    AName + ' behavior test must not import Darwin ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.android.ffi',
+    AName + ' behavior test must not import Android ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.freebsd.ffi',
+    AName + ' behavior test must not import FreeBSD ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.unix.ffi',
+    AName + ' behavior test must not import generic Unix ffi');
+  CheckTokenAbsent(LSource, 'nextpas.core.platform.windows.ffi',
+    AName + ' behavior test must not import Windows ffi');
+  CheckTokenAbsent(LSource, 'pthread_create(',
+    AName + ' behavior test must not create threads through raw pthread');
+  CheckTokenAbsent(LSource, 'pthread_join(',
+    AName + ' behavior test must not join threads through raw pthread');
+  CheckTokenAbsent(LSource, 'gettid',
+    AName + ' behavior test must not use raw native thread-id syscall as oracle');
 end;
 
 procedure TestPlatformFFIOwnerBoundary;
@@ -67,6 +109,7 @@ var
   LFoundPlatformSync: Boolean;
   LFoundPosixBase: Boolean;
   LFoundPosixFfi: Boolean;
+  LFoundPosixMath: Boolean;
   LFoundLinuxBase: Boolean;
   LFoundLinuxFfi: Boolean;
   LFoundDarwinBase: Boolean;
@@ -92,6 +135,7 @@ begin
   LFoundPlatformSync := False;
   LFoundPosixBase := False;
   LFoundPosixFfi := False;
+  LFoundPosixMath := False;
   LFoundLinuxBase := False;
   LFoundLinuxFfi := False;
   LFoundDarwinBase := False;
@@ -138,6 +182,8 @@ begin
         LFoundPosixBase := True
       else if LFileName = 'nextpas.core.platform.posix.ffi.pas' then
         LFoundPosixFfi := True
+      else if LFileName = 'nextpas.core.platform.posix.math.pas' then
+        LFoundPosixMath := True
       else if LFileName = 'nextpas.core.platform.linux.base.pas' then
         LFoundLinuxBase := True
       else if LFileName = 'nextpas.core.platform.linux.ffi.pas' then
@@ -181,7 +227,7 @@ begin
     FindClose(LSearch);
   end;
 
-  Check(LNonFfiCount >= 15, 'platform source audit must see the core non-ffi units and host base units');
+  Check(LNonFfiCount >= 16, 'platform source audit must see the core non-ffi units, host base units, and helper-only math units');
   Check(LFfiCount >= 7, 'platform source audit must see the host/shared ffi owner units');
 
   Check(LFoundPlatform, 'platform source audit must include nextpas.core.platform.pas');
@@ -193,6 +239,7 @@ begin
   Check(LFoundPlatformSync, 'platform source audit must include nextpas.core.platform.sync.pas');
   Check(LFoundPosixBase, 'platform source audit must include nextpas.core.platform.posix.base.pas');
   Check(LFoundPosixFfi, 'platform source audit must include nextpas.core.platform.posix.ffi.pas');
+  Check(LFoundPosixMath, 'platform source audit must include nextpas.core.platform.posix.math.pas');
   Check(LFoundLinuxBase, 'platform source audit must include nextpas.core.platform.linux.base.pas');
   Check(LFoundLinuxFfi, 'platform source audit must include nextpas.core.platform.linux.ffi.pas');
   Check(LFoundDarwinBase, 'platform source audit must include nextpas.core.platform.darwin.base.pas');
@@ -207,8 +254,22 @@ begin
   Check(LFoundWindowsFfi, 'platform source audit must include nextpas.core.platform.windows.ffi.pas');
 end;
 
+procedure TestPlatformBehaviorTestsStayOnAbstractAPI;
+begin
+  CheckBehaviorTestHasNoHostFFI(
+    ResolvePath(PLATFORM_TIME_HELPERS_TEST_FROM_TEST, PLATFORM_TIME_HELPERS_TEST_FROM_ROOT),
+    'platform.time');
+  CheckBehaviorTestHasNoHostFFI(
+    ResolvePath(PLATFORM_SYNC_BEHAVIOR_TEST_FROM_TEST, PLATFORM_SYNC_BEHAVIOR_TEST_FROM_ROOT),
+    'platform.sync');
+  CheckBehaviorTestHasNoHostFFI(
+    ResolvePath(PLATFORM_THREAD_BEHAVIOR_TEST_FROM_TEST, PLATFORM_THREAD_BEHAVIOR_TEST_FROM_ROOT),
+    'platform.thread');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.ffi_owner_boundary');
   T.Run('platform ffi ownership stays in ffi units', @TestPlatformFFIOwnerBoundary);
+  T.Run('platform behavior tests stay on abstract APIs', @TestPlatformBehaviorTestsStayOnAbstractAPI);
   T.Summary;
 end.

@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.time facade/base/host shape normalization；上一轮包括
+当前最新本轮为 platform behavior tests abstract API boundary；上一轮包括
+platform.time facade/base/host shape normalization；
 platform.sync Windows busy-result helper ownership；
 platform.sync Windows destroy helper ownership；
 platform.time host-ffi facade collapse；
@@ -27,6 +28,48 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform behavior tests abstract API boundary)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把“FPC 源码作 ABI 依据、raw 系统 API 不作为 runtime 单元测试目标”落实到文档和测试边界。
+  - 保持 runtime behavior tests 只覆盖 `platform.time` / `platform.sync` / `platform.thread`
+    的统一抽象 public contract。
+- Baseline:
+  - `platform.sync/test_platform_sync` 为了造等待线程直接 import
+    `nextpas.core.platform.posix.ffi`，并直接调用 `pthread_create` / `pthread_join`。
+  - `platform.thread/test_platform_thread` import `linux.ffi`，用 raw `gettid` 作为 Linux runtime oracle。
+  - 这两处不是 production 违规，但会模糊“行为测试覆盖抽象 API，不测试系统 API 本身”的新规则。
+- Actions taken:
+  - 扩 `test_platform_ffi_owner_boundary`，新增 behavior-test guard：
+    `platform.time` / `platform.sync` / `platform.thread` 行为测试不得 import host FFI，也不得直接调用
+    raw `pthread_create` / `pthread_join` / `gettid`。
+  - `platform.sync/test_platform_sync` 改为通过 `platform.thread_create` /
+    `platform_thread_join` 创建和回收 worker，继续测试 condvar 和 address-wait public behavior。
+  - `platform.thread/test_platform_thread` 移除 Linux FFI import 和 raw `gettid` oracle，只保留
+    nextPas public contract：thread id 非零且稳定。
+  - `docs/design-conventions.md` 补充测试分层：ABI 正确性靠 FPC 源码取证、人工审查、
+    source-surface guard 和 compile-only gate；runtime behavior tests 只测统一抽象 API。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      初始失败在
+      `platform.sync behavior test must not import shared POSIX ffi`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`
+    - `make -C core examples` 输出 `All examples compiled.`
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`
+- Review:
+  - 这批没有弱化 FFI owner guard；它只把 runtime 单测从 raw 系统 API oracle 拉回 platform 抽象层。
+  - 后续继续扩平台 API 时，新增行为测试应先问“这是不是 nextPas public contract”，而不是
+    “能不能顺手调一个宿主 API 当真相源”。
 
 ## Session: 2026-05-27 (platform.time facade/base/host shape normalization)
 
@@ -6025,3 +6068,54 @@ Hello from nextPas!
     `base + ffi` 分层，符合项目四件套范式，也避免后续在 time/sync/thread 里重新长出重复 ABI。
   - 下一步应继续做 host-specific ABI audit：先查 `platform.*` 是否还有 consumer 内 raw OS token，
     再补 Windows/macOS/Android/FreeBSD 更强 compile/runtime matrix。
+
+### Phase 16: Platform POSIX Math Helper Split
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 新开 `codex/platform-abi-boundary-audit` worktree，从 `main@632b2df` 开始，不触碰主 checkout
+    里无关的 `core/tests/nextpas.core.collections/test_queue/` 未跟踪目录。
+  - 先跑 focused baseline：
+    `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`，确认当前
+    platform owner boundary 绿。
+  - 审计 `platform.time.host`、`platform.sync`、`platform.thread` consumer 后，确认下一条高价值边界是：
+    `platform.time.host` 为了 public `timespec -> ns` 纯换算无条件 `uses posix.ffi`。
+  - 扩 `test_platform_time_host_ffi_surface`、`test_platform_posix_ffi_surface` 与
+    `test_platform_ffi_owner_boundary`，把 helper-only `posix.math` 文件存在性、`posix.ffi` 不再定义纯
+    timespec math，以及 `platform.time.host` 只在 Unix 分支消费 `posix.ffi` 固化成 RED gate。
+  - 新增 `core/src/nextpas.core.platform.posix.math.pas`，迁入
+    `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns`、
+    `platform_posix_timespec_remaining_ns_u64` 与 nanoseconds-per-second token。
+  - `core/src/nextpas.core.platform.posix.ffi.pas` 改为消费 `posix.math`；仍保留 raw POSIX external 与贴近
+    external 的 shared helper。
+  - `core/src/nextpas.core.platform.time.host.pas` 改为无条件消费 `posix.base` / `posix.math`，
+    并仅在 `NEXTPAS_UNIX` 分支消费 `posix.ffi` 与 host ffi owner。
+  - `build/verify_local.sh` 和 `core/docs/design-conventions.md` 已补入 `posix.math` 边界。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在 `File not found`
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在 `File not found`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      初始失败在 helper-only math unit 计数不足
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`
+    - `make -C core examples` 输出 `All examples compiled.`
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`
+- Review:
+  - 这批和 `windows.math` 是同一种边界修正：纯 helper 不伪装成 FFI owner，也不让其他平台链接路径为了
+    复用数学逻辑拉入无关 external owner。
+  - 行为测试的边界也一起收紧：系统 API 的 ABI 正确性靠 FPC 源码取证、source-surface guard 与
+    compile-only gate，runtime 单测只覆盖 nextPas platform 抽象 public contract。

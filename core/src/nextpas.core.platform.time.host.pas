@@ -23,13 +23,14 @@ implementation
 
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.math
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.platform.windows.ffi
   {$ELSE}
   , nextpas.core.platform.windows.math
   {$ENDIF}
   {$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.ffi
   {$ELSEIF defined(NEXTPAS_MACOS)}

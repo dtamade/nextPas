@@ -11,6 +11,8 @@ const
   POSIX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.base.pas';
   POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
   POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
+  POSIX_MATH_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.math.pas';
+  POSIX_MATH_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.math.pas';
 
 var
   T: TTestRunner;
@@ -57,6 +59,7 @@ procedure TestPosixFFIExposesTargetMatrix;
 var
   LBaseSource: string;
   LSource: string;
+  LMathSource: string;
 begin
   LBaseSource := ReadSourceFile(ResolveSourcePath(
     POSIX_BASE_SOURCE_PATH_FROM_TEST,
@@ -64,9 +67,14 @@ begin
   LSource := ReadSourceFile(ResolveSourcePath(
     POSIX_FFI_SOURCE_PATH_FROM_TEST,
     POSIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LMathSource := ReadSourceFile(ResolveSourcePath(
+    POSIX_MATH_SOURCE_PATH_FROM_TEST,
+    POSIX_MATH_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LSource, 'nextpas.core.platform.posix.base',
     'posix.ffi must consume shared POSIX base ABI shapes');
+  CheckTokenPresent(LSource, 'nextpas.core.platform.posix.math',
+    'posix.ffi must consume helper-only POSIX math for pure timespec arithmetic');
   CheckTokenPresent(LBaseSource, 'nextpas_android',
     'posix.base must carry an Android-specific pthread ABI branch');
   CheckTokenPresent(LBaseSource, 'nextpas_freebsd',
@@ -88,12 +96,18 @@ begin
     'posix.base must model Android pthread mutex attributes as long-sized values');
   CheckTokenPresent(LBaseSource, 'pthread_mutexattr_t = int32;',
     'posix.base must model Linux pthread mutex attributes as 32-bit values');
-  CheckTokenPresent(LSource, 'platform_posix_timespec_to_ns_u64',
-    'posix.ffi must expose shared timespec-to-ns conversion for platform consumers');
-  CheckTokenPresent(LSource, 'platform_posix_timespec_add_ns',
-    'posix.ffi must expose shared timespec deadline arithmetic for platform consumers');
-  CheckTokenPresent(LSource, 'platform_posix_timespec_remaining_ns_u64',
-    'posix.ffi must expose shared timespec remaining-time arithmetic for platform consumers');
+  CheckTokenPresent(LMathSource, 'platform_posix_timespec_to_ns_u64',
+    'posix.math must expose shared timespec-to-ns conversion for platform consumers');
+  CheckTokenPresent(LMathSource, 'platform_posix_timespec_add_ns',
+    'posix.math must expose shared timespec deadline arithmetic for platform consumers');
+  CheckTokenPresent(LMathSource, 'platform_posix_timespec_remaining_ns_u64',
+    'posix.math must expose shared timespec remaining-time arithmetic for platform consumers');
+  CheckTokenAbsent(LSource, 'function platform_posix_timespec_to_ns_u64',
+    'posix.ffi must not own pure timespec-to-ns math after posix.math split');
+  CheckTokenAbsent(LSource, 'procedure platform_posix_timespec_add_ns',
+    'posix.ffi must not own pure timespec deadline arithmetic after posix.math split');
+  CheckTokenAbsent(LSource, 'function platform_posix_timespec_remaining_ns_u64',
+    'posix.ffi must not own pure timespec remaining arithmetic after posix.math split');
   CheckTokenPresent(LSource, 'platform_posix_thread_self_token_u64',
     'posix.ffi must expose shared pthread self-token projection for platform.thread host owners');
   CheckTokenPresent(LSource, 'platform_posix_sysconf_positive_i32',

@@ -881,6 +881,7 @@ require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
 require_path core/src/nextpas.core.platform.posix.base.pas
+require_path core/src/nextpas.core.platform.posix.math.pas
 require_path core/src/nextpas.core.platform.linux.base.pas
 require_path core/src/nextpas.core.platform.darwin.base.pas
 require_path core/src/nextpas.core.platform.android.base.pas
@@ -4505,7 +4506,7 @@ if ! "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BINARY" >>"$CORE_PLATFORM_FFI_OWNER_BOUN
   fail 'core-platform-ffi-owner-boundary-run-failed'
 fi
 cat "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.ffi_owner_boundary: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 'missing-core-platform-ffi-owner-boundary-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.ffi_owner_boundary: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 'missing-core-platform-ffi-owner-boundary-pass-summary'
 printf 'core-platform-ffi-owner-boundary-check=pass\n'
 
 printf 'core-platform-simulated-host-compile-matrix-check=running\n'

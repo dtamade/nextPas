@@ -14,6 +14,9 @@
 - platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
   `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
   platform 模块成果混入。
+- FPC 源码和平台单元是 `platform.<host>.base` / `platform.<host>.ffi` 的 ABI 取证依据，不是
+  platform 生产代码依赖；raw 系统 API 不作为 nextPas runtime 单元测试目标，行为测试只覆盖
+  `platform.time` / `platform.sync` / `platform.thread` 这类统一抽象子模块 public contract。
 - `platform.time`、`platform.sync`、`platform.thread` 是基于 `platform.<host>.base` /
   `platform.<host>.ffi` 的跨平台统一 API contract，不是按 feature 切碎的 FFI owner。
   除非 feature 自身真的拥有独立 foreign ABI，否则不创建
@@ -84,6 +87,10 @@
 - `test_platform_time_helpers` 现在 direct 覆盖 `platform_realtime_ns` 与
   `platform_monotonic_resolution_ns`，platform 自己的 focused test 对 public clock API 的接口覆盖更完整，
   不再主要依赖 example 与 L1 `time` test 间接证明。
+- `test_platform_ffi_owner_boundary` 现在还冻结了 platform runtime behavior test 的边界：
+  `platform.time` / `platform.sync` / `platform.thread` 行为测试不得 import host FFI，也不得用
+  raw `pthread_create` / `pthread_join` / `gettid` 作为系统 API oracle；`platform.sync` 的并发场景
+  已改为使用 `platform.thread` 创建和 join worker。
 - `nextpas.core.platform.posix.ffi` 现在应只拥有 shared POSIX ABI：`timespec`、
   `clock_gettime/getres`、`nanosleep`、`sched_yield`、`sysconf` 与 pthread
   type/function declarations；host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno 常量和 errno
@@ -1874,3 +1881,32 @@
   `verify-local=pass` 已拿到。
 - 当前证据边界仍要诚实：这轮主要证明 owner boundary、Linux runtime 行为、Win64 compile-only 与
   multi-host simulated compile coherence；没有新增 macOS / Android / FreeBSD / Windows runtime proof。
+
+## 2026-05-27 Follow-up Findings 19
+
+- `platform.time.host` 无条件 `uses posix.ffi` 的问题和之前无条件拉 `windows.ffi` 类似：consumer 只是需要
+  纯 `timespec -> ns` 数学，却把 POSIX external owner 带进了所有宿主编译/链接路径。
+- 正确边界是新增 helper-only `nextpas.core.platform.posix.math`。它承载
+  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns` 与
+  `platform_posix_timespec_remaining_ns_u64`；这些 helper 跨 POSIX 宿主共享，但本身不需要
+  `clock_gettime`、`pthread`、`nanosleep` 等 external binding。
+- `posix.ffi` 仍然可以消费 `posix.math`，用于 clock/deadline helper；但它不再是纯 timespec math 的
+  owner。这样 `platform.time.host` 的 public timespec helper 可以只拉 `posix.math`，而 Unix host clock
+  分支再拉 `posix.ffi`。
+- 这条规则已经进入 source-surface gate：time host surface、posix ffi surface 和 ffi owner boundary 都会
+  检查 `posix.math`，并防止 `posix.ffi` 回头定义纯 timespec math。
+- 当前证据边界仍要诚实：这轮重点是 source boundary、Linux runtime focused tests 和 multi-host simulated
+  compile matrix；真实 Windows runtime link evidence 仍未新增。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与 fresh
+  `bash build/verify_local.sh` 都已通过；official envelope 继续给出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 新的长期落地规则：FPC 源码和平台单元可以作为系统 ABI 声明依据，把系统 API、常量、record layout、
+  调用约定、外部库名和符号名核对后搬进 nextPas 自己的 `platform.<host>.base/ffi`；必要时可做
+  test-only/reference-only 对照工具。但 platform 生产代码不能依赖或 `uses` FPC 平台单元。后续扩充
+  platform ffi 时应按 host owner 扩，不按 feature 随手分裂。
+- 扩平台 API 的顺序也明确了：host `base/ffi` 先尽量完整承载系统 ABI，再由通用 platform 子模块做统一
+  抽象。也就是说，ffi 层可以做厚，但 public contract 仍应由 `platform.time/sync/thread/...`
+  这类子模块整理成 nextPas 稳定语义。
+- runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
+  等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
+  API 本身不作为 nextPas 单元测试目标。
