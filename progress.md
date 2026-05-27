@@ -206,7 +206,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform facade info boundary)
 
-- **Status:** branch verification and latest-main rebase verification completed; merge/cleanup pending
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块结构范式，把顶层 `nextpas.core.platform` 中的
     OS/CPU/endian 查询与名字映射逻辑抽到 `nextpas.core.platform.info`。
@@ -284,13 +284,36 @@ platform/core 工作流保留下来的已完成记录。
     因此合并前采用本地 review，未启动子代理。
 - Latest-main integration:
   - `codex/platform-facade-info` 已 rebase 到 `main@db454df`，无冲突；新的提交为
-    `e04ab83 platform: split top-level info facade`。
+    `2417233 platform: split top-level info facade`。
   - post-rebase focused verification passed:
     `test_platform_facade_surface` 3/3，
     `test_platform_ffi_owner_boundary` 2/2，
     `test_platform_simulated_host_compile_matrix` pass，
     `test_platform` 输出 `PASS: all platform tests passed`，
     `git diff --check` pass。
+- Merge / post-merge verification:
+  - `codex/platform-facade-info` commit `2417233` 已 fast-forward 合并进 `main@2417233`。
+  - post-merge focused verification passed:
+    `make -C core/tests/nextpas.core.platform/test_platform_facade_surface clean test`
+    输出 `3 total, 3 passed, 0 failed`；
+    `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`；
+    `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`；
+    `make -C core/tests/nextpas.core.platform/test_platform clean test`
+    输出 `PASS: all platform tests passed`；
+    `git diff --check` pass。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info` worktree 已删除，
+    `codex/platform-facade-info` 分支已删除。
+- Review:
+  - 这轮把顶层 inquiry logic 从 facade 中拿出来，但没有引入新的 public API，也没有改变
+    `platform.time` 的转发路径。
+  - `platform.info` 是 L0 纯实现子模块，不是 host ABI owner；后续如果有人想加
+    `platform.info.ffi/intf/base`，需要先证明有真实 ABI 或 Pascal interface contract。
+- Next:
+  - 下一轮 platform 优先继续做 host FFI surface parity/gap matrix，特别是 Android、FreeBSD、
+    generic Unix 与 Windows/macOS 的 ABI token、opaque size/alignment 和 timeout/error mapping
+    语义复核。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 

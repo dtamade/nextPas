@@ -189,8 +189,7 @@ Completed, committed, merged to `main@9312764`, and worktree/branch cleanup done
 
 ### Status
 
-Implementation, branch verification, and latest-main rebase verification completed in
-`codex/platform-facade-info`; merge/cleanup pending.
+Completed, committed, merged to `main@2417233`, and worktree/branch cleanup done.
 
 ### Planned Steps
 
@@ -220,8 +219,8 @@ Implementation, branch verification, and latest-main rebase verification complet
   - `bash build/verify_local.sh`
   - `git diff --check`
 - [x] rebase 到最新 `main@db454df` 并跑 post-rebase focused gates
-- [ ] commit、择优合并回 `main`
-- [ ] 清理 worktree / 分支
+- [x] commit、择优合并回 `main`
+- [x] 清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -268,6 +267,16 @@ Implementation, branch verification, and latest-main rebase verification complet
   - `make -C core/tests/nextpas.core.platform/test_platform clean test`:
     output includes `PASS: all platform tests passed`。
   - `git diff --check`: pass。
+- Merge / post-merge:
+  - `codex/platform-facade-info` commit `2417233` 已 fast-forward 合并进 `main@2417233`。
+  - post-merge focused verification on main passed:
+    `test_platform_facade_surface` 3/3，
+    `test_platform_ffi_owner_boundary` 2/2，
+    `test_platform_simulated_host_compile_matrix` pass，
+    `test_platform` 输出 `PASS: all platform tests passed`，
+    `git diff --check` pass。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info` worktree 已删除，
+    `codex/platform-facade-info` 分支已删除。
 - Note:
   - 扩 matrix 时暴露 enum constructor 不会随 type alias 变成真正“开箱即用” re-export；本轮只把
     facade/info 纳入 compile proof，未改变 enum constructor public usage contract。
