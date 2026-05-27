@@ -39,3 +39,10 @@
 - `TryGet(Index, out Value): Boolean` is allowed as the non-throwing lookup form for callers that want explicit branching.
 - `GetUnchecked(Index): T` and `PutUnchecked(Index, Value)` are the unsafe fast path and require clear documentation that the caller owns bounds correctness.
 - Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other indexed sequence-like containers.
+
+## 2026-05-27: sequence mutation method semantics
+
+- `Delete(Index)` means delete by position.
+- `Remove(Value)` means remove by element value.
+- Do not add `RemoveAt(Index)` as a duplicate synonym while `Delete(Index)` remains the Pascal-style positional removal name.
+- Apply this distinction consistently across sequence-like containers that support both positional and value-based removal.

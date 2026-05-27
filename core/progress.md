@@ -13,6 +13,7 @@
 - Agreed not to add default semantic interface aliases for now. `MakeMap` may return `IHashMap`; no separate `IMap` alias is introduced yet.
 - Agreed that map-like `Get`/`Put` and `TryGetValue`/`AddOrAssign` have distinct semantics and should not be treated as duplicate aliases in the final interface.
 - Agreed that indexed sequence containers use checked access by default, optional `TryGet`, and explicit `Unchecked` methods for unsafe fast paths.
+- Agreed that sequence mutation keeps Pascal-style `Delete(Index)` for positional removal and `Remove(Value)` for value-based removal; no `RemoveAt` synonym for now.
 
 ## Next
 
