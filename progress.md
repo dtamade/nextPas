@@ -17,6 +17,45 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Session: 2026-05-27 (Batch 111 imported member unknown-member diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 imported direct member-call 的 source-owned name miss 正式纳入 `sema.unknown-member`，
+    同时保持 `installed-source` imported member unknown-member 继续 deferred。
+- Baseline:
+  - Batch 86 已覆盖 root-owned direct class unknown member。
+  - 当前 imported project-source `Worker.Missing(1)` 实测已会报 `sema.unknown-member`，但没有
+    focused/stage0 gate，且 `installed-source` 同场景会被过早诊断。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标与快节奏执行法：`单刀目标 -> RED -> 根因定位 -> 最小修复 ->
+    focused GREEN -> fresh verify -> review -> commit`。
+  - 先补 imported project-source focused probe，确认这条能力已经存在，不再虚构 RED。
+  - 增加真正的 RED guard：imported `installed-source` `Worker.Missing(1)` 现在会错误报
+    `sema.unknown-member`，focused semantic test 失败在
+    `unexpected-installed-unknown-member-diagnostic:sema.unknown-member`。
+  - `MethodSymbolIdForClassTypeMember(...)` 的 unknown-member 尾端现在新增 imported owner
+    provenance guard：只有 root source 或 imported `project-source` owner 才允许落
+    `unknown-member`，其余 imported owner 继续 deferred。
+  - 新增 `tests/fixtures/imported_unknown_member`，并把 `imported-unknown-member-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - Focused probe: imported project-source unknown-member regression 保持
+    `semantic-call-bindings-status=pass`。
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=unexpected-installed-unknown-member-diagnostic:sema.unknown-member`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `imported-unknown-member-check=pass`、
+    `importedUnknownMemberCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只把 imported `project-source` exact class direct member unknown-member 正式 gate 化，并把
+    installed-source 同场景收回 deferred；`System` / runtime baseline、generic specialization、
+    alias / record receiver、implicit conversion、default parameter ranking、var/out compatibility、
+    visibility checking 继续 deferred。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
+
 ## Session: 2026-05-27 (Batch 110 imported member no matching overload diagnostics)
 
 - **Status:** completed; verification passed

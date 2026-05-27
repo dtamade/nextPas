@@ -1717,6 +1717,7 @@ var
   CurrentTypeId: LongInt;
   Depth: LongInt;
   MethodNameFound: Boolean;
+  TypeSymbol: TSemanticSymbol;
 begin
   Result := 0;
   AResolutionFailureKind := '';
@@ -1752,6 +1753,13 @@ begin
     Inc(Depth);
   end;
   if IsDeferredSystemObjectMember(AMemberName) then
+    Exit;
+  if TypeSymbolForTypeId(AClassTypeId, TypeSymbol) and
+    (not SameText(
+      TypeSymbol.OwnerUnitId,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    )) and
+    (not ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId)) then
     Exit;
   AResolutionFailureKind := 'unknown-member';
 end;

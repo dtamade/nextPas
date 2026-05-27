@@ -28,6 +28,69 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Addendum: 2026-05-27 Batch 111 Imported Member Unknown Member Diagnostics
+
+### Goal
+
+把 `sema.unknown-member` 从 root-owned direct class member-call 推进到第一条 imported direct
+member-call 安全边界：当 receiver type 已知、imported `project-source` unit 的 exact class / parent chain
+里都不存在同名 method，且当前 receiver 仍属于已知 class layout truth 时，发出
+`sema.unknown-member`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Missing(1);`，其中 imported project-source `TWorker` 只有 `Run` 而没有
+  `Missing` 时，必须失败为 `sema.unknown-member`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member unknown-member 继续 deferred，不注册错误 binding，也不提前诊断。
+- `build/verify_local.sh` 新增 `imported-unknown-member-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedUnknownMemberCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+
+### Architecture Decision
+
+这是 imported member unknown-member 的第一条 source-owned 切片，不是完整 Pascal member resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class direct member-call name miss。
+- imported `installed-source` / RTL/helper 继续 deferred，避免重演 `System` / runtime baseline
+  缺口被误报成 ordinary unknown member。
+- imported/inherited member 其他 deferred 边界、record/property/array/deref receiver、generic
+  specialization member truth、implicit conversion、default parameter ranking、var/out compatibility、
+  visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与快节奏执行法
+- [x] 复查当前 unknown-member 热路径，并确认 imported project-source regression 已实际为绿
+- [x] RED：新增 imported installed-source unknown-member deferred guard，并定位真实过宽诊断边界
+- [x] 在 member lookup 的 unknown-member 尾端增加 imported owner provenance guard
+- [x] 新增 `tests/fixtures/imported_unknown_member` 与 `imported-unknown-member-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused probe: imported project-source unknown-member regression保持 `semantic-call-bindings-status=pass`。
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-unknown-member-diagnostic:sema.unknown-member`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-unknown-member-check=pass`、
+  `importedUnknownMemberCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member unknown-member 纳入 diagnostics
+- 不把 generic specialization / alias / record receiver member miss 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
 ## Addendum: 2026-05-27 Batch 110 Imported Member No Matching Overload Diagnostics
 
 ### Goal

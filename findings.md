@@ -73,6 +73,13 @@
   binding，也不会提前报 `sema.no-matching-overload`。
 - Batch 110 新增 `imported-member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
   `sema.no-matching-overload` projection 与 final envelope `importedMemberNoMatchingOverloadCheck=pass`。
+- Batch 111 把 imported direct member-call 的 source-owned name miss 正式纳入 gate：receiver type 已知、
+  imported `project-source` unit 的 exact class / parent chain 不存在同名 method 时，
+  `Worker.Missing(1)` 会失败为 `sema.unknown-member`，且不注册失败 `member-call` binding。
+- Batch 111 同时把 imported `installed-source` member unknown-member 收回 deferred；它不会错误 binding，
+  也不会把 `System` / runtime baseline 或 helper surface 提前报成 ordinary unknown member。
+- Batch 111 新增 `imported-unknown-member-check`，用 dedicated fixture 固定 stage0
+  `sema.unknown-member` projection 与 final envelope `importedUnknownMemberCheck=pass`。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。
