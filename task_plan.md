@@ -83,10 +83,10 @@ family。目标是把能够可靠取证、能够被 host owner 承载的低层�
 ### Status
 
 Implementation, focused verification, full verification, rebase over latest local
-`main@c09bc58`, and final pre-merge verification are complete in isolated
-worktree
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`.
-Merge, post-merge verification, and cleanup remain pending.
+`main@c09bc58`, final pre-merge verification, fast-forward merge, post-merge
+verification, and cleanup are complete. The accepted platform Wave 3 commits are
+on `main` as `f43cfbd`, `2e6b181`, and `ed25455`; `main` later advanced to
+`d2e5b52` with unrelated collections docs.
 
 ### Planned Steps
 
@@ -103,7 +103,7 @@ Merge, post-merge verification, and cleanup remain pending.
 - [x] sync `build/verify_local.sh` forced POSIX fallback summary to the new
   11-test `nextpas.core.sync` contract
 - [x] commit final feature branch and rebase over latest local `main@c09bc58`
-- [ ] merge, post-merge verification, cleanup
+- [x] merge, post-merge verification, cleanup
 
 ### Audit Checklist
 
@@ -178,6 +178,22 @@ Merge, post-merge verification, and cleanup remain pending.
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave3StatCheck":"pass"` and
     `coreSyncPosixFallbackCheck":"pass"`.
+- Fast-forward merge landed on `main` at `ed25455`. Post-merge verification
+  passed:
+  - `git diff --check`
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+    `5 total, 5 passed, 0 failed`
+  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+    `11 total, 11 passed, 0 failed`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave3StatCheck":"pass"` and
+    `coreSyncPosixFallbackCheck":"pass"`.
+- Cleanup completed: removed worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`,
+  deleted branch `codex/platform-host-abi-wave3-stat`, and ran
+  `git worktree prune`. Remaining worktrees are `collections-refactor` and
+  `sema-no-matching-overload`.
 
 ### Recovery Entry
 
@@ -191,8 +207,10 @@ sed -n '1,200p' progress.md
 sed -n '1,170p' findings.md
 ```
 
-Then continue from the first unchecked item in this Wave 3 addendum. Do not add
-runtime tests for raw OS APIs and do not introduce `platform.file` public API in this wave.
+This Wave 3 addendum is closed. Continue from latest `main` for the next
+platform host ABI import wave. Do not add runtime tests for raw OS APIs and do
+not introduce `platform.file` public API without a separate public contract
+design.
 
 ## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2
 

@@ -1005,7 +1005,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Phase 21: Platform Host ABI Completeness Wave 3
 
-- **Status:** completed; verification passed in isolated worktree; merge pending
+- **Status:** completed; merged to main, post-merge verified, and cleanup done
 - Started: 2026-05-27
 - Objective:
   - 继续按 `core/docs/platform-ffi-import-workflow.md` 从 FPC source evidence 扩充 platform host-owned
@@ -1152,9 +1152,27 @@ platform/core 工作流保留下来的已完成记录。
       `human-summary=local verification passed`; final envelope includes
       `corePlatformHostAbiWave3StatCheck":"pass"` and
       `coreSyncPosixFallbackCheck":"pass"`.
-  - Next: confirm main checkout is clean, merge the feature branch into `main`,
-    run post-merge focused/official gates, then remove the temporary worktree and
-    branch.
+  - Integration:
+    - Fast-forward merged `codex/platform-host-abi-wave3-stat` into `main` at
+      `ed25455`.
+    - Post-merge focused verification passed:
+      `git diff --check`,
+      `test_platform_host_abi_wave3_stat` `5 total, 5 passed, 0 failed`, and
+      `test_sync` `11 total, 11 passed, 0 failed`.
+    - Post-merge official verification passed:
+      `bash build/verify_local.sh` produced `verify-local=pass` and
+      `human-summary=local verification passed`, with
+      `corePlatformHostAbiWave3StatCheck":"pass"` and
+      `coreSyncPosixFallbackCheck":"pass"` in the final envelope.
+    - Removed
+      `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`,
+      deleted `codex/platform-host-abi-wave3-stat`, and ran `git worktree prune`.
+    - `main` later advanced to `d2e5b52` via unrelated collections docs; the
+      platform Wave 3 commits remain ancestors of current `main`.
+  - Next:
+    - Start the next platform host ABI import wave from latest `main`, keeping
+      raw OS API testing out of runtime unit tests and continuing source-surface,
+      ABI size, simulated-host compile, and official route-truth coverage.
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 

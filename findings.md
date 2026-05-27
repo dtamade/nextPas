@@ -2247,3 +2247,17 @@
   `human-summary=local verification passed`，final envelope 同时包含
   `corePlatformHostAbiWave3StatCheck":"pass"` 与 `coreSyncPosixFallbackCheck":"pass"`。当前可进入
   fast-forward merge、post-merge verification 与 worktree cleanup。
+
+## 2026-05-27 Follow-up Findings 34
+
+- Platform Host ABI Wave 3 已 fast-forward merge 到 `main@ed25455`，随后主线又被 unrelated
+  collections docs 推进到 `main@d2e5b52`；Wave 3 三笔提交仍是当前 `main` 的祖先。
+- Post-merge focused gates 通过：`git diff --check`、`test_platform_host_abi_wave3_stat`
+  `5 total, 5 passed, 0 failed`、`test_sync` `11 total, 11 passed, 0 failed`。
+- Post-merge official verification 通过：fresh `bash build/verify_local.sh` 输出
+  `verify-local=pass` 与 `human-summary=local verification passed`，final envelope 继续包含
+  `corePlatformHostAbiWave3StatCheck":"pass"` 与 `coreSyncPosixFallbackCheck":"pass"`。
+- 临时 worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat` 已删除，分支
+  `codex/platform-host-abi-wave3-stat` 已删除，`git worktree prune` 已执行；当前剩余并行 worktree 是
+  `collections-refactor` 与 `sema-no-matching-overload`。
