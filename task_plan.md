@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard；Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard；Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard；Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics；Batch 156 Imported Member Function Result No Matching Overload Diagnostics；Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard；Batch 154 Imported Function Result Ambiguous Overload Diagnostics；Batch 153 Installed-source Function Result No Matching Overload Deferred Guard；Batch 152 Imported Function Result No Matching Overload Diagnostics；Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard；Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard；Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics；Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard；Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics；Batch 146 Installed-source Inherited Member Function Result Deferred Guard；Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics；Batch 144 Imported Member Function Result Type Mismatch Diagnostics；Batch 143 Imported Function Result Type Mismatch Diagnostics；Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 141 Installed-source Bare Unknown Callable Deferred Guard；Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard；Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics；Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard；Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard；Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard；Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics；Batch 156 Imported Member Function Result No Matching Overload Diagnostics；Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard；Batch 154 Imported Function Result Ambiguous Overload Diagnostics；Batch 153 Installed-source Function Result No Matching Overload Deferred Guard；Batch 152 Imported Function Result No Matching Overload Diagnostics；Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard；Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard；Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics；Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard；Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics；Batch 146 Installed-source Inherited Member Function Result Deferred Guard；Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics；Batch 144 Imported Member Function Result Type Mismatch Diagnostics；Batch 143 Imported Function Result Type Mismatch Diagnostics；Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 141 Installed-source Bare Unknown Callable Deferred Guard；Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard；Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,72 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿“同族近邻推进”的提速思路，把 direct imported member function-result 家族从
+type/no-match/ambiguity 扩到 arity failure：
+
+- imported `project-source` unit 暴露单一 `TWorker.Pick(Integer)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Worker.Pick(Flag, Flag)`。
+- 期望发 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 当前加速策略：先闭环 direct member function-result 三格，再沿相同 harness 推进 arity 维度；
+  这样比切到无关模块更快，也能持续增加真实 diagnostics 覆盖。
+- `project-source` 是可诊断 truth；本轮是正向 gate，若 focused probe GREEN，则 promotion 到
+  stage0 fixture 与 `verify_local.sh`。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string；本轮重点是
+  arity failure 不应因为 argument expression 是 function result 而丢失。
+- installed-source 同形状 deferred guard 留给下一轮成对收口。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、同族近邻提速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 imported project-source direct member + root-owned function-result wrong-argument-count
+- [x] Probe GREEN 后 promotion 到 stage0 fixture 与 `verify_local.sh`；本轮不需要修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe: `tests/fixtures/imported_member_function_result_wrong_argument_count`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local: `bash build/verify_local.sh` 输出
+  `imported-member-function-result-wrong-argument-count-check=pass`、
+  `importedMemberFunctionResultWrongArgumentCountCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+
+### Review
+
+- Diff 范围集中在 semantic harness、stage0 failure fixture、`verify_local.sh` gate/final envelope
+  与工作记录/规格同步。
+- 本轮没有修改 `compiler/sema/np_semantic_analyzer.pas`，也没有修改 `core/`。
+
+### Non-goals
+
+- 不处理 installed-source direct member function-result wrong-argument-count，本轮只收 project-source 正向 gate
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
 ## Addendum: 2026-05-28 Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard
 

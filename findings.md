@@ -401,6 +401,14 @@
 - installed-source direct member function-result no-match 的 official proof 只能放在 semantic harness 中用
   `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
   project-source，不能证明 installed-source provenance。
+- Batch 161 把 direct imported member function-result 家族扩到 arity miss：root `Flag: Boolean`
+  作为两个 arguments 调 imported `project-source` 单一 `TWorker.Pick(Integer)` 时，会失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 161 focused probe 与 stage0 probe 都直接 GREEN，证明 direct member-call path 已能把
+  root-owned function-result evidence 传给 imported `project-source` arity projection；本批不修改 analyzer。
+- Batch 161 新增 `tests/fixtures/imported_member_function_result_wrong_argument_count` 与
+  `imported-member-function-result-wrong-argument-count-check`，final envelope 新增
+  `importedMemberFunctionResultWrongArgumentCountCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

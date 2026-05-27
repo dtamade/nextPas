@@ -255,7 +255,9 @@ root-owned function-result evidence 仍保守 deferred，不投影为 ordinary `
 当 imported `project-source` bare callable、direct member-call 或 inherited member-call overload set 的所有同 arity target 都不匹配时，
 同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；当同一
 imported `project-source` bare callable、direct member-call 或 inherited overload set 出现 compact signature collision 且无法唯一选择时，
-同一类 root-owned function-result evidence 会投影为 `sema.ambiguous-overload`；无法推断、
+同一类 root-owned function-result evidence 会投影为 `sema.ambiguous-overload`；当 imported
+`project-source` direct member-call single target arity 不兼容时，同一类 evidence 会投影为
+`sema.wrong-argument-count`；无法推断、
 imported `installed-source` target 或 direct/inherited installed-source overload set、imported/带参/member function result
 或 source provenance 不可信的 signature 不唯一时仍保守不绑定；对应 installed-source bare/direct-member/inherited
 function-result type-mismatch、no-match 与 ambiguity 用 `semantic-call-bindings-check` 的 focused
@@ -916,7 +918,8 @@ implicit-self bare method ambiguous overload 断言同一组 semantic failure / 
 type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 root-owned 与
 imported project-source bare wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
-同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数/函数结果形态断言
+同一组 semantic failure / diagnostic projection，再对 imported direct member function-result wrong argument count
+断言同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数/函数结果形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
 `semantic-analysis-failed` + `sema.unknown-callable`，再对 known field/property member call 及 inherited known
 field/property member call 断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member

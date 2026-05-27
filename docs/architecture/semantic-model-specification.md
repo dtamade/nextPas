@@ -98,7 +98,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   同样发 `sema.no-matching-overload`；imported `project-source` direct member-call 与 inherited
   member-call overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定
   no-match evidence；imported `project-source` direct member-call 与 inherited member-call overload
-  set 还接受同类 evidence 作为 ambiguity evidence。
+  set 还接受同类 evidence 作为 ambiguity evidence；imported `project-source` direct member-call
+  single target 面对同类 evidence 但 arity 不兼容时会发 `sema.wrong-argument-count`。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   single-target arity miss、bare callable ambiguity、
@@ -331,6 +332,9 @@ candidate collection
   - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
   - 也用于 bare procedure/function call 中 root source 没有同名 callable、但 imported
     `project-source` 单一 target 已知且调用 arity 不匹配的场景
+  - 也用于 imported `project-source` direct member-call 单一 target 已知且调用 arity 不匹配的场景；
+    该路径接受 root-owned 零参内建标量/字符串 function result 作为 argument evidence，并且不会注册失败
+    `member-call` binding
   - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
     method name，但没有任何 arity-compatible target 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
