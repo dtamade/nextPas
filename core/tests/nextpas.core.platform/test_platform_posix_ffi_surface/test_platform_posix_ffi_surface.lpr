@@ -154,6 +154,8 @@ begin
     'posix.ffi must expose shared pthread mutex lock helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_trylock',
     'posix.ffi must expose shared pthread mutex trylock helper for host ffi owners');
+  CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_timedlock_abs',
+    'posix.ffi must expose shared pthread mutex timed-lock helper for supported host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_mutex_unlock',
     'posix.ffi must expose shared pthread mutex unlock helper for host ffi owners');
   CheckTokenPresent(LSource, 'platform_posix_pthread_rwlock_init',
@@ -190,6 +192,8 @@ begin
     'posix.ffi must not keep per-host pthread mutex kind numbering');
   CheckTokenAbsent(LSource, 'function pthread_condattr_setclock',
     'posix.ffi must not keep host-specific pthread condattr clock binding');
+  CheckTokenPresent(LSource, 'function pthread_mutex_timedlock',
+    'posix.ffi must declare pthread_mutex_timedlock where FPC pthread sources prove the ABI');
 end;
 
 begin

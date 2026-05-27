@@ -1028,6 +1028,14 @@ mutex attr / cond attr 初始化、condattr clock capability、timeout clock id 
 宿主 capability 差异，只统一承载 raw pthread 调用；各 host ffi owner 只把宿主 truth 叠在外层，
 再把 shared forwarder 委托出去。
 
+`pthread_mutex_timedlock` 这类 ABI 要按 FPC 源码证据和宿主 capability 分层落位：Linux/Android 与
+FreeBSD 的 FPC pthread 声明可作为 ABI 依据，因此 raw declaration 和
+`platform_posix_pthread_mutex_timedlock_abs` 这类 truly shared forwarder 可以进入
+`posix.ffi`，但各 host 是否支持必须由 `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED` 等
+host `.base` token 表达。没有足够依据或明确不支持的宿主（例如当前 Darwin / generic Unix 路径）
+应在 host `.ffi` 暴露同名 helper 并返回 `PLATFORM_POSIX_ENOTSUP`，而不是让 consumer 猜测或直接
+调用 raw pthread symbol。
+
 同理，只要 helper 本身不内嵌宿主 truth，shared `posix.ffi` 也可以继续拥有参数化的 attr-init glue，
 例如 `platform_posix_pthread_mutex_init_kind` 与
 `platform_posix_pthread_condvar_init_with_clock`。这类 helper 统一承载

@@ -1910,3 +1910,27 @@
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。
+
+## 2026-05-27 Follow-up Findings 20
+
+- FPC Linux 与 FreeBSD `pthread.inc` 明确声明 `pthread_mutex_timedlock`；Linux 这份声明也覆盖
+  Android 条件分支，因此 Linux / Android / FreeBSD 可以把该 ABI 搬入 nextPas-owned
+  `platform.posix.ffi` raw declaration 与 shared thin helper。
+- FPC Darwin `pthread.inc` 没有 `pthread_mutex_timedlock` 声明，generic Unix 也没有足够宿主证据；
+  这类 host owner 应显式暴露 unsupported / unknown capability，而不是让 consumer 直接调用一个可能
+  不存在的 pthread symbol。
+- `pthread_rwlock_timedrdlock` / `pthread_rwlock_timedwrlock` 这轮不应被强行搬入通用 POSIX surface：
+  当前 FPC 搜索只在 `netwlibc` 找到它们，不足以作为 Linux/FreeBSD/Darwin/Android host pthread
+  owner 的依据。
+- 因此新增的 owner 模型是：
+  `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED` 放在各 host `.base`；
+  `posix.ffi` 只在 Linux / Android / FreeBSD target path 声明 raw `pthread_mutex_timedlock` 与
+  `platform_posix_pthread_mutex_timedlock_abs`；
+  host `.ffi` 对支持宿主委托 shared helper，对 Darwin / generic Unix 返回
+  `PLATFORM_POSIX_ENOTSUP`。
+- 这批没有新增 `platform.sync` public API，也不新增 raw pthread runtime 单测；证据面是
+  source-surface gate、FPC 源码取证和 simulated host compile matrix。
+- fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 与 fresh
+  `bash build/verify_local.sh` 均已通过；official envelope 给出 `verify-local=pass` 与
+  `human-summary=local verification passed`。当前结论仍是 ABI reference surface 已收口，不等价于
+  新增 raw pthread runtime behavior contract。

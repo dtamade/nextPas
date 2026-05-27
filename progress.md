@@ -6119,3 +6119,48 @@ Hello from nextPas!
     复用数学逻辑拉入无关 external owner。
   - 行为测试的边界也一起收紧：系统 API 的 ABI 正确性靠 FPC 源码取证、source-surface guard 与
     compile-only gate，runtime 单测只覆盖 nextPas platform 抽象 public contract。
+
+### Phase 17: Platform POSIX Mutex Timedlock ABI Surface
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 先核对 FPC 源码：Linux 与 FreeBSD `pthread.inc` 明确声明 `pthread_mutex_timedlock`，Darwin
+    没有该声明；`pthread_rwlock_timedrdlock` / `pthread_rwlock_timedwrlock` 只在 `netwlibc`
+    里出现，因此这轮不搬 rwlock timedlock。
+  - 扩 `test_platform_posix_ffi_surface` 成 RED，要求 shared `posix.ffi` 暴露
+    `platform_posix_pthread_mutex_timedlock_abs` 与 raw `pthread_mutex_timedlock` declaration。
+  - 扩 `test_platform_sync_host_ffi_surface` 与 `test_platform_ffi_partition_surface` 成 RED，要求
+    host `.base` 暴露 `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED`，host `.ffi` 暴露统一
+    `platform_pthread_mutex_timedlock_abs`。
+  - `linux/android/freebsd.base` 标记 timedlock supported，`darwin/unix.base` 标记 unsupported /
+    unknown。
+  - `posix.ffi` 在 Linux / Android / FreeBSD target path 中声明 raw `pthread_mutex_timedlock`
+    与 shared helper；`linux/android/freebsd.ffi` 委托 shared helper；`darwin/unix.ffi` 暴露
+    `PLATFORM_POSIX_ENOTSUP` stub。
+  - 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+      初始失败在缺少 `platform_posix_pthread_mutex_timedlock_abs`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+      初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`
+    - `make -C core examples` 输出 `All examples compiled.`
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`
+- Review:
+  - 这批扩的是 ABI reference surface，不是 public sync API；因此行为测试不新增，避免把 raw
+    pthread 系统 API 当成 nextPas 单元测试目标。
+  - Darwin / generic Unix 的 unsupported helper 是刻意的 host truth，不是遗漏：没有 FPC host 证据前
+    不让 consumer 猜测 raw symbol 是否存在。
+  - 本轮保持了 platform L0 边界：host base 表达 capability，host ffi 负责 wrapper/stub，feature
+    consumer 暂不增加 public timedlock contract。

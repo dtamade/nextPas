@@ -8252,3 +8252,64 @@ Completed; verification passed.
 - 这批不改变 public time/sync/thread API
 - 这批不宣称新增 Windows runtime link evidence；先用 source-surface、Linux runtime 和 compile-only
   matrix 收紧边界
+
+## Addendum: 2026-05-27 Platform POSIX Mutex Timedlock ABI Surface
+
+### Goal
+
+按“FPC 源码是 ABI 依据，不是运行时依赖”的规则，补齐有明确证据的 POSIX mutex timedlock ABI surface：
+
+- `posix.ffi` 拥有 `pthread_mutex_timedlock` raw declaration 与 shared thin helper。
+- `linux/android/freebsd.base` 显式标记 timedlock supported。
+- `darwin/unix.base` 显式标记 timedlock unsupported / unknown，host ffi 暴露 ENOTSUP stub。
+- 不新增 `platform.sync` public API，不对 raw pthread timedlock 做 runtime 单元测试。
+
+### Architecture Decision
+
+- Linux 与 FreeBSD 的 FPC `pthread.inc` 明确声明 `pthread_mutex_timedlock`；Linux 声明覆盖 Android
+  分支，因此这三类宿主可委托 shared `platform_posix_pthread_mutex_timedlock_abs`。
+- FPC Darwin pthread 声明没有 `pthread_mutex_timedlock`，generic Unix 也没有足够宿主依据；这两个
+  host owner 暴露同名 helper 但返回 `PLATFORM_POSIX_ENOTSUP`。
+- `pthread_rwlock_timedrdlock` / `pthread_rwlock_timedwrlock` 这轮不搬入通用 POSIX surface，因为当前
+  FPC 证据只在 `netwlibc`，不是 Linux/FreeBSD/Darwin/Android host pthread 依据。
+
+### Status
+
+Completed; verification passed in isolated worktree.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 shared timedlock declaration/helper
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 host capability token 与 host helper/stub
+- [x] RED：扩 `test_platform_ffi_partition_surface`，要求 timedlock capability 属于 host base
+- [x] 实现 host base capability、`posix.ffi` raw declaration/shared helper、host ffi wrapper/stub
+- [x] 运行 focused gates 与 simulated host compile matrix
+- [x] 运行 full core test/example/benchmark 与 fresh `bash build/verify_local.sh`
+- [ ] commit / merge / cleanup
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在缺少 `platform_posix_pthread_mutex_timedlock_abs`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+    初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`
+
+### Non-goals
+
+- 不新增 `platform_mutex_timedlock` public API。
+- 不把 raw `pthread_mutex_timedlock` 当成 nextPas runtime 单测目标。
+- 不搬入当前 host FPC pthread 证据不足的 rwlock timedlock ABI。

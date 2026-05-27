@@ -200,6 +200,8 @@ begin
     'linux.base must expose Linux pthread mutex kind numbering');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_condattr_setclock_supported',
     'linux.base must expose Linux pthread condattr clock capability');
+  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_mutex_timedlock_supported',
+    'linux.base must expose Linux pthread mutex timed-lock capability');
   CheckTokenPresent(LLinuxSource, 'function platform_pthread_condattr_setclock',
     'linux.ffi must expose Linux pthread condattr clock binding');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_timeout_clock_id',
@@ -221,6 +223,8 @@ begin
     'darwin.base must expose Darwin pthread mutex kind numbering');
   CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_condattr_setclock_supported',
     'darwin.base must expose Darwin pthread condattr clock capability');
+  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_mutex_timedlock_supported',
+    'darwin.base must expose Darwin pthread mutex timed-lock capability');
   CheckTokenPresent(LDarwinSource, 'function platform_pthread_condattr_setclock',
     'darwin.ffi must expose Darwin pthread condattr clock binding or stub');
   CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_timeout_clock_id',
@@ -240,6 +244,8 @@ begin
     'android.base must expose Android pthread mutex kind numbering');
   CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_condattr_setclock_supported',
     'android.base must expose Android pthread condattr clock capability');
+  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_mutex_timedlock_supported',
+    'android.base must expose Android pthread mutex timed-lock capability');
   CheckTokenPresent(LAndroidSource, 'function platform_pthread_condattr_setclock',
     'android.ffi must expose Android pthread condattr clock binding');
   CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_timeout_clock_id',
@@ -259,6 +265,8 @@ begin
     'freebsd.base must expose FreeBSD pthread mutex kind numbering');
   CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_condattr_setclock_supported',
     'freebsd.base must expose FreeBSD pthread condattr clock capability');
+  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_mutex_timedlock_supported',
+    'freebsd.base must expose FreeBSD pthread mutex timed-lock capability');
   CheckTokenPresent(LFreeBSDSource, 'function platform_pthread_condattr_setclock',
     'freebsd.ffi must expose FreeBSD pthread condattr clock binding');
   CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_timeout_clock_id',
@@ -278,6 +286,8 @@ begin
     'unix.base must expose generic Unix pthread mutex kind numbering');
   CheckTokenPresent(LUnixBaseSource, 'platform_pthread_condattr_setclock_supported',
     'unix.base must expose generic Unix pthread condattr clock capability');
+  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_mutex_timedlock_supported',
+    'unix.base must expose generic Unix pthread mutex timed-lock capability');
   CheckTokenPresent(LUnixSource, 'function platform_pthread_condattr_setclock',
     'unix.ffi must expose generic Unix pthread condattr clock binding');
   CheckTokenPresent(LUnixBaseSource, 'platform_pthread_timeout_clock_id',

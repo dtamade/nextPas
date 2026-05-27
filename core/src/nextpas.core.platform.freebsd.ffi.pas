@@ -43,6 +43,7 @@ function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 function platform_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 function platform_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+function platform_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 function platform_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 function platform_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
 function platform_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
@@ -186,6 +187,11 @@ end;
 function platform_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_trylock(AMutex);
+end;
+
+function platform_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+begin
+  Result := platform_posix_pthread_mutex_timedlock_abs(AMutex, ADeadline);
 end;
 
 function platform_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;

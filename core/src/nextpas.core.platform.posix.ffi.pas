@@ -62,6 +62,9 @@ function platform_posix_pthread_mutex_init_public_kind(
 function platform_posix_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID) or defined(NEXTPAS_FREEBSD)}
+function platform_posix_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+{$ENDIF}
 function platform_posix_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 function platform_posix_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
 function platform_posix_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
@@ -107,6 +110,9 @@ function pthread_mutex_init(mutex: Pointer; attr: Pointer): Int32; cdecl; extern
 function pthread_mutex_destroy(mutex: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutex_destroy';
 function pthread_mutex_lock(mutex: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutex_lock';
 function pthread_mutex_trylock(mutex: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutex_trylock';
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID) or defined(NEXTPAS_FREEBSD)}
+function pthread_mutex_timedlock(mutex: Pointer; abstime: PTimeSpec): Int32; cdecl; external 'pthread' name 'pthread_mutex_timedlock';
+{$ENDIF}
 function pthread_mutex_unlock(mutex: Pointer): Int32; cdecl; external 'pthread' name 'pthread_mutex_unlock';
 
 function pthread_rwlock_init(rwlock: Pointer; attr: Pointer): Int32; cdecl; external 'pthread' name 'pthread_rwlock_init';
@@ -355,6 +361,13 @@ function platform_posix_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
   Result := pthread_mutex_trylock(AMutex);
 end;
+
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID) or defined(NEXTPAS_FREEBSD)}
+function platform_posix_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+begin
+  Result := pthread_mutex_timedlock(AMutex, PTimeSpec(ADeadline));
+end;
+{$ENDIF}
 
 function platform_posix_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 begin

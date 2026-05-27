@@ -80,6 +80,8 @@ begin
     AHostLabel + ' base must expose pthread rwlock storage size for sync');
   CheckTokenPresent(ABaseSource, 'platform_pthread_condvar_size',
     AHostLabel + ' base must expose pthread condvar storage size for sync');
+  CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_timedlock_supported',
+    AHostLabel + ' base must expose pthread mutex timed-lock capability for future sync contracts');
   CheckTokenPresent(ABaseSource, 'tplatformpthreadmutexalign',
     AHostLabel + ' base must expose pthread mutex align carrier type for sync');
   CheckTokenPresent(ABaseSource, 'tplatformpthreadrwlockalign',
@@ -106,6 +108,8 @@ begin
     AHostLabel + ' must expose pthread mutex lock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_trylock',
     AHostLabel + ' must expose pthread mutex trylock helper for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_mutex_timedlock_abs',
+    AHostLabel + ' must expose pthread mutex timed-lock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_unlock',
     AHostLabel + ' must expose pthread mutex unlock helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_rwlock_init',
@@ -241,19 +245,29 @@ begin
   CheckTokenPresent(LLinuxSource, 'linux_futex_wake_all_i32',
     'linux.ffi must expose Linux futex wake-all helper for sync');
   CheckPosixSyncHelperSet(LLinuxSource, LLinuxBaseSource, 'linux');
+  CheckTokenPresent(LLinuxSource, 'platform_posix_pthread_mutex_timedlock_abs',
+    'linux.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
 
   CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
     'darwin.ffi must expose Darwin errno value helper for sync');
   CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin');
+  CheckTokenPresent(LDarwinSource, 'platform_posix_enotsup',
+    'darwin.ffi must keep unsupported pthread mutex timed-lock as a host-owned ENOTSUP stub');
   CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
     'android.ffi must expose Android errno value helper for sync');
   CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android');
+  CheckTokenPresent(LAndroidSource, 'platform_posix_pthread_mutex_timedlock_abs',
+    'android.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
     'freebsd.ffi must expose FreeBSD errno value helper for sync');
   CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd');
+  CheckTokenPresent(LFreeBSDSource, 'platform_posix_pthread_mutex_timedlock_abs',
+    'freebsd.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
   CheckTokenPresent(LUnixSource, 'platform_posix_errno_value',
     'unix.ffi must expose generic Unix errno value helper for sync');
   CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix');
+  CheckTokenPresent(LUnixSource, 'platform_posix_enotsup',
+    'unix.ffi must keep unknown pthread mutex timed-lock capability as a host-owned ENOTSUP stub');
 
   CheckTokenPresent(LWindowsSource, 'waitonaddress',
     'windows.ffi must expose WaitOnAddress');
