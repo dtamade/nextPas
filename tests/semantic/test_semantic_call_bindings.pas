@@ -4188,6 +4188,106 @@ begin
   end;
 end;
 
+procedure CheckImportedMemberFunctionResultCallTypeMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-member-function-result-type-mismatch-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program ImportedMemberFunctionResultTypeMismatchCalls;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(Flag);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'ImportedMemberFunctionResultTypeMismatchCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-imported-member-function-result-type-mismatch-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.type-mismatch') then
+      Fail('unexpected-imported-member-function-result-type-mismatch-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-imported-member-function-result-type-mismatch-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('imported-member-function-result-type-mismatch-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-imported-member-function-result-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-imported-member-function-result-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-imported-member-function-result-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInstalledSourceInheritedMemberAmbiguousOverloadStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -6872,6 +6972,7 @@ begin
     CheckInstalledSourceMemberNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceInheritedMemberNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceMemberCallTypeMismatchStaysDeferred;
+    CheckImportedMemberFunctionResultCallTypeMismatchDiagnostic;
     CheckBareNoMatchingOverloadDiagnostic;
     CheckBareWrongArgumentCountDiagnostic;
     CheckBareDefaultParameterCallBindings;
