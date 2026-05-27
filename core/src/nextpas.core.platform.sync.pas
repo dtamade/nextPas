@@ -157,6 +157,13 @@ uses
   nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
+function platform_sync_validate_address(AAddr: PInt32): Int32; inline;
+begin
+  if AAddr = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := 0;
+end;
+
 {$IFDEF NEXTPAS_UNIX}
 const
   POSIX_WAIT_BUCKET_COUNT = 64;
@@ -188,6 +195,15 @@ end;
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
 begin
   Result := (PtrUInt(AAddr) shr 2) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
+end;
+
+function platform_posix_wait_address_released(
+  const ABucketGeneration: UInt64;
+  const AWaitGeneration: UInt64;
+  AAddr: PInt32;
+  const AExpected: Int32): Boolean; inline;
+begin
+  Result := (ABucketGeneration <> AWaitGeneration) or (AAddr^ <> AExpected);
 end;
 
 function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
@@ -400,8 +416,9 @@ var
   LWaiting: Boolean;
   LDone: Boolean;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
   if AAddr^ <> AExpected then
     Exit(PLATFORM_ERR_AGAIN);
 
@@ -458,12 +475,14 @@ begin
 
         if LRet = 0 then
         begin
-          if (LBucket^.Generation <> LGeneration) or (AAddr^ <> AExpected) then
+          if platform_posix_wait_address_released(
+            LBucket^.Generation, LGeneration, AAddr, AExpected) then
             LDone := True;
         end
         else if LRet = PLATFORM_ERR_TIMEOUT then
         begin
-          if (LBucket^.Generation <> LGeneration) or (AAddr^ <> AExpected) then
+          if platform_posix_wait_address_released(
+            LBucket^.Generation, LGeneration, AAddr, AExpected) then
             Result := 0
           else
             Result := PLATFORM_ERR_TIMEOUT;
@@ -488,8 +507,9 @@ function platform_posix_wake_address_one_fallback(AAddr: PInt32): Int32;
 var
   LBucket: ^TPosixWaitBucket;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
 
   Result := platform_posix_ensure_wait_buckets;
   if Result <> 0 then
@@ -514,8 +534,9 @@ function platform_posix_wake_address_all_fallback(AAddr: PInt32): Int32;
 var
   LBucket: ^TPosixWaitBucket;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
 
   Result := platform_posix_ensure_wait_buckets;
   if Result <> 0 then
@@ -542,8 +563,9 @@ end;
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
 
   Result := linux_futex_wait_i32(AAddr, AExpected, ATimeoutNs);
   if Result = 0 then
@@ -554,8 +576,9 @@ end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
 
   Result := linux_futex_wake_one_i32(AAddr);
   if Result = 0 then
@@ -566,8 +589,9 @@ end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
 begin
-  if AAddr = nil then
-    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
 
   Result := linux_futex_wake_all_i32(AAddr);
   if Result = 0 then
@@ -726,17 +750,29 @@ end;
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 begin
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
+
   Result := windows_wait_address_i32_timeout_result(
     AAddr, AExpected, ATimeoutNs, PLATFORM_ERR_TIMEOUT);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
 begin
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
+
   Result := windows_wake_address_single(AAddr);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
 begin
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
+
   Result := windows_wake_address_all(AAddr);
 end;
 

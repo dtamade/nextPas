@@ -361,6 +361,18 @@ var
   LValue: Int32;
   LRet: Int32;
 begin
+  LRet := platform_wait_address32(nil, 0, 0);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wait address should be invalid');
+
+  LRet := platform_wake_address_one(nil);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wake-one address should be invalid');
+
+  LRet := platform_wake_address_all(nil);
+  CheckEqual(Int64(PLATFORM_ERR_INVALID), Int64(LRet),
+    'nil wake-all address should be invalid');
+
   LValue := 42;
 
   // value != expected: futex returns EAGAIN immediately (not blocked)

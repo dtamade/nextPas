@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync POSIX error result host ownership；上一轮包括
+当前最新本轮为 platform.sync POSIX wait-bucket policy ownership；上一轮包括
+platform.sync POSIX error result host ownership；
 platform thread POSIX state ownerization；
 platform behavior tests abstract API boundary；
 platform.time facade/base/host shape normalization；
@@ -30,6 +31,66 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync POSIX wait-bucket policy ownership)
+
+- **Status:** completed; verification passed in isolated worktree
+- Objective:
+  - 继续按 `/plan` 推进 platform owner audit，这轮不移动 wait-bucket 算法，而是把
+    `platform.sync` 对 POSIX fallback policy 的 ownership 变成文档和测试共同守住的事实。
+- Audit:
+  - wait-bucket fallback 不是 raw OS ABI；它是 `platform.sync` 为 address-wait public API 提供的
+    generic POSIX 策略。
+  - Linux futex、pthread condvar、Windows WaitOnAddress 仍然属于 host `.ffi` raw/helper owner。
+  - nil address 是 `platform_wait_address32` / `platform_wake_address_*` 的 public input validation，
+    应在 `platform.sync` 层统一处理，不能下放给 WinAPI/futex/pthread helper。
+- Actions taken:
+  - 从最新 `main@8936833` 开 `codex/platform-sync-wait-policy` isolated worktree。
+  - baseline 通过：
+    `test_platform_sync` 14/14 pass，`test_platform_sync_posix_fallback` 14/14 pass，
+    `test_platform_sync_posix_surface` 1/1 pass。
+  - RED：扩 `test_platform_sync_posix_surface`，初始有效失败在
+    `platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi:
+    platform_posix_wait_address_released`。
+  - GREEN：`platform.sync` 新增内部 `platform_posix_wait_address_released` helper，明确承载
+    generation/value mismatch release policy；host ffi 不新增 wait-bucket token。
+  - 扩 `test_platform_sync` 的 `Address wait` 用例，覆盖 nil wait/wake public API：
+    `platform_wait_address32(nil, ...)`、`platform_wake_address_one(nil)`、
+    `platform_wake_address_all(nil)` 均期望 `PLATFORM_ERR_INVALID`。
+  - RED：扩 `test_platform_sync_host_ffi_surface`，初始失败在
+    `platform.sync must validate public wait-address pointers before host wait/wake helpers:
+    platform_sync_validate_address`。
+  - GREEN：`platform.sync` 新增 `platform_sync_validate_address`，Linux futex、POSIX fallback 与 Windows
+    wait/wake wrapper 都先执行 public nil guard。
+- Verification:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - Focused full gate:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    全部通过，matrix 输出 `simulated-host-compile-matrix-status=pass`。
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`。
+    - `make -C core examples` 输出 `All examples compiled.`。
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+    - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把“wait-bucket 归 platform.sync”写成了可验证边界，同时没有把 public `PLATFORM_ERR_*`
+    下沉进 host ffi，也没有引入 feature-specific `platform.sync.ffi`。
+  - Windows wait/wake nil-address 现在和 Linux/fallback public contract 对齐；后续真实 Windows
+    runtime matrix 仍需单独补证，当前只能算 source/compile contract 和 Linux runtime proof。
 
 ## Session: 2026-05-27 (platform.sync POSIX error result host ownership)
 

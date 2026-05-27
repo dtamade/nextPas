@@ -476,6 +476,8 @@ begin
     'platform.sync must consume Windows wake-address-single helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_wake_address_all',
     'platform.sync must consume Windows wake-address-all helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'platform_sync_validate_address',
+    'platform.sync must validate public wait-address pointers before host wait/wake helpers');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_size',
     'platform.sync must consume host-owned pthread mutex storage size');
   CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_size',

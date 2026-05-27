@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync POSIX Error Result Host Ownership；上一轮包括
+当前最新本轮为 Platform Sync POSIX Wait-Bucket Policy Ownership；上一轮包括
+Platform Sync POSIX Error Result Host Ownership、
 Platform ABI Owner Audit And Gap Matrix、
 Platform Behavior Tests Abstract API Boundary；
 Platform Time Facade/Base/Host Shape Normalization；
@@ -41,6 +42,130 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync POSIX Wait-Bucket Policy Ownership
+
+### Goal
+
+把 `platform.sync` 的 address-wait fallback 策略从“代码里刚好存在”提升成明确、可验证的
+owner boundary：
+
+- `platform.sync` 是统一跨平台 wait/wake public contract owner。
+- Linux futex、Windows WaitOnAddress、pthread condvar/raw errno/clock 继续归各 host `.ffi` owner。
+- POSIX wait-bucket fallback 是 nextPas 的跨平台策略，不是 raw OS ABI，因此继续归
+  `platform.sync`，不下沉到 `platform.<host>.ffi`。
+- runtime behavior tests 只覆盖 `platform_wait_address32` / `platform_wake_address_*` public API，
+  不直接测试 raw futex/pthread/WaitOnAddress。
+
+### Architecture Decision
+
+- 不新增 `platform.sync.ffi`，也不新增 `platform.sync.posix.ffi`。
+- 不把 wait-bucket bucket count、waiter/generation policy、forced fallback selector 复制到 host ffi。
+- 可以对 `platform.sync` 内部 fallback 策略做小的自解释 helper 提取，但 host `.ffi` 仍只提供
+  raw ABI 和 caller-supplied result/helper。
+- Linux 默认继续走 futex；`NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 只作为 verification
+  selector，用 Linux 宿主验证 generic POSIX fallback public behavior。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] 从最新 `main@8936833` 开 `codex/platform-sync-wait-policy` isolated worktree
+- [x] 跑 focused baseline：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+- [x] RED：扩 `test_platform_sync_posix_surface`，冻结 wait-bucket policy owner 留在 `platform.sync`
+  而不是 host ffi
+- [x] RED：扩 `test_platform_sync`，补 address-wait nil address public API 覆盖
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 public wait/wake 入口统一地址校验
+- [x] GREEN：在 `platform.sync` 内提取 wait-bucket release predicate helper，并保持 public API 语义不变
+- [x] GREEN：在 `platform.sync` 增加 `platform_sync_validate_address`，让 Linux/fallback/Windows wait/wake
+  都先处理 nil address
+- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [x] 跑 full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+
+### Audit Checklist
+
+- [x] `platform.sync` 保留 `TPosixWaitBucket` / bucket count / generation / waiter policy
+- [x] host `.ffi` 不新增 wait-bucket policy token 或 feature-specific sync fallback ffi
+- [x] address-wait nil / mismatch / zero-timeout / timeout / wake-one / wake-all public behavior 有覆盖
+- [x] forced fallback gate 覆盖 Linux 宿主上的 generic POSIX fallback behavior
+- [x] 不新增 raw OS API runtime 单测
+
+### Implementation Notes
+
+- Baseline:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    第一版测试先失败在路径解析，修正 sibling path 后有效失败在
+    `platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi:
+    platform_posix_wait_address_released`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `platform.sync must validate public wait-address pointers before host wait/wake helpers:
+    platform_sync_validate_address`。
+- GREEN so far:
+  - `platform_posix_wait_address_released` 提取 generation/value mismatch release predicate。
+  - `platform_sync_validate_address` 统一 Linux futex、POSIX fallback、Windows wait/wake public nil guard。
+  - `test_platform_sync` 的 `Address wait` 用例现在覆盖 nil wait/wake public API。
+- Focused GREEN so far:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+- Focused full gate:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+- Full GREEN:
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不改变 `platform_wait_address32` / `platform_wake_address_*` public API 名称。
+- 不新增真实 macOS / FreeBSD / Android runtime evidence。
+- 不把 wait-bucket fallback 算法整体搬进 host ffi。
+- 不扩大到 L1 `nextpas.core.sync` 抽象设计。
 
 ## Addendum: 2026-05-27 Platform Behavior Tests Abstract API Boundary
 

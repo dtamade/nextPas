@@ -233,6 +233,15 @@
 - `platform.sync` 的 public opaque storage 现在也按 Linux/Android/macOS/FreeBSD/Windows/generic
   Unix 分支，至少在 public size/align surface 上不再把 FreeBSD pointer handle 或 macOS rwlock
   继续装进“通用 Unix 大数组”里。
+- `platform.sync` 的 POSIX wait-bucket fallback 是 nextPas 的跨平台 wait/wake policy，而不是
+  raw OS ABI；因此 `POSIX_WAIT_BUCKET_COUNT`、`TPosixWaitBucket`、waiter/generation 计数和
+  release predicate 应继续留在 `platform.sync`。host `.ffi` 继续只拥有 Linux futex、pthread condvar、
+  Windows WaitOnAddress 等宿主 helper 及 caller-supplied result projection，不能反向拥有
+  wait-bucket policy。
+- `platform_wait_address32` / `platform_wake_address_one` / `platform_wake_address_all` 的 nil
+  address 处理属于 `platform.sync` public contract。Linux futex 和 POSIX fallback 已有 guard；Windows
+  wrapper 也需要在调用 `windows_wait_address_i32_timeout_result` /
+  `windows_wake_address_*` 前统一返回 `PLATFORM_ERR_INVALID`，不能把 nil 直接交给 raw WinAPI helper。
 - `platform.sync` 的 size ownership 现在进一步收回到 FFI 类型本身：
   POSIX 分支直接取 `SizeOf(pthread_mutex_t)` / `SizeOf(pthread_rwlock_t)` /
   `SizeOf(pthread_cond_t)`，Windows 分支直接取 `SizeOf(SRWLOCK)` /
