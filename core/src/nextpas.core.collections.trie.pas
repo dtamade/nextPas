@@ -14,6 +14,7 @@ interface
 uses
   SysUtils,
   nextpas.core.collections.base,
+  nextpas.core.collections.trie.base,
   nextpas.core.collections.trie.intf;
 
 type
@@ -28,7 +29,7 @@ type
   private type
     PNode = ^TNode;
     TNode = record
-      Children: array[0..255] of PNode;
+      Children: array[0..TRIE_ALPHABET_LAST_INDEX] of PNode;
       HasValue: Boolean;
       Value: V;
     end;
@@ -138,7 +139,7 @@ var
   i: Integer;
 begin
   New(Result);
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     Result^.Children[i] := nil;
   Result^.HasValue := False;
 end;
@@ -154,7 +155,7 @@ var
 begin
   if aNode = nil then Exit;
 
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     if aNode^.Children[i] <> nil then
       FreeNodeRecursive(aNode^.Children[i]);
 
@@ -184,7 +185,7 @@ function TTrie.HasChildren(aNode: PNode): Boolean;
 var
   i: Integer;
 begin
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     if aNode^.Children[i] <> nil then
       Exit(True);
   Result := False;
@@ -199,12 +200,12 @@ begin
   if aNode^.HasValue then
   begin
     if aIndex >= Length(aKeys) then
-      SetLength(aKeys, Length(aKeys) + 16);
+      SetLength(aKeys, Length(aKeys) + TRIE_KEYS_GROWTH_STEP);
     aKeys[aIndex] := aPrefix;
     Inc(aIndex);
   end;
 
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     if aNode^.Children[i] <> nil then
       CollectKeys(aNode^.Children[i], aPrefix + Chr(i), aKeys, aIndex);
 end;
@@ -219,7 +220,7 @@ begin
   if aNode^.HasValue then
     Inc(Result);
 
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
     if aNode^.Children[i] <> nil then
       Inc(Result, CountKeysInSubtree(aNode^.Children[i]));
 end;
@@ -293,7 +294,7 @@ var
   i: Integer;
 begin
   // Free all children of root
-  for i := 0 to 255 do
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
   begin
     if FRoot^.Children[i] <> nil then
     begin

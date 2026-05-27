@@ -22,7 +22,8 @@ unit nextpas.core.collections.smallvec;
 interface
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.collections.smallvec.base;
 
 type
   {**
@@ -138,8 +139,8 @@ var
 begin
   // 计算新的堆容量（至少 N*2）
   LNewCapacity := N * 2;
-  if LNewCapacity < 16 then
-    LNewCapacity := 16;
+  if LNewCapacity < SMALLVEC_MIN_HEAP_CAPACITY then
+    LNewCapacity := SMALLVEC_MIN_HEAP_CAPACITY;
 
   // 分配堆空间
   SetLength(FHeap, LNewCapacity);
@@ -158,7 +159,7 @@ var
   LNewCapacity: SizeUInt;
 begin
   if FCapacity = 0 then
-    LNewCapacity := 16
+    LNewCapacity := SMALLVEC_MIN_HEAP_CAPACITY
   else
     LNewCapacity := FCapacity + FCapacity div 2; // 1.5x growth
 

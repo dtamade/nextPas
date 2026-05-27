@@ -61,6 +61,8 @@ uses
   nextpas.core.collections.algorithms,
   nextpas.core.collections.builder,
   nextpas.core.collections.node,
+  nextpas.core.collections.smallvec.base,
+  nextpas.core.collections.trie.base,
   // 容器接口/实现
   nextpas.core.collections.vec,
   nextpas.core.collections.smallvec,
@@ -147,6 +149,10 @@ const
   BITSET_DEFAULT_CAPACITY = nextpas.core.collections.bitset.base.BITSET_DEFAULT_CAPACITY;
   PRIORITYQUEUE_DEFAULT_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_DEFAULT_CAPACITY;
   PRIORITYQUEUE_MIN_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_MIN_CAPACITY;
+  SMALLVEC_MIN_HEAP_CAPACITY = nextpas.core.collections.smallvec.base.SMALLVEC_MIN_HEAP_CAPACITY;
+  TRIE_ALPHABET_SIZE = nextpas.core.collections.trie.base.TRIE_ALPHABET_SIZE;
+  TRIE_ALPHABET_LAST_INDEX = nextpas.core.collections.trie.base.TRIE_ALPHABET_LAST_INDEX;
+  TRIE_KEYS_GROWTH_STEP = nextpas.core.collections.trie.base.TRIE_KEYS_GROWTH_STEP;
 
 function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
 function FactorGrow(aFactor: Double): IGrowthStrategy;
