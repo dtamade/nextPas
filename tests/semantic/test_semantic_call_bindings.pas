@@ -2478,6 +2478,114 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceFunctionResultNoMatchingOverloadStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  HelperAPath: string;
+  HelperBPath: string;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-imported-function-result-no-matching-overload-' +
+    IntToStr(Random(MaxInt));
+  HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
+  HelperBPath := ProjectRoot + DirectorySeparator + 'helperb.pas';
+  RootSourceText :=
+    'program InstalledImportedFunctionResultNoMatchingOverloadCalls;' +
+    LineEnding +
+    'uses HelperA, HelperB;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(Flag);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    HelperAPath,
+    'unit HelperA;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+  WriteTextFile(
+    HelperBPath,
+    'unit HelperB;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: AnsiString);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: AnsiString);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledImportedFunctionResultNoMatchingOverloadCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('HelperA', HelperAPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('HelperB', HelperBPath, ruoInstalledSource, '', 'unit', 3)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-imported-function-result-no-matching-overload-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-imported-function-result-no-matching-overload-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-imported-function-result-no-matching-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-imported-function-result-no-matching-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedWrongArgumentCountDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -7768,6 +7876,7 @@ begin
     CheckImportedFunctionResultNoMatchingOverloadDiagnostic;
     CheckInstalledSourceAmbiguousOverloadStaysDeferred;
     CheckInstalledSourceNoMatchingOverloadStaysDeferred;
+    CheckInstalledSourceFunctionResultNoMatchingOverloadStaysDeferred;
     CheckImportedWrongArgumentCountDiagnostic;
     CheckInstalledSourceWrongArgumentCountStaysDeferred;
     CheckImportedCallTypeMismatchDiagnostic;

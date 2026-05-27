@@ -100,7 +100,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   ambiguity evidence。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
-  single-target arity miss、bare callable ambiguity、bare callable no-match、
+  single-target arity miss、bare callable ambiguity、
+  bare callable no-match（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned 零参
   内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
