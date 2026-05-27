@@ -23,3 +23,12 @@
 - A working public implementation such as `TreeMap`, `LinkedHashMap`, `VecDeque`, or `SkipList` should expose a matching public factory.
 - Default semantic factories are acceptable when useful, for example `MakeMap<K,V>` as the recommended default map. These must clearly document which concrete implementation they currently choose.
 - Do not add `IMap<K,V>`, `ISet<T>`, `IOrderedMap<K,V>`, or similar default semantic interface aliases at this stage. FPC generic alias and interface identity risks make this a poor fit for the current facade.
+
+## 2026-05-27: map-like method semantics
+
+- `TryGetValue(Key, out Value): Boolean` is the safe lookup form. It does not throw for a missing key and does not mutate the map.
+- `Get(Key): Value` should mean the key must exist; absence is an exceptional condition.
+- `Add(Key, Value): Boolean` inserts only when absent.
+- `AddOrAssign(Key, Value): Boolean` inserts or updates and reports whether a new key was inserted.
+- `Put(Key, Value)` writes without reporting whether it inserted or updated.
+- Current copied code may still have transitional aliases such as `Get(Key, out Value)` or `Put` returning `Boolean`; these should be reviewed during interface tuning rather than treated as the final shape.

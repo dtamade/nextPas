@@ -41,6 +41,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Every working public container implementation must expose a public `MakeXxx` factory. A public class without a factory is considered an incomplete public API.
 - Default semantic factories such as `MakeMap<K,V>` and `MakeSet<T>` are allowed, but their current implementation mapping must be explicitly documented in code comments and user-facing docs.
 - Do not add default semantic interface aliases such as `IMap<K,V>` or `ISet<T>` for now. Default semantics live at the factory layer; interfaces keep concrete semantic names such as `IHashMap<K,V>` and `ITreeMap<K,V>`.
+- Map-like APIs must not treat `Get`/`Put` as mere aliases for `TryGetValue`/`AddOrAssign`. `TryGetValue(Key, out Value)` is a non-throwing lookup, `Get(Key): Value` requires the key and throws on absence, `Put(Key, Value)` writes without reporting insert/update, and `AddOrAssign` reports whether it inserted or updated.
 
 ## Verification Commands
 
