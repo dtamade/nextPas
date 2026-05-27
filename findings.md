@@ -459,6 +459,16 @@
 - Batch 167 新增 `tests/fixtures/imported_known_field_member_call` 与
   `imported-known-field-member-call-check`，final envelope 新增
   `importedKnownFieldMemberCallCheck":"pass"`。
+- Batch 168 把 Batch 167 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct class field 即使在 class layout truth 中可见，也必须保持 deferred，不发
+  `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 168 focused RED 证明旧实现会误报
+  `sema.invalid-call-shape`；`MethodSymbolIdForClassTypeMember(...)` 现在只在当前 type owner 是
+  root source 或 imported `project-source` 时，才把 known non-method member 投影为
+  `invalid-call-shape`，`installed-source` 继续保守 deferred。
+- installed-source known field invalid-call-shape 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作
+  workspace project-source，不能证明 installed-source provenance。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

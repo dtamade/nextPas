@@ -1813,7 +1813,15 @@ begin
   begin
     if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
     begin
-      AResolutionFailureKind := 'invalid-call-shape';
+      if TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) and
+        (
+          SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or
+          ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId)
+        ) then
+        AResolutionFailureKind := 'invalid-call-shape';
       Exit;
     end;
 

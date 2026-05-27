@@ -417,6 +417,9 @@ candidate collection
   - 同一条 direct field 边界也适用于 receiver type 与 field truth 来自 imported `project-source`
     unit 的场景；例如 imported `TWorker.Value: Integer` 被 root source 写成 `Worker.Value(1)`
     时同样失败为 `sema.invalid-call-shape`
+  - receiver type 与 field truth 来自 imported `installed-source` unit 时继续保守 deferred，不把
+    incomplete helper/RTL class layout truth 提前投影成 ordinary `sema.invalid-call-shape`；这条
+    guard 用 `semantic-call-bindings-check` 的 focused harness 固定
   - 同一条边界同样适用于已知 class property 被当成 call 使用的场景；例如
     `Worker.Value(1)` 在 `Value` 是 property 时也会失败为 `sema.invalid-call-shape`
   - 当 member lookup 沿 `ParentTypeId` 命中 inherited field/property，且该 member 不是 callable 时，
