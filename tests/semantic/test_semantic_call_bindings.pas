@@ -1935,6 +1935,183 @@ begin
   end;
 end;
 
+procedure CheckImportedCallTypeMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  HelperPath: string;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-call-type-mismatch-' +
+    IntToStr(Random(MaxInt));
+  HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
+  RootSourceText :=
+    'program ImportedCallTypeMismatchCalls;' + LineEnding +
+    'uses Helper;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(True);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    HelperPath,
+    'unit Helper;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'ImportedCallTypeMismatchCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Helper', HelperPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-imported-call-type-mismatch-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.type-mismatch') then
+      Fail('unexpected-imported-call-type-mismatch-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-imported-call-type-mismatch-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('imported-call-type-mismatch-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-imported-call-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-imported-call-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-imported-call-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInstalledSourceCallTypeMismatchStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  HelperPath: string;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-imported-call-type-mismatch-' +
+    IntToStr(Random(MaxInt));
+  HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
+  RootSourceText :=
+    'program InstalledImportedCallTypeMismatchCalls;' + LineEnding +
+    'uses Helper;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(True);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    HelperPath,
+    'unit Helper;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledImportedCallTypeMismatchCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Helper', HelperPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-imported-call-type-mismatch-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-imported-call-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-imported-call-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-imported-call-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckBareNoMatchingOverloadDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -3057,6 +3234,8 @@ begin
     CheckBareTypedOverloadBindingTargets;
     CheckAmbiguousImportedBareOverloadDiagnostic;
     CheckImportedNoMatchingOverloadDiagnostic;
+    CheckImportedCallTypeMismatchDiagnostic;
+    CheckInstalledSourceCallTypeMismatchStaysDeferred;
     CheckBareNoMatchingOverloadDiagnostic;
     CheckBareWrongArgumentCountDiagnostic;
     CheckBareDefaultParameterCallBindings;

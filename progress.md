@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 107 member no matching overload diagnostics；Batch 106 imported no matching
+当前最新本轮为 Batch 108 imported single-target type mismatch diagnostics；Batch 107 member no matching
+overload diagnostics；Batch 106 imported no matching
 overload diagnostics、Batch 105 no matching overload diagnostics、Batch 104 function result call type
 mismatch evidence 已完成；并行收口包含
 platform.thread L0 surface coverage、platform.time L0 surface coverage 与 platform API boundary cleanup；
@@ -15,6 +16,40 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 108 imported single-target type mismatch diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 imported bare single-target 的稳定 signature mismatch 从错误 binding / silent deferred 推进到
+    `sema.type-mismatch`，同时保持 `installed-source` imported target 继续 deferred。
+- Baseline:
+  - Batch 79/80/81/104 已覆盖 root-owned bare/member single-target type mismatch 与稳定 evidence。
+  - imported bare call 当前在 `ImportedMatchCount = 1` 时会直接绑定 target，哪怕 signature 明确不兼容；
+    这既不能诚实报错，也会重演 imported helper/RTL surface 的误判风险。
+- Actions taken:
+  - 先写 focused RED：`uses Helper; Pick(True);`，其中 imported `project-source`
+    `Helper.Pick(Integer)` 是唯一 target 时，必须触发 `sema.type-mismatch`、semantic model status
+    `failure`，且不注册失败 call binding。
+  - 增加 focused guard：同样的 imported single-target mismatch 若 unit origin 是
+    `installed-source`，则继续 deferred，不发 diagnostics，也不注册错误 binding。
+  - `LookupCallBindingDeclaration(...)` 现在对 imported 单目标 mismatch 复用 root-owned 的
+    signature mismatch path；只有 owner unit 在 `TUnitGraph` 中标记为 `project-source` 时才发
+    `type-mismatch`，否则保守返回 deferred。
+  - 新增 `tests/fixtures/imported_type_mismatch_call`，并把
+    `imported-type-mismatch-call-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-imported-call-type-mismatch-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 imported `project-source` bare single-target mismatch；`installed-source` / RTL helper、
+    member imported mismatch、implicit conversion、default parameter ranking、var/out compatibility、
+    visibility checking 继续 deferred。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 107 member no matching overload diagnostics)
 

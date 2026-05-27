@@ -882,7 +882,8 @@ ambiguous imported callable overload 与 ambiguous member overload 断言
 `semantic-analysis-failed` + `sema.ambiguous-overload`，再对 root-owned no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported no matching overload 断言
 同一组 semantic failure / diagnostic projection，再对 direct member no matching overload 断言
-同一组 semantic failure / diagnostic projection，再对 wrong argument count 断言
+同一组 semantic failure / diagnostic projection，再对 imported project-source bare single-target
+type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
 同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言

@@ -42,6 +42,17 @@
 - Batch 104 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
+  root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
+  argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
+  `sema.type-mismatch`，且不注册失败 call binding。
+- Batch 108 同时固定 imported `installed-source` single-target mismatch 继续 deferred；它不会再错误
+  binding，也不会提前报 `sema.type-mismatch`。
+- Batch 108 新增 `imported-type-mismatch-call-check`，用 dedicated fixture 固定 stage0
+  `sema.type-mismatch` projection 与 final envelope `importedTypeMismatchCallCheck=pass`。
+- Batch 108 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败

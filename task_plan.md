@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 107 Member No Matching Overload Diagnostics；Batch 106 Imported No Matching
+当前最新本轮为 Batch 108 Imported Single-target Type Mismatch Diagnostics；Batch 107 Member No Matching
+Overload Diagnostics；Batch 106 Imported No Matching
 Overload Diagnostics、Batch 105 No Matching Overload Diagnostics、Batch 104 Function Result Call Type
 Mismatch Evidence 已完成；并行收口包含
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
@@ -26,6 +27,66 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 108 Imported Single-target Type Mismatch Diagnostics
+
+### Goal
+
+把 `sema.type-mismatch` 从 root-owned single-target bare/member call 推进到第一条 imported bare
+call 安全边界：当 root source 没有同名 callable，imported `project-source` unit 中只有一个同 arity
+target，当前 argument signature 来自稳定事实，且与 target param signature 明确不兼容时，发出
+`sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `uses Helper; Pick(True);`，其中 `Helper.Pick(Integer)` 是唯一 imported project-source target 时，
+  必须失败为 `sema.type-mismatch`，且失败调用不注册 `call` binding。
+- imported `installed-source` 单目标 mismatch 继续 deferred，不注册错误 binding，也不提前诊断。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 mismatch，避免把未知表达式、
+  implicit conversion、future imported resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-type-mismatch-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedTypeMismatchCallCheck`。
+
+### Architecture Decision
+
+这是 imported bare single-target mismatch 的第一条 source-owned 切片，不是完整 imported callable
+type system：
+
+- 只覆盖 imported `project-source` unit 的 bare callable 单目标。
+- imported `installed-source` / RTL/helper 继续 deferred，避免重演 `ExpandFileName` /
+  `FileExists` 那类过宽误报。
+- imported 多候选 no-match 仍由 `sema.no-matching-overload` 表达；member mismatch、implicit
+  conversion、default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 imported single-target `Pick(Integer)` 调 `Pick(True)` 的 focused regression
+- [x] RED：新增 imported `installed-source` single-target mismatch deferred guard
+- [x] 在 imported bare call lookup 中带出 `type-mismatch` failure kind，并禁止错误 binding
+- [x] 新增 `tests/fixtures/imported_type_mismatch_call` 与 `imported-type-mismatch-call-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` single-target mismatch 纳入 diagnostics
+- 不把 member-call imported mismatch 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 107 Member No Matching Overload Diagnostics
 

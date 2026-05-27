@@ -93,6 +93,9 @@ type
       out AResolutionFailureKind: string;
       out ABody: TGreenNode;
       out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
+    function ImportedUnitAllowsTypeMismatchDiagnostic(
+      const AOwnerUnitId: string
+    ): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
@@ -1078,7 +1081,23 @@ begin
   end;
 
   if ImportedMatchCount = 1 then
+  begin
+    if AHasArgSignature and
+      (not DeclParamSignatureMatchesArgs(
+        FProcedureBodies[ImportedMatchIndex].Decl,
+        AArgSignature,
+        AArgCount
+      )) then
+    begin
+      if AHasTypeMismatchEvidence and
+        ImportedUnitAllowsTypeMismatchDiagnostic(
+          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
+        ) then
+        AResolutionFailureKind := 'type-mismatch';
+      Exit(False);
+    end;
     ImportedSignatureMatchIndex := ImportedMatchIndex
+  end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
     AResolutionFailureKind := 'ambiguous-overload';
@@ -1095,6 +1114,20 @@ begin
   ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
   AOwnerUnitId := FProcedureBodies[ImportedSignatureMatchIndex].OwnerUnitId;
   Result := True;
+end;
+
+function TSemanticAnalyzer.ImportedUnitAllowsTypeMismatchDiagnostic(
+  const AOwnerUnitId: string
+): Boolean;
+var
+  ResolvedUnit: TResolvedUnit;
+begin
+  Result := False;
+  if Trim(AOwnerUnitId) = '' then
+    Exit;
+  if not FUnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
+    Exit;
+  Result := SameText(ResolvedUnit.OriginClass, 'project-source');
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
