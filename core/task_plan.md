@@ -37,6 +37,9 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Callback function types with identical signatures are accepted by FPC and are safe for facade re-export.
 - Public factory naming discussion currently favors `MakeXxx` only. Short factories such as `Vec<T>` and `Set_<T>` are rejected for now because the family cannot stay clean and consistent around Pascal keywords.
 - Users should eventually be able to use the public collections API from the facade without importing child `.intf` units, but current FPC behavior blocks direct generic interface visibility. This remains unresolved.
+- The collections public API is interface-first: public factories return public interfaces, while concrete classes remain available for implementation, expert, benchmark, and performance-sensitive usage.
+- Every working public container implementation must expose a public `MakeXxx` factory. A public class without a factory is considered an incomplete public API.
+- Default semantic factories such as `MakeMap<K,V>` and `MakeSet<T>` are allowed, but their current implementation mapping must be explicitly documented in code comments and user-facing docs.
 
 ## Verification Commands
 
