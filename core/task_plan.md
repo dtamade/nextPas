@@ -40,6 +40,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - The collections public API is interface-first: public factories return public interfaces, while concrete classes remain available for implementation, expert, benchmark, and performance-sensitive usage.
 - Every working public container implementation must expose a public `MakeXxx` factory. A public class without a factory is considered an incomplete public API.
 - Default semantic factories such as `MakeMap<K,V>` and `MakeSet<T>` are allowed, but their current implementation mapping must be explicitly documented in code comments and user-facing docs.
+- Do not add default semantic interface aliases such as `IMap<K,V>` or `ISet<T>` for now. Default semantics live at the factory layer; interfaces keep concrete semantic names such as `IHashMap<K,V>` and `ITreeMap<K,V>`.
 
 ## Verification Commands
 
