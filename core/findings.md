@@ -41,6 +41,14 @@
 - Spell unsafe fast-path method names with `Unchecked` as one word, not `UnChecked`. Current copied names such as `GetUnChecked`, `ReadUnChecked`, and `SortUnChecked` are transitional and should be renamed consistently during interface tuning.
 - Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other array-like indexed sequence containers. Keep `TryXxx` for operations where failure is normal domain behavior, such as map lookup or empty pop.
 
+## 2026-05-27: container algorithm API ergonomics
+
+- Rich container algorithm methods are not a design flaw by themselves. Complete container capabilities naturally create a larger public surface than minimal standard-library containers.
+- Do not move algorithms out of container APIs solely to make interfaces look smaller. Free-function algorithms would still need the same overload families and would make common use less direct.
+- Keep the three callback overload families for functions, methods, and anonymous references when they improve call-site ergonomics. Replacing them with option records would make ordinary Pascal usage heavier.
+- Future interface tuning should focus on semantic ownership, naming consistency, inheritance clarity, and removing true duplicates, not on flattening useful method-style APIs.
+- Implementation tuning should reuse shared algorithm cores where possible so rich interfaces do not imply repeated algorithm bodies in every container.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.
