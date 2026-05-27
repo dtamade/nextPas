@@ -75,6 +75,25 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+function CountTokenOccurrences(const ASource, AToken: string): Integer;
+var
+  LOffset: SizeInt;
+  LPosition: SizeInt;
+  LNeedle: string;
+begin
+  Result := 0;
+  LOffset := 1;
+  LNeedle := LowerCase(AToken);
+  while LOffset <= Length(ASource) do
+  begin
+    LPosition := Pos(LNeedle, Copy(ASource, LOffset, MaxInt));
+    if LPosition = 0 then
+      Exit;
+    Inc(Result);
+    Inc(LOffset, LPosition + Length(LNeedle) - 1);
+  end;
+end;
+
 procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel: string);
 begin
   CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
@@ -478,6 +497,12 @@ begin
     'platform.sync must consume Windows wake-address-all helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'platform_sync_validate_address',
     'platform.sync must validate public wait-address pointers before host wait/wake helpers');
+  CheckTokenPresent(LSyncSource, 'platform_sync_validate_wait_address',
+    'platform.sync must own public wait-address nil/mismatch validation before host wait helpers');
+  Check(CountTokenOccurrences(
+      LSyncSource,
+      'result := platform_sync_validate_wait_address(aaddr, aexpected);') >= 3,
+    'platform.sync must consume wait-address public precheck in Linux, POSIX fallback, and Windows wait paths');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_size',
     'platform.sync must consume host-owned pthread mutex storage size');
   CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_size',

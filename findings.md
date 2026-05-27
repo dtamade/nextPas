@@ -21,6 +21,11 @@
   `platform.<host>.ffi` 的跨平台统一 API contract，不是按 feature 切碎的 FFI owner。
   除非 feature 自身真的拥有独立 foreign ABI，否则不创建
   `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`。
+- Windows `WaitOnAddress` 的 raw success/timeout/last-error truth 属于 `windows.ffi`，但
+  `platform_wait_address32` 的 nil/mismatch/timeout/wake public result contract 属于
+  `platform.sync`。因此 Windows wait path 必须像 Linux futex 与 POSIX fallback 一样，在调用
+  host wait helper 前完成 nil/mismatch precheck；mismatch -> `PLATFORM_ERR_AGAIN` 不能下沉成
+  `windows.ffi` 的硬编码 public policy。
 - `*.intf.pas` 只给真实 Pascal `interface` contract。`platform.time` 当前只有过程/函数 API，
   不应保留 `nextpas.core.platform.time.intf.pas` 或 `IPlatformTimeSource`。
 - `ICollection` 与 `IGenericCollection<T>` 的真实 interface definition 已迁入

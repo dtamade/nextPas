@@ -164,6 +164,15 @@ begin
   Result := 0;
 end;
 
+function platform_sync_validate_wait_address(AAddr: PInt32; const AExpected: Int32): Int32; inline;
+begin
+  Result := platform_sync_validate_address(AAddr);
+  if Result <> 0 then
+    Exit;
+  if AAddr^ <> AExpected then
+    Result := PLATFORM_ERR_AGAIN;
+end;
+
 {$IFDEF NEXTPAS_UNIX}
 const
   POSIX_WAIT_BUCKET_COUNT = 64;
@@ -416,11 +425,9 @@ var
   LWaiting: Boolean;
   LDone: Boolean;
 begin
-  Result := platform_sync_validate_address(AAddr);
+  Result := platform_sync_validate_wait_address(AAddr, AExpected);
   if Result <> 0 then
     Exit;
-  if AAddr^ <> AExpected then
-    Exit(PLATFORM_ERR_AGAIN);
 
   Result := platform_posix_ensure_wait_buckets;
   if Result <> 0 then
@@ -563,7 +570,7 @@ end;
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 begin
-  Result := platform_sync_validate_address(AAddr);
+  Result := platform_sync_validate_wait_address(AAddr, AExpected);
   if Result <> 0 then
     Exit;
 
@@ -750,7 +757,7 @@ end;
 
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 begin
-  Result := platform_sync_validate_address(AAddr);
+  Result := platform_sync_validate_wait_address(AAddr, AExpected);
   if Result <> 0 then
     Exit;
 

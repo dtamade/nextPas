@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync POSIX Wait-Bucket Policy Ownership；上一轮包括
+当前最新本轮为 Platform Sync Windows Wait-Address Public Result Boundary；上一轮包括
+Platform Sync POSIX Wait-Bucket Policy Ownership、
 Platform Sync POSIX Error Result Host Ownership、
 Platform ABI Owner Audit And Gap Matrix、
 Platform Behavior Tests Abstract API Boundary；
@@ -42,6 +43,99 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Windows Wait-Address Public Result Boundary
+
+### Goal
+
+把 Windows `WaitOnAddress` helper 的 host-owned result projection 与 `platform_wait_address32`
+的 public contract 对齐，防止 Windows 路径把“当前值已经不等于 expected”的立即返回误报成成功：
+
+- `platform.sync` 继续拥有 public address-wait contract：nil -> `PLATFORM_ERR_INVALID`，
+  value mismatch -> `PLATFORM_ERR_AGAIN`，匹配但超时 -> `PLATFORM_ERR_TIMEOUT`，被唤醒 -> `0`。
+- `windows.ffi` 继续拥有 raw `WaitOnAddress`、`GetLastError`、timeout ms conversion 与
+  caller-supplied timeout-result helper。
+- 不把 `PLATFORM_ERR_AGAIN` public policy 下沉到 `windows.ffi`，也不新增 `platform.sync.ffi`。
+- Linux/POSIX/Windows wait path 都应在进入 host wait helper 前完成 public nil/mismatch validation。
+
+### Architecture Decision
+
+- 新增或收紧 `platform.sync` 内部 wait-address public precheck helper，让所有 wait path 复用同一条
+  nil/mismatch 判定。
+- wake-one/wake-all 仍只需要 nil address validation；它们不检查 expected value。
+- 测试边界仍遵守既定规则：Linux runtime 行为测试覆盖抽象 API，Windows 路径通过 source-surface
+  gate 和 Win64 compile-only gate 固化，不能把 raw WinAPI 当成 Linux 主机上的 runtime oracle。
+
+### Status
+
+Completed; branch verification passed in `codex/platform-sync-windows-wait-result` from `main@6818cd9`.
+
+### Planned Steps
+
+- [x] 从最新 `main@6818cd9` 开 `codex/platform-sync-windows-wait-result` isolated worktree
+- [x] 跑 focused baseline：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 Windows wait-address branch 先消费
+  `platform_sync_validate_wait_address` 再调用 `windows_wait_address_i32_timeout_result`
+- [x] GREEN：在 `platform.sync` 提取 wait-address nil/mismatch public precheck，并让 Linux、
+  POSIX fallback 与 Windows wait path 统一消费
+- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [x] 跑 full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+
+### Audit Checklist
+
+- [x] Windows `platform_wait_address32` mismatch 不再可能绕过 public `PLATFORM_ERR_AGAIN`
+- [x] Linux futex path 不再依赖 host syscall 才得到 mismatch result
+- [x] POSIX fallback 继续保持同一 public mismatch behavior
+- [x] host `.ffi` 不硬编码 nextPas public `PLATFORM_ERR_AGAIN`
+- [x] 不新增 raw OS API runtime 单测
+
+### Implementation Notes
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `platform.sync must own public wait-address nil/mismatch validation before host wait helpers:
+    platform_sync_validate_wait_address`。
+- GREEN:
+  - `platform.sync` 新增 `platform_sync_validate_wait_address`，复用
+    `platform_sync_validate_address`，再统一处理 `AAddr^ <> AExpected` -> `PLATFORM_ERR_AGAIN`。
+  - Linux futex path、POSIX fallback path、Windows wait-address path 都在进入 host wait helper 前消费
+    `platform_sync_validate_wait_address`。
+  - `windows.ffi` 未新增 public result 常量或 feature-specific FFI 单元。
+- Focused GREEN so far:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+- Final branch verification:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
 
 ## Addendum: 2026-05-27 Platform Sync POSIX Wait-Bucket Policy Ownership
 

@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync POSIX wait-bucket policy ownership；上一轮包括
+当前最新本轮为 platform.sync Windows wait-address public result boundary；上一轮包括
+platform.sync POSIX wait-bucket policy ownership；
 platform.sync POSIX error result host ownership；
 platform thread POSIX state ownerization；
 platform behavior tests abstract API boundary；
@@ -31,6 +32,66 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
+
+- **Status:** completed; branch verification passed in isolated worktree
+- Objective:
+  - 继续按 `/plan` 推进 platform owner audit，这轮收紧 Windows `WaitOnAddress` result boundary：
+    host ffi 继续拥有 raw API/timeout/last-error truth，`platform.sync` 继续拥有 public
+    nil/mismatch/timeout/wake contract。
+- Baseline:
+  - Worktree: `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-windows-wait-result`
+    on `codex/platform-sync-windows-wait-result` from `main@6818cd9`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+- Audit:
+  - Linux futex 与 POSIX fallback 已经表现出 mismatch -> `PLATFORM_ERR_AGAIN` 的 public API
+    行为；Windows `WaitOnAddress` helper 当前只把 timeout 映射为 caller-supplied timeout result。
+  - Windows API 在 value mismatch 场景可能立即返回 true；如果 `platform.sync` 不在调用 host
+    wait helper 前做 public mismatch precheck，Windows 路径会把 mismatch 错投影为 success。
+  - 因为 `PLATFORM_ERR_AGAIN` 属于 `platform.sync` public contract，不应下沉进 `windows.ffi`。
+    正确边界是在 `platform.sync` 提取 wait-address public precheck；`windows.ffi` 继续只拥有
+    host wait/timeout result helper。
+- Actions taken:
+  - RED：扩 `test_platform_sync_host_ffi_surface`，要求 `platform.sync` 暴露并消费
+    `platform_sync_validate_wait_address`，且 Linux/POSIX fallback/Windows wait path 都在 host wait
+    helper 前复用这层 public precheck。初始失败在
+    `platform.sync must own public wait-address nil/mismatch validation before host wait helpers:
+    platform_sync_validate_wait_address`。
+  - GREEN：`platform.sync` 新增 `platform_sync_validate_wait_address`，统一 nil -> invalid、
+    mismatch -> again；Linux futex、POSIX fallback、Windows `WaitOnAddress` path 都改为先走该 helper。
+  - `core/docs/design-conventions.md` 写入该 owner boundary：mismatch 归 `platform.sync` public
+    contract，timeout/last-error/raw wait success 归 host ffi helper 投影。
+- Focused verification so far:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+- Final branch verification:
+  - focused gates:
+    `test_platform_sync_host_ffi_surface` 1/1 pass，
+    `test_platform_sync` 14/14 pass，
+    `test_platform_sync_posix_fallback` 14/14 pass，
+    `test_platform_sync_no_fpc_units` 1/1 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass，
+    `test_platform_simulated_host_compile_matrix` pass。
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 这轮把 `platform_wait_address32` 的 nil/mismatch public precheck 固定在
+    `platform.sync`，避免 Windows `WaitOnAddress` 的 raw success 语义把 mismatch 投影成 success。
+  - host `.ffi` 继续只处理 raw ABI、timeout 与 last-error，不承载 nextPas public
+    `PLATFORM_ERR_AGAIN` 策略。
 
 ## Session: 2026-05-27 (platform.sync POSIX wait-bucket policy ownership)
 
