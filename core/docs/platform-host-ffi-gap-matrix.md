@@ -9,6 +9,12 @@ proof. Runtime behavior tests cover the unified public contracts in
 FPC source evidence, host-owned declarations, source-surface checks, and
 compile-only gates.
 
+The source evidence route for those declarations is tracked in
+`docs/platform-ffi-source-evidence-index.md`. Keep that index, this gap matrix,
+and the official verification routes synchronized: FPC source evidence explains
+where ABI truth comes from; this matrix records what nextPas currently owns and
+which gaps are still deliberate.
+
 ## Host Base/FFI Ownership Matrix
 
 Host `base` units own ABI constants, record shapes, opaque carriers, scalar

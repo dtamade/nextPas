@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform host gap route guard；上一轮包括
+当前最新本轮为 platform ffi source evidence index；上一轮包括
+platform host gap route guard；
 platform host ffi gap matrix guard；
 platform facade info boundary；
 platform.sync base extraction；
@@ -37,6 +38,75 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform ffi source evidence index)
+
+- **Status:** full verification passed; commit/integration pending
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块；本轮建立 host `base/ffi` 声明的 source evidence index。
+  - 目标是把“参考 FPC 源码搬入 nextPas-owned FFI/base”的依据链条做成正式文档和 official
+    source-surface gate，防止以后只剩口头规则。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` 当前在 `main@2217d7a`，有 unrelated collections WIP：
+    `core/src/nextpas.core.collections.element_manager.intf.pas`、
+    `core/src/nextpas.core.collections.element_manager.base.pas`；本轮不触碰。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-source-evidence-index`
+    on `codex/platform-ffi-source-evidence-index` from `main@2217d7a`。
+- Current plan:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/`，先用缺失
+    `core/docs/platform-ffi-source-evidence-index.md` 和 missing verify route 制造 RED。
+  - 新增 `core/docs/platform-ffi-source-evidence-index.md`，记录 Linux、Android、Darwin、FreeBSD、
+    generic Unix、Windows 的 FPC source evidence family、host owner 与证据边界。
+  - 更新 `core/docs/design-conventions.md` 与 `core/docs/platform-host-ffi-gap-matrix.md`，把 evidence
+    index、gap matrix 与 official gate 串起来。
+  - 接入 `build/verify_local.sh` required path、focused check 与 final envelope。
+- Boundary:
+  - 本轮不扩 public API，不新增 feature-specific `platform.time.ffi` / `platform.sync.ffi` /
+    `platform.thread.ffi`。
+  - 本轮不对 raw `clock_gettime`、`pthread_*`、`futex`、Windows kernel32 API 做 runtime 单测；
+    runtime tests 仍只覆盖统一 public contract。
+- Notes:
+  - `/home/dtamade/projects/fpdev/sources/fpc/fpc-main` 是空目录壳；不能作为本轮 evidence path。
+  - 找到可用 FPC source checkout `/home/dtamade/projects/fpc`，后续文档使用 source family 和 unit
+    names，不把用户机器上的本地绝对路径写进规范。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
+    初始失败在缺失 `core/docs/platform-ffi-source-evidence-index.md` 和 design conventions route token：
+    `2 total, 0 passed, 2 failed`。
+- GREEN actions:
+  - 新增 `core/docs/platform-ffi-source-evidence-index.md`，按 Linux / Android / Darwin / FreeBSD /
+    generic Unix / Windows 记录 FPC source family、OS SDK/header 补证、nextPas host owner 和证据边界。
+  - `core/docs/design-conventions.md` 增加 evidence index official route：
+    `core-platform-ffi-source-evidence-index-check` /
+    `corePlatformFfiSourceEvidenceIndexCheck`。
+  - `core/docs/platform-host-ffi-gap-matrix.md` 指向 evidence index，明确 source evidence 与 runtime
+    proof 分离。
+  - `build/verify_local.sh` 已接入 evidence index required path、focused gate、cleanup 和 final envelope。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`:
+    `1 total, 1 passed, 0 failed`。
+  - `bash -n build/verify_local.sh`: pass。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformFfiSourceEvidenceIndexCheck":"pass"`。
+  - `git diff --check`: pass。
+- Review:
+  - 本轮建立的是 platform host ABI source evidence 审计入口，不是新 public API。
+  - 文档和 gate 明确 FPC source 是 reference authority，而不是 production dependency；platform 生产代码
+    仍禁止 `uses Linux`、`UnixType`、`BaseUnix`、`PThreads`、`Syscall`、`Windows` 等 FPC 平台单元。
+  - raw OS API 继续不进入 runtime 单测；测试覆盖 unified public contracts，raw ABI 通过 source evidence、
+    source-surface gate 和 compile-only gate 守住。
 
 ## Session: 2026-05-27 (platform host gap route guard)
 

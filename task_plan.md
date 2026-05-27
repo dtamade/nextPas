@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host Gap Route Guard；上一轮包括
+当前最新本轮为 Platform FFI Source Evidence Index；上一轮包括
+Platform Host Gap Route Guard；
 Platform Host FFI Gap Matrix Guard；
 Platform Facade Info Boundary；
 Platform Sync Base Extraction；
@@ -48,6 +49,67 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform FFI Source Evidence Index
+
+### Goal
+
+把 platform host `base/ffi` 声明的“依据来自哪里”做成可审计、可验证、可追溯的 evidence index：
+
+- 新增 `core/docs/platform-ffi-source-evidence-index.md`，记录 Linux、Android、Darwin、FreeBSD、
+  generic Unix 与 Windows 当前 ABI 声明的 FPC source evidence family 与证据边界。
+- 新增 `test_platform_ffi_source_evidence_index` source-surface gate，检查 evidence index 覆盖
+  clock/time、errno、pthread/thread/TLS、CPU count、Linux futex 与 Windows kernel32/SRW/QPC/FILETIME。
+- 接入 `build/verify_local.sh` required path、focused route 与 final envelope：
+  `core-platform-ffi-source-evidence-index-check` /
+  `corePlatformFfiSourceEvidenceIndexCheck`。
+- 不测试 raw OS API，不扩 `platform.time` / `platform.sync` / `platform.thread` public API。
+
+### Architecture Decision
+
+- FPC source/platform units 是 reference authority，不是 production dependency。nextPas-owned
+  `platform.<host>.base` / `platform.<host>.ffi` 承载 ABI truth，production platform 代码继续禁止
+  `uses Linux`、`UnixType`、`BaseUnix`、`PThreads`、`Syscall`、`Windows` 等 FPC 平台单元。
+- Evidence index 是 host ABI 声明的审计入口；host gap matrix 是覆盖/缺口事实源；
+  `design-conventions.md` 是规则入口；`build/verify_local.sh` 是 official local route。
+- raw 系统 API 的 runtime 正确性不由 nextPas 单元测试证明；统一 public contract 的 runtime 测试继续
+  只覆盖 `platform.time` / `platform.sync` / `platform.thread` 抽象层。
+
+### Status
+
+Full verification passed on isolated worktree; commit and integration pending:
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-source-evidence-index`
+from `main@2217d7a`. 主 checkout 有 unrelated collections WIP，本轮不触碰。
+
+### Planned Steps
+
+- [x] 刷新 main/worktree 状态并确认 unrelated collections WIP 不纳入本轮
+- [x] 从 `main@2217d7a` 创建 `codex/platform-ffi-source-evidence-index` isolated worktree
+- [x] 查证本机 FPC source 位置与可引用 source family，不写死不可验证的空目录
+- [x] RED：新增 `test_platform_ffi_source_evidence_index`，要求 evidence index doc 与 official route token
+- [x] GREEN：新增 evidence index 文档，更新 `design-conventions.md` 与 `platform-host-ffi-gap-matrix.md` 交叉入口
+- [x] GREEN：接入 `build/verify_local.sh` required path、focused gate、final envelope
+- [x] focused verification：
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+- [x] full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+  - `git diff --check`
+- [ ] commit、整合最新 main、择优合并回 main、post-merge verification、清理 worktree/branch
+
+### Audit Checklist
+
+- [x] evidence index 明确 FPC source 是参考依据而非 production dependency
+- [x] Linux / Android / Darwin / FreeBSD / generic Unix / Windows 都有 host evidence entries
+- [x] clock/time、errno、pthread/thread/TLS、CPU count、Linux futex、Windows kernel32/SRW/QPC/FILETIME 都有覆盖
+- [x] design conventions 索引 evidence index 与 official route token
+- [x] verify_local final envelope 包含 `corePlatformFfiSourceEvidenceIndexCheck`
+- [x] 不新增 `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`
 
 ## Addendum: 2026-05-27 Platform Host Gap Route Guard
 

@@ -26,6 +26,13 @@
   `test_platform_host_gap_matrix` 与 `build/verify_local.sh` 的
   `corePlatformHostGapMatrixCheck` 只证明 source-surface 同步，不把 Win64/simulated host 编译证据
   包装成跨宿主 runtime proof。
+- `core/docs/platform-ffi-source-evidence-index.md` 将作为 host ABI 声明的 evidence index：它记录
+  每类声明参考的 FPC source family / unit names、nextPas host owner 与证据边界。该文档不替代
+  host gap matrix；gap matrix 说明当前覆盖和缺口，evidence index 说明这些声明应回到哪里取证。
+- 本机 `/home/dtamade/projects/fpdev/sources/fpc/fpc-main` 是空目录壳，不能写进 evidence index 作为
+  可验证依据；可用 FPC source checkout 位于 `/home/dtamade/projects/fpc`，但项目文档应记录
+  `rtl/linux`、`rtl/unix`、`rtl/darwin`、`rtl/freebsd`、`rtl/win32`、`rtl/win64`、
+  `packages/winunits-base` 这类 source family 和 unit names，而不是绑定用户机器绝对路径。
 - `docs/design-conventions.md`、`docs/platform-host-ffi-gap-matrix.md` 与 `build/verify_local.sh`
   应形成 route-truth 闭环：设计规范是规则入口，gap matrix 是 host ABI 覆盖事实源，
   `core-platform-host-gap-matrix-check` / `corePlatformHostGapMatrixCheck` 是 official local
@@ -1973,6 +1980,11 @@
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。
+- `platform-ffi-source-evidence-index` 已进入 official verification surface：fresh focused gate
+  `test_platform_ffi_source_evidence_index` 通过 2/2，fresh `make -C core test`、`make -C core examples`、
+  `make -C core benchmarks` 与 fresh `bash build/verify_local.sh` 均通过；final envelope 包含
+  `corePlatformFfiSourceEvidenceIndexCheck":"pass"`，并输出 `verify-local=pass` /
+  `human-summary=local verification passed`。
 
 ## 2026-05-27 Follow-up Findings 20
 
