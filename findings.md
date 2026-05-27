@@ -21,6 +21,11 @@
   `platform.<host>.ffi` 的跨平台统一 API contract，不是按 feature 切碎的 FFI owner。
   除非 feature 自身真的拥有独立 foreign ABI，否则不创建
   `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`。
+- `core/docs/platform-host-ffi-gap-matrix.md` 现在是 Linux / Android / Darwin / FreeBSD /
+  generic Unix / Windows host ABI 覆盖面和已知缺口的文档事实源；配套
+  `test_platform_host_gap_matrix` 与 `build/verify_local.sh` 的
+  `corePlatformHostGapMatrixCheck` 只证明 source-surface 同步，不把 Win64/simulated host 编译证据
+  包装成跨宿主 runtime proof。
 - `platform.thread` 的 public carrier types 也应遵循 base owner：`TPlatformThreadHandle`、
   `TPlatformThreadToken`、`TPlatformThreadProc`、`TPlatformTLSKey` 归
   `nextpas.core.platform.thread.base`，`nextpas.core.platform.thread` 只 re-export 并实现统一
@@ -2034,3 +2039,21 @@
   `human-summary=local verification passed`。
 - 证据边界保持不变：Linux thread behavior 是真实 runtime proof；Win64、Darwin、Android、FreeBSD
   和 generic Unix 仍主要是 source-surface / compile-only proof，不能宣称新增真实 runtime 覆盖。
+
+## 2026-05-27 Follow-up Findings 24
+
+- 当前 platform host base/ffi 已经比较丰富，但缺少一份“覆盖面与已知缺口”的正式矩阵；没有这份矩阵，
+  后续继续从 FPC 源码搬 ABI 时容易重复争论哪些 token 属于 host base、哪些 helper 属于 host ffi，
+  以及哪些 unsupported 是刻意决策。
+- 这轮正确切片不是继续扩 `platform.time` / `platform.sync` / `platform.thread` public API，而是新增
+  `platform-host-ffi-gap-matrix` 文档和 source-surface guard，把 Linux / Android / Darwin /
+  FreeBSD / generic Unix / Windows 的 host rows、domain coverage 与 known gaps 冻结下来。
+- 当前需要明确记录的已知差异包括：
+  Darwin `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`、Darwin
+  `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`、generic Unix native thread id fallback 到
+  `platform_posix_thread_self_token_u64`、generic Unix `_SC_NPROCESSORS_ONLN = -1`、generic Unix
+  mutex timedlock unsupported，以及 Windows 完全走 kernel32 / SRW / CONDITION_VARIABLE /
+  QPC / FILETIME / WaitOnAddress 路径而不是 POSIX。
+- 这个 guard 的证据边界必须诚实：它证明 source ownership、文档同步和 compile-surface 可回归，
+  不等价于真实 macOS / Android / FreeBSD / Windows runtime proof；raw 系统 API 本身仍不进入
+  nextPas runtime 单元测试。

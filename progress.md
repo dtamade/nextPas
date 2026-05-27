@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform facade info boundary；上一轮包括
+当前最新本轮为 platform host ffi gap matrix guard；上一轮包括
+platform facade info boundary；
 platform.sync base extraction；
 platform.thread base extraction；
 platform.sync Windows wait-address public result boundary；
@@ -35,6 +36,74 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform host ffi gap matrix guard)
+
+- **Status:** implementation verified in isolated worktree; commit and integration pending
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块，但本轮不扩 public API，而是建立
+    Platform Host FFI Gap Matrix Guard。
+  - 目标是让 Linux / Android / Darwin / FreeBSD / generic Unix / Windows 的 host base/ffi
+    覆盖面和已知缺口有正式文档与 official source-surface gate。
+- Baseline / worktree:
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-matrix`
+    on `codex/platform-host-gap-matrix`。
+  - 主 checkout `/home/dtamade/projects/nextPas` 实时状态为 `main@d987e80` 且干净。
+  - 当前 worktree 起点是 `main@cda52dd`，主线已推进到 `main@d987e80`；合并前必须整合最新 main。
+- Baseline focused gates:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`: pass。
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`: pass。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`: pass。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`: pass。
+- Current plan:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_host_gap_matrix/`，先用缺失文档制造 RED。
+  - 新增 `core/docs/platform-host-ffi-gap-matrix.md`，记录 host/domain/gap matrix。
+  - source-surface guard 检查 host rows、domain tokens、known gap tokens，以及禁止
+    `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`。
+  - 接入 `build/verify_local.sh` required path、focused gate 与 final envelope。
+- Boundary:
+  - 这轮只做 docs + source-surface gate，不测试 raw `clock_gettime` / `pthread_*` / `futex` /
+    Windows kernel32 API。
+  - 行为单测继续只覆盖 `platform.time` / `platform.sync` / `platform.thread` public contract。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+    初始失败在
+    `platform host ffi gap matrix doc must exist: ../../../docs/platform-host-ffi-gap-matrix.md`。
+  - 同一轮 RED 中源码 token 检查和 feature-specific FFI 禁止检查已通过，说明失败边界集中在缺失文档，
+    不是测试拼写或路径错误。
+- GREEN:
+  - 新增 `core/docs/platform-host-ffi-gap-matrix.md`，记录 Linux / Android / Darwin / FreeBSD /
+    generic Unix / Windows 的 host base/ffi ownership matrix、known gaps 与 verification boundary。
+  - `core/docs/design-conventions.md` 增加矩阵入口，说明它是 source-surface guard 的文档事实源，
+    不是跨宿主 runtime proof。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+    输出 `3 total, 3 passed, 0 failed`。
+- Official gate integration:
+  - `build/verify_local.sh` 已接入 `CORE_PLATFORM_HOST_GAP_MATRIX_*` 输出和构建目录、cleanup、
+    required path、focused execution block，以及 final JSON envelope 的
+    `corePlatformHostGapMatrixCheck`。
+  - `bash -n build/verify_local.sh` 通过。
+- Focused GREEN after integration:
+  - `test_platform_host_gap_matrix`: `3 total, 3 passed, 0 failed`。
+  - `test_platform_ffi_partition_surface`: `1 total, 1 passed, 0 failed`。
+  - `test_platform_posix_ffi_surface`: `1 total, 1 passed, 0 failed`。
+  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
+  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、`human-summary=local verification passed`；
+    final envelope 包含 `corePlatformHostGapMatrixCheck":"pass"`。
+  - `git diff --check`: pass。
+- Review:
+  - 这轮没有扩展 `platform.time` / `platform.sync` / `platform.thread` public API，也没有把 raw OS API
+    放进 runtime 单测；新增的是 host FFI 覆盖矩阵和 source-surface 回归门。
+  - 证据边界已经在文档和测试里明确：Linux 是 runtime proof，Win64/simulated hosts 是 compile-only，
+    source-surface gate 负责防止 host ABI owner 与 feature unified contract 再次漂移。
+- Next:
+  - 提交当前分支，整合最新 `main@d987e80`，重跑 post-integration focused gates 后择优合并回 main。
 
 ## Session: 2026-05-27 (platform.thread base extraction)
 
