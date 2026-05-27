@@ -35,6 +35,27 @@ function linux_statx_path_basic(
 function linux_statx_fd_basic(
   const AFileDescriptor: TPlatformFileDescriptor;
   out ABuffer: TPlatformLinuxStatx): Int32; inline;
+function linux_xstat(
+  const AVersion: Int32;
+  const AFileName: PAnsiChar;
+  var AStat: TPlatformLinuxStat): Int32; cdecl; external 'c' name '__xstat';
+function linux_lxstat(
+  const AVersion: Int32;
+  const AFileName: PAnsiChar;
+  var AStat: TPlatformLinuxStat): Int32; cdecl; external 'c' name '__lxstat';
+function linux_fxstat(
+  const AVersion: Int32;
+  const AFileDescriptor: Int32;
+  var AStat: TPlatformLinuxStat): Int32; cdecl; external 'c' name '__fxstat';
+function linux_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
+function linux_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
+function linux_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -469,6 +490,30 @@ begin
     UInt32(PLATFORM_LINUX_AT_EMPTY_PATH),
     PLATFORM_LINUX_STATX_BASIC_STATS,
     ABuffer);
+end;
+
+function linux_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := linux_xstat(PLATFORM_LINUX_STAT_VERSION, APath, ABuffer);
+end;
+
+function linux_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := linux_lxstat(PLATFORM_LINUX_STAT_VERSION, APath, ABuffer);
+end;
+
+function linux_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformLinuxStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := linux_fxstat(PLATFORM_LINUX_STAT_VERSION, Int32(AFileDescriptor), ABuffer);
 end;
 
 function platform_thread_self_token_u64: UInt64; inline;

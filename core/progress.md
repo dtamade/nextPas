@@ -2,6 +2,92 @@
 
 ## 2026-05-28
 
+- Started Wave 9 from `main@524b27c` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
+  on branch `codex/platform-host-abi-wave9-posix-stat`.
+- Current goal tree anchors are `G3` core/runtime/framework, `G7` FPC
+  compatibility and ecosystem migration, and `G0` quality discipline.
+- `planning-with-files` catchup reported stale unrelated mem/collections context
+  from an older interrupted session; current `git status` is clean, and the live
+  platform plan/progress/findings are authoritative for this worktree.
+- Confirmed remaining active sibling worktrees are `collections-refactor` and
+  `sema-no-matching-overload`; Wave 9 remains isolated.
+- Baseline focused platform gate passed:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`
+  reported `5 total, 5 passed, 0 failed`.
+- Selected Wave 9 from the explicit gap matrix marker: traditional POSIX
+  `stat` / `fstat` / `lstat` was deferred in Wave 3 because layouts and suffix
+  policy are host-specific. Wave 9 promotes only the Linux traditional stat
+  raw ABI into Linux host owners.
+- FPC evidence found for Wave 9:
+  - `rtl/linux/ostypes.inc` defines `_STAT_VER` policy. For the current nextPas
+    Linux CPU set, x86_64 uses `_STAT_VER_LINUX = 1`; aarch64 uses
+    `_STAT_VER_LINUX = 0`.
+  - `rtl/linux/x86_64/stat.inc` defines the x86_64 Linux `stat` record used by
+    FPC.
+  - `rtl/linux/aarch64/stat.inc` defines the aarch64 Linux `stat` record used by
+    FPC.
+  - `rtl/linux/osmacro.inc` declares `__xstat`, `__lxstat`, and `__fxstat`, then
+    routes `FpStat`, `FpLstat`, and `FpFstat` through those libc wrappers with
+    `_STAT_VER`.
+  - `rtl/unix/oscdeclh.inc` records why this must remain host-owned: Linux has
+    macro wrappers, while non-Linux Unix hosts use symbol suffix handling such
+    as Darwin `$INODE64`.
+- Updated `task_plan.md` active scope from closed Wave 8 to Wave 9 Linux
+  traditional stat raw ABI.
+- Added Wave 9 source-surface guard in
+  `core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/`.
+  The guard checks Linux host ownership tokens, shared POSIX stat absence,
+  documentation evidence, `verify_local` route truth, absence of
+  `platform.file` / `platform.file.ffi`, and absence of Wave 9 raw stat
+  consumption from `platform.time`, `platform.sync`, and `platform.thread`.
+- Imported Linux traditional stat raw ABI into Linux host owners:
+  - `linux.base` now owns `TPlatformLinuxStat`, `PPlatformLinuxStat`, and
+    CPU-specific `PLATFORM_LINUX_STAT_VERSION`.
+  - `linux.ffi` now owns raw libc wrapper declarations `linux_xstat`,
+    `linux_lxstat`, and `linux_fxstat`.
+  - `linux.ffi` also exposes thin Linux-prefixed helpers `linux_stat_path`,
+    `linux_lstat_path`, and `linux_fstat_fd`.
+- Kept shared `posix.base` / `posix.ffi` free of generic POSIX stat record and
+  generic `stat` / `lstat` / `fstat` bindings.
+- Kept Wave 9 out of public `platform.file` / `platform.file.ffi`; this is raw
+  host ABI inventory only, not a unified file contract.
+- Updated `docs/platform-ffi-source-evidence-index.md`,
+  `docs/platform-host-ffi-gap-matrix.md`, and `build/verify_local.sh` with Wave
+  9 source evidence and route truth. The gap matrix now has a separate
+  `File / status ABI` column so stat/file status inventory does not get mixed
+  into timeout capability.
+- Reconfirmed the raw ABI correctness boundary after user review:
+  FPC source is the authority for copied platform API definitions. nextPas raw
+  ABI wave checks should not runtime-prove FPC constants, record layouts, or
+  libc/syscall declarations; they guard owner placement, docs, route truth,
+  absence of feature-specific FFI units, no FPC platform-unit dependencies, and
+  compile coherence.
+- Focused Wave 9 verification passed:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`:
+    `5 total, 5 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin / Android / FreeBSD / generic Unix simulated compile passed.
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`:
+    `8 total, 8 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`:
+    `14 total, 14 passed, 0 failed`.
+- Full Wave 9 verification passed in the isolated worktree:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave9LinuxStatCheck`.
+
 - Started Wave 8 from latest `main@ac4a6fe` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`
   on branch `codex/platform-host-abi-wave8-file-io`.

@@ -29,6 +29,53 @@ type
 
   TPlatformProcessId = pid_t;
 
+  {$IFDEF NEXTPAS_AARCH64}
+  TPlatformLinuxStat = record
+    st_dev: UInt64;
+    st_ino: UInt64;
+    st_mode: UInt32;
+    st_nlink: UInt32;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    st_rdev: UInt64;
+    __pad1a: UInt64;
+    st_size: Int64;
+    st_blksize: Int32;
+    __pad2a: Int32;
+    st_blocks: Int64;
+    st_atime: Int64;
+    st_atime_nsec: UInt64;
+    st_mtime: Int64;
+    st_mtime_nsec: UInt64;
+    st_ctime: Int64;
+    st_ctime_nsec: UInt64;
+    __unused4a: UInt32;
+    __unused5a: UInt32;
+  end;
+  {$ELSE}
+  TPlatformLinuxStat = record
+    st_dev: UInt64;
+    st_ino: UInt64;
+    st_nlink: UInt64;
+    st_mode: UInt32;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    __pad1: UInt32;
+    st_rdev: UInt64;
+    st_size: Int64;
+    st_blksize: Int64;
+    st_blocks: Int64;
+    st_atime: UInt64;
+    st_atime_nsec: UInt64;
+    st_mtime: UInt64;
+    st_mtime_nsec: UInt64;
+    st_ctime: UInt64;
+    st_ctime_nsec: UInt64;
+    __unused2: array[0..2] of Int64;
+  end;
+  {$ENDIF}
+  PPlatformLinuxStat = ^TPlatformLinuxStat;
+
   TPlatformLinuxStatxTimestamp = record
     tv_sec: Int64;
     tv_nsec: UInt32;
@@ -144,13 +191,15 @@ const
   PLATFORM_LINUX_AT_STATX_DONT_SYNC = Int32($4000);
 
   {$IFDEF NEXTPAS_X86_64}
+  PLATFORM_LINUX_STAT_VERSION = Int32(1);
   LINUX_SYSCALL_FUTEX = 202;
   LINUX_SYSCALL_STATX = 332;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
+  PLATFORM_LINUX_STAT_VERSION = Int32(0);
   LINUX_SYSCALL_FUTEX = 98;
   LINUX_SYSCALL_STATX = 291;
   {$ELSE}
-    {$FATAL 'nextpas.core.platform.linux.base: unsupported Linux CPU for futex syscall'}
+    {$FATAL 'nextpas.core.platform.linux.base: unsupported Linux CPU for Linux syscalls and stat ABI'}
   {$ENDIF}
 
 implementation

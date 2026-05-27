@@ -35,7 +35,7 @@ abstractions that consume them.
 
 | Host | nextPas owner | FPC source evidence | Evidence scope |
 | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
+| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Linux traditional stat records and libc wrappers |
 | Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/linux/ostypes.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
 | Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/bsd/sysos.inc`, `rtl/macos/macostp.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
 | FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
@@ -43,6 +43,30 @@ abstractions that consume them.
 | Windows | `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi` | `rtl/win32/windows.pp`, `rtl/win64/windows.pp`, `rtl/win/wininc`, `rtl/win/sysfile.inc`, `rtl/win/sysutils.pp`, `packages/winunits-base`, and Windows OS SDK headers when FPC does not expose newer kernel32 APIs | `FILETIME`, `SYSTEM_INFO`, `PROCESS_INFORMATION`, `STARTUPINFOA/W`, `CreateThread`, `CreateProcessA/W`, `WaitForSingleObject`, `CloseHandle`, `GetCurrentThreadId`, `QueryPerformanceCounter`, `GetSystemTimeAsFileTime`, `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue`, `GetSystemInfo`, `SRWLOCK`, `CONDITION_VARIABLE`, `SleepConditionVariableSRW`, `WaitOnAddress`, `WakeByAddressSingle`, `WakeByAddressAll`, Windows environment entrypoints, Windows process-control entrypoints, Windows file I/O entrypoints |
 
 ## Declaration Evidence Classes
+
+### Platform Host ABI Completeness Wave 9: Linux traditional stat raw ABI
+
+Wave 9 promotes only the Linux traditional stat raw ABI from the deferred POSIX
+stat family. It copies FPC's Linux `stat` record shape, CPU-specific
+`_STAT_VER` policy, and libc wrapper route into Linux host-owned declarations.
+It keeps shared POSIX stat deferred and does not create a public
+`platform.file` contract.
+
+- Linux traditional stat evidence starts in FPC `rtl/linux/ostypes.inc`,
+  `rtl/linux/x86_64/stat.inc`, `rtl/linux/aarch64/stat.inc`, and
+  `rtl/linux/osmacro.inc`. `nextpas.core.platform.linux.base` owns
+  `TPlatformLinuxStat`, `PPlatformLinuxStat`, and
+  `PLATFORM_LINUX_STAT_VERSION`.
+- Linux libc wrapper evidence starts in `rtl/linux/osmacro.inc`, where FPC
+  declares `__xstat`, `__lxstat`, and `__fxstat`, then routes `FpStat`,
+  `FpLstat`, and `FpFstat` through those wrappers with `_STAT_VER`.
+  `nextpas.core.platform.linux.ffi` owns `linux_xstat`, `linux_lxstat`,
+  `linux_fxstat`, `linux_stat_path`, `linux_lstat_path`, and
+  `linux_fstat_fd`.
+- Shared POSIX `stat`, `lstat`, and `fstat` remain deferred because
+  `rtl/unix/oscdeclh.inc` records host-specific symbol suffix policy, and the
+  Linux, Darwin, FreeBSD, Android, and generic Unix record layouts still need
+  separate host-owner decisions.
 
 ### Platform Host ABI Completeness Wave 8: file I/O continuation
 

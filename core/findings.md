@@ -1,5 +1,45 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 9 Linux traditional stat decisions
+
+- Wave 9 is a host-specific promotion of the deferred POSIX stat family. It
+  covers Linux traditional `stat` / `lstat` / `fstat` raw ABI only.
+- Shared `nextpas.core.platform.posix.base` must still not own a generic
+  `TPlatformStat` record, and shared `nextpas.core.platform.posix.ffi` must
+  still not declare generic `stat`, `lstat`, or `fstat` bindings. FPC records
+  host-specific layouts and suffix policy, so the shared POSIX owner would be
+  the wrong layer.
+- Linux stat record shape belongs in `nextpas.core.platform.linux.base`.
+  Linux libc wrapper declarations and Linux-prefixed thin helpers belong in
+  `nextpas.core.platform.linux.ffi`.
+- Android, Darwin, FreeBSD, and generic Unix traditional stat promotion remains
+  out of scope for this wave. They need separate owner decisions because FPC
+  records Android syscall policy, Darwin `$INODE64` suffix handling, and BSD
+  record layout differences separately.
+- Wave 9 remains raw ABI import, not a public `platform.file` or
+  `platform.fs` contract.
+
+## 2026-05-28: FPC source evidence for Wave 9
+
+- Linux `_STAT_VER` policy starts in `rtl/linux/ostypes.inc`. For the current
+  nextPas Linux CPU set, FPC uses `_STAT_VER_LINUX = 1` on x86_64 and
+  `_STAT_VER_LINUX = 0` on aarch64.
+- Linux x86_64 record evidence starts in `rtl/linux/x86_64/stat.inc`, where
+  FPC defines the packed `stat` record with `st_dev`, `st_ino`, `st_nlink`,
+  `st_mode`, ownership ids, device ids, size/block fields, timestamp seconds /
+  nanoseconds, and unused padding.
+- Linux aarch64 record evidence starts in `rtl/linux/aarch64/stat.inc`, where
+  FPC defines the asm-generic `stat` record with `st_dev`, `st_ino`, mode/link
+  fields, ownership ids, device ids, size/block fields, timestamp seconds /
+  nanoseconds, and trailing unused fields.
+- Linux libc wrapper evidence starts in `rtl/linux/osmacro.inc`: FPC declares
+  `__fxstat`, `__xstat`, and `__lxstat`, then implements `FpFstat`, `FpStat`,
+  and `FpLstat` by passing `_STAT_VER`.
+- `rtl/unix/oscdeclh.inc` records the broader Unix boundary: Linux gets macro
+  wrappers, while non-Linux Unix hosts use direct `fstat`, `lstat`, and `stat`
+  symbols with large-file / Darwin suffix policy. That is why Wave 9 keeps the
+  shared POSIX owner empty and promotes only Linux.
+
 ## 2026-05-28: raw ABI correctness boundary
 
 - FPC source is the authority for copied platform ABI definitions. If FPC carries
@@ -9,6 +49,9 @@
   guard only nextPas integration discipline: owner placement, documentation
   truth, official route truth, feature-specific FFI absence, no FPC platform-unit
   dependency, and compile coherence.
+- A raw ABI import wave can cite FPC source evidence directly as the correctness
+  authority. Extra nextPas runtime probes against libc/syscalls would be
+  redundant and risk turning ABI inventory work into behavior testing.
 - Runtime behavior tests remain necessary for unified nextPas public contracts
   such as `platform.time`, `platform.sync`, and `platform.thread`.
 

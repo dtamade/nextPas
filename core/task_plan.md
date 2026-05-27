@@ -9,16 +9,14 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 8 merged to `main` as `e6c09b3`
-  (`platform: add file I/O ABI wave 8`).
-- Closed worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`
-- Closed branch: `codex/platform-host-abi-wave8-file-io`
-- Base: `main@ac4a6fe`
+- Current worktree:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
+- Branch: `codex/platform-host-abi-wave9-posix-stat`
+- Base: `main@524b27c`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 8, file I/O continuation
-  closed; next wave should start from latest `main`.
+- Current wave: Platform Host ABI Completeness Wave 9, Linux traditional stat
+  raw ABI.
 
 ## Architecture Rules
 
@@ -49,24 +47,20 @@ the integration boundary.
 
 ## Current Phase
 
-### Wave 8: file I/O continuation
+### Wave 9: Linux traditional stat raw ABI
 
 - [x] Open isolated worktree from latest `main`.
 - [x] Baseline focused platform gate before edits.
-- [x] Re-anchor the plan after user correction: FPC raw ABI definitions are
-  authoritative and do not need nextPas runtime proof.
-- [x] Add Wave 8 source-surface guard and confirm RED.
-- [x] Import shared POSIX file I/O aliases, externals, and thin helpers for
-  `read`, `write`, `lseek`, `fsync`, and `ftruncate`.
-- [x] Import POSIX host seek tokens into Linux, Android, Darwin, FreeBSD, and
-  generic Unix `base` owners.
-- [x] Expose POSIX host delegated file I/O helpers from each POSIX host `ffi`
-  unit without creating a public `platform.file` contract.
-- [x] Import Windows file position, size, sync, and truncate raw ABI declarations
-  and constants into `windows.base` / `windows.ffi`.
+- [x] Select next gap from goal tree and gap matrix: promote Linux traditional
+  `stat` / `lstat` / `fstat` from the Wave 3 deferred POSIX stat family.
+- [x] Add Wave 9 source-surface guard for owner, docs, and route discipline.
+- [x] Import Linux `_STAT_VER`, `stat` record, and `__xstat` / `__lxstat` /
+  `__fxstat` declarations into `linux.base` / `linux.ffi`.
+- [x] Keep shared `posix.base` / `posix.ffi` free of a generic POSIX stat
+  record or generic `stat` binding.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ## Non-goals
 
@@ -75,11 +69,14 @@ the integration boundary.
 - No runtime unit tests for FPC raw API values or record layouts.
 - No L1 abstractions such as stopwatch, thread pool, channel, future, process
   runner, or command API inside `platform`.
+- No Darwin, FreeBSD, Android, or generic Unix traditional `stat` promotion in
+  this wave; those hosts remain separate owner decisions because FPC records
+  host-specific layout and suffix policy.
 
 ## Verification Commands
 
 - `git diff --check`
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
@@ -91,8 +88,7 @@ the integration boundary.
 
 ### Verification Evidence
 
-- `git diff --check`: pass.
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`:
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`:
   `5 total, 5 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
   `4 total, 4 passed, 0 failed`.
@@ -101,19 +97,19 @@ the integration boundary.
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
   `2 total, 2 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
-  Darwin, Android, FreeBSD, and generic Unix simulated host compile gates pass.
-- Win64 compile-only gates pass for `core.time`, `platform.thread`, and
-  `platform.sync`.
+  Darwin, Android, FreeBSD, and generic Unix simulated compile routes passed.
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`:
+  `8 total, 8 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`:
+  `14 total, 14 passed, 0 failed`.
+- `git diff --check`: pass.
 - `sh -n build/verify_local.sh`: pass.
-- `make -C core examples`: pass, all examples compiled.
-- `make -C core benchmarks`: pass, all benchmarks passed.
-- `make -C core test`: pass, all tests passed.
-- `bash build/verify_local.sh`: pass; final envelope reports
-  `verify-local=pass`, `human-summary=local verification passed`, and
-  includes `corePlatformHostAbiWave8FileIoCheck`.
-- Post-merge `bash build/verify_local.sh` on `main@e6c09b3`: pass; final
-  envelope reports `verify-local=pass`, `human-summary=local verification
-  passed`, and includes `corePlatformHostAbiWave8FileIoCheck`.
+- `make -C core test`: `All tests passed.`
+- `make -C core examples`: `All examples compiled.`
+- `make -C core benchmarks`: `All benchmarks passed.`
+- `bash build/verify_local.sh`: `verify-local=pass`,
+  `human-summary=local verification passed`, final envelope includes
+  `corePlatformHostAbiWave9LinuxStatCheck`.
 
 ## Errors Encountered
 
