@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.collections.intf,
-  nextpas.core.collections.hashset.base;
+  nextpas.core.collections.intf;
 
 type
   {**

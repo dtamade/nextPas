@@ -4,51 +4,43 @@ program test_facade;
 
 uses
   nextpas.core.testing,
-  nextpas.core.collections,
-  nextpas.core.collections.base,
-  nextpas.core.collections.vec.intf,
-  nextpas.core.collections.queue.intf,
-  nextpas.core.collections.deque.intf,
-  nextpas.core.collections.hashmap.intf,
-  nextpas.core.collections.hashset.intf;
-
-type
-  IIntVec = specialize IVec<Integer>;
-  IIntIntMap = specialize IHashMap<Integer, Integer>;
-  IIntSet = specialize IHashSet<Integer>;
-  IIntDeque = specialize IDeque<Integer>;
+  nextpas.core.collections;
 
 var
   T: TTestRunner;
 
 procedure TestFacadeFactoriesReturnPublicInterfaces;
 var
-  LVec: IIntVec;
-  LMap: IIntIntMap;
-  LSet: IIntSet;
-  LDeque: IIntDeque;
   LValue: Integer;
 begin
-  LVec := specialize Vec<Integer>;
-  LVec.Push(10);
-  CheckEqual(Int64(1), Int64(LVec.Count), 'vec count');
-  CheckEqual(Int64(10), Int64(LVec[0]), 'vec value');
+  with specialize Vec<Integer> do
+  begin
+    Push(10);
+    CheckEqual(Int64(1), Int64(Count), 'vec count');
+    CheckEqual(Int64(10), Int64(Get(0)), 'vec value');
+  end;
 
-  LMap := specialize Map<Integer, Integer>;
-  LMap.Put(1, 100);
-  Check(LMap.Get(1, LValue), 'map get');
-  CheckEqual(Int64(100), Int64(LValue), 'map value');
+  with specialize Map<Integer, Integer> do
+  begin
+    Put(1, 100);
+    Check(Get(1, LValue), 'map get');
+    CheckEqual(Int64(100), Int64(LValue), 'map value');
+  end;
 
-  LSet := specialize Set_<Integer>;
-  Check(LSet.Add(7), 'set add');
-  Check(LSet.Contains(7), 'set contains');
+  with specialize Set_<Integer> do
+  begin
+    Check(Add(7), 'set add');
+    Check(Contains(7), 'set contains');
+  end;
 
-  LDeque := specialize Deque<Integer>;
-  LDeque.PushBack(1);
-  LDeque.PushFront(0);
-  CheckEqual(Int64(2), Int64(LDeque.Count), 'deque count');
-  CheckEqual(Int64(0), Int64(LDeque.PopFront), 'deque front');
-  CheckEqual(Int64(1), Int64(LDeque.PopBack), 'deque back');
+  with specialize Deque<Integer> do
+  begin
+    PushBack(1);
+    PushFront(0);
+    CheckEqual(Int64(2), Int64(Count), 'deque count');
+    CheckEqual(Int64(0), Int64(PopFront), 'deque front');
+    CheckEqual(Int64(1), Int64(PopBack), 'deque back');
+  end;
 end;
 
 procedure TestFacadeExportsGrowthStrategies;
