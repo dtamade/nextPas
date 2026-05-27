@@ -61,62 +61,32 @@ uses
 {$ENDIF}
 
 {$IFDEF NEXTPAS_UNIX}
-type
-  PPosixThreadState = ^TPosixThreadState;
-  TPosixThreadState = record
-    case Integer of
-      0: (FAlign: TPlatformPThreadTokenAlign);
-      1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
-  end;
-
 { Thread lifecycle }
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 var
-  LState: PPosixThreadState;
+  LState: PPlatformPThreadState;
 begin
   AHandle := nil;
-  if not Assigned(AProc) then
-    Exit(-1);
-
-  New(LState);
-  FillChar(LState^, SizeOf(LState^), 0);
-
-  Result := platform_pthread_create_handle(@LState^.Thread[0], Pointer(AProc), AArg);
+  Result := platform_pthread_state_create(LState, Pointer(AProc), AArg);
   if Result = 0 then
-    AHandle := TPlatformThreadHandle(LState)
-  else
-  begin
-    Dispose(LState);
-    AHandle := nil;
-  end;
+    AHandle := TPlatformThreadHandle(LState);
 end;
 
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
 var
-  LState: PPosixThreadState;
+  LState: PPlatformPThreadState;
 begin
-  ARetVal := nil;
-  if AHandle = nil then
-    Exit(-1);
-
-  LState := PPosixThreadState(AHandle);
-  Result := platform_pthread_join_handle(@LState^.Thread[0], @ARetVal);
-  if Result = 0 then
-    Dispose(LState);
+  LState := PPlatformPThreadState(AHandle);
+  Result := platform_pthread_state_join(LState, ARetVal);
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
 var
-  LState: PPosixThreadState;
+  LState: PPlatformPThreadState;
 begin
-  if AHandle = nil then
-    Exit(-1);
-
-  LState := PPosixThreadState(AHandle);
-  Result := platform_pthread_detach_handle(@LState^.Thread[0]);
-  if Result = 0 then
-    Dispose(LState);
+  LState := PPlatformPThreadState(AHandle);
+  Result := platform_pthread_state_detach(LState);
 end;
 
 function platform_thread_self: TPlatformThreadToken;

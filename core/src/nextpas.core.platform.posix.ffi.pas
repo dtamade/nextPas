@@ -16,6 +16,12 @@ function platform_posix_pthread_create_handle(
   const AArgument: Pointer): Int32; inline;
 function platform_posix_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
 function platform_posix_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+function platform_posix_pthread_state_create(
+  AThreadStorage: Pointer;
+  const AStartRoutine: Pointer;
+  const AArgument: Pointer): Int32; inline;
+function platform_posix_pthread_state_join(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+function platform_posix_pthread_state_detach(AThreadStorage: Pointer): Int32; inline;
 procedure platform_posix_pthread_yield; inline;
 procedure platform_posix_pthread_sleep_ns(
   const ANanoseconds: UInt64;
@@ -169,6 +175,24 @@ end;
 function platform_posix_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
 begin
   Result := pthread_detach(PPThreadToken(AThreadStorage)^);
+end;
+
+function platform_posix_pthread_state_create(
+  AThreadStorage: Pointer;
+  const AStartRoutine: Pointer;
+  const AArgument: Pointer): Int32; inline;
+begin
+  Result := platform_posix_pthread_create_handle(AThreadStorage, AStartRoutine, AArgument);
+end;
+
+function platform_posix_pthread_state_join(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+begin
+  Result := platform_posix_pthread_join_handle(AThreadStorage, ARetVal);
+end;
+
+function platform_posix_pthread_state_detach(AThreadStorage: Pointer): Int32; inline;
+begin
+  Result := platform_posix_pthread_detach_handle(AThreadStorage);
 end;
 
 procedure platform_posix_pthread_yield; inline;

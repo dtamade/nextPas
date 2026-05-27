@@ -9,6 +9,8 @@ uses
 const
   THREAD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.pas';
   THREAD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
+  POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
+  POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
   LINUX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
   LINUX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.base.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
@@ -84,6 +86,12 @@ begin
     AHostLabel + ' must delegate pthread join glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_detach_handle',
     AHostLabel + ' must delegate pthread detach glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_state_create',
+    AHostLabel + ' must delegate pthread state create glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_state_join',
+    AHostLabel + ' must delegate pthread state join glue to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_pthread_state_detach',
+    AHostLabel + ' must delegate pthread state detach glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_yield',
     AHostLabel + ' must delegate pthread yield glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_sleep_ns',
@@ -103,6 +111,7 @@ end;
 procedure TestPlatformThreadUsesHostThreadIdFFI;
 var
   LThreadSource: string;
+  LPosixSource: string;
   LLinuxBaseSource: string;
   LLinuxSource: string;
   LDarwinBaseSource: string;
@@ -117,6 +126,7 @@ var
   LWindowsSource: string;
 begin
   LThreadSource := ReadSourceFile(ResolveSourcePath(THREAD_SOURCE_PATH_FROM_TEST, THREAD_SOURCE_PATH_FROM_ROOT));
+  LPosixSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
   LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
   LDarwinBaseSource := ReadSourceFile(ResolveSourcePath(DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT));
@@ -152,6 +162,12 @@ begin
     'linux.ffi must expose Linux pthread join helper');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_detach_handle',
     'linux.ffi must expose Linux pthread detach helper');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_create',
+    'linux.ffi must expose Linux pthread state create helper');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_join',
+    'linux.ffi must expose Linux pthread state join helper');
+  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_detach',
+    'linux.ffi must expose Linux pthread state detach helper');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_yield',
     'linux.ffi must expose Linux pthread yield helper');
   CheckTokenPresent(LLinuxSource, 'platform_pthread_sleep_ns',
@@ -168,6 +184,10 @@ begin
     'linux.base must expose Linux pthread token storage size');
   CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadtokenalign',
     'linux.base must expose Linux pthread token align carrier type');
+  CheckTokenPresent(LLinuxBaseSource, 'pplatformpthreadstate',
+    'linux.base must expose Linux pthread state pointer type');
+  CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadstate',
+    'linux.base must expose Linux pthread state carrier type');
   CheckSharedPosixThreadDelegation(LLinuxSource, 'linux.ffi');
 
   CheckTokenPresent(LAndroidSource, 'function gettid',
@@ -192,6 +212,12 @@ begin
     'android.ffi must expose Android pthread join helper');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_detach_handle',
     'android.ffi must expose Android pthread detach helper');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_create',
+    'android.ffi must expose Android pthread state create helper');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_join',
+    'android.ffi must expose Android pthread state join helper');
+  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_detach',
+    'android.ffi must expose Android pthread state detach helper');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_yield',
     'android.ffi must expose Android pthread yield helper');
   CheckTokenPresent(LAndroidSource, 'platform_pthread_sleep_ns',
@@ -208,6 +234,10 @@ begin
     'android.base must expose Android pthread token storage size');
   CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadtokenalign',
     'android.base must expose Android pthread token align carrier type');
+  CheckTokenPresent(LAndroidBaseSource, 'pplatformpthreadstate',
+    'android.base must expose Android pthread state pointer type');
+  CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadstate',
+    'android.base must expose Android pthread state carrier type');
   CheckSharedPosixThreadDelegation(LAndroidSource, 'android.ffi');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
@@ -230,6 +260,12 @@ begin
     'darwin.ffi must expose Darwin pthread join helper');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_detach_handle',
     'darwin.ffi must expose Darwin pthread detach helper');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_create',
+    'darwin.ffi must expose Darwin pthread state create helper');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_join',
+    'darwin.ffi must expose Darwin pthread state join helper');
+  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_detach',
+    'darwin.ffi must expose Darwin pthread state detach helper');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_yield',
     'darwin.ffi must expose Darwin pthread yield helper');
   CheckTokenPresent(LDarwinSource, 'platform_pthread_sleep_ns',
@@ -246,6 +282,10 @@ begin
     'darwin.base must expose Darwin pthread token storage size');
   CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadtokenalign',
     'darwin.base must expose Darwin pthread token align carrier type');
+  CheckTokenPresent(LDarwinBaseSource, 'pplatformpthreadstate',
+    'darwin.base must expose Darwin pthread state pointer type');
+  CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadstate',
+    'darwin.base must expose Darwin pthread state carrier type');
   CheckSharedPosixThreadDelegation(LDarwinSource, 'darwin.ffi');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
@@ -267,6 +307,12 @@ begin
     'freebsd.ffi must expose FreeBSD pthread join helper');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_detach_handle',
     'freebsd.ffi must expose FreeBSD pthread detach helper');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_create',
+    'freebsd.ffi must expose FreeBSD pthread state create helper');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_join',
+    'freebsd.ffi must expose FreeBSD pthread state join helper');
+  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_detach',
+    'freebsd.ffi must expose FreeBSD pthread state detach helper');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_yield',
     'freebsd.ffi must expose FreeBSD pthread yield helper');
   CheckTokenPresent(LFreeBSDSource, 'platform_pthread_sleep_ns',
@@ -283,6 +329,10 @@ begin
     'freebsd.base must expose FreeBSD pthread token storage size');
   CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadtokenalign',
     'freebsd.base must expose FreeBSD pthread token align carrier type');
+  CheckTokenPresent(LFreeBSDBaseSource, 'pplatformpthreadstate',
+    'freebsd.base must expose FreeBSD pthread state pointer type');
+  CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadstate',
+    'freebsd.base must expose FreeBSD pthread state carrier type');
   CheckSharedPosixThreadDelegation(LFreeBSDSource, 'freebsd.ffi');
   CheckTokenPresent(LUnixSource, 'platform_thread_self_token_u64',
     'unix.ffi must expose generic Unix thread self token helper');
@@ -296,6 +346,12 @@ begin
     'unix.ffi must expose generic Unix pthread join helper');
   CheckTokenPresent(LUnixSource, 'platform_pthread_detach_handle',
     'unix.ffi must expose generic Unix pthread detach helper');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_state_create',
+    'unix.ffi must expose generic Unix pthread state create helper');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_state_join',
+    'unix.ffi must expose generic Unix pthread state join helper');
+  CheckTokenPresent(LUnixSource, 'platform_pthread_state_detach',
+    'unix.ffi must expose generic Unix pthread state detach helper');
   CheckTokenPresent(LUnixSource, 'platform_pthread_yield',
     'unix.ffi must expose generic Unix pthread yield helper');
   CheckTokenPresent(LUnixSource, 'platform_pthread_sleep_ns',
@@ -312,7 +368,17 @@ begin
     'unix.base must expose generic Unix pthread token storage size');
   CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadtokenalign',
     'unix.base must expose generic Unix pthread token align carrier type');
+  CheckTokenPresent(LUnixBaseSource, 'pplatformpthreadstate',
+    'unix.base must expose generic Unix pthread state pointer type');
+  CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadstate',
+    'unix.base must expose generic Unix pthread state carrier type');
   CheckSharedPosixThreadDelegation(LUnixSource, 'unix.ffi');
+  CheckTokenPresent(LPosixSource, 'platform_posix_pthread_state_create',
+    'posix.ffi must expose shared POSIX pthread state create helper');
+  CheckTokenPresent(LPosixSource, 'platform_posix_pthread_state_join',
+    'posix.ffi must expose shared POSIX pthread state join helper');
+  CheckTokenPresent(LPosixSource, 'platform_posix_pthread_state_detach',
+    'posix.ffi must expose shared POSIX pthread state detach helper');
   CheckTokenPresent(LWindowsSource, 'windows_sleep_ns_to_ms',
     'windows.ffi must expose Windows sleep timeout conversion policy');
   CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',
@@ -372,12 +438,12 @@ begin
     'platform.thread must use host-owned native thread id helper');
   CheckTokenPresent(LThreadSource, 'platform_cpu_count_i32',
     'platform.thread must use host-owned CPU count helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_create_handle',
-    'platform.thread must consume host-owned pthread create helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_join_handle',
-    'platform.thread must consume host-owned pthread join helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_detach_handle',
-    'platform.thread must consume host-owned pthread detach helper');
+  CheckTokenPresent(LThreadSource, 'platform_pthread_state_create',
+    'platform.thread must consume host-owned pthread state create helper');
+  CheckTokenPresent(LThreadSource, 'platform_pthread_state_join',
+    'platform.thread must consume host-owned pthread state join helper');
+  CheckTokenPresent(LThreadSource, 'platform_pthread_state_detach',
+    'platform.thread must consume host-owned pthread state detach helper');
   CheckTokenPresent(LThreadSource, 'platform_pthread_yield',
     'platform.thread must consume host-owned pthread yield helper');
   CheckTokenPresent(LThreadSource, 'platform_pthread_sleep_ns',
@@ -390,10 +456,8 @@ begin
     'platform.thread must consume host-owned pthread TLS set helper');
   CheckTokenPresent(LThreadSource, 'platform_pthread_tls_get',
     'platform.thread must consume host-owned pthread TLS get helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_token_size',
-    'platform.thread must consume host-owned pthread token storage size');
-  CheckTokenPresent(LThreadSource, 'tplatformpthreadtokenalign',
-    'platform.thread must consume host-owned pthread token align carrier');
+  CheckTokenPresent(LThreadSource, 'pplatformpthreadstate',
+    'platform.thread must consume host-owned pthread state carrier');
   Check(Pos('platform_posix_eintr', LThreadSource) = 0,
     'platform.thread must not keep raw EINTR retry semantics in the Unix consumer');
   Check(Pos('platform_posix_errno_value', LThreadSource) = 0,
@@ -506,12 +570,32 @@ begin
     'platform.thread must not call pthread_threadid_np directly in the consumer');
   Check(Pos('pthread_getthreadid_np', LThreadSource) = 0,
     'platform.thread must not call pthread_getthreadid_np directly in the consumer');
+  Check(Pos('platform_pthread_create_handle', LThreadSource) = 0,
+    'platform.thread must not consume low-level pthread create handle helper after state ownerization');
+  Check(Pos('platform_pthread_join_handle', LThreadSource) = 0,
+    'platform.thread must not consume low-level pthread join handle helper after state ownerization');
+  Check(Pos('platform_pthread_detach_handle', LThreadSource) = 0,
+    'platform.thread must not consume low-level pthread detach handle helper after state ownerization');
   Check(Pos('thread: pthread_t', LThreadSource) = 0,
     'platform.thread must not keep raw pthread_t thread storage in the Unix consumer');
   Check(Pos('ppthreadtoken', LThreadSource) = 0,
     'platform.thread must not reintroduce raw pthread_t pointer aliases in the Unix consumer');
   Check(Pos('falign: ptruint', LThreadSource) = 0,
     'platform.thread must not keep a generic PtrUInt align fallback in the Unix consumer');
+  Check(Pos('platform_pthread_token_size', LThreadSource) = 0,
+    'platform.thread must not consume pthread token storage size after state ownerization');
+  Check(Pos('tplatformpthreadtokenalign', LThreadSource) = 0,
+    'platform.thread must not consume pthread token align carrier after state ownerization');
+  Check(Pos('pposixthreadstate', LThreadSource) = 0,
+    'platform.thread must not keep a local POSIX thread state pointer type in the Unix consumer');
+  Check(Pos('tposixthreadstate', LThreadSource) = 0,
+    'platform.thread must not keep a local POSIX thread state carrier type in the Unix consumer');
+  Check(Pos('new(lstate)', LThreadSource) = 0,
+    'platform.thread must not allocate POSIX thread state directly in the Unix consumer');
+  Check(Pos('dispose(lstate)', LThreadSource) = 0,
+    'platform.thread must not release POSIX thread state directly in the Unix consumer');
+  Check(Pos('@lstate^.thread[0]', LThreadSource) = 0,
+    'platform.thread must not expose pthread token storage offsets in the Unix consumer');
 end;
 
 begin

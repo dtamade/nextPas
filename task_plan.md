@@ -8394,33 +8394,35 @@ source-surface gate 和 full verification 吸收。
 
 ### Planned Steps
 
-- [ ] 在最新 `main` 开 `codex/platform-thread-owner-audit` isolated worktree
-- [ ] 跑 platform focused baseline：
+- [x] 在最新 `main` 开 `codex/platform-thread-owner-audit` isolated worktree
+- [x] 跑 platform focused baseline：
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [ ] 审计 `core/src/nextpas.core.platform.thread.pas` 与 host `base/ffi` consumer boundary
-- [ ] 先扩 source-surface test 成 RED，冻结发现的 owner gap
-- [ ] 再移动最小实现，让 RED 变 GREEN
-- [ ] 同步 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [ ] 跑 focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
-- [ ] 跑 fresh `bash build/verify_local.sh`
+- [x] 审计 `core/src/nextpas.core.platform.thread.pas` 与 host `base/ffi` consumer boundary
+- [x] 先扩 source-surface test 成 RED，冻结发现的 owner gap
+- [x] 再移动最小实现，让 RED 变 GREEN
+- [x] 同步 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
+- [x] 跑 fresh `bash build/verify_local.sh`
 - [ ] 复盘、提交、合并回 `main`，再清理 worktree / 分支
 
 ### Audit Checklist
 
-- [ ] production platform code 不 `uses Linux`、`UnixType`、`PThreads`、`BaseUnix`、`Syscall`、`Windows`
-- [ ] production platform implementation 不散落新的 raw `external` 声明
-- [ ] `platform.thread` 不创建 feature-specific `platform.thread.ffi`
-- [ ] `platform.thread` consumer 不保留 raw Windows `HANDLE` / `DWORD` / `stdcall` thunk
-- [ ] `platform.thread` consumer 不保留 raw POSIX `pthread_t` / `pthread_key_t` / `nanosleep` ABI 细节
-- [ ] host size / align / capability token 只由 host `.base` 暴露
-- [ ] host ABI wrapper、errno binding、native thread id、TLS key glue 只由 host `.ffi` / shared `posix.ffi`
+- [x] production platform code 不 `uses Linux`、`UnixType`、`PThreads`、`BaseUnix`、`Syscall`、`Windows`
+- [x] production platform implementation 不散落新的 raw `external` 声明
+- [x] `platform.thread` 不创建 feature-specific `platform.thread.ffi`
+- [x] `platform.thread` consumer 不保留 raw Windows `HANDLE` / `DWORD` / `stdcall` thunk
+- [x] `platform.thread` consumer 不保留 raw POSIX `pthread_t` / `pthread_key_t` / `nanosleep` ABI 细节
+- [x] host size / align / capability token 只由 host `.base` 暴露
+- [x] host ABI wrapper、errno binding、native thread id、TLS key glue 只由 host `.ffi` / shared `posix.ffi`
   暴露
-- [ ] runtime tests 只覆盖 `platform.thread` public contract，不直接测试 raw OS API
+- [x] POSIX thread state carrier 与分配/释放归 host `.base` / `.ffi`，`platform.thread` 只消费
+  `platform_pthread_state_create/join/detach`
+- [x] runtime tests 只覆盖 `platform.thread` public contract，不直接测试 raw OS API
 
 ### Verification Plan
 
@@ -8442,3 +8444,45 @@ source-surface gate 和 full verification 吸收。
 - 不对 raw `pthread_*`、`nanosleep`、Windows thread API 做 runtime 单测。
 - 不宣称新增 macOS / Android / FreeBSD / Windows runtime 证据。
 - 不为 `platform.thread` 新建 feature-specific `*.ffi.pas`，除非先证明它不属于任何 host owner。
+
+### Implementation Notes
+
+- 审计发现 `platform.thread` 的 POSIX 路径还保留本地
+  `PPosixThreadState` / `TPosixThreadState`、`New(LState)`、`Dispose(LState)` 与
+  `@LState^.Thread[0]`。这层生命周期和 storage offset 不属于 unified consumer，应归 host
+  `base/ffi` owner。
+- RED:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must expose Linux pthread state create helper: platform_pthread_state_create`。
+- GREEN:
+  - `linux/android/darwin/freebsd/unix.base` 新增
+    `PPlatformPThreadState` / `TPlatformPThreadState`。
+  - shared `posix.ffi` 新增
+    `platform_posix_pthread_state_create/join/detach`，只处理 pthread token storage 的通用 glue。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增
+    `platform_pthread_state_create/join/detach`，负责 state 分配、清零、释放与 shared helper
+    委托。
+  - `platform.thread` POSIX 分支删除本地 state carrier 和直接 `New/Dispose`，只消费 host-owned
+    state helper。
+- 期间 focused 行为测试第一次失败在
+  `nextpas.core.platform.thread.pas(140,8) Error: ENDIF without IF(N)DEF`，原因是删除本地
+  POSIX state type 时误删了 Unix implementation guard；已恢复 `{$IFDEF NEXTPAS_UNIX}`。
+- Fresh verification:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    输出 `8 total, 8 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
+    输出 `3 total, 3 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。

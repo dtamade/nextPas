@@ -7,6 +7,9 @@ interface
 uses
   nextpas.core.platform.posix.base;
 
+const
+  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
+
 type
   TPlatformPThreadTokenAlign = record
     Value: pthread_t;
@@ -24,6 +27,13 @@ type
     Value: pthread_cond_t;
   end;
 
+  PPlatformPThreadState = ^TPlatformPThreadState;
+  TPlatformPThreadState = record
+    case Integer of
+      0: (FAlign: TPlatformPThreadTokenAlign);
+      1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
+  end;
+
 const
   PLATFORM_CLOCK_REALTIME_ID = Int32(0);
   PLATFORM_CLOCK_MONOTONIC_ID = Int32(4);
@@ -35,7 +45,6 @@ const
   PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND = 1;
   PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND = 2;
   PLATFORM_PTHREAD_MUTEX_NORMAL_KIND = 3;
-  PLATFORM_PTHREAD_TOKEN_SIZE = SizeOf(pthread_t);
   PLATFORM_PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
   PLATFORM_PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
   PLATFORM_PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);

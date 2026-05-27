@@ -20,6 +20,9 @@ function platform_cpu_count_i32: Int32; inline;
 function platform_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
 function platform_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
 function platform_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+function platform_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+function platform_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
+function platform_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
 procedure platform_pthread_yield; inline;
 procedure platform_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
 function platform_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
@@ -105,6 +108,44 @@ end;
 function platform_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_detach_handle(AThreadStorage);
+end;
+
+function platform_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+begin
+  AState := nil;
+  if AStartRoutine = nil then
+    Exit(-1);
+
+  New(AState);
+  FillChar(AState^, SizeOf(AState^), 0);
+
+  Result := platform_posix_pthread_state_create(@AState^.Thread[0], AStartRoutine, AArgument);
+  if Result <> 0 then
+  begin
+    Dispose(AState);
+    AState := nil;
+  end;
+end;
+
+function platform_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
+begin
+  ARetVal := nil;
+  if AState = nil then
+    Exit(-1);
+
+  Result := platform_posix_pthread_state_join(@AState^.Thread[0], @ARetVal);
+  if Result = 0 then
+    Dispose(AState);
+end;
+
+function platform_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
+begin
+  if AState = nil then
+    Exit(-1);
+
+  Result := platform_posix_pthread_state_detach(@AState^.Thread[0]);
+  if Result = 0 then
+    Dispose(AState);
 end;
 
 procedure platform_pthread_yield; inline;

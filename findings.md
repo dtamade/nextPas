@@ -101,9 +101,18 @@
   `platform_posix_timespec_remaining_ns_u64`、`platform_posix_thread_self_token_u64`、
   `platform_posix_sysconf_positive_i32`、
   `platform_posix_pthread_create/join/detach_handle`、
+  `platform_posix_pthread_state_create/join/detach`、
   `platform_posix_pthread_yield`、
   `platform_posix_pthread_sleep_ns` 与
   `platform_posix_pthread_tls_create/destroy/set/get`。
+- `platform.thread` 的 POSIX state carrier、allocation、zero-init、join/detach release 和 pthread token
+  storage offset 不应留在 unified consumer。现在 `linux/android/darwin/freebsd/unix.base` 拥有
+  `PPlatformPThreadState` / `TPlatformPThreadState`，各 host `.ffi` 拥有
+  `platform_pthread_state_create/join/detach`，consumer 只把返回的 pointer 当作
+  `TPlatformThreadHandle` public handle。
+- 这也修正了旧记录里“`platform.thread` 继续保留 state record”的说法：当前规则是 public
+  handle contract 仍在 `platform.thread`，但 host-shaped thread state carrier 和释放时机由 host
+  base/ffi owner 封装。
 - 这轮之后，shared `posix.ffi` 还进一步统一承载了两层不携带宿主 truth 的 projection skeleton：
   `platform_posix_errno_value_from_location` 与
   `platform_posix_pthread_mutex_init_public_kind`。前者只做 `errno-location -> value` 的通用 load，
@@ -1962,3 +1971,21 @@
   compile-only 是三类不同证据；不能把 compile-only 或 simulated host selection 包装成真实 runtime 支持。
 - runtime 单元测试仍只覆盖 `platform.thread` / `platform.sync` / `platform.time` public contract；raw
   OS API 的正确性依赖 FPC 源码取证、host-owned declarations、source-surface guard 与 compile gate。
+
+## 2026-05-27 Follow-up Findings 23
+
+- `platform.thread` 的 POSIX state carrier、allocation、zero-init、join/detach release 和 pthread token
+  storage offset 已从 unified consumer 收回 host owner：
+  `linux/android/darwin/freebsd/unix.base` 暴露 `PPlatformPThreadState` / `TPlatformPThreadState`，
+  对应 `.ffi` 暴露 `platform_pthread_state_create/join/detach`。
+- shared `posix.ffi` 只新增不携带宿主 truth 的 pthread token storage glue：
+  `platform_posix_pthread_state_create/join/detach`。真正的 state 生命周期和 nil guard 仍由各 host
+  `.ffi` 包装。
+- `platform.thread` 现在只把 host state pointer 当作 `TPlatformThreadHandle` public handle，不再声明
+  `PPosixThreadState` / `TPosixThreadState`，也不再执行 `New` / `Dispose` 或
+  `@State^.Thread[0]` 这类 ABI storage offset 操作。
+- fresh focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
+  与 `bash build/verify_local.sh` 均已通过；official envelope 给出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- 证据边界保持不变：Linux thread behavior 是真实 runtime proof；Win64、Darwin、Android、FreeBSD
+  和 generic Unix 仍主要是 source-surface / compile-only proof，不能宣称新增真实 runtime 覆盖。

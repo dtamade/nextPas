@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform behavior tests abstract API boundary；上一轮包括
+当前最新本轮为 platform thread POSIX state ownerization；上一轮包括
+platform behavior tests abstract API boundary；
 platform.time facade/base/host shape normalization；
 platform.sync Windows busy-result helper ownership；
 platform.sync Windows destroy helper ownership；
@@ -28,6 +29,72 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform thread POSIX state ownerization)
+
+- **Status:** completed; verification passed in isolated worktree
+- Objective:
+  - 继续执行 Platform ABI Owner Audit：把 `platform.thread` POSIX 路径最后一层本地
+    state carrier、分配/释放和 pthread token offset 从 consumer 收回 host `base/ffi` owner。
+- Baseline:
+  - `platform.thread` 已不直接调用 raw `pthread_create/join/detach`，但仍声明
+    `PPosixThreadState` / `TPosixThreadState`，并在 consumer 里执行 `New(LState)`、
+    `Dispose(LState)`、`@LState^.Thread[0]`。
+  - Windows 路径已经把 thread state carrier 与 lifecycle helper 收到
+    `windows.base/windows.ffi`；POSIX 路径应和这个 owner 模型对齐。
+- Actions taken:
+  - 扩 `test_platform_thread_host_ffi_surface` 为 RED gate，要求：
+    `posix.ffi` 暴露 `platform_posix_pthread_state_create/join/detach`；
+    `linux/android/darwin/freebsd/unix.base` 暴露
+    `PPlatformPThreadState` / `TPlatformPThreadState`；
+    `linux/android/darwin/freebsd/unix.ffi` 暴露并委托
+    `platform_pthread_state_create/join/detach`；
+    `platform.thread` 不再保留本地 POSIX state type、`New/Dispose` 或 pthread storage offset。
+  - `linux/android/darwin/freebsd/unix.base` 新增 host-owned POSIX thread state carrier。
+  - `posix.ffi` 新增 shared state helper，只封装 pthread token storage 的
+    create/join/detach glue。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增 host-owned state create/join/detach helper，
+    负责 allocation、zero-init、success release 与 nil guard。
+  - `platform.thread` POSIX 分支改为消费 `PPlatformPThreadState` 与
+    `platform_pthread_state_create/join/detach`。
+  - `core/docs/design-conventions.md` 更新 POSIX thread state owner boundary。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      初始失败在
+      `linux.ffi must expose Linux pthread state create helper: platform_pthread_state_create`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+      输出 `8 total, 8 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
+      输出 `3 total, 3 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      输出 `2 total, 2 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      输出 `simulated-host-compile-matrix-status=pass`。
+  - Full:
+    - `make -C core test` 输出 `All tests passed.`。
+    - `make -C core examples` 输出 `All examples compiled.`。
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+    - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Errors encountered:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test` 初次 GREEN 后失败：
+    `nextpas.core.platform.thread.pas(140,8) Error: ENDIF without IF(N)DEF`。
+    原因是删除本地 POSIX state type 时误删 Unix implementation guard；恢复
+    `{$IFDEF NEXTPAS_UNIX}` 后通过。
+- Review:
+  - 这批没有新增 `platform.thread.ffi`，也没有把 L1 并发抽象放进 platform。
+  - POSIX 路径现在和 Windows thread state 模型一致：host `.base` 拥有 carrier，host `.ffi`
+    拥有 lifecycle helper，`platform.thread` 只维持 public handle contract。
+  - Linux 是真实 runtime proof；Darwin/Android/FreeBSD/generic Unix 仍是 simulated compile-only
+    proof，不能包装成真实 runtime 证据。
+  - 下一步收口动作是 diff hygiene、提交分支、检查 `main` 是否可安全合并，然后在合并后复验和清理
+    worktree / 分支。
 
 ## Session: 2026-05-27 (platform behavior tests abstract API boundary)
 
