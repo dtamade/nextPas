@@ -268,6 +268,20 @@
   `inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass"`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 127 采用“失败矩阵补齐”加速策略：沿 Batch 126 的 inherited implicit-self bare method
+  failure-kind propagation 继续补 `wrong-argument-count`，避免每轮重新发散找新主题。
+- focused semantic 证明 `Touch;` 调 inherited `Touch(Value: Integer)` 已天然失败为
+  `sema.wrong-argument-count`，且不注册错误 `member-call` binding；本批不需要修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- Batch 127 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_wrong_argument_count` 与
+  `inherited-implicit-self-bare-method-wrong-argument-count-check`，把该能力提升到 official
+  verify gate 与 final envelope。
+- Batch 127 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-wrong-argument-count-check=pass`、
+  `inheritedImplicitSelfBareMethodWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
