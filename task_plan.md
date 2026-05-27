@@ -82,8 +82,8 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Fast-forward merged to `main@54b19bd` and post-merge verified. Cleanup of the
-temporary worktree/branch is next.
+Fast-forward merged to `main@54b19bd`, post-merge verified, and the temporary
+worktree/branch has been cleaned up.
 
 ### Planned Steps
 
@@ -99,7 +99,7 @@ temporary worktree/branch is next.
 - [x] pre-merge focused/full verification after rebase
 - [x] fast-forward merge to `main@54b19bd`
 - [x] post-merge focused gate and `bash build/verify_local.sh`
-- [ ] cleanup temporary worktree / branch
+- [x] cleanup temporary worktree / branch
 
 ### Recovery Entry
 
@@ -113,7 +113,8 @@ sed -n '1,180p' progress.md
 sed -n '1,130p' findings.md
 ```
 
-Then continue from cleanup. Do not add runtime tests for raw OS APIs.
+This wave is closed. Continue with the next platform host ABI wave from latest
+`main`, and do not add runtime tests for raw OS APIs.
 
 ## Addendum: 2026-05-27 Platform FFI Import Workflow
 

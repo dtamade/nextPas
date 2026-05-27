@@ -43,7 +43,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 1)
 
-- **Status:** merged to main and post-merge verified; cleanup next
+- **Status:** merged to main, post-merge verified, and cleanup done
 - Objective:
   - 按 `core/docs/platform-ffi-import-workflow.md` 启动第一批 host ABI completeness。
   - 本轮不新增 raw OS API runtime tests，不扩 `platform.time` / `platform.sync` /
@@ -131,10 +131,15 @@ platform/core 工作流保留下来的已完成记录。
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave1Check":"pass"`.
+- Cleanup:
+  - Removed worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1`。
+  - Deleted branch `codex/platform-host-abi-wave1`。
+  - Remaining worktrees are `collections-refactor` and `sema-no-matching-overload`。
 - Recovery:
   - 下次恢复请从本 section 和 `task_plan.md` 的
     `Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1` 继续。
-  - 第一条未完成任务是 cleanup temporary worktree / branch。
+  - 本 wave 已关闭；下一步从 latest `main` 开新 worktree 继续下一波 platform host ABI import。
 
 ## Session: 2026-05-27 (platform ffi import workflow)
 

@@ -2008,6 +2008,9 @@
   `git diff --check` 通过，`bash build/verify_local.sh` 输出 `verify-local=pass` /
   `human-summary=local verification passed`，final envelope 继续包含
   `corePlatformHostAbiWave1Check":"pass"`。
+- 收口后已删除临时 worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1` 与分支
+  `codex/platform-host-abi-wave1`；后续 platform host ABI wave 应从 latest `main` 重新开隔离 worktree。
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。
