@@ -1,9 +1,10 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-27 记录为准。
+2026-05-28 记录为准。
 
-当前最新本轮为 platform host abi completeness wave 3；上一轮包括
+当前最新本轮为 platform host abi completeness wave 4；上一轮包括
+platform host abi completeness wave 3；
 platform host abi completeness wave 2；
 platform host abi completeness wave 1；
 platform ffi import workflow；
@@ -42,6 +43,100 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-28 (platform host abi completeness wave 4)
+
+- **Status:** feature commit and latest-main rebase verification completed; merge / post-merge verification pending
+- Objective:
+  - 按 `core/docs/platform-ffi-import-workflow.md` 启动第四批 host ABI completeness。
+  - 本轮聚焦 directory/path raw ABI inventory，不新增 `platform.file` public contract，不新增 raw
+    OS API runtime tests。
+  - 首选候选是 POSIX `mkdir` / `rmdir` / `unlink` / `rename` / `access` /
+    `getcwd` / `chdir`；Windows `CreateDirectoryA/W`、`RemoveDirectoryA/W`、
+    `DeleteFileA/W`、`MoveFileA/W`、`GetCurrentDirectoryA/W`、
+    `SetCurrentDirectoryA/W`、`GetFullPathNameA/W`。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` at `main@27d57f2`，创建 Wave 4 worktree 前干净。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths`
+    on `codex/platform-host-abi-wave4-paths` from `main@27d57f2`。
+  - 其他并行 worktree 仍存在：`collections-refactor`、`sema-no-matching-overload`；本轮不触碰。
+- Boundary:
+  - FPC source 是 evidence，不是 production dependency。
+  - host `base/ffi` 可以厚化；统一 public contract 未来由 `platform.file` / `platform.path`
+    或更高层模块另行设计。
+  - raw ABI 通过 source evidence、source-surface gate、compile-only gate 和 review 证明。
+- Source evidence so far:
+  - POSIX libc declaration evidence:
+    `rtl/unix/oscdeclh.inc` declares `FpChdir`, `FpMkdir`, `FpUnlink`, `FpRmdir`,
+    `FpRename`, and `FpAccess` as external `chdir`, `mkdir`, `unlink`, `rmdir`,
+    `rename`, and `access`.
+  - Linux/BSD syscall wrapper evidence:
+    `rtl/linux/ossysc.inc` and `rtl/bsd/ossysc.inc` expose `Fpunlink`, `Fprename`,
+    `Fpchdir`, `Fpmkdir`, `Fprmdir`, `Fpaccess`, and `Fpgetcwd`.
+  - Windows kernel32 evidence:
+    `rtl/win/wininc/ascfun.inc`, `unifun.inc`, `ascdef.inc`, `unidef.inc`, and
+    `rtl/win/sysos.inc` declare `CreateDirectory*`, `RemoveDirectory*`,
+    `DeleteFile*`, `MoveFile*`, `GetCurrentDirectory*`, `SetCurrentDirectory*`,
+    and `GetFullPathName*`.
+- Current plan:
+  - 先新增 `test_platform_host_abi_wave4_paths` source-surface gate，制造 RED。
+  - GREEN 阶段只落证据充分、host owner 清楚的目录路径基础 ABI；不写 runtime raw API tests。
+  - 接入 `build/verify_local.sh`，再跑 focused/full verification，提交并合并。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths clean test`
+    已按预期失败：POSIX path bindings、Windows path aliases/bindings、Wave 4 docs 和
+    `verify_local` route token 尚不存在；`platform.file.ffi` absent check 已通过。
+- Actions taken:
+  - 新增 `test_platform_host_abi_wave4_paths` source-surface gate，覆盖 FPC source evidence、
+    host owner tokens、`verify_local` route token，并明确检查不存在 feature-specific
+    `platform.file.ffi`。
+  - `posix.ffi` 新增 directory/path raw externals 与 thin helpers：
+    `mkdir`、`rmdir`、`unlink`、`rename`、`access`、`getcwd`、`chdir` 以及
+    `platform_posix_directory_*` / `platform_posix_path_*` helper。
+  - Linux、Android、Darwin、FreeBSD、generic Unix host `.base` 新增 access mode tokens；
+    对应 host `.ffi` 新增 `platform_directory_*` / `platform_path_*` delegating helpers。
+  - Windows `.base` 新增 `LPSTR` / `LPWSTR` / pointer aliases；Windows `.ffi` 新增
+    `CreateDirectoryA/W`、`RemoveDirectoryA/W`、`DeleteFileA/W`、`MoveFileA/W`、
+    `GetCurrentDirectoryA/W`、`SetCurrentDirectoryA/W`、`GetFullPathNameA/W` 与 thin helpers。
+  - 更新 evidence index 与 gap matrix，记录 Wave 4 scope 和不创建 public `platform.file`
+    contract 的边界。
+  - `build/verify_local.sh` 新增 Wave 4 required paths、focused check 和 final envelope token
+    `corePlatformHostAbiWave4PathsCheck`。曾出现一次机械插入导致脚本 diff 膨胀的问题，已修复为
+    最小 route-truth diff；`git diff --numstat build/verify_local.sh` 为 `27 1`。
+- Verification:
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths clean test`:
+    `5 total, 5 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin / Android / FreeBSD / generic Unix simulated host compile matrix all `status=pass`.
+  - Focused regression gates passed:
+    `test_platform_ffi_partition_surface`, `test_platform_posix_ffi_surface`,
+    `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
+    `test_platform_ffi_owner_boundary`.
+  - Win64 compile-only smoke passed for
+    `core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`,
+    `core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`,
+    and `core/tests/nextpas.core.time/test_time/test_time.lpr`.
+  - `git diff --check`: pass.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave4PathsCheck":"pass"`.
+- Retrospective:
+  - 本轮守住了 L0 raw ABI 边界：host `base/ffi` 变厚，public platform contract 没有被提前设计或污染。
+  - 验证策略符合用户要求：raw OS API 不做 runtime unit test，改用 FPC source evidence、
+    source-surface tests、compile gates、Win64 compile-only smoke 和 official route truth。
+  - Feature commit 初始为 `e852718`；集成窗口内本地 `main` 继续前进到 `ff141a2`，本分支已再次
+    rebase 到该最新 main 且无冲突。
+  - 最新 rebase 后 fresh `git diff --check main..HEAD` 通过，focused Wave 4 gate 仍为
+    `5 total, 5 passed, 0 failed`，fresh `bash build/verify_local.sh` 仍输出
+    `verify-local=pass` / `human-summary=local verification passed`，final envelope 继续包含
+    `corePlatformHostAbiWave4PathsCheck":"pass"`。
+  - 合并前必须确认 fast-forward，不覆盖并行 worktree/主线工作，并在合并后做 post-merge focused
+    gate / official route verification。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 2)
 

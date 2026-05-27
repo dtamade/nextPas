@@ -38,6 +38,23 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 4 covers the directory/path ABI raw inventory for
+  host `base/ffi` owners. POSIX hosts now carry `F_OK`, `X_OK`,
+  `W_OK`, `R_OK` access tokens plus delegated helpers for `mkdir`, `rmdir`,
+  `unlink`, `rename`, `access`, `getcwd`, and `chdir`. Windows now carries
+  `LPSTR`, `LPWSTR`, `PLPSTR`, `PLPWSTR`, `CreateDirectoryA`,
+  `CreateDirectoryW`, `RemoveDirectoryA`, `RemoveDirectoryW`, `DeleteFileA`,
+  `DeleteFileW`, `MoveFileA`, `MoveFileW`, `GetCurrentDirectoryA`,
+  `GetCurrentDirectoryW`, `SetCurrentDirectoryA`, `SetCurrentDirectoryW`,
+  `GetFullPathNameA`, `GetFullPathNameW`, and thin result helpers. This remains
+  source-surface and compile evidence with no public platform.file contract.
+- Wave 4 source evidence tokens are synchronized with the evidence index:
+  `mkdir`, `rmdir`, `unlink`, `rename`, `access`, `getcwd`, `chdir`, `F_OK`,
+  `X_OK`, `W_OK`, `R_OK`, `CreateDirectoryA`, `CreateDirectoryW`,
+  `RemoveDirectoryA`, `RemoveDirectoryW`, `DeleteFileA`, `DeleteFileW`,
+  `MoveFileA`, `MoveFileW`, `GetCurrentDirectoryA`, `GetCurrentDirectoryW`,
+  `SetCurrentDirectoryA`, `SetCurrentDirectoryW`, `GetFullPathNameA`, and
+  `GetFullPathNameW`.
 - Platform Host ABI Completeness Wave 1 covers process id, `timeval`, mmap, and
   dynamic loader inventory for host `base/ffi` owners. POSIX hosts now carry
   `pid_t`, RTLD constants, `platform_process_id`, `platform_parent_process_id`,

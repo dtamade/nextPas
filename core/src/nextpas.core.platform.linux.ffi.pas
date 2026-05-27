@@ -111,6 +111,21 @@ function platform_file_fcntl_i32(
   const AFileDescriptor: TPlatformFileDescriptor;
   const ACommand: Int32;
   const AArgument: Int32): Int32; inline;
+function platform_directory_create(
+  const APath: PAnsiChar;
+  const AMode: TPlatformFileModeArg): Int32; inline;
+function platform_directory_remove(const APath: PAnsiChar): Int32; inline;
+function platform_path_unlink(const APath: PAnsiChar): Int32; inline;
+function platform_path_rename(
+  const AOldPath: PAnsiChar;
+  const ANewPath: PAnsiChar): Int32; inline;
+function platform_path_access(
+  const APath: PAnsiChar;
+  const AMode: Int32): Int32; inline;
+function platform_path_get_current_directory(
+  ABuffer: PAnsiChar;
+  const ASize: PtrUInt): PAnsiChar; inline;
+function platform_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;
 function platform_dlsym(ALibrary: Pointer; const AName: PAnsiChar): Pointer; inline;
 function platform_dlclose(ALibrary: Pointer): Int32; inline;
@@ -187,6 +202,49 @@ function platform_file_fcntl_i32(
   const AArgument: Int32): Int32; inline;
 begin
   Result := platform_posix_fcntl_i32(AFileDescriptor, ACommand, AArgument);
+end;
+
+function platform_directory_create(
+  const APath: PAnsiChar;
+  const AMode: TPlatformFileModeArg): Int32; inline;
+begin
+  Result := platform_posix_directory_create(APath, AMode);
+end;
+
+function platform_directory_remove(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_directory_remove(APath);
+end;
+
+function platform_path_unlink(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_path_unlink(APath);
+end;
+
+function platform_path_rename(
+  const AOldPath: PAnsiChar;
+  const ANewPath: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_path_rename(AOldPath, ANewPath);
+end;
+
+function platform_path_access(
+  const APath: PAnsiChar;
+  const AMode: Int32): Int32; inline;
+begin
+  Result := platform_posix_path_access(APath, AMode);
+end;
+
+function platform_path_get_current_directory(
+  ABuffer: PAnsiChar;
+  const ASize: PtrUInt): PAnsiChar; inline;
+begin
+  Result := platform_posix_path_get_current_directory(ABuffer, ASize);
+end;
+
+function platform_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_path_set_current_directory(APath);
 end;
 
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;

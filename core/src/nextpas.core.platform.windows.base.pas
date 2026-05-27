@@ -11,8 +11,12 @@ type
   FARPROC = Pointer;
   HMODULE = HANDLE;
   LPCSTR = PAnsiChar;
+  LPSTR = PAnsiChar;
   LPCWSTR = PWideChar;
+  LPWSTR = PWideChar;
   LPDWORD = ^DWORD;
+  PLPSTR = ^LPSTR;
+  PLPWSTR = ^LPWSTR;
   SRWLOCK = Pointer;
   CONDITION_VARIABLE = Pointer;
   TPlatformWindowsThreadProc = function(AArg: Pointer): Pointer; cdecl;

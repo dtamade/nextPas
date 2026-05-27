@@ -41,6 +41,44 @@ compile-only gates, and focused runtime tests of the nextPas abstractions.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 4: directory/path ABI raw inventory
+
+Wave 4 imports the directory/path ABI raw inventory that future file or path
+contracts can consume. It covers POSIX directory and path entrypoints and
+Windows kernel32 directory/path entrypoints. It keeps no public platform.file contract in
+this wave.
+
+- Shared POSIX path externals and thin helpers live in
+  `nextpas.core.platform.posix.ffi`: `mkdir`, `rmdir`, `unlink`, `rename`,
+  `access`, `getcwd`, `chdir`, `platform_posix_directory_create`,
+  `platform_posix_directory_remove`, `platform_posix_path_unlink`,
+  `platform_posix_path_rename`, `platform_posix_path_access`,
+  `platform_posix_path_get_current_directory`, and
+  `platform_posix_path_set_current_directory`. FPC evidence starts in
+  `rtl/unix/oscdeclh.inc`, where the libc external declarations are visible,
+  and in `rtl/linux/ossysc.inc` / `rtl/bsd/ossysc.inc`, where syscall wrappers
+  expose `FpMkdir`, `FpRmdir`, `FpUnlink`, `FpRename`, `FpAccess`, `FpGetcwd`,
+  and `FpChdir`.
+- POSIX access mode tokens stay in host `base` units: `F_OK`, `X_OK`, `W_OK`,
+  and `R_OK` become `PLATFORM_ACCESS_EXISTS`, `PLATFORM_ACCESS_EXECUTE`,
+  `PLATFORM_ACCESS_WRITE`, and `PLATFORM_ACCESS_READ`. Evidence starts in FPC
+  `rtl/linux/ostypes.inc` and `rtl/bsd/ostypes.inc`; generic Unix keeps the
+  same proven POSIX values until a more specific host owner is promoted.
+- POSIX host `ffi` units expose `platform_directory_create`,
+  `platform_directory_remove`, `platform_path_unlink`, `platform_path_rename`,
+  `platform_path_access`, `platform_path_get_current_directory`, and
+  `platform_path_set_current_directory` by delegating to the shared POSIX
+  helpers.
+- Windows path and directory evidence starts in FPC
+  `rtl/win/wininc/ascfun.inc`, `rtl/win/wininc/unifun.inc`,
+  `rtl/win/wininc/ascdef.inc`, `rtl/win/wininc/unidef.inc`, and
+  `rtl/win/sysos.inc`. Wave 4 imports `LPSTR`, `LPWSTR`, `PLPSTR`, `PLPWSTR`,
+  `CreateDirectoryA`, `CreateDirectoryW`, `RemoveDirectoryA`,
+  `RemoveDirectoryW`, `DeleteFileA`, `DeleteFileW`, `MoveFileA`, `MoveFileW`,
+  `GetCurrentDirectoryA`, `GetCurrentDirectoryW`, `SetCurrentDirectoryA`,
+  `SetCurrentDirectoryW`, `GetFullPathNameA`, `GetFullPathNameW`, and thin
+  result helpers.
+
 ### Platform Host ABI Completeness Wave 3: file status ABI raw inventory
 
 Wave 3 imports the file status ABI raw inventory that is safe to own without

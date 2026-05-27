@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host ABI Completeness Wave 3；上一轮包括
+当前最新本轮为 Platform Host ABI Completeness Wave 4；上一轮包括
+Platform Host ABI Completeness Wave 3；
 Platform Host ABI Completeness Wave 2；
 Platform Host ABI Completeness Wave 1；
 Platform FFI Import Workflow；
@@ -53,6 +54,108 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 4
+
+### Goal
+
+继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
+目录与路径基础 ABI：POSIX `mkdir` / `rmdir` / `unlink` / `rename` / `access` /
+`getcwd` / `chdir`，以及 Windows `CreateDirectoryA/W`、`RemoveDirectoryA/W`、
+`DeleteFileA/W`、`MoveFileA/W`、`GetCurrentDirectoryA/W`、`SetCurrentDirectoryA/W`、
+`GetFullPathNameA/W`。
+
+本轮明确不创建 `platform.file` public contract，不新增 `platform.file.ffi`，也不把 raw
+OS API 作为 runtime unit test 目标。后续统一文件/路径 API 应另起 public contract 设计。
+
+### Architecture Decision
+
+- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC
+  platform/RTL units。
+- 共享 POSIX external 与 thin helper 放在 `nextpas.core.platform.posix.ffi`；host `.ffi`
+  只暴露 host owner helper 并委托 shared POSIX helper。
+- POSIX access mode token `F_OK` / `X_OK` / `W_OK` / `R_OK` 是 host base 事实，放入各
+  POSIX host `.base`，不藏在 feature 子模块。
+- Windows path/directory entrypoints、string pointer aliases 与 helper 归
+  `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi`。
+- raw OS ABI 不做 runtime unit test；本轮用 FPC source evidence、source-surface guard、
+  simulated host compile matrix、Win64 compile-only gate 与 official verify route 证明。
+
+### Status
+
+Feature commit, latest-main rebase, and rebase verification completed; merge /
+post-merge verification / cleanup are still pending.
+
+- Worktree:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths`
+- Branch: `codex/platform-host-abi-wave4-paths`
+- Base: `main@27d57f2`
+- Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
+  wave does not touch them.
+
+### Planned Steps
+
+- [x] 从最新 `main@27d57f2` 创建 `codex/platform-host-abi-wave4-paths` isolated worktree
+- [x] 读取 workflow、host gap matrix、source evidence index、Wave 2/3 tests 与现有 host
+  base/ffi owner
+- [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows 目录路径 ABI
+- [x] RED：新增 Wave 4 source-surface gate，要求 evidence、host owner tokens 和 verify route
+- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
+- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [x] focused verification、full verification
+- [x] commit feature branch and rebase latest `main`
+- [ ] merge, post-merge verification, cleanup
+
+### Audit Checklist
+
+- [x] 不新增 `platform.file` public API，也不新增 `platform.file.ffi`
+- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw path ABI
+- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
+  `Windows`
+- [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
+- [x] POSIX 与 Windows path/directory family 分别归 host owner，不混成伪 POSIX
+
+### Verification Evidence
+
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths clean test`:
+  `5 total, 5 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+  Darwin / Android / FreeBSD / generic Unix simulated host compile matrix all `status=pass`.
+- Regression surface checks passed:
+  `test_platform_ffi_partition_surface`, `test_platform_posix_ffi_surface`,
+  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
+  `test_platform_ffi_owner_boundary`.
+- Win64 compile-only smoke passed for platform thread, platform sync, and `nextpas.core.time`.
+- Full checks passed: `make -C core test`, `make -C core examples`,
+  `make -C core benchmarks`.
+- Fresh `bash build/verify_local.sh` passed with `verify-local=pass`,
+  `human-summary=local verification passed`, and final envelope token
+  `corePlatformHostAbiWave4PathsCheck":"pass"`.
+- After local `main` advanced through collections work to `main@ff141a2`, rebasing
+  Wave 4 again completed without conflicts. Fresh `git diff --check main..HEAD`,
+  focused Wave 4 gate, and `bash build/verify_local.sh` passed again; the official
+  envelope still contains `corePlatformHostAbiWave4PathsCheck":"pass"`.
+
+### Retrospective
+
+本轮方向正确：raw directory/path API 已进入 host-owned `base/ffi`，没有偷渡成 public
+`platform.file` / `platform.path` contract，也没有让 `platform.time` / `platform.sync` /
+`platform.thread` 消费这组 ABI。一次风险点是 `build/verify_local.sh` 曾被机械插入扩大成大 diff；
+已收敛回最小 route-truth diff，并用 `sh -n build/verify_local.sh` 与 fresh full verification 证明。
+集成窗口内主线前进过 collections commits；本轮通过重复 rebase 保持在最新 main 之上。合并必须
+保持 fast-forward，并在合并后做 post-merge verification。
+
+### Recovery Entry
+
+If this session is interrupted, resume here:
+
+```bash
+cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths
+git status --short --branch
+sed -n '1,170p' task_plan.md
+sed -n '1,120p' progress.md
+tail -n 120 findings.md
+```
 
 ## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 3
 

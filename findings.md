@@ -2261,3 +2261,53 @@
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat` 已删除，分支
   `codex/platform-host-abi-wave3-stat` 已删除，`git worktree prune` 已执行；当前剩余并行 worktree 是
   `collections-refactor` 与 `sema-no-matching-overload`。
+
+## 2026-05-28 Follow-up Findings 35
+
+- Platform Host ABI Wave 4 的正确切片是 directory/path raw ABI inventory，不是 `platform.file`
+  或 `platform.path` public contract。后续统一文件/路径 API 需要另起设计，不应在本轮 raw ABI
+  import 中偷渡。
+- POSIX 侧取证落点清楚：FPC `rtl/unix/oscdeclh.inc` 以 libc external 方式声明
+  `chdir`、`mkdir`、`unlink`、`rmdir`、`rename`、`access`；`rtl/linux/ossysc.inc` 与
+  `rtl/bsd/ossysc.inc` 还提供 `Fpgetcwd` 等 syscall wrapper evidence。因此 shared POSIX
+  `posix.ffi` 可以承载这些 external binding 和 `platform_posix_*` thin helpers，host `.ffi`
+  再暴露 `platform_path_*` / `platform_directory_*` helper。
+- POSIX access mode token `F_OK` / `X_OK` / `W_OK` / `R_OK` 属于 host base fact。当前 Linux、
+  Android、Darwin、FreeBSD 与 generic Unix 的基础值均可按 FPC/POSIX evidence 收进各自 `.base`；
+  不能把它们塞进 feature-specific `platform.file.ffi`。
+- Windows 侧取证来自 kernel32 family：FPC `rtl/win/wininc/ascfun.inc`、`unifun.inc`、
+  `ascdef.inc`、`unidef.inc` 与 `rtl/win/sysos.inc` 覆盖 `CreateDirectoryA/W`、
+  `RemoveDirectoryA/W`、`DeleteFileA/W`、`MoveFileA/W`、`GetCurrentDirectoryA/W`、
+  `SetCurrentDirectoryA/W`、`GetFullPathNameA/W`。这些 entrypoint 与 helper 应归
+  `windows.base` / `windows.ffi`。
+- raw directory/path ABI 仍不做 runtime unit test。本轮测试目标是 source-surface、文档事实、
+  official route truth、ABI owner 边界和 compile-only coherence。
+
+## 2026-05-28 Follow-up Findings 36
+
+- Wave 4 implementation 已把 directory/path ABI 放进 host-owned shape：POSIX externals 与
+  `platform_posix_*` helper 位于 `posix.ffi`；Linux、Android、Darwin、FreeBSD、generic Unix
+  `.ffi` 只暴露 host owner helper 并委托 POSIX；Windows A/W entrypoints 和 helper 位于
+  `windows.ffi`，string pointer aliases 位于 `windows.base`。
+- `build/verify_local.sh` 的 Wave 4 接入应保持小而可审查：required path、focused source-surface
+  check、final envelope token 足够。一次机械插入曾把脚本扩大成异常大 diff，已修复为
+  `27 1` 的最小 diff 并通过 `sh -n build/verify_local.sh`。
+- Pre-merge verification 证据完整：Wave 4 focused gate `5 total, 5 passed, 0 failed`；
+  simulated host compile matrix 全部 `status=pass`；`make -C core test` / `examples` /
+  `benchmarks` 通过；fresh `bash build/verify_local.sh` 输出 `verify-local=pass`、
+  `human-summary=local verification passed`，final envelope 包含
+  `corePlatformHostAbiWave4PathsCheck":"pass"`。
+- 本轮仍未新增真实 Windows/macOS runtime execution evidence；这是当前硬件/环境边界，不应被误报为
+  已有跨平台 runtime 证明。当前跨平台保证来自 source evidence、Win64 compile-only smoke 与
+  simulated host compile matrix。
+
+## 2026-05-28 Follow-up Findings 37
+
+- Wave 4 feature branch 初始 commit 为 `e852718`；集成窗口内本地 `main` 前进到
+  `ff141a2`，本分支已再次 rebase 到最新 main 且无冲突。
+- 最新 rebase 后 fresh checks 通过：`git diff --check main..HEAD`、focused Wave 4 gate
+  `5 total, 5 passed, 0 failed`、fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`，final envelope 继续包含
+  `corePlatformHostAbiWave4PathsCheck":"pass"`。
+- 合并应 fast-forward 进行；合并后要重新跑 focused gate 与 official verification，确保主线上的
+  route truth 仍成立。

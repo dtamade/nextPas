@@ -152,6 +152,40 @@ function windows_get_file_attributes_ex_w(
 function windows_get_file_information_by_handle(
   const AFile: HANDLE;
   out AFileInformation: BY_HANDLE_FILE_INFORMATION): Int32; inline;
+function windows_create_directory_a(
+  const APathName: LPCSTR;
+  const ASecurityAttributes: Pointer): Int32; inline;
+function windows_create_directory_w(
+  const APathName: LPCWSTR;
+  const ASecurityAttributes: Pointer): Int32; inline;
+function windows_remove_directory_a(const APathName: LPCSTR): Int32; inline;
+function windows_remove_directory_w(const APathName: LPCWSTR): Int32; inline;
+function windows_delete_file_a(const AFileName: LPCSTR): Int32; inline;
+function windows_delete_file_w(const AFileName: LPCWSTR): Int32; inline;
+function windows_move_file_a(
+  const AExistingFileName: LPCSTR;
+  const ANewFileName: LPCSTR): Int32; inline;
+function windows_move_file_w(
+  const AExistingFileName: LPCWSTR;
+  const ANewFileName: LPCWSTR): Int32; inline;
+function windows_get_current_directory_a(
+  const ABufferLength: DWORD;
+  ABuffer: LPSTR): DWORD; inline;
+function windows_get_current_directory_w(
+  const ABufferLength: DWORD;
+  ABuffer: LPWSTR): DWORD; inline;
+function windows_set_current_directory_a(const APathName: LPCSTR): Int32; inline;
+function windows_set_current_directory_w(const APathName: LPCWSTR): Int32; inline;
+function windows_get_full_path_name_a(
+  const AFileName: LPCSTR;
+  const ABufferLength: DWORD;
+  ABuffer: LPSTR;
+  AFilePart: PLPSTR): DWORD; inline;
+function windows_get_full_path_name_w(
+  const AFileName: LPCWSTR;
+  const ABufferLength: DWORD;
+  ABuffer: LPWSTR;
+  AFilePart: PLPWSTR): DWORD; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -202,6 +236,20 @@ function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWOR
 function GetFileAttributesExA(lpFileName: LPCSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExA';
 function GetFileAttributesExW(lpFileName: LPCWSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExW';
 function GetFileInformationByHandle(hFile: HANDLE; lpFileInformation: PBY_HANDLE_FILE_INFORMATION): BOOL; stdcall; external 'kernel32' name 'GetFileInformationByHandle';
+function CreateDirectoryA(lpPathName: LPCSTR; lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateDirectoryA';
+function CreateDirectoryW(lpPathName: LPCWSTR; lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateDirectoryW';
+function RemoveDirectoryA(lpPathName: LPCSTR): BOOL; stdcall; external 'kernel32' name 'RemoveDirectoryA';
+function RemoveDirectoryW(lpPathName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'RemoveDirectoryW';
+function DeleteFileA(lpFileName: LPCSTR): BOOL; stdcall; external 'kernel32' name 'DeleteFileA';
+function DeleteFileW(lpFileName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'DeleteFileW';
+function MoveFileA(lpExistingFileName: LPCSTR; lpNewFileName: LPCSTR): BOOL; stdcall; external 'kernel32' name 'MoveFileA';
+function MoveFileW(lpExistingFileName: LPCWSTR; lpNewFileName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'MoveFileW';
+function GetCurrentDirectoryA(nBufferLength: DWORD; lpBuffer: LPSTR): DWORD; stdcall; external 'kernel32' name 'GetCurrentDirectoryA';
+function GetCurrentDirectoryW(nBufferLength: DWORD; lpBuffer: LPWSTR): DWORD; stdcall; external 'kernel32' name 'GetCurrentDirectoryW';
+function SetCurrentDirectoryA(lpPathName: LPCSTR): BOOL; stdcall; external 'kernel32' name 'SetCurrentDirectoryA';
+function SetCurrentDirectoryW(lpPathName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'SetCurrentDirectoryW';
+function GetFullPathNameA(lpFileName: LPCSTR; nBufferLength: DWORD; lpBuffer: LPSTR; lpFilePart: PLPSTR): DWORD; stdcall; external 'kernel32' name 'GetFullPathNameA';
+function GetFullPathNameW(lpFileName: LPCWSTR; nBufferLength: DWORD; lpBuffer: LPWSTR; lpFilePart: PLPWSTR): DWORD; stdcall; external 'kernel32' name 'GetFullPathNameW';
 
 implementation
 
@@ -415,6 +463,126 @@ begin
     Result := 0
   else
     Result := windows_last_error_i32;
+end;
+
+function windows_create_directory_a(
+  const APathName: LPCSTR;
+  const ASecurityAttributes: Pointer): Int32; inline;
+begin
+  if CreateDirectoryA(APathName, ASecurityAttributes) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_create_directory_w(
+  const APathName: LPCWSTR;
+  const ASecurityAttributes: Pointer): Int32; inline;
+begin
+  if CreateDirectoryW(APathName, ASecurityAttributes) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_remove_directory_a(const APathName: LPCSTR): Int32; inline;
+begin
+  if RemoveDirectoryA(APathName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_remove_directory_w(const APathName: LPCWSTR): Int32; inline;
+begin
+  if RemoveDirectoryW(APathName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_delete_file_a(const AFileName: LPCSTR): Int32; inline;
+begin
+  if DeleteFileA(AFileName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_delete_file_w(const AFileName: LPCWSTR): Int32; inline;
+begin
+  if DeleteFileW(AFileName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_move_file_a(
+  const AExistingFileName: LPCSTR;
+  const ANewFileName: LPCSTR): Int32; inline;
+begin
+  if MoveFileA(AExistingFileName, ANewFileName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_move_file_w(
+  const AExistingFileName: LPCWSTR;
+  const ANewFileName: LPCWSTR): Int32; inline;
+begin
+  if MoveFileW(AExistingFileName, ANewFileName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_get_current_directory_a(
+  const ABufferLength: DWORD;
+  ABuffer: LPSTR): DWORD; inline;
+begin
+  Result := GetCurrentDirectoryA(ABufferLength, ABuffer);
+end;
+
+function windows_get_current_directory_w(
+  const ABufferLength: DWORD;
+  ABuffer: LPWSTR): DWORD; inline;
+begin
+  Result := GetCurrentDirectoryW(ABufferLength, ABuffer);
+end;
+
+function windows_set_current_directory_a(const APathName: LPCSTR): Int32; inline;
+begin
+  if SetCurrentDirectoryA(APathName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_set_current_directory_w(const APathName: LPCWSTR): Int32; inline;
+begin
+  if SetCurrentDirectoryW(APathName) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_get_full_path_name_a(
+  const AFileName: LPCSTR;
+  const ABufferLength: DWORD;
+  ABuffer: LPSTR;
+  AFilePart: PLPSTR): DWORD; inline;
+begin
+  Result := GetFullPathNameA(AFileName, ABufferLength, ABuffer, AFilePart);
+end;
+
+function windows_get_full_path_name_w(
+  const AFileName: LPCWSTR;
+  const ABufferLength: DWORD;
+  ABuffer: LPWSTR;
+  AFilePart: PLPWSTR): DWORD; inline;
+begin
+  Result := GetFullPathNameW(AFileName, ABufferLength, ABuffer, AFilePart);
 end;
 
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;

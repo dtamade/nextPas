@@ -129,6 +129,21 @@ function platform_posix_fcntl_i32(
   const AFileDescriptor: TPlatformFileDescriptor;
   const ACommand: Int32;
   const AArgument: Int32): Int32; inline;
+function platform_posix_directory_create(
+  const APath: PAnsiChar;
+  const AMode: TPlatformFileModeArg): Int32; inline;
+function platform_posix_directory_remove(const APath: PAnsiChar): Int32; inline;
+function platform_posix_path_unlink(const APath: PAnsiChar): Int32; inline;
+function platform_posix_path_rename(
+  const AOldPath: PAnsiChar;
+  const ANewPath: PAnsiChar): Int32; inline;
+function platform_posix_path_access(
+  const APath: PAnsiChar;
+  const AMode: Int32): Int32; inline;
+function platform_posix_path_get_current_directory(
+  ABuffer: PAnsiChar;
+  const ASize: PtrUInt): PAnsiChar; inline;
+function platform_posix_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
 function platform_posix_getpid: pid_t; inline;
 function platform_posix_getppid: pid_t; inline;
 
@@ -145,6 +160,13 @@ function mprotect(addr: Pointer; len: PtrUInt; prot: Int32): Int32; cdecl; exter
 function open(path: PAnsiChar; flags: Int32; mode: TPlatformFileModeArg): TPlatformFileDescriptor; cdecl; external 'c' name 'open';
 function close(fd: TPlatformFileDescriptor): Int32; cdecl; external 'c' name 'close';
 function fcntl(fd: TPlatformFileDescriptor; cmd: Int32; arg: PtrInt): Int32; cdecl; external 'c' name 'fcntl';
+function mkdir(path: PAnsiChar; mode: TPlatformFileModeArg): Int32; cdecl; external 'c' name 'mkdir';
+function rmdir(path: PAnsiChar): Int32; cdecl; external 'c' name 'rmdir';
+function unlink(path: PAnsiChar): Int32; cdecl; external 'c' name 'unlink';
+function rename(oldpath: PAnsiChar; newpath: PAnsiChar): Int32; cdecl; external 'c' name 'rename';
+function access(path: PAnsiChar; mode: Int32): Int32; cdecl; external 'c' name 'access';
+function getcwd(buf: PAnsiChar; size: PtrUInt): PAnsiChar; cdecl; external 'c' name 'getcwd';
+function chdir(path: PAnsiChar): Int32; cdecl; external 'c' name 'chdir';
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
@@ -434,6 +456,49 @@ function platform_posix_fcntl_i32(
   const AArgument: Int32): Int32; inline;
 begin
   Result := fcntl(AFileDescriptor, ACommand, PtrInt(AArgument));
+end;
+
+function platform_posix_directory_create(
+  const APath: PAnsiChar;
+  const AMode: TPlatformFileModeArg): Int32; inline;
+begin
+  Result := mkdir(APath, AMode);
+end;
+
+function platform_posix_directory_remove(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := rmdir(APath);
+end;
+
+function platform_posix_path_unlink(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := unlink(APath);
+end;
+
+function platform_posix_path_rename(
+  const AOldPath: PAnsiChar;
+  const ANewPath: PAnsiChar): Int32; inline;
+begin
+  Result := rename(AOldPath, ANewPath);
+end;
+
+function platform_posix_path_access(
+  const APath: PAnsiChar;
+  const AMode: Int32): Int32; inline;
+begin
+  Result := access(APath, AMode);
+end;
+
+function platform_posix_path_get_current_directory(
+  ABuffer: PAnsiChar;
+  const ASize: PtrUInt): PAnsiChar; inline;
+begin
+  Result := getcwd(ABuffer, ASize);
+end;
+
+function platform_posix_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
+begin
+  Result := chdir(APath);
 end;
 
 function platform_posix_getppid: pid_t; inline;
