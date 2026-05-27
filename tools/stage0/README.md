@@ -268,7 +268,8 @@ class variable receiver 的 method statement call，包括 argument-count matche
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
 direct member function call、class method body 内的 `Self.SetValue(9)` 与 bare implicit-self
 method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑定到 inherited
-method），还覆盖 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
+method），还覆盖 imported `project-source` direct known field/property 被当作 call 使用时的
+`sema.invalid-call-shape` gate，以及 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
 same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
 单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
 `Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`，或 `Pick(Flag);`

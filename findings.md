@@ -469,6 +469,19 @@
 - installed-source known field invalid-call-shape 的 official proof 只能放在 semantic harness 中用
   `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作
   workspace project-source，不能证明 installed-source provenance。
+- Batch 169 把 known non-callable invalid-call-shape 推进到 imported `project-source` direct property：
+  imported `TWorker.Value` property 被 root source 调成 `Worker.Value(1)` 时，会失败为
+  `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 169 focused probe 直接 GREEN，证明 imported project-source property truth 已经通过
+  `$read` / `$write` 进入 known non-method member guard；本批不修改 analyzer。
+- Batch 169 新增 `tests/fixtures/imported_known_property_member_call` 与
+  `imported-known-property-member-call-check`，final envelope 新增
+  `importedKnownPropertyMemberCallCheck":"pass"`。
+- Batch 169 fresh `bash build/verify_local.sh` 已输出
+  `imported-known-property-member-call-check=pass`、
+  `importedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
