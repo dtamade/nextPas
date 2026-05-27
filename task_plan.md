@@ -28,6 +28,70 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Addendum: 2026-05-27 Batch 109 Imported Member Single-target Type Mismatch Diagnostics
+
+### Goal
+
+把 `sema.type-mismatch` 从 root-owned member single-target call 与 imported bare single-target call
+推进到第一条 imported direct member-call 安全边界：当 receiver type 已知、root source 中没有同 owner
+class method、imported `project-source` unit 中 exact class type 只有一个同 arity member target，且当前
+argument signature 来自稳定事实并与 target param signature 明确不兼容时，发出
+`sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(True);`，其中 imported project-source `TWorker.Pick(Integer)` 是唯一
+  member target 时，必须失败为 `sema.type-mismatch`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member single-target mismatch 继续 deferred，不注册错误 binding，也不提前诊断。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 mismatch，避免把未知表达式、
+  implicit conversion、future member resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-member-type-mismatch-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedMemberTypeMismatchCallCheck`。
+- 从本批次起，后续 sema 热点轮次统一按 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 ->
+  focused GREEN -> fresh verify -> review -> commit` 的固定节奏推进，用单目标与热路径约束加快开发。
+
+### Architecture Decision
+
+这是 imported member-call single-target mismatch 的第一条 source-owned 切片，不是完整 Pascal member
+resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class direct member-call 单目标。
+- imported `installed-source` / RTL/helper 继续 deferred，避免过宽误报。
+- imported/inherited member no-match、record/property/array/deref receiver、implicit conversion、
+  default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标与快节奏执行法
+- [x] RED：新增 imported project-source member single-target mismatch focused regression
+- [x] RED：新增 imported installed-source member single-target mismatch deferred guard
+- [x] 在 member exact class lookup 中带出 imported project-source `type-mismatch` failure kind，并禁止错误 binding
+- [x] 新增 `tests/fixtures/imported_member_type_mismatch_call` 与 `imported-member-type-mismatch-call-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-member-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-member-type-mismatch-call-check=pass`、
+  `importedMemberTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member single-target mismatch 纳入 diagnostics
+- 不把 imported/inherited member no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
 ## Addendum: 2026-05-27 Batch 108 Imported Single-target Type Mismatch Diagnostics
 
 ### Goal

@@ -1639,12 +1639,17 @@ begin
     Exit;
   end;
   if AHasTypeMismatchEvidence and
-    SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) and
     (SymbolMatchCount = 1) and AHasArgSignature and
     (SignatureMatchCount = 0) then
   begin
-    AResolutionFailureKind := 'type-mismatch';
-    Exit;
+    if SameText(
+      TypeSymbol.OwnerUnitId,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    ) or ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId) then
+    begin
+      AResolutionFailureKind := 'type-mismatch';
+      Exit;
+    end;
   end;
   if SymbolMatchCount > 1 then
   begin

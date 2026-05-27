@@ -53,6 +53,21 @@
 - Batch 108 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 109 把 imported direct member-call single-target signature mismatch 接进 structured diagnostics：
+  receiver type 已知、imported `project-source` unit 的 exact class type 中只有一个同 arity
+  member target、且稳定 argument signature 与 target param signature 明确不兼容时，
+  `Worker.Pick(True)` 会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- Batch 109 同时固定 imported `installed-source` member single-target mismatch 继续 deferred；
+  它不会再错误 binding，也不会提前报 `sema.type-mismatch`。
+- Batch 109 新增 `imported-member-type-mismatch-call-check`，用 dedicated fixture 固定 stage0
+  `sema.type-mismatch` projection 与 final envelope `importedMemberTypeMismatchCallCheck=pass`。
+- Batch 109 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `imported-member-type-mismatch-call-check=pass`、
+  `importedMemberTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
+  最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
+  一条热路径，避免并行猜修拖慢收口。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
