@@ -32,3 +32,10 @@
 - `AddOrAssign(Key, Value): Boolean` inserts or updates and reports whether a new key was inserted.
 - `Put(Key, Value)` writes without reporting whether it inserted or updated.
 - Current copied code may still have transitional aliases such as `Get(Key, out Value)` or `Put` returning `Boolean`; these should be reviewed during interface tuning rather than treated as the final shape.
+
+## 2026-05-27: sequence indexed access semantics
+
+- `Get(Index): T` and `Put(Index, Value)` are checked operations and throw on invalid indexes.
+- `TryGet(Index, out Value): Boolean` is allowed as the non-throwing lookup form for callers that want explicit branching.
+- `GetUnchecked(Index): T` and `PutUnchecked(Index, Value)` are the unsafe fast path and require clear documentation that the caller owns bounds correctness.
+- Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other indexed sequence-like containers.

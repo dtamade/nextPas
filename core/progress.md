@@ -12,6 +12,7 @@
 - Added design decisions from discussion: every public working container implementation needs a public factory, and default semantic factories are allowed if their concrete mapping is documented.
 - Agreed not to add default semantic interface aliases for now. `MakeMap` may return `IHashMap`; no separate `IMap` alias is introduced yet.
 - Agreed that map-like `Get`/`Put` and `TryGetValue`/`AddOrAssign` have distinct semantics and should not be treated as duplicate aliases in the final interface.
+- Agreed that indexed sequence containers use checked access by default, optional `TryGet`, and explicit `Unchecked` methods for unsafe fast paths.
 
 ## Next
 
