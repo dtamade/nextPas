@@ -41,11 +41,13 @@ uses
   nextpas.core.collections.trie.intf,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.element_manager.intf,
   nextpas.core.collections.list.intf,
   nextpas.core.collections.forward_list.intf,
   nextpas.core.collections.stack.intf,
   nextpas.core.collections.circularbuffer.intf,
   nextpas.core.collections.priorityqueue.intf,
+  nextpas.core.collections.bitset.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.collections.iterators,
@@ -88,6 +90,7 @@ uses
 type
   // 统一对外导出的关键接口类型（非泛型别名；泛型类型请直接使用其本单元 uses 引入的原始定义）
   ICollection = nextpas.core.collections.intf.ICollection;
+  IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
