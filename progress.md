@@ -6164,3 +6164,6 @@ Hello from nextPas!
     不让 consumer 猜测 raw symbol 是否存在。
   - 本轮保持了 platform L0 边界：host base 表达 capability，host ffi 负责 wrapper/stub，feature
     consumer 暂不增加 public timedlock contract。
+  - Commit `c4ae03d` 已 fast-forward 合入 `main`，原
+    `codex/platform-abi-reference-surface` worktree 和分支已清理；合并后在最新主线重新跑
+    posix ffi surface、sync host ffi surface 与 ffi partition surface focused gate，均通过。

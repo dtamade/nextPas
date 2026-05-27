@@ -8285,7 +8285,7 @@ Completed; verification passed in isolated worktree.
 - [x] 实现 host base capability、`posix.ffi` raw declaration/shared helper、host ffi wrapper/stub
 - [x] 运行 focused gates 与 simulated host compile matrix
 - [x] 运行 full core test/example/benchmark 与 fresh `bash build/verify_local.sh`
-- [ ] commit / merge / cleanup
+- [x] commit / merge / cleanup
 
 ### Verification
 
