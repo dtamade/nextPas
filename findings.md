@@ -1934,3 +1934,17 @@
   `bash build/verify_local.sh` 均已通过；official envelope 给出 `verify-local=pass` 与
   `human-summary=local verification passed`。当前结论仍是 ABI reference surface 已收口，不等价于
   新增 raw pthread runtime behavior contract。
+
+## 2026-05-27 Follow-up Findings 21
+
+- `codex/platform-time-integration @ 02be065` 已不是可合并的活跃平台分支；相对当前主线它只剩
+  1 个独有旧提交，但整条 diff 会删除/回滚大量已成熟的 platform host-owner base/ffi、source-surface
+  gate、example 和 benchmark。
+- 旧分支里的 platform time hardening、per-project Makefile、platform time example/benchmark、
+  no-FPC 边界和 verification 记录，都已经被当前主线以更好分层吸收。
+- 旧分支中仍值得保留的小颗粒是 `nextpas.core.text` public contract 边界：empty split field、
+  empty delimiter，以及 empty substring index。移植这些测试后，`TextIndexOf('hello', '')`
+  暴露出真实缺口，修复为返回 0。
+- `demo_stopwatch` 和旧 L1 `bench_platform_time` 不应作为 platform closeout 合入；platform L0 示例/
+  基准继续使用 `core/examples/nextpas.core.platform.time/platform_time_clock` 与
+  `core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock`。

@@ -6167,3 +6167,30 @@ Hello from nextPas!
   - Commit `c4ae03d` 已 fast-forward 合入 `main`，原
     `codex/platform-abi-reference-surface` worktree 和分支已清理；合并后在最新主线重新跑
     posix ffi surface、sync host ffi surface 与 ffi partition surface focused gate，均通过。
+
+### Phase 18: Platform Time Integration Worktree Closeout
+
+- **Status:** completed; verification passed
+- Actions taken:
+  - 复查 `codex/platform-time-integration @ 02be065`：当前主线已经大幅领先，它只剩 1 个独有旧提交。
+  - 审查差异后确认不能整条合并：该提交会删除当前主线的大量
+    `platform.<host>.base/ffi`、platform time/sync/thread gate、platform example/benchmark 和
+    host-owner 分层成果。
+  - platform/time/build 方向已被主线以更好架构吸收；旧分支里的 `demo_stopwatch` 和
+    L1 `bench_platform_time` 不属于 platform L0 成果。
+  - 从旧分支择优移植 text contract 边界：split empty field、empty delimiter、empty substring
+    index。
+  - RED 已确认 `TextIndexOf('hello', '')` 旧实现返回 `-1`；修复为返回 `0` 后
+    `make -C core/tests/nextpas.core.text/test_text clean test` 通过，21/21 pass。
+  - 旧 `platform-time-integration` worktree 与 `codex/platform-time-integration` 分支已删除。
+- Verification:
+  - `make -C core/tests/nextpas.core.text/test_text clean test` 通过，21/21 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test` 通过，11/11 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary clean test` 通过，6/6 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test` 通过，1/1 pass。
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+- Review:
+  - 这次 closeout 的正确策略是 cherry-pick 思路下的小颗粒移植，而不是 merge 分支。
+  - platform 主线继续以当前 host-owner 模型为准；旧 integration worktree 只作为历史参考，收口后应删除。

@@ -8313,3 +8313,57 @@ Completed; verification passed in isolated worktree.
 - 不新增 `platform_mutex_timedlock` public API。
 - 不把 raw `pthread_mutex_timedlock` 当成 nextPas runtime 单测目标。
 - 不搬入当前 host FPC pthread 证据不足的 rwlock timedlock ABI。
+
+## Addendum: 2026-05-27 Platform Time Integration Worktree Closeout
+
+### Goal
+
+审查并收口旧 `codex/platform-time-integration` worktree，避免它继续被误认为待合主线：
+
+- 不整条合入会回滚当前 host-owner platform 架构的旧提交。
+- 只择优移植仍有价值且未被主线吸收的小颗粒。
+- 清理历史 worktree / 分支，减少并行开发噪音。
+
+### Decision
+
+`codex/platform-time-integration @ 02be065` 相对当前主线只领先 1 个旧提交，但主线已经领先 91+
+个提交。该提交混合了过期 platform.time FFI 形态、L1 `demo_stopwatch`、L1 time benchmark、
+旧 Makefile 脚本与 text 边界补丁；其中 platform/time/build 方向已被主线以更好的
+`platform.time facade + base + host`、host `base/ffi` owner、platform 专属 example/benchmark、
+source-surface gate 和 full verification 吸收。
+
+本轮只择优保留 text public contract 边界：
+
+- `TextSplit('a,,c', ',')` 保留空字段。
+- `TextSplit('abc', '')` 返回原字符串单元素数组。
+- `TextIndexOf('hello', '')` 返回 0。
+
+### Planned Steps
+
+- [x] 对比 `main...codex/platform-time-integration` 提交和文件差异
+- [x] 确认整条合并会删除/回滚当前 platform host-owner 成果
+- [x] 移植仍有价值的 text 边界测试
+- [x] 修复 `TextIndexOf` 空 substring contract
+- [x] 跑 focused / broader verification
+- [x] 删除旧 worktree 和分支
+- [x] 提交 closeout
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.text/test_text clean test` 失败在
+    `TextIndexOf('hello', '')` expected 0, got -1。
+- GREEN:
+  - `make -C core/tests/nextpas.core.text/test_text clean test` 通过，21/21 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test` 通过，11/11 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary clean test` 通过，6/6 pass。
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test` 通过，1/1 pass。
+  - `make -C core test` 输出 `All tests passed.`
+  - `make -C core examples` 输出 `All examples compiled.`
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`
+
+### Non-goals
+
+- 不合入旧 `demo_stopwatch` 到 platform。
+- 不恢复旧 `core/scripts/project.mk` 构建形态。
+- 不回退当前 `platform.time`、`platform.sync`、`platform.thread` host-owner FFI 分层。

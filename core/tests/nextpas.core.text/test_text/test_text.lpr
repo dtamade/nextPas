@@ -74,6 +74,14 @@ begin
   CheckEqual(Int64(3), Int64(Length(LParts)), 'leading/trailing delim');
   CheckEqual('', LParts[0], 'empty first');
   CheckEqual('', LParts[2], 'empty last');
+
+  LParts := TextSplit('a,,c', ',');
+  CheckEqual(Int64(3), Int64(Length(LParts)), 'empty field count');
+  CheckEqual('', LParts[1], 'empty middle field');
+
+  LParts := TextSplit('abc', '');
+  CheckEqual(Int64(1), Int64(Length(LParts)), 'empty delimiter count');
+  CheckEqual('abc', LParts[0], 'empty delimiter value');
 end;
 
 procedure TestJoin;
@@ -147,6 +155,7 @@ begin
   CheckEqual(Int64(4), Int64(TextIndexOf('hello', 'o')), 'last char');
   CheckEqual(Int64(-1), Int64(TextIndexOf('hello', 'z')), 'not found');
   CheckEqual(Int64(2), Int64(TextIndexOf('hello', 'llo')), 'substring');
+  CheckEqual(Int64(0), Int64(TextIndexOf('hello', '')), 'empty substring');
 end;
 
 procedure TestLastIndexOf;

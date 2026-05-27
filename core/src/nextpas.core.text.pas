@@ -269,6 +269,8 @@ end;
 
 function TextIndexOf(const AValue, ASubStr: string): Integer;
 begin
+  if ASubStr = '' then
+    Exit(0);
   Result := Pos(ASubStr, AValue);
   if Result > 0 then
     Dec(Result)
