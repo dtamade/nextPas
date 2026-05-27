@@ -75,6 +75,18 @@
 - `Overwrite` naturally belongs on the contiguous array capability layer. `Write` and `WriteExact` naturally belong on the vector/growable sequence layer because they can extend logical length.
 - Interface tuning should make overload symmetry explicit, especially checked and unchecked partial container overloads such as `Overwrite(Collection, Count)`.
 
+## 2026-05-28: size and capacity semantics
+
+- Preserve the distinct size/capacity vocabulary rather than flattening it.
+- `Resize(NewSize)` changes logical `Count`. Growing initializes new elements; shrinking finalizes/discards tail elements. Capacity growth follows the container's normal policy.
+- `EnsureCapacity(Capacity)` ensures an absolute capacity and does not change `Count`.
+- Existing `IArray<T>.Ensure(Count)` currently means ensuring absolute element capacity. During naming cleanup, prefer `EnsureCapacity` for this meaning because plain `Ensure` is too easy to confuse with `Reserve`.
+- `Reserve(Additional)` is a growable-vector operation: it ensures room for `Count + Additional` elements and follows the normal growth strategy.
+- `ReserveExact(Additional)` is the exact-capacity counterpart of `Reserve`: it ensures room for `Count + Additional` elements without applying the growth strategy.
+- `ResizeExact(NewSize)` changes logical `Count` and sets capacity exactly to `NewSize`.
+- `Shrink`, `ShrinkTo`, `ShrinkToFit`, and `FreeBuffer` are explicit vector capacity-release controls. They belong to growable vector-style containers rather than the contiguous array capability base.
+- The key distinction for public docs: `Resize` is about length, `EnsureCapacity` is about absolute capacity, `Reserve` is about append headroom, and `Exact` is about bypassing the growth strategy.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.

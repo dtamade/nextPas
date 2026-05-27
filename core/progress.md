@@ -19,6 +19,7 @@
 - Agreed that `IArray<T>` is the rich capability base for mutable, indexable, contiguous-storage array-like sequences. `Vec` should inherit and reuse this layer; non-contiguous indexed containers such as ring-buffer deque implementations should not inherit it because they cannot honestly promise contiguous memory APIs such as `GetMemory`.
 - Agreed that `TryLoadFrom` and `TryAppend` are natural common collection capabilities rather than array-only clutter. They should remain available and be regularized at the common collection/interface ownership layer during interface tuning.
 - Agreed to preserve the distinct block operation semantics: `Overwrite` writes inside an existing range without changing `Count`, `Read` copies out, `Copy` copies internally, `Write` may extend using normal growth, and `WriteExact` may extend with exact capacity growth. `Overwrite` belongs to contiguous array capability; `Write`/`WriteExact` belong to growable vector-style capability.
+- Agreed on size/capacity vocabulary: `Resize` changes logical `Count`; `EnsureCapacity` ensures absolute capacity; `Reserve` ensures append headroom (`Count + Additional`); `Exact` variants bypass the growth strategy; shrink/free-buffer operations belong to growable vector-style containers, not the array capability base.
 
 ## Next
 
