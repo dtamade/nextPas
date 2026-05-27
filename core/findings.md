@@ -43,6 +43,7 @@
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.
-- Current copied `Vec` and `VecDeque` interfaces use `Remove(Index): T` and `Remove(Index, var Element)` for indexed extraction: remove the element from the container and return/copy it to the caller.
-- Do not treat indexed sequence `Remove(Index)` as value-based removal. Value-based `Remove(Value)` belongs only to containers whose contract is explicitly value/key lookup and removal.
-- During interface tuning, decide whether the final primary extraction name should remain `Remove(Index): T` for `fafafa.core` continuity or become `RemoveAt(Index): T` for clearer indexed semantics. Do not keep both as long-term duplicate primary APIs without a specific reason.
+- Current copied `Vec` and `VecDeque` interfaces use `Remove(Index): T` and `Remove(Index, var Element)` for indexed extraction, but this is transitional copied API rather than the final public shape.
+- Final indexed sequence APIs should use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for indexed extraction.
+- Do not keep `Remove(Index)` alongside `RemoveAt(Index)` as a public synonym. The framework is unreleased, so there is no compatibility burden that justifies carrying duplicate names.
+- Value-based `Remove(Value)` belongs only to containers whose contract is explicitly value/key lookup and removal.
