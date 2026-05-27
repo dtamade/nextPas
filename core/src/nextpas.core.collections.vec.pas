@@ -12,11 +12,15 @@ uses
   nextpas.core.math,
   nextpas.core.mem.utils,
   nextpas.core.collections.base,
-  nextpas.core.collections.abstract,
-  nextpas.core.collections.intf,
+  nextpas.core.collections.arr.base,
+  nextpas.core.collections.arr.intf,
+  nextpas.core.collections.vec.base,
+  nextpas.core.collections.vec.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.mem.allocator;
+
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
 
@@ -51,11 +55,6 @@ type
    * @see TVecDeque 双端队列替代方案
    *}
   generic TVec<T> = class(specialize TGenericCollection<T>, specialize IVec<T>)
-  const
-    {** 默认初始容量（0 表示延迟分配） *}
-    VEC_DEFAULT_CAPACITY = 0;
-    {** 交换缓冲区默认大小 *}
-    DEFAULT_SWAP_BUFFER_SIZE = 4096;
   public type
     IVecT = specialize IVec<T>;
     {**
@@ -782,6 +781,11 @@ type
 
 implementation
 
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
+begin
+  Result := IsOverlap(aPtr1, aSize1, aPtr2, aSize2);
+end;
+
 { TVec<T> }
 constructor TVec.Create;
 begin
@@ -907,8 +911,8 @@ end;
 
 function TVec.IsOverlap(const aSrc: Pointer; aCount: SizeUInt): Boolean;
 begin
-  Result := nextpas.core.mem.utils.IsOverlap(GetMemory, GetCapacity * GetElementSize,
-                                            aSrc, aCount * GetElementSize);
+  Result := MemIsOverlap(GetMemory, GetCapacity * GetElementSize,
+                         aSrc, aCount * GetElementSize);
 end;
 
 function TVec.CalcGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;

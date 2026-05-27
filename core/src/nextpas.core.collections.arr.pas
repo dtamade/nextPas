@@ -9,16 +9,17 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
-  nextpas.core.collections.intf;
+  nextpas.core.collections.arr.base,
+  nextpas.core.collections.arr.intf;
+
+procedure MemCopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
 
 
   { TArray 数组实现类 }
   generic TArray<T> = class(specialize TGenericCollection<T>, specialize IArray<T>)
-  const
-    ARRAY_DEFAULT_SWAP_BUFFER_SIZE = 4096; // 默认交换缓冲区最大用量(字节)
-    INSERTION_SORT_THRESHOLD = 16;         // 插入排序阈值
   type
     TSwapMethod  = procedure(const aIndex1, aIndex2: SizeUInt) of object;
   private
@@ -593,6 +594,16 @@ type
 
 implementation
 
+procedure MemCopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
+begin
+  CopyUnChecked(aSrc, aDst, aSize);
+end;
+
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
+begin
+  Result := IsOverlap(aPtr1, aSize1, aPtr2, aSize2);
+end;
+
 function TArray.DoIterGetCurrent(aIter: PPtrIter): Pointer;
 begin
   {$PUSH}{$WARN 4055 OFF}
@@ -644,9 +655,9 @@ begin
   LP1 := GetPtrUnChecked(aIndex1);
   LP2 := GetPtrUnChecked(aIndex2);
 
-  nextpas.core.mem.utils.CopyUnChecked(LP1, FSwapBufferCache, FElementSizeCache);
-  nextpas.core.mem.utils.CopyUnChecked(LP2, LP1, FElementSizeCache);
-  nextpas.core.mem.utils.CopyUnChecked(FSwapBufferCache, LP2, FElementSizeCache);
+  MemCopyUnChecked(LP1, FSwapBufferCache, FElementSizeCache);
+  MemCopyUnChecked(LP2, LP1, FElementSizeCache);
+  MemCopyUnChecked(FSwapBufferCache, LP2, FElementSizeCache);
 end;
 
 function TArray.IsOverlap(const aSrc: Pointer; aCount: SizeUInt): Boolean;
@@ -658,7 +669,7 @@ begin
   LExternalSize := aCount * GetElementSize;
 
   { 使用底层内存重叠检测函数 }
-  Result := nextpas.core.mem.utils.IsOverlap(FMemory, LArraySize, aSrc, LExternalSize);
+  Result := MemIsOverlap(FMemory, LArraySize, aSrc, LExternalSize);
 end;
 
 procedure TArray.DoFill(const aElement: T);
@@ -1173,13 +1184,13 @@ begin
     exit;
 
   if aDst = nil then
-    raise nextpas.core.base.EArgumentNil.Create('TArray.SerializeToArrayBuffer: aDst is nil');
+    raise EArgumentNil.Create('TArray.SerializeToArrayBuffer: aDst is nil');
 
   if IsOverlap(aDst, aCount) then
-    raise nextpas.core.base.EInvalidArgument.Create('TArray.SerializeToArrayBuffer: aDst is overlapped');
+    raise EInvalidArgument.Create('TArray.SerializeToArrayBuffer: aDst is overlapped');
 
   if aCount > FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.SerializeToArrayBuffer: aCount out of bounds');
+    raise EOutOfRange.Create('TArray.SerializeToArrayBuffer: aCount out of bounds');
 
   FElementManager.CopyElementsNonOverlapUnChecked(FMemory, aDst, aCount);
 end;
@@ -1207,12 +1218,12 @@ begin
 
     {$PUSH}{$WARN 4055 OFF}
     if (PtrUInt(aSrc) mod LElementSize) <> 0 then
-      raise nextpas.core.base.EInvalidArgument.Create('TArray.AppendUnChecked: aSrc is not aligned');
+      raise EInvalidArgument.Create('TArray.AppendUnChecked: aSrc is not aligned');
 
     LIndex := (PtrUInt(aSrc) - PtrUInt(FMemory)) div LElementSize;
     {$POP}
     if (LIndex >= LCount) or (aCount > (LCount - LIndex)) then
-      raise nextpas.core.base.EOutOfRange.Create('TArray.AppendUnChecked: bounds out of range');
+      raise EOutOfRange.Create('TArray.AppendUnChecked: bounds out of range');
 
     Resize(LCount + aCount);
     CopyUnChecked(LIndex, LCount, aCount);
@@ -1295,7 +1306,7 @@ end;
 function TArray.GetPtr(aIndex: SizeUInt): PElement;
 begin
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.GetPtr: index out of range');
+    raise EOutOfRange.Create('TArray.GetPtr: index out of range');
 
   Result := GetPtrUnChecked(aIndex);
 end;
@@ -1315,7 +1326,7 @@ begin
   LMemory := FElementManager.ReallocElements(FMemory, FCount, aNewSize);
 
   if (aNewSize > 0) and (LMemory = nil) then
-    raise nextpas.core.base.EOutOfMemory.Create('TArray.Resize: out of memory');
+    raise EOutOfMemory.Create('TArray.Resize: out of memory');
 
   FMemory := LMemory;
   FCount  := aNewSize;
@@ -1331,7 +1342,7 @@ end;
 procedure TArray.Fill(aIndex: SizeUInt; const aValue: T);
 begin
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Fill: aIndex out of range');
+    raise EOutOfRange.Create('TArray.Fill: aIndex out of range');
 
   DoFill(aIndex, FCount - aIndex, aValue);
 end;
@@ -1342,10 +1353,10 @@ begin
     exit;
 
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Fill: aIndex out of range');
+    raise EOutOfRange.Create('TArray.Fill: aIndex out of range');
 
   if aCount > (FCount - aIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Fill: aIndex + aCount out of range');
+    raise EOutOfRange.Create('TArray.Fill: aIndex + aCount out of range');
 
   FillUnChecked(aIndex, aCount, aValue);
 end;
@@ -1354,7 +1365,7 @@ end;
 procedure TArray.Zero(aIndex: SizeUInt);
 begin
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Zero: aIndex out of range');
+    raise EOutOfRange.Create('TArray.Zero: aIndex out of range');
 
   ZeroUnChecked(aIndex, FCount - aIndex);
 end;
@@ -1365,10 +1376,10 @@ begin
     exit;
 
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Zero: aIndex out of range');
+    raise EOutOfRange.Create('TArray.Zero: aIndex out of range');
 
   if aCount > (FCount - aIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Zero: aIndex + aCount out of range');
+    raise EOutOfRange.Create('TArray.Zero: aIndex + aCount out of range');
 
   ZeroUnChecked(aIndex, aCount);
 end;
@@ -1376,10 +1387,10 @@ end;
 procedure TArray.Swap(aIndex1, aIndex2: SizeUInt);
 begin
   if (aIndex1 >= FCount) or (aIndex2 >= FCount) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Swap: index out of range');
+    raise EOutOfRange.Create('TArray.Swap: index out of range');
 
   if aIndex1 = aIndex2 then
-    raise nextpas.core.base.EInvalidArgument.Create('TArray.Swap: same index');
+    raise EInvalidArgument.Create('TArray.Swap: same index');
 
   SwapUnChecked(aIndex1, aIndex2);
 end;
@@ -1407,22 +1418,22 @@ begin
     Exit;
 
   if aIndex1 = aIndex2 then
-    raise nextpas.core.base.EInvalidArgument.Create('TArray.Swap: same index');
+    raise EInvalidArgument.Create('TArray.Swap: same index');
 
   if (aIndex1 >= FCount) or (aIndex2 >= FCount) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Swap: index out of range');
+    raise EOutOfRange.Create('TArray.Swap: index out of range');
 
   if aCount > (FCount - aIndex1) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Swap: aIndex1 + aCount out of range');
+    raise EOutOfRange.Create('TArray.Swap: aIndex1 + aCount out of range');
 
   if aCount > (FCount - aIndex2) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Swap: aIndex2 + aCount out of range');
+    raise EOutOfRange.Create('TArray.Swap: aIndex2 + aCount out of range');
 
   { 如果元素数量大于 1，则需要检查范围是否越界和是否重叠并且用临时缓冲区交换元素 }
   if aCount > 1 then
   begin
     if (aIndex1 + aCount > aIndex2) and (aIndex2 + aCount > aIndex1) then
-      raise nextpas.core.base.EInvalidArgument.Create('TArray.Swap: overlap');
+      raise EInvalidArgument.Create('TArray.Swap: overlap');
 
     LElementSize := GetElementSize;
     LRemainSize  := aCount * LElementSize;
@@ -1435,7 +1446,7 @@ begin
     LBuffer := Allocator.GetMem(LBufferSize);
 
     if LBuffer = nil then
-      raise nextpas.core.base.EOutOfMemory.Create('TArray.Swap: out of memory');
+      raise EOutOfMemory.Create('TArray.Swap: out of memory');
 
     try
       { 分块交换元素 }
@@ -1447,9 +1458,9 @@ begin
         if LBufferSize > LRemainSize then
           LBufferSize  := LRemainSize;
 
-        nextpas.core.mem.utils.CopyUnChecked(LP1,     LBuffer, LBufferSize);
-        nextpas.core.mem.utils.CopyUnChecked(LP2,     LP1,     LBufferSize);
-        nextpas.core.mem.utils.CopyUnChecked(LBuffer, LP2,     LBufferSize);
+        MemCopyUnChecked(LP1,     LBuffer, LBufferSize);
+        MemCopyUnChecked(LP2,     LP1,     LBufferSize);
+        MemCopyUnChecked(LBuffer, LP2,     LBufferSize);
 
         Inc(LP1, LBufferSize);
         Inc(LP2, LBufferSize);
@@ -1470,19 +1481,19 @@ begin
     exit;
 
   if aSrcIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Copy: src index out of range');
+    raise EOutOfRange.Create('TArray.Copy: src index out of range');
 
   if aDstIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Copy: dst index out of range');
+    raise EOutOfRange.Create('TArray.Copy: dst index out of range');
 
   if aCount > (FCount - aSrcIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Copy: src index + count out of range');
+    raise EOutOfRange.Create('TArray.Copy: src index + count out of range');
 
   if aCount > (FCount - aDstIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Copy: dst index + count out of range');
+    raise EOutOfRange.Create('TArray.Copy: dst index + count out of range');
 
   if aSrcIndex = aDstIndex then
-    raise nextpas.core.base.EInvalidArgument.Create('TArray.Copy: same index');
+    raise EInvalidArgument.Create('TArray.Copy: same index');
 
   CopyUnChecked(aSrcIndex, aDstIndex, aCount);
 end;
@@ -1495,7 +1506,7 @@ end;
 procedure TArray.Reverse(aStartIndex: SizeUInt);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Reverse: aStartIndex out of range');
+    raise EOutOfRange.Create('TArray.Reverse: aStartIndex out of range');
 
   Reverse(aStartIndex, FCount - aStartIndex);
 end;
@@ -1506,10 +1517,10 @@ begin
     exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Reverse: aStartIndex out of range');
+    raise EOutOfRange.Create('TArray.Reverse: aStartIndex out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Reverse: aStartIndex + aCount out of range');
+    raise EOutOfRange.Create('TArray.Reverse: aStartIndex + aCount out of range');
 
   ReverseUnChecked(aStartIndex, aCount);
 end;
@@ -1517,7 +1528,7 @@ end;
 function TArray.ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   Result := ForEach(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1525,7 +1536,7 @@ end;
 function TArray.ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   Result := ForEach(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1534,7 +1545,7 @@ end;
 function TArray.ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   Result := ForEach(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -1546,10 +1557,10 @@ begin
     exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: bounds out of range');
+    raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
   Result := ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1560,10 +1571,10 @@ begin
     exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: bounds out of range');
+    raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
   Result := ForEachUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1575,10 +1586,10 @@ begin
     exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: index out of range');
+    raise EOutOfRange.Create('TArray.ForEach: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ForEach: bounds out of range');
+    raise EOutOfRange.Create('TArray.ForEach: bounds out of range');
 
   Result := ForEachUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -1587,7 +1598,7 @@ end;
 function TArray.Contains(const aValue: T; aStartIndex: SizeUInt): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   Result := Contains(aValue, aStartIndex, FCount - aStartIndex);
 end;
@@ -1595,7 +1606,7 @@ end;
 function TArray.Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   Result := Contains(aValue, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -1603,7 +1614,7 @@ end;
 function TArray.Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   Result := Contains(aValue, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -1612,7 +1623,7 @@ end;
 function TArray.Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   Result := Contains(aValue, aStartIndex, FCount - aStartIndex, aEquals);
 end;
@@ -1624,10 +1635,10 @@ begin
     exit(False);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: bounds out of range');
+    raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
   Result := ContainsUnChecked(aValue, aStartIndex, aCount);
 end;
@@ -1638,10 +1649,10 @@ begin
     exit(False);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: bounds out of range');
+    raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
   Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
@@ -1652,10 +1663,10 @@ begin
     exit(False);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: bounds out of range');
+    raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
   Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
@@ -1667,10 +1678,10 @@ begin
     exit(False);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: index out of range');
+    raise EOutOfRange.Create('TArray.Contains: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Contains: bounds out of range');
+    raise EOutOfRange.Create('TArray.Contains: bounds out of range');
 
   Result := ContainsUnChecked(aValue, aStartIndex, aCount, aEquals);
 end;
@@ -1713,7 +1724,7 @@ end;
 function TArray.Find(const aValue: T; aStartIndex: SizeUInt): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   Result := Find(aValue, aStartIndex, FCount - aStartIndex);
 end;
@@ -1721,7 +1732,7 @@ end;
 function TArray.Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   Result := Find(aValue, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -1729,7 +1740,7 @@ end;
 function TArray.Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   Result := Find(aValue, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -1738,7 +1749,7 @@ end;
 function TArray.Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   Result := Find(aValue, aStartIndex, FCount - aStartIndex, aEquals);
 end;
@@ -1750,10 +1761,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: bounds out of range');
+    raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
   Result := FindUnChecked(aValue, aStartIndex, aCount);
 end;
@@ -1764,10 +1775,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: bounds out of range');
+    raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
   Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
@@ -1778,10 +1789,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: bounds out of range');
+    raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
   Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals, aData);
 end;
@@ -1793,10 +1804,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: index out of range');
+    raise EOutOfRange.Create('TArray.Find: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Find: bounds out of range');
+    raise EOutOfRange.Create('TArray.Find: bounds out of range');
 
   Result := FindUnChecked(aValue, aStartIndex, aCount, aEquals);
 end;
@@ -1832,7 +1843,7 @@ end;
 function TArray.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1840,7 +1851,7 @@ end;
 function TArray.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1849,7 +1860,7 @@ end;
 function TArray.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -1861,10 +1872,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
   Result := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1875,10 +1886,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
   Result := FindIFUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1890,10 +1901,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIF: bounds out of range');
 
   Result := FindIFUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -1929,7 +1940,7 @@ end;
 function TArray.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1937,7 +1948,7 @@ end;
 function TArray.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -1947,7 +1958,7 @@ function TArray.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize
   TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -1959,10 +1970,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
   Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1973,10 +1984,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
   Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -1988,10 +1999,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindIFNot: bounds out of range');
 
   Result := FindIFNotUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -2034,7 +2045,7 @@ end;
 function TArray.FindLast(const aElement: T; aStartIndex: SizeUInt): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   Result := FindLast(aElement, aStartIndex, FCount - aStartIndex);
 end;
@@ -2042,7 +2053,7 @@ end;
 function TArray.FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   Result := FindLast(aElement, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -2050,7 +2061,7 @@ end;
 function TArray.FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   Result := FindLast(aElement, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -2059,7 +2070,7 @@ end;
 function TArray.FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   Result := FindLast(aElement, aStartIndex, FCount - aStartIndex, aEquals);
 end;
@@ -2071,10 +2082,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
   Result := FindLastUnChecked(aElement, aStartIndex, aCount);
 end;
@@ -2085,10 +2096,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
   Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2099,10 +2110,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
   Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2114,10 +2125,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: index out of range');
+    raise EOutOfRange.Create('TArray.FindLast: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLast: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLast: bounds out of range');
 
   Result := FindLastUnChecked(aElement, aStartIndex, aCount, aEquals);
 end;
@@ -2152,7 +2163,7 @@ end;
 function TArray.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2160,7 +2171,7 @@ end;
 function TArray.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2169,7 +2180,7 @@ end;
 function TArray.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -2181,10 +2192,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
   Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2195,10 +2206,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
   Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2210,10 +2221,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIF: bounds out of range');
 
   Result := FindLastIFUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -2248,7 +2259,7 @@ end;
 function TArray.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   Result := FindLastIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2256,7 +2267,7 @@ end;
 function TArray.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   Result := FindLastIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2265,7 +2276,7 @@ end;
 function TArray.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   Result := DoFindLastIFNot(@DoPredicateRefFuncProxy, aStartIndex, FCount - aStartIndex, @aPredicate, nil);
 end;
@@ -2277,10 +2288,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
   Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2291,10 +2302,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
   Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2306,10 +2317,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
+    raise EOutOfRange.Create('TArray.FindLastIFNot: bounds out of range');
 
   Result := FindLastIFNotUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -2318,7 +2329,7 @@ end;
 function TArray.CountOf(const aElement: T; aStartIndex: SizeUInt): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   Result := DoCountOf(@DoEqualsDefaultProxy, aElement, aStartIndex, FCount - aStartIndex, nil, nil);
 end;
@@ -2326,7 +2337,7 @@ end;
 function TArray.CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   Result := DoCountOf(@DoEqualsFuncProxy, aElement, aStartIndex, FCount - aStartIndex, @aEquals, aData);
 end;
@@ -2334,7 +2345,7 @@ end;
 function TArray.CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   Result := DoCountOf(@DoEqualsMethodProxy, aElement, aStartIndex, FCount - aStartIndex, @aEquals, aData);
 end;
@@ -2343,7 +2354,7 @@ end;
 function TArray.CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   Result := DoCountOf(@DoEqualsRefFuncProxy, aElement, aStartIndex, FCount - aStartIndex, @aEquals, nil);
 end;
@@ -2355,10 +2366,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
   Result := CountOfUnChecked(aElement, aStartIndex, aCount);
 end;
@@ -2369,10 +2380,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
   Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2383,10 +2394,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
   Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2398,10 +2409,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: index out of range');
+    raise EOutOfRange.Create('TArray.CountOf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountOf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountOf: bounds out of range');
 
   Result := CountOfUnChecked(aElement, aStartIndex, aCount, aEquals);
 end;
@@ -2410,7 +2421,7 @@ end;
 function TArray.CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   Result := CountIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2418,7 +2429,7 @@ end;
 function TArray.CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   Result := CountIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2427,7 +2438,7 @@ end;
 function TArray.CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   Result := CountIf(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -2439,10 +2450,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
   Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2453,10 +2464,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
   Result := CountIfUnChecked(aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2469,10 +2480,10 @@ begin
     Exit(0);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: index out of range');
+    raise EOutOfRange.Create('TArray.CountIf: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.CountIf: bounds out of range');
+    raise EOutOfRange.Create('TArray.CountIf: bounds out of range');
 
   Result := CountIfUnChecked(aStartIndex, aCount, aPredicate);
 end;
@@ -2481,7 +2492,7 @@ end;
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   Replace(aElement, aNewElement, aStartIndex, FCount - aStartIndex);
 end;
@@ -2489,7 +2500,7 @@ end;
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   Replace(aElement, aNewElement, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -2497,7 +2508,7 @@ end;
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   Replace(aElement, aNewElement, aStartIndex, FCount - aStartIndex, aEquals, aData);
 end;
@@ -2506,7 +2517,7 @@ end;
 procedure TArray.Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   Replace(aElement, aNewElement, aStartIndex, FCount - aStartIndex, aEquals);
 end;
@@ -2519,10 +2530,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: bounds out of range');
+    raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
   ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount);
 end;
@@ -2533,10 +2544,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: bounds out of range');
+    raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
   ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2547,10 +2558,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: bounds out of range');
+    raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
   ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals, aData);
 end;
@@ -2562,10 +2573,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: index out of range');
+    raise EOutOfRange.Create('TArray.Replace: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Replace: bounds out of range');
+    raise EOutOfRange.Create('TArray.Replace: bounds out of range');
 
   ReplaceUnChecked(aElement, aNewElement, aStartIndex, aCount, aEquals);
 end;
@@ -2574,7 +2585,7 @@ end;
 procedure TArray.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2582,7 +2593,7 @@ end;
 procedure TArray.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
@@ -2591,7 +2602,7 @@ end;
 procedure TArray.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate);
 end;
@@ -2603,10 +2614,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
   ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2617,10 +2628,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
   ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
@@ -2632,10 +2643,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: index out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
+    raise EOutOfRange.Create('TArray.ReplaceIF: bounds out of range');
 
   ReplaceIFUnChecked(aNewElement, aStartIndex, aCount, aPredicate);
 end;
@@ -2678,7 +2689,7 @@ end;
 function TArray.IsSorted(aStartIndex: SizeUInt): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   Result := IsSorted(aStartIndex, FCount - aStartIndex);
 end;
@@ -2686,7 +2697,7 @@ end;
 function TArray.IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   Result := IsSorted(aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2694,7 +2705,7 @@ end;
 function TArray.IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   Result := IsSorted(aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2703,7 +2714,7 @@ end;
 function TArray.IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   Result := IsSorted(aStartIndex, FCount - aStartIndex, aComparer);
 end;
@@ -2715,10 +2726,10 @@ begin
     Exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: bounds out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
   Result := IsSortedUnChecked(aStartIndex, aCount);
 end;
@@ -2729,10 +2740,10 @@ begin
     Exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: bounds out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
   Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
 end;
@@ -2743,10 +2754,10 @@ begin
     Exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: bounds out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
   Result := IsSortedUnChecked(aStartIndex, aCount, aComparer, aData);
 end;
@@ -2758,10 +2769,10 @@ begin
     Exit(True);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: index out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.IsSorted: bounds out of range');
+    raise EOutOfRange.Create('TArray.IsSorted: bounds out of range');
 
   Result := IsSortedUnChecked(aStartIndex, aCount, aComparer);
 end;
@@ -2804,7 +2815,7 @@ end;
 procedure TArray.Sort(aStartIndex: SizeUInt);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   Sort(aStartIndex, FCount - aStartIndex);
 end;
@@ -2812,7 +2823,7 @@ end;
 procedure TArray.Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   Sort(aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2820,7 +2831,7 @@ end;
 procedure TArray.Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   Sort(aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2829,7 +2840,7 @@ end;
 procedure TArray.Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   Sort(aStartIndex, FCount - aStartIndex, aComparer);
 end;
@@ -2842,10 +2853,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: bounds out of range');
+    raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
   SortUnChecked(aStartIndex, aCount);
 end;
@@ -2856,10 +2867,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: bounds out of range');
+    raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
   SortUnChecked(aStartIndex, aCount, aComparer, aData);
 end;
@@ -2870,10 +2881,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: bounds out of range');
+    raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
   SortUnChecked(aStartIndex, aCount, aComparer, aData);
 end;
@@ -2885,10 +2896,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: index out of range');
+    raise EOutOfRange.Create('TArray.Sort: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Sort: bounds out of range');
+    raise EOutOfRange.Create('TArray.Sort: bounds out of range');
 
   SortUnChecked(aStartIndex, aCount, aComparer);
 end;
@@ -2931,7 +2942,7 @@ end;
 function TArray.BinarySearch(const aValue: T; aStartIndex: SizeUInt): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   Result := BinarySearch(aValue, aStartIndex, FCount - aStartIndex);
 end;
@@ -2939,7 +2950,7 @@ end;
 function TArray.BinarySearch(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   Result := BinarySearch(aValue, aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2947,7 +2958,7 @@ end;
 function TArray.BinarySearch(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   Result := BinarySearch(aValue, aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -2956,7 +2967,7 @@ end;
 function TArray.BinarySearch(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   Result := BinarySearch(aValue, aStartIndex, FCount - aStartIndex, aComparer);
 end;
@@ -2968,10 +2979,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
   Result := BinarySearchUnChecked(aValue, aStartIndex, aCount);
 end;
@@ -2982,10 +2993,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
   Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
@@ -2996,10 +3007,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
   Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
@@ -3011,10 +3022,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearch: bounds out of range');
 
   Result := BinarySearchUnChecked(aValue, aStartIndex, aCount, aComparer);
 end;
@@ -3057,7 +3068,7 @@ end;
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex: SizeUInt): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   Result := BinarySearchInsert(aValue, aStartIndex, FCount - aStartIndex);
 end;
@@ -3065,7 +3076,7 @@ end;
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   Result := BinarySearchInsert(aValue, aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -3073,7 +3084,7 @@ end;
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   Result := BinarySearchInsert(aValue, aStartIndex, FCount - aStartIndex, aComparer, aData);
 end;
@@ -3082,7 +3093,7 @@ end;
 function TArray.BinarySearchInsert(const aValue: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   Result := BinarySearchInsert(aValue, aStartIndex, FCount - aStartIndex, aComparer);
 end;
@@ -3094,10 +3105,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
   Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount);
 end;
@@ -3108,10 +3119,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
   Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
@@ -3122,10 +3133,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
   Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer, aData);
 end;
@@ -3137,10 +3148,10 @@ begin
     Exit(-1);
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
+    raise EOutOfRange.Create('TArray.BinarySearchInsert: bounds out of range');
 
   Result := BinarySearchInsertUnChecked(aValue, aStartIndex, aCount, aComparer);
 end;
@@ -3183,7 +3194,7 @@ end;
 procedure TArray.Shuffle(aStartIndex: SizeUInt);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   Shuffle(aStartIndex, FCount - aStartIndex);
 end;
@@ -3191,7 +3202,7 @@ end;
 procedure TArray.Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   Shuffle(aStartIndex, FCount - aStartIndex, aRandomGenerator, aData);
 end;
@@ -3199,7 +3210,7 @@ end;
 procedure TArray.Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   Shuffle(aStartIndex, FCount - aStartIndex, aRandomGenerator, aData);
 end;
@@ -3208,7 +3219,7 @@ end;
 procedure TArray.Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc);
 begin
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   Shuffle(aStartIndex, FCount - aStartIndex, aRandomGenerator);
 end;
@@ -3220,10 +3231,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: bounds out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
   DoShuffle(@DoRandomGeneratorDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
@@ -3234,10 +3245,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: bounds out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
   ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
@@ -3248,10 +3259,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: bounds out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
   ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator, aData);
 end;
@@ -3263,10 +3274,10 @@ begin
     Exit;
 
   if aStartIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: index out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: index out of range');
 
   if aCount > (FCount - aStartIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Shuffle: bounds out of range');
+    raise EOutOfRange.Create('TArray.Shuffle: bounds out of range');
 
   ShuffleUnChecked(aStartIndex, aCount, aRandomGenerator);
 end;
@@ -3278,13 +3289,13 @@ begin
     Exit;
 
   if aSrc = nil then
-    raise nextpas.core.base.EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
 
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.OverWrite: index out of range');
+    raise EOutOfRange.Create('TArray.OverWrite: index out of range');
 
   if aCount > (FCount - aIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.OverWrite: bounds out of range');
+    raise EOutOfRange.Create('TArray.OverWrite: bounds out of range');
 
   OverWriteUnChecked(aIndex, aSrc, aCount);
 end;
@@ -3317,7 +3328,7 @@ end;
 procedure TArray.OverWrite(aIndex: SizeUInt; const aSrc: TCollection);
 begin
   if aSrc = nil then
-    raise nextpas.core.base.EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
 
   OverWrite(aIndex, aSrc, aSrc.GetCount);
 end;
@@ -3328,16 +3339,16 @@ begin
     Exit;
 
   if aSrc = nil then
-    raise nextpas.core.base.EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
 
   if not IsCompatible(aSrc) then
-    raise nextpas.core.base.ENotCompatible.Create('TArray.OverWrite: aSrc is not compatible');
+    raise ENotCompatible.Create('TArray.OverWrite: aSrc is not compatible');
 
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.OverWrite: index out of range');
+    raise EOutOfRange.Create('TArray.OverWrite: index out of range');
 
   if aCount > (FCount - aIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.OverWrite: bounds out of range');
+    raise EOutOfRange.Create('TArray.OverWrite: bounds out of range');
 
   OverWriteUnChecked(aIndex, aSrc, aCount);
 end;
@@ -3353,13 +3364,13 @@ begin
     exit;
 
   if aDst = nil then
-    raise nextpas.core.base.EArgumentNil.Create('TArray.Read: aDst is nil');
+    raise EArgumentNil.Create('TArray.Read: aDst is nil');
 
   if aIndex >= FCount then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Read: index out of range');
+    raise EOutOfRange.Create('TArray.Read: index out of range');
 
   if aCount > (FCount - aIndex) then
-    raise nextpas.core.base.EOutOfRange.Create('TArray.Read: bounds out of range');
+    raise EOutOfRange.Create('TArray.Read: bounds out of range');
 
   ReadUnChecked(aIndex, aDst, aCount);
 end;

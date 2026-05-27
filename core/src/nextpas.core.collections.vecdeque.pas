@@ -12,8 +12,13 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
+  nextpas.core.collections.arr.intf,
+  nextpas.core.collections.queue.intf,
+  nextpas.core.collections.vec.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.vec;
+
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
 
 type
 
@@ -942,6 +947,11 @@ type
 
 implementation
 
+function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
+begin
+  Result := IsOverlap(aPtr1, aSize1, aPtr2, aSize2);
+end;
+
 { TVecDeque<T> }
 
 { 内部辅助方法 }
@@ -1349,7 +1359,7 @@ begin
   end;
 
   // 检查源指针是否与VecDeque的缓冲区重叠
-  Result := nextpas.core.mem.utils.IsOverlap(
+  Result := MemIsOverlap(
     FBuffer.GetMemory, FBuffer.GetCount * GetElementSize,
     aSrc, aCount * GetElementSize);
 end;
@@ -2823,12 +2833,12 @@ end;
 
 function TVecDeque.Pop: T;
 begin
-  Result := PopBack;
+  Result := PopFront;
 end;
 
 function TVecDeque.Peek: T;
 begin
-  Result := PeekBack;
+  Result := PeekFront;
 end;
 
 

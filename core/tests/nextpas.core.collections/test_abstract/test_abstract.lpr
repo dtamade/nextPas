@@ -63,7 +63,7 @@ begin
   Result := APathFromTest;
 end;
 
-procedure TestGrowthStrategyInterfaceLivesInIntf;
+procedure TestGrowthStrategyInterfaceLivesInBase;
 var
   LBaseSource: string;
   LIntfSource: string;
@@ -75,10 +75,10 @@ begin
     '../../../src/nextpas.core.collections.intf.pas',
     'core/src/nextpas.core.collections.intf.pas'));
 
-  Check(Pos('IGrowthStrategy = interface', LIntfSource) > 0,
-    'IGrowthStrategy interface definition should live in collections.intf');
-  Check(Pos('IGrowthStrategy = interface', LBaseSource) = 0,
-    'collections.base should not own IGrowthStrategy interface definition');
+  Check(Pos('IGrowthStrategy = interface', LBaseSource) > 0,
+    'IGrowthStrategy interface definition should live in collections.base');
+  Check(Pos('IGrowthStrategy = interface', LIntfSource) = 0,
+    'collections.intf should no longer own IGrowthStrategy interface definition');
 end;
 
 procedure TestCollectionInterfacesLiveInIntf;
@@ -107,7 +107,7 @@ begin
   T := TTestRunner.Create('nextpas.core.collections.abstract');
   T.Run('exports collection skeleton', @TestAbstractExportsCollectionSkeleton);
   T.Run('exports growth strategies', @TestAbstractExportsGrowthStrategies);
-  T.Run('growth strategy interface lives in intf', @TestGrowthStrategyInterfaceLivesInIntf);
+  T.Run('growth strategy interface lives in base', @TestGrowthStrategyInterfaceLivesInBase);
   T.Run('collection interfaces live in intf', @TestCollectionInterfacesLiveInIntf);
   T.Summary;
 end.

@@ -5,7 +5,10 @@ program test_facade;
 uses
   nextpas.core.testing,
   nextpas.core.collections,
-  nextpas.core.collections.intf;
+  nextpas.core.collections.base,
+  nextpas.core.collections.vec.intf,
+  nextpas.core.collections.queue.intf,
+  nextpas.core.collections.hashmap.intf;
 
 type
   IIntVec = specialize IVec<Integer>;

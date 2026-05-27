@@ -1,6 +1,7 @@
 unit nextpas.core.collections;
 
 {$I nextpas.core.settings.inc}
+{$DEFINE FAFAFA_COLLECTIONS_FACADE}
 // Suppress unused parameter hints - facade unit
 {$WARN 5024 OFF}
 
@@ -14,8 +15,11 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
-  nextpas.core.collections.abstract,
   nextpas.core.collections.intf,
+  nextpas.core.collections.arr.intf,
+  nextpas.core.collections.vec.intf,
+  nextpas.core.collections.queue.intf,
+  nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.collections.iterators,
@@ -59,17 +63,17 @@ type
   ICollection = nextpas.core.collections.intf.ICollection;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
-  IGrowthStrategy          = nextpas.core.collections.intf.IGrowthStrategy;
-  TGrowthStrategy          = nextpas.core.collections.abstract.TGrowthStrategy;
-  TGrowthStrategyClass     = nextpas.core.collections.abstract.TGrowthStrategyClass;
-  TCustomGrowthStrategy    = nextpas.core.collections.abstract.TCustomGrowthStrategy;
-  TDoublingGrowStrategy    = nextpas.core.collections.abstract.TDoublingGrowStrategy;
-  TFixedGrowStrategy       = nextpas.core.collections.abstract.TFixedGrowStrategy;
-  TFactorGrowStrategy      = nextpas.core.collections.abstract.TFactorGrowStrategy;
-  TPowerOfTwoGrowStrategy  = nextpas.core.collections.abstract.TPowerOfTwoGrowStrategy;
-  TGoldenRatioGrowStrategy = nextpas.core.collections.abstract.TGoldenRatioGrowStrategy;
-  TAlignedWrapperStrategy  = nextpas.core.collections.abstract.TAlignedWrapperStrategy;
-  TExactGrowStrategy       = nextpas.core.collections.abstract.TExactGrowStrategy;
+  IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
+  TGrowthStrategy          = nextpas.core.collections.base.TGrowthStrategy;
+  TGrowthStrategyClass     = nextpas.core.collections.base.TGrowthStrategyClass;
+  TCustomGrowthStrategy    = nextpas.core.collections.base.TCustomGrowthStrategy;
+  TDoublingGrowStrategy    = nextpas.core.collections.base.TDoublingGrowStrategy;
+  TFixedGrowStrategy       = nextpas.core.collections.base.TFixedGrowStrategy;
+  TFactorGrowStrategy      = nextpas.core.collections.base.TFactorGrowStrategy;
+  TPowerOfTwoGrowStrategy  = nextpas.core.collections.base.TPowerOfTwoGrowStrategy;
+  TGoldenRatioGrowStrategy = nextpas.core.collections.base.TGoldenRatioGrowStrategy;
+  TAlignedWrapperStrategy  = nextpas.core.collections.base.TAlignedWrapperStrategy;
+  TExactGrowStrategy       = nextpas.core.collections.base.TExactGrowStrategy;
 
 {$IFDEF FAFAFA_CORE_TYPE_ALIASES}
   // 可选：常用 specialization 的类型别名，避免重复 specialization（按需开启）
@@ -168,7 +172,7 @@ function MakeBitSet(aInitialCapacity: SizeUInt = 64; aAllocator: IAllocator = ni
 
 // ==== Deque (source-based) ====
 
-generic function MakeVecDeque<T>: ICollection; overload;
+generic function MakeVecDeque<T>: specialize IDeque<T>; overload;
 
 generic function MakeDeque<T>: specialize IDeque<T>; overload;
 generic function MakeDeque<T>(aCapacity: SizeUInt; aAllocator: IAllocator = nil; aGrowStrategy: TGrowthStrategy = nil): specialize IDeque<T>; overload;
@@ -232,27 +236,27 @@ implementation
 
 function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
 begin
-  Result := nextpas.core.collections.abstract.FixedGrow(aStep);
+  Result := nextpas.core.collections.base.FixedGrow(aStep);
 end;
 
 function FactorGrow(aFactor: Double): IGrowthStrategy;
 begin
-  Result := nextpas.core.collections.abstract.FactorGrow(aFactor);
+  Result := nextpas.core.collections.base.FactorGrow(aFactor);
 end;
 
 function DoublingGrow: IGrowthStrategy;
 begin
-  Result := nextpas.core.collections.abstract.DoublingGrow;
+  Result := nextpas.core.collections.base.DoublingGrow;
 end;
 
 function ExactGrow: IGrowthStrategy;
 begin
-  Result := nextpas.core.collections.abstract.ExactGrow;
+  Result := nextpas.core.collections.base.ExactGrow;
 end;
 
 function GoldenRatioGrow: IGrowthStrategy;
 begin
-  Result := nextpas.core.collections.abstract.GoldenRatioGrow;
+  Result := nextpas.core.collections.base.GoldenRatioGrow;
 end;
 
 // 工厂实现
@@ -301,7 +305,7 @@ end;
 {$IFDEF FAFAFA_COLLECTIONS_FACADE}
 
 // VecDeque facade helpers
-generic function MakeVecDeque<T>: ICollection;
+generic function MakeVecDeque<T>: specialize IDeque<T>;
 var
   LDeque: specialize TVecDeque<T>;
 begin

@@ -5,7 +5,7 @@ program test_deque;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.intf,
+  nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque;
 
 type

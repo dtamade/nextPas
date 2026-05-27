@@ -5,7 +5,7 @@ program test_vec;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.intf,
+  nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec;
 
 type

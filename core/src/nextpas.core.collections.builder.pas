@@ -25,7 +25,8 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.collections.intf,
+  nextpas.core.collections.vec.intf,
+  nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.vec,
   nextpas.core.collections.hashmap;
 
