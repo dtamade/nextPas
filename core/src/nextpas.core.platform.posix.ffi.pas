@@ -122,6 +122,22 @@ function platform_posix_open(
   const AFlags: Int32;
   const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
 function platform_posix_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_posix_read(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+function platform_posix_write(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+function platform_posix_seek(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const AOffset: TPlatformFileOffset;
+  const AWhence: Int32): TPlatformFileOffset; inline;
+function platform_posix_sync(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_posix_truncate(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ALength: TPlatformFileOffset): Int32; inline;
 function platform_posix_fcntl(
   const AFileDescriptor: TPlatformFileDescriptor;
   const ACommand: Int32): Int32; inline;
@@ -166,6 +182,11 @@ function munmap(addr: Pointer; len: PtrUInt): Int32; cdecl; external 'c' name 'm
 function mprotect(addr: Pointer; len: PtrUInt; prot: Int32): Int32; cdecl; external 'c' name 'mprotect';
 function open(path: PAnsiChar; flags: Int32; mode: TPlatformFileModeArg): TPlatformFileDescriptor; cdecl; external 'c' name 'open';
 function close(fd: TPlatformFileDescriptor): Int32; cdecl; external 'c' name 'close';
+function read(fd: TPlatformFileDescriptor; buf: Pointer; count: size_t): ssize_t; cdecl; external 'c' name 'read';
+function write(fd: TPlatformFileDescriptor; buf: Pointer; count: size_t): ssize_t; cdecl; external 'c' name 'write';
+function lseek(fd: TPlatformFileDescriptor; offset: off_t; whence: Int32): off_t; cdecl; external 'c' name 'lseek';
+function fsync(fd: TPlatformFileDescriptor): Int32; cdecl; external 'c' name 'fsync';
+function ftruncate(fd: TPlatformFileDescriptor; length: off_t): Int32; cdecl; external 'c' name 'ftruncate';
 function fcntl(fd: TPlatformFileDescriptor; cmd: Int32; arg: PtrInt): Int32; cdecl; external 'c' name 'fcntl';
 function mkdir(path: PAnsiChar; mode: TPlatformFileModeArg): Int32; cdecl; external 'c' name 'mkdir';
 function rmdir(path: PAnsiChar): Int32; cdecl; external 'c' name 'rmdir';
@@ -457,6 +478,42 @@ end;
 function platform_posix_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
 begin
   Result := close(AFileDescriptor);
+end;
+
+function platform_posix_read(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+begin
+  Result := read(AFileDescriptor, ABuffer, AByteCount);
+end;
+
+function platform_posix_write(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+begin
+  Result := write(AFileDescriptor, ABuffer, AByteCount);
+end;
+
+function platform_posix_seek(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const AOffset: TPlatformFileOffset;
+  const AWhence: Int32): TPlatformFileOffset; inline;
+begin
+  Result := lseek(AFileDescriptor, AOffset, AWhence);
+end;
+
+function platform_posix_sync(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+begin
+  Result := fsync(AFileDescriptor);
+end;
+
+function platform_posix_truncate(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ALength: TPlatformFileOffset): Int32; inline;
+begin
+  Result := ftruncate(AFileDescriptor, ALength);
 end;
 
 function platform_posix_fcntl(

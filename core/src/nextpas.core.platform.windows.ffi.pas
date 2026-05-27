@@ -143,6 +143,25 @@ function windows_write_file(
   const ABytesToWrite: DWORD;
   out ABytesWritten: DWORD): Int32; inline;
 function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
+function windows_get_file_size(
+  const AFile: HANDLE;
+  out AFileSize: UInt64): Int32; inline;
+function windows_get_file_size_ex(
+  const AFile: HANDLE;
+  out AFileSize: Int64): Int32; inline;
+function windows_set_file_pointer(
+  const AFile: HANDLE;
+  const ADistanceToMove: LONG;
+  ADistanceToMoveHigh: PLONG;
+  const AMoveMethod: DWORD;
+  out ANewFilePointerLow: DWORD): Int32; inline;
+function windows_set_file_pointer_ex(
+  const AFile: HANDLE;
+  const ADistanceToMove: Int64;
+  out ANewFilePointer: Int64;
+  const AMoveMethod: DWORD): Int32; inline;
+function windows_flush_file_buffers(const AFile: HANDLE): Int32; inline;
+function windows_set_end_of_file(const AFile: HANDLE): Int32; inline;
 function windows_get_file_attributes_ex_a(
   const AFileName: LPCSTR;
   out AFileInformation: WIN32_FILE_ATTRIBUTE_DATA): Int32; inline;
@@ -259,6 +278,12 @@ function CreateFileA(lpFileName: LPCSTR; dwDesiredAccess: DWORD; dwShareMode: DW
 function CreateFileW(lpFileName: LPCWSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
 function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'ReadFile';
 function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWORD; lpNumberOfBytesWritten: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'WriteFile';
+function GetFileSize(hFile: HANDLE; lpFileSizeHigh: LPDWORD): DWORD; stdcall; external 'kernel32' name 'GetFileSize';
+function FlushFileBuffers(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'FlushFileBuffers';
+function SetEndOfFile(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'SetEndOfFile';
+function SetFilePointer(hFile: HANDLE; lDistanceToMove: LONG; lpDistanceToMoveHigh: PLONG; dwMoveMethod: DWORD): DWORD; stdcall; external 'kernel32' name 'SetFilePointer';
+function GetFileSizeEx(InFileHandle: HANDLE; OutFileSize: PINT64): BOOL; stdcall; external 'kernel32' name 'GetFileSizeEx';
+function SetFilePointerEx(InFile: HANDLE; InDistanceToMove: Int64; OutoptNewFilePointer: PINT64; InMoveMethod: DWORD): BOOL; stdcall; external 'kernel32' name 'SetFilePointerEx';
 function GetFileAttributesExA(lpFileName: LPCSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExA';
 function GetFileAttributesExW(lpFileName: LPCWSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExW';
 function GetFileInformationByHandle(hFile: HANDLE; lpFileInformation: PBY_HANDLE_FILE_INFORMATION): BOOL; stdcall; external 'kernel32' name 'GetFileInformationByHandle';
@@ -473,6 +498,93 @@ end;
 function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
 begin
   Result := windows_thread_close_handle(AHandle);
+end;
+
+function windows_get_file_size(
+  const AFile: HANDLE;
+  out AFileSize: UInt64): Int32; inline;
+var
+  LLow: DWORD;
+  LHigh: DWORD;
+  LLastError: DWORD;
+begin
+  AFileSize := 0;
+  LHigh := 0;
+  LLow := GetFileSize(AFile, @LHigh);
+  if LLow <> INVALID_SET_FILE_POINTER then
+  begin
+    AFileSize := (UInt64(LHigh) shl 32) or UInt64(LLow);
+    Exit(0);
+  end;
+
+  LLastError := GetLastError;
+  if LLastError = 0 then
+  begin
+    AFileSize := (UInt64(LHigh) shl 32) or UInt64(LLow);
+    Exit(0);
+  end;
+
+  Result := Int32(LLastError);
+end;
+
+function windows_get_file_size_ex(
+  const AFile: HANDLE;
+  out AFileSize: Int64): Int32; inline;
+begin
+  AFileSize := 0;
+  if GetFileSizeEx(AFile, @AFileSize) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_set_file_pointer(
+  const AFile: HANDLE;
+  const ADistanceToMove: LONG;
+  ADistanceToMoveHigh: PLONG;
+  const AMoveMethod: DWORD;
+  out ANewFilePointerLow: DWORD): Int32; inline;
+var
+  LLastError: DWORD;
+begin
+  ANewFilePointerLow := SetFilePointer(AFile, ADistanceToMove, ADistanceToMoveHigh, AMoveMethod);
+  if ANewFilePointerLow <> INVALID_SET_FILE_POINTER then
+    Exit(0);
+
+  LLastError := GetLastError;
+  if LLastError = 0 then
+    Result := 0
+  else
+    Result := Int32(LLastError);
+end;
+
+function windows_set_file_pointer_ex(
+  const AFile: HANDLE;
+  const ADistanceToMove: Int64;
+  out ANewFilePointer: Int64;
+  const AMoveMethod: DWORD): Int32; inline;
+begin
+  ANewFilePointer := 0;
+  if SetFilePointerEx(AFile, ADistanceToMove, @ANewFilePointer, AMoveMethod) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_flush_file_buffers(const AFile: HANDLE): Int32; inline;
+begin
+  if FlushFileBuffers(AFile) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_set_end_of_file(const AFile: HANDLE): Int32; inline;
+begin
+  if SetEndOfFile(AFile) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
 end;
 
 function windows_get_file_attributes_ex_a(

@@ -9,6 +9,8 @@ type
   WORD = UInt16;
   UINT = UInt32;
   DWORD = UInt32;
+  LONG = Int32;
+  LONGLONG = Int64;
   WINBOOL = LongBool;
   BOOL = WINBOOL;
   HANDLE = Pointer;
@@ -20,6 +22,8 @@ type
   LPCWSTR = PWideChar;
   LPWSTR = PWideChar;
   LPDWORD = ^DWORD;
+  PLONG = ^LONG;
+  PINT64 = ^Int64;
   LPBYTE = ^BYTE;
   PLPSTR = ^LPSTR;
   PLPWSTR = ^LPWSTR;
@@ -31,6 +35,16 @@ type
     dwLowDateTime: DWORD;
     dwHighDateTime: DWORD;
   end;
+
+  LARGE_INTEGER = record
+    case Byte of
+      0: (
+        LowPart: DWORD;
+        HighPart: LONG);
+      1: (
+        QuadPart: LONGLONG);
+  end;
+  PLARGE_INTEGER = ^LARGE_INTEGER;
 
   GET_FILEEX_INFO_LEVELS = (
     GetFileExInfoStandard,
@@ -171,6 +185,10 @@ const
   DUPLICATE_SAME_ACCESS = DWORD(2);
   SYNCHRONIZE = DWORD($100000);
   PROCESS_TERMINATE = DWORD($0001);
+  FILE_BEGIN = DWORD(0);
+  FILE_CURRENT = DWORD(1);
+  FILE_END = DWORD(2);
+  INVALID_SET_FILE_POINTER = DWORD($FFFFFFFF);
   PLATFORM_WINDOWS_INVALID_HANDLE_VALUE = PtrInt(-1);
   PLATFORM_WINDOWS_MEM_COMMIT = DWORD($00001000);
   PLATFORM_WINDOWS_MEM_RESERVE = DWORD($00002000);

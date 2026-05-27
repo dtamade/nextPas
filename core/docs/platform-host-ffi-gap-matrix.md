@@ -4,8 +4,9 @@ This document records the current platform host ABI surface for
 `nextpas.core.platform`. It is a source-surface guard companion, not runtime
 proof. Runtime behavior tests cover the unified public contracts in
 `platform.time`, `platform.sync`, and `platform.thread`; raw OS APIs such as
-`clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, `WaitOnAddress`,
-`CreateProcessA/W`, `QueryPerformanceCounter`, and `GetSystemTimeAsFileTime`
+`clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, POSIX `read` / `write` /
+`lseek`, `WaitOnAddress`, `CreateProcessA/W`, `QueryPerformanceCounter`, and
+`GetSystemTimeAsFileTime`
 are accepted from FPC source, copied into host-owned declarations, and guarded
 through source-surface integration checks and compile-only gates.
 
@@ -39,6 +40,27 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 8 covers the file I/O continuation raw
+  ABI inventory for host `base/ffi` owners. POSIX shared owners now carry
+  `size_t`, `ssize_t`, `off_t`, `TPlatformFileOffset`, `read`, `write`,
+  `lseek`, `fsync`, `ftruncate`, `platform_posix_read`,
+  `platform_posix_write`, `platform_posix_seek`, `platform_posix_sync`, and
+  `platform_posix_truncate`. POSIX host `base` units now carry `SEEK_SET`,
+  `SEEK_CUR`, and `SEEK_END` as `PLATFORM_SEEK_SET`,
+  `PLATFORM_SEEK_CURRENT`, and `PLATFORM_SEEK_END`; POSIX host `ffi` units
+  expose delegated `platform_file_read`, `platform_file_write`,
+  `platform_file_seek`, `platform_file_sync`, and
+  `platform_file_truncate` helpers. Windows now carries `LONG`, `PLONG`,
+  `PINT64`, `LARGE_INTEGER`, `FILE_BEGIN`, `FILE_CURRENT`, `FILE_END`,
+  `INVALID_SET_FILE_POINTER`, `GetFileSize`, `SetFilePointer`,
+  `FlushFileBuffers`, `SetEndOfFile`, `GetFileSizeEx`,
+  `SetFilePointerEx`, and thin Windows-prefixed helper projections. This
+  remains source-surface and compile evidence, not a new public platform.file
+  contract.
+- Wave 8 source evidence tokens are synchronized with the evidence index:
+  `read`, `write`, `lseek`, `fsync`, `ftruncate`, `SEEK_SET`, `SEEK_CUR`,
+  `SEEK_END`, `GetFileSize`, `SetFilePointer`, `FlushFileBuffers`,
+  `SetEndOfFile`, `GetFileSizeEx`, and `SetFilePointerEx`.
 - Platform Host ABI Completeness Wave 6 covers the process-control raw ABI inventory for
   host `base/ffi` owners. Shared POSIX FFI now owns raw `fork`, `execve`,
   `waitpid`, `_exit`, and `kill` declarations only; POSIX host `ffi` units must

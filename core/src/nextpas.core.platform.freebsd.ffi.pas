@@ -88,6 +88,22 @@ function platform_file_open(
   const AFlags: Int32;
   const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
 function platform_file_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_file_read(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+function platform_file_write(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+function platform_file_seek(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const AOffset: TPlatformFileOffset;
+  const AWhence: Int32): TPlatformFileOffset; inline;
+function platform_file_sync(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_file_truncate(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ALength: TPlatformFileOffset): Int32; inline;
 function platform_file_fcntl(
   const AFileDescriptor: TPlatformFileDescriptor;
   const ACommand: Int32): Int32; inline;
@@ -178,6 +194,42 @@ end;
 function platform_file_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
 begin
   Result := platform_posix_close(AFileDescriptor);
+end;
+
+function platform_file_read(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+begin
+  Result := platform_posix_read(AFileDescriptor, ABuffer, AByteCount);
+end;
+
+function platform_file_write(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ABuffer: Pointer;
+  const AByteCount: size_t): ssize_t; inline;
+begin
+  Result := platform_posix_write(AFileDescriptor, ABuffer, AByteCount);
+end;
+
+function platform_file_seek(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const AOffset: TPlatformFileOffset;
+  const AWhence: Int32): TPlatformFileOffset; inline;
+begin
+  Result := platform_posix_seek(AFileDescriptor, AOffset, AWhence);
+end;
+
+function platform_file_sync(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+begin
+  Result := platform_posix_sync(AFileDescriptor);
+end;
+
+function platform_file_truncate(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ALength: TPlatformFileOffset): Int32; inline;
+begin
+  Result := platform_posix_truncate(AFileDescriptor, ALength);
 end;
 
 function platform_file_fcntl(

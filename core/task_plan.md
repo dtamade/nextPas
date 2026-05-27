@@ -9,13 +9,12 @@ the integration boundary.
 
 ## Active Scope
 
-- Current worktree: `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave7-process-status`
-- Branch: `codex/platform-host-abi-wave7-process-status`
-- Base: `main@79f1a05`
+- Current worktree: `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`
+- Branch: `codex/platform-host-abi-wave8-file-io`
+- Base: `main@ac4a6fe`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 7, process wait-status and
-  signal constants.
+- Current wave: Platform Host ABI Completeness Wave 8, file I/O continuation.
 
 ## Architecture Rules
 
@@ -46,26 +45,29 @@ the integration boundary.
 
 ## Current Phase
 
-### Wave 7: process wait status and signal constants
+### Wave 8: file I/O continuation
 
 - [x] Open isolated worktree from latest `main`.
-- [x] Baseline focused platform gates before edits.
-- [x] Re-anchor the plan after user correction: no runtime proof for FPC raw ABI
-  definitions.
-- [x] Add Wave 7 source-surface guard.
-- [x] Import POSIX wait option tokens into host `base` units.
-- [x] Import POSIX signal tokens into host `base` units, with host-specific
-  `SIGCHLD` values.
-- [x] Import FPC wait-status macro logic into shared POSIX math helpers.
-- [x] Import Windows wait/process status/access tokens into `windows.base`.
+- [x] Baseline focused platform gate before edits.
+- [x] Re-anchor the plan after user correction: FPC raw ABI definitions are
+  authoritative and do not need nextPas runtime proof.
+- [x] Add Wave 8 source-surface guard and confirm RED.
+- [x] Import shared POSIX file I/O aliases, externals, and thin helpers for
+  `read`, `write`, `lseek`, `fsync`, and `ftruncate`.
+- [x] Import POSIX host seek tokens into Linux, Android, Darwin, FreeBSD, and
+  generic Unix `base` owners.
+- [x] Expose POSIX host delegated file I/O helpers from each POSIX host `ffi`
+  unit without creating a public `platform.file` contract.
+- [x] Import Windows file position, size, sync, and truncate raw ABI declarations
+  and constants into `windows.base` / `windows.ffi`.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ## Non-goals
 
-- No public `nextpas.core.platform.process` contract in this wave.
-- No `nextpas.core.platform.process.ffi` file.
+- No public `nextpas.core.platform.file` contract in this wave.
+- No `nextpas.core.platform.file.ffi` file.
 - No runtime unit tests for FPC raw API values or record layouts.
 - No L1 abstractions such as stopwatch, thread pool, channel, future, process
   runner, or command API inside `platform`.
@@ -73,7 +75,7 @@ the integration boundary.
 ## Verification Commands
 
 - `git diff --check`
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status clean test`
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
@@ -86,20 +88,25 @@ the integration boundary.
 ### Verification Evidence
 
 - `git diff --check`: pass.
-- Focused Wave 7 and companion guards: pass.
-- `make -C core test`: pass.
-- `make -C core examples`: pass.
-- `make -C core benchmarks`: pass.
-- `bash build/verify_local.sh`: pass, including
-  `corePlatformHostAbiWave7ProcessStatusCheck`.
-- Commit: `9cc441b` (`platform: add process status ABI wave 7`).
-- Merge: fast-forwarded into `main`.
-- Post-merge `bash build/verify_local.sh`: pass on
-  `/home/dtamade/projects/nextPas`, including
-  `corePlatformHostAbiWave7ProcessStatusCheck`.
-- Cleanup: removed worktree
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave7-process-status`
-  and deleted branch `codex/platform-host-abi-wave7-process-status`.
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`:
+  `5 total, 5 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+  `4 total, 4 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+  `2 total, 2 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+  `2 total, 2 passed, 0 failed`.
+- `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+  Darwin, Android, FreeBSD, and generic Unix simulated host compile gates pass.
+- Win64 compile-only gates pass for `core.time`, `platform.thread`, and
+  `platform.sync`.
+- `sh -n build/verify_local.sh`: pass.
+- `make -C core examples`: pass, all examples compiled.
+- `make -C core benchmarks`: pass, all benchmarks passed.
+- `make -C core test`: pass, all tests passed.
+- `bash build/verify_local.sh`: pass; final envelope reports
+  `verify-local=pass`, `human-summary=local verification passed`, and
+  includes `corePlatformHostAbiWave8FileIoCheck`.
 
 ## Errors Encountered
 

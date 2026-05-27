@@ -12,6 +12,46 @@
 - Runtime behavior tests remain necessary for unified nextPas public contracts
   such as `platform.time`, `platform.sync`, and `platform.thread`.
 
+## 2026-05-28: Wave 8 file I/O continuation decisions
+
+- Wave 8 continues the earlier file ABI inventory. It remains raw host ABI
+  import, not a public `platform.file` contract.
+- Shared POSIX file I/O scalar aliases belong in
+  `nextpas.core.platform.posix.base`; shared POSIX externals and thin helpers
+  for `read`, `write`, `lseek`, `fsync`, and `ftruncate` belong in
+  `nextpas.core.platform.posix.ffi`.
+- `SEEK_SET`, `SEEK_CUR`, and `SEEK_END` are host `base` constants even though
+  the current FPC values match across Linux/BSD/macOS. Host ownership keeps the
+  ABI source clear when more platforms are promoted.
+- POSIX host `ffi` units may expose delegated file helpers with the existing
+  `platform_file_*` raw-host-helper shape because Wave 2 already established
+  that pattern for `open` / `close` / `fcntl`. This still must not create
+  `nextpas.core.platform.file` or `nextpas.core.platform.file.ffi`.
+- Windows file positioning, sizing, sync, and truncation belong in
+  `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi`.
+  Raw declarations should mirror FPC-shaped kernel32 entrypoints first; helpers
+  stay thin and Windows-prefixed.
+
+## 2026-05-28: FPC source evidence for Wave 8
+
+- POSIX `read`, `write`, `lseek`, and `ftruncate` evidence starts in
+  `rtl/unix/oscdeclh.inc`, where FPC declares libc `read`, `write`,
+  `lseek` plus suffix handling, and `ftruncate` plus suffix handling.
+- POSIX syscall wrapper evidence also appears in `rtl/unix/bunxh.inc`,
+  `rtl/linux/ossysc.inc`, and `rtl/bsd/ossysc.inc` through
+  `FPC_SYSC_READ`, `FPC_SYSC_WRITE`, `FPC_SYSC_LSEEK`, and
+  `FPC_SYSC_FTRUNCATE`.
+- POSIX `fsync` evidence starts in `rtl/unix/unxdeclh.inc`, where FPC declares
+  libc `fsync`; Linux and BSD syscall wrapper source records the same surface.
+- POSIX seek token evidence starts in `rtl/linux/ostypes.inc`,
+  `rtl/bsd/ostypes.inc`, and `rtl/macos/macostp.inc`, where `SEEK_SET = 0`,
+  `SEEK_CUR = 1`, and `SEEK_END = 2`.
+- Windows evidence starts in `rtl/win/wininc/func.inc` and
+  `rtl/win/wininc/redef.inc` for `GetFileSize`, `SetFilePointer`,
+  `FlushFileBuffers`, `SetEndOfFile`, `GetFileSizeEx`, and
+  `SetFilePointerEx`; FPC usage is visible in `rtl/win/sysfile.inc` and
+  `rtl/win/sysutils.pp`.
+
 ## 2026-05-28: Wave 7 owner decisions
 
 - POSIX wait option tokens such as `WNOHANG` and `WUNTRACED` belong in each POSIX

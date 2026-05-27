@@ -24,7 +24,8 @@ Use this document to answer two questions:
 This is not runtime proof. Runtime behavior tests cover the unified public
 contracts in `platform.time`, `platform.sync`, and `platform.thread`. Raw OS
 APIs such as `clock_gettime`, `pthread_*`, Linux `futex`, POSIX `fork`,
-Windows `WaitOnAddress`, `CreateProcessA/W`, `QueryPerformanceCounter`, and
+POSIX `read` / `write` / `lseek`, Windows `WaitOnAddress`,
+`CreateProcessA/W`, `QueryPerformanceCounter`, and
 `GetSystemTimeAsFileTime` are accepted from FPC source and then guarded only at
 the nextPas integration boundary: owner placement, source-surface checks,
 compile-only gates, route truth, and focused runtime tests of nextPas
@@ -34,14 +35,54 @@ abstractions that consume them.
 
 | Host | nextPas owner | FPC source evidence | Evidence scope |
 | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/sysos.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals |
-| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals |
-| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/bsd/sysos.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, POSIX environment helpers, shared POSIX process-control externals, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
-| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals |
-| generic Unix | `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` | `rtl/unix/baseunix.pp`, `rtl/unix/unix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/unix/initc.pp`, `rtl/unix/cthreads.pp`, and the closest proven host-specific FPC source before promoting a fallback into a real host | shared POSIX `clock_gettime`, `clock_getres`, `timespec`, `__errno_location` / `__error` errno families, pthread lifecycle/TLS/sync declarations, `pthread_condattr_setclock` policy, `_SC_NPROCESSORS_ONLN` fallback, `pthread_self` native-id fallback, POSIX environment helpers, and shared POSIX process-control externals |
-| Windows | `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi` | `rtl/win32/windows.pp`, `rtl/win64/windows.pp`, `packages/winunits-base`, and Windows OS SDK headers when FPC does not expose newer kernel32 APIs | `FILETIME`, `SYSTEM_INFO`, `PROCESS_INFORMATION`, `STARTUPINFOA/W`, `CreateThread`, `CreateProcessA/W`, `WaitForSingleObject`, `CloseHandle`, `GetCurrentThreadId`, `QueryPerformanceCounter`, `GetSystemTimeAsFileTime`, `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue`, `GetSystemInfo`, `SRWLOCK`, `CONDITION_VARIABLE`, `SleepConditionVariableSRW`, `WaitOnAddress`, `WakeByAddressSingle`, `WakeByAddressAll`, Windows environment entrypoints, Windows process-control entrypoints |
+| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
+| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/linux/ostypes.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
+| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/bsd/sysos.inc`, `rtl/macos/macostp.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
+| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals |
+| generic Unix | `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` | `rtl/unix/baseunix.pp`, `rtl/unix/unix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/unix/unxdeclh.inc`, `rtl/unix/initc.pp`, `rtl/unix/cthreads.pp`, and the closest proven host-specific FPC source before promoting a fallback into a real host | shared POSIX `clock_gettime`, `clock_getres`, `timespec`, `__errno_location` / `__error` errno families, pthread lifecycle/TLS/sync declarations, `pthread_condattr_setclock` policy, `_SC_NPROCESSORS_ONLN` fallback, `pthread_self` native-id fallback, POSIX environment helpers, shared POSIX process-control externals, and shared POSIX file I/O externals |
+| Windows | `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi` | `rtl/win32/windows.pp`, `rtl/win64/windows.pp`, `rtl/win/wininc`, `rtl/win/sysfile.inc`, `rtl/win/sysutils.pp`, `packages/winunits-base`, and Windows OS SDK headers when FPC does not expose newer kernel32 APIs | `FILETIME`, `SYSTEM_INFO`, `PROCESS_INFORMATION`, `STARTUPINFOA/W`, `CreateThread`, `CreateProcessA/W`, `WaitForSingleObject`, `CloseHandle`, `GetCurrentThreadId`, `QueryPerformanceCounter`, `GetSystemTimeAsFileTime`, `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue`, `GetSystemInfo`, `SRWLOCK`, `CONDITION_VARIABLE`, `SleepConditionVariableSRW`, `WaitOnAddress`, `WakeByAddressSingle`, `WakeByAddressAll`, Windows environment entrypoints, Windows process-control entrypoints, Windows file I/O entrypoints |
 
 ## Declaration Evidence Classes
+
+### Platform Host ABI Completeness Wave 8: file I/O continuation
+
+Wave 8 extends the low-level file ABI inventory with file I/O continuation
+entrypoints. It covers POSIX `read`, `write`, `lseek`, `fsync`, `ftruncate`,
+host seek tokens, and Windows kernel32 file positioning, sizing, syncing, and
+truncation entrypoints. It keeps no public platform.file contract in this wave.
+
+- Shared POSIX file I/O scalar aliases live in
+  `nextpas.core.platform.posix.base`: `size_t`, `ssize_t`, `off_t`, and
+  `TPlatformFileOffset`. FPC evidence starts in the Unix file descriptor source
+  family that exposes `TSize`, `TSSize`, and `TOff` around the same libc
+  calls.
+- POSIX seek tokens stay in host `base` units: `SEEK_SET`, `SEEK_CUR`, and
+  `SEEK_END` become `PLATFORM_SEEK_SET`, `PLATFORM_SEEK_CURRENT`, and
+  `PLATFORM_SEEK_END`. Evidence starts in FPC `rtl/linux/ostypes.inc`,
+  `rtl/bsd/ostypes.inc`, and `rtl/macos/macostp.inc`.
+- Shared POSIX externals and thin helpers live in
+  `nextpas.core.platform.posix.ffi`: `read`, `write`, `lseek`, `fsync`,
+  `ftruncate`, `platform_posix_read`, `platform_posix_write`,
+  `platform_posix_seek`, `platform_posix_sync`, and
+  `platform_posix_truncate`. Evidence starts in `rtl/unix/oscdeclh.inc` for
+  `read`, `write`, `lseek`, and `ftruncate`; in `rtl/unix/unxdeclh.inc` for
+  `fsync`; and in `rtl/unix/bunxh.inc`, `rtl/linux/ossysc.inc`, and
+  `rtl/bsd/ossysc.inc` for the `FPC_SYSC_READ`, `FPC_SYSC_WRITE`,
+  `FPC_SYSC_LSEEK`, and `FPC_SYSC_FTRUNCATE` syscall wrapper aliases.
+- POSIX host `ffi` units expose `platform_file_read`, `platform_file_write`,
+  `platform_file_seek`, `platform_file_sync`, and
+  `platform_file_truncate` by delegating to the shared POSIX helpers. These are
+  raw host helper projections following the Wave 2 file helper precedent, not a
+  public `platform.file` contract.
+- Windows file I/O continuation evidence starts in FPC `rtl/win/wininc/func.inc`
+  and `rtl/win/wininc/redef.inc` for `GetFileSize`, `SetFilePointer`,
+  `FlushFileBuffers`, `SetEndOfFile`, `GetFileSizeEx`, and
+  `SetFilePointerEx`; `rtl/win/sysfile.inc` and `rtl/win/sysutils.pp` show FPC
+  using those entrypoints for file position, size, flush, and truncate flows.
+  Windows ABI aliases, `LARGE_INTEGER`, `FILE_BEGIN`, `FILE_CURRENT`,
+  `FILE_END`, and `INVALID_SET_FILE_POINTER` live in
+  `nextpas.core.platform.windows.base`; raw declarations and thin
+  Windows-prefixed helpers live in `nextpas.core.platform.windows.ffi`.
 
 ### Platform Host ABI Completeness Wave 6: process-control raw ABI inventory
 

@@ -5,8 +5,13 @@ unit nextpas.core.platform.posix.base;
 interface
 
 type
+  size_t = PtrUInt;
+  ssize_t = PtrInt;
+  off_t = Int64;
+
   TPlatformFileDescriptor = Int32;
   TPlatformFileModeArg = UInt32;
+  TPlatformFileOffset = off_t;
 
   timespec = record
     tv_sec: Int64;
