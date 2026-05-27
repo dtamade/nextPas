@@ -1451,6 +1451,96 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceInheritedKnownFieldMemberCallStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-imported-inherited-known-field-member-call-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledImportedInheritedKnownFieldMemberCall;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Value(1);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    Value: Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledImportedInheritedKnownFieldMemberCall',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-imported-inherited-known-field-member-call-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-imported-inherited-known-field-member-call-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-imported-inherited-known-field-member-call-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-imported-inherited-known-field-member-call-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckKnownPropertyMemberCallDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -9640,6 +9730,7 @@ begin
     CheckImportedKnownFieldMemberCallDiagnostic;
     CheckImportedInheritedKnownFieldMemberCallDiagnostic;
     CheckInstalledSourceKnownFieldMemberCallStaysDeferred;
+    CheckInstalledSourceInheritedKnownFieldMemberCallStaysDeferred;
     CheckKnownPropertyMemberCallDiagnostic;
     CheckImportedKnownPropertyMemberCallDiagnostic;
     CheckInstalledSourceKnownPropertyMemberCallStaysDeferred;

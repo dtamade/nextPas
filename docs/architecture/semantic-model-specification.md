@@ -434,6 +434,9 @@ candidate collection
     `project-source` unit 的场景；例如 imported `TBaseWorker.Value: Integer` 被 root source
     通过 `TWorker = class(TBaseWorker)` 写成 `Worker.Value(1)` 时同样失败为
     `sema.invalid-call-shape`
+  - inherited field truth 来自 imported `installed-source` unit 时继续保守 deferred；这条 guard
+    与 installed-source direct field guard 一样，只用 `semantic-call-bindings-check` 的 focused
+    harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
   - 上述 inherited non-callable 边界同样覆盖 inherited class property
   - specialized generic receiver、record/property/array/deref receiver 与更完整 member access 仍继续 deferred
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
