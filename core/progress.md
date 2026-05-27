@@ -87,6 +87,16 @@
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave9LinuxStatCheck`.
+- Committed Wave 9 as `23f0dfd`
+  (`platform: add Linux stat ABI wave 9`).
+- Fast-forwarded `main` from `524b27c` to `23f0dfd`.
+- Post-merge `bash build/verify_local.sh` passed on the main checkout with
+  `verify-local=pass`, `human-summary=local verification passed`, and final
+  envelope token `corePlatformHostAbiWave9LinuxStatCheck`.
+- Removed the Wave 9 worktree and deleted branch
+  `codex/platform-host-abi-wave9-posix-stat`.
+- Remaining active sibling worktrees are `collections-refactor` and
+  `sema-no-matching-overload`.
 
 - Started Wave 8 from latest `main@ac4a6fe` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`

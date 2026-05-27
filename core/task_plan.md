@@ -9,14 +9,16 @@ the integration boundary.
 
 ## Active Scope
 
-- Current worktree:
+- Current status: Wave 9 merged to `main` as `23f0dfd`
+  (`platform: add Linux stat ABI wave 9`).
+- Closed worktree:
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
-- Branch: `codex/platform-host-abi-wave9-posix-stat`
+- Closed branch: `codex/platform-host-abi-wave9-posix-stat`
 - Base: `main@524b27c`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Current wave: Platform Host ABI Completeness Wave 9, Linux traditional stat
-  raw ABI.
+  raw ABI, closed; next wave should start from latest `main`.
 
 ## Architecture Rules
 
@@ -60,7 +62,7 @@ the integration boundary.
   record or generic `stat` binding.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ## Non-goals
 
@@ -110,6 +112,9 @@ the integration boundary.
 - `bash build/verify_local.sh`: `verify-local=pass`,
   `human-summary=local verification passed`, final envelope includes
   `corePlatformHostAbiWave9LinuxStatCheck`.
+- Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final
+  envelope reports `verify-local=pass`, `human-summary=local verification
+  passed`, and includes `corePlatformHostAbiWave9LinuxStatCheck`.
 
 ## Errors Encountered
 
