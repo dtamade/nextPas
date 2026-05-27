@@ -9,7 +9,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
-  nextpas.core.collections.element_manager,
+  nextpas.core.collections.element_manager.intf,
   nextpas.core.collections.slice;
 
 type
@@ -577,7 +577,7 @@ type
      *
      * @remark 元素管理器用于在容器内部管理元素的内存分配和释放。
      *}
-    function GetElementManager: specialize TElementManager<T>;
+    function GetElementManager: specialize IElementManager<T>;
 
     {**
      * LoadFrom
@@ -910,7 +910,7 @@ type
     property Enumerator:      specialize TIter<T>           read GetEnumerator;
     property ElementSize:     SizeUInt                      read GetElementSize;
     property IsManagedType:   Boolean                       read GetIsManagedType;
-    property ElementManager:  specialize TElementManager<T> read GetElementManager;
+    property ElementManager:  specialize IElementManager<T> read GetElementManager;
     property ElementTypeInfo: PTypeInfo                     read GetElementTypeInfo;
 
   end;

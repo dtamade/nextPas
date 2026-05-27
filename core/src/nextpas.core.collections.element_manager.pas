@@ -45,7 +45,7 @@ interface
 
   { TElementManager 泛型元素分配器实现 }
 
-  generic TElementManager<T> = class(TObject)
+  generic TElementManager<T> = class(TInterfacedObject, specialize IElementManager<T>)
   type
     PElement = ^T;
   private

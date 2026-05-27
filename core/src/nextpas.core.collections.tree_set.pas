@@ -11,7 +11,7 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.tree_set.intf,
-  nextpas.core.collections.element_manager,
+  nextpas.core.collections.element_manager.intf,
   nextpas.core.collections.rbset,
   nextpas.core.mem.allocator;
 
@@ -43,7 +43,7 @@ type
     function Iter: specialize TIter<T>;
     function GetElementSize: SizeUInt;
     function GetIsManagedType: Boolean;
-    function GetElementManager: specialize TElementManager<T>;
+    function GetElementManager: specialize IElementManager<T>;
     procedure LoadFrom(const aSrc: array of T); overload;
     procedure Append(const aSrc: array of T); overload;
     function ToArray: specialize TGenericArray<T>;
@@ -168,7 +168,7 @@ begin
   Result := FImpl.GetIsManagedType;
 end;
 
-function TTreeSet.GetElementManager: specialize TElementManager<T>;
+function TTreeSet.GetElementManager: specialize IElementManager<T>;
 begin
   Result := FImpl.GetElementManager;
 end;

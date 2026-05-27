@@ -9,7 +9,7 @@ uses
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.element_manager;
+  nextpas.core.collections.element_manager.intf;
 
 // Suppress unused parameter hints - growth strategies and IsOverlap have intentionally unused params
 {$WARN 5024 OFF}
@@ -209,7 +209,6 @@ type
   type
     PElement        = ^T;
     TIter           = specialize TIter<T>;
-    TElementManager = specialize TElementManager<T>;
 
     TEqualsFunc    = specialize TEqualsFunc<T>;
     TEqualsMethod  = specialize TEqualsMethod<T>;
@@ -233,7 +232,7 @@ type
     TInternalCompareMethod = function (const aLeft, aRight: T): SizeInt of object;
 
   protected
-    FElementManager:   TElementManager;
+    FElementManager:   specialize IElementManager<T>;
     FElementSizeCache: SizeUInt; // 元素大小缓存
 
   { Equals 内部相等回调 }
@@ -363,7 +362,7 @@ type
     function GetElementSize: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function GetIsManagedType: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function GetElementTypeInfo: PTypeInfo; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetElementManager: specialize TElementManager<T>; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetElementManager: specialize IElementManager<T>; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     function  IsCompatible(aDst: TCollection): Boolean; override;
     procedure LoadFrom(const aSrc: array of T); overload;
@@ -417,7 +416,7 @@ type
     property Enumerator:      specialize TIter<T>           read GetEnumerator;
     property ElementSize:     SizeUInt                      read GetElementSize;
     property IsManagedType:   Boolean                       read GetIsManagedType;
-    property ElementManager:  specialize TElementManager<T> read GetElementManager;
+    property ElementManager:  specialize IElementManager<T> read GetElementManager;
     property ElementTypeInfo: PTypeInfo                     read GetElementTypeInfo;
 
   end;
@@ -635,6 +634,9 @@ procedure CheckBounds(aIndex, aCount, aMax: SizeUInt; const aCallerName: string)
 
 
 implementation
+
+uses
+  nextpas.core.collections.element_manager;
 
 function compare_bool(const aLeft, aRight: Boolean): SizeInt;
 begin
@@ -1911,7 +1913,7 @@ var
   LTypeInfo: PTypeInfo;
 begin
   inherited Create(aAllocator, aData);
-  FElementManager := TElementManager.Create(FAllocator);
+  FElementManager := specialize TElementManager<T>.Create(FAllocator);
   FElementSizeCache := FElementManager.GetElementSize;
 
   LTypeInfo := GetElementTypeInfo();
@@ -1934,32 +1936,32 @@ begin
     end;
     tkInteger:
     begin
-      if LTypeInfo = system.typeinfo(Int8) then
+      if LTypeInfo = TypeInfo(Int8) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI8);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI8);
       end
-      else if LTypeInfo = system.typeinfo(Int16) then
+      else if LTypeInfo = TypeInfo(Int16) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI16);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI16);
       end
-      else if LTypeInfo = system.typeinfo(Int32) then
+      else if LTypeInfo = TypeInfo(Int32) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI32);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI32);
       end
-      else if LTypeInfo = system.typeinfo(UInt8) then
+      else if LTypeInfo = TypeInfo(UInt8) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU8);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU8);
       end
-      else if LTypeInfo = system.typeinfo(UInt16) then
+      else if LTypeInfo = TypeInfo(UInt16) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU16);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU16);
       end
-      else if LTypeInfo = system.typeinfo(UInt32) then
+      else if LTypeInfo = TypeInfo(UInt32) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU32);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU32);
@@ -1967,12 +1969,12 @@ begin
     end;
     tkInt64:
     begin
-      if LTypeInfo = system.typeinfo(Int64) then
+      if LTypeInfo = TypeInfo(Int64) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI64);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI64);
       end
-      else if LTypeInfo = system.typeinfo(Comp) then
+      else if LTypeInfo = TypeInfo(Comp) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareComp);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsComp);
@@ -1985,22 +1987,22 @@ begin
     end;
     tkFloat:
     begin
-      if LTypeInfo = system.typeinfo(Single) then
+      if LTypeInfo = TypeInfo(Single) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareSingle);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsSingle);
       end
-      else if LTypeInfo = system.typeinfo(Double) then
+      else if LTypeInfo = TypeInfo(Double) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareDouble);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsDouble);
       end
-      else if LTypeInfo = system.typeinfo(Extended) then
+      else if LTypeInfo = TypeInfo(Extended) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareExtended);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsExtended);
       end
-      else if LTypeInfo = system.typeinfo(Currency) then
+      else if LTypeInfo = TypeInfo(Currency) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareCurrency);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsCurrency);
@@ -2073,7 +2075,6 @@ end;
 
 destructor TGenericCollection.Destroy;
 begin
-  FElementManager.Free;
   inherited Destroy;
 end;
 
@@ -2102,7 +2103,7 @@ begin
   Result := FElementManager.ElementTypeInfo;
 end;
 
-function TGenericCollection.GetElementManager: specialize TElementManager<T>;
+function TGenericCollection.GetElementManager: specialize IElementManager<T>;
 begin
   Result := FElementManager;
 end;
