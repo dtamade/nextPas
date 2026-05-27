@@ -99,8 +99,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
   `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`）、表达式参数里的 direct
   member function call（例如 `Halt(Worker.Add(1, 2));`）、class method body 内的
-  `Self.SetValue(9)` 与 bare implicit-self method call（例如 `Touch;`，包括回绑到 parent
-  class method 的 inherited case），以及已声明 class type-name receiver 的 constructor-like member call
+  `Self.SetValue(9)` 与 bare implicit-self method call（例如 `Touch;` / `Touch(7);`，
+  包括回绑到 parent class method 的 inherited case），以及已声明 class type-name receiver 的 constructor-like member call
   （例如 `TWorker.Create(42)`），以 `member-call` binding 指向已声明的 `TClass.Method`
   method symbol。root source 变量的 type id 也可以来自 imported project/source unit 中已 seed
   的 class type，因此 `uses Worker; var Worker: TWorker;` 后的 direct member call 可绑定到

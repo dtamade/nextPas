@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,53 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 125 inherited implicit self bare method call argument binding)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.4 Semantic model`
+- Objective:
+  - 把 inherited implicit-self bare method call 从零参推进到带参数 method，例如
+    `TBaseWorker.Touch(Value: Integer)` 与 `procedure TWorker.Run; begin Touch(7); end;`，
+    `Touch(7);` 必须绑定到 parent class 上的 integer overload。
+- Baseline:
+  - Batch 124 已让 inherited bare `Touch;` 绑定到 `TBaseWorker.Touch`。
+  - Batch 123 的 implicit-self fallback 已经传入 `CallArgumentCount(...)` 与 compact argument
+    signature，因此本轮优先 probe 带参数路径是否天然成立。
+- Actions taken:
+  - 按 `/plan` 固定本轮只收 inherited implicit-self bare method call with argument，并继续采用
+    `单热点 / fresh probe / promotion-first / probe 失败再修实现`。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckInheritedImplicitSelfBareMethodCallArgumentBinding`，要求 `TWorker.Run` 内 bare
+    `Touch(7);` 产生唯一 `member-call` binding、target 为
+    `TBaseWorker.Touch(Value: Integer)`，且 `Model.BindingCount = 1`。
+  - focused semantic 直接输出 `semantic-call-bindings-status=pass`，证明实现能力天然成立，本轮不修改
+    `compiler/sema/np_semantic_analyzer.pas`。
+  - 扩展 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas`：新增
+    `TBaseWorker.Touch(Value: Integer)`，并在 `TChildWorker.Run` 内新增 bare `Touch(7);`。
+  - 用 fresh `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols ...` 重新 probe，确认 offset
+    `1038` 的 `Touch` 已进入 `query-bindings` 与 `query-definitions`，target 为
+    带 `targetParamSignature="i"` 的 `TBaseWorker.Touch`。
+  - 在 `build/verify_local.sh` 的 `stage0-query-member-call-bindings-check` 增加 inherited
+    implicit-self `Touch(7);` 的 text/envelope gate。
+- Verification:
+  - Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Fresh stage0 query probe 已输出：
+    - `query-bindings` 中 `{"kind":"member-call","name":"Touch","byteOffset":1038,"targetSymbolId":16}`
+    - `query-definitions` 中 `bindingByteOffset=1038` 对应
+      `targetName="TBaseWorker.Touch"` / `targetKind="method"` /
+      `targetParamCount=1` / `targetParamSignature="i"`
+  - Fresh full：`bash build/verify_local.sh` 已输出
+    `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮继续证明 argument-aware lookup 已经被现有 implicit-self fallback 复用，不需要扩大 sema 实现。
+  - 相邻边界先 probe 再 promotion 的节奏仍然最快，且能把真实能力纳入 official gate。
+  - final diff review 仅覆盖 semantic/query tests、query fixture、verify gate、README/spec 与持续记录；
+    没有修改 `core/`。
 
 ## Session: 2026-05-27 (Batch 124 inherited implicit self bare method call binding)
 

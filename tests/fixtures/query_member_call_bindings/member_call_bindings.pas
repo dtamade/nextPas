@@ -13,6 +13,7 @@ type
   end;
   TBaseWorker = class
     procedure Touch;
+    procedure Touch(Value: Integer);
   end;
   TChildWorker = class(TBaseWorker)
     procedure Run;
@@ -57,9 +58,14 @@ procedure TBaseWorker.Touch;
 begin
 end;
 
+procedure TBaseWorker.Touch(Value: Integer);
+begin
+end;
+
 procedure TChildWorker.Run;
 begin
   Touch;
+  Touch(7);
 end;
 
 var

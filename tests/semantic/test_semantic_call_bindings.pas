@@ -4932,6 +4932,106 @@ begin
   end;
 end;
 
+procedure CheckInheritedImplicitSelfBareMethodCallArgumentBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Binding: TSemanticBinding;
+  Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  TouchBindingCount: LongInt;
+  TouchOffset: LongInt;
+  TouchSymbolId: LongInt;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedImplicitSelfBareMethodCallArgumentBinding;' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch(7);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-argument-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-inherited-implicit-self-bare-method-call-argument-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-argument-model-status:' +
+        Model.Status);
+    TouchSymbolId := SymbolIdByNameKindOwnerAndSignature(
+      Model,
+      'TBaseWorker.Touch',
+      'method',
+      'inheritedimplicitselfbaremethodcallargumentbinding',
+      1,
+      'i'
+    );
+    if TouchSymbolId <= 0 then
+      Fail('missing-inherited-implicit-self-bare-method-call-argument-target-symbol');
+    TouchOffset := Pos('Touch(7)', SourceText) - 1;
+    TouchBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Touch') then
+      begin
+        Inc(TouchBindingCount);
+        if Binding.TargetSymbolId <> TouchSymbolId then
+          Fail('inherited-implicit-self-bare-method-call-argument-target-mismatch');
+        if Binding.ByteOffset <> TouchOffset then
+          Fail('inherited-implicit-self-bare-method-call-argument-offset-mismatch:' +
+            IntToStr(Binding.ByteOffset));
+      end;
+    end;
+    if TouchBindingCount = 0 then
+      Fail('missing-inherited-implicit-self-bare-method-call-argument-binding');
+    if TouchBindingCount <> 1 then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-argument-binding-count:' +
+        IntToStr(TouchBindingCount));
+    if Model.BindingCount <> 1 then
+      Fail('unexpected-inherited-implicit-self-bare-method-call-argument-model-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckMemberParameterCallTypeMismatchDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -5356,6 +5456,7 @@ begin
     CheckBareUnknownCallableDiagnostic;
     CheckImplicitSelfBareMethodCallBinding;
     CheckInheritedImplicitSelfBareMethodCallBinding;
+    CheckInheritedImplicitSelfBareMethodCallArgumentBinding;
     CheckMemberParameterCallTypeMismatchDiagnostic;
     CheckBareFunctionResultTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;

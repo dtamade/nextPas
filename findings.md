@@ -238,6 +238,21 @@
   `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
   `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 semantic analyzer，
   也没有修改 `core/`。
+- Batch 125 证明 inherited implicit-self bare method call with argument 也能消费现有
+  argument-count/signature truth：当 parent class 声明 `TBaseWorker.Touch(Value: Integer)`，
+  child class method body 内写 `Touch(7);` 时，`Touch` 会注册为唯一 `member-call`
+  binding，target 指向 param signature 为 `i` 的 `TBaseWorker.Touch`，且不报 diagnostic。
+- 这条带参数 inherited implicit-self bare call 边界不需要修改
+  `compiler/sema/np_semantic_analyzer.pas`：Batch 123 的 implicit-self fallback 已传入
+  `CallArgumentCount(...)` 与 compact argument signature，现有
+  `MethodSymbolIdForClassTypeMember(...)` 会沿 parent chain 选择同 arity/signature target。
+- Batch 125 新增 `TChildWorker.Run` 内 bare `Touch(7);` 的 query gate；fresh stage0 query probe
+  已输出 `query-bindings` 中 `byteOffset=1038` 的 `Touch` `member-call`，target 为带
+  `targetParamCount=1` / `targetParamSignature="i"` 的 `TBaseWorker.Touch`。
+- Batch 125 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 semantic analyzer，
+  也没有修改 `core/`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
