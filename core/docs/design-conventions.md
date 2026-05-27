@@ -35,6 +35,16 @@
 
 ### 标准形态（四件套 + 实现）
 
+这是完整模块可能采用的最大形态，不是每个模块都必须机械创建所有文件。
+每个文件是否存在，由真实职责决定：
+
+- `base`：只有模块需要公开常量、record、enum、type alias 等公共载体类型时存在。
+- `intf`：只有模块确实定义 Pascal `interface` 契约时存在。普通函数式 API 或 platform
+  统一过程/函数契约，不为了“凑四件套”创建 `*.intf.pas`。
+- `ffi`：只有模块本身拥有 foreign binding / ABI 声明时存在。不能把普通 helper 或抽象层伪装成
+  `*.ffi.pas`。
+- 实现子模块：只有门面需要拆出具体实现、策略或算法时存在。
+
 ```
 nextpas.core.<module>.pas           ← 门面：纯 re-export，不含逻辑
 nextpas.core.<module>.base.pas      ← 基本类型定义（record、enum、const、type alias）
@@ -64,6 +74,8 @@ base ← ffi  ← 实现
 - `ffi` 是实现侧 ABI / foreign binding seam；默认只依赖 RTL 与宿主声明，若签名需要模块内公共载体类型，可依赖 `base`
 - 实现依赖 `intf` + `base`，需要 foreign binding 时再依赖 `ffi`
 - 门面 uses 所有子模块，re-export 给外部
+- 如果模块没有 `intf` 或 `ffi`，实现层直接依赖实际存在的 `base`、宿主 FFI 或其他下层 contract；
+  禁止为了满足图形范式而引入空文件或错误职责文件。
 
 ### 门面职责
 
@@ -111,6 +123,10 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
+- `platform` 的 feature 子模块遵循 host-owner 模型：`platform.time`、`platform.sync`、
+  `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
+  `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
+  owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
 
 ### 单元体积指引
 
@@ -768,20 +784,27 @@ nextpas.core/
 所有系统调用和平台 API 必须通过 nextPas 自己维护的 FFI 文件声明：
 
 ```
+src/nextpas.core.platform.posix.base.pas  ← POSIX 共享常量、结构、ABI 类型
 src/nextpas.core.platform.posix.ffi.pas   ← POSIX 系统调用（cdecl external 'c'）
+src/nextpas.core.platform.linux.base.pas  ← Linux 常量、结构、ABI 类型
 src/nextpas.core.platform.linux.ffi.pas   ← Linux 特有（syscall numbers 等）
+src/nextpas.core.platform.darwin.base.pas ← macOS 常量、结构、ABI 类型
 src/nextpas.core.platform.darwin.ffi.pas  ← macOS 特有（mach_* 等）
+src/nextpas.core.platform.windows.base.pas ← Windows 常量、结构、ABI 类型
 src/nextpas.core.platform.windows.ffi.pas ← Windows API（stdcall external）
 ```
 
 示例边界：
 
-- `nextpas.core.platform.posix.ffi`：POSIX 通用 ABI，如 `timespec`、
-  `clock_gettime`、pthread 类型与函数。
-- `nextpas.core.platform.linux.ffi`：Linux 专有 ABI，如 `syscall`、
-  `SYS_futex`、`FUTEX_WAIT`、`FUTEX_WAKE`。
-- Windows 专有 ABI 也必须放入 nextPas 自己的 FFI 单元，不能通过 FPC
-  `Windows` 单元取得声明。
+- `nextpas.core.platform.<host>.base`：宿主平台定义，如常量、record、opaque carrier、
+  ABI scalar/type alias、capability token。
+- `nextpas.core.platform.<host>.ffi`：宿主平台 API 绑定，如 `cdecl/stdcall external`
+  声明、syscall wrapper、libc/kernel32/pthread/mach 入口，以及围绕这些 ABI 的 host-owned
+  thin helper。
+- `nextpas.core.platform.posix.base` / `nextpas.core.platform.posix.ffi`：只承载真正跨 POSIX
+  宿主共享的 ABI 形状和共享 helper。
+- Windows 专有 ABI 必须放入 nextPas 自己的 Windows base/FFI 单元，不能通过 FPC `Windows`
+  单元取得声明。
 
 FFI 声明应使用明确的 ABI 类型、调用约定和外部符号名，例如
 `cdecl; external 'c' name 'clock_gettime'` 或
@@ -794,6 +817,14 @@ time、sync ABI 应尽量统一沉到 `nextpas.core.platform.windows.ffi`，Linu
 `nextpas.core.platform.linux.ffi`，macOS 专有 ABI 统一沉到
 `nextpas.core.platform.darwin.ffi`。`platform.time`、`platform.sync`、`platform.thread`
 等实现单元负责策略、契约和错误码映射，不在实现体里散落 `external` 声明。
+
+换句话说，`platform.time`、`platform.sync`、`platform.thread` 是 platform 层在不同宿主之上的
+统一 API contract：它们把 Linux、Windows、macOS、Android、FreeBSD、generic Unix 等宿主差异整理成
+nextPas 自己稳定的过程/函数、类型和错误语义。它们应直接消费各自宿主的
+`platform.<host>.base` / `platform.<host>.ffi`，不再重复创建
+`platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi` 这类按 feature 切碎的 FFI 单元。
+如果后来确实出现 feature-specific foreign ABI，必须先证明它不属于任何 host owner，再单独建
+`platform.<feature>.ffi`。
 
 `nextpas.core.platform.posix.ffi` 这类 shared FFI 单元只保留真正跨宿主共享的 ABI 形状，例如
 `timespec`、pthread opaque types 与普遍存在的 pthread/system call 声明；像 mutex kind 编号、
