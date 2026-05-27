@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync Windows busy-result helper ownership；上一轮包括
+当前最新本轮为 platform.time facade/base/host shape normalization；上一轮包括
+platform.sync Windows busy-result helper ownership；
 platform.sync Windows destroy helper ownership；
 platform.time host-ffi facade collapse；
 platform POSIX timeout deadline helper ownership、
@@ -26,6 +27,54 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.time facade/base/host shape normalization)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 按最新 platform host-owner 模型收正 `platform.time`：`platform.time` 是跨平台统一过程/函数 API，
+    不是 Pascal `interface` contract；因此不能继续保留 `nextpas.core.platform.time.intf.pas`。
+- Baseline:
+  - `platform.time` 曾被拆成 `facade + base + intf + host`，并临时引入
+    `IPlatformTimeSource`。
+  - 用户明确指出 `intf` 是接口用的，platform feature 没有真实接口需求时应省略。
+  - 已有文档提交 `c1110e3` 明确了 `platform.<host>.base/ffi` owner 与 feature API 不重复建
+    `*.ffi` 的规则。
+- Actions taken:
+  - 扩 `test_platform_time_host_ffi_surface` 成 RED gate，要求 facade 不再 uses
+    `nextpas.core.platform.time.intf`，也不 re-export `IPlatformTimeSource`。
+  - 删除 `core/src/nextpas.core.platform.time.intf.pas`。
+  - `core/src/nextpas.core.platform.time.pas` 只 re-export `platform.time.base` 的 carrier types，
+    并继续 inline 转发到 `platform.time.host`。
+  - `core/src/nextpas.core.platform.time.base.pas` 保留
+    `TPlatformTimeNanoseconds`、`TPlatformCounterValue`、`TPlatformCounterFrequency`。
+  - `core/src/nextpas.core.platform.time.host.pas` 继续承载 host FFI delegation implementation。
+  - 更新 `test_platform_time_l0_boundary`、`test_platform_ffi_owner_boundary` 与
+    `build/verify_local.sh`，不再要求 `platform.time.intf` 存在。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+      初始失败在
+      `platform.time has no Pascal interface contract, so facade must not use platform.time.intf`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`
+    - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform clean test`
+    - `make -C core/tests/nextpas.core.time/test_time clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+      输出 `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这批修的是 module shape，不是时钟行为。它把 `platform.time` 从错误的“interface object”
+    方向拉回 L0 unified platform API contract。
+  - 后续更大的结构债务是把宿主常量、结构和 ABI carrier 从现有 host ffi 中继续拆进
+    `platform.<host>.base`，再让 host ffi 依赖 host base。
 
 ## Session: 2026-05-27 (platform.sync Windows busy-result helper ownership)
 

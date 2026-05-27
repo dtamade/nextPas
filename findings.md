@@ -14,6 +14,12 @@
 - platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
   `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
   platform 模块成果混入。
+- `platform.time`、`platform.sync`、`platform.thread` 是基于 `platform.<host>.base` /
+  `platform.<host>.ffi` 的跨平台统一 API contract，不是按 feature 切碎的 FFI owner。
+  除非 feature 自身真的拥有独立 foreign ABI，否则不创建
+  `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`。
+- `*.intf.pas` 只给真实 Pascal `interface` contract。`platform.time` 当前只有过程/函数 API，
+  不应保留 `nextpas.core.platform.time.intf.pas` 或 `IPlatformTimeSource`。
 - `ICollection` 与 `IGenericCollection<T>` 的真实 interface definition 已迁入
   `nextpas.core.collections.intf`；`collections.base` 不再拥有这些接口定义。
 - 当前不能直接把 `TCollection` / `TGenericCollection<T>` 强搬到 `collections.abstract`：现有
@@ -65,6 +71,9 @@
 - `platform.time` 现在连 public façade body 的重复都收掉了：`platform_monotonic_ns`、
   `platform_realtime_ns`、`platform_monotonic_resolution_ns` 各只保留一个实现体，并由统一
   `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate 覆盖 `NEXTPAS_UNIX` / `NEXTPAS_WINDOWS` 两类受支持宿主。
+- `platform.time` 现在进一步收成 `facade + base + host`：facade 只 re-export
+  `platform.time.base` 的 public carrier types 并转发到 `platform.time.host`；不存在真实接口契约，
+  因此不再有 `platform.time.intf`。
 - `test_platform_time_host_ffi_surface` 现在还会额外禁止 `platform.time` 回归裸
   `116444736000000000` 这类 Windows `FILETIME` epoch 魔数；owner boundary 不再只检查符号存在，
   也检查实现层不把宿主 clock truth 再偷拿回来。

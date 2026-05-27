@@ -7,8 +7,12 @@ uses
   nextpas.core.testing;
 
 const
-  TIME_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.pas';
-  TIME_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.pas';
+  TIME_FACADE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.pas';
+  TIME_FACADE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.pas';
+  TIME_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.base.pas';
+  TIME_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.base.pas';
+  TIME_HOST_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.time.host.pas';
+  TIME_HOST_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.time.host.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
   LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
   ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
@@ -62,6 +66,11 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 function CountToken(const ASource, AToken: string): Integer;
 var
   LFoundAt: SizeInt;
@@ -111,7 +120,9 @@ end;
 
 procedure TestPlatformTimeUsesHostClockFFI;
 var
-  LTimeSource: string;
+  LTimeFacadeSource: string;
+  LTimeBaseSource: string;
+  LTimeHostSource: string;
   LLinuxSource: string;
   LAndroidSource: string;
   LFreeBSDSource: string;
@@ -121,7 +132,9 @@ var
   LWindowsSource: string;
   LWindowsMathSource: string;
 begin
-  LTimeSource := ReadSourceFile(ResolveSourcePath(TIME_SOURCE_PATH_FROM_TEST, TIME_SOURCE_PATH_FROM_ROOT));
+  LTimeFacadeSource := ReadSourceFile(ResolveSourcePath(TIME_FACADE_SOURCE_PATH_FROM_TEST, TIME_FACADE_SOURCE_PATH_FROM_ROOT));
+  LTimeBaseSource := ReadSourceFile(ResolveSourcePath(TIME_BASE_SOURCE_PATH_FROM_TEST, TIME_BASE_SOURCE_PATH_FROM_ROOT));
+  LTimeHostSource := ReadSourceFile(ResolveSourcePath(TIME_HOST_SOURCE_PATH_FROM_TEST, TIME_HOST_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
   LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
   LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
@@ -188,86 +201,132 @@ begin
   CheckTokenPresent(LWindowsSource, 'platform_clock_monotonic_resolution_ns_u64',
     'windows.ffi must expose host-owned monotonic resolution nanosecond helper for platform.time');
 
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.posix.ffi',
-    'platform.time must use shared POSIX ffi declarations');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.linux.ffi',
-    'platform.time must bind Linux host-owned clock ids through linux.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.darwin.ffi',
-    'platform.time must bind Darwin host-owned clock ids through darwin.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.android.ffi',
-    'platform.time must bind Android host-owned clock ids through android.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.freebsd.ffi',
-    'platform.time must bind FreeBSD host-owned clock ids through freebsd.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.unix.ffi',
-    'platform.time must bind generic Unix host-owned clock ids through unix.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.ffi',
-    'platform.time must bind Windows clock APIs through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'nextpas.core.platform.windows.math',
-    'platform.time must use helper-only windows.math for pure QPC math on non-Windows hosts');
-  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_ns_u64',
-    'platform.time must consume host-owned monotonic nanosecond helper');
-  CheckTokenPresent(LTimeSource, 'platform_clock_realtime_ns_u64',
-    'platform.time must consume host-owned realtime nanosecond helper');
-  CheckTokenPresent(LTimeSource, 'platform_clock_monotonic_resolution_ns_u64',
-    'platform.time must consume host-owned monotonic resolution nanosecond helper');
-  CheckTokenPresent(LTimeSource, 'windows_qpc_to_ns',
-    'platform.time must consume Windows QPC nanosecond conversion helper through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'windows_qpc_resolution_ns',
-    'platform.time must consume Windows QPC resolution helper through windows.ffi');
-  CheckTokenPresent(LTimeSource, 'platform_posix_timespec_to_ns_u64',
-    'platform.time must consume shared POSIX timespec conversion helper through posix.ffi');
-  Check(CountToken(LTimeSource, 'result := platform_clock_monotonic_ns_u64;') = 1,
-    'platform.time must keep a single host-ffi monotonic facade body');
-  Check(CountToken(LTimeSource, 'result := platform_clock_realtime_ns_u64;') = 1,
-    'platform.time must keep a single host-ffi realtime facade body');
-  Check(CountToken(LTimeSource, 'result := platform_clock_monotonic_resolution_ns_u64;') = 1,
-    'platform.time must keep a single host-ffi monotonic-resolution facade body');
-  Check(Pos('mach_absolute_time(', LTimeSource) = 0,
-    'platform.time must not call mach_absolute_time directly in the consumer');
-  Check(Pos('mach_timebase_info(', LTimeSource) = 0,
-    'platform.time must not call mach_timebase_info directly in the consumer');
-  Check(Pos('queryperformancefrequency(', LTimeSource) = 0,
-    'platform.time must not call QueryPerformanceFrequency directly in the consumer');
-  Check(Pos('queryperformancecounter(', LTimeSource) = 0,
-    'platform.time must not call QueryPerformanceCounter directly in the consumer');
-  Check(Pos('getsystemtimeasfiletime(', LTimeSource) = 0,
-    'platform.time must not call GetSystemTimeAsFileTime directly in the consumer');
-  Check(Pos('clock_gettime(', LTimeSource) = 0,
-    'platform.time must not call clock_gettime directly in the consumer');
-  Check(Pos('clock_getres(', LTimeSource) = 0,
-    'platform.time must not call clock_getres directly in the consumer');
-  Check(Pos('platform_clock_monotonic_now', LTimeSource) = 0,
-    'platform.time must not consume raw host monotonic timespec helpers in the consumer');
-  Check(Pos('platform_clock_realtime_now', LTimeSource) = 0,
-    'platform.time must not consume raw host realtime timespec helpers in the consumer');
-  Check(Pos('platform_clock_monotonic_getres', LTimeSource) = 0,
-    'platform.time must not consume raw host monotonic resolution timespec helpers in the consumer');
-  Check(Pos('platform_clock_monotonic_id', LTimeSource) = 0,
-    'platform.time must not consume raw host monotonic clock ids in the consumer');
-  Check(Pos('platform_clock_realtime_id', LTimeSource) = 0,
-    'platform.time must not consume raw host realtime clock ids in the consumer');
-  Check(Pos('darwin_mach_monotonic_ns', LTimeSource) = 0,
-    'platform.time must not consume Darwin raw monotonic helper directly in the consumer');
-  Check(Pos('darwin_mach_monotonic_resolution_ns', LTimeSource) = 0,
-    'platform.time must not consume Darwin raw monotonic resolution helper directly in the consumer');
-  Check(Pos('windows_qpc_frequency_u64', LTimeSource) = 0,
-    'platform.time must not consume Windows QPC frequency helper directly in the consumer');
-  Check(Pos('windows_qpc_counter_u64', LTimeSource) = 0,
-    'platform.time must not consume Windows QPC counter helper directly in the consumer');
-  Check(Pos('windows_filetime_now_unix_ns', LTimeSource) = 0,
-    'platform.time must not consume Windows FILETIME realtime helper directly in the consumer');
-  Check(Pos('windows_filetime_unix_epoch_offset_100ns', LTimeSource) = 0,
-    'platform.time must not consume raw FILETIME epoch offset tokens in the consumer');
-  Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeSource) = 0,
-    'platform.time must not consume raw FILETIME tick size tokens in the consumer');
-  Check(Pos('function platform_mul_div_floor', LTimeSource) = 0,
-    'platform.time must not keep a local multiply-divide helper after ffi ownerization');
-  Check(Pos('function platform_scale_units', LTimeSource) = 0,
-    'platform.time must not keep a local unit-scaling helper after ffi ownerization');
-  Check(Pos('nanoseconds_per_second', LTimeSource) = 0,
-    'platform.time must not keep a local nanoseconds-per-second helper constant after ffi ownerization');
-  Check(Pos('116444736000000000', LTimeSource) = 0,
-    'platform.time must not keep a raw Windows FILETIME epoch offset literal');
+  CheckTokenPresent(LTimeBaseSource, 'tplatformtimenanoseconds',
+    'platform.time.base must define the public nanosecond carrier type');
+  CheckTokenPresent(LTimeBaseSource, 'tplatformcountervalue',
+    'platform.time.base must define the public counter-value carrier type');
+  CheckTokenPresent(LTimeBaseSource, 'tplatformcounterfrequency',
+    'platform.time.base must define the public counter-frequency carrier type');
+
+  CheckTokenPresent(LTimeFacadeSource, 'nextpas.core.platform.time.base',
+    'platform.time facade must re-export platform.time.base');
+  CheckTokenAbsent(LTimeFacadeSource, 'nextpas.core.platform.time.intf',
+    'platform.time has no Pascal interface contract, so facade must not use platform.time.intf');
+  CheckTokenAbsent(LTimeFacadeSource, 'iplatformtimesource',
+    'platform.time has no Pascal interface contract, so facade must not re-export IPlatformTimeSource');
+  CheckTokenPresent(LTimeFacadeSource, 'nextpas.core.platform.time.host',
+    'platform.time facade must delegate to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'tplatformtimenanoseconds = nextpas.core.platform.time.base.tplatformtimenanoseconds',
+    'platform.time facade must re-export the public nanosecond carrier type');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_monotonic_ns;',
+    'platform.time facade must forward monotonic clock API to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_realtime_ns;',
+    'platform.time facade must forward realtime clock API to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_monotonic_resolution_ns;',
+    'platform.time facade must forward clock resolution API to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_qpc_to_ns(acounter, afrequency);',
+    'platform.time facade must forward QPC conversion API to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_resolution_from_frequency_ns(afrequency);',
+    'platform.time facade must forward frequency-resolution conversion API to platform.time.host');
+  CheckTokenPresent(LTimeFacadeSource, 'result := nextpas.core.platform.time.host.platform_timespec_to_ns(asec, ansec);',
+    'platform.time facade must forward timespec conversion API to platform.time.host');
+
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.posix.ffi',
+    'platform.time.host must use shared POSIX ffi declarations');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.linux.ffi',
+    'platform.time.host must bind Linux host-owned clock ids through linux.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.darwin.ffi',
+    'platform.time.host must bind Darwin host-owned clock ids through darwin.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.android.ffi',
+    'platform.time.host must bind Android host-owned clock ids through android.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.freebsd.ffi',
+    'platform.time.host must bind FreeBSD host-owned clock ids through freebsd.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.unix.ffi',
+    'platform.time.host must bind generic Unix host-owned clock ids through unix.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.windows.ffi',
+    'platform.time.host must bind Windows clock APIs through windows.ffi');
+  CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.windows.math',
+    'platform.time.host must use helper-only windows.math for pure QPC math on non-Windows hosts');
+  CheckTokenPresent(LTimeHostSource, 'platform_clock_monotonic_ns_u64',
+    'platform.time.host must consume host-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'platform_clock_realtime_ns_u64',
+    'platform.time.host must consume host-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'platform_clock_monotonic_resolution_ns_u64',
+    'platform.time.host must consume host-owned monotonic resolution nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'windows_qpc_to_ns',
+    'platform.time.host must consume Windows QPC nanosecond conversion helper through windows.ffi');
+  CheckTokenPresent(LTimeHostSource, 'windows_qpc_resolution_ns',
+    'platform.time.host must consume Windows QPC resolution helper through windows.ffi');
+  CheckTokenPresent(LTimeHostSource, 'platform_posix_timespec_to_ns_u64',
+    'platform.time.host must consume shared POSIX timespec conversion helper through posix.ffi');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single host-ffi monotonic body');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_realtime_ns_u64;') = 1,
+    'platform.time.host must keep a single host-ffi realtime body');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_resolution_ns_u64;') = 1,
+    'platform.time.host must keep a single host-ffi monotonic-resolution body');
+  Check(Pos('mach_absolute_time(', LTimeHostSource) = 0,
+    'platform.time.host must not call mach_absolute_time directly in the consumer');
+  Check(Pos('mach_timebase_info(', LTimeHostSource) = 0,
+    'platform.time.host must not call mach_timebase_info directly in the consumer');
+  Check(Pos('queryperformancefrequency(', LTimeHostSource) = 0,
+    'platform.time.host must not call QueryPerformanceFrequency directly in the consumer');
+  Check(Pos('queryperformancecounter(', LTimeHostSource) = 0,
+    'platform.time.host must not call QueryPerformanceCounter directly in the consumer');
+  Check(Pos('getsystemtimeasfiletime(', LTimeHostSource) = 0,
+    'platform.time.host must not call GetSystemTimeAsFileTime directly in the consumer');
+  Check(Pos('clock_gettime(', LTimeHostSource) = 0,
+    'platform.time.host must not call clock_gettime directly in the consumer');
+  Check(Pos('clock_getres(', LTimeHostSource) = 0,
+    'platform.time.host must not call clock_getres directly in the consumer');
+  Check(Pos('platform_clock_monotonic_now', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw host monotonic timespec helpers in the consumer');
+  Check(Pos('platform_clock_realtime_now', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw host realtime timespec helpers in the consumer');
+  Check(Pos('platform_clock_monotonic_getres', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw host monotonic resolution timespec helpers in the consumer');
+  Check(Pos('platform_clock_monotonic_id', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw host monotonic clock ids in the consumer');
+  Check(Pos('platform_clock_realtime_id', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw host realtime clock ids in the consumer');
+  Check(Pos('darwin_mach_monotonic_ns', LTimeHostSource) = 0,
+    'platform.time.host must not consume Darwin raw monotonic helper directly in the consumer');
+  Check(Pos('darwin_mach_monotonic_resolution_ns', LTimeHostSource) = 0,
+    'platform.time.host must not consume Darwin raw monotonic resolution helper directly in the consumer');
+  Check(Pos('windows_qpc_frequency_u64', LTimeHostSource) = 0,
+    'platform.time.host must not consume Windows QPC frequency helper directly in the consumer');
+  Check(Pos('windows_qpc_counter_u64', LTimeHostSource) = 0,
+    'platform.time.host must not consume Windows QPC counter helper directly in the consumer');
+  Check(Pos('windows_filetime_now_unix_ns', LTimeHostSource) = 0,
+    'platform.time.host must not consume Windows FILETIME realtime helper directly in the consumer');
+  Check(Pos('windows_filetime_unix_epoch_offset_100ns', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw FILETIME epoch offset tokens in the consumer');
+  Check(Pos('windows_filetime_nanoseconds_per_tick', LTimeHostSource) = 0,
+    'platform.time.host must not consume raw FILETIME tick size tokens in the consumer');
+  Check(Pos('function platform_mul_div_floor', LTimeHostSource) = 0,
+    'platform.time.host must not keep a local multiply-divide helper after ffi ownerization');
+  Check(Pos('function platform_scale_units', LTimeHostSource) = 0,
+    'platform.time.host must not keep a local unit-scaling helper after ffi ownerization');
+  Check(Pos('nanoseconds_per_second', LTimeHostSource) = 0,
+    'platform.time.host must not keep a local nanoseconds-per-second helper constant after ffi ownerization');
+  Check(Pos('116444736000000000', LTimeHostSource) = 0,
+    'platform.time.host must not keep a raw Windows FILETIME epoch offset literal');
+  Check(Pos('nextpas.core.platform.posix.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind shared POSIX ffi directly');
+  Check(Pos('nextpas.core.platform.linux.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind Linux host ffi directly');
+  Check(Pos('nextpas.core.platform.darwin.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind Darwin host ffi directly');
+  Check(Pos('nextpas.core.platform.android.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind Android host ffi directly');
+  Check(Pos('nextpas.core.platform.freebsd.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind FreeBSD host ffi directly');
+  Check(Pos('nextpas.core.platform.unix.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind generic Unix host ffi directly');
+  Check(Pos('nextpas.core.platform.windows.ffi', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind Windows host ffi directly');
+  Check(Pos('nextpas.core.platform.windows.math', LTimeFacadeSource) = 0,
+    'platform.time facade must not bind helper-only windows.math directly');
 end;
 
 begin

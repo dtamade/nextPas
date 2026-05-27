@@ -4,111 +4,76 @@ unit nextpas.core.platform.time;
 
 interface
 
-{**
- * @desc 单调时钟，纳秒精度
- * @note 契约：绝不倒退，不受系统时钟调整影响
- *       失败时返回 0（不应发生在正常系统上）
- *}
-function platform_monotonic_ns: UInt64;
+uses
+  nextpas.core.platform.time.base,
+  nextpas.core.platform.time.host;
 
-{**
- * @desc 实时时钟，纳秒精度
- * @note 契约：返回自 Unix epoch (1970-01-01T00:00:00Z) 以来的纳秒数
- *       可能因 NTP/手动调整而跳变
- *}
-function platform_realtime_ns: UInt64;
+type
+  TPlatformTimeNanoseconds = nextpas.core.platform.time.base.TPlatformTimeNanoseconds;
+  TPlatformCounterValue = nextpas.core.platform.time.base.TPlatformCounterValue;
+  TPlatformCounterFrequency = nextpas.core.platform.time.base.TPlatformCounterFrequency;
 
-{**
- * @desc 单调时钟分辨率
- * @note 契约：返回保守值（实际精度 >= 返回值），最小为 1ns
- *       不高估精度
- *}
-function platform_monotonic_resolution_ns: UInt64;
+{ Monotonic clock in nanoseconds. Never moves backward and is not affected by
+  wall-clock adjustments. Returns 0 only if the host clock is unavailable. }
+function platform_monotonic_ns: TPlatformTimeNanoseconds; inline;
 
-{**
- * @desc QPC 计数器转纳秒（div/mod 安全，不溢出）
- * @note 纯函数，可单测
- *}
-function platform_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64;
+{ Realtime clock in nanoseconds since the Unix epoch. This can jump if the
+  system clock is adjusted. }
+function platform_realtime_ns: TPlatformTimeNanoseconds; inline;
 
-{**
- * @desc 计数器频率转纳秒级分辨率
- * @note 纯函数，可单测；使用 ceil，不高估时钟精度
- *}
-function platform_resolution_from_frequency_ns(const AFrequency: UInt64): UInt64;
+{ Conservative monotonic clock resolution in nanoseconds. The returned value is
+  never smaller than 1ns and does not overstate precision. }
+function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds; inline;
 
-{**
- * @desc timespec 转纳秒
- * @note 纯函数，可单测
- *}
-function platform_timespec_to_ns(const ASec: Int64; const ANsec: Int64): UInt64;
+{ Convert a host counter value to nanoseconds without intermediate overflow. }
+function platform_qpc_to_ns(
+  const ACounter: TPlatformCounterValue;
+  const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds; inline;
+
+{ Convert a counter frequency to a conservative nanosecond resolution. }
+function platform_resolution_from_frequency_ns(
+  const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds; inline;
+
+{ Convert a POSIX timespec pair to saturated nanoseconds. }
+function platform_timespec_to_ns(
+  const ASec: Int64;
+  const ANsec: Int64): TPlatformTimeNanoseconds; inline;
 
 implementation
 
-uses
-  nextpas.core.platform.posix.ffi
-  {$IFDEF NEXTPAS_WINDOWS}
-  , nextpas.core.platform.windows.ffi
-  {$ELSE}
-  , nextpas.core.platform.windows.math
-  {$ENDIF}
-  {$IFDEF NEXTPAS_UNIX}
-  {$IFDEF NEXTPAS_LINUX}
-  , nextpas.core.platform.linux.ffi
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  , nextpas.core.platform.darwin.ffi
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  , nextpas.core.platform.android.ffi
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  , nextpas.core.platform.freebsd.ffi
-  {$ELSE}
-  , nextpas.core.platform.unix.ffi
-  {$ENDIF}
-  {$ENDIF}
-  ;
-
-function platform_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64;
+function platform_monotonic_ns: TPlatformTimeNanoseconds;
 begin
-  Result := windows_qpc_to_ns(ACounter, AFrequency);
+  Result := nextpas.core.platform.time.host.platform_monotonic_ns;
 end;
 
-function platform_resolution_from_frequency_ns(const AFrequency: UInt64): UInt64;
+function platform_realtime_ns: TPlatformTimeNanoseconds;
 begin
-  Result := windows_qpc_resolution_ns(AFrequency);
+  Result := nextpas.core.platform.time.host.platform_realtime_ns;
 end;
 
-function platform_timespec_to_ns(const ASec: Int64; const ANsec: Int64): UInt64;
-var
-  LTime: timespec;
+function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds;
 begin
-  LTime.tv_sec := ASec;
-  LTime.tv_nsec := ANsec;
-  Result := platform_posix_timespec_to_ns_u64(@LTime);
+  Result := nextpas.core.platform.time.host.platform_monotonic_resolution_ns;
 end;
 
-{$IFDEF NEXTPAS_UNIX}
-  {$DEFINE NEXTPAS_PLATFORM_TIME_HOST_FFI}
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-  {$DEFINE NEXTPAS_PLATFORM_TIME_HOST_FFI}
-{$ENDIF}
-{$IFNDEF NEXTPAS_PLATFORM_TIME_HOST_FFI}
-  {$FATAL 'nextpas.core.platform.time: unsupported platform. Implement for your target.'}
-{$ENDIF}
-
-function platform_monotonic_ns: UInt64;
+function platform_qpc_to_ns(
+  const ACounter: TPlatformCounterValue;
+  const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_monotonic_ns_u64;
+  Result := nextpas.core.platform.time.host.platform_qpc_to_ns(ACounter, AFrequency);
 end;
 
-function platform_realtime_ns: UInt64;
+function platform_resolution_from_frequency_ns(
+  const AFrequency: TPlatformCounterFrequency): TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_realtime_ns_u64;
+  Result := nextpas.core.platform.time.host.platform_resolution_from_frequency_ns(AFrequency);
 end;
 
-function platform_monotonic_resolution_ns: UInt64;
+function platform_timespec_to_ns(
+  const ASec: Int64;
+  const ANsec: Int64): TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_monotonic_resolution_ns_u64;
+  Result := nextpas.core.platform.time.host.platform_timespec_to_ns(ASec, ANsec);
 end;
 
 end.

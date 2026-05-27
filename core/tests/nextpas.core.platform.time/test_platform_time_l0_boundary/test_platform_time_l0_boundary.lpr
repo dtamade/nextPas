@@ -60,12 +60,28 @@ end;
 procedure TestPlatformTimeSourceStaysL0;
 begin
   CheckL0OnlySource(
-    'platform.time source',
+    'platform.time facade',
     '../../../src/nextpas.core.platform.time.pas',
     'core/src/nextpas.core.platform.time.pas');
 end;
 
-procedure TestPlatformTimeFacadeStaysL0;
+procedure TestPlatformTimeBaseStaysL0;
+begin
+  CheckL0OnlySource(
+    'platform.time base',
+    '../../../src/nextpas.core.platform.time.base.pas',
+    'core/src/nextpas.core.platform.time.base.pas');
+end;
+
+procedure TestPlatformTimeHostStaysL0;
+begin
+  CheckL0OnlySource(
+    'platform.time host',
+    '../../../src/nextpas.core.platform.time.host.pas',
+    'core/src/nextpas.core.platform.time.host.pas');
+end;
+
+procedure TestPlatformFacadeStaysL0;
 begin
   CheckL0OnlySource(
     'platform facade',
@@ -91,8 +107,10 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.platform.time.l0_boundary');
-  T.Run('platform.time source stays L0', @TestPlatformTimeSourceStaysL0);
-  T.Run('platform facade stays L0', @TestPlatformTimeFacadeStaysL0);
+  T.Run('platform.time facade stays L0', @TestPlatformTimeSourceStaysL0);
+  T.Run('platform.time base stays L0', @TestPlatformTimeBaseStaysL0);
+  T.Run('platform.time host stays L0', @TestPlatformTimeHostStaysL0);
+  T.Run('platform facade stays L0', @TestPlatformFacadeStaysL0);
   T.Run('platform.time example stays L0', @TestPlatformTimeExampleStaysL0);
   T.Run('platform.time benchmark stays L0', @TestPlatformTimeBenchmarkStaysL0);
   T.Summary;
