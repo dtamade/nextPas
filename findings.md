@@ -247,6 +247,16 @@
   `importedInheritedMemberFunctionResultTypeMismatchCallCheck":"pass"`、
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 146 把 Batch 145 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  inherited member single-target mismatch 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.type-mismatch`，也不注册错误 `member-call` binding。
+- Focused semantic guard 使用 `TUnitGraph` 显式标记 `Worker` 为 `ruoInstalledSource`；普通 stage0 fixture
+  不能证明这条 owner provenance，因为 sibling unit 会按 workspace truth 进入 project-source。
+- Batch 146 focused probe 直接 GREEN：parent-chain member-call path 的 provenance gate 已经阻止
+  installed-source inherited member function-result mismatch 被提前投影为 ordinary type mismatch；本批不修改 analyzer。
+- Batch 146 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
