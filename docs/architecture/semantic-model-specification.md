@@ -172,7 +172,11 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `TWorker = class(TBaseWorker)` 中 `procedure TWorker.Run; begin Touch(True); end;`
   面对 `TBaseWorker.Touch(Value: Integer)`）；同一路径中的 stable literal no-match（例如
   `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
-  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径中的 stable literal
+  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径沿 imported owner
+  class parent chain 找到 inherited method overload set 后，也会输出 stable literal no-match
+  diagnostic（例如 `TWorker = class(TBaseWorker)` 中
+  `procedure TWorker.Run; begin Touch(True); end;` 同时面对
+  `TBaseWorker.Touch(Integer)` 与 `TBaseWorker.Touch(AnsiString)`）；同一路径中的 stable literal
   ambiguity（例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
   `Pick(Integer)` 与 `Pick(LongInt)`）会输出 `sema.ambiguous-overload`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
@@ -404,6 +408,11 @@ candidate collection
     imported owner class 的同名同 arity多候选，但 stable argument signature 与全部 target param
     signature 都不兼容的场景；例如 `procedure TWorker.Run; begin Pick(True); end;`
     同时面对 `Pick(Integer)` 与 `Pick(AnsiString)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
+    imported owner class parent chain 找到 inherited 同名同 arity多候选，但 stable argument
+    signature 与全部 target param signature 都不兼容的场景；例如
+    `procedure TWorker.Run; begin Touch(True); end;` 同时面对 inherited `Touch(Integer)` 与
+    `Touch(AnsiString)`，该路径不会注册失败 `member-call` binding
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景

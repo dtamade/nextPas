@@ -949,6 +949,8 @@ unit method body inherited bare implicit-self wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
 unit method body inherited bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body inherited bare implicit-self no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
 unit method body bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
 unit method body bare implicit-self no matching overload 断言

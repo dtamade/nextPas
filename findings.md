@@ -10,6 +10,22 @@
 
 ## Research Findings
 
+- Batch 183 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
+  同时面对 inherited `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: AnsiString)` 时，
+  必须失败为 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+- Batch 183 focused semantic probe 直接 GREEN，证明 Batch 181-182 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal no-match；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 183 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_no_matching_overload` 与
+  `imported-unit-body-inherited-implicit-self-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass`。
+- Batch 183 fresh `bash build/verify_local.sh` 已输出
+  `importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - Batch 182 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
   imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
   调 inherited `TBaseWorker.Touch(Value: Integer)` 时，必须失败为 `sema.type-mismatch`，
