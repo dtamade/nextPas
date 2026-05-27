@@ -409,6 +409,14 @@
 - Batch 161 新增 `tests/fixtures/imported_member_function_result_wrong_argument_count` 与
   `imported-member-function-result-wrong-argument-count-check`，final envelope 新增
   `importedMemberFunctionResultWrongArgumentCountCheck":"pass"`。
+- Batch 162 把 Batch 161 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member single-target arity miss 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.wrong-argument-count`，也不注册错误 `member-call` binding。
+- Batch 162 focused probe 直接 GREEN：direct member-call path 的 provenance guard 已经阻止
+  installed-source direct member function-result arity miss 被提前投影为 ordinary wrong-argument-count；本批不修改 analyzer。
+- installed-source direct member function-result wrong-argument-count 的 official proof 只能放在
+  semantic harness 中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把
+  sibling unit 当作 workspace project-source，不能证明 installed-source provenance。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

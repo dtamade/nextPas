@@ -102,7 +102,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   single target 面对同类 evidence 但 arity 不兼容时会发 `sema.wrong-argument-count`。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
-  single-target arity miss、bare callable ambiguity、
+  single-target arity miss（包括 direct member-call root-owned function-result arity miss）、bare callable ambiguity、
   bare callable no-match（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   direct/inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned
   零参内建标量/字符串 function result）、
