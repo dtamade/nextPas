@@ -131,7 +131,7 @@ type
    *
    * @desc 内存分配器的抽象基类, 实现了 IAllocator 接口
    *}
-  TAllocator = class(TInterfacedObject, IAllocator)
+  TAllocator = class(TInterfacedObject, nextpas.core.mem.intf.IAllocator, IAllocator)
   protected
     function DoGetMem(aSize: SizeUInt): Pointer; virtual; abstract;
     function DoAllocMem(aSize: SizeUInt): Pointer; virtual; abstract;
