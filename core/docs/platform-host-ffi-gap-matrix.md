@@ -38,6 +38,25 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 5 covers the environment ABI raw inventory for
+  host `ffi` owners. POSIX hosts now expose delegated helpers for `getenv`,
+  `setenv`, `unsetenv`, and `putenv`. FPC Unix source directly proves `getenv`;
+  `setenv`, `unsetenv`, and `putenv` are recorded as POSIX libc/header fallback
+  declarations because current FPC Unix units do not expose them. Windows now
+  carries `GetEnvironmentVariableA`, `GetEnvironmentVariableW`,
+  `SetEnvironmentVariableA`, `SetEnvironmentVariableW`,
+  `GetEnvironmentStringsA`, `GetEnvironmentStringsW`,
+  `FreeEnvironmentStringsA`, `FreeEnvironmentStringsW`,
+  `ExpandEnvironmentStringsA`, `ExpandEnvironmentStringsW`, and thin result
+  helpers. This remains source-surface and compile evidence with no public
+  platform.env contract. There is no public platform.env contract in this wave.
+- Wave 5 source evidence tokens are synchronized with the evidence index:
+  `getenv`, `setenv`, `unsetenv`, `putenv`, POSIX libc/header fallback,
+  `GetEnvironmentVariableA`, `GetEnvironmentVariableW`,
+  `SetEnvironmentVariableA`, `SetEnvironmentVariableW`,
+  `GetEnvironmentStringsA`, `GetEnvironmentStringsW`,
+  `FreeEnvironmentStringsA`, `FreeEnvironmentStringsW`,
+  `ExpandEnvironmentStringsA`, and `ExpandEnvironmentStringsW`.
 - Platform Host ABI Completeness Wave 4 covers the directory/path ABI raw inventory for
   host `base/ffi` owners. POSIX hosts now carry `F_OK`, `X_OK`,
   `W_OK`, `R_OK` access tokens plus delegated helpers for `mkdir`, `rmdir`,

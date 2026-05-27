@@ -238,6 +238,11 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 旧 `rtl/core/base`、`rtl/core/mem`、`rtl/core/text` 已服务 compiler/toolchain-first foundation。
 - `rtl/core/system/` 已明确为 nextPas-owned 最小 `System` 平替落点；它要先支撑自举代码、
   `TObject`/对象生命周期和 `core` 框架的最低依赖，而不是继续依赖宿主 FPC `System`。
+- `core/src/nextpas.core.platform.*.base/ffi` 已成为 nextPas-owned host ABI inventory 的落点：
+  platform raw OS API 通过 FPC source evidence、host base/ffi owner、source-surface gate、
+  compile-only gate 与 `verify_local` route truth 分批导入；统一 public contract 另由
+  `platform.time`、`platform.sync`、`platform.thread` 以及后续 `platform.env` / `platform.process`
+  等模块设计，不能在 host ABI wave 中偷渡。
 - 最小 source-backed `System.pas` / `TObject` truth 已落地：implicit runtime 语义层会读取
   target-installed `System.pas`，普通 class 默认继承 `System.TObject`，`Obj.Free` 可绑定到
   真实 `TObject.Free` method symbol；no-fold typed HIR 也会把继承路径上的 `Free` lowering 到
@@ -267,6 +272,9 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 继续扩展 `System` source truth：把 `np_object_alloc` / `np_object_free_release` helper 从 header
   ownership + magic validation + release poison + invalid-release trap 接到 allocator free、结构化
   diagnostics、完整 dynamic dispatch 与 backend/runtime helper，并推进 unit init/fini。
+- platform host ABI import wave 必须继续绑定 `G3/G7`：先记录 FPC source evidence 和 host owner，
+  再导入 nextPas-owned ABI declaration；raw OS API 不做 runtime unit test，统一 public contract
+  单独设计并覆盖接口行为。
 - compiler/tooling 侧只提出 core 需求和 integration contract。
 - 需要 core 改动时，先形成 review/suggestion，不直接落 core 代码。
 

@@ -144,6 +144,13 @@ function platform_posix_path_get_current_directory(
   ABuffer: PAnsiChar;
   const ASize: PtrUInt): PAnsiChar; inline;
 function platform_posix_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
+function platform_posix_environment_get(const AName: PAnsiChar): PAnsiChar; inline;
+function platform_posix_environment_set(
+  const AName: PAnsiChar;
+  const AValue: PAnsiChar;
+  const AOverwrite: Int32): Int32; inline;
+function platform_posix_environment_unset(const AName: PAnsiChar): Int32; inline;
+function platform_posix_environment_put(const AEntry: PAnsiChar): Int32; inline;
 function platform_posix_getpid: pid_t; inline;
 function platform_posix_getppid: pid_t; inline;
 
@@ -167,6 +174,10 @@ function rename(oldpath: PAnsiChar; newpath: PAnsiChar): Int32; cdecl; external 
 function access(path: PAnsiChar; mode: Int32): Int32; cdecl; external 'c' name 'access';
 function getcwd(buf: PAnsiChar; size: PtrUInt): PAnsiChar; cdecl; external 'c' name 'getcwd';
 function chdir(path: PAnsiChar): Int32; cdecl; external 'c' name 'chdir';
+function getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
+function setenv(name: PAnsiChar; value: PAnsiChar; overwrite: Int32): Int32; cdecl; external 'c' name 'setenv';
+function unsetenv(name: PAnsiChar): Int32; cdecl; external 'c' name 'unsetenv';
+function putenv(str: PAnsiChar): Int32; cdecl; external 'c' name 'putenv';
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
@@ -499,6 +510,29 @@ end;
 function platform_posix_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
 begin
   Result := chdir(APath);
+end;
+
+function platform_posix_environment_get(const AName: PAnsiChar): PAnsiChar; inline;
+begin
+  Result := getenv(AName);
+end;
+
+function platform_posix_environment_set(
+  const AName: PAnsiChar;
+  const AValue: PAnsiChar;
+  const AOverwrite: Int32): Int32; inline;
+begin
+  Result := setenv(AName, AValue, AOverwrite);
+end;
+
+function platform_posix_environment_unset(const AName: PAnsiChar): Int32; inline;
+begin
+  Result := unsetenv(AName);
+end;
+
+function platform_posix_environment_put(const AEntry: PAnsiChar): Int32; inline;
+begin
+  Result := putenv(AEntry);
 end;
 
 function platform_posix_getppid: pid_t; inline;

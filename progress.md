@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
-当前最新本轮为 platform host abi completeness wave 4；上一轮包括
+当前最新本轮为 platform host abi completeness wave 5；上一轮包括
+platform host abi completeness wave 4；
 platform host abi completeness wave 3；
 platform host abi completeness wave 2；
 platform host abi completeness wave 1；
@@ -43,6 +44,86 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-28 (platform host abi wave 5 environment)
+
+- **Status:** ready for commit and merge refresh
+- Goal tree:
+  - `G3: RTL、core 和 framework`
+  - `G7: FreePascal compatibility 和生态迁移`
+- Objective:
+  - 按 `core/docs/platform-ffi-import-workflow.md` 启动第五批 host ABI completeness。
+  - 本轮聚焦 environment raw ABI：POSIX `getenv` / `setenv` / `unsetenv` / `putenv`，
+    Windows `GetEnvironmentVariableA/W`、`SetEnvironmentVariableA/W`、
+    `GetEnvironmentStringsA/W`、`FreeEnvironmentStringsA/W` 与
+    `ExpandEnvironmentStringsA/W`。
+  - 不新增 public `platform.env` / `platform.process` contract，不新增 feature-specific
+    `.ffi`，不对 raw OS API 写 runtime unit test。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` clean at `main@46acefb`。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
+    on `codex/platform-host-abi-wave5-env` from `main@46acefb`。
+  - 其他并行 worktree 仍存在：`collections-refactor`、`sema-no-matching-overload`；本轮不触碰。
+- Source evidence so far:
+  - POSIX: FPC `rtl/unix/oscdeclh.inc` exposes `fpgetenv` as libc `getenv`;
+    `rtl/unix/baseunix.pp` includes `genfuncs.inc`, and `rtl/unix/unix.pp`
+    re-exports the generated `getenv` wrapper. Mutating environment APIs are
+    POSIX/libc environment family declarations and must be recorded explicitly
+    before import.
+  - Android: FPC `rtl/android/sysandroid.inc` records the libc `environ` path;
+    environment functions still use the POSIX libc family for this wave.
+  - Windows: FPC `rtl/win/wininc/ascfun.inc` / `unifun.inc` / `ascdef.inc` /
+    `unidef.inc` expose `GetEnvironmentStringsA/W`,
+    `FreeEnvironmentStringsA/W`, `GetEnvironmentVariableA/W`,
+    `SetEnvironmentVariableA/W`, and `ExpandEnvironmentStringsA/W`; `rtl/win/sysos.inc`
+    additionally records `SetEnvironmentVariableW`.
+- Baseline verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+    输出 `4 total, 4 passed, 0 failed`。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`
+    已按预期失败：`posix.ffi` 缺 `getenv`，`windows.ffi` 缺
+    `GetEnvironmentVariableA`，evidence/gap docs 缺 Wave 5，`verify_local`
+    缺 Wave 5 route。测试自身编译通过，失败边界正确。
+- Current plan:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/` source-surface gate。
+  - 先确认 RED 正确失败，再补 source evidence、gap matrix、host ffi owner 与 `verify_local` route。
+- GREEN actions:
+  - `posix.ffi` 新增 `getenv` / `setenv` / `unsetenv` / `putenv` raw libc declarations 与
+    `platform_posix_environment_*` thin helpers。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增 `platform_environment_*` host owner helpers，委托
+    shared POSIX owner。
+  - `windows.ffi` 新增 `GetEnvironmentVariableA/W`、`SetEnvironmentVariableA/W`、
+    `GetEnvironmentStringsA/W`、`FreeEnvironmentStringsA/W`、`ExpandEnvironmentStringsA/W` raw
+    kernel32 declarations与 `windows_*environment*` helpers。
+  - 更新 source evidence index 与 host gap matrix；明确 POSIX mutating env API 是
+    POSIX libc/header fallback，不伪装成 FPC Unix 已暴露。
+  - `build/verify_local.sh` 新增 Wave 5 required paths、focused gate 和 final envelope token
+    `corePlatformHostAbiWave5EnvCheck`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`
+    输出 `5 total, 5 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 Darwin / Android / FreeBSD / generic Unix `status=pass`。
+  - `test_platform_ffi_partition_surface`、`test_platform_posix_ffi_surface`、
+    `test_platform_ffi_source_evidence_index` 均通过。
+  - Win64 compile-only smoke 通过：`nextpas.core.time`、`platform.thread`、`platform.sync`。
+- Full verification:
+  - `make -C core test` 输出 `All tests passed`。
+  - `make -C core examples` 输出 `All examples compiled`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`；final envelope 包含
+    `corePlatformHostAbiWave5EnvCheck":"pass"`。
+  - `git diff --check` 与 `sh -n build/verify_local.sh` 均无输出。
+- Current cleanup state:
+  - `git ls-files --others --exclude-standard` 只列出新增
+    `core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/Makefile` 与
+    `test_platform_host_abi_wave5_env.lpr`。
+  - `.nextpas`、`.sisyphus`、`core/build/projects` 等验证产物未进入待提交列表。
 
 ## Session: 2026-05-28 (platform host abi completeness wave 4)
 

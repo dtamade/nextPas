@@ -1,5 +1,36 @@
 # Findings & Decisions
 
+## 2026-05-28 Follow-up Findings 39
+
+- Wave 5 的高价值切片是 environment raw ABI inventory，不是 public `platform.env` 或
+  `platform.process` contract。环境变量是 future process/env/workspace/doctor 能力的基础系统面，
+  但统一语义、编码、枚举所有变量、线程安全和错误模型要另起 public contract 设计。
+- POSIX 侧取证显示 FPC 已有 `getenv` 路径：`rtl/unix/oscdeclh.inc` 声明 `fpgetenv`
+  绑定 libc `getenv`，`rtl/unix/baseunix.pp` 引入 `genfuncs.inc`，`rtl/unix/unix.pp` 提供
+  `getenv` wrapper。`setenv` / `unsetenv` / `putenv` 属于 POSIX/libc environment mutation family；
+  本轮可以把它们作为 raw ABI 记录到 shared POSIX `posix.ffi`，host `.ffi` 暴露 owner helper。
+- Android 侧 FPC `rtl/android/sysandroid.inc` 记录了 libc `environ` 获取路径；本轮仍按 POSIX libc
+  environment family 处理，不把 Android 独立拆成另一套 public API。
+- Windows 侧取证清楚：FPC `rtl/win/wininc/ascfun.inc`、`unifun.inc`、`ascdef.inc`、`unidef.inc`
+  提供 `GetEnvironmentStringsA/W`、`FreeEnvironmentStringsA/W`、`GetEnvironmentVariableA/W`、
+  `SetEnvironmentVariableA/W` 与 `ExpandEnvironmentStringsA/W`；`rtl/win/sysos.inc` 也记录
+  `SetEnvironmentVariableW`。这些 entrypoint 应归 `windows.ffi`，复用 `windows.base` 既有 string
+  pointer aliases。
+- raw environment ABI 不做 runtime unit test。本轮验证口径继续是 source-surface、文档事实、
+  official route truth、ABI owner 边界、Win64 compile-only 与 simulated-host compile matrix。
+- Wave 5 implementation 已落为 host-owned ABI inventory：shared POSIX externals 与
+  `platform_posix_environment_*` helper 位于 `posix.ffi`；Linux、Android、Darwin、FreeBSD、
+  generic Unix `.ffi` 暴露 `platform_environment_*` 并委托 POSIX；Windows A/W environment
+  entrypoints 与 `windows_*environment*` helper 位于 `windows.ffi`。
+- Pre-commit verification 证据完整：focused Wave 5 gate `5 total, 5 passed, 0 failed`；
+  simulated host compile matrix 全部 `status=pass`；`make -C core test` / `examples` /
+  `benchmarks` 通过；fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`，final envelope 包含
+  `corePlatformHostAbiWave5EnvCheck":"pass"`。
+- 本轮仍没有真实 Windows/macOS/Android runtime execution evidence；当前跨平台保证来自 FPC/source
+  evidence、host-owned declarations、Win64 compile-only smoke、simulated-host compile matrix 与
+  source-surface gates，不能把它包装成所有平台 runtime 已执行。
+
 ## Requirements
 
 - 用户要求继续按路线图推进，但不能再停在碎片化“继续”循环里。

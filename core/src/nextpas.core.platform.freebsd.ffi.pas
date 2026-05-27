@@ -110,6 +110,13 @@ function platform_path_get_current_directory(
   ABuffer: PAnsiChar;
   const ASize: PtrUInt): PAnsiChar; inline;
 function platform_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
+function platform_environment_get(const AName: PAnsiChar): PAnsiChar; inline;
+function platform_environment_set(
+  const AName: PAnsiChar;
+  const AValue: PAnsiChar;
+  const AOverwrite: Int32): Int32; inline;
+function platform_environment_unset(const AName: PAnsiChar): Int32; inline;
+function platform_environment_put(const AEntry: PAnsiChar): Int32; inline;
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;
 function platform_dlsym(ALibrary: Pointer; const AName: PAnsiChar): Pointer; inline;
 function platform_dlclose(ALibrary: Pointer): Int32; inline;
@@ -229,6 +236,29 @@ end;
 function platform_path_set_current_directory(const APath: PAnsiChar): Int32; inline;
 begin
   Result := platform_posix_path_set_current_directory(APath);
+end;
+
+function platform_environment_get(const AName: PAnsiChar): PAnsiChar; inline;
+begin
+  Result := platform_posix_environment_get(AName);
+end;
+
+function platform_environment_set(
+  const AName: PAnsiChar;
+  const AValue: PAnsiChar;
+  const AOverwrite: Int32): Int32; inline;
+begin
+  Result := platform_posix_environment_set(AName, AValue, AOverwrite);
+end;
+
+function platform_environment_unset(const AName: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_environment_unset(AName);
+end;
+
+function platform_environment_put(const AEntry: PAnsiChar): Int32; inline;
+begin
+  Result := platform_posix_environment_put(AEntry);
 end;
 
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;

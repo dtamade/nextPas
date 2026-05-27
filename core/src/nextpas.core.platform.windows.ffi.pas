@@ -186,6 +186,32 @@ function windows_get_full_path_name_w(
   const ABufferLength: DWORD;
   ABuffer: LPWSTR;
   AFilePart: PLPWSTR): DWORD; inline;
+function windows_get_environment_variable_a(
+  const AName: LPCSTR;
+  ABuffer: LPSTR;
+  const ABufferLength: DWORD): DWORD; inline;
+function windows_get_environment_variable_w(
+  const AName: LPCWSTR;
+  ABuffer: LPWSTR;
+  const ABufferLength: DWORD): DWORD; inline;
+function windows_set_environment_variable_a(
+  const AName: LPCSTR;
+  const AValue: LPCSTR): Int32; inline;
+function windows_set_environment_variable_w(
+  const AName: LPCWSTR;
+  const AValue: LPCWSTR): Int32; inline;
+function windows_get_environment_strings_a: LPSTR; inline;
+function windows_get_environment_strings_w: LPWSTR; inline;
+function windows_free_environment_strings_a(const AEnvironment: LPSTR): Int32; inline;
+function windows_free_environment_strings_w(const AEnvironment: LPWSTR): Int32; inline;
+function windows_expand_environment_strings_a(
+  const ASource: LPCSTR;
+  ADestination: LPSTR;
+  const ADestinationLength: DWORD): DWORD; inline;
+function windows_expand_environment_strings_w(
+  const ASource: LPCWSTR;
+  ADestination: LPWSTR;
+  const ADestinationLength: DWORD): DWORD; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -250,6 +276,16 @@ function SetCurrentDirectoryA(lpPathName: LPCSTR): BOOL; stdcall; external 'kern
 function SetCurrentDirectoryW(lpPathName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'SetCurrentDirectoryW';
 function GetFullPathNameA(lpFileName: LPCSTR; nBufferLength: DWORD; lpBuffer: LPSTR; lpFilePart: PLPSTR): DWORD; stdcall; external 'kernel32' name 'GetFullPathNameA';
 function GetFullPathNameW(lpFileName: LPCWSTR; nBufferLength: DWORD; lpBuffer: LPWSTR; lpFilePart: PLPWSTR): DWORD; stdcall; external 'kernel32' name 'GetFullPathNameW';
+function GetEnvironmentVariableA(lpName: LPCSTR; lpBuffer: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetEnvironmentVariableA';
+function GetEnvironmentVariableW(lpName: LPCWSTR; lpBuffer: LPWSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetEnvironmentVariableW';
+function SetEnvironmentVariableA(lpName: LPCSTR; lpValue: LPCSTR): BOOL; stdcall; external 'kernel32' name 'SetEnvironmentVariableA';
+function SetEnvironmentVariableW(lpName: LPCWSTR; lpValue: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'SetEnvironmentVariableW';
+function GetEnvironmentStringsA: LPSTR; stdcall; external 'kernel32' name 'GetEnvironmentStringsA';
+function GetEnvironmentStringsW: LPWSTR; stdcall; external 'kernel32' name 'GetEnvironmentStringsW';
+function FreeEnvironmentStringsA(lpszEnvironmentBlock: LPSTR): BOOL; stdcall; external 'kernel32' name 'FreeEnvironmentStringsA';
+function FreeEnvironmentStringsW(lpszEnvironmentBlock: LPWSTR): BOOL; stdcall; external 'kernel32' name 'FreeEnvironmentStringsW';
+function ExpandEnvironmentStringsA(lpSrc: LPCSTR; lpDst: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsA';
+function ExpandEnvironmentStringsW(lpSrc: LPCWSTR; lpDst: LPWSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsW';
 
 implementation
 
@@ -583,6 +619,84 @@ function windows_get_full_path_name_w(
   AFilePart: PLPWSTR): DWORD; inline;
 begin
   Result := GetFullPathNameW(AFileName, ABufferLength, ABuffer, AFilePart);
+end;
+
+function windows_get_environment_variable_a(
+  const AName: LPCSTR;
+  ABuffer: LPSTR;
+  const ABufferLength: DWORD): DWORD; inline;
+begin
+  Result := GetEnvironmentVariableA(AName, ABuffer, ABufferLength);
+end;
+
+function windows_get_environment_variable_w(
+  const AName: LPCWSTR;
+  ABuffer: LPWSTR;
+  const ABufferLength: DWORD): DWORD; inline;
+begin
+  Result := GetEnvironmentVariableW(AName, ABuffer, ABufferLength);
+end;
+
+function windows_set_environment_variable_a(
+  const AName: LPCSTR;
+  const AValue: LPCSTR): Int32; inline;
+begin
+  if SetEnvironmentVariableA(AName, AValue) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_set_environment_variable_w(
+  const AName: LPCWSTR;
+  const AValue: LPCWSTR): Int32; inline;
+begin
+  if SetEnvironmentVariableW(AName, AValue) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_get_environment_strings_a: LPSTR; inline;
+begin
+  Result := GetEnvironmentStringsA;
+end;
+
+function windows_get_environment_strings_w: LPWSTR; inline;
+begin
+  Result := GetEnvironmentStringsW;
+end;
+
+function windows_free_environment_strings_a(const AEnvironment: LPSTR): Int32; inline;
+begin
+  if FreeEnvironmentStringsA(AEnvironment) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_free_environment_strings_w(const AEnvironment: LPWSTR): Int32; inline;
+begin
+  if FreeEnvironmentStringsW(AEnvironment) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_expand_environment_strings_a(
+  const ASource: LPCSTR;
+  ADestination: LPSTR;
+  const ADestinationLength: DWORD): DWORD; inline;
+begin
+  Result := ExpandEnvironmentStringsA(ASource, ADestination, ADestinationLength);
+end;
+
+function windows_expand_environment_strings_w(
+  const ASource: LPCWSTR;
+  ADestination: LPWSTR;
+  const ADestinationLength: DWORD): DWORD; inline;
+begin
+  Result := ExpandEnvironmentStringsW(ASource, ADestination, ADestinationLength);
 end;
 
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;
