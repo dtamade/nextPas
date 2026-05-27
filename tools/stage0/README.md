@@ -261,7 +261,7 @@ evidence 会投影为 `sema.wrong-argument-count`；无法推断、
 imported `installed-source` target 或 direct/inherited installed-source overload set、imported/带参/member function result
 或 source provenance 不可信的 signature 不唯一时仍保守不绑定；对应 installed-source bare/direct-member/inherited
 function-result type-mismatch、wrong-argument-count、no-match 与 ambiguity（包括 bare function-result arity miss），以及
-installed-source direct known field invalid-call-shape deferred guard，用 `semantic-call-bindings-check` 的 focused
+installed-source direct known field/property invalid-call-shape deferred guard，用 `semantic-call-bindings-check` 的 focused
 guard 固定，不用普通 stage0 fixture 伪造 provenance。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
@@ -926,7 +926,7 @@ imported direct member function-result wrong argument count
 断言同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数/函数结果形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
 `semantic-analysis-failed` + `sema.unknown-callable`，再对 known field/property member call、imported
-project-source known field member call 及 inherited known field/property member call 断言
+project-source known field/property member call 及 inherited known field/property member call 断言
 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
 和 class method body 内 bare implicit-self unknown member 断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对
