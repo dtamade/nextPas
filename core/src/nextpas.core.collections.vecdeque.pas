@@ -330,14 +330,14 @@ type
     { 高性能批量操作接口 - 提供更高效的数据转移方式 }
     { LoadFrom: 直接加载数据到容器（替换当前内容） }
     procedure LoadFromPointer(aSrc: PElement; aCount: SizeUInt); inline;
-    procedure LoadFromArray(const aSrc: array of T); inline;
+    procedure LoadFromArray(const aSrc: array of T);
 
     { AppendFrom: 从指定位置追加数据到容器末尾 }
-    procedure AppendFrom(const aSrc: TVecDeque; aSrcIndex: SizeUInt; aCount: SizeUInt); inline;
+    procedure AppendFrom(const aSrc: TVecDeque; aSrcIndex: SizeUInt; aCount: SizeUInt);
 
     { InsertFrom: 从指定位置插入批量数据 }
     procedure InsertFrom(aIndex: SizeUInt; aSrc: PElement; aCount: SizeUInt); inline;
-    procedure InsertFrom(aIndex: SizeUInt; const aSrc: array of T); inline;
+    procedure InsertFrom(aIndex: SizeUInt; const aSrc: array of T);
 
     { IGenericCollection<T> 接口实现 }
     procedure SaveToUnChecked(aDst: TCollection); override;
@@ -1743,12 +1743,25 @@ procedure TVecDeque.AppendFrom(const aSrc: TVecDeque; aSrcIndex: SizeUInt; aCoun
 var
   LSrcPtr1, LSrcPtr2: PElement;
   LSrcLen1, LSrcLen2: SizeUInt;
+  LSnapshot: TVecDeque;
 begin
   if (aSrc = nil) or (aCount = 0) then Exit;
 
   // 验证范围
   if aSrcIndex + aCount > aSrc.Count then
     raise EOutOfRange.Create('Source index or count out of range');
+
+  if aSrc = Self then
+  begin
+    LSnapshot := TVecDeque.Create(aCount, FBuffer.GetAllocator, FGrowStrategy);
+    try
+      LSnapshot.AppendFrom(Self, aSrcIndex, aCount);
+      AppendFrom(LSnapshot, 0, aCount);
+    finally
+      LSnapshot.Free;
+    end;
+    Exit;
+  end;
 
   // 提前扩容，避免 PushBack 过程中重新分配导致指针失效
   EnsureCapacity(FCount + aCount);
