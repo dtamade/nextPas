@@ -41,6 +41,7 @@ uses
   nextpas.core.collections.trie.intf,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.element_manager.base,
   nextpas.core.collections.element_manager.intf,
   nextpas.core.collections.list.intf,
   nextpas.core.collections.forward_list.intf,
