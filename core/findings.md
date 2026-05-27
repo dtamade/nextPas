@@ -38,6 +38,7 @@
 - `Get(Index): T` and `Put(Index, Value)` are checked operations and throw on invalid indexes.
 - `GetUnchecked(Index): T` and `PutUnchecked(Index, Value)` are the unsafe fast path and require clear documentation that the caller owns bounds correctness.
 - Do not add `TryGet(Index, out Value): Boolean` to the base array/indexed-access contract. For array-like containers, an invalid index is a caller error, and callers that want a non-throwing branch can check `Count` before indexing.
+- Spell unsafe fast-path method names with `Unchecked` as one word, not `UnChecked`. Current copied names such as `GetUnChecked`, `ReadUnChecked`, and `SortUnChecked` are transitional and should be renamed consistently during interface tuning.
 - Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other array-like indexed sequence containers. Keep `TryXxx` for operations where failure is normal domain behavior, such as map lookup or empty pop.
 
 ## 2026-05-27: sequence mutation method semantics
