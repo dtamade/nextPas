@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,47 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 123 implicit self bare method call binding)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.4 Semantic model`
+- Objective:
+  - 把 class method body 内的 bare implicit-self method call 从 deferred 推进到真实 binding/query truth，
+    例如 `procedure TWorker.Run; begin Touch; end;` 中的 `Touch;` 必须绑定到 `TWorker.Touch`。
+- Baseline:
+  - Batch 122 已完成 known non-callable 家族 direct/inherited × field/property 四格，当前最高价值相邻热点回到
+    member-call 正向绑定。
+  - 先前 focused semantic 已提示 `Touch;` 缺少 `member-call` binding；但 old stage0 query probe 使用的是较早
+    binary，需要用 fresh rebuilt stage0 binary 重新验真，避免误判 query 仍未同步。
+- Actions taken:
+  - 按 `/plan` 固定本轮只收这一条热点，并正式采用提速法：`单热点 / fresh probe / promotion-first / probe 失败再修实现`。
+  - 把 `tests/semantic/test_semantic_call_bindings.pas` 中
+    `CheckImplicitSelfBareMethodCallDeferred` 升格为 `CheckImplicitSelfBareMethodCallBinding`，要求
+    `Touch;` 产生唯一 `member-call` binding、target 为 `TWorker.Touch`，且 `Model.BindingCount = 1`。
+  - 在 `compiler/sema/np_semantic_analyzer.pas` 增加 bare callee name 提取与最小 implicit-self fallback，
+    只在 bare call 常规 lookup 失败、且 method class 已知时尝试绑定当前 class 的同名 method。
+  - 把 `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 扩成 query probe：
+    `TWorker.Run` 中新增 `Touch;`，并在 `build/verify_local.sh` 的
+    `stage0-query-member-call-bindings-check` 增加 `query-bindings` / `query-definitions` /
+    envelope 对 `TWorker.Touch` 的断言。
+  - 用 fresh `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols ...` 重新 probe，确认 `Touch;`
+    已进入 `query-bindings` 与 `query-definitions`，因此本轮可以直接走 promotion 收口，而不是再扩 query 实现。
+- Verification:
+  - Fresh stage0 query probe 已输出：
+    - `query-bindings` 中 `{"kind":"member-call","name":"Touch","byteOffset":519,"targetSymbolId":8}`
+    - `query-definitions` 中 `bindingByteOffset=519` 对应
+      `targetName="TWorker.Touch"` / `targetKind="method"`
+  - Fresh full verify：`bash build/verify_local.sh` 输出
+    `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮验证了当前最快的推进法确实有效：先用 fresh query probe 重新验真，避免被旧 binary 证据拖着走。
+  - query 已天然成立后，再补 official gate 和记录，比直接猜修 query/session 更快也更干净。
+  - 第一次 full verify 暴露的是 gate offset 计算漂移，不是 sema/query 回归；修正 `Touch;` callee
+    byte offset 后，fresh verify 全链路通过。
 
 ## Session: 2026-05-27 (Batch 122 inherited known property member invalid-call-shape)
 

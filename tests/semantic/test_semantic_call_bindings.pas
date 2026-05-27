@@ -4749,19 +4749,23 @@ begin
   end;
 end;
 
-procedure CheckImplicitSelfBareMethodCallDeferred;
+procedure CheckImplicitSelfBareMethodCallBinding;
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
+  Binding: TSemanticBinding;
   Diagnostics: TDiagnosticsSink;
+  Index: LongInt;
   Lexer: TLexerResult;
   Model: TSemanticModel;
   SourceText: string;
+  TouchBindingCount: LongInt;
+  TouchSymbolId: LongInt;
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
   SourceText :=
-    'program ImplicitSelfBareMethodCallDeferred;' + LineEnding +
+    'program ImplicitSelfBareMethodCallBinding;' + LineEnding +
     'type' + LineEnding +
     '  TWorker = class' + LineEnding +
     '    procedure Run;' + LineEnding +
@@ -4790,13 +4794,36 @@ begin
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
     if Diagnostics.HasErrors then
-      Fail('unexpected-implicit-self-bare-method-call-diagnostic:' +
+      Fail('unexpected-implicit-self-bare-method-call-binding-diagnostic:' +
         Diagnostics.LastDiagnosticCode);
     if Model = nil then
-      Fail('missing-implicit-self-bare-method-call-model');
+      Fail('missing-implicit-self-bare-method-call-binding-model');
     if not SameText(Model.Status, 'ready') then
-      Fail('unexpected-implicit-self-bare-method-call-model-status:' +
+      Fail('unexpected-implicit-self-bare-method-call-binding-model-status:' +
         Model.Status);
+    TouchSymbolId := SymbolIdByNameAndKind(Model, 'TWorker.Touch', 'method');
+    if TouchSymbolId <= 0 then
+      Fail('missing-implicit-self-bare-method-call-target-symbol');
+    TouchBindingCount := 0;
+    for Index := 0 to Model.BindingCount - 1 do
+    begin
+      Binding := Model.BindingAt(Index);
+      if SameText(Binding.Kind, 'member-call') and
+        SameText(Binding.Name, 'Touch') then
+      begin
+        Inc(TouchBindingCount);
+        if Binding.TargetSymbolId <> TouchSymbolId then
+          Fail('implicit-self-bare-method-call-target-mismatch');
+      end;
+    end;
+    if TouchBindingCount = 0 then
+      Fail('missing-implicit-self-bare-method-call-binding');
+    if TouchBindingCount <> 1 then
+      Fail('unexpected-implicit-self-bare-method-call-binding-count:' +
+        IntToStr(TouchBindingCount));
+    if Model.BindingCount <> 1 then
+      Fail('unexpected-implicit-self-bare-method-call-model-binding-count:' +
+        IntToStr(Model.BindingCount));
   finally
     Model.Free;
     Analyzer.Free;
@@ -5230,7 +5257,7 @@ begin
     CheckMemberVariableCallTypeMismatchDiagnostic;
     CheckBareParameterCallTypeMismatchDiagnostic;
     CheckBareUnknownCallableDiagnostic;
-    CheckImplicitSelfBareMethodCallDeferred;
+    CheckImplicitSelfBareMethodCallBinding;
     CheckMemberParameterCallTypeMismatchDiagnostic;
     CheckBareFunctionResultTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;

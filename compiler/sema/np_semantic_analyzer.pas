@@ -112,6 +112,7 @@ type
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
+    function BareCallCalleeName(const ACallNode: TGreenNode): string;
     function IsWrappedCallChild(
       const AParent: TGreenNode;
       const AChild: TGreenNode
@@ -175,6 +176,10 @@ type
       out AResolutionFailureKind: string;
       out AFailureName: string;
       out AFailureOffset: LongInt
+    ): Boolean;
+    function TryRegisterImplicitSelfBareMethodCallBinding(
+      const ACallNode: TGreenNode;
+      const ACurrentMethodClass: string
     ): Boolean;
     function BindCallArgs(const ADecl: TGreenNode;
       const ACallNode: TGreenNode;
@@ -1245,6 +1250,36 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.BareCallCalleeName(
+  const ACallNode: TGreenNode
+): string;
+var
+  CalleeNode: TGreenNode;
+  InnerCallNode: TGreenNode;
+begin
+  Result := '';
+  if ACallNode = nil then
+    Exit;
+  if ACallNode.ChildCount = 0 then
+    Exit(ACallNode.Text);
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier) then
+    Exit(CalleeNode.Text);
+
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkFunctionCall) then
+  begin
+    InnerCallNode := CalleeNode;
+    if (InnerCallNode.ChildCount > 0) and
+      (InnerCallNode.ChildAt(0) <> nil) and
+      (InnerCallNode.ChildAt(0).NodeKind = gnkIdentifier) then
+      Exit(InnerCallNode.ChildAt(0).Text);
+  end;
+
+  Result := ACallNode.Text;
+end;
+
 function TSemanticAnalyzer.IsWrappedCallChild(
   const AParent: TGreenNode;
   const AChild: TGreenNode
@@ -1849,6 +1884,60 @@ begin
   Result := True;
 end;
 
+function TSemanticAnalyzer.TryRegisterImplicitSelfBareMethodCallBinding(
+  const ACallNode: TGreenNode;
+  const ACurrentMethodClass: string
+): Boolean;
+var
+  ArgCount: LongInt;
+  ArgSignature: string;
+  CallName: string;
+  HasArgSignature: Boolean;
+  HasTypeMismatchEvidence: Boolean;
+  ReceiverTypeId: LongInt;
+  ResolutionFailureKind: string;
+  TargetSymbolId: LongInt;
+begin
+  Result := False;
+  if (ACurrentMethodClass = '') or (ACallNode = nil) or
+    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) then
+    Exit;
+
+  CallName := BareCallCalleeName(ACallNode);
+  if CallName = '' then
+    Exit;
+
+  ReceiverTypeId := TypeIdForMemberReceiver('Self', ACurrentMethodClass);
+  if ReceiverTypeId <= 0 then
+    Exit;
+
+  ArgCount := CallArgumentCount(ACallNode);
+  HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode);
+  ResolutionFailureKind := '';
+  TargetSymbolId := MethodSymbolIdForClassTypeMember(
+    ReceiverTypeId,
+    CallName,
+    ArgCount,
+    ArgSignature,
+    HasArgSignature,
+    HasTypeMismatchEvidence,
+    ResolutionFailureKind
+  );
+  if TargetSymbolId <= 0 then
+    Exit;
+
+  FModel.AddBinding(
+    'member-call',
+    CallName,
+    NormalizeUnitIdentity(FUnitGraph.RootName),
+    ACallNode.ByteOffset,
+    TargetSymbolId
+  );
+  Result := True;
+end;
+
 function TSemanticAnalyzer.BindCallArgs(const ADecl: TGreenNode;
   const ACallNode: TGreenNode;
   const ANameSkip: LongInt): TParamSnapshots;
@@ -2047,6 +2136,7 @@ var
   DeclNode: TGreenNode;
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
+  ImplicitSelfBound: Boolean;
   Index: LongInt;
   MemberFailureName: string;
   MemberFailureOffset: LongInt;
@@ -2123,6 +2213,7 @@ begin
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       HasTypeMismatchEvidence := HasArgSignature and
         CallArgumentSignatureIsStable(ANode);
+      ImplicitSelfBound := False;
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
@@ -2135,37 +2226,52 @@ begin
         OwnerUnitId
       ) then
         RegisterCallBinding(ANode, DeclNode, OwnerUnitId)
-      else if SameText(ResolutionFailureKind, 'ambiguous-overload') then
-        EmitSemaError(
-          'sema.ambiguous-overload',
-          'ambiguous overload for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
-        EmitSemaError(
-          'sema.wrong-argument-count',
-          'wrong number of arguments for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'type-mismatch') then
-        EmitSemaError(
-          'sema.type-mismatch',
-          'argument type mismatch for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'no-matching-overload') then
-        EmitSemaError(
-          'sema.no-matching-overload',
-          'no matching overload for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'unknown-callable') and
-        (MethodClass = '') then
-        EmitSemaError(
-          'sema.unknown-callable',
-          'unknown callable "' + ANode.Text + '"',
-          ANode.ByteOffset
-        );
+      else
+      begin
+        if (MethodClass <> '') and
+          ((ResolutionFailureKind = '') or
+           SameText(ResolutionFailureKind, 'unknown-callable')) then
+          ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
+            ANode,
+            MethodClass
+          );
+        if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'ambiguous-overload') then
+          EmitSemaError(
+            'sema.ambiguous-overload',
+            'ambiguous overload for "' + ANode.Text + '"',
+            ANode.ByteOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'wrong-argument-count') then
+          EmitSemaError(
+            'sema.wrong-argument-count',
+            'wrong number of arguments for "' + ANode.Text + '"',
+            ANode.ByteOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'type-mismatch') then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'argument type mismatch for "' + ANode.Text + '"',
+            ANode.ByteOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'no-matching-overload') then
+          EmitSemaError(
+            'sema.no-matching-overload',
+            'no matching overload for "' + ANode.Text + '"',
+            ANode.ByteOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'unknown-callable') and
+          (MethodClass = '') then
+          EmitSemaError(
+            'sema.unknown-callable',
+            'unknown callable "' + ANode.Text + '"',
+            ANode.ByteOffset
+          );
+      end;
     end;
   end;
 

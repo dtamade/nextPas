@@ -204,6 +204,25 @@
 - Batch 122 新增 `tests/fixtures/inherited_known_property_member_call` 与
   `inherited-known-property-member-call-check`，把 inherited known property non-callable 也正式纳入
   final envelope `inheritedKnownPropertyMemberCallCheck=pass`。
+- Batch 123 把 class method body 内的 bare implicit-self method call 推进到真实 binding truth：
+  `procedure TWorker.Run; begin Touch; end;` 中的 `Touch;` 现在会注册为唯一 `member-call` binding，
+  target 指向 `TWorker.Touch`，且不报 diagnostic。
+- 这次修复不是扩大完整 bare/member resolver，而是最小补齐两个局部缺口：
+  `BareCallCalleeName(...)` 在 bare `gnkProcedureCallStatement` 没有 child node 时回退到
+  `ACallNode.Text`；`TryRegisterImplicitSelfBareMethodCallBinding(...)` 只在当前 method class 已知、
+  bare call 常规 lookup 失败且 failure kind 仍为空或 `unknown-callable` 时，尝试把 bare name 回绑到
+  当前 class method symbol。
+- fresh stage0 query probe 证明 query/session projection 也已经天然成立，不需要继续改 query path：
+  `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols ...member_call_bindings.pas` 已输出
+  `query-bindings` 中 `byteOffset=519` 的 `Touch` `member-call`，target 为 `TWorker.Touch`；同一条
+  `query-definitions` 也同步投影 `targetName="TWorker.Touch"`。
+- 因此 Batch 123 的正确提速方式是 promotion-first：先用 fresh binary 复核 query 真相，再补
+  `stage0-query-member-call-bindings-check` 官方 gate，而不是在 query 已经成立时继续猜修 session / projection。
+- Batch 123 第一次 full verify 失败点是 official gate 的 byte offset 期望漂移：脚本算到了语句行首，
+  而 query truth 的 binding offset 是 callee `Touch` 起点 `519`。修正
+  `MEMBER_IMPLICIT_TOUCH_OFFSET` 之后，fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
