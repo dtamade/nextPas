@@ -1704,6 +1704,106 @@ begin
   end;
 end;
 
+procedure CheckImportedInheritedKnownPropertyMemberCallDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-inherited-known-property-member-call-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program ImportedInheritedKnownPropertyMemberCall;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Value(1);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '  private' + LineEnding +
+    '    FValue: Integer;' + LineEnding +
+    '  public' + LineEnding +
+    '    property Value: Integer read FValue write FValue;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'ImportedInheritedKnownPropertyMemberCall',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-imported-inherited-known-property-member-call-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.invalid-call-shape') then
+      Fail('unexpected-imported-inherited-known-property-member-call-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-imported-inherited-known-property-member-call-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Value', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('imported-inherited-known-property-member-call-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-imported-inherited-known-property-member-call-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-imported-inherited-known-property-member-call-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-imported-inherited-known-property-member-call-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInstalledSourceKnownPropertyMemberCallStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -9733,6 +9833,7 @@ begin
     CheckInstalledSourceInheritedKnownFieldMemberCallStaysDeferred;
     CheckKnownPropertyMemberCallDiagnostic;
     CheckImportedKnownPropertyMemberCallDiagnostic;
+    CheckImportedInheritedKnownPropertyMemberCallDiagnostic;
     CheckInstalledSourceKnownPropertyMemberCallStaysDeferred;
     CheckInheritedKnownFieldMemberCallDiagnostic;
     CheckInheritedKnownPropertyMemberCallDiagnostic;
