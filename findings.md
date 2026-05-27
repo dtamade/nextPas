@@ -530,6 +530,15 @@
   `importedInheritedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 174 把 Batch 173 的成对 installed-source 防误报护栏补齐：imported
+  `installed-source` inherited class property 即使通过 parent-chain `$read` / `$write` truth 可见，
+  也必须保持 deferred，不发 `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 174 focused semantic 直接 GREEN，证明 Batch 168/170 的 known non-method member
+  provenance guard 已覆盖 inherited parent-chain property truth；本批不修改 analyzer，也不新增
+  stage0 fixture 伪造 installed-source provenance。
+- Batch 174 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

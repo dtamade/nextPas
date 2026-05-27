@@ -440,6 +440,9 @@ candidate collection
   - inherited property truth 来自 imported `project-source` unit 时同样适用；例如 imported
     `TBaseWorker.Value` property 被 root source 通过 `TWorker = class(TBaseWorker)` 写成
     `Worker.Value(1)` 时也失败为 `sema.invalid-call-shape`
+  - inherited property truth 来自 imported `installed-source` unit 时继续保守 deferred；这条
+    guard 与 installed-source inherited field guard 一样，只用 `semantic-call-bindings-check` 的
+    focused harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
   - specialized generic receiver、record/property/array/deref receiver 与更完整 member access 仍继续 deferred
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
     receiver pointer operand 与 effective `Destroy` target，并把紧随其后的匹配 `Destroy`
