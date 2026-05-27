@@ -39,6 +39,9 @@
 - `corePlatformFfiImportWorkflowCheck` 已进入 `build/verify_local.sh` 的 official final envelope；
   这保证后续 session 不能只更新 workflow 文档而忘记 route truth，也不能绕过 workflow 直接开始
   bulk raw OS API import。
+- Platform Host ABI Completeness Wave 1 的边界已定为 raw host ABI inventory，而不是统一 public
+  contract：先从 FPC source evidence 补 host `base/ffi`，再由未来 `platform.file`、`platform.process`、
+  `platform.memory`、`platform.dylib` 等统一子模块择机消费。raw ABI 本轮不做 runtime unit test。
 - 本机 `/home/dtamade/projects/fpdev/sources/fpc/fpc-main` 是空目录壳，不能写进 evidence index 作为
   可验证依据；可用 FPC source checkout 位于 `/home/dtamade/projects/fpc`，但项目文档应记录
   `rtl/linux`、`rtl/unix`、`rtl/darwin`、`rtl/freebsd`、`rtl/win32`、`rtl/win64`、
@@ -1987,6 +1990,20 @@
 - 扩平台 API 的顺序也明确了：host `base/ffi` 先尽量完整承载系统 ABI，再由通用 platform 子模块做统一
   抽象。也就是说，ffi 层可以做厚，但 public contract 仍应由 `platform.time/sync/thread/...`
   这类子模块整理成 nextPas 稳定语义。
+- Platform Host ABI Wave 1 已落为低风险 raw host ABI inventory：process id、`timeval`、mmap、
+  dynamic loader，以及 Windows process id / dynamic library / virtual memory basics。它不新增
+  `platform.process`、`platform.memory` 或 dynamic-library public contract。
+- `stat/open/fcntl deferred` 是本轮明确延期边界：file/stat 的 record layout、flag family、large-file
+  suffix 与 32/64-bit 差异风险高，应作为下一波单独取证和 gate。
+- POSIX `MAP_FAILED` 保留 signed ABI token `PLATFORM_POSIX_MAP_FAILED = PtrInt(-1)`，指针比较使用
+  unsigned token `PLATFORM_POSIX_MAP_FAILED_PTR = High(PtrUInt)`，避免 FPC 的 signed pointer
+  comparison warning。
+- `build/verify_local.sh` 已纳入 Wave 1 official route：required path、focused check、cleanup 和 final
+  envelope token `corePlatformHostAbiWave1Check` 必须同步维护。
+- Wave 1 已在 feature commit `865ae8f` 上 rebase 到 `main@52c2e2d`，无冲突；合并前重新跑过 focused
+  gate、`make -C core test`、`make -C core examples`、`make -C core benchmarks`、`git diff --check`
+  与 `bash build/verify_local.sh`，final envelope 继续包含
+  `corePlatformHostAbiWave1Check":"pass"`。
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。

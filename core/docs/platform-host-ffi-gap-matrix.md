@@ -38,6 +38,20 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 1 covers process id, `timeval`, mmap, and
+  dynamic loader inventory for host `base/ffi` owners. POSIX hosts now carry
+  `pid_t`, RTLD constants, `platform_process_id`, `platform_parent_process_id`,
+  mmap helpers, and dynamic loader helpers; Windows carries process id,
+  `LoadLibraryA`, `GetProcAddress`, `FreeLibrary`, `VirtualAlloc`,
+  `VirtualFree`, and `VirtualProtect` inventory. This is source-surface and
+  compile evidence, not a new public `platform.process` or `platform.memory`
+  contract.
+- Wave 1 source evidence tokens are synchronized with the evidence index:
+  `getpid`, `getppid`, `fpmmap`, `fpmunmap`, `dlopen`, `dlsym`,
+  `LoadLibraryA`, `GetProcAddress`, and `VirtualAlloc`.
+- `stat/open/fcntl deferred`: file and stat families stay out of Wave 1 because
+  their record layouts, flag sets, and 32/64-bit suffix policy need a separate
+  evidence pass before import.
 - Darwin has `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, so pthread
   condition-variable timeout policy uses the host-owned realtime clock token.
 - Darwin has `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`. Its

@@ -41,6 +41,40 @@ compile-only gates, and focused runtime tests of the nextPas abstractions.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 1: process id, timeval, mmap, and dynamic loader
+
+Wave 1 imports the first low-risk host ABI inventory used by future
+`platform.process`, `platform.memory`, and dynamic-library contracts. It covers
+process id, `timeval`, mmap, and dynamic loader declarations. The
+`stat/open/fcntl deferred` marker is deliberate: those families have higher
+record-layout and 32/64-bit variant risk and belong in a later wave with
+narrower source evidence.
+
+- Shared `timeval` shape belongs in `nextpas.core.platform.posix.base`.
+  Evidence starts in FPC `rtl/linux/ptypes.inc`,
+  `rtl/darwin/ptypes.inc`, and `rtl/freebsd/ptypes.inc`. Darwin keeps its
+  `suseconds_t = cint32` `tv_usec` field while the Linux/Android/FreeBSD/current
+  generic Unix path uses long-sized fields.
+- Shared process id declarations use FPC `rtl/unix/oscdeclh.inc`, where
+  `FpGetpid` and `FpGetppid` bind to `getpid` and `getppid`. Host `base` units
+  own `pid_t` / `TPlatformProcessId`, and host `ffi` units expose
+  `platform_process_id` and `platform_parent_process_id`.
+- Shared mmap declarations use FPC `rtl/unix/baseunix.pp` for `PROT_READ`,
+  `PROT_WRITE`, `PROT_EXEC`, `PROT_NONE`, `MAP_SHARED`, `MAP_PRIVATE`, and
+  `MAP_FAILED`; FPC `rtl/unix/oscdeclh.inc` records `fpmmap`, `fpmunmap`, and
+  `fpmprotect` as libc bindings for `mmap`, `munmap`, and `mprotect`.
+- POSIX dynamic loader evidence starts in FPC `rtl/unix/dl.pp`, which records
+  `RTLD_LAZY`, `RTLD_NOW`, `RTLD_LOCAL`, `RTLD_GLOBAL`, `dlopen`, `dlsym`,
+  `dlclose`, and `dlerror`. RTLD constants and the external library owner vary
+  by host, so constants stay in host `base` units and declarations stay in host
+  `ffi` units.
+- Windows Wave 1 process, memory, and dynamic-library evidence starts in FPC
+  `rtl/win32/objinc.inc`, `rtl/win32/classes.pp`, `rtl/win64/system.pp`, and
+  `packages/winunits-base`, then falls back to Windows OS SDK headers for exact
+  kernel32 signatures. The imported surface includes `GetCurrentProcessId`,
+  `LoadLibraryA`, `GetProcAddress`, `FreeLibrary`, `VirtualAlloc`,
+  `VirtualFree`, and `VirtualProtect`.
+
 ### POSIX clock and time declarations
 
 - Shared `timespec` shape belongs in `nextpas.core.platform.posix.base`.

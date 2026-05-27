@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform ffi import workflow；上一轮包括
+当前最新本轮为 platform host abi completeness wave 1；上一轮包括
+platform ffi import workflow；
 platform ffi source evidence index；
 platform host gap route guard；
 platform host ffi gap matrix guard；
@@ -39,6 +40,94 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform host abi completeness wave 1)
+
+- **Status:** rebased and pre-merge verified on feature worktree; merge and cleanup next
+- Objective:
+  - 按 `core/docs/platform-ffi-import-workflow.md` 启动第一批 host ABI completeness。
+  - 本轮不新增 raw OS API runtime tests，不扩 `platform.time` / `platform.sync` /
+    `platform.thread` public contract。
+  - 优先取证低风险、多模块可能复用的 host raw ABI inventory：process id、`timeval`、file/stat/open/fcntl、
+    mmap、dynamic loader，Windows 对应 kernel32 基础 entrypoints。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` clean at `main@8a12bf9`。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1`
+    on `codex/platform-host-abi-wave1` from `main@8a12bf9`。
+  - 其他并行 worktree 仍存在：`collections-refactor`、`sema-no-matching-overload`；本轮不触碰。
+- Integration update:
+  - Initial feature commit after first verification: `05e9213`。
+  - 主线随后前进到 `main@52c2e2d`；本轮执行 `git rebase main` 无冲突，feature commit 变为
+    `865ae8f`。
+  - Rebase 后 `git log --left-right main...HEAD` 只剩一笔 feature commit：
+    `865ae8f feat(platform): add host ABI wave one inventory`。
+- Boundary:
+  - FPC source 是 evidence，不是 production dependency。
+  - host `base/ffi` 可以厚化；统一 public contract 继续由 platform 子模块整理。
+  - raw ABI 通过 source evidence、source-surface gate、compile-only gate 和 review 证明。
+- Source evidence and scope:
+  - Wave 1 narrowed to process id, `timeval`, mmap, dynamic loader, and Windows
+    process/memory/dynamic-library basics.
+  - `stat/open/fcntl deferred` is intentional because file/stat record layouts,
+    flag sets, and 32/64-bit suffix policy need a separate evidence pass.
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+    initially compiled and failed as expected: source tokens were present, but
+    docs lacked `stat/open/fcntl deferred` and `build/verify_local.sh` lacked
+    the Wave 1 route.
+- GREEN actions:
+  - Added `test_platform_host_abi_wave1` with its own Makefile, checking host
+    `base/ffi` ownership, docs evidence, and official route truth.
+  - Added POSIX `timeval`, `PTimeVal`, `pid_t`, mmap constants, mmap/getpid
+    declarations and helpers.
+  - Added host process-id, mmap, dynamic-loader wrappers to Linux, Android,
+    Darwin, FreeBSD, and generic Unix `base/ffi` owners.
+  - Added Windows process id, dynamic library, and virtual memory declarations
+    plus thin helpers.
+  - Updated evidence index and host gap matrix with Wave 1 scope and the
+    `stat/open/fcntl deferred` boundary.
+  - Integrated `build/verify_local.sh` required paths, focused gate, cleanup,
+    and final envelope token `corePlatformHostAbiWave1Check`.
+  - Replaced signed pointer comparison for `MAP_FAILED` with
+    `PLATFORM_POSIX_MAP_FAILED_PTR`, removing the simulated-host pointer warning.
+- Focused verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    `simulated-host-compile-matrix-status=pass`.
+- Full verification:
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave1Check":"pass"`.
+  - `git diff --check`: pass.
+- Rebase pre-merge verification on `865ae8f` over `main@52c2e2d`:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `git diff --check`: pass.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave1Check":"pass"`.
+- Recovery:
+  - 下次恢复请从本 section 和 `task_plan.md` 的
+    `Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1` 继续。
+  - 第一条未完成任务是 merge、post-merge verification、cleanup。
 
 ## Session: 2026-05-27 (platform ffi import workflow)
 

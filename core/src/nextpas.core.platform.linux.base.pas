@@ -27,6 +27,8 @@ type
     Value: pthread_cond_t;
   end;
 
+  TPlatformProcessId = pid_t;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -59,6 +61,11 @@ const
   FUTEX_WAIT         = 0;
   FUTEX_WAKE         = 1;
   FUTEX_PRIVATE_FLAG = 128;
+
+  PLATFORM_RTLD_LAZY = Int32(1);
+  PLATFORM_RTLD_NOW = Int32(2);
+  PLATFORM_RTLD_LOCAL = Int32(0);
+  PLATFORM_RTLD_GLOBAL = Int32($100);
 
   {$IFDEF NEXTPAS_X86_64}
   LINUX_SYSCALL_FUTEX = 202;

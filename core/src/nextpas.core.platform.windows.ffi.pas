@@ -98,10 +98,29 @@ function windows_filetime_now_unix_ns: UInt64;
 function platform_clock_monotonic_ns_u64: UInt64;
 function platform_clock_realtime_ns_u64: UInt64; inline;
 function platform_clock_monotonic_resolution_ns_u64: UInt64;
+function windows_process_id_u64: UInt64; inline;
+function windows_load_library_a(const AName: PAnsiChar): HMODULE; inline;
+function windows_get_proc_address(const AModule: HMODULE; const AName: PAnsiChar): FARPROC; inline;
+function windows_free_library(const AModule: HMODULE): Int32; inline;
+function windows_virtual_alloc(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const AAllocationType: DWORD;
+  const AProtect: DWORD): Pointer; inline;
+function windows_virtual_free(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const AFreeType: DWORD): Int32; inline;
+function windows_virtual_protect(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const ANewProtect: DWORD;
+  out AOldProtect: DWORD): Int32; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
 function CloseHandle(hObject: HANDLE): BOOL; stdcall; external 'kernel32' name 'CloseHandle';
+function GetCurrentProcessId: DWORD; stdcall; external 'kernel32' name 'GetCurrentProcessId';
 function GetCurrentThreadId: DWORD; stdcall; external 'kernel32' name 'GetCurrentThreadId';
 function QueryPerformanceFrequency(var lpFrequency: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceFrequency';
 function QueryPerformanceCounter(var lpPerformanceCount: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceCounter';
@@ -134,6 +153,12 @@ procedure WakeAllConditionVariable(ConditionVariable: Pointer); stdcall; externa
 function WaitOnAddress(Address: Pointer; CompareAddress: Pointer; AddressSize: PtrUInt; dwMilliseconds: DWORD): BOOL; stdcall; external 'kernel32' name 'WaitOnAddress';
 procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressSingle';
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
+function LoadLibraryA(lpLibFileName: PAnsiChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryA';
+function GetProcAddress(hModule: HMODULE; lpProcName: PAnsiChar): FARPROC; stdcall; external 'kernel32' name 'GetProcAddress';
+function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' name 'FreeLibrary';
+function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';
+function VirtualFree(lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualFree';
+function VirtualProtect(lpAddress: Pointer; dwSize: PtrUInt; flNewProtect: DWORD; var lpflOldProtect: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualProtect';
 
 implementation
 
@@ -189,6 +214,62 @@ end;
 function windows_last_error_i32: Int32; inline;
 begin
   Result := Int32(GetLastError);
+end;
+
+function windows_process_id_u64: UInt64; inline;
+begin
+  Result := UInt64(GetCurrentProcessId);
+end;
+
+function windows_load_library_a(const AName: PAnsiChar): HMODULE; inline;
+begin
+  Result := LoadLibraryA(AName);
+end;
+
+function windows_get_proc_address(const AModule: HMODULE; const AName: PAnsiChar): FARPROC; inline;
+begin
+  Result := GetProcAddress(AModule, AName);
+end;
+
+function windows_free_library(const AModule: HMODULE): Int32; inline;
+begin
+  if FreeLibrary(AModule) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_virtual_alloc(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const AAllocationType: DWORD;
+  const AProtect: DWORD): Pointer; inline;
+begin
+  Result := VirtualAlloc(AAddress, ASize, AAllocationType, AProtect);
+end;
+
+function windows_virtual_free(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const AFreeType: DWORD): Int32; inline;
+begin
+  if VirtualFree(AAddress, ASize, AFreeType) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_virtual_protect(
+  const AAddress: Pointer;
+  const ASize: PtrUInt;
+  const ANewProtect: DWORD;
+  out AOldProtect: DWORD): Int32; inline;
+begin
+  AOldProtect := 0;
+  if VirtualProtect(AAddress, ASize, ANewProtect, AOldProtect) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
 end;
 
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;

@@ -27,6 +27,8 @@ type
     Value: pthread_cond_t;
   end;
 
+  TPlatformProcessId = pid_t;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -60,6 +62,11 @@ const
   PLATFORM_POSIX_EINVAL = 22;
   PLATFORM_POSIX_ENOTSUP = 45;
   PLATFORM_POSIX_ETIMEDOUT = 60;
+
+  PLATFORM_RTLD_LAZY = Int32(1);
+  PLATFORM_RTLD_NOW = Int32(2);
+  PLATFORM_RTLD_LOCAL = Int32(4);
+  PLATFORM_RTLD_GLOBAL = Int32(8);
 
 implementation
 

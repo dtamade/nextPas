@@ -69,12 +69,88 @@ function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Point
 function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl; external 'pthread' name 'pthread_condattr_setclock';
+function platform_process_id: TPlatformProcessId; inline;
+function platform_parent_process_id: TPlatformProcessId; inline;
+function platform_mmap(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32;
+  const AFlags: Int32;
+  const AFileDescriptor: Int32;
+  const AOffset: Int64): Pointer; inline;
+function platform_munmap(AAddress: Pointer; const ALength: PtrUInt): Int32; inline;
+function platform_mprotect(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32): Int32; inline;
+function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;
+function platform_dlsym(ALibrary: Pointer; const AName: PAnsiChar): Pointer; inline;
+function platform_dlclose(ALibrary: Pointer): Int32; inline;
+function platform_dlerror: PAnsiChar; inline;
+function dlopen(Name: PAnsiChar; Flags: Int32): Pointer; cdecl; external 'dl' name 'dlopen';
+function dlsym(Lib: Pointer; Name: PAnsiChar): Pointer; cdecl; external 'dl' name 'dlsym';
+function dlclose(Lib: Pointer): Int32; cdecl; external 'dl' name 'dlclose';
+function dlerror: PAnsiChar; cdecl; external 'dl' name 'dlerror';
 
 implementation
 
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_posix_errno_value_from_location(platform_errno_location);
+end;
+
+function platform_process_id: TPlatformProcessId; inline;
+begin
+  Result := platform_posix_getpid;
+end;
+
+function platform_parent_process_id: TPlatformProcessId; inline;
+begin
+  Result := platform_posix_getppid;
+end;
+
+function platform_mmap(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32;
+  const AFlags: Int32;
+  const AFileDescriptor: Int32;
+  const AOffset: Int64): Pointer; inline;
+begin
+  Result := platform_posix_mmap(AAddress, ALength, AProtection, AFlags, AFileDescriptor, AOffset);
+end;
+
+function platform_munmap(AAddress: Pointer; const ALength: PtrUInt): Int32; inline;
+begin
+  Result := platform_posix_munmap(AAddress, ALength);
+end;
+
+function platform_mprotect(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32): Int32; inline;
+begin
+  Result := platform_posix_mprotect(AAddress, ALength, AProtection);
+end;
+
+function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;
+begin
+  Result := dlopen(AName, AFlags);
+end;
+
+function platform_dlsym(ALibrary: Pointer; const AName: PAnsiChar): Pointer; inline;
+begin
+  Result := dlsym(ALibrary, AName);
+end;
+
+function platform_dlclose(ALibrary: Pointer): Int32; inline;
+begin
+  Result := dlclose(ALibrary);
+end;
+
+function platform_dlerror: PAnsiChar; inline;
+begin
+  Result := dlerror;
 end;
 
 function platform_pthread_sync_result(

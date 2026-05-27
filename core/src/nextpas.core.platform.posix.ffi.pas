@@ -104,12 +104,32 @@ function platform_posix_pthread_condvar_timedwait_abs(
   ADeadline: Pointer): Int32; inline;
 function platform_posix_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 function platform_posix_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+function platform_posix_mmap_failed(const AAddress: Pointer): Boolean; inline;
+function platform_posix_mmap(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32;
+  const AFlags: Int32;
+  const AFileDescriptor: Int32;
+  const AOffset: Int64): Pointer; inline;
+function platform_posix_munmap(AAddress: Pointer; const ALength: PtrUInt): Int32; inline;
+function platform_posix_mprotect(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32): Int32; inline;
+function platform_posix_getpid: pid_t; inline;
+function platform_posix_getppid: pid_t; inline;
 
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
 function sched_yield: Int32; cdecl; external 'c' name 'sched_yield';
 function sysconf(name: Int32): PtrInt; cdecl; external 'c' name 'sysconf';
+function getpid: pid_t; cdecl; external 'c' name 'getpid';
+function getppid: pid_t; cdecl; external 'c' name 'getppid';
+function mmap(addr: Pointer; len: PtrUInt; prot: Int32; flags: Int32; fd: Int32; ofs: Int64): Pointer; cdecl; external 'c' name 'mmap';
+function munmap(addr: Pointer; len: PtrUInt): Int32; cdecl; external 'c' name 'munmap';
+function mprotect(addr: Pointer; len: PtrUInt; prot: Int32): Int32; cdecl; external 'c' name 'mprotect';
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
@@ -337,6 +357,45 @@ begin
   if Result <> 0 then
     Exit;
   ARemainingNs := platform_posix_timespec_remaining_ns_u64(ADeadline, @LNow);
+end;
+
+function platform_posix_mmap_failed(const AAddress: Pointer): Boolean; inline;
+begin
+  Result := PtrUInt(AAddress) = PLATFORM_POSIX_MAP_FAILED_PTR;
+end;
+
+function platform_posix_mmap(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32;
+  const AFlags: Int32;
+  const AFileDescriptor: Int32;
+  const AOffset: Int64): Pointer; inline;
+begin
+  Result := mmap(AAddress, ALength, AProtection, AFlags, AFileDescriptor, AOffset);
+end;
+
+function platform_posix_munmap(AAddress: Pointer; const ALength: PtrUInt): Int32; inline;
+begin
+  Result := munmap(AAddress, ALength);
+end;
+
+function platform_posix_mprotect(
+  AAddress: Pointer;
+  const ALength: PtrUInt;
+  const AProtection: Int32): Int32; inline;
+begin
+  Result := mprotect(AAddress, ALength, AProtection);
+end;
+
+function platform_posix_getpid: pid_t; inline;
+begin
+  Result := getpid;
+end;
+
+function platform_posix_getppid: pid_t; inline;
+begin
+  Result := getppid;
 end;
 
 function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;

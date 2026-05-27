@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform FFI Import Workflow；上一轮包括
+当前最新本轮为 Platform Host ABI Completeness Wave 1；上一轮包括
+Platform FFI Import Workflow；
 Platform FFI Source Evidence Index；
 Platform Host Gap Route Guard；
 Platform Host FFI Gap Matrix Guard；
@@ -50,6 +51,68 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1
+
+### Goal
+
+按刚合入的 `docs/platform-ffi-import-workflow.md` 开始第一批 host ABI completeness 工作。目标不是扩
+`platform.time` / `platform.sync` / `platform.thread` public contract，而是从 FPC source evidence
+补齐低风险、后续会被多个 platform 子模块消费的 host-owned raw ABI inventory。
+
+本轮候选范围先限定为 source-surface 可审查的一小波：
+
+- POSIX/Linux/Android/Darwin/FreeBSD/generic Unix：process id、`timeval`、file/stat/open/fcntl、
+  mmap、dynamic loader family。
+- Windows：process/thread/file/memory/dynamic library 对应的 kernel32 基础 ABI token 与 entrypoint
+  inventory。
+
+如果取证显示范围过大，本轮只落第一个可审查子集，并把剩余内容明确写入下一波。
+
+### Architecture Decision
+
+- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
+- constants、record layouts、opaque carriers、scalar aliases、syscall/open/mmap/error tokens 放入
+  `nextpas.core.platform.<host>.base`。
+- external declarations 与 thin host helpers 放入 `nextpas.core.platform.<host>.ffi`。
+- raw OS API 不做 runtime unit test；本轮用 source evidence、source-surface guard、compile-only gate
+  和 review 证明。
+- 不新增 `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`，也不扩这些统一 public
+  contract。
+
+### Status
+
+Rebased over latest `main@52c2e2d` and pre-merge verified on isolated worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1`
+on `codex/platform-host-abi-wave1`; merge, post-merge verification, and cleanup are next.
+
+### Planned Steps
+
+- [x] 从最新 `main@8a12bf9` 创建 `codex/platform-host-abi-wave1` isolated worktree
+- [x] 读取 workflow、host gap matrix、source evidence index、现有 host base/ffi owner
+- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 1 最小可审查 ABI 子集：
+  process id、`timeval`、mmap、dynamic loader；`stat/open/fcntl` 延后
+- [x] RED：新增 source-surface gate，要求 Wave 1 evidence、host owner tokens 和 verify route
+- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
+- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [x] focused verification、full verification
+- [x] feature commit and rebase over latest `main@52c2e2d`
+- [x] pre-merge focused/full verification after rebase
+- [ ] merge、post-merge verification、cleanup
+
+### Recovery Entry
+
+If this session is interrupted, resume here:
+
+```bash
+cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1
+git status --short --branch
+sed -n '1,180p' task_plan.md
+sed -n '1,180p' progress.md
+sed -n '1,130p' findings.md
+```
+
+Then continue from merge / post-merge verification / cleanup. Do not add runtime tests for raw OS APIs.
 
 ## Addendum: 2026-05-27 Platform FFI Import Workflow
 

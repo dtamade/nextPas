@@ -11,6 +11,25 @@ type
   end;
   PTimeSpec = ^timespec;
 
+  {$IFDEF NEXTPAS_MACOS}
+  timeval = record
+    tv_sec: Int64;
+    tv_usec: Int32;
+  end;
+  {$ELSE}
+  timeval = record
+    tv_sec: Int64;
+    tv_usec: Int64;
+  end;
+  {$ENDIF}
+  PTimeVal = ^timeval;
+
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  pid_t = Int32;
+  {$ELSE}
+  pid_t = Int32;
+  {$ENDIF}
+
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   pthread_t = Pointer;
   {$ELSEIF defined(NEXTPAS_ANDROID)}
@@ -158,6 +177,16 @@ type
       1: (FOpaque: array[0..7] of Byte);
   end;
   {$ENDIF}
+
+const
+  PLATFORM_POSIX_PROT_NONE = Int32(0);
+  PLATFORM_POSIX_PROT_READ = Int32(1);
+  PLATFORM_POSIX_PROT_WRITE = Int32(2);
+  PLATFORM_POSIX_PROT_EXEC = Int32(4);
+  PLATFORM_POSIX_MAP_SHARED = Int32(1);
+  PLATFORM_POSIX_MAP_PRIVATE = Int32(2);
+  PLATFORM_POSIX_MAP_FAILED = PtrInt(-1);
+  PLATFORM_POSIX_MAP_FAILED_PTR = PtrUInt(High(PtrUInt));
 
 implementation
 
