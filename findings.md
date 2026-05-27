@@ -451,6 +451,14 @@
 - installed-source bare function-result wrong-argument-count 的 official proof 只能放在 semantic harness
   中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作
   workspace project-source，不能证明 installed-source provenance。
+- Batch 167 把 known non-callable invalid-call-shape 推进到 imported `project-source` direct field：
+  imported `TWorker.Value: Integer` 被 root source 调成 `Worker.Value(1)` 时，会失败为
+  `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 167 focused probe 直接 GREEN，证明 imported project-source class layout truth 已能喂给
+  direct member-call 的 known non-method guard；本批不修改 analyzer。
+- Batch 167 新增 `tests/fixtures/imported_known_field_member_call` 与
+  `imported-known-field-member-call-check`，final envelope 新增
+  `importedKnownFieldMemberCallCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

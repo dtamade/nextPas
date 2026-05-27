@@ -414,6 +414,9 @@ candidate collection
 - `sema.invalid-call-shape`
   - 先用于 direct class member-call 中 receiver 类型已知、class layout truth 已知，且同名 field/property
     已知存在但不是 callable 的场景；例如 `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`
+  - 同一条 direct field 边界也适用于 receiver type 与 field truth 来自 imported `project-source`
+    unit 的场景；例如 imported `TWorker.Value: Integer` 被 root source 写成 `Worker.Value(1)`
+    时同样失败为 `sema.invalid-call-shape`
   - 同一条边界同样适用于已知 class property 被当成 call 使用的场景；例如
     `Worker.Value(1)` 在 `Value` 是 property 时也会失败为 `sema.invalid-call-shape`
   - 当 member lookup 沿 `ParentTypeId` 命中 inherited field/property，且该 member 不是 callable 时，
