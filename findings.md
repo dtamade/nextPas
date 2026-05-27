@@ -1948,3 +1948,17 @@
 - `demo_stopwatch` 和旧 L1 `bench_platform_time` 不应作为 platform closeout 合入；platform L0 示例/
   基准继续使用 `core/examples/nextpas.core.platform.time/platform_time_clock` 与
   `core/benchmarks/nextpas.core.platform.time/bench_platform_time_clock`。
+
+## 2026-05-27 Follow-up Findings 22
+
+- platform 下一轮不能继续凭“感觉”扩 `time` 或 `sync`，必须先以 `task_plan.md` 的 Phase 19 为入口：
+  建立 ABI owner audit 与 gap matrix，再选择实现切片。
+- 当前架构主线已经明确：host `base/ffi` 承载系统 ABI truth，`platform.time/sync/thread` 承载
+  nextPas 的跨宿主稳定 contract；feature-specific `platform.thread.ffi` 仍不是默认方案。
+- 下一轮优先 `platform.thread`，因为它横跨 POSIX thread、TLS、sleep/yield、native thread id、CPU
+  count、Windows thread state 和 Windows TLS key，最能暴露 raw ABI type / scalar / calling convention
+  是否还泄漏到 consumer。
+- 证据口径必须继续诚实：Linux runtime、Win64 compile-only、simulated Darwin/Android/FreeBSD/Unix
+  compile-only 是三类不同证据；不能把 compile-only 或 simulated host selection 包装成真实 runtime 支持。
+- runtime 单元测试仍只覆盖 `platform.thread` / `platform.sync` / `platform.time` public contract；raw
+  OS API 的正确性依赖 FPC 源码取证、host-owned declarations、source-surface guard 与 compile gate。

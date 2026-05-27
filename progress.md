@@ -6194,3 +6194,23 @@ Hello from nextPas!
 - Review:
   - 这次 closeout 的正确策略是 cherry-pick 思路下的小颗粒移植，而不是 merge 分支。
   - platform 主线继续以当前 host-owner 模型为准；旧 integration worktree 只作为历史参考，收口后应删除。
+
+### Phase 19: Platform ABI Owner Audit And Gap Matrix
+
+- **Status:** planned; plan committed before implementation
+- Started: 2026-05-27 12:32:47 CST
+- Objective:
+  - 按用户要求继续以 `/plan` 为准绳，先把 platform 下一轮写成明确 plan，再开 worktree 实施。
+  - 从最新 `main` 审计 platform ABI owner boundary，并优先从 `platform.thread` 做下一轮 source-surface
+    / host-owner 收紧。
+- Current decision:
+  - 不继续展开旧 `platform-time-integration`。
+  - 不新增 feature-specific `platform.thread.ffi`。
+  - 不把 L1 `ThreadPool` / `Channel` / `Future` 混进 platform。
+  - runtime tests 只测 `platform.thread` public contract；raw OS ABI 走 FPC 源码取证和 source-surface /
+    compile gate。
+- Planned next action:
+  - 提交这批 plan 文件。
+  - 从最新 `main` 开 `codex/platform-thread-owner-audit` worktree。
+  - 跑 focused baseline 后，扩 `test_platform_thread_host_ffi_surface` 或
+    `test_platform_ffi_owner_boundary` 成 RED，再实施最小 owner fix。

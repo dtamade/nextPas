@@ -8367,3 +8367,78 @@ source-surface gate 和 full verification 吸收。
 - 不合入旧 `demo_stopwatch` 到 platform。
 - 不恢复旧 `core/scripts/project.mk` 构建形态。
 - 不回退当前 `platform.time`、`platform.sync`、`platform.thread` host-owner FFI 分层。
+
+## Addendum: 2026-05-27 Platform ABI Owner Audit And Gap Matrix
+
+### Goal
+
+从最新 `main` 重新进入 platform 下一轮，不继续背旧 `platform-time-integration` 分支：
+
+- 以 `task_plan.md` 为准绳，先补计划再实施。
+- 全量审计 `platform.time` / `platform.sync` / `platform.thread` 是否还残留 raw OS ABI token、
+  raw scalar、calling convention、errno 读取、timeout 换算、`SizeOf(raw type)` 或 inline
+  `external` 声明。
+- 把确认存在的宿主 truth 下沉到 `platform.<host>.base` / `platform.<host>.ffi`，把纯数学 helper
+  放到 `posix.math` / `windows.math` 这类普通 helper owner。
+- 建立真实的 platform gap matrix，明确 Linux runtime、Win64 compile-only、simulated host compile-only
+  与尚未覆盖的 macOS / Android / FreeBSD / Windows runtime 缺口。
+
+### Current Decision
+
+下一轮优先从 `platform.thread` 做 owner audit。理由：
+
+- `platform.thread` 是 L0 系统线程 API，不是 L1 `ThreadPool` / `Channel` / `Future`。
+- 它同时碰到 POSIX `pthread`、`nanosleep`、TLS、native thread id、CPU count、Windows thread state
+  与 Windows TLS key，最容易把宿主 ABI 细节泄回 consumer。
+- 当前 `platform.time`、`platform.sync` 已有较强 source-surface gate；thread 继续审计能补齐三者一致性。
+
+### Planned Steps
+
+- [ ] 在最新 `main` 开 `codex/platform-thread-owner-audit` isolated worktree
+- [ ] 跑 platform focused baseline：
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [ ] 审计 `core/src/nextpas.core.platform.thread.pas` 与 host `base/ffi` consumer boundary
+- [ ] 先扩 source-surface test 成 RED，冻结发现的 owner gap
+- [ ] 再移动最小实现，让 RED 变 GREEN
+- [ ] 同步 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [ ] 跑 focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
+- [ ] 跑 fresh `bash build/verify_local.sh`
+- [ ] 复盘、提交、合并回 `main`，再清理 worktree / 分支
+
+### Audit Checklist
+
+- [ ] production platform code 不 `uses Linux`、`UnixType`、`PThreads`、`BaseUnix`、`Syscall`、`Windows`
+- [ ] production platform implementation 不散落新的 raw `external` 声明
+- [ ] `platform.thread` 不创建 feature-specific `platform.thread.ffi`
+- [ ] `platform.thread` consumer 不保留 raw Windows `HANDLE` / `DWORD` / `stdcall` thunk
+- [ ] `platform.thread` consumer 不保留 raw POSIX `pthread_t` / `pthread_key_t` / `nanosleep` ABI 细节
+- [ ] host size / align / capability token 只由 host `.base` 暴露
+- [ ] host ABI wrapper、errno binding、native thread id、TLS key glue 只由 host `.ffi` / shared `posix.ffi`
+  暴露
+- [ ] runtime tests 只覆盖 `platform.thread` public contract，不直接测试 raw OS API
+
+### Verification Plan
+
+- Focused RED/GREEN gate 必须记录初始失败点和修复后通过命令。
+- Linux runtime 证据以 `test_platform_thread`、example、benchmark 为主。
+- Win64 仍为 compile-only；不能包装成 Windows runtime truth。
+- Darwin / Android / FreeBSD / generic Unix 仍以 simulated host compile-only 和 source-surface gate 为主；
+  不能包装成真实 runtime truth。
+- 收口前必须 fresh 跑：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+
+### Non-goals
+
+- 不改 L1 `nextpas.core.thread`。
+- 不加入 `ThreadPool`、`Channel`、`Future`、scheduler、task 等 L1 抽象。
+- 不对 raw `pthread_*`、`nanosleep`、Windows thread API 做 runtime 单测。
+- 不宣称新增 macOS / Android / FreeBSD / Windows runtime 证据。
+- 不为 `platform.thread` 新建 feature-specific `*.ffi.pas`，除非先证明它不属于任何 host owner。
