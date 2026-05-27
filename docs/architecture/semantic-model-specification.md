@@ -97,8 +97,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
   同样发 `sema.no-matching-overload`；imported `project-source` direct member-call 与 inherited
   member-call overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定
-  no-match evidence；imported `project-source` inherited member-call overload set 还接受同类 evidence
-  作为 ambiguity evidence。
+  no-match evidence；imported `project-source` direct member-call 与 inherited member-call overload
+  set 还接受同类 evidence 作为 ambiguity evidence。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   single-target arity miss、bare callable ambiguity、
@@ -137,7 +137,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
   `sema.no-matching-overload`，例如当前 class 的 `Pick(True);` 同时面对
   `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
-  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` bare callable 或
+  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` bare callable、direct member-call 或
   inherited member-call overload set 同样可用 root-owned 零参内建标量/字符串 function result
   作为 stable no-match evidence，例如 `Pick(Flag);` 或 `Worker.Pick(Flag);` 面对
   `Pick(Integer)` / `Pick(AnsiString)` 而 `Flag` 返回 `Boolean`；若同 arity 有多个候选，则用当前可推断的
@@ -145,7 +145,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
   透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
   inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`，或 imported
-  `project-source` bare `Pick(Count);` / inherited `Worker.Pick(Count);` 同时面对
+  `project-source` bare `Pick(Count);` / direct or inherited `Worker.Pick(Count);` 同时面对
   `Pick(Integer)` 与 `Pick(LongInt)` 且 root-owned `Count` 返回 `Integer`。随后再用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
@@ -362,6 +362,9 @@ candidate collection
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
+    target method 的场景
+  - 也用于 imported `project-source` direct member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target method 的场景
   - 也用于 imported `project-source` bare procedure/function overload set 中，root-owned 零参

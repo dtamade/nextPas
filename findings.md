@@ -367,6 +367,16 @@
 - Batch 156 新增 `tests/fixtures/imported_member_function_result_no_matching_overload` 与
   `imported-member-function-result-no-matching-overload-check`，final envelope 新增
   `importedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Batch 157 继续同族矩阵连打：把 Batch 115/154 的 ambiguity projection 与 Batch 156
+  刚固定的 direct imported member function-result evidence 组合成 official gate。
+- Batch 157 focused probe 已直接 GREEN：root `Count: Integer` 调 imported `project-source`
+  direct member overload set `TWorker.Pick(Integer)` / `TWorker.Pick(LongInt)` 会失败为
+  `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：direct member-call path 已经把 root-owned function-result evidence
+  传给 imported `project-source` overload-set ambiguity projection。
+- Batch 157 新增 `tests/fixtures/imported_member_function_result_ambiguous_overload` 与
+  `imported-member-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedMemberFunctionResultAmbiguousOverloadCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
