@@ -10,6 +10,21 @@
 
 ## Research Findings
 
+- Batch 186 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
+  `TWorker.Pick(Value: AnsiString)` 与 `function Flag: Boolean;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Pick(Flag); end;` 必须失败为 `sema.no-matching-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 186 focused semantic probe 直接 GREEN，证明 Batch 185 的 same-owner project-source
+  function-result stable evidence 已自然覆盖 imported method body implicit-self overload-set no-match；本批不需要修改 analyzer。
+- Batch 186 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_no_matching_overload` 与
+  `imported-unit-body-implicit-self-function-result-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`。
+- Batch 186 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-function-result-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 185 收口 imported unit method body implicit-self same-unit function-result type-mismatch：root
   `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` 与
   `function Flag: Boolean;` 同属 `project-source` owner unit，`procedure TWorker.Run; begin Pick(Flag); end;`

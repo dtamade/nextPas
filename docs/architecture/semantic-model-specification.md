@@ -412,8 +412,11 @@ candidate collection
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
     imported owner class 的同名同 arity多候选，但 stable argument signature 与全部 target param
-    signature 都不兼容的场景；例如 `procedure TWorker.Run; begin Pick(True); end;`
-    同时面对 `Pick(Integer)` 与 `Pick(AnsiString)`，该路径不会注册失败 `member-call` binding
+    signature 都不兼容的场景；stable evidence 包含 literal/纯表达式，以及同一
+    project-source owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Pick(True); end;` 或 `Pick(Flag);` 面对
+    `Pick(Value: Integer)` / `Pick(Value: AnsiString)`，该路径不会注册失败
+    `member-call` binding
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
     imported owner class parent chain 找到 inherited 同名同 arity多候选，但 stable argument
     signature 与全部 target param signature 都不兼容的场景；例如

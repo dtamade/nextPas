@@ -957,6 +957,8 @@ unit method body bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
 unit method body bare implicit-self same-unit function-result type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
 unit method body bare implicit-self no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
 unit method body bare implicit-self ambiguous overload 断言
