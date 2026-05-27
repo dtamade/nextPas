@@ -46,7 +46,7 @@
 - Rich container algorithm methods are not a design flaw by themselves. Complete container capabilities naturally create a larger public surface than minimal standard-library containers.
 - Do not move algorithms out of container APIs solely to make interfaces look smaller. Free-function algorithms would still need the same overload families and would make common use less direct.
 - Keep the three callback overload families for functions, methods, and anonymous references when they improve call-site ergonomics. Replacing them with option records would make ordinary Pascal usage heavier.
-- Future interface tuning should focus on semantic ownership, naming consistency, inheritance clarity, and removing true duplicates, not on flattening useful method-style APIs. Increasing the number of interfaces or methods is acceptable when it makes capability boundaries and reuse relationships clearer.
+- Future interface tuning should focus on semantic ownership, naming consistency, inheritance clarity, and removing true duplicates, not on flattening useful method-style APIs. Increasing the number of interfaces or methods is acceptable when it makes capability boundaries and reuse relationships clearer; removing APIs is acceptable when the design is redundant, wrong, semantically confusing, or not worth its maintenance burden.
 - Implementation tuning should reuse shared algorithm cores where possible so rich interfaces do not imply repeated algorithm bodies in every container.
 
 ## 2026-05-27: sequence mutation method semantics
