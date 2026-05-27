@@ -35,8 +35,8 @@ type
     FCompareData: Pointer;
     FFinalize: TFinalizeMethod;
   private
-    procedure InitTree; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  Cmp(const L, R: T): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    procedure InitTree; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  Cmp(const L, R: T): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
     function  NewNode(const AValue: T): PNode;
     procedure FreeNode(ANode: PNode);
@@ -48,16 +48,16 @@ type
     procedure DeleteFixup(X: PNode; XParent: PNode);
     procedure Transplant(U, V: PNode);
 
-    function  MinNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  MaxNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  SuccessorNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  PredecessorNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function  MinNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  MaxNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  SuccessorNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  PredecessorNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
   public
     constructor Create(aCompare: TCompareMethod; aCompareData: Pointer; aFinalize: TFinalizeMethod);
     destructor Destroy; override;
 
     procedure Clear;
-    function  GetCount: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function  GetCount: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
     // Basic ops
     function  InsertUnique(const AValue: T): Boolean;
@@ -73,12 +73,12 @@ type
     function  Max(out OutValue: T): Boolean;
 
     // Iteration helpers
-    function  FirstNode: PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  LastNode:  PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  Successor(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function  Predecessor(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function  FirstNode: PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  LastNode:  PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  Successor(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function  Predecessor(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
-    function  Sentinel: PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function  Sentinel: PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
   end;
 
 implementation

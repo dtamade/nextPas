@@ -66,14 +66,14 @@ type
     Started: Boolean;
     Data:    Pointer;
   public
-    procedure Init(aOwner: TCollection; aGetCurrent: TPtrIterGetCurrentMethod; aMoveNext: TPtrIterMoveNextMethod; aMovePrev: TPtrIterMovePrevMethod; aData: Pointer); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Init(aOwner: TCollection; aGetCurrent: TPtrIterGetCurrentMethod; aMoveNext: TPtrIterMoveNextMethod; aData: Pointer); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Init(aOwner: TCollection; aGetCurrent: TPtrIterGetCurrentMethod; aMoveNext: TPtrIterMoveNextMethod; aMovePrev: TPtrIterMovePrevMethod; aData: Pointer); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Init(aOwner: TCollection; aGetCurrent: TPtrIterGetCurrentMethod; aMoveNext: TPtrIterMoveNextMethod; aData: Pointer); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    function  GetStarted: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetCurrent: Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  MoveNext: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  MovePrev: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Reset; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetStarted: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetCurrent: Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  MoveNext: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  MovePrev: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Reset; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: Pointer read GetCurrent;
   end;
@@ -100,11 +100,11 @@ type
 
     function  PtrIter: TPtrIter; virtual; abstract;
 
-    function  GetAllocator: IAllocator; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetAllocator: IAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetCount: SizeUInt; virtual; abstract;
-    function  IsEmpty: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetData: Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure SetData(aData: Pointer); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetData: Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure SetData(aData: Pointer); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure Clear; virtual; abstract;
 
     procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); virtual; abstract;
@@ -149,13 +149,13 @@ type
   public
     PtrIter: TPtrIter;
   public
-    procedure Init(const aIter: TPtrIter); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Init(const aIter: TPtrIter); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    function  GetStarted: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  MoveNext: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  MovePrev: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Reset; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetStarted: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  MoveNext: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  MovePrev: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Reset; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property  Current: T read GetCurrent;
   end;
@@ -168,14 +168,14 @@ type
   { 泛型断言回调函数 }
   generic TPredicateFunc<T>    = function (const aElement: T; aData: Pointer): Boolean;
   generic TPredicateMethod<T>  = function (const aElement: T; aData: Pointer): Boolean of Object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TPredicateRefFunc<T> = reference to function (const aElement: T): Boolean;
   {$ENDIF}
 
   { 泛型映射回调函数 }
   generic TMapperFunc<T, U>    = function (const aElement: T; aData: Pointer): U;
   generic TMapperMethod<T, U>  = function (const aElement: T; aData: Pointer): U of Object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TMapperRefFunc<T, U> = reference to function (const aElement: T): U;
   {$ENDIF}
 
@@ -183,7 +183,7 @@ type
 
   generic TCompareFunc<T>    = function (const aLeft, aRight: T; aData: Pointer): SizeInt;
   generic TCompareMethod<T>  = function (const aLeft, aRight: T; aData: Pointer): SizeInt of Object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TCompareRefFunc<T> = reference to function (const aLeft, aRight: T): SizeInt;
   {$ENDIF}
 
@@ -191,7 +191,7 @@ type
 
   generic TEqualsFunc<T>    = function (const aLeft, aRight: T; aData: Pointer): Boolean;
   generic TEqualsMethod<T>  = function (const aLeft, aRight: T; aData: Pointer): Boolean of Object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TEqualsRefFunc<T> = reference to function (const aLeft, aRight: T): Boolean;
   {$ENDIF}
 
@@ -212,19 +212,19 @@ type
 
     TEqualsFunc    = specialize TEqualsFunc<T>;
     TEqualsMethod  = specialize TEqualsMethod<T>;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     TEqualsRefFunc = specialize TEqualsRefFunc<T>;
     {$ENDIF}
 
     TPredicateFunc    = specialize TPredicateFunc<T>;
     TPredicateMethod  = specialize TPredicateMethod<T>;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     TPredicateRefFunc = specialize TPredicateRefFunc<T>;
     {$ENDIF}
 
     TCompareFunc      = specialize TCompareFunc<T>;
     TCompareMethod    = specialize TCompareMethod<T>;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     TCompareRefFunc   = specialize TCompareRefFunc<T>;
     {$ENDIF}
 
@@ -238,102 +238,102 @@ type
   { Equals 内部相等回调 }
   protected
     FInternalEquals: TInternalEqualsMethod;
-    function DoEqualsBool(const aLeft, aRight: Boolean): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsChar(const aLeft, aRight: Char): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsWChar(const aLeft, aRight: WideChar): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsI8(const aLeft, aRight: Int8): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsI16(const aLeft, aRight: Int16): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsI32(const aLeft, aRight: Int32): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsI64(const aLeft, aRight: Int64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsU8(const aLeft, aRight: UInt8): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsU16(const aLeft, aRight: UInt16): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsU32(const aLeft, aRight: UInt32): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsU64(const aLeft, aRight: UInt64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsSingle(const aLeft, aRight: Single): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsDouble(const aLeft, aRight: Double): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsExtended(const aLeft, aRight: Extended): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsCurrency(const aLeft, aRight: Currency): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsComp(const aLeft, aRight: Comp): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsShortString(const aLeft, aRight: ShortString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsAnsiString(const aLeft, aRight: AnsiString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsWideString(const aLeft, aRight: WideString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsUnicodeString(const aLeft: UnicodeString; const aRight: UnicodeString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsPointer(const aLeft, aRight: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsVariant(const aLeft, aRight: Variant): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsStr(const aLeft, aRight: String): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsMethod(const aLeft, aRight: TMethod): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsBin(const aLeft, aRight: T): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsDynArray(const aLeft, aRight: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsBool(const aLeft, aRight: Boolean): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsChar(const aLeft, aRight: Char): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsWChar(const aLeft, aRight: WideChar): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsI8(const aLeft, aRight: Int8): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsI16(const aLeft, aRight: Int16): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsI32(const aLeft, aRight: Int32): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsI64(const aLeft, aRight: Int64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsU8(const aLeft, aRight: UInt8): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsU16(const aLeft, aRight: UInt16): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsU32(const aLeft, aRight: UInt32): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsU64(const aLeft, aRight: UInt64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsSingle(const aLeft, aRight: Single): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsDouble(const aLeft, aRight: Double): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsExtended(const aLeft, aRight: Extended): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsCurrency(const aLeft, aRight: Currency): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsComp(const aLeft, aRight: Comp): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsShortString(const aLeft, aRight: ShortString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsAnsiString(const aLeft, aRight: AnsiString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsWideString(const aLeft, aRight: WideString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsUnicodeString(const aLeft: UnicodeString; const aRight: UnicodeString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsPointer(const aLeft, aRight: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsVariant(const aLeft, aRight: Variant): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsStr(const aLeft, aRight: String): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsMethod(const aLeft, aRight: TMethod): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsBin(const aLeft, aRight: T): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsDynArray(const aLeft, aRight: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     { compare 内部比较回调 }
   protected
     FInternalComparer: TInternalCompareMethod;
-    function DoCompareBool(const aLeft, aRight: Boolean): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareChar(const aLeft, aRight: Char): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareWChar(const aLeft, aRight: WideChar): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareI8(const aLeft, aRight: Int8): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareI16(const aLeft, aRight: Int16): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareI32(const aLeft, aRight: Int32): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareI64(const aLeft, aRight: Int64): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareU8(const aLeft, aRight: UInt8): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareU16(const aLeft, aRight: UInt16): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareU32(const aLeft, aRight: UInt32): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareU64(const aLeft, aRight: UInt64): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareSingle(const aLeft, aRight: Single): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareDouble(const aLeft, aRight: Double): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareExtended(const aLeft, aRight: Extended): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareCurrency(const aLeft, aRight: Currency): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareComp(const aLeft, aRight: Comp): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareShortString(const aLeft, aRight: ShortString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareAnsiString(const aLeft, aRight: AnsiString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareWideString(const aLeft, aRight: WideString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareUnicodeString(const aLeft, aRight: UnicodeString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoComparePointer(const aLeft, aRight: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareVariant(const aLeft, aRight: Variant): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareStr(const aLeft, aRight: String): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareMethod(const aLeft, aRight: TMethod): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareBin(const aLeft, aRight: T): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareDynArray(const aLeft, aRight: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareBool(const aLeft, aRight: Boolean): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareChar(const aLeft, aRight: Char): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareWChar(const aLeft, aRight: WideChar): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareI8(const aLeft, aRight: Int8): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareI16(const aLeft, aRight: Int16): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareI32(const aLeft, aRight: Int32): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareI64(const aLeft, aRight: Int64): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareU8(const aLeft, aRight: UInt8): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareU16(const aLeft, aRight: UInt16): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareU32(const aLeft, aRight: UInt32): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareU64(const aLeft, aRight: UInt64): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareSingle(const aLeft, aRight: Single): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareDouble(const aLeft, aRight: Double): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareExtended(const aLeft, aRight: Extended): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareCurrency(const aLeft, aRight: Currency): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareComp(const aLeft, aRight: Comp): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareShortString(const aLeft, aRight: ShortString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareAnsiString(const aLeft, aRight: AnsiString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareWideString(const aLeft, aRight: WideString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareUnicodeString(const aLeft, aRight: UnicodeString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoComparePointer(const aLeft, aRight: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareVariant(const aLeft, aRight: Variant): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareStr(const aLeft, aRight: String): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareMethod(const aLeft, aRight: TMethod): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareBin(const aLeft, aRight: T): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareDynArray(const aLeft, aRight: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   { Equals 代理 }
   type
     TEqualsProxyMethod = function (aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean of object;
   protected
-    function DoEqualsDefaultProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsFuncProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoEqualsMethodProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function DoEqualsRefFuncProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsDefaultProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsFuncProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoEqualsMethodProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function DoEqualsRefFuncProxy(aEquals: Pointer; const aLeft, aRight: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
   { Compare 代理 }
   type
     TCompareProxyMethod = function (aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt of object;
   protected
-    function DoCompareDefaultProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareFuncProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoCompareMethodProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function DoCompareRefFuncProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareDefaultProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareFuncProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoCompareMethodProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function DoCompareRefFuncProxy(aCompare: Pointer; const aLeft, aRight: T; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
   { Predicate 代理 }
   type
     TPredicateProxyMethod = function (aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean of object;
   protected
-    function DoPredicateFuncProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoPredicateMethodProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function DoPredicateRefFuncProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoPredicateFuncProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoPredicateMethodProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function DoPredicateRefFuncProxy(aPredicate: Pointer; const aElement: T; aData: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
   { TRandomGeneratorProxyMethod }
   type
     TRandomGeneratorProxyMethod = function (aRandomGenerator: Pointer; aRange:Int64; aData: Pointer): Int64 of object;
   protected
-    function DoRandomGeneratorDefaultProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoRandomGeneratorFuncProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function DoRandomGeneratorMethodProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function DoRandomGeneratorRefFuncProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoRandomGeneratorDefaultProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoRandomGeneratorFuncProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoRandomGeneratorMethodProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function DoRandomGeneratorRefFuncProxy(aRandomGenerator: Pointer; aRange: Int64; aData: Pointer): Int64; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
   protected
     function  DoForEach(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): Boolean; virtual;
@@ -356,13 +356,13 @@ type
 
     { 迭代器相关 }
 
-    function GetEnumerator: specialize TIter<T>; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function Iter: specialize TIter<T>; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetEnumerator: specialize TIter<T>; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Iter: specialize TIter<T>; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    function GetElementSize: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetIsManagedType: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetElementTypeInfo: PTypeInfo; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetElementManager: specialize IElementManager<T>; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetElementSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetIsManagedType: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetElementTypeInfo: PTypeInfo; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetElementManager: specialize IElementManager<T>; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     function  IsCompatible(aDst: TCollection): Boolean; override;
     procedure LoadFrom(const aSrc: array of T); overload;
@@ -372,27 +372,27 @@ type
 
     function ForEach(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
     function ForEach(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     function Contains(const aElement: T): Boolean; overload;
     function Contains(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
     function Contains(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     function CountOf(const aElement: T): SizeUInt; overload;
     function CountOf(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountOf(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
@@ -403,13 +403,13 @@ type
     procedure Replace(const aElement, aNewElement: T);
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer);
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer);
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>);
     {$ENDIF}
 
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>);
     {$ENDIF}
 
@@ -441,7 +441,7 @@ type
   { 增长策略回调 }
   TGrowFunc = function(aCurrentSize, aRequiredSize: SizeUInt; aData: Pointer): SizeUInt;
   TGrowMethod = function(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt of object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   TGrowRefFunc = reference to function(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;
   {$ENDIF}
   TGrowProxyMethod = function(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt of object;
@@ -454,18 +454,18 @@ type
     FGrowMethod: TGrowMethod;
     FGrowRefFunc: TGrowRefFunc;
     FGrowProxy: TGrowProxyMethod;
-    function GetData: Pointer; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function GetData: Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   protected
-    function DoGetGrowSizeFunc(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function DoGetGrowSizeMethod(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function DoGetGrowSizeRefFunc(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function DoGetGrowSizeFunc(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function DoGetGrowSizeMethod(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function DoGetGrowSizeRefFunc(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
     function DoGetGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; override;
   public
     constructor Create(aGrowFunc: TGrowFunc; aData: Pointer);
     constructor Create(aGrowMethod: TGrowMethod; aData: Pointer);
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     constructor Create(aGrowRefFunc: TGrowRefFunc);
     {$ENDIF}
   strict protected
@@ -487,14 +487,14 @@ type
     class var FGlobal: TDoublingGrowStrategy;
     class destructor Destroy;
   public
-    class function GetGlobal: TDoublingGrowStrategy; static; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    class function GetGlobal: TDoublingGrowStrategy; static; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   end;
 
   { TFixedGrowStrategy 固定线性增长 }
   TFixedGrowStrategy = class(TCalcGrowStrategy)
   private
     FFixedSize: SizeUInt;
-    function GetFixedSize: SizeUInt; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function GetFixedSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   protected
     function DoCalc(aCurrentSize: SizeUInt): SizeUInt; override;
   public
@@ -506,7 +506,7 @@ type
   TFactorGrowStrategy = class(TCalcGrowStrategy)
   private
     FFactor: Single;
-    function GetFactor: Single; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function GetFactor: Single; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   protected
     function DoCalc(aCurrentSize: SizeUInt): SizeUInt; override;
   public
@@ -522,7 +522,7 @@ type
   protected
     function DoGetGrowSize({%H-}aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; override;
   public
-    class function GetGlobal: TPowerOfTwoGrowStrategy; static; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    class function GetGlobal: TPowerOfTwoGrowStrategy; static; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   end;
 
   { TGoldenRatioGrowStrategy 黄金比例增长 }
@@ -533,7 +533,7 @@ type
     class var FGlobal: TGoldenRatioGrowStrategy;
     class destructor Destroy;
   public
-    class function GetGlobal: TGoldenRatioGrowStrategy; static; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    class function GetGlobal: TGoldenRatioGrowStrategy; static; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   end;
 
   { TAlignedWrapperStrategy 对齐包装增长策略 }
@@ -561,7 +561,7 @@ type
   protected
     function DoGetGrowSize({%H-}aCurrentSize, aRequiredSize: SizeUInt): SizeUInt; override;
   public
-    class function GetGlobal: TExactGrowStrategy; static; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    class function GetGlobal: TExactGrowStrategy; static; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   end;
 
 function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
@@ -572,65 +572,65 @@ function GoldenRatioGrow: IGrowthStrategy;
 
 { 内置相等函数 }
 
-function equals_bool(const aLeft, aRight: Boolean): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_char(const aLeft, aRight: Char): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_wchar(const aLeft, aRight: WideChar): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_i8(const aLeft, aRight: Int8): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_i16(const aLeft, aRight: Int16): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_i32(const aLeft, aRight: Int32): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_i64(const aLeft, aRight: Int64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_u8(const aLeft, aRight: UInt8): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_u16(const aLeft, aRight: UInt16): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_u32(const aLeft, aRight: UInt32): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_u64(const aLeft, aRight: UInt64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_single(const aLeft, aRight: Single): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_double(const aLeft, aRight: Double): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_extended(const aLeft, aRight: Extended): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_currency(const aLeft, aRight: Currency): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_comp(const aLeft, aRight: Comp): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_shortstring(const aLeft, aRight: ShortString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_ansistring(const aLeft, aRight: AnsiString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_widestring(const aLeft, aRight: WideString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_unicodestring(const aLeft, aRight: UnicodeString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_pointer(const aLeft, aRight: Pointer): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_bin(const aLeft, aRight: Pointer; aSize: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_variant(const aLeft, aRight: Variant): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_string(const aLeft, aRight: string): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_method(const aLeft, aRight: TMethod): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function equals_dynarray(const aLeft, aRight: Pointer; aElementSize: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function equals_bool(const aLeft, aRight: Boolean): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_char(const aLeft, aRight: Char): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_wchar(const aLeft, aRight: WideChar): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_i8(const aLeft, aRight: Int8): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_i16(const aLeft, aRight: Int16): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_i32(const aLeft, aRight: Int32): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_i64(const aLeft, aRight: Int64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_u8(const aLeft, aRight: UInt8): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_u16(const aLeft, aRight: UInt16): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_u32(const aLeft, aRight: UInt32): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_u64(const aLeft, aRight: UInt64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_single(const aLeft, aRight: Single): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_double(const aLeft, aRight: Double): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_extended(const aLeft, aRight: Extended): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_currency(const aLeft, aRight: Currency): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_comp(const aLeft, aRight: Comp): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_shortstring(const aLeft, aRight: ShortString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_ansistring(const aLeft, aRight: AnsiString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_widestring(const aLeft, aRight: WideString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_unicodestring(const aLeft, aRight: UnicodeString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_pointer(const aLeft, aRight: Pointer): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_bin(const aLeft, aRight: Pointer; aSize: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_variant(const aLeft, aRight: Variant): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_string(const aLeft, aRight: string): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_method(const aLeft, aRight: TMethod): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function equals_dynarray(const aLeft, aRight: Pointer; aElementSize: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 { 内置比较函数 }
-function compare_bool(const aLeft, aRight: Boolean): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_char(const aLeft, aRight: Char): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_wchar(const aLeft, aRight: WideChar): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_i8(const aLeft, aRight: Int8): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_i16(const aLeft, aRight: Int16): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_i32(const aLeft, aRight: Int32): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_i64(const aLeft, aRight: Int64): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_u8(const aLeft, aRight: UInt8): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_u16(const aLeft, aRight: UInt16): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_u32(const aLeft, aRight: UInt32): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_u64(const aLeft, aRight: UInt64): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_single(const aLeft, aRight: Single): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_double(const aLeft, aRight: Double): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_extended(const aLeft, aRight: Extended): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_currency(const aLeft, aRight: Currency): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_comp(const aLeft, aRight: Comp): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_shortstring(const aLeft, aRight: ShortString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_ansistring(const aLeft, aRight: AnsiString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_widestring(const aLeft, aRight: WideString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_unicodestring(const aLeft, aRight: UnicodeString): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_pointer(const aLeft, aRight: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_bin(const aLeft, aRight: Pointer; aSize: SizeUInt): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_variant(const aLeft, aRight: Variant): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_string(const aLeft, aRight: string): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_method(const aLeft, aRight: TMethod): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-function compare_dynarray(const aLeft, aRight: Pointer; aElementSize: SizeUInt): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function compare_bool(const aLeft, aRight: Boolean): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_char(const aLeft, aRight: Char): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_wchar(const aLeft, aRight: WideChar): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_i8(const aLeft, aRight: Int8): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_i16(const aLeft, aRight: Int16): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_i32(const aLeft, aRight: Int32): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_i64(const aLeft, aRight: Int64): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_u8(const aLeft, aRight: UInt8): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_u16(const aLeft, aRight: UInt16): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_u32(const aLeft, aRight: UInt32): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_u64(const aLeft, aRight: UInt64): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_single(const aLeft, aRight: Single): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_double(const aLeft, aRight: Double): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_extended(const aLeft, aRight: Extended): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_currency(const aLeft, aRight: Currency): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_comp(const aLeft, aRight: Comp): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_shortstring(const aLeft, aRight: ShortString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_ansistring(const aLeft, aRight: AnsiString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_widestring(const aLeft, aRight: WideString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_unicodestring(const aLeft, aRight: UnicodeString): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_pointer(const aLeft, aRight: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_bin(const aLeft, aRight: Pointer; aSize: SizeUInt): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_variant(const aLeft, aRight: Variant): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_string(const aLeft, aRight: string): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_method(const aLeft, aRight: TMethod): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function compare_dynarray(const aLeft, aRight: Pointer; aElementSize: SizeUInt): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 { 检查 }
-procedure CheckIndex(aIndex, aMax: SizeUInt; const aCallerName: string); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-procedure CheckBounds(aIndex, aCount, aMax: SizeUInt; const aCallerName: string); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure CheckIndex(aIndex, aMax: SizeUInt; const aCallerName: string); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+procedure CheckBounds(aIndex, aCount, aMax: SizeUInt; const aCallerName: string); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 implementation
@@ -2171,7 +2171,7 @@ begin
   Result := DoForEach(@DoPredicateMethodProxy, @aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TGenericCollection.ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 begin
   if GetCount = 0 then
@@ -2205,7 +2205,7 @@ begin
   Result := DoContains(@DoEqualsMethodProxy, aElement, @aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TGenericCollection.Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
   if GetCount = 0 then
@@ -2239,7 +2239,7 @@ begin
   Result := DoCountOf(@DoEqualsMethodProxy, aElement, @aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TGenericCollection.CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
   if GetCount = 0 then
@@ -2265,7 +2265,7 @@ begin
   Result := DoCountIf(@DoPredicateMethodProxy, @aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TGenericCollection.CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
   if GetCount = 0 then
@@ -2323,7 +2323,7 @@ begin
   DoReplace(@DoEqualsMethodProxy, aElement, aNewElement, @aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TGenericCollection.Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>);
 begin
   if GetCount = 0 then
@@ -2349,7 +2349,7 @@ begin
   DoReplaceIf(@DoPredicateMethodProxy, aNewElement, @aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TGenericCollection.ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>);
 begin
   if GetCount = 0 then

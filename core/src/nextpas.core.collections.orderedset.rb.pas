@@ -29,17 +29,17 @@ type
 
   private
     // iterator callbacks (adapt FTree nodes)
-    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
     // range iterator callbacks
-    function RangeIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function RangeIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function RangeIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function RangeIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
-    function CompareAdapter(const L, R: T; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    procedure FinalizeAdapter(var V: T); {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function CompareAdapter(const L, R: T; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    procedure FinalizeAdapter(var V: T); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
   protected
     // TCollection / TGenericCollection overrides
   public

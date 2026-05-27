@@ -49,24 +49,24 @@ type
     function ToArray: specialize TGenericArray<T>;
     function ForEach(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
     function ForEach(aForEach: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
     function Contains(const aElement: T): Boolean; overload;
     function Contains(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
     function Contains(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
     function CountOf(const aElement: T): SizeUInt; overload;
     function CountOf(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountOf(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
     function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
     procedure Fill(const aElement: T);
@@ -74,12 +74,12 @@ type
     procedure Replace(const aElement, aNewElement: T);
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload;
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
     procedure Reverse;
@@ -198,7 +198,7 @@ begin
   Result := FImpl.ForEach(aForEach, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TTreeSet.ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 begin
   Result := FImpl.ForEach(aPredicate);
@@ -220,7 +220,7 @@ begin
   Result := FImpl.Contains(aElement, aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TTreeSet.Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
   Result := FImpl.Contains(aElement, aEquals);
@@ -242,7 +242,7 @@ begin
   Result := FImpl.CountOf(aElement, aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TTreeSet.CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
 begin
   Result := FImpl.CountOf(aElement, aEquals);
@@ -259,7 +259,7 @@ begin
   Result := FImpl.CountIf(aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TTreeSet.CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
   Result := FImpl.CountIf(aPredicate);
@@ -291,7 +291,7 @@ begin
   FImpl.Replace(aElement, aNewElement, aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TTreeSet.Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>);
 begin
   FImpl.Replace(aElement, aNewElement, aEquals);
@@ -308,7 +308,7 @@ begin
   FImpl.ReplaceIf(aNewElement, aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TTreeSet.ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>);
 begin
   FImpl.ReplaceIf(aNewElement, aPredicate);

@@ -661,7 +661,7 @@ type
      *}
     function ForEach(aForEach: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ForEach
      *
@@ -677,7 +677,7 @@ type
      *   如果容器为空,则立即返回 True
      *   在回调函数中返回 False 时,遍历会立即停止,并返回 False 表示未完全遍历
      *   在回调函数中返回 True 时,遍历会继续,并返回 True 表示完全遍历
-     *   使用此接口需要在 fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     *   使用此接口需要在 fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
@@ -746,7 +746,7 @@ type
      *}
     function Contains(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Contains
      *
@@ -765,7 +765,7 @@ type
      *    返回 False 表示不相等
      *
      *   当容器为空时,立即返回 False
-     *   使用此接口需要在 fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     *   使用此接口需要在 fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
@@ -793,7 +793,7 @@ type
      *}
     function CountOf(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountOf
      *
@@ -819,7 +819,7 @@ type
      *}
     function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountIf
      *
@@ -866,7 +866,7 @@ type
      *}
     procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer);
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Replace
      *
@@ -890,7 +890,7 @@ type
      *}
     procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ReplaceIf
      *

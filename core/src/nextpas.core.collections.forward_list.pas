@@ -69,11 +69,11 @@ type
 
       { 新增的函数类型 }
       TActionFunc       = procedure(var aElement: T; aData: Pointer);
-      {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+      {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
       TActionRefFunc    = reference to procedure(var aElement: T);
       {$ENDIF}
       TAccumulatorFunc  = function(const aAccumulated, aElement: T; aData: Pointer): T;
-      {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+      {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
       TAccumulatorRefFunc = reference to function(const aAccumulated, aElement: T): T;
       {$ENDIF}
 
@@ -91,8 +91,8 @@ type
   { 迭代器回调 }
 { 参见迭代器最佳实践：docs/Iterator_BestPractices.md }
   protected
-    function  DoIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  DoIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  DoIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  DoIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   { 内部查找辅助方法 }
   private
@@ -110,12 +110,12 @@ type
     { 高级操作的辅助方法 }
     function  DoMergeSort(aHead: PNode; aCompare: TCompareFunc; aData: Pointer): PNode;
     function  DoMergeSortMethod(aHead: PNode; aCompare: TCompareMethod; aData: Pointer): PNode;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  DoMergeSortRefFunc(aHead: PNode; aCompare: TCompareRefFunc): PNode;
     {$ENDIF}
     function  DoMergeLists(aLeft, aRight: PNode; aCompare: TCompareFunc; aData: Pointer): PNode;
     function  DoMergeListsMethod(aLeft, aRight: PNode; aCompare: TCompareMethod; aData: Pointer): PNode;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  DoMergeListsRefFunc(aLeft, aRight: PNode; aCompare: TCompareRefFunc): PNode;
     {$ENDIF}
     function  DoSplitList(aHead: PNode): PNode;
@@ -182,13 +182,13 @@ type
     function  Remove(const aElement: T): SizeUInt; overload;
     function  Remove(const aElement: T; aEquals: TEqualsFunc; aData: Pointer): SizeUInt; overload;
     function  Remove(const aElement: T; aEquals: TEqualsMethod; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  Remove(const aElement: T; aEquals: TEqualsRefFunc): SizeUInt; overload;
     {$ENDIF}
 
     function  RemoveIf(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt; overload;
     function  RemoveIf(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  RemoveIf(aPredicate: TPredicateRefFunc): SizeUInt; overload;
     {$ENDIF}
 
@@ -196,7 +196,7 @@ type
     function  Find(const aElement: T; aEquals: TEqualsFunc; aData: Pointer): TIter; overload;
 
     function  FindIf(aPredicate: TPredicateFunc; aData: Pointer): TIter; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  FindIf(aPredicate: TPredicateRefFunc): TIter; overload;
     {$ENDIF}
 
@@ -204,21 +204,21 @@ type
     procedure Sort; overload;
     procedure Sort(aCompare: TCompareFunc; aData: Pointer); overload;
     procedure Sort(aCompare: TCompareMethod; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Sort(aCompare: TCompareRefFunc); overload;
     {$ENDIF}
 
     procedure Unique; overload;
     procedure Unique(aEquals: TEqualsFunc; aData: Pointer); overload;
     procedure Unique(aEquals: TEqualsMethod; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Unique(aEquals: TEqualsRefFunc); overload;
     {$ENDIF}
 
     procedure Merge(var aOther: TForwardList); overload;
     procedure Merge(var aOther: TForwardList; aCompare: TCompareFunc; aData: Pointer); overload;
     procedure Merge(var aOther: TForwardList; aCompare: TCompareMethod; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Merge(var aOther: TForwardList; aCompare: TCompareRefFunc); overload;
     {$ENDIF}
 
@@ -226,7 +226,7 @@ type
     procedure MergeCopy(const aOther: TForwardList); overload;
     procedure MergeCopy(const aOther: TForwardList; aCompare: TCompareFunc; aData: Pointer); overload;
     procedure MergeCopy(const aOther: TForwardList; aCompare: TCompareMethod; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure MergeCopy(const aOther: TForwardList; aCompare: TCompareRefFunc); overload;
     {$ENDIF}
 
@@ -268,19 +268,19 @@ type
     function  All(aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;  // 所有元素都满足条件
     function  Any(aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload;  // 任意元素满足条件
     function  None(aPredicate: TPredicateFunc; aData: Pointer): Boolean; overload; // 没有元素满足条件
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  All(aPredicate: TPredicateRefFunc): Boolean; overload;
     function  Any(aPredicate: TPredicateRefFunc): Boolean; overload;
     function  None(aPredicate: TPredicateRefFunc): Boolean; overload;
     {$ENDIF}
 
     procedure ForEach(aAction: TActionFunc; aData: Pointer); overload;             // 对每个元素执行操作
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure ForEach(aAction: TActionRefFunc); overload;
     {$ENDIF}
 
     function  Accumulate(aInitial: T; aAccumulator: TAccumulatorFunc; aData: Pointer): T; overload; // 累积操作
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function  Accumulate(aInitial: T; aAccumulator: TAccumulatorRefFunc): T; overload;
     {$ENDIF}
 
@@ -1227,7 +1227,7 @@ var
   LPositionNode: PSingleNode;
   LCurrentNode, LNextNode: PSingleNode;
   LEraseCount: SizeUInt;
-  {$IFDEF FAFAFA_CORE_STRICT_ERASEAFTER}
+  {$IFDEF NEXTPAS_COLLECTIONS_STRICT_ERASEAFTER}
   LProbe, LTarget: PSingleNode;
   LReachable: Boolean;
   {$ENDIF}
@@ -1249,7 +1249,7 @@ begin
     LPositionNode := PSingleNode(aPosition.PtrIter.Data);
 
   // Debug: aLast 可达性检查（仅当 aLast 指向某节点时才检查）
-  {$IFDEF FAFAFA_CORE_STRICT_ERASEAFTER}
+  {$IFDEF NEXTPAS_COLLECTIONS_STRICT_ERASEAFTER}
   if aLast.PtrIter.Data <> nil then
   begin
     LProbe := PSingleNode(LPositionNode^.GetNext);
@@ -1490,7 +1490,7 @@ begin
     FLast := LPrev;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.Remove(const aElement: T; aEquals: TEqualsRefFunc): SizeUInt;
 var
   LPrev, LCurrent: PNode;
@@ -1617,7 +1617,7 @@ begin
     FLast := nil;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.RemoveIf(aPredicate: TPredicateRefFunc): SizeUInt;
 var
   LPrev, LCurrent: PNode;
@@ -1744,7 +1744,7 @@ begin
   Result.PtrIter.Started := True;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.FindIf(aPredicate: TPredicateRefFunc): TIter;
 var
   LCurrent: PNode;
@@ -1878,7 +1878,7 @@ begin
   Result := PNode(LDummy.Next);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.DoMergeListsRefFunc(aLeft, aRight: PNode; aCompare: TCompareRefFunc): PNode;
 var
   LDummy: TNode;
@@ -1954,7 +1954,7 @@ begin
   Result := DoMergeListsMethod(aHead, LRight, aCompare, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.DoMergeSortRefFunc(aHead: PNode; aCompare: TCompareRefFunc): PNode;
 var
   LRight: PNode;
@@ -2023,7 +2023,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TForwardList.Sort(aCompare: TCompareRefFunc);
 var
   L: PSingleNode;
@@ -2138,7 +2138,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TForwardList.Unique(aEquals: TEqualsRefFunc);
 var
   LCurrent, LNext: PNode;
@@ -2436,7 +2436,7 @@ end;
     end;
   end;
 
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   procedure TForwardList.MergeCopy(const aOther: TForwardList; aCompare: TCompareRefFunc);
   var
     LTmp: TForwardList;
@@ -2474,7 +2474,7 @@ end;
   end;
   {$ENDIF}
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TForwardList.Merge(var aOther: TForwardList; aCompare: TCompareRefFunc);
 var
   LDummy: TNode;
@@ -3174,7 +3174,7 @@ begin
   Result := not Any(aPredicate, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.All(aPredicate: TPredicateRefFunc): Boolean;
 var
   LCurrent: PNode;
@@ -3230,7 +3230,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TForwardList.ForEach(aAction: TActionRefFunc);
 var
   LCurrent: PNode;
@@ -3257,7 +3257,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TForwardList.Accumulate(aInitial: T; aAccumulator: TAccumulatorRefFunc): T;
 var
   LCurrent: PNode;

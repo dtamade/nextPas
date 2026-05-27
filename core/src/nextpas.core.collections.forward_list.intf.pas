@@ -189,7 +189,7 @@ type
      *}
     function Remove(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Remove
      *
@@ -201,7 +201,7 @@ type
      *
      * @return 被移除的元素数量
      *
-     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function Remove(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
@@ -236,7 +236,7 @@ type
      *}
     function RemoveIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * RemoveIf
      *
@@ -247,7 +247,7 @@ type
      *
      * @return 被移除的元素数量
      *
-     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function RemoveIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
@@ -299,7 +299,7 @@ type
      *}
     function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize TIter<T>; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * FindIf
      *
@@ -310,7 +310,7 @@ type
      *
      * @return 指向找到元素的迭代器，如果未找到则返回 end 迭代器
      *
-     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     * @remark 使用此接口需要在 fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function FindIf(aPredicate: specialize TPredicateRefFunc<T>): specialize TIter<T>; overload;
     {$ENDIF}

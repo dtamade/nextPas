@@ -34,11 +34,13 @@
 - Implemented the fourth naming cleanup batch across collections source units: copied algorithm names now use PascalCase `If` spellings (`FindIf`, `FindIfNot`, `FindLastIf`, `FindLastIfNot`, `CountIf`, and `ReplaceIf`), including unchecked variants, internal `Do*` hooks, comments, and exception text.
 - Confirmed there are no remaining `FindIF`, `FindLastIF`, `CountIF`, or `ReplaceIF` spellings in collections source or existing collections tests.
 - Removed rejected short facade factories from `nextpas.core.collections`: `Vec`, `Deque`, `Map`, `Set_`, `OrdMap`, and `OrdSet` are no longer exported. The facade test now uses the accepted `MakeXxx` factory family.
+- Implemented the next naming cleanup batch across collections source units: copied `FAFAFA_CORE_*` and `FAFAFA_COLLECTIONS_*` conditional symbols are now `NEXTPAS_CORE_*` or `NEXTPAS_COLLECTIONS_*` as appropriate.
+- Added canonical `NEXTPAS_CORE_INLINE`, `NEXTPAS_CORE_ANONYMOUS_REFERENCES`, and `NEXTPAS_CORE_CONTRACTS` definitions to `nextpas.core.settings.inc` while keeping temporary `FAFAFA_CORE_*` compatibility aliases for non-collections copied modules such as `mem`.
 
 ## Next
 
 - Continue the naming cleanup implementation one batch at a time.
-- Next mechanical batch: record and plan the remaining copied `FAFAFA_CORE_*` macro cleanup; it likely requires a small settings/macros decision because it crosses the pure collections source boundary.
+- Next mechanical batch: continue public interface naming cleanup with the planned indexed-extraction rename family (`Remove`/`RemoveSwap` toward `RemoveAt`/`SwapRemoveAt`) after reviewing the exact interface and implementation surface.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

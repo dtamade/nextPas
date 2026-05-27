@@ -27,25 +27,25 @@ type
     FRoot: PNode;
     FCount: SizeUInt;
     FSentinel: TNode; // black sentinel used as nil replacement
-    procedure InitTree; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    procedure InitTree; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
   private
     // iterator callbacks
-    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
   private
     // helpers
     function NewNode(const AValue: T): PNode;
     procedure FreeNode(ANode: PNode);
     procedure ClearSubtree(ANode: PNode);  // Helper for Clear to safely free nodes
 
-    function MinNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function MaxNode(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function Successor(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function Predecessor(N: PNode): PNode; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function MinNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MaxNode(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function Successor(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function Predecessor(N: PNode): PNode; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
-    function Compare(const L, R: T): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function Compare(const L, R: T): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
     procedure RotateLeft(X: PNode);
     procedure RotateRight(X: PNode);

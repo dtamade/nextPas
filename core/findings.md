@@ -114,6 +114,13 @@
 - The batch must update public interfaces, implementation method declarations/bodies, comments/docs, tests, examples, and facade references together, then run compile verification. Partial renames will break interface implementation matching in FPC.
 - Pure comment cleanup can ride with the matching identifier batch when it prevents stale docs; unrelated prose cleanup should wait.
 
+## 2026-05-28: collections macro naming cleanup
+
+- Collections source should use `NEXTPAS_*` conditional symbols instead of copied `FAFAFA_*` symbols.
+- `NEXTPAS_CORE_INLINE`, `NEXTPAS_CORE_ANONYMOUS_REFERENCES`, and `NEXTPAS_CORE_CONTRACTS` are the canonical core-wide symbols defined by `nextpas.core.settings.inc`.
+- `NEXTPAS_COLLECTIONS_TYPE_ALIASES`, `NEXTPAS_COLLECTIONS_DISABLE_HASH`, `NEXTPAS_COLLECTIONS_FACADE`, and `NEXTPAS_COLLECTIONS_STRICT_ERASEAFTER` are collections-owned symbols because they control collections API shape or collections implementation behavior.
+- Keep temporary `FAFAFA_CORE_*` compatibility definitions in `nextpas.core.settings.inc` until non-collections copied modules such as `mem` are migrated. Do not rename mem macro references in the collections-only batch.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.

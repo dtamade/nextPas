@@ -46,8 +46,8 @@ type
     class function Create(const aSource: TSourceIter; aStartIndex: SizeUInt = 0): specialize TEnumerateIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetIndex: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetIndex: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // For TIter<T> compatibility
     function ToIter: TSourceIter;
@@ -77,8 +77,8 @@ type
     class function Create(const aFirst: TFirstIter; const aSecond: TSecondIter): specialize TZipIter<T, U>; static;
 
     function MoveNext: Boolean;
-    function GetFirst: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetSecond: U; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetFirst: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetSecond: U; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property First: T read GetFirst;
     property Second: U read GetSecond;
@@ -104,7 +104,7 @@ type
     class function Create(const aFirst: TSourceIter; const aSecond: TSourceIter): specialize TChainIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;
@@ -129,7 +129,7 @@ type
     class function Create(const aSource: TSourceIter; aMapper: TMapperFunc; aData: Pointer): specialize TMapIter<T, U>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: U; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: U; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: U read GetCurrent;
   end;
@@ -154,7 +154,7 @@ type
     class function Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TFilterIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // For TIter<T> compatibility
     function ToIter: TSourceIter;
@@ -180,7 +180,7 @@ type
     class function Create(const aSource: TSourceIter; aCount: SizeUInt): specialize TTakeIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;
@@ -206,7 +206,7 @@ type
     class function Create(const aSource: TSourceIter): specialize TRevIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;
@@ -230,7 +230,7 @@ type
     class function Create(const aSource: TSourceIter; aCount: SizeUInt): specialize TSkipIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // For TIter<T> compatibility
     function ToIter: TSourceIter;
@@ -259,7 +259,7 @@ type
     class function Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TTakeWhileIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;
@@ -285,7 +285,7 @@ type
     class function Create(const aSource: TSourceIter; aPredicate: TPredicateFunc; aData: Pointer): specialize TSkipWhileIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;
@@ -314,7 +314,7 @@ type
     class function Create(const aSource: TOuterIter): specialize TFlattenIter<T>; static;
 
     function MoveNext: Boolean;
-    function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property Current: T read GetCurrent;
   end;

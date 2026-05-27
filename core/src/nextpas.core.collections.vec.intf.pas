@@ -910,7 +910,7 @@ type
      *}
     function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload;
     function Filter(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): specialize IVec<T>; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Filter(aPredicate: specialize TPredicateRefFunc<T>): specialize IVec<T>; overload;
     {$ENDIF}
 
@@ -929,7 +929,7 @@ type
      *}
     function Any(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
     function Any(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Any(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
@@ -948,7 +948,7 @@ type
      *}
     function All(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
     function All(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function All(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
@@ -967,7 +967,7 @@ type
      *}
     procedure Retain(aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
     procedure Retain(aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Retain(aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
 

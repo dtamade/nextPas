@@ -86,7 +86,7 @@ type
     public
       procedure Init(const aDrained: IVecT);
       function MoveNext: Boolean;
-      function GetCurrent: T; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+      function GetCurrent: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
       property Current: T read GetCurrent;
     end;
   type
@@ -102,22 +102,22 @@ type
 
   { 内部辅助方法 }
   private
-    function  GetPhysicalIndex(aLogicalIndex: SizeUInt): SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  WrapIndex(aIndex: SizeUInt): SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  WrapAdd(aIndex, aValue: SizeUInt): SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  WrapSub(aIndex, aValue: SizeUInt): SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  GetTailIndex: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  IsFull: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  IsValidIndex(aIndex: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  IsEmpty: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetPhysicalIndex(aLogicalIndex: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  WrapIndex(aIndex: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  WrapAdd(aIndex, aValue: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  WrapSub(aIndex, aValue: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetTailIndex: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  IsFull: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  IsValidIndex(aIndex: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
     procedure EnsureCapacity(aRequiredCapacity: SizeUInt);
     procedure Grow(aNewCapacity: SizeUInt);
     function  CalcGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;
     function  NextPowerOfTwo(aValue: SizeUInt): SizeUInt;
-    function  IsPowerOfTwo(aValue: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  IsPowerOfTwo(aValue: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure UpdateCapacityMask;
-    procedure SyncCountAndTail; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure SyncCountAndTail; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  ChooseOptimalGrowStrategy(aFirstPartSize, aSecondPartSize, aNewCapacity: SizeUInt): Integer;
     function  GetDefaultGrowStrategy: IGrowthStrategy;
     procedure ReverseRange(aStartIndex: SizeUInt; aCount: SizeUInt);
@@ -169,12 +169,12 @@ type
     procedure DoInsertionSort(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
 
     { 排序辅助方法 }
-    function DoCompare(const aLeft, aRight: T; aComparer: TCompareFunc; aData: Pointer): Integer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure DoSwap(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoCompare(const aLeft, aRight: T; aComparer: TCompareFunc; aData: Pointer): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure DoSwap(aIndex1, aIndex2: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function DoPartition(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeUInt;
     procedure DoHeapify(aIndex, aHeapSize: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
     procedure DoMerge(aLeft, aMid, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
-    function DoIntroSortDepthLimit(aCount: SizeUInt): Integer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function DoIntroSortDepthLimit(aCount: SizeUInt): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     type
       TCompareMethodContext = record
@@ -183,7 +183,7 @@ type
       end;
 
     class function CompareMethodAdapter(const aLeft, aRight: T; aData: Pointer): SizeInt; static;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     class function CompareRefFuncAdapter(const aLeft, aRight: T; aData: Pointer): SizeInt; static;
     {$ENDIF}
 
@@ -771,7 +771,7 @@ type
     function RemoveValue(const aElement: T): Boolean; overload;
     function RemoveValue(const aElement: T; aEquals: TEqualsFunc; aData: Pointer): Boolean; overload;
     function RemoveValue(const aElement: T; aEquals: TEqualsMethod; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function RemoveValue(const aElement: T; aEquals: TEqualsRefFunc): Boolean; overload;
     {$ENDIF}
 
@@ -779,14 +779,14 @@ type
     function MinElement: T;
     function MinElement(aComparer: TCompareFunc; aData: Pointer): T;
     function MinElement(aComparer: TCompareMethod; aData: Pointer): T;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function MinElement(aComparer: TCompareRefFunc): T;
     {$ENDIF}
 
     function MaxElement: T;
     function MaxElement(aComparer: TCompareFunc; aData: Pointer): T;
     function MaxElement(aComparer: TCompareMethod; aData: Pointer): T;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function MaxElement(aComparer: TCompareRefFunc): T;
     {$ENDIF}
 
@@ -794,42 +794,42 @@ type
     function MinElementIndex: SizeUInt;
     function MinElementIndex(aComparer: TCompareFunc; aData: Pointer): SizeUInt;
     function MinElementIndex(aComparer: TCompareMethod; aData: Pointer): SizeUInt;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function MinElementIndex(aComparer: TCompareRefFunc): SizeUInt;
     {$ENDIF}
 
     function MaxElementIndex: SizeUInt;
     function MaxElementIndex(aComparer: TCompareFunc; aData: Pointer): SizeUInt;
     function MaxElementIndex(aComparer: TCompareMethod; aData: Pointer): SizeUInt;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function MaxElementIndex(aComparer: TCompareRefFunc): SizeUInt;
     {$ENDIF}
 
     // Filter 系列方法
     function Filter(aPredicate: TPredicateFunc; aData: Pointer): specialize IVec<T>;
     function Filter(aPredicate: TPredicateMethod; aData: Pointer): specialize IVec<T>;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Filter(aPredicate: TPredicateRefFunc): specialize IVec<T>;
     {$ENDIF}
 
     // Any 系列方法
     function Any(aPredicate: TPredicateFunc; aData: Pointer): Boolean;
     function Any(aPredicate: TPredicateMethod; aData: Pointer): Boolean;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Any(aPredicate: TPredicateRefFunc): Boolean;
     {$ENDIF}
 
     // All 系列方法
     function All(aPredicate: TPredicateFunc; aData: Pointer): Boolean;
     function All(aPredicate: TPredicateMethod; aData: Pointer): Boolean;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function All(aPredicate: TPredicateRefFunc): Boolean;
     {$ENDIF}
 
     // Retain 系列方法
     procedure Retain(aPredicate: TPredicateFunc; aData: Pointer);
     procedure Retain(aPredicate: TPredicateMethod; aData: Pointer);
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure Retain(aPredicate: TPredicateRefFunc);
     {$ENDIF}
 
@@ -7126,7 +7126,7 @@ begin
   Result := False;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.RemoveValue(const aElement: T; aEquals: TEqualsRefFunc): Boolean;
 var
   idx: SizeInt;
@@ -7527,7 +7527,7 @@ begin
   Result := LContext^.Comparer(aLeft, aRight, LContext^.Data);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 class function TVecDeque.CompareRefFuncAdapter(const aLeft, aRight: T; aData: Pointer): SizeInt;
 type
   PCompareRefFunc = ^TCompareRefFunc;
@@ -8213,7 +8213,7 @@ begin
   Result := LMinValue;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.MinElement(aComparer: TCompareRefFunc): T;
 var
   i: SizeUInt;
@@ -8285,7 +8285,7 @@ begin
   Result := LMaxValue;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.MaxElement(aComparer: TCompareRefFunc): T;
 var
   i: SizeUInt;
@@ -8374,7 +8374,7 @@ begin
   Result := LMinIndex;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.MinElementIndex(aComparer: TCompareRefFunc): SizeUInt;
 var
   i: SizeUInt;
@@ -8466,7 +8466,7 @@ begin
   Result := LMaxIndex;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.MaxElementIndex(aComparer: TCompareRefFunc): SizeUInt;
 var
   i: SizeUInt;
@@ -8530,7 +8530,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.Filter(aPredicate: TPredicateRefFunc): specialize IVec<T>;
 var
   i: SizeUInt;
@@ -8687,7 +8687,7 @@ begin
   Result := False;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.Any(aPredicate: TPredicateRefFunc): Boolean;
 var
   i: SizeUInt;
@@ -8719,7 +8719,7 @@ begin
   Result := True;
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function TVecDeque.All(aPredicate: TPredicateRefFunc): Boolean;
 var
   i: SizeUInt;
@@ -8761,7 +8761,7 @@ begin
   Resize(j);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 procedure TVecDeque.Retain(aPredicate: TPredicateRefFunc);
 var
   i, j: SizeUInt;

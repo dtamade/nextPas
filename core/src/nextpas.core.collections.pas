@@ -1,7 +1,7 @@
 unit nextpas.core.collections;
 
 {$I nextpas.core.settings.inc}
-{$DEFINE FAFAFA_COLLECTIONS_FACADE}
+{$DEFINE NEXTPAS_COLLECTIONS_FACADE}
 // Suppress unused parameter hints - facade unit
 {$WARN 5024 OFF}
 
@@ -121,22 +121,22 @@ type
   // 算法公共回调类型
   generic TPredicateFunc<T> = function(const aElement: T; aData: Pointer): Boolean;
   generic TPredicateMethod<T> = function(const aElement: T; aData: Pointer): Boolean of object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TPredicateRefFunc<T> = reference to function(const aElement: T): Boolean;
   {$ENDIF}
   generic TMapperFunc<T,U> = function(const aElement: T; aData: Pointer): U;
   generic TMapperMethod<T,U> = function(const aElement: T; aData: Pointer): U of object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TMapperRefFunc<T,U> = reference to function(const aElement: T): U;
   {$ENDIF}
   generic TCompareFunc<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt;
   generic TCompareMethod<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt of object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TCompareRefFunc<T> = reference to function(const aLeft, aRight: T): SizeInt;
   {$ENDIF}
   generic TEqualsFunc<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean;
   generic TEqualsMethod<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean of object;
-  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
   generic TEqualsRefFunc<T> = reference to function(const aLeft, aRight: T): Boolean;
   {$ENDIF}
 
@@ -164,7 +164,7 @@ type
   TAlignedWrapperStrategy  = nextpas.core.collections.base.TAlignedWrapperStrategy;
   TExactGrowStrategy       = nextpas.core.collections.base.TExactGrowStrategy;
 
-{$IFDEF FAFAFA_CORE_TYPE_ALIASES}
+{$IFDEF NEXTPAS_COLLECTIONS_TYPE_ALIASES}
   // 可选：常用 specialization 的类型别名，避免重复 specialization（按需开启）
 {$ENDIF}
 
@@ -217,7 +217,7 @@ generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: IAllo
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator = nil): specialize IArray<T>;
 
 // ==== HashMap / HashSet (OA default) ====
-{$IFNDEF FAFAFA_COLLECTIONS_DISABLE_HASH}
+{$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
@@ -242,7 +242,7 @@ function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAlloc
 
 // generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TAllocator; aData: Pointer): specialize IArray<T>; overload;
 
-{$IFDEF FAFAFA_COLLECTIONS_FACADE}
+{$IFDEF NEXTPAS_COLLECTIONS_FACADE}
 
 // ==== Deque (source-based) ====
 
@@ -376,7 +376,7 @@ begin
 end;
 
 
-{$IFDEF FAFAFA_COLLECTIONS_FACADE}
+{$IFDEF NEXTPAS_COLLECTIONS_FACADE}
 
 // VecDeque facade helpers
 generic function MakeVecDeque<T>: specialize IDeque<T>;
@@ -775,7 +775,7 @@ begin
 end;
 
 
-{$IFNDEF FAFAFA_COLLECTIONS_DISABLE_HASH}
+{$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
 // HashMap / HashSet factories — implementation will be provided by hashmap unit
 
 generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;

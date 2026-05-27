@@ -39,7 +39,7 @@ type
     procedure Grow;
     procedure SiftUp(aIndex: SizeUInt);
     procedure SiftDown(aIndex: SizeUInt);
-    procedure Swap(aIndex1, aIndex2: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
+    procedure Swap(aIndex1, aIndex2: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
 
   protected
     function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;

@@ -12,6 +12,12 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
+### Current Micro Batch: Copied Macro Names
+
+- [x] Migrate collections source from copied `FAFAFA_CORE_*` / `FAFAFA_COLLECTIONS_*` macro names to canonical `NEXTPAS_*` names.
+- [x] Keep old `FAFAFA_CORE_*` compatibility definitions temporarily in `nextpas.core.settings.inc` because `mem` still uses them.
+- [x] Do not rename mem/platform/compiler macro references in this collections batch.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.

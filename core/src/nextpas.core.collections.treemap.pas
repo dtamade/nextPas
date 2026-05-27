@@ -48,7 +48,7 @@ type
     FElementManager: TElementManagerType;
     FCompareMethod: specialize TCompareFunc<K>;
 
-    procedure InitTree; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure InitTree; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     { 红黑树操作 }
     procedure RotateLeft(aNode: PNode);

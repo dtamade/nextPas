@@ -34,20 +34,20 @@ type
     FRangeInclusiveRight: Boolean;
     FRangeL: K;
     FRangeR: K;
-    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function IterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function IterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     // keys/values iterator callbacks
-    function KeyIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function KeyIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function KeyIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function ValIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function ValIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function ValIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function KeyIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function KeyIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function KeyIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function ValIterGetCurrent(aIter: PPtrIter): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function ValIterMoveNext(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function ValIterMovePrev(aIter: PPtrIter): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
-    function CompareAdapter(const L, R: TEntry; aData: Pointer): SizeInt; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    procedure FinalizeAdapter(var E: TEntry); {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
-    function MakeEntry(const AKey: K): TEntry; {$IFDEF FAFAFA_CORE_INLINE} inline; {$ENDIF}
+    function CompareAdapter(const L, R: TEntry; aData: Pointer): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    procedure FinalizeAdapter(var E: TEntry); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MakeEntry(const AKey: K): TEntry; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
   public
     constructor Create(aKeyComparer: TKeyCmp); reintroduce; overload;
     constructor Create(aKeyComparer: TKeyCmp; aAllocator: IAllocator); reintroduce; overload;

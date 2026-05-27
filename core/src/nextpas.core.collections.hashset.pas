@@ -101,7 +101,7 @@ type
     function Contains(const AKey: K): Boolean; overload;
     function Contains(const AKey: K; aEquals: specialize TEqualsFunc<K>; aData: Pointer): Boolean; overload;
     function Contains(const AKey: K; aEquals: specialize TEqualsMethod<K>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function Contains(const AKey: K; aEquals: specialize TEqualsRefFunc<K>): Boolean; overload;
     {$ENDIF}
     function Remove(const AKey: K): Boolean;
@@ -314,7 +314,7 @@ begin
   Result := inherited Contains(AKey, aEquals, aData);
 end;
 
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
 function THashSet.Contains(const AKey: K; aEquals: specialize TEqualsRefFunc<K>): Boolean;
 begin
   Result := inherited Contains(AKey, aEquals);

@@ -54,37 +54,37 @@ interface
     FIsManagedType:   Boolean;
     FElementTypeInfo: PTypeInfo;
   private
-    procedure CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   public
     constructor Create(aAllocator: IAllocator); overload;
     constructor Create; overload;
 
-    function  GeTAllocator: IAllocator; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function  GetElementSize: SizeUInt; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function  GetIsManagedType: Boolean; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function  GetElementTypeInfo: PTypeInfo; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function  GeTAllocator: IAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetElementSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetIsManagedType: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetElementTypeInfo: PTypeInfo; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    procedure InitializeElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure InitializeElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure FinalizeManagedElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure FinalizeManagedElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure InitializeElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure InitializeElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure FinalizeManagedElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure FinalizeManagedElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    function  AllocElements(aElementCount: SizeUInt): PElement; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function  AllocElement: PElement; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    function  ReallocElements(aDst: Pointer; aElementCount, aNewElementCount: SizeUInt): PElement; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure FreeElements(aDst: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure FreeElement(aDst: Pointer); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function  AllocElements(aElementCount: SizeUInt): PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  AllocElement: PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  ReallocElements(aDst: Pointer; aElementCount, aNewElementCount: SizeUInt): PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure FreeElements(aDst: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure FreeElement(aDst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    function  IsOverlap(aSrc, aDst: Pointer; aElementCount: SizeUInt): Boolean; {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    function  IsOverlap(aSrc, aDst: Pointer; aElementCount: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    procedure CopyElements(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure CopyElementsUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElements(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure CopyElementsUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    procedure CopyElementsNonOverlap(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure CopyElementsNonOverlapUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure CopyElementsNonOverlap(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure CopyElementsNonOverlapUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
-    procedure FillElements(aDst: Pointer; aValue: T; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
-    procedure ZeroElements(aDst: Pointer; aElementCount: SizeUInt); {$IFDEF FAFAFA_COLLECTIONS_INLINE} inline;{$ENDIF}
+    procedure FillElements(aDst: Pointer; aValue: T; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ZeroElements(aDst: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     property  ElementSize:     SizeUInt   read GetElementSize;
     property  IsManagedType:   Boolean    read GetIsManagedType;

@@ -685,7 +685,7 @@ type
      *}
     function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ForEach
      *
@@ -699,7 +699,7 @@ type
      *
      * @remark
      *   匿名方法 `aPredicate` 返回 `False` 将立即中断遍历过程.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -751,7 +751,7 @@ type
      *}
     function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ForEach
      *
@@ -767,7 +767,7 @@ type
      * @remark
      *   如果 `aCount` 为 0, 此函数不执行任何操作并立即返回 `True`.
      *   匿名方法 `aPredicate` 返回 `False` 将立即中断遍历过程.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -813,7 +813,7 @@ type
      *}
     function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ForEachUnchecked
      *
@@ -829,7 +829,7 @@ type
      * @remark
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
-     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function ForEachUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
@@ -899,7 +899,7 @@ type
      *}
     function Contains(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Contains
      *
@@ -914,7 +914,7 @@ type
      *
      * @remark
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -988,7 +988,7 @@ type
      *}
     function Contains(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Contains
      *
@@ -1004,7 +1004,7 @@ type
      *
      * @remark
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange       索引/范围越界.
@@ -1074,7 +1074,7 @@ type
      *}
     function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ContainsUnchecked
      *
@@ -1092,7 +1092,7 @@ type
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
-     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function ContainsUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
@@ -1116,7 +1116,7 @@ type
      *}
     function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1139,7 +1139,7 @@ type
      *}
     function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1164,7 +1164,7 @@ type
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1187,7 +1187,7 @@ type
      *}
     function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1210,7 +1210,7 @@ type
      *}
     function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1235,7 +1235,7 @@ type
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountOfUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
@@ -1258,7 +1258,7 @@ type
      *}
     function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
     function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function CountIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
@@ -1284,7 +1284,7 @@ type
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
@@ -1308,7 +1308,7 @@ type
      *}
     function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
     function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
@@ -1332,7 +1332,7 @@ type
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt): Boolean; overload;
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function IsSortedUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
@@ -1358,7 +1358,7 @@ type
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function BinarySearchUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1384,7 +1384,7 @@ type
     function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
     function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function BinarySearchInsertUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1406,7 +1406,7 @@ type
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt); overload;
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     procedure ShuffleUnchecked(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
@@ -1469,7 +1469,7 @@ type
      *}
     function Find(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Find
      *
@@ -1486,7 +1486,7 @@ type
 
      *   如果容器为空, 此函数不执行搜索并立即返回 -1.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function Find(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
@@ -1561,7 +1561,7 @@ type
      *}
     function Find(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Find
      *
@@ -1577,7 +1577,7 @@ type
      * @remark
      *   如果容器为空, 此函数不执行搜索并立即返回 -1.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  Index out of range.
@@ -1683,7 +1683,7 @@ type
      *}
     function Find(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Find
      *
@@ -1702,7 +1702,7 @@ type
 
      *   如果容器为空, 此函数不执行搜索并立即返回 -1.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EInvalidArgument  元素数量为 0.
@@ -1775,7 +1775,7 @@ type
      *}
     function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * FindUnchecked
      *
@@ -1794,7 +1794,7 @@ type
      *   详见 docs/Unchecked_Methods_Summary.md。
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aEquals` 应在两元素相等时返回 `True`.
-     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function FindUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
@@ -1803,19 +1803,19 @@ type
 
     function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1823,19 +1823,19 @@ type
 
     function FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1844,21 +1844,21 @@ type
     function FindLast(const aElement: T): SizeInt; overload;
     function FindLast(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLast(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLast(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLast(const aElement: T; aStartIndex: SizeUInt): SizeInt; overload;
     function FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLast(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLast(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
     function FindLast(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLast(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLast(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1866,19 +1866,19 @@ type
 
     function FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1886,19 +1886,19 @@ type
 
     function FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
     function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
@@ -1937,7 +1937,7 @@ type
      *}
     function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountOf
      *
@@ -1986,7 +1986,7 @@ type
      *}
     function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountOf
      *
@@ -2025,7 +2025,7 @@ type
      *}
     function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountIf
      *
@@ -2036,7 +2036,7 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
@@ -2067,7 +2067,7 @@ type
      *}
     function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * CountIf
      *
@@ -2079,7 +2079,7 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
@@ -2125,7 +2125,7 @@ type
      *}
     procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Replace
      *
@@ -2138,7 +2138,7 @@ type
      *   aEquals     用于比较两个元素的自定义回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
@@ -2185,7 +2185,7 @@ type
      *}
     procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Replace
      *
@@ -2199,7 +2199,7 @@ type
      *   aEquals     用于比较两个元素的自定义回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
@@ -2232,7 +2232,7 @@ type
      *}
     procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ReplaceIf
      *
@@ -2244,7 +2244,7 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
@@ -2277,7 +2277,7 @@ type
      *}
     procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * ReplaceIf
      *
@@ -2290,7 +2290,7 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (匿名方法版本).
      *
      * @remark
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
@@ -2300,21 +2300,21 @@ type
     function IsSorted: Boolean; overload;
     function IsSorted(aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
     function IsSorted(aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function IsSorted(aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     function IsSorted(aStartIndex: SizeUInt): Boolean; overload;
     function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
     function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     function IsSorted(aStartIndex, aCount: SizeUInt): Boolean; overload;
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
@@ -2368,7 +2368,7 @@ type
      *}
     procedure Sort(aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Sort
      *
@@ -2383,7 +2383,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure Sort(aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
@@ -2447,11 +2447,11 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Sort
      *
@@ -2467,7 +2467,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  Index out of range.
@@ -2555,7 +2555,7 @@ type
      *}
     procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Sort
      *
@@ -2572,7 +2572,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange       索引/范围越界.
@@ -2640,7 +2640,7 @@ type
      *}
     procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * SortUnchecked
      *
@@ -2657,7 +2657,7 @@ type
      *   调用者必须确保 aStartIndex 和 aCount 参数的有效性, 否则可能导致程序崩溃.
      *   回调 `aComparer` 应在第一个元素小于第二个元素时返回负值, 相等时返回 0, 大于时返回正值.
      *   排序算法为稳定的快速排序, 平均时间复杂度为 O(n log n).
-     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在 fpc 3.3.1 及以上并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     procedure SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
@@ -2724,7 +2724,7 @@ type
      *}
     function BinarySearch(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearch
      *
@@ -2743,7 +2743,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
     function BinarySearch(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
@@ -2820,7 +2820,7 @@ type
      *}
     function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearch
      *
@@ -2840,7 +2840,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -2923,7 +2923,7 @@ type
      *}
     function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearch
      *
@@ -2945,7 +2945,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
+     *   此重载版本需要在fpc 3.3.1 及以上 并启用 `NEXTPAS_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -3034,7 +3034,7 @@ type
      *}
     function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearchInsert
      *
@@ -3060,7 +3060,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *}
     function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
@@ -3155,7 +3155,7 @@ type
      *}
     function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearchInsert
      *
@@ -3182,7 +3182,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *
      * @exceptions
      *   EOutOfRange  索引越界.
@@ -3283,7 +3283,7 @@ type
      *}
     function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * BinarySearchInsert
      *
@@ -3311,7 +3311,7 @@ type
      *    * 等于0表示左值等于右值
      *    * 大于0表示左值大于右值
      *
-     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 FAFAFA_CORE_ANONYMOUS_REFERENCES
+     *   使用此接口需要在fpc 3.3.1 及以上并且开启宏 NEXTPAS_CORE_ANONYMOUS_REFERENCES
      *
      * @exceptions
      *   EOutOfRange  索引/范围越界.
@@ -3351,7 +3351,7 @@ type
      *}
     procedure Shuffle(aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Shuffle
      *
@@ -3406,7 +3406,7 @@ type
      *}
     procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Shuffle
      *
@@ -3465,7 +3465,7 @@ type
      *}
     procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
 
-    {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
     {**
      * Shuffle
      *
