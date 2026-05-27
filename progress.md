@@ -1005,7 +1005,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Phase 21: Platform Host ABI Completeness Wave 3
 
-- **Status:** completed; verification passed in isolated worktree
+- **Status:** completed; verification passed in isolated worktree; merge pending
 - Started: 2026-05-27
 - Objective:
   - 继续按 `core/docs/platform-ffi-import-workflow.md` 从 FPC source evidence 扩充 platform host-owned
@@ -1137,9 +1137,24 @@ platform/core 工作流保留下来的已完成记录。
       `human-summary=local verification passed`, final envelope includes
       `corePlatformHostAbiWave3StatCheck":"pass"` and
       `coreSyncPosixFallbackCheck":"pass"`.
-  - Next: commit the condvar/route-truth fix, confirm main checkout is clean,
-    merge the feature branch into `main`, run post-merge focused/official gates,
-    then remove the temporary worktree and branch.
+  - Commit/rebase:
+    - Wave 3 feature commit: `f43cfbd`.
+    - Condvar lost-wake fix and verify route truth commit: `2e6b181`.
+    - Branch `codex/platform-host-abi-wave3-stat` rebased over latest local
+      `main@c09bc58` without conflicts.
+  - Final rebase verification:
+    - `git diff --check`: pass.
+    - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+      `11 total, 11 passed, 0 failed`.
+    - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+      `5 total, 5 passed, 0 failed`.
+    - `bash build/verify_local.sh`: `verify-local=pass`,
+      `human-summary=local verification passed`; final envelope includes
+      `corePlatformHostAbiWave3StatCheck":"pass"` and
+      `coreSyncPosixFallbackCheck":"pass"`.
+  - Next: confirm main checkout is clean, merge the feature branch into `main`,
+    run post-merge focused/official gates, then remove the temporary worktree and
+    branch.
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 

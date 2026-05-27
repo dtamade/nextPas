@@ -82,10 +82,11 @@ family。目标是把能够可靠取证、能够被 host owner 承载的低层�
 
 ### Status
 
-Implementation, focused verification, and full verification are complete in isolated worktree
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat` from
-`main@846b9d1`. Commit, rebase/merge, post-merge verification, and cleanup
-remain pending.
+Implementation, focused verification, full verification, rebase over latest local
+`main@c09bc58`, and final pre-merge verification are complete in isolated
+worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`.
+Merge, post-merge verification, and cleanup remain pending.
 
 ### Planned Steps
 
@@ -101,7 +102,8 @@ remain pending.
 - [x] rerun full verification after condvar fix
 - [x] sync `build/verify_local.sh` forced POSIX fallback summary to the new
   11-test `nextpas.core.sync` contract
-- [ ] amend/commit final feature branch, merge, post-merge verification, cleanup
+- [x] commit final feature branch and rebase over latest local `main@c09bc58`
+- [ ] merge, post-merge verification, cleanup
 
 ### Audit Checklist
 
@@ -147,7 +149,8 @@ remain pending.
   route correctly ran 11 sync tests, but the official route still expected the
   old `10 total, 10 passed, 0 failed` summary. The route expectation is now
   updated to `11 total, 11 passed, 0 failed`.
-- Final pre-merge verification in the isolated worktree passed:
+- Final pre-merge verification in the isolated worktree passed before the latest
+  local rebase:
   - `git diff --check`
   - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
     `11 total, 11 passed, 0 failed`
@@ -160,6 +163,17 @@ remain pending.
   - `make -C core test`: `All tests passed.`
   - `make -C core examples`: `All examples compiled.`
   - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave3StatCheck":"pass"` and
+    `coreSyncPosixFallbackCheck":"pass"`.
+- Rebase over latest local `main@c09bc58` completed without conflicts. Fresh
+  focused checks after that rebase passed:
+  - `git diff --check`
+  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
+    `11 total, 11 passed, 0 failed`
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+    `5 total, 5 passed, 0 failed`
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave3StatCheck":"pass"` and

@@ -2235,3 +2235,15 @@
 - 更新 summary 后的 official verification 已通过，final envelope 同时保留
   `corePlatformHostAbiWave3StatCheck":"pass"` 与 `coreSyncPosixFallbackCheck":"pass"`。这说明本轮
   Wave 3 raw ABI route truth 和 condvar fallback route truth 都已经回到同一个官方收口面。
+
+## 2026-05-27 Follow-up Findings 33
+
+- Branch `codex/platform-host-abi-wave3-stat` 已 rebase 到最新本地 `main@c09bc58`，没有冲突，主
+  checkout 当前干净，`main` 是 feature branch 的祖先。
+- Rebase 后 fresh focused checks 通过：`git diff --check`、`test_sync`
+  `11 total, 11 passed, 0 failed`、`test_platform_host_abi_wave3_stat`
+  `5 total, 5 passed, 0 failed`。
+- Rebase 后 fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`，final envelope 同时包含
+  `corePlatformHostAbiWave3StatCheck":"pass"` 与 `coreSyncPosixFallbackCheck":"pass"`。当前可进入
+  fast-forward merge、post-merge verification 与 worktree cleanup。
