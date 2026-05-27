@@ -174,6 +174,15 @@
 - Batch 140 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 141 选定同一路线下一格：source-owned bare `unknown-callable` 已有 official
+  `unknown-callable-check`，但 installed-source imports 表示当前 imported callable truth 可能不完整；
+  此时 root bare name miss 应保守 deferred，避免把 helper/RTL 缺口提前报成普通 unknown callable。
+- RED focused 证明旧实现会误报 `sema.unknown-callable`；`LookupCallBindingDeclaration(...)`
+  现在只在当前 unit graph 没有 installed-source imports 时，才把 bare name miss 投影为
+  `unknown-callable`。
+- Batch 141 focused semantic 已输出 `semantic-call-bindings-status=pass`；fresh local verification
+  已输出 `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

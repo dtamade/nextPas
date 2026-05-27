@@ -346,6 +346,8 @@ candidate collection
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
+  - 当当前 unit graph 含有 `installed-source` import 时，bare callable name miss 继续保守不绑定，
+    避免把 incomplete helper/RTL callable truth 提前报成普通 unknown callable
 - `sema.unknown-member`
   - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
   - 也用于 class method body 内 bare implicit-self method call 中，当前 `Self` class/parent chain

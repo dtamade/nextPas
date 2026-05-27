@@ -96,6 +96,7 @@ type
     function ImportedUnitAllowsTypeMismatchDiagnostic(
       const AOwnerUnitId: string
     ): Boolean;
+    function HasInstalledSourceImports: Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
@@ -1094,7 +1095,8 @@ begin
     KnownSymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
     if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
       (FModel.FindTypeByName(AName) = 0) and
-      (not IsBuiltinProcedure(AName)) then
+      (not IsBuiltinProcedure(AName)) and
+      (not HasInstalledSourceImports) then
       AResolutionFailureKind := 'unknown-callable';
     Exit(False);
   end;
@@ -1157,6 +1159,20 @@ begin
   if not FUnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
     Exit;
   Result := SameText(ResolvedUnit.OriginClass, 'project-source');
+end;
+
+function TSemanticAnalyzer.HasInstalledSourceImports: Boolean;
+var
+  Index: LongInt;
+  ResolvedUnit: TResolvedUnit;
+begin
+  Result := False;
+  for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+  begin
+    ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
+    if SameText(ResolvedUnit.OriginClass, 'installed-source') then
+      Exit(True);
+  end;
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
