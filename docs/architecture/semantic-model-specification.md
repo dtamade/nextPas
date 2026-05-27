@@ -97,7 +97,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match 与
   ambiguity evidence。
   imported `installed-source` single-target
-  type mismatch、single-target arity miss、bare callable ambiguity、bare callable no-match、
+  type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
+  single-target arity miss、bare callable ambiguity、bare callable no-match、
   inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned 零参
   内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、

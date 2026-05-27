@@ -250,6 +250,8 @@ bare call 的可接受 arity 扩展为必填参数数到总参数数，当前可
 type-mismatch diagnostics 现在还接受 root-owned 零参内建标量/字符串 function result 作为稳定
 argument evidence；当 target 来自 imported `project-source` 单一 callable、direct member-call
 target 或 inherited direct member-call target 时，同一类 root-owned function-result evidence 也会投影为 `sema.type-mismatch`；
+当 target 来自 imported `installed-source` bare callable 时，同一类 root-owned function-result evidence 仍保守
+deferred，不投影为 ordinary `sema.type-mismatch`；
 当 imported `project-source` inherited member-call overload set 的所有同 arity target 都不匹配时，
 同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；当同一
 imported inherited overload set 出现 compact signature collision 且无法唯一选择时，同一类

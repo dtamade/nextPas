@@ -2813,6 +2813,94 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceFunctionResultCallTypeMismatchStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  HelperPath: string;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-imported-function-result-type-mismatch-' +
+    IntToStr(Random(MaxInt));
+  HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
+  RootSourceText :=
+    'program InstalledImportedFunctionResultTypeMismatchCalls;' + LineEnding +
+    'uses Helper;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(Flag);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    HelperPath,
+    'unit Helper;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledImportedFunctionResultTypeMismatchCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Helper', HelperPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-imported-function-result-type-mismatch-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-imported-function-result-type-mismatch-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-imported-function-result-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-imported-function-result-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedMemberCallTypeMismatchDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -7567,6 +7655,7 @@ begin
     CheckImportedCallTypeMismatchDiagnostic;
     CheckInstalledSourceCallTypeMismatchStaysDeferred;
     CheckImportedFunctionResultCallTypeMismatchDiagnostic;
+    CheckInstalledSourceFunctionResultCallTypeMismatchStaysDeferred;
     CheckImportedUnknownMemberDiagnostic;
     CheckInstalledSourceUnknownMemberStaysDeferred;
     CheckImportedInheritedUnknownMemberDiagnostic;
