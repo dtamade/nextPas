@@ -77,9 +77,9 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Full verification passed on isolated worktree; commit and integration pending:
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-source-evidence-index`
-from `main@2217d7a`. 主 checkout 有 unrelated collections WIP，本轮不触碰。
+Completed, fast-forward merged to `main@def99d2`, and worktree/branch cleanup
+done. The work started from `main@2217d7a`, was rebased over latest
+`main@c6a6ed7`, and did not touch unrelated collections work.
 
 ### Planned Steps
 
@@ -100,7 +100,7 @@ from `main@2217d7a`. 主 checkout 有 unrelated collections WIP，本轮不触�
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
   - `git diff --check`
-- [ ] commit、整合最新 main、择优合并回 main、post-merge verification、清理 worktree/branch
+- [x] commit、整合最新 main、择优合并回 main、post-merge verification、清理 worktree/branch
 
 ### Audit Checklist
 

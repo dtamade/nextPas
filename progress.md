@@ -41,7 +41,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform ffi source evidence index)
 
-- **Status:** full verification passed; commit/integration pending
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块；本轮建立 host `base/ffi` 声明的 source evidence index。
   - 目标是把“参考 FPC 源码搬入 nextPas-owned FFI/base”的依据链条做成正式文档和 official
@@ -107,6 +107,15 @@ platform/core 工作流保留下来的已完成记录。
     仍禁止 `uses Linux`、`UnixType`、`BaseUnix`、`PThreads`、`Syscall`、`Windows` 等 FPC 平台单元。
   - raw OS API 继续不进入 runtime 单测；测试覆盖 unified public contracts，raw ABI 通过 source evidence、
     source-surface gate 和 compile-only gate 守住。
+- Integration / post-merge:
+  - 初始 feature commit `40da544` 已 rebase 到最新 `main@c6a6ed7`，得到最终提交
+    `def99d2`。
+  - 已 fast-forward merged 到 `main@def99d2`。
+  - post-merge focused verification passed:
+    `test_platform_ffi_source_evidence_index` 2/2 pass，
+    `test_platform_host_gap_matrix` 4/4 pass。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-source-evidence-index` worktree
+    已删除，`codex/platform-ffi-source-evidence-index` 分支已删除。
 
 ## Session: 2026-05-27 (platform host gap route guard)
 
