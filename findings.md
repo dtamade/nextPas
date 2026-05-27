@@ -10,6 +10,21 @@
 
 ## Research Findings
 
+- Batch 181 开启 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch; end;`
+  调 inherited `TBaseWorker.Touch(Value: Integer)` 缺参时，必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 181 focused semantic probe 直接 GREEN，证明 Batch 176-180 的 owner-aware imported method
+  body traversal 已自然覆盖 parent-chain arity miss；本批不修改 analyzer，也不修改 `core/`。
+- Batch 181 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_wrong_argument_count` 与
+  `imported-unit-body-inherited-implicit-self-wrong-argument-count-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass`。
+- Batch 181 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
   `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
   platform 模块成果混入。

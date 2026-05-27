@@ -943,6 +943,8 @@ inherited known field/property member call 断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对 imported `project-source` unit method body
 bare implicit-self wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body inherited bare implicit-self wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
 unit method body bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
 unit method body bare implicit-self no matching overload 断言

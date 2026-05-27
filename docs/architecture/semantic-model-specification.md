@@ -162,7 +162,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   的 bare implicit-self member miss 会按 `Worker` owner 解析 `Self`
   并输出 `sema.unknown-member`；同一路径中的 bare implicit-self arity miss（例如
   `procedure TWorker.Run; begin Pick; end;` 调 `Pick(Value: Integer)`）会输出
-  `sema.wrong-argument-count`；同一路径中的 stable literal mismatch（例如
+  `sema.wrong-argument-count`；同一路径沿 imported owner class parent chain 找到 inherited
+  method target 时也会输出同类 arity diagnostic（例如 `TWorker = class(TBaseWorker)` 中
+  `procedure TWorker.Run; begin Touch; end;` 面对 `TBaseWorker.Touch(Value: Integer)`）；
+  同一路径中的 stable literal mismatch（例如
   `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
   `sema.type-mismatch`；同一路径中的 stable literal no-match（例如
   `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
@@ -365,6 +368,12 @@ candidate collection
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
     imported owner class 的 method name，但没有任何 arity-compatible target 的场景；该路径不会注册失败
     `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 parent
+    chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；该路径同样不会注册失败
+    `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 imported
+    owner class parent chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；
+    该路径不会注册失败 `member-call` binding
 - `sema.type-mismatch`
   - 先用于 bare procedure/function call 与 direct member-call 中，root-owned 单一 target 的 arity
     已匹配、当前 argument signature 来自稳定 literal/纯表达式、已声明内建标量/字符串变量/参数事实，
