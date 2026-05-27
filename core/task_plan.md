@@ -9,14 +9,14 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 12 merged to `main` as `4d22157`
-  (`platform: clean process id host ffi names`). Post-merge verification passed
-  on `main@4d22157`.
+- Current status: Wave 13 is active in worktree
+  `platform-host-ffi-wave13-names` from `main@eab4c19`.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 12, host FFI process-id
-  helper ownership cleanup, closed. Next platform wave should start from latest
-  `main`.
+- Current wave: Platform Host ABI Completeness Wave 13, Linux host FFI helper
+  ownership-name cleanup. This wave corrects Linux `platform_*` host-owned
+  helper names for pthread, clock, errno, native thread id, and CPU count before
+  the next broad FPC raw API import wave.
 
 ## Architecture Rules
 
@@ -48,6 +48,48 @@ the integration boundary.
 - Runtime behavior tests belong to unified nextPas public contracts only.
 
 ## Current Phase
+
+### Wave 13: Linux host FFI helper ownership-name cleanup
+
+- [x] Open isolated worktree from latest `main@eab4c19`.
+- [x] Re-read active platform ABI import plan, evidence index, gap matrix, and
+  goal-tree rules.
+- [x] Select the highest-risk naming debt from user review: Linux host FFI still
+  exposes host-owned pthread/clock/errno/thread/cpu helper projections with
+  unified-looking `platform_*` names.
+- [x] Add RED source-surface guard requiring Linux host-owned helpers to use
+  `linux_*` names and rejecting Linux `platform_pthread_*`,
+  `platform_clock_*`, `platform_thread_self_token_u64`,
+  `platform_native_thread_id_u64`, `platform_cpu_count_i32`,
+  `platform_errno_location`, and `platform_posix_errno_value` helper exports.
+- [x] Rename Linux host-owned helpers to `linux_*` and update Linux branches in
+  `platform.time.host`, `platform.sync`, and `platform.thread` to consume those
+  host-owned names.
+- [x] Keep shared `platform_posix_*` helpers unchanged because they are owned by
+  the shared POSIX owner, not by Linux.
+- [x] Record remaining Android / Darwin / FreeBSD / generic Unix helper-name
+  debt as the next required wave instead of pretending Linux-only cleanup closes
+  the whole family.
+- [x] Run focused and full verification.
+- [ ] Commit, merge to `main`, post-merge verify, clean the worktree, and
+  delete the feature branch.
+
+#### Wave 13 Verification Boundary
+
+- This is naming/ownership cleanup for existing FPC-backed raw ABI helpers, not
+  runtime proof of pthread, clock, errno, thread-id, or sysconf behavior.
+- FPC remains the correctness authority for raw ABI declarations and constants.
+  Wave 13 guards nextPas integration discipline: host helper owner names,
+  consumer boundary, docs truth, no FPC platform-unit dependency, and compile
+  coherence.
+
+#### Wave 13 Non-goals
+
+- No new raw OS API family import in this wave.
+- No public `platform.process`, `platform.file`, or new feature-specific FFI.
+- No runtime tests for raw FPC API definitions.
+- No Android / Darwin / FreeBSD / generic Unix bulk rename in this wave; those
+  remain the next cleanup wave to keep the Linux correction reviewable.
 
 ### Wave 12: host FFI process-id helper ownership cleanup
 
@@ -179,6 +221,12 @@ the integration boundary.
 - `git diff --check`
 - `sh -n build/verify_local.sh`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+- `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+- `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`
@@ -193,6 +241,45 @@ the integration boundary.
 
 ### Verification Evidence
 
+- Wave 13 RED:
+  `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  failed as expected on missing `linux_errno_location`.
+- Wave 13 focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin, Android, FreeBSD, and generic Unix simulated compile routes passed.
+- Wave 13 full pre-merge verification:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformFfiPartitionSurfaceCheck`,
+    `corePlatformHostGapMatrixCheck`,
+    `corePlatformFfiSourceEvidenceIndexCheck`,
+    `corePlatformFfiImportWorkflowCheck`,
+    `corePlatformHostAbiWave1Check`,
+    `corePlatformHostAbiWave11SignalControlCheck`, and
+    `corePlatformSimulatedHostCompileMatrixCheck`.
 - Wave 12 RED:
   `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
   failed as expected on missing `linux_process_id`.
@@ -252,3 +339,5 @@ the integration boundary.
 | Cleanup command removed tracked `build/` files while clearing generated artifacts. | Wave 10 post-merge cleanup | Immediately restored tracked `build/` with `git restore build`; avoid broad `rm -rf build` in future cleanups. |
 | Tried to patch Darwin `pthread_sigmask` external library after it had already been corrected to FPC's libc route. | Wave 11 review | Re-read the file and kept the already-correct `external 'c'` declaration. |
 | `make -C core test` stopped at the Wave 11 goal-tree guard after Wave 12 updated the current platform ABI paragraph. | Wave 12 full verification | Kept Wave 12 as current state and restored the exact historical phrase `Platform Host ABI Completeness Wave 11` so the previous wave's route truth remains recoverable. |
+| `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test` failed after Wave 13 changed the POSIX token helper signature. | Wave 13 focused verification | Updated the generic Unix call to pass the transitional `platform` host-helper prefix, matching the intentionally deferred non-Linux rename scope. |
+| Fresh `make -C core test` stopped at `test_platform_ffi_partition_surface` because the guard still required Linux `function platform_errno_location`. | Wave 13 full verification | Updated the Linux partition guard to require `linux_errno_location` / `linux_pthread_condattr_setclock` and reject old unified-looking Linux helper names. |

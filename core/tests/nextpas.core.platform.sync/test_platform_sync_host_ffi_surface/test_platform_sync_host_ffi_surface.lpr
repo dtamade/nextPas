@@ -96,13 +96,13 @@ begin
   end;
 end;
 
-procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel: string);
+procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel, AHostPrefix: string);
 begin
   CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
     AHostLabel + ' must delegate errno-value load to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_sync_result_from_error',
     AHostLabel + ' must delegate POSIX sync error classification to shared posix.ffi skeleton');
-  CheckTokenPresent(ASource, 'platform_pthread_sync_result',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sync_result',
     AHostLabel + ' must expose host-owned POSIX sync result helper');
   CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_size',
     AHostLabel + ' base must expose pthread mutex storage size for sync');
@@ -118,59 +118,59 @@ begin
     AHostLabel + ' base must expose pthread rwlock align carrier type for sync');
   CheckTokenPresent(ABaseSource, 'tplatformpthreadcondvaralign',
     AHostLabel + ' base must expose pthread condvar align carrier type for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_timeout_clock_now',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_clock_now',
     AHostLabel + ' must expose pthread timeout clock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_timeout_deadline_after_ns',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_deadline_after_ns',
     AHostLabel + ' must expose pthread timeout deadline helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_timeout_remaining_ns_u64',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_remaining_ns_u64',
     AHostLabel + ' must expose pthread timeout remaining helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_init',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init',
     AHostLabel + ' must expose pthread mutex init helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_init_platform_kind',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init_platform_kind',
     AHostLabel + ' must expose pthread mutex init helper for public kind contract');
   CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_kind',
     AHostLabel + ' must delegate pthread mutex attr-init glue to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_public_kind',
     AHostLabel + ' must delegate public mutex kind projection to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_destroy',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_destroy',
     AHostLabel + ' must expose pthread mutex destroy helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_lock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_lock',
     AHostLabel + ' must expose pthread mutex lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_trylock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_trylock',
     AHostLabel + ' must expose pthread mutex trylock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_timedlock_abs',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_timedlock_abs',
     AHostLabel + ' must expose pthread mutex timed-lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_mutex_unlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_unlock',
     AHostLabel + ' must expose pthread mutex unlock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_init',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_init',
     AHostLabel + ' must expose pthread rwlock init helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_destroy',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_destroy',
     AHostLabel + ' must expose pthread rwlock destroy helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_rdlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdlock',
     AHostLabel + ' must expose pthread rwlock read-lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_tryrdlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_tryrdlock',
     AHostLabel + ' must expose pthread rwlock try-read-lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_wrlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrlock',
     AHostLabel + ' must expose pthread rwlock write-lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_trywrlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_trywrlock',
     AHostLabel + ' must expose pthread rwlock try-write-lock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_rdunlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdunlock',
     AHostLabel + ' must expose pthread rwlock read-unlock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_rwlock_wrunlock',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrunlock',
     AHostLabel + ' must expose pthread rwlock write-unlock helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_init',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_init',
     AHostLabel + ' must expose pthread condvar init helper for sync');
   CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_init_with_clock',
     AHostLabel + ' must delegate pthread condvar attr-init glue to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_destroy',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_destroy',
     AHostLabel + ' must expose pthread condvar destroy helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_wait',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_wait',
     AHostLabel + ' must expose pthread condvar wait helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_timedwait_abs',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_timedwait_abs',
     AHostLabel + ' must expose pthread condvar timedwait helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_signal',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_signal',
     AHostLabel + ' must expose pthread condvar signal helper for sync');
-  CheckTokenPresent(ASource, 'platform_pthread_condvar_broadcast',
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_broadcast',
     AHostLabel + ' must expose pthread condvar broadcast helper for sync');
   CheckTokenPresent(ASource, 'platform_posix_clock_now',
     AHostLabel + ' must delegate timeout clock reads to shared posix.ffi');
@@ -268,36 +268,38 @@ begin
     'linux.ffi must expose FUTEX_WAIT');
   CheckTokenPresent(LLinuxSource, 'futex_wake',
     'linux.ffi must expose FUTEX_WAKE');
-  CheckTokenPresent(LLinuxSource, 'platform_posix_errno_value',
-    'linux.ffi must expose Linux errno value helper for sync');
+  CheckTokenPresent(LLinuxSource, 'linux_errno_value',
+    'linux.ffi must expose Linux-owned errno value helper for sync');
+  CheckTokenAbsent(LLinuxSource, 'function platform_posix_errno_value',
+    'linux.ffi must not expose unified-looking errno value helper names');
   CheckTokenPresent(LLinuxSource, 'linux_futex_wait_i32',
     'linux.ffi must expose Linux futex wait helper for sync');
   CheckTokenPresent(LLinuxSource, 'linux_futex_wake_one_i32',
     'linux.ffi must expose Linux futex wake-one helper for sync');
   CheckTokenPresent(LLinuxSource, 'linux_futex_wake_all_i32',
     'linux.ffi must expose Linux futex wake-all helper for sync');
-  CheckPosixSyncHelperSet(LLinuxSource, LLinuxBaseSource, 'linux');
+  CheckPosixSyncHelperSet(LLinuxSource, LLinuxBaseSource, 'linux', 'linux');
   CheckTokenPresent(LLinuxSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'linux.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
 
   CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
     'darwin.ffi must expose Darwin errno value helper for sync');
-  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin');
+  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin', 'platform');
   CheckTokenPresent(LDarwinSource, 'platform_posix_enotsup',
     'darwin.ffi must keep unsupported pthread mutex timed-lock as a host-owned ENOTSUP stub');
   CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
     'android.ffi must expose Android errno value helper for sync');
-  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android');
+  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android', 'platform');
   CheckTokenPresent(LAndroidSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'android.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
     'freebsd.ffi must expose FreeBSD errno value helper for sync');
-  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd');
+  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd', 'platform');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'freebsd.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
   CheckTokenPresent(LUnixSource, 'platform_posix_errno_value',
     'unix.ffi must expose generic Unix errno value helper for sync');
-  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix');
+  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix', 'platform');
   CheckTokenPresent(LUnixSource, 'platform_posix_enotsup',
     'unix.ffi must keep unknown pthread mutex timed-lock capability as a host-owned ENOTSUP stub');
 

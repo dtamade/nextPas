@@ -44,6 +44,27 @@ abstractions that consume them.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 13: Linux host helper owner names
+
+Wave 13 does not import a new raw OS API family. It corrects Linux host-owned
+helper names so they no longer look like unified public `platform` contracts.
+The raw ABI evidence remains the same FPC source already cited for clock,
+errno, pthread lifecycle/TLS/sync, native thread id, and CPU count.
+
+- `nextpas.core.platform.linux.ffi` now exposes Linux-owned helper projections
+  with the `linux_*` prefix: `linux_errno_location`, `linux_errno_value`,
+  `linux_clock_*`, `linux_thread_self_token_u64`,
+  `linux_native_thread_id_u64`, `linux_cpu_count_i32`, and
+  `linux_pthread_*`.
+- Shared POSIX skeletons remain `platform_posix_*` because their owner is
+  `nextpas.core.platform.posix.ffi`, not Linux.
+- `platform.time.host`, `platform.sync`, and `platform.thread` consume the
+  Linux-prefixed helpers on the Linux branch while preserving the unified public
+  `platform_*` contract names in their own public API.
+- Android, Darwin, FreeBSD, and generic Unix still carry historical
+  unified-looking helper names for the same families. That is recorded as a
+  follow-up owner-name cleanup, not as desired shape for new imports.
+
 ### Platform Host ABI Completeness Wave 11: POSIX signal-control raw ABI
 
 Wave 11 promotes POSIX signal-control raw ABI inventory into host owners. It

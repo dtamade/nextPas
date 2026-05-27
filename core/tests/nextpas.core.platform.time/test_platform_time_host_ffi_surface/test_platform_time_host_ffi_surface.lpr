@@ -95,19 +95,20 @@ end;
 
 procedure CheckPosixClockHelperSet(
   const ASource, AHostLabel: string;
-  const ARequireSharedResolutionProjection: Boolean);
+  const ARequireSharedResolutionProjection: Boolean;
+  const AHostPrefix: string = 'platform');
 begin
-  CheckTokenPresent(ASource, 'platform_clock_monotonic_now',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_now',
     AHostLabel + ' must expose host monotonic clock helper for platform.time');
-  CheckTokenPresent(ASource, 'platform_clock_realtime_now',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_realtime_now',
     AHostLabel + ' must expose host realtime clock helper for platform.time');
-  CheckTokenPresent(ASource, 'platform_clock_monotonic_getres',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_getres',
     AHostLabel + ' must expose host monotonic clock resolution helper for platform.time');
-  CheckTokenPresent(ASource, 'platform_clock_monotonic_ns_u64',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_ns_u64',
     AHostLabel + ' must expose host-owned monotonic nanosecond helper for platform.time');
-  CheckTokenPresent(ASource, 'platform_clock_realtime_ns_u64',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_realtime_ns_u64',
     AHostLabel + ' must expose host-owned realtime nanosecond helper for platform.time');
-  CheckTokenPresent(ASource, 'platform_clock_monotonic_resolution_ns_u64',
+  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_resolution_ns_u64',
     AHostLabel + ' must expose host-owned monotonic resolution nanosecond helper for platform.time');
   CheckTokenPresent(ASource, 'platform_posix_clock_now',
     AHostLabel + ' must delegate raw POSIX clock reads to shared posix.ffi');
@@ -158,7 +159,9 @@ begin
     'posix.ffi must delegate pure POSIX timespec math through helper-only posix.math');
   CheckTokenPresent(LPosixMathSource, 'platform_posix_timespec_to_ns_u64',
     'posix.math must expose shared timespec conversion helper for platform.time');
-  CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi', True);
+  CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi', True, 'linux');
+  CheckTokenAbsent(LLinuxSource, 'function platform_clock_',
+    'linux.ffi must not expose unified-looking platform_clock helper names');
   CheckPosixClockHelperSet(LAndroidSource, 'android.ffi', True);
   CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi', True);
   CheckPosixClockHelperSet(LUnixSource, 'unix.ffi', True);
@@ -261,6 +264,12 @@ begin
     'platform.time.host must consume host-owned realtime nanosecond helper');
   CheckTokenPresent(LTimeHostSource, 'platform_clock_monotonic_resolution_ns_u64',
     'platform.time.host must consume host-owned monotonic resolution nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'linux_clock_monotonic_ns_u64',
+    'platform.time.host Linux branch must consume Linux-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'linux_clock_realtime_ns_u64',
+    'platform.time.host Linux branch must consume Linux-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'linux_clock_monotonic_resolution_ns_u64',
+    'platform.time.host Linux branch must consume Linux-owned monotonic resolution helper');
   CheckTokenPresent(LTimeHostSource, 'windows_qpc_to_ns',
     'platform.time.host must consume Windows QPC nanosecond conversion helper through windows.ffi');
   CheckTokenPresent(LTimeHostSource, 'windows_qpc_resolution_ns',

@@ -243,13 +243,13 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   compile-only gate 与 `verify_local` route truth 分批导入；统一 public contract 另由
   `platform.time`、`platform.sync`、`platform.thread` 以及后续 `platform.env` / `platform.process`
   等模块设计，不能在 host ABI wave 中偷渡。
-- 当前 platform host ABI import 已推进到 Platform Host ABI Completeness Wave 12：host FFI
-  process-id owner-name cleanup。POSIX host FFI 中旧的 `platform_process_id` /
-  `platform_parent_process_id` 已收回为 `linux_*`、`android_*`、`darwin_*`、`freebsd_*`
-  和 `unix_*` host-prefixed helper；这保持 raw ABI 归 host `base/ffi` owner，避免在尚未设计
-  public `platform.process` contract 前泄漏统一抽象命名。Platform Host ABI Completeness Wave 11
-  已完成 POSIX signal-control raw ABI 导入；shared POSIX 不伪造通用 `sigset_t` / `sigactionrec`，
-  也不创建 public `platform.signal` 或 `platform.process` contract。
+- 当前 platform host ABI import 已推进到 Platform Host ABI Completeness Wave 13：Linux host FFI
+  helper owner-name cleanup。Linux pthread / clock / errno / thread / CPU helper projection 已从
+  误导性的 `platform_*` 命名收回为 `linux_*`，shared POSIX skeleton 继续使用
+  `platform_posix_*`。Platform Host ABI Completeness Wave 12 已完成 host FFI process-id
+  owner-name cleanup；Platform Host ABI Completeness Wave 11 已完成 POSIX signal-control raw ABI
+  导入。Android / Darwin / FreeBSD / generic Unix 同类 helper 命名仍是下一波必须收敛的债务，不能作为
+  新 raw ABI 导入模板继续扩散。
 - 最小 source-backed `System.pas` / `TObject` truth 已落地：implicit runtime 语义层会读取
   target-installed `System.pas`，普通 class 默认继承 `System.TObject`，`Obj.Free` 可绑定到
   真实 `TObject.Free` method symbol；no-fold typed HIR 也会把继承路径上的 `Free` lowering 到

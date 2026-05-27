@@ -116,9 +116,238 @@ var
   GPosixWaitBucketsState: Int32 = 0;
   GPosixWaitBucketsInitResult: Int32 = 0;
 
+function platform_sync_host_pthread_sync_result(
+  const AError: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_sync_result(
+    AError,
+    AAgainResult,
+    ABusyResult,
+    AInvalidResult,
+    AUnsupportedResult,
+    ATimeoutResult);
+  {$ELSE}
+  Result := platform_pthread_sync_result(
+    AError,
+    AAgainResult,
+    ABusyResult,
+    AInvalidResult,
+    AUnsupportedResult,
+    ATimeoutResult);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_mutex_init_platform_kind(AMutex, AKind);
+  {$ELSE}
+  Result := platform_pthread_mutex_init_platform_kind(AMutex, AKind);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_init(ACondVar);
+  {$ELSE}
+  Result := platform_pthread_condvar_init(ACondVar);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
+  {$ELSE}
+  Result := platform_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
+  {$ENDIF}
+end;
+
+procedure platform_sync_host_pthread_yield; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  linux_pthread_yield;
+  {$ELSE}
+  platform_pthread_yield;
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_mutex_destroy(AMutex);
+  {$ELSE}
+  Result := platform_pthread_mutex_destroy(AMutex);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_mutex_lock(AMutex);
+  {$ELSE}
+  Result := platform_pthread_mutex_lock(AMutex);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_mutex_trylock(AMutex);
+  {$ELSE}
+  Result := platform_pthread_mutex_trylock(AMutex);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_mutex_unlock(AMutex);
+  {$ELSE}
+  Result := platform_pthread_mutex_unlock(AMutex);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_init(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_init(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_destroy(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_destroy(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_rdlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_rdlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_tryrdlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_tryrdlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_wrlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_wrlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_trywrlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_trywrlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_rdunlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_rdunlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_rwlock_wrunlock(ARwLock);
+  {$ELSE}
+  Result := platform_pthread_rwlock_wrunlock(ARwLock);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_destroy(ACondVar);
+  {$ELSE}
+  Result := platform_pthread_condvar_destroy(ACondVar);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_wait(ACondVar, AMutex);
+  {$ELSE}
+  Result := platform_pthread_condvar_wait(ACondVar, AMutex);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_timeout_deadline_after_ns(
+  const ANanoseconds: UInt64;
+  out ADeadline: timespec): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
+  {$ELSE}
+  Result := platform_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_timeout_remaining_ns_u64(
+  const ADeadline: PTimeSpec;
+  out ARemainingNs: UInt64): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
+  {$ELSE}
+  Result := platform_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_signal(ACondVar);
+  {$ELSE}
+  Result := platform_pthread_condvar_signal(ACondVar);
+  {$ENDIF}
+end;
+
+function platform_sync_host_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_condvar_broadcast(ACondVar);
+  {$ELSE}
+  Result := platform_pthread_condvar_broadcast(ACondVar);
+  {$ENDIF}
+end;
+
 function platform_posix_map_error(const ACode: Int32): Int32; inline;
 begin
-  Result := platform_pthread_sync_result(
+  Result := platform_sync_host_pthread_sync_result(
     ACode,
     PLATFORM_ERR_AGAIN,
     PLATFORM_ERR_BUSY,
@@ -145,13 +374,13 @@ function platform_posix_mutex_init_impl(var AMutex: TPlatformMutex; const AKind:
 begin
   FillChar(AMutex, SizeOf(AMutex), 0);
   Result := platform_posix_map_error(
-    platform_pthread_mutex_init_platform_kind(@AMutex.FOpaque[0], AKind));
+    platform_sync_host_pthread_mutex_init_platform_kind(@AMutex.FOpaque[0], AKind));
 end;
 
 function platform_posix_condvar_init_impl(var ACondVar: TPlatformCondVar): Int32;
 begin
   FillChar(ACondVar, SizeOf(ACondVar), 0);
-  Result := platform_posix_map_error(platform_pthread_condvar_init(@ACondVar.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_condvar_init(@ACondVar.FOpaque[0]));
 end;
 
 function platform_posix_condvar_timedwait_abs(
@@ -163,7 +392,7 @@ var
 begin
   LDeadline := ADeadline;
   Result := platform_posix_map_error(
-    platform_pthread_condvar_timedwait_abs(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], @LDeadline));
+    platform_sync_host_pthread_condvar_timedwait_abs(@ACondVar.FOpaque[0], @AMutex.FOpaque[0], @LDeadline));
 end;
 
 procedure platform_posix_wait_buckets_destroy_range(const ALastIndex: Integer);
@@ -218,7 +447,7 @@ begin
   end;
 
   while InterlockedCompareExchange(GPosixWaitBucketsState, 0, 0) <> 2 do
-    platform_pthread_yield;
+    platform_sync_host_pthread_yield;
   Result := GPosixWaitBucketsInitResult;
 end;
 
@@ -231,22 +460,22 @@ end;
 
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_mutex_destroy(@AMutex.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_mutex_destroy(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_mutex_lock(@AMutex.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_mutex_lock(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_mutex_trylock(@AMutex.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_mutex_trylock(@AMutex.FOpaque[0]));
 end;
 
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_mutex_unlock(@AMutex.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_mutex_unlock(@AMutex.FOpaque[0]));
 end;
 
 { RWLock }
@@ -254,42 +483,42 @@ end;
 function platform_rwlock_init(var ARwLock: TPlatformRwLock): Int32;
 begin
   FillChar(ARwLock, SizeOf(ARwLock), 0);
-  Result := platform_posix_map_error(platform_pthread_rwlock_init(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_init(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_destroy(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_destroy(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_rdlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_rdlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_tryrdlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_tryrdlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_wrlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_wrlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_trywrlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_rdunlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_rdunlock(@ARwLock.FOpaque[0]));
 end;
 
 function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_rwlock_wrunlock(@ARwLock.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_rwlock_wrunlock(@ARwLock.FOpaque[0]));
 end;
 
 { CondVar }
@@ -301,13 +530,13 @@ end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_condvar_destroy(@ACondVar.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_condvar_destroy(@ACondVar.FOpaque[0]));
 end;
 
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;
 begin
   Result := platform_posix_map_error(
-    platform_pthread_condvar_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]));
+    platform_sync_host_pthread_condvar_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]));
 end;
 
 function platform_condvar_timedwait(
@@ -321,7 +550,7 @@ begin
     Exit(platform_condvar_wait(ACondVar, AMutex));
 
   Result := platform_posix_map_error(
-    platform_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
+    platform_sync_host_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
   if Result <> 0 then
     Exit;
   Result := platform_posix_condvar_timedwait_abs(ACondVar, AMutex, LDeadline);
@@ -329,12 +558,12 @@ end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_condvar_signal(@ACondVar.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_condvar_signal(@ACondVar.FOpaque[0]));
 end;
 
 function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := platform_posix_map_error(platform_pthread_condvar_broadcast(@ACondVar.FOpaque[0]));
+  Result := platform_posix_map_error(platform_sync_host_pthread_condvar_broadcast(@ACondVar.FOpaque[0]));
 end;
 
 function platform_posix_wait_address_fallback(
@@ -382,7 +611,7 @@ begin
       if ATimeoutNs > 0 then
       begin
         Result := platform_posix_map_error(
-          platform_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
+          platform_sync_host_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
         if Result <> 0 then
           LDone := True;
       end;
@@ -394,7 +623,7 @@ begin
         else
         begin
           Result := platform_posix_map_error(
-            platform_pthread_timeout_remaining_ns_u64(@LDeadline, LRemainingNs));
+            platform_sync_host_pthread_timeout_remaining_ns_u64(@LDeadline, LRemainingNs));
           if Result <> 0 then
             Break;
           if LRemainingNs = 0 then

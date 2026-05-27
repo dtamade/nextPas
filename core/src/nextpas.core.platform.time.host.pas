@@ -79,19 +79,46 @@ end;
   {$FATAL 'nextpas.core.platform.time.host: unsupported platform. Implement for your target.'}
 {$ENDIF}
 
+function platform_time_host_clock_monotonic_ns_u64: UInt64; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_clock_monotonic_ns_u64;
+  {$ELSE}
+  Result := platform_clock_monotonic_ns_u64;
+  {$ENDIF}
+end;
+
+function platform_time_host_clock_realtime_ns_u64: UInt64; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_clock_realtime_ns_u64;
+  {$ELSE}
+  Result := platform_clock_realtime_ns_u64;
+  {$ENDIF}
+end;
+
+function platform_time_host_clock_monotonic_resolution_ns_u64: UInt64; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_clock_monotonic_resolution_ns_u64;
+  {$ELSE}
+  Result := platform_clock_monotonic_resolution_ns_u64;
+  {$ENDIF}
+end;
+
 function platform_monotonic_ns: TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_monotonic_ns_u64;
+  Result := platform_time_host_clock_monotonic_ns_u64;
 end;
 
 function platform_realtime_ns: TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_realtime_ns_u64;
+  Result := platform_time_host_clock_realtime_ns_u64;
 end;
 
 function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds;
 begin
-  Result := platform_clock_monotonic_resolution_ns_u64;
+  Result := platform_time_host_clock_monotonic_resolution_ns_u64;
 end;
 
 end.

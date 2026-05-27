@@ -2,6 +2,79 @@
 
 ## 2026-05-28
 
+- Started Wave 13 from `main@eab4c19` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave13-names`
+  on branch `codex/platform-host-ffi-wave13-names`.
+- Baseline focused guard passed:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`
+  reported `3 total, 3 passed, 0 failed`.
+- Re-read the active platform plan, findings, progress, source evidence index,
+  import workflow, and host gap matrix. Also confirmed the root-level
+  `task_plan.md` is stale unrelated planning; the active platform files are the
+  `core/task_plan.md`, `core/findings.md`, and `core/progress.md` trio.
+- Selected Wave 13 as Linux host FFI helper owner-name cleanup after user review
+  of `platform_pthread_*` names in `linux.ffi`. Scope is Linux pthread/clock/
+  errno/thread/cpu helper names plus their Linux consumers in
+  `platform.time.host`, `platform.sync`, and `platform.thread`.
+- Recorded the raw ABI verification boundary again: FPC definitions are not
+  runtime-probed; nextPas checks owner/name discipline, docs truth, dependency
+  purity, and compile coherence.
+- RED result:
+  `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  compiled and failed as expected on missing `linux_errno_location`.
+- Renamed Linux host-owned helper projections in `linux.ffi` to `linux_*`:
+  errno, pthread sync/lifecycle/TLS/sleep/yield, clock, native thread id, and
+  CPU count. Shared `platform_posix_*` helpers stayed unchanged.
+- Updated Linux consumer branches in `platform.time.host`, `platform.sync`, and
+  `platform.thread` through private host-dispatch helpers so public
+  `platform_*` contracts remain stable while Linux host-owned names are no
+  longer misleading.
+- Focused GREEN so far:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`:
+    `8 total, 8 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`:
+    `14 total, 14 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`:
+    `11 total, 11 passed, 0 failed`.
+- Updated design conventions, source evidence index, host gap matrix, and goal
+  tree to record Wave 13 and to mark Android / Darwin / FreeBSD / generic Unix
+  helper-name cleanup as the next platform wave.
+- Fixed two stale source-surface guards found during verification:
+  - `test_platform_host_gap_matrix` still had one generic Unix call without the
+    transitional `platform` host-helper prefix.
+  - `test_platform_ffi_partition_surface` still expected Linux
+    `platform_errno_location` / `platform_pthread_condattr_setclock`; it now
+    requires `linux_errno_location` / `linux_pthread_condattr_setclock` and
+    rejects the old Linux `platform_*` helper exports.
+- Wave 13 focused and full pre-merge verification passed:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin, Android, FreeBSD, and generic Unix simulated compile routes passed.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`.
+
 - Started Wave 12 from `main@0da1a4a` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-purity-wave12`
   on branch `codex/platform-host-ffi-purity-wave12`.

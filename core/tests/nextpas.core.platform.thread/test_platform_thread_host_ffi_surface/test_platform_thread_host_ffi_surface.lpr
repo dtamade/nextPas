@@ -189,40 +189,68 @@ begin
     'linux.ffi must bind the Linux native thread id symbol');
   CheckTokenPresent(LLinuxSource, 'platform_posix_eintr',
     'linux.ffi must expose Linux EINTR for retryable nanosleep');
-  CheckTokenPresent(LLinuxSource, 'platform_errno_location',
-    'linux.ffi must expose Linux errno binding for retryable nanosleep');
-  CheckTokenPresent(LLinuxSource, 'platform_posix_errno_value',
-    'linux.ffi must expose Linux errno value helper for retryable nanosleep');
-  CheckTokenPresent(LLinuxSource, 'platform_thread_self_token_u64',
-    'linux.ffi must expose Linux thread self token helper');
-  CheckTokenPresent(LLinuxSource, 'platform_native_thread_id_u64',
-    'linux.ffi must expose Linux native thread id helper');
-  CheckTokenPresent(LLinuxSource, 'platform_cpu_count_i32',
-    'linux.ffi must expose Linux CPU count helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_create_handle',
-    'linux.ffi must expose Linux pthread create helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_join_handle',
-    'linux.ffi must expose Linux pthread join helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_detach_handle',
-    'linux.ffi must expose Linux pthread detach helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_create',
-    'linux.ffi must expose Linux pthread state create helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_join',
-    'linux.ffi must expose Linux pthread state join helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_state_detach',
-    'linux.ffi must expose Linux pthread state detach helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_yield',
-    'linux.ffi must expose Linux pthread yield helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_sleep_ns',
-    'linux.ffi must expose Linux pthread sleep helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_create',
-    'linux.ffi must expose Linux pthread TLS create helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_destroy',
-    'linux.ffi must expose Linux pthread TLS destroy helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_set',
-    'linux.ffi must expose Linux pthread TLS set helper');
-  CheckTokenPresent(LLinuxSource, 'platform_pthread_tls_get',
-    'linux.ffi must expose Linux pthread TLS get helper');
+  CheckTokenPresent(LLinuxSource, 'linux_errno_location',
+    'linux.ffi must expose Linux-owned errno binding for retryable nanosleep');
+  CheckTokenPresent(LLinuxSource, 'linux_errno_value',
+    'linux.ffi must expose Linux-owned errno value helper for retryable nanosleep');
+  CheckTokenPresent(LLinuxSource, 'linux_thread_self_token_u64',
+    'linux.ffi must expose Linux-owned thread self token helper');
+  CheckTokenPresent(LLinuxSource, 'linux_native_thread_id_u64',
+    'linux.ffi must expose Linux-owned native thread id helper');
+  CheckTokenPresent(LLinuxSource, 'linux_cpu_count_i32',
+    'linux.ffi must expose Linux-owned CPU count helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_create_handle',
+    'linux.ffi must expose Linux-owned pthread create helper');
+  CheckTokenAbsent(LLinuxSource, 'function platform_pthread_',
+    'linux.ffi must not expose unified-looking platform_pthread helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_clock_',
+    'linux.ffi must not expose unified-looking platform_clock helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_thread_self_token_u64',
+    'linux.ffi must not expose unified-looking thread token helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_native_thread_id_u64',
+    'linux.ffi must not expose unified-looking native thread id helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_cpu_count_i32',
+    'linux.ffi must not expose unified-looking CPU helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_errno_location',
+    'linux.ffi must not expose unified-looking errno binding names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_posix_errno_value',
+    'linux.ffi must not expose unified-looking errno value helper names');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_join_handle',
+    'linux.ffi must expose Linux-owned pthread join helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_detach_handle',
+    'linux.ffi must expose Linux-owned pthread detach helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_state_create',
+    'linux.ffi must expose Linux-owned pthread state create helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_state_join',
+    'linux.ffi must expose Linux-owned pthread state join helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_state_detach',
+    'linux.ffi must expose Linux-owned pthread state detach helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_yield',
+    'linux.ffi must expose Linux-owned pthread yield helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_sleep_ns',
+    'linux.ffi must expose Linux-owned pthread sleep helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_tls_create',
+    'linux.ffi must expose Linux-owned pthread TLS create helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_tls_destroy',
+    'linux.ffi must expose Linux-owned pthread TLS destroy helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_tls_set',
+    'linux.ffi must expose Linux-owned pthread TLS set helper');
+  CheckTokenPresent(LLinuxSource, 'linux_pthread_tls_get',
+    'linux.ffi must expose Linux-owned pthread TLS get helper');
+  CheckTokenAbsent(LLinuxSource, 'platform_pthread_create_handle',
+    'linux.ffi must no longer expose old platform_pthread_create_handle helper');
+  CheckTokenAbsent(LLinuxSource, 'platform_pthread_join_handle',
+    'linux.ffi must no longer expose old platform_pthread_join_handle helper');
+  CheckTokenAbsent(LLinuxSource, 'platform_pthread_detach_handle',
+    'linux.ffi must no longer expose old platform_pthread_detach_handle helper');
+  CheckTokenPresent(LThreadSource, 'linux_pthread_state_create',
+    'platform.thread Linux branch must consume Linux-owned pthread state create helper');
+  CheckTokenPresent(LThreadSource, 'linux_thread_self_token_u64',
+    'platform.thread Linux branch must consume Linux-owned thread self token helper');
+  CheckTokenPresent(LThreadSource, 'linux_native_thread_id_u64',
+    'platform.thread Linux branch must consume Linux-owned native thread id helper');
+  CheckTokenPresent(LThreadSource, 'linux_cpu_count_i32',
+    'platform.thread Linux branch must consume Linux-owned CPU count helper');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_token_size',
     'linux.base must expose Linux pthread token storage size');
   CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadtokenalign',

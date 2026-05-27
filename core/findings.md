@@ -1,5 +1,26 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 13 Linux host helper naming cleanup
+
+- User review correctly flagged that Linux host FFI helpers named
+  `platform_pthread_*` look like a unified public `platform` contract even
+  though they are host-owned projections over POSIX pthread/raw Linux ABI.
+- The same naming leak exists on the Linux host path for `platform_clock_*`,
+  `platform_errno_location`, `platform_posix_errno_value`,
+  `platform_thread_self_token_u64`, `platform_native_thread_id_u64`, and
+  `platform_cpu_count_i32`.
+- Wave 13 should rename the Linux host-owned helper surface to `linux_*` and
+  update the Linux branches in `platform.time.host`, `platform.sync`, and
+  `platform.thread` to consume Linux-owned names. Shared `platform_posix_*`
+  names stay unchanged because their owner is `nextpas.core.platform.posix.ffi`.
+- Android, Darwin, FreeBSD, and generic Unix carry the same historical helper
+  naming pattern. They are deliberately left for the next cleanup wave so this
+  Linux correction remains reviewable and can be verified on the real local
+  Linux path first.
+- No runtime proof is needed for these raw helpers. FPC remains the ABI
+  authority; this wave verifies nextPas owner/name discipline and compile
+  coherence.
+
 ## 2026-05-28: Wave 12 process-id owner-name cleanup
 
 - Wave 12 corrects a boundary inconsistency left by the early raw ABI import

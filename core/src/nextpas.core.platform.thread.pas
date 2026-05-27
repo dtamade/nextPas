@@ -64,6 +64,114 @@ uses
 {$ENDIF}
 
 {$IFDEF NEXTPAS_UNIX}
+function platform_thread_host_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_state_create(AState, AStartRoutine, AArgument);
+  {$ELSE}
+  Result := platform_pthread_state_create(AState, AStartRoutine, AArgument);
+  {$ENDIF}
+end;
+
+function platform_thread_host_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_state_join(AState, ARetVal);
+  {$ELSE}
+  Result := platform_pthread_state_join(AState, ARetVal);
+  {$ENDIF}
+end;
+
+function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_state_detach(AState);
+  {$ELSE}
+  Result := platform_pthread_state_detach(AState);
+  {$ENDIF}
+end;
+
+function platform_thread_host_self_token_u64: UInt64; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_thread_self_token_u64;
+  {$ELSE}
+  Result := platform_thread_self_token_u64;
+  {$ENDIF}
+end;
+
+function platform_thread_host_native_thread_id_u64: UInt64; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_native_thread_id_u64;
+  {$ELSE}
+  Result := platform_native_thread_id_u64;
+  {$ENDIF}
+end;
+
+procedure platform_thread_host_yield; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  linux_pthread_yield;
+  {$ELSE}
+  platform_pthread_yield;
+  {$ENDIF}
+end;
+
+procedure platform_thread_host_sleep_ns(const ANanoseconds: UInt64); inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  linux_pthread_sleep_ns(ANanoseconds);
+  {$ELSE}
+  platform_pthread_sleep_ns(ANanoseconds);
+  {$ENDIF}
+end;
+
+function platform_thread_host_tls_create(out AKey: PtrUInt): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_tls_create(AKey);
+  {$ELSE}
+  Result := platform_pthread_tls_create(AKey);
+  {$ENDIF}
+end;
+
+function platform_thread_host_tls_destroy(const AKey: PtrUInt): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_tls_destroy(AKey);
+  {$ELSE}
+  Result := platform_pthread_tls_destroy(AKey);
+  {$ENDIF}
+end;
+
+function platform_thread_host_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_tls_set(AKey, AValue);
+  {$ELSE}
+  Result := platform_pthread_tls_set(AKey, AValue);
+  {$ENDIF}
+end;
+
+function platform_thread_host_tls_get(const AKey: PtrUInt): Pointer; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_pthread_tls_get(AKey);
+  {$ELSE}
+  Result := platform_pthread_tls_get(AKey);
+  {$ENDIF}
+end;
+
+function platform_thread_host_cpu_count_i32: Int32; inline;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  Result := linux_cpu_count_i32;
+  {$ELSE}
+  Result := platform_cpu_count_i32;
+  {$ENDIF}
+end;
+
 { Thread lifecycle }
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
@@ -71,7 +179,7 @@ var
   LState: PPlatformPThreadState;
 begin
   AHandle := nil;
-  Result := platform_pthread_state_create(LState, Pointer(AProc), AArg);
+  Result := platform_thread_host_state_create(LState, Pointer(AProc), AArg);
   if Result = 0 then
     AHandle := TPlatformThreadHandle(LState);
 end;
@@ -81,7 +189,7 @@ var
   LState: PPlatformPThreadState;
 begin
   LState := PPlatformPThreadState(AHandle);
-  Result := platform_pthread_state_join(LState, ARetVal);
+  Result := platform_thread_host_state_join(LState, ARetVal);
 end;
 
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
@@ -89,56 +197,56 @@ var
   LState: PPlatformPThreadState;
 begin
   LState := PPlatformPThreadState(AHandle);
-  Result := platform_pthread_state_detach(LState);
+  Result := platform_thread_host_state_detach(LState);
 end;
 
 function platform_thread_self: TPlatformThreadToken;
 begin
-  Result := TPlatformThreadToken(platform_thread_self_token_u64);
+  Result := TPlatformThreadToken(platform_thread_host_self_token_u64);
 end;
 
 function platform_thread_id: UInt64;
 begin
-  Result := platform_native_thread_id_u64;
+  Result := platform_thread_host_native_thread_id_u64;
 end;
 
 procedure platform_thread_yield;
 begin
-  platform_pthread_yield;
+  platform_thread_host_yield;
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
 begin
-  platform_pthread_sleep_ns(ANanoseconds);
+  platform_thread_host_sleep_ns(ANanoseconds);
 end;
 
 { TLS }
 
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 begin
-  Result := platform_pthread_tls_create(AKey);
+  Result := platform_thread_host_tls_create(AKey);
 end;
 
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
-  Result := platform_pthread_tls_destroy(AKey);
+  Result := platform_thread_host_tls_destroy(AKey);
 end;
 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
 begin
-  Result := platform_pthread_tls_set(AKey, AValue);
+  Result := platform_thread_host_tls_set(AKey, AValue);
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 begin
-  Result := platform_pthread_tls_get(AKey);
+  Result := platform_thread_host_tls_get(AKey);
 end;
 
 { CPU }
 
 function platform_cpu_count: Int32;
 begin
-  Result := platform_cpu_count_i32;
+  Result := platform_thread_host_cpu_count_i32;
 end;
 
 {$ENDIF}

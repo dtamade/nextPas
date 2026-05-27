@@ -194,16 +194,22 @@ begin
     'linux.base must expose Linux EINTR for retryable sleep semantics');
   CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadtokenalign',
     'linux.base must expose Linux pthread token align carrier');
-  CheckTokenPresent(LLinuxSource, 'function platform_errno_location',
-    'linux.ffi must expose Linux errno binding');
+  CheckTokenPresent(LLinuxSource, 'function linux_errno_location',
+    'linux.ffi must expose Linux-owned errno binding');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_mutex_normal_kind',
     'linux.base must expose Linux pthread mutex kind numbering');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_condattr_setclock_supported',
     'linux.base must expose Linux pthread condattr clock capability');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_mutex_timedlock_supported',
     'linux.base must expose Linux pthread mutex timed-lock capability');
-  CheckTokenPresent(LLinuxSource, 'function platform_pthread_condattr_setclock',
-    'linux.ffi must expose Linux pthread condattr clock binding');
+  CheckTokenPresent(LLinuxSource, 'function linux_pthread_condattr_setclock',
+    'linux.ffi must expose Linux-owned pthread condattr clock binding');
+  CheckTokenAbsent(LLinuxSource, 'function platform_errno_location',
+    'linux.ffi must not expose unified-looking errno helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_pthread_',
+    'linux.ffi must not expose unified-looking pthread helper names');
+  CheckTokenAbsent(LLinuxSource, 'function platform_clock_',
+    'linux.ffi must not expose unified-looking clock helper names');
   CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_timeout_clock_id',
     'linux.base must expose Linux pthread timeout clock policy');
 

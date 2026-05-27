@@ -31,7 +31,7 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 
 | Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability | File / status ABI |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | `__errno_location`, Linux `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84` | `gettid` plus `platform_posix_thread_self_token_u64` for self token | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers plus Linux futex wait/wake | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers, Linux `statx`, and Linux traditional stat records / libc wrappers |
+| Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, `linux_clock_*` helpers | `linux_errno_location`, Linux `PLATFORM_POSIX_E*` values, `linux_errno_value` | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84`, `linux_cpu_count_i32` | `gettid` plus `platform_posix_thread_self_token_u64` for self token through `linux_*` helpers | `linux_pthread_state_*` backed by `pthread_create/join/detach` | `linux_pthread_tls_*` helpers | `linux_pthread_*` mutex/rwlock/condvar helpers plus Linux futex wait/wake | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers, Linux `statx`, and Linux traditional stat records / libc wrappers |
 | Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | Android `__errno`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97` | `gettid` plus `platform_posix_thread_self_token_u64` for self token | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; Android traditional stat records and `newfstatat` / `fstat` helpers |
 | Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime plus Mach monotonic helpers | `__error`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_threadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX file descriptor and I/O helpers; Darwin `$INODE64` stat records and libc bindings |
 | FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`, platform clock helpers | `__error`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_getthreadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; FreeBSD traditional stat records and libc bindings |
@@ -40,6 +40,13 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 13 covers Linux host FFI helper
+  owner-name cleanup. Linux pthread/clock/errno/thread/cpu helper projections
+  now use `linux_*` names, while shared POSIX skeleton helpers remain
+  `platform_posix_*`. This is naming/owner cleanup for existing FPC-backed raw
+  ABI evidence, not a runtime proof wave. Android, Darwin, FreeBSD, and generic
+  Unix still carry the historical unified-looking helper names for these
+  families and must be cleaned in a follow-up wave.
 - Platform Host ABI Completeness Wave 11 covers POSIX signal-control raw ABI
   inventory for host `base/ffi` owners. Linux now carries
   `TPlatformLinuxSignalSet`, `PPlatformLinuxSignalSet`,
