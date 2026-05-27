@@ -36,7 +36,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform.thread base extraction)
 
-- **Status:** completed; merged to main and cleanup pending
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块结构范式，把 `platform.thread` 的 public carrier type
     抽到 `nextpas.core.platform.thread.base`，让 `platform.thread` 和 `platform.time` 一样遵循
@@ -118,9 +118,11 @@ platform/core 工作流保留下来的已完成记录。
     `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
   - 主 checkout 仍有 unrelated user/teammate WIP：
     `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`；本轮未修改也未提交该文件。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base` worktree 已删除，
+    `codex/platform-thread-base` 分支已删除。
 - Next:
-  - 提交本收口记录后，清理 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base`
-    worktree 和 `codex/platform-thread-base` 分支。
+  - 下一轮 platform 优先做 facade/base 结构完整性巡检：确认 `platform.sync` 是否也需要单独 base
+    owner，或继续推进 Windows/macOS/Linux/Android/FreeBSD host FFI surface parity。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 

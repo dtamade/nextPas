@@ -70,7 +70,7 @@ platform 子模块继续符合“facade/base/implementation”结构范式：
 
 ### Status
 
-Completed; merged to `main@de7efaa`, cleanup pending.
+Completed; merged to `main@de7efaa`, cleanup done.
 
 ### Planned Steps
 
@@ -99,7 +99,7 @@ Completed; merged to `main@de7efaa`, cleanup pending.
   - `bash build/verify_local.sh`
   - `git diff --check`
 - [x] commit、择优合并回 `main`
-- [ ] 清理 worktree / 分支
+- [x] 清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -148,6 +148,8 @@ Completed; merged to `main@de7efaa`, cleanup pending.
     `test_platform_simulated_host_compile_matrix` pass。
   - 主 checkout 存在 unrelated `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`
     WIP，本轮不纳入提交。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base` worktree 已删除，
+    `codex/platform-thread-base` 分支已删除。
 
 ## Addendum: 2026-05-27 Platform Sync Windows Wait-Address Public Result Boundary
 
