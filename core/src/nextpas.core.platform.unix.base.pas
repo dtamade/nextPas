@@ -29,6 +29,23 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformUnixSignalSet = record
+    Words: array[0..1] of PtrUInt;
+  end;
+  PPlatformUnixSignalSet = ^TPlatformUnixSignalSet;
+
+  TPlatformUnixSigActionHandler = procedure(
+    ASignal: Int32;
+    AInfo: Pointer;
+    AContext: Pointer); cdecl;
+
+  TPlatformUnixSigAction = record
+    sa_handler: TPlatformUnixSigActionHandler;
+    sa_mask: TPlatformUnixSignalSet;
+    sa_flags: Int32;
+  end;
+  PPlatformUnixSigAction = ^TPlatformUnixSigAction;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -66,6 +83,11 @@ const
   PLATFORM_SIGNAL_KILL = Int32(9);
   PLATFORM_SIGNAL_TERMINATE = Int32(15);
   PLATFORM_SIGNAL_CHILD = Int32(17);
+  PLATFORM_SIGNAL_ACTION_SIGINFO = Int32(4);
+  PLATFORM_SIGNAL_ACTION_RESTART = Int32($10000000);
+  PLATFORM_SIGNAL_MASK_BLOCK = Int32(0);
+  PLATFORM_SIGNAL_MASK_UNBLOCK = Int32(1);
+  PLATFORM_SIGNAL_MASK_SETMASK = Int32(2);
 
   PLATFORM_RTLD_LAZY = Int32(1);
   PLATFORM_RTLD_NOW = Int32(2);

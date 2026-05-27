@@ -35,14 +35,68 @@ abstractions that consume them.
 
 | Host | nextPas owner | FPC source evidence | Evidence scope |
 | --- | --- | --- | --- |
-| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Linux traditional stat records and libc wrappers |
-| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/Makefile`, `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/x86_64/stat.inc`, `rtl/linux/aarch64/stat.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, and Android traditional stat records plus syscall-backed `newfstatat` / `fstat` helpers |
-| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/macos/macostp.inc`, `rtl/unix/oscdeclh.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Darwin `$INODE64` traditional stat bindings, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
-| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/unix/oscdeclh.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, and FreeBSD traditional stat bindings |
+| Linux | `nextpas.core.platform.linux.base` / `nextpas.core.platform.linux.ffi` | `rtl/linux/linux.pp`, `rtl/linux/ptypes.inc`, `rtl/linux/pthread.inc`, `rtl/linux/signal.inc`, `rtl/linux/sysos.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/sysnr.inc`, and sibling arch `sysnr.inc` files | `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, `clock_gettime`, `clock_getres`, `timespec`, `__errno_location`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread shapes/functions, `pthread_condattr_setclock`, `pthread_mutex_timedlock`, `syscall_nr_futex`, `FUTEX_WAIT`, `FUTEX_WAKE`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Linux traditional stat records and libc wrappers, Linux signal-control records/constants and `rt_sigaction` / `rt_sigprocmask` syscall projections |
+| Android | `nextpas.core.platform.android.base` / `nextpas.core.platform.android.ffi` | `rtl/android/Makefile`, `rtl/android/*/sysnr.inc`, `rtl/android/sysandroid.inc`, `packages/pthreads/src/pthrandroid.inc`, `rtl/linux/signal.inc`, `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`, `rtl/linux/x86_64/stat.inc`, `rtl/linux/aarch64/stat.inc`, and Android Bionic headers when FPC does not expose the libc symbol directly | Android `clock_gettime` / `clock_getres` syscall families, `timespec`, `__errno`, `gettid`, `_SC_NPROCESSORS_ONLN`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Android traditional stat records plus syscall-backed `newfstatat` / `fstat` helpers, and Android signal-control records/constants plus `rt_sigaction` / `rt_sigprocmask` syscall projections |
+| Darwin | `nextpas.core.platform.darwin.base` / `nextpas.core.platform.darwin.ffi` | `rtl/darwin/ptypes.inc`, `rtl/darwin/pthread.inc`, `rtl/darwin/signal.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/macos/macostp.inc`, `rtl/unix/oscdeclh.inc`, `rtl/unix/initc.pp`, plus Apple Darwin/Mach headers for Mach-only calls | `timespec`, pthread shapes/functions, `__error`, `pthread_threadid_np`, `mach_absolute_time`, `mach_timebase_info`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, Darwin `$INODE64` traditional stat bindings, Darwin signal-control records/constants and libc `sigaction` / `sigprocmask` plus `pthread_sigmask`, and the documented absence of `pthread_mutex_timedlock` / monotonic condattr policy on the current nextPas Darwin path |
+| FreeBSD | `nextpas.core.platform.freebsd.base` / `nextpas.core.platform.freebsd.ffi` | `rtl/freebsd/freebsd.pas`, `rtl/freebsd/ptypes.inc`, `rtl/freebsd/pthread.inc`, `rtl/freebsd/signal.inc`, `rtl/freebsd/sysnr.inc`, `rtl/bsd/sysos.inc`, `rtl/bsd/ostypes.inc`, `rtl/unix/oscdeclh.inc` | `CLOCK_REALTIME`, `CLOCK_MONOTONIC = 4`, `clock_gettime`, `clock_getres`, `timespec`, `__error`, `pthread_getthreadid_np`, pthread lifecycle/TLS/sync declarations, `pthread_mutex_timedlock`, `pthread_condattr_setclock`, POSIX environment helpers, shared POSIX process-control externals, shared POSIX file I/O externals, FreeBSD traditional stat bindings, and FreeBSD signal-control records/constants plus libc `sigaction` / `sigprocmask` and `pthread_sigmask` |
 | generic Unix | `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` | `rtl/unix/baseunix.pp`, `rtl/unix/unix.pp`, `rtl/unix/oscdeclh.inc`, `rtl/unix/unxdeclh.inc`, `rtl/unix/initc.pp`, `rtl/unix/cthreads.pp`, and the closest proven host-specific FPC source before promoting a fallback into a real host | shared POSIX `clock_gettime`, `clock_getres`, `timespec`, `__errno_location` / `__error` errno families, pthread lifecycle/TLS/sync declarations, `pthread_condattr_setclock` policy, `_SC_NPROCESSORS_ONLN` fallback, `pthread_self` native-id fallback, POSIX environment helpers, shared POSIX process-control externals, and shared POSIX file I/O externals |
 | Windows | `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi` | `rtl/win32/windows.pp`, `rtl/win64/windows.pp`, `rtl/win/wininc`, `rtl/win/sysfile.inc`, `rtl/win/sysutils.pp`, `packages/winunits-base`, and Windows OS SDK headers when FPC does not expose newer kernel32 APIs | `FILETIME`, `SYSTEM_INFO`, `PROCESS_INFORMATION`, `STARTUPINFOA/W`, `CreateThread`, `CreateProcessA/W`, `WaitForSingleObject`, `CloseHandle`, `GetCurrentThreadId`, `QueryPerformanceCounter`, `GetSystemTimeAsFileTime`, `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue`, `GetSystemInfo`, `SRWLOCK`, `CONDITION_VARIABLE`, `SleepConditionVariableSRW`, `WaitOnAddress`, `WakeByAddressSingle`, `WakeByAddressAll`, Windows environment entrypoints, Windows process-control entrypoints, Windows file I/O entrypoints |
 
 ## Declaration Evidence Classes
+
+### Platform Host ABI Completeness Wave 11: POSIX signal-control raw ABI
+
+Wave 11 promotes POSIX signal-control raw ABI inventory into host owners. It
+copies FPC's host-specific signal set widths, `sigactionrec` layouts, signal
+action flags, signal-mask operation constants, libc bindings, pthread signal
+mask bindings, and Linux-derived `rt_sigaction` / `rt_sigprocmask` syscall
+routes. Shared POSIX signal-control remains deferred because FPC records
+host-specific layouts; this wave has no public platform.signal contract.
+
+- Linux signal-control evidence starts in FPC `rtl/linux/signal.inc`,
+  `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`,
+  `rtl/linux/x86_64/sysnr.inc`, and `rtl/linux/sysnr-gen.inc`.
+  `nextpas.core.platform.linux.base` owns `TPlatformLinuxSignalSet`,
+  `PPlatformLinuxSignalSet`, `TPlatformLinuxSigAction`,
+  `PPlatformLinuxSigAction`, `PLATFORM_SIGNAL_ACTION_SIGINFO`,
+  `PLATFORM_SIGNAL_ACTION_RESTART`, `PLATFORM_SIGNAL_MASK_BLOCK`,
+  `PLATFORM_SIGNAL_MASK_UNBLOCK`, `PLATFORM_SIGNAL_MASK_SETMASK`,
+  `LINUX_SYSCALL_RT_SIGACTION`, and
+  `LINUX_SYSCALL_RT_SIGPROCMASK`. `nextpas.core.platform.linux.ffi` owns
+  `linux_rt_sigaction` and `linux_rt_sigprocmask` syscall projections.
+- Android signal-control evidence starts in FPC `rtl/linux/signal.inc`,
+  `rtl/linux/ossysc.inc`, `rtl/android/x86_64/sysnr.inc`, and
+  `rtl/android/aarch64/sysnr.inc`. `nextpas.core.platform.android.base` owns
+  `TPlatformAndroidSignalSet`, `PPlatformAndroidSignalSet`,
+  `TPlatformAndroidSigAction`, `PPlatformAndroidSigAction`, the host signal
+  action/mask tokens, `ANDROID_SYSCALL_RT_SIGACTION`, and
+  `ANDROID_SYSCALL_RT_SIGPROCMASK`. `nextpas.core.platform.android.ffi` owns
+  `android_rt_sigaction` and `android_rt_sigprocmask` syscall projections.
+- Darwin signal-control evidence starts in FPC `rtl/darwin/signal.inc`,
+  `rtl/darwin/pthread.inc`, and `rtl/unix/oscdeclh.inc`.
+  `nextpas.core.platform.darwin.base` owns `TPlatformDarwinSignalSet`,
+  `PPlatformDarwinSignalSet`, `TPlatformDarwinSigAction`,
+  `PPlatformDarwinSigAction`, and the Darwin signal action/mask tokens.
+  `nextpas.core.platform.darwin.ffi` owns `darwin_sigaction`,
+  `darwin_sigprocmask`, and `darwin_pthread_sigmask`.
+- FreeBSD signal-control evidence starts in FPC `rtl/freebsd/signal.inc`,
+  `rtl/freebsd/pthread.inc`, `rtl/bsd/ostypes.inc`,
+  `rtl/freebsd/sysnr.inc`, and `rtl/unix/oscdeclh.inc`.
+  `nextpas.core.platform.freebsd.base` owns `TPlatformFreeBSDSignalSet`,
+  `PPlatformFreeBSDSignalSet`, `TPlatformFreeBSDSigAction`,
+  `PPlatformFreeBSDSigAction`, and the FreeBSD signal action/mask tokens.
+  `nextpas.core.platform.freebsd.ffi` owns `freebsd_sigaction`,
+  `freebsd_sigprocmask`, and `freebsd_pthread_sigmask`.
+- Generic Unix keeps a conservative libc-backed fallback in
+  `nextpas.core.platform.unix.base` / `nextpas.core.platform.unix.ffi` through
+  `TPlatformUnixSignalSet`, `TPlatformUnixSigAction`, `unix_sigaction`, and
+  `unix_sigprocmask`. It does not invent a Linux `rt_sigaction` syscall route.
+- Shared POSIX owners still do not carry `TPlatformPosixSignalSet`,
+  `TPlatformPosixSigAction`, shared `sigaction`, or shared `sigprocmask`.
+  `rtl/unix/gensigset.inc` is evidence for future host-local or parameterized
+  pure signal-set helpers, not a universal record layout.
+
+No public platform.signal contract is created in Wave 11.
 
 ### Platform Host ABI Completeness Wave 10: Darwin / FreeBSD / Android traditional stat raw ABI
 

@@ -20,6 +20,14 @@ function platform_pthread_sync_result(
   const AInvalidResult: Int32;
   const AUnsupportedResult: Int32;
   const ATimeoutResult: Int32): Int32; inline;
+function android_rt_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformAndroidSigAction;
+  AOldAction: PPlatformAndroidSigAction): Int32; inline;
+function android_rt_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformAndroidSignalSet;
+  AOldSet: PPlatformAndroidSignalSet): Int32; inline;
 function android_newfstatat(
   const ADirectoryFileDescriptor: Int32;
   const APath: PAnsiChar;
@@ -173,6 +181,36 @@ begin
     Result := 0
   else
     Result := platform_posix_errno_value;
+end;
+
+function android_rt_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformAndroidSigAction;
+  AOldAction: PPlatformAndroidSigAction): Int32; inline;
+begin
+  Result := Int32(android_syscall(
+    ANDROID_SYSCALL_RT_SIGACTION,
+    PtrUInt(ASignal),
+    PtrUInt(ANewAction),
+    PtrUInt(AOldAction),
+    PtrUInt(8),
+    PtrUInt(0),
+    PtrUInt(0)));
+end;
+
+function android_rt_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformAndroidSignalSet;
+  AOldSet: PPlatformAndroidSignalSet): Int32; inline;
+begin
+  Result := Int32(android_syscall(
+    ANDROID_SYSCALL_RT_SIGPROCMASK,
+    PtrUInt(AHow),
+    PtrUInt(ANewSet),
+    PtrUInt(AOldSet),
+    PtrUInt(8),
+    PtrUInt(0),
+    PtrUInt(0)));
 end;
 
 function android_newfstatat(

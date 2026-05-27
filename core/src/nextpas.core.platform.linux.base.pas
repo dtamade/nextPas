@@ -29,6 +29,25 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformLinuxSignalSet = record
+    Words: array[0..1] of PtrUInt;
+  end;
+  PPlatformLinuxSignalSet = ^TPlatformLinuxSignalSet;
+
+  TPlatformLinuxSigActionHandler = procedure(
+    ASignal: Int32;
+    AInfo: Pointer;
+    AContext: Pointer); cdecl;
+  TPlatformLinuxSigRestorer = procedure; cdecl;
+
+  TPlatformLinuxSigAction = record
+    sa_handler: TPlatformLinuxSigActionHandler;
+    sa_flags: PtrUInt;
+    sa_restorer: TPlatformLinuxSigRestorer;
+    sa_mask: TPlatformLinuxSignalSet;
+  end;
+  PPlatformLinuxSigAction = ^TPlatformLinuxSigAction;
+
   {$IFDEF NEXTPAS_AARCH64}
   TPlatformLinuxStat = record
     st_dev: UInt64;
@@ -145,6 +164,11 @@ const
   PLATFORM_SIGNAL_KILL = Int32(9);
   PLATFORM_SIGNAL_TERMINATE = Int32(15);
   PLATFORM_SIGNAL_CHILD = Int32(17);
+  PLATFORM_SIGNAL_ACTION_SIGINFO = Int32(4);
+  PLATFORM_SIGNAL_ACTION_RESTART = Int32($10000000);
+  PLATFORM_SIGNAL_MASK_BLOCK = Int32(0);
+  PLATFORM_SIGNAL_MASK_UNBLOCK = Int32(1);
+  PLATFORM_SIGNAL_MASK_SETMASK = Int32(2);
 
   FUTEX_WAIT         = 0;
   FUTEX_WAKE         = 1;
@@ -194,10 +218,14 @@ const
   PLATFORM_LINUX_STAT_VERSION = Int32(1);
   LINUX_SYSCALL_FUTEX = 202;
   LINUX_SYSCALL_STATX = 332;
+  LINUX_SYSCALL_RT_SIGACTION = 13;
+  LINUX_SYSCALL_RT_SIGPROCMASK = 14;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
   PLATFORM_LINUX_STAT_VERSION = Int32(0);
   LINUX_SYSCALL_FUTEX = 98;
   LINUX_SYSCALL_STATX = 291;
+  LINUX_SYSCALL_RT_SIGACTION = 134;
+  LINUX_SYSCALL_RT_SIGPROCMASK = 135;
   {$ELSE}
     {$FATAL 'nextpas.core.platform.linux.base: unsupported Linux CPU for Linux syscalls and stat ABI'}
   {$ENDIF}

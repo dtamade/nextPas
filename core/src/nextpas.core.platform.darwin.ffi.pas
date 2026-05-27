@@ -14,6 +14,18 @@ function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; 
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 function platform_posix_errno_value: Int32; inline;
+function darwin_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformDarwinSigAction;
+  AOldAction: PPlatformDarwinSigAction): Int32; cdecl; external 'c' name 'sigaction';
+function darwin_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformDarwinSignalSet;
+  AOldSet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'sigprocmask';
+function darwin_pthread_sigmask(
+  const AHow: Int32;
+  ANewSet: PPlatformDarwinSignalSet;
+  AOldSet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'pthread_sigmask';
 function platform_pthread_sync_result(
   const AError: Int32;
   const AAgainResult: Int32;

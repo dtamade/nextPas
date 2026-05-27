@@ -243,6 +243,11 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   compile-only gate 与 `verify_local` route truth 分批导入；统一 public contract 另由
   `platform.time`、`platform.sync`、`platform.thread` 以及后续 `platform.env` / `platform.process`
   等模块设计，不能在 host ABI wave 中偷渡。
+- 当前 platform host ABI import 已推进到 Platform Host ABI Completeness Wave 11：POSIX signal-control
+  raw ABI。Linux / Android 的 `rt_sigaction` / `rt_sigprocmask`、Darwin /
+  FreeBSD / generic Unix 的 libc `sigaction` / `sigprocmask` 和 pthread signal-mask 入口都按
+  FPC evidence 进入 host `base/ffi` owner；shared POSIX 不伪造通用 `sigset_t` / `sigactionrec`，
+  本批也不创建 public `platform.signal` 或 `platform.process` contract。
 - 最小 source-backed `System.pas` / `TObject` truth 已落地：implicit runtime 语义层会读取
   target-installed `System.pas`，普通 class 默认继承 `System.TObject`，`Obj.Free` 可绑定到
   真实 `TObject.Free` method symbol；no-fold typed HIR 也会把继承路径上的 `Free` lowering 到

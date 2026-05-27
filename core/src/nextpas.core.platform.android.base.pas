@@ -29,6 +29,25 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformAndroidSignalSet = record
+    Words: array[0..1] of PtrUInt;
+  end;
+  PPlatformAndroidSignalSet = ^TPlatformAndroidSignalSet;
+
+  TPlatformAndroidSigActionHandler = procedure(
+    ASignal: Int32;
+    AInfo: Pointer;
+    AContext: Pointer); cdecl;
+  TPlatformAndroidSigRestorer = procedure; cdecl;
+
+  TPlatformAndroidSigAction = record
+    sa_handler: TPlatformAndroidSigActionHandler;
+    sa_flags: PtrUInt;
+    sa_restorer: TPlatformAndroidSigRestorer;
+    sa_mask: TPlatformAndroidSignalSet;
+  end;
+  PPlatformAndroidSigAction = ^TPlatformAndroidSigAction;
+
   {$IFDEF NEXTPAS_AARCH64}
   TPlatformAndroidStat = record
     st_dev: UInt64;
@@ -113,6 +132,11 @@ const
   PLATFORM_SIGNAL_KILL = Int32(9);
   PLATFORM_SIGNAL_TERMINATE = Int32(15);
   PLATFORM_SIGNAL_CHILD = Int32(17);
+  PLATFORM_SIGNAL_ACTION_SIGINFO = Int32(4);
+  PLATFORM_SIGNAL_ACTION_RESTART = Int32($10000000);
+  PLATFORM_SIGNAL_MASK_BLOCK = Int32(0);
+  PLATFORM_SIGNAL_MASK_UNBLOCK = Int32(1);
+  PLATFORM_SIGNAL_MASK_SETMASK = Int32(2);
 
   PLATFORM_RTLD_LAZY = Int32(1);
   PLATFORM_RTLD_NOW = Int32(2);
@@ -149,10 +173,14 @@ const
 
   {$IFDEF NEXTPAS_X86_64}
   ANDROID_SYSCALL_FSTAT = 5;
+  ANDROID_SYSCALL_RT_SIGACTION = 13;
+  ANDROID_SYSCALL_RT_SIGPROCMASK = 14;
   ANDROID_SYSCALL_NEWFSTATAT = 262;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
   ANDROID_SYSCALL_NEWFSTATAT = 79;
   ANDROID_SYSCALL_FSTAT = 80;
+  ANDROID_SYSCALL_RT_SIGACTION = 134;
+  ANDROID_SYSCALL_RT_SIGPROCMASK = 135;
   {$ELSE}
     {$FATAL 'nextpas.core.platform.android.base: unsupported Android CPU for stat syscalls'}
   {$ENDIF}

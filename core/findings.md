@@ -1,5 +1,64 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 11 POSIX signal-control decisions
+
+- Wave 11 follows Wave 7. Wave 7 copied host signal numbers and wait-status
+  macro arithmetic; Wave 11 copies the lower signal-control ABI needed to set
+  handlers and masks: `sigset_t`, `sigactionrec`, signal action flags,
+  `sigaction`, `sigprocmask`, `pthread_sigmask`, and host-specific Linux /
+  Android syscall numbers.
+- Signal-control raw ABI belongs in host `base` / `ffi` owners. It must not
+  create `nextpas.core.platform.signal`, `nextpas.core.platform.signal.ffi`,
+  `nextpas.core.platform.process`, or `nextpas.core.platform.process.ffi`.
+- Shared POSIX must not own a fake `sigset_t` or `sigactionrec` shape in this
+  wave. FPC records different signal set widths and action record layouts for
+  Linux, Darwin, and FreeBSD, so those records stay in host `base` owners.
+  `rtl/unix/gensigset.inc` remains evidence for future host-local pure helper
+  projections, not proof of one universal nextPas signal-set record.
+- Linux and Android signal-control route should be syscall-backed through
+  `rt_sigaction` / `rt_sigprocmask` according to FPC `rtl/linux/ossysc.inc`
+  and Android/Linux syscall tables.
+- Darwin and FreeBSD signal-control route should be libc-backed through
+  `sigaction`, `sigprocmask`, and `pthread_sigmask` according to FPC
+  `rtl/unix/oscdeclh.inc`, `rtl/darwin/pthread.inc`, and
+  `rtl/freebsd/pthread.inc`.
+- Darwin `pthread_sigmask` is declared by FPC in `rtl/darwin/pthread.inc` as
+  `external 'c'`; nextPas Darwin host ffi should mirror that libc route rather
+  than spelling a separate pthread library for this symbol.
+- Windows is deliberately out of this wave. Windows control events and signal
+  compatibility need a separate public design and should not be collapsed into
+  POSIX signal ABI inventory.
+
+## 2026-05-28: FPC source evidence for Wave 11
+
+- Linux signal constants, `sigset_t`, handlers, and `sigactionrec` evidence
+  starts in `rtl/linux/signal.inc`; `wordsinsigset`, `ln2bitsinword`, and
+  `ln2bitmask` evidence starts in `rtl/linux/ostypes.inc`.
+- Linux syscall route evidence starts in `rtl/linux/ossysc.inc`, where FPC
+  implements `Fpsigaction` through `syscall_nr_rt_sigaction` and
+  `FPSigProcMask` through `syscall_nr_rt_sigprocmask`; x86_64 syscall numbers
+  start in `rtl/linux/x86_64/sysnr.inc`, and aarch64-style numbers start in
+  `rtl/linux/sysnr-gen.inc`.
+- Android syscall numbers start in `rtl/android/x86_64/sysnr.inc` and
+  `rtl/android/aarch64/sysnr.inc`; Android follows the Linux-derived generic
+  syscall route for this signal-control wave.
+- Darwin signal constants, `sigset_t`, and `SigActionRec` evidence starts in
+  `rtl/darwin/signal.inc`; Darwin libc `sigaction` / `sigprocmask` evidence
+  starts in `rtl/unix/oscdeclh.inc`; Darwin `pthread_sigmask` evidence starts
+  in `rtl/darwin/pthread.inc`.
+- FreeBSD signal constants, `sigset_t`, and `SigActionRec` evidence starts in
+  `rtl/freebsd/signal.inc`; BSD `wordsinsigset` evidence starts in
+  `rtl/bsd/ostypes.inc`; FreeBSD syscall numbers are recorded in
+  `rtl/freebsd/sysnr.inc`, while the host binding route for this wave remains
+  the libc route from `rtl/unix/oscdeclh.inc` plus pthread mask evidence from
+  `rtl/freebsd/pthread.inc`.
+- Shared POSIX signal set arithmetic evidence starts in
+  `rtl/unix/gensigset.inc`: `fpsigaddset`, `fpsigdelset`, `fpsigemptyset`,
+  `fpsigfillset`, and `fpsigismember`. This evidence uses host parameters such
+  as `wordsinsigset`, `ln2bitsinword`, and `ln2bitmask`; it should be promoted
+  as host-local helpers or a parameterized helper later, not as a universal
+  `TPlatformPosixSignalSet` record.
+
 ## 2026-05-28: Wave 10 POSIX host stat decisions
 
 - Wave 10 continues the Wave 9 deferred POSIX stat family by promoting Darwin,

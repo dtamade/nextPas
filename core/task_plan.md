@@ -9,17 +9,15 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 10 merged to `main` as `8ed96da`
-  (`platform: add POSIX host stat ABI wave 10`).
-- Closed worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
-- Closed branch: `codex/platform-host-abi-wave10-posix-stat-hosts`
-- Base: `main@eeac28c`
+- Current status: Wave 11 pre-commit verification passed from `main@4923adc`
+  in isolated worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave11-signal-control`
+  on branch `codex/platform-host-abi-wave11-signal-control`; commit, merge,
+  post-merge verification, and cleanup are pending.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 10, Darwin / FreeBSD /
-  Android traditional stat raw ABI, closed; next wave should start from latest
-  `main`.
+- Current wave: Platform Host ABI Completeness Wave 11, POSIX signal-control
+  raw ABI inventory, pre-commit verified.
 
 ## Architecture Rules
 
@@ -49,6 +47,50 @@ the integration boundary.
 - Runtime behavior tests belong to unified nextPas public contracts only.
 
 ## Current Phase
+
+### Wave 11: POSIX signal-control raw ABI
+
+- [x] Open isolated worktree from latest `main`.
+- [x] Reconfirm goal-tree anchors: G3 core/runtime/framework, G7 FPC
+  compatibility, G0 quality discipline.
+- [x] Select next gap from the platform ABI roadmap: POSIX signal-control raw
+  ABI follows Wave 7 wait/status signal constants and prepares future process /
+  runtime contracts without creating them now.
+- [x] Add Wave 11 source-surface guard for owner, docs, route, and feature
+  boundary discipline.
+- [x] Keep shared POSIX signal-control shape deferred; signal set and sigaction
+  records are host-owned because FPC records host-specific layouts.
+- [x] Import Linux / Android `rt_sigaction` and `rt_sigprocmask` syscall
+  numbers, record shapes, and host-owned thin projections.
+- [x] Import Darwin / FreeBSD `sigaction`, `sigprocmask`, and pthread mask
+  declarations and host-owned thin projections.
+- [x] Keep generic Unix signal-control shape source-backed but conservative.
+- [x] Keep Wave 11 out of `platform.time`, `platform.sync`, `platform.thread`,
+  and any public `platform.signal` / `platform.process` contract.
+- [x] Update source evidence, gap matrix, goal-tree platform route text, and
+  official verification route.
+- [x] Run focused and full verification.
+- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+
+#### Wave 11 Verification Boundary
+
+- FPC source is the correctness authority for `sigset_t`, `sigactionrec`, signal
+  action flags, mask-operation constants, syscall numbers, libc symbols, and
+  pthread signal mask declarations.
+- Wave 11 tests must not runtime-probe raw signal behavior. They guard only
+  nextPas integration: host owner placement, source evidence, verify route,
+  no FPC platform-unit dependency, no feature-specific FFI, and simulated
+  compile coherence.
+
+#### Wave 11 Non-goals
+
+- No public `nextpas.core.platform.signal` or `nextpas.core.platform.process`
+  contract in this wave.
+- No `nextpas.core.platform.signal.ffi` or `nextpas.core.platform.process.ffi`.
+- No runtime tests for raw `sigaction`, `sigprocmask`, `pthread_sigmask`, or
+  signal mask bit arithmetic.
+- No Windows signal emulation. Windows has different console/control-event
+  semantics and needs a separate future design.
 
 ### Wave 10: Darwin / FreeBSD / Android traditional stat raw ABI
 
@@ -107,6 +149,8 @@ the integration boundary.
 ## Verification Commands
 
 - `git diff --check`
+- `sh -n build/verify_local.sh`
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
@@ -120,6 +164,8 @@ the integration boundary.
 
 ### Verification Evidence
 
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+  `7 total, 7 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`:
   `7 total, 7 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`:
@@ -143,8 +189,9 @@ the integration boundary.
 - `make -C core benchmarks`: `All benchmarks passed.`
 - `bash build/verify_local.sh`: `verify-local=pass`,
   `human-summary=local verification passed`, final envelope includes
-  `corePlatformHostAbiWave9LinuxStatCheck` and
-  `corePlatformHostAbiWave10PosixStatHostsCheck`.
+  `corePlatformHostAbiWave9LinuxStatCheck`,
+  `corePlatformHostAbiWave10PosixStatHostsCheck`, and
+  `corePlatformHostAbiWave11SignalControlCheck`.
 - Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final
   envelope reports `verify-local=pass`, `human-summary=local verification
   passed`, and includes `corePlatformHostAbiWave9LinuxStatCheck`.
@@ -158,3 +205,4 @@ the integration boundary.
 | --- | --- | --- |
 | Active planning files still described collections work in the Wave 7 platform worktree. | Session recovery | Replaced the active plan with platform ABI Wave 7 scope before implementation. |
 | Cleanup command removed tracked `build/` files while clearing generated artifacts. | Wave 10 post-merge cleanup | Immediately restored tracked `build/` with `git restore build`; avoid broad `rm -rf build` in future cleanups. |
+| Tried to patch Darwin `pthread_sigmask` external library after it had already been corrected to FPC's libc route. | Wave 11 review | Re-read the file and kept the already-correct `external 'c'` declaration. |

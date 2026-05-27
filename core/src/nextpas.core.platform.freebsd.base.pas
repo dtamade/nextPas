@@ -39,6 +39,23 @@ type
   TPlatformFreeBSDTime = Int64;
   TPlatformFreeBSDLong = Int64;
 
+  TPlatformFreeBSDSignalSet = record
+    Words: array[0..3] of Int32;
+  end;
+  PPlatformFreeBSDSignalSet = ^TPlatformFreeBSDSignalSet;
+
+  TPlatformFreeBSDSigActionHandler = procedure(
+    ASignal: Int32;
+    AInfo: Pointer;
+    AContext: Pointer); cdecl;
+
+  TPlatformFreeBSDSigAction = packed record
+    sa_handler: TPlatformFreeBSDSigActionHandler;
+    sa_flags: Int32;
+    sa_mask: TPlatformFreeBSDSignalSet;
+  end;
+  PPlatformFreeBSDSigAction = ^TPlatformFreeBSDSigAction;
+
   TPlatformFreeBSDStat = record
     st_dev: TPlatformFreeBSDDev;
     st_ino: TPlatformFreeBSDIno;
@@ -103,6 +120,11 @@ const
   PLATFORM_SIGNAL_KILL = Int32(9);
   PLATFORM_SIGNAL_TERMINATE = Int32(15);
   PLATFORM_SIGNAL_CHILD = Int32(20);
+  PLATFORM_SIGNAL_ACTION_SIGINFO = Int32($040);
+  PLATFORM_SIGNAL_ACTION_RESTART = Int32($002);
+  PLATFORM_SIGNAL_MASK_BLOCK = Int32(1);
+  PLATFORM_SIGNAL_MASK_UNBLOCK = Int32(2);
+  PLATFORM_SIGNAL_MASK_SETMASK = Int32(3);
 
   PLATFORM_RTLD_LAZY = Int32(1);
   PLATFORM_RTLD_NOW = Int32(2);

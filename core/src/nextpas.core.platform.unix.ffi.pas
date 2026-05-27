@@ -11,6 +11,14 @@ uses
 
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
 function platform_posix_errno_value: Int32; inline;
+function unix_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformUnixSigAction;
+  AOldAction: PPlatformUnixSigAction): Int32; cdecl; external 'c' name 'sigaction';
+function unix_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformUnixSignalSet;
+  AOldSet: PPlatformUnixSignalSet): Int32; cdecl; external 'c' name 'sigprocmask';
 function platform_pthread_sync_result(
   const AError: Int32;
   const AAgainResult: Int32;

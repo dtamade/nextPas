@@ -2,6 +2,104 @@
 
 ## 2026-05-28
 
+- Started Wave 11 from `main@4923adc` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave11-signal-control`
+  on branch `codex/platform-host-abi-wave11-signal-control`.
+- Goal tree:
+  - `G3: RTL、core 和 framework`
+  - `G7: FreePascal compatibility 和生态迁移`
+  - `G0: 项目控制面和质量纪律`
+- Confirmed `docs/architecture/nextpas-goal-tree.md` already exists and G3
+  explicitly routes platform raw OS API import through FPC source evidence,
+  host `base/ffi` owners, source-surface gates, compile-only gates, and
+  `verify_local` route truth.
+- `planning-with-files` catchup again reported stale unrelated mem/collections
+  context from an older interrupted session. Current clean `main`, live
+  platform plan/progress/findings, and the active goal are authoritative for
+  this platform ABI work.
+- Selected Wave 11 as POSIX signal-control raw ABI inventory. This continues
+  Wave 7 signal/wait-status groundwork and prepares future process/runtime
+  contracts without creating public `platform.signal` or `platform.process`.
+- FPC evidence found for Wave 11:
+  - `rtl/linux/signal.inc` and `rtl/linux/ostypes.inc` define Linux signal
+    flags, `sigset_t`, `sigactionrec`, and signal-set word math constants.
+  - `rtl/linux/ossysc.inc` routes Linux `Fpsigaction` and `FPSigProcMask`
+    through `rt_sigaction` and `rt_sigprocmask`; Linux syscall numbers start
+    in `rtl/linux/x86_64/sysnr.inc` and `rtl/linux/sysnr-gen.inc` for the
+    current nextPas Linux CPU set.
+  - `rtl/android/x86_64/sysnr.inc` and `rtl/android/aarch64/sysnr.inc` record
+    Android `rt_sigaction` / `rt_sigprocmask` syscall numbers.
+  - `rtl/darwin/signal.inc`, `rtl/freebsd/signal.inc`, and
+    `rtl/bsd/ostypes.inc` define BSD/Darwin signal flags, `sigset_t`, and
+    `SigActionRec` shapes.
+  - `rtl/unix/oscdeclh.inc` records libc `sigaction` and `sigprocmask`
+    bindings for non-Linux Unix routes.
+  - `rtl/darwin/pthread.inc` and `rtl/freebsd/pthread.inc` record
+    `pthread_sigmask` declarations.
+  - `rtl/unix/gensigset.inc` records pure POSIX signal-set arithmetic helpers.
+- Updated `task_plan.md` active scope to Wave 11 and recorded Wave 11 decisions
+  and source evidence in `findings.md`.
+- Added Wave 11 source-surface guard in
+  `core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/`.
+- Corrected the initial guard before green import: `sigset_t` is not a truly
+  shared POSIX record shape. Linux, Darwin, and FreeBSD carry different widths
+  / layouts in FPC source, so the guard now requires host-owned signal-set and
+  sigaction records and explicitly keeps shared POSIX signal-control deferred.
+- RED result:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`
+  compiled and failed as expected with `7 total, 1 passed, 6 failed`. The
+  intended failures are missing signal-control owner tokens, docs evidence,
+  goal-tree route text, and `verify_local` route truth. The pass confirms no
+  feature-specific `platform.signal` / `platform.process` FFI was introduced.
+- Imported Wave 11 raw ABI inventory into host owners:
+  - `linux.base` owns Linux signal set and sigaction records, signal action /
+    mask tokens, and `LINUX_SYSCALL_RT_SIGACTION` /
+    `LINUX_SYSCALL_RT_SIGPROCMASK` for x86_64 and aarch64.
+  - `linux.ffi` owns `linux_rt_sigaction` and `linux_rt_sigprocmask` syscall
+    projections using FPC's `rt_sig*` route and sigset-size argument `8`.
+  - `android.base` / `android.ffi` own the Android equivalents, with syscall
+    numbers from Android x86_64 and aarch64 FPC tables.
+  - `darwin.base` / `darwin.ffi` own Darwin signal set/action records,
+    `sigaction`, `sigprocmask`, and `pthread_sigmask` declarations.
+  - `freebsd.base` / `freebsd.ffi` own FreeBSD signal set/action records,
+    `sigaction`, `sigprocmask`, and `pthread_sigmask` declarations.
+  - `unix.base` / `unix.ffi` own only a conservative libc-backed fallback and
+    do not invent a Linux `rt_sigaction` route.
+- Kept shared `posix.base` / `posix.ffi` free of universal signal-control
+  records or shared `sigaction` / `sigprocmask` declarations.
+- Updated `docs/platform-ffi-source-evidence-index.md`,
+  `docs/platform-host-ffi-gap-matrix.md`,
+  `docs/architecture/nextpas-goal-tree.md`, and `build/verify_local.sh` with
+  Wave 11 source evidence, route truth, and official focused check.
+- Focused Wave 11 GREEN:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`
+  passed with `7 total, 7 passed, 0 failed`.
+- Review correction: `darwin_pthread_sigmask` now follows FPC
+  `rtl/darwin/pthread.inc` and binds `pthread_sigmask` through libc
+  (`external 'c'`), with a source-surface guard to keep that route stable.
+- Wave 11 pre-commit verification passed:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin / Android / FreeBSD / generic Unix simulated compile passed.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave11SignalControlCheck`.
+- Guardrail note: raw Wave 11 signal-control ABI was not runtime-probed.
+  Verification stayed on owner placement, docs truth, route truth, absence of
+  feature-specific FFI, no FPC platform-unit dependency, and compile coherence.
+
 - Started Wave 10 from `main@eeac28c` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
   on branch `codex/platform-host-abi-wave10-posix-stat-hosts`.

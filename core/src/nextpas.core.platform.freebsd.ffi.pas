@@ -12,6 +12,18 @@ uses
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 function pthread_getthreadid_np: Int32; cdecl; external 'pthread' name 'pthread_getthreadid_np';
 function platform_posix_errno_value: Int32; inline;
+function freebsd_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformFreeBSDSigAction;
+  AOldAction: PPlatformFreeBSDSigAction): Int32; cdecl; external 'c' name 'sigaction';
+function freebsd_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformFreeBSDSignalSet;
+  AOldSet: PPlatformFreeBSDSignalSet): Int32; cdecl; external 'c' name 'sigprocmask';
+function freebsd_pthread_sigmask(
+  const AHow: Int32;
+  ANewSet: PPlatformFreeBSDSignalSet;
+  AOldSet: PPlatformFreeBSDSignalSet): Int32; cdecl; external 'pthread' name 'pthread_sigmask';
 function platform_pthread_sync_result(
   const AError: Int32;
   const AAgainResult: Int32;

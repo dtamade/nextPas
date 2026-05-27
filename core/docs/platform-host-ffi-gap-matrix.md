@@ -40,6 +40,35 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 11 covers POSIX signal-control raw ABI
+  inventory for host `base/ffi` owners. Linux now carries
+  `TPlatformLinuxSignalSet`, `PPlatformLinuxSignalSet`,
+  `TPlatformLinuxSigAction`, `PPlatformLinuxSigAction`, signal action/mask
+  tokens, `LINUX_SYSCALL_RT_SIGACTION`, `LINUX_SYSCALL_RT_SIGPROCMASK`,
+  `linux_rt_sigaction`, and `linux_rt_sigprocmask`. Android now carries the
+  Android equivalents plus `ANDROID_SYSCALL_RT_SIGACTION`,
+  `ANDROID_SYSCALL_RT_SIGPROCMASK`, `android_rt_sigaction`, and
+  `android_rt_sigprocmask`. Darwin now carries `TPlatformDarwinSignalSet`,
+  `TPlatformDarwinSigAction`, `darwin_sigaction`, `darwin_sigprocmask`, and
+  `darwin_pthread_sigmask`. FreeBSD now carries
+  `TPlatformFreeBSDSignalSet`, `TPlatformFreeBSDSigAction`,
+  `freebsd_sigaction`, `freebsd_sigprocmask`, and
+  `freebsd_pthread_sigmask`. Generic Unix carries only a conservative
+  libc-backed `TPlatformUnixSignalSet`, `TPlatformUnixSigAction`,
+  `unix_sigaction`, and `unix_sigprocmask`. FPC evidence starts in
+  `rtl/linux/signal.inc`, `rtl/linux/ossysc.inc`,
+  `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
+  `rtl/darwin/signal.inc`, `rtl/freebsd/signal.inc`,
+  `rtl/unix/oscdeclh.inc`, and `rtl/unix/gensigset.inc`. This remains
+  source-surface and compile evidence with no public platform.signal contract
+  and no public platform.process contract.
+- Shared POSIX signal-control remains deferred: `nextpas.core.platform.posix.base`
+  does not carry a universal `TPlatformPosixSignalSet` or
+  `TPlatformPosixSigAction`, and `nextpas.core.platform.posix.ffi` does not
+  expose shared `sigaction` or `sigprocmask` bindings. FPC records
+  host-specific signal set widths and action record layouts, so host owners
+  remain the only correct place for this raw ABI.
+
 - Platform Host ABI Completeness Wave 10 covers Darwin / FreeBSD / Android traditional stat
   raw ABI inventory for host `base/ffi` owners. Darwin now
   carries `TPlatformDarwinStat`, `PPlatformDarwinStat`, `darwin_stat`,

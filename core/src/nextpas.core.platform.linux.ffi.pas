@@ -23,6 +23,14 @@ function platform_pthread_sync_result(
 function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 function linux_futex_wake_one_i32(AAddr: PInt32): Int32;
 function linux_futex_wake_all_i32(AAddr: PInt32): Int32;
+function linux_rt_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformLinuxSigAction;
+  AOldAction: PPlatformLinuxSigAction): Int32; inline;
+function linux_rt_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformLinuxSignalSet;
+  AOldSet: PPlatformLinuxSignalSet): Int32; inline;
 function linux_statx(
   const ADirectoryFileDescriptor: Int32;
   const APath: PAnsiChar;
@@ -440,6 +448,36 @@ begin
     Result := 0
   else
     Result := platform_posix_errno_value;
+end;
+
+function linux_rt_sigaction(
+  const ASignal: Int32;
+  ANewAction: PPlatformLinuxSigAction;
+  AOldAction: PPlatformLinuxSigAction): Int32; inline;
+begin
+  Result := Int32(linux_syscall(
+    LINUX_SYSCALL_RT_SIGACTION,
+    PtrUInt(ASignal),
+    PtrUInt(ANewAction),
+    PtrUInt(AOldAction),
+    PtrUInt(8),
+    PtrUInt(0),
+    PtrUInt(0)));
+end;
+
+function linux_rt_sigprocmask(
+  const AHow: Int32;
+  ANewSet: PPlatformLinuxSignalSet;
+  AOldSet: PPlatformLinuxSignalSet): Int32; inline;
+begin
+  Result := Int32(linux_syscall(
+    LINUX_SYSCALL_RT_SIGPROCMASK,
+    PtrUInt(AHow),
+    PtrUInt(ANewSet),
+    PtrUInt(AOldSet),
+    PtrUInt(8),
+    PtrUInt(0),
+    PtrUInt(0)));
 end;
 
 function linux_statx(
