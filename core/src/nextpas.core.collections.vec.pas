@@ -146,13 +146,13 @@ type
     procedure Resize(aNewSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Ensure(aCount: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -984,7 +984,7 @@ begin
     exit;
 
   Reserve(aCount);
-  OverWriteUnChecked(FCount, aSrc, aCount);
+  OverwriteUnChecked(FCount, aSrc, aCount);
   Inc(FCount, aCount);
 end;
 
@@ -1351,7 +1351,7 @@ begin
 
   LOldCount := FCount;
   Resize(FCount + aCount);
-  OverWrite(LOldCount, aSrc, aCount);
+  Overwrite(LOldCount, aSrc, aCount);
 end;
 
 procedure TVec.Push(const aSrc: array of T);
@@ -1526,7 +1526,7 @@ begin
   if (aIndex < LOldCount) then
     Copy(aIndex, aIndex + aCount, LOldCount - aIndex);
 
-  OverWrite(aIndex, aSrc, aCount);
+  Overwrite(aIndex, aSrc, aCount);
 end;
 
 procedure TVec.Insert(aIndex: SizeUInt; const aSrc: array of T);
@@ -1601,7 +1601,7 @@ begin
   if LCapacity < LEnd then
     Reserve(LEnd - LCapacity);
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -1699,7 +1699,7 @@ begin
   if LCapacity < LEnd then
     SetCapacity(LEnd);
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 
   if LEnd > FCount then
     FCount := LEnd;
@@ -2357,7 +2357,7 @@ begin
     LResult.SetGrowStrategy(GetGrowStrategy);
 
     if FCount > 0 then
-      LResult.OverWriteUnChecked(0, GetMemory, FCount);
+      LResult.OverwriteUnChecked(0, GetMemory, FCount);
     LResult.FCount := FCount;
     Result := LResult;
   except
@@ -2388,29 +2388,29 @@ begin
   Inc(FCount);
 end;
 
-procedure TVec.OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
 
   if aSrc = nil then
-    raise EInvalidArgument.Create('TVec.OverWrite: source is nil');
+    raise EInvalidArgument.Create('TVec.Overwrite: source is nil');
 
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TVec.OverWrite: index out of bounds');
+    raise EOutOfRange.Create('TVec.Overwrite: index out of bounds');
 
   if aCount > FCount - aIndex then
-    raise EOutOfRange.Create('TVec.OverWrite: count out of bounds');
+    raise EOutOfRange.Create('TVec.Overwrite: count out of bounds');
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
-  FBuf.OverWriteUnChecked(aIndex, aSrc, aCount);
+  FBuf.OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.OverWrite(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: array of T);
 var
   LLen: SizeInt;
 begin
@@ -2424,43 +2424,43 @@ begin
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
 
-  OverWrite(aIndex, @aSrc[0], LLen);
+  Overwrite(aIndex, @aSrc[0], LLen);
 end;
 
-procedure TVec.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverWriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  OverwriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
-procedure TVec.OverWrite(aIndex: SizeUInt; const aSrc: TCollection);
+procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
 begin
   if aSrc = nil then
-    raise EInvalidArgument.Create('TVec.OverWrite: source is nil');
+    raise EInvalidArgument.Create('TVec.Overwrite: source is nil');
 
-  OverWrite(aIndex, aSrc, aSrc.GetCount);
+  Overwrite(aIndex, aSrc, aSrc.GetCount);
 end;
 
-procedure TVec.OverWrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
 
   if aSrc = nil then
-    raise EInvalidArgument.Create('TVec.OverWrite: source is nil');
+    raise EInvalidArgument.Create('TVec.Overwrite: source is nil');
 
   if not IsCompatible(aSrc) then
-    raise ENotCompatible.Create('TVec.OverWrite: source is not compatible');
+    raise ENotCompatible.Create('TVec.Overwrite: source is not compatible');
 
   if aIndex > FCount then
-    raise EOutOfRange.Create('TVec.OverWrite: index out of bounds');
+    raise EOutOfRange.Create('TVec.Overwrite: index out of bounds');
 
   if aCount > FCount - aIndex then
-    raise EOutOfRange.Create('TVec.OverWrite: count out of bounds');
+    raise EOutOfRange.Create('TVec.Overwrite: count out of bounds');
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
   aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
 end;

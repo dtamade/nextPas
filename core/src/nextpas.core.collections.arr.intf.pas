@@ -172,7 +172,7 @@ type
     procedure Ensure(aCount: SizeUInt);
 
     {**
-     * OverWrite
+     * Overwrite
      *
      * @desc 在容器内指定位置覆写一段来自外部指针的元素.
      *
@@ -191,10 +191,10 @@ type
      *   EArgumentNil  当 `aSrc` 为 `nil` 且 `aCount` > 0 时抛出.
      *   EOutOfRange   索引/范围越界.
      *}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
 
     {**
-     * OverWriteUnChecked
+     * OverwriteUnChecked
      *
      * @desc 在容器内指定位置覆写一段来自外部指针的元素 (不安全快速版本).
      *
@@ -208,10 +208,10 @@ type
      *   详见 docs/UnChecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
 
     {**
-     * OverWrite
+     * Overwrite
      *
      * @desc 在容器内指定位置覆写一个动态数组的全部内容.
      *
@@ -227,10 +227,10 @@ type
      * @exceptions
      *   EOutOfRange  索引/范围越界.
      *}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload;
 
     {**
-     * OverWriteUnChecked
+     * OverwriteUnChecked
      *
      * @desc 在容器内指定位置覆写一个动态数组的全部内容 (不安全快速版本).
      *
@@ -243,10 +243,10 @@ type
      *   详见 docs/UnChecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
 
     {**
-     * OverWrite
+     * Overwrite
      *
      * @desc 在容器内指定位置覆写另一个容器的全部内容.
      *
@@ -265,10 +265,10 @@ type
      *   ENotCompatible  源容器与目标容器不兼容.
      *   EOutOfRange     索引/范围越界.
      *}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
 
     {**
-     * OverWrite
+     * Overwrite
      *
      * @desc 在容器内指定位置覆写另一个集合的部分内容.
      *
@@ -295,7 +295,7 @@ type
      *   详见 docs/UnChecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
     {**
      * Read

@@ -258,12 +258,12 @@ type
     function GetPtrUnChecked(aIndex: SizeUInt): PElement;
     procedure Resize(aNewSize: SizeUInt);
     procedure Ensure(aIndex: SizeUInt);
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: array of T); overload;
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
     procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
     procedure Read(aIndex: SizeUInt; var aDst: TCollection; aCount: SizeUInt); overload;
@@ -1022,7 +1022,7 @@ begin
       // 情况1：数据是连续的 [____XXXX____]
       // 选择最优放置策略：居中放置以便两端都有增长空间
       LNewHead := (aNewCapacity - FCount) div 2;
-      LNewBuffer.OverWriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), FCount);
+      LNewBuffer.OverwriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), FCount);
       FHead := LNewHead;
       FTail := LNewHead + FCount;
     end
@@ -1042,8 +1042,8 @@ begin
       case LOptimalStrategy of
         0: // 连续放置在开头
         begin
-          LNewBuffer.OverWriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-          LNewBuffer.OverWriteUnChecked(LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+          LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
+          LNewBuffer.OverwriteUnChecked(LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
           FHead := 0;
           FTail := FCount;
         end;
@@ -1051,8 +1051,8 @@ begin
         1: // 连续放置在中间（推荐）
         begin
           LNewHead := (aNewCapacity - FCount) div 2;
-          LNewBuffer.OverWriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-          LNewBuffer.OverWriteUnChecked(LNewHead + LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+          LNewBuffer.OverwriteUnChecked(LNewHead, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
+          LNewBuffer.OverwriteUnChecked(LNewHead + LFirstPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
           FHead := LNewHead;
           FTail := LNewHead + FCount;
         end;
@@ -1062,15 +1062,15 @@ begin
           // 将较大的段放在开头，较小的段放在末尾
           if LFirstPartSize >= LSecondPartSize then
           begin
-            LNewBuffer.OverWriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
-            LNewBuffer.OverWriteUnChecked(aNewCapacity - LSecondPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+            LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
+            LNewBuffer.OverwriteUnChecked(aNewCapacity - LSecondPartSize, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
             FHead := 0;
             FTail := aNewCapacity - LSecondPartSize;
           end
           else
           begin
-            LNewBuffer.OverWriteUnChecked(0, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
-            LNewBuffer.OverWriteUnChecked(aNewCapacity - LFirstPartSize, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
+            LNewBuffer.OverwriteUnChecked(0, FBuffer.GetPtrUnChecked(0), LSecondPartSize);
+            LNewBuffer.OverwriteUnChecked(aNewCapacity - LFirstPartSize, FBuffer.GetPtrUnChecked(FHead), LFirstPartSize);
             FHead := aNewCapacity - LFirstPartSize;
             FTail := LSecondPartSize;
           end;
@@ -1786,7 +1786,7 @@ begin
     if L2 > 0 then begin Move(P2^, LDst^, L2 * LElementSize); end;
 
     // 线性覆写回主缓冲的前 Count 段
-    FBuffer.OverWrite(0, Tmp, FCount);
+    FBuffer.Overwrite(0, Tmp, FCount);
 
     // 修正头尾指针，形成连续 [0..Count)
     FHead := 0;
@@ -1869,15 +1869,15 @@ begin
     Resize(aIndex + 1);
 end;
 
-procedure TVecDeque.OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aIndex + aCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.OverWrite: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aCount - 1, FCount - 1]);
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVecDeque.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LStartPhysical, LEndPhysical: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
@@ -1913,9 +1913,9 @@ begin
   end;
 end;
 
-procedure TVecDeque.OverWrite(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverWrite(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
+  Overwrite(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
 end;
 
   { UnChecked: 调用方必须确保前置条件：
@@ -1923,22 +1923,22 @@ end;
     - 覆写范围 [aIndex, aIndex + Length(aSrc) - 1] 在当前计数/容量映射的有效范围内（VecDeque 为环缓，覆盖可能跨两段）
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TVecDeque.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverWriteUnChecked(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
+  OverwriteUnChecked(aIndex, @aSrc[Low(aSrc)], Length(aSrc));
 end;
 
-procedure TVecDeque.OverWrite(aIndex: SizeUInt; const aSrc: TCollection);
+procedure TVecDeque.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
 var
   i: SizeUInt;
   LIterator: TPtrIter;
 begin
   if aSrc = nil then
-    raise EArgumentNil.Create('TVecDeque.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TVecDeque.Overwrite: aSrc is nil');
 
   // 由于环形缓冲区的复杂性，我们使用逐个元素复制
   if aIndex + aSrc.GetCount > FCount then
-    raise EOutOfRange.CreateFmt('TVecDeque.OverWrite: range [%d..%d] out of bounds [0..%d]',
+    raise EOutOfRange.CreateFmt('TVecDeque.Overwrite: range [%d..%d] out of bounds [0..%d]',
       [aIndex, aIndex + aSrc.GetCount - 1, FCount - 1]);
 
   // 实现集合到集合的复制
@@ -1952,7 +1952,7 @@ begin
   // zero-allocation iterator: nothing to finalize
 end;
 
-procedure TVecDeque.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVecDeque.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   i: SizeUInt;
   LIterator: TPtrIter;
@@ -2933,7 +2933,7 @@ var
   begin
     LSrc := PByte(aSrcPtr);
     for j := 0 to aCount - 1 do
-      FBuffer.OverWriteUnChecked(aDstIndex + j, LSrc + (aCount - 1 - j) * LElementSize, 1);
+      FBuffer.OverwriteUnChecked(aDstIndex + j, LSrc + (aCount - 1 - j) * LElementSize, 1);
   end;
 
 begin
@@ -3020,7 +3020,7 @@ begin
   if LElementCount <= LAvailableSpace then
   begin
     // 情况1：有足够空间在尾部连续放置 - 使用块复制
-    FBuffer.OverWriteUnChecked(FTail, LSrcPtr, LElementCount);
+    FBuffer.OverwriteUnChecked(FTail, LSrcPtr, LElementCount);
     FTail := WrapAdd(FTail, LElementCount);
   end
   else
@@ -3030,10 +3030,10 @@ begin
     LSecondPartSize := LElementCount - LFirstPartSize;
 
     // 第一部分：复制到尾部剩余空间
-    FBuffer.OverWriteUnChecked(FTail, LSrcPtr, LFirstPartSize);
+    FBuffer.OverwriteUnChecked(FTail, LSrcPtr, LFirstPartSize);
 
     // 第二部分：复制到缓冲区开头
-    FBuffer.OverWriteUnChecked(0,
+    FBuffer.OverwriteUnChecked(0,
       Pointer(PByte(LSrcPtr) + LFirstPartSize * SizeOf(T)),
       LSecondPartSize);
 
@@ -3073,7 +3073,7 @@ begin
   if aElementCount <= LAvailableSpace then
   begin
     // 情况1：有足够空间在尾部连续放置
-    FBuffer.OverWriteUnChecked(FTail, aSrc, aElementCount);
+    FBuffer.OverwriteUnChecked(FTail, aSrc, aElementCount);
     FTail := WrapAdd(FTail, aElementCount);
   end
   else
@@ -3083,10 +3083,10 @@ begin
     LSecondPartSize := aElementCount - LFirstPartSize;
 
     // 第一部分：放到尾部剩余空间
-    FBuffer.OverWriteUnChecked(FTail, aSrc, LFirstPartSize);
+    FBuffer.OverwriteUnChecked(FTail, aSrc, LFirstPartSize);
 
     // 第二部分：放到缓冲区开头
-    FBuffer.OverWriteUnChecked(0, PByte(aSrc) + LFirstPartSize * GetElementSize, LSecondPartSize);
+    FBuffer.OverwriteUnChecked(0, PByte(aSrc) + LFirstPartSize * GetElementSize, LSecondPartSize);
 
     FTail := LSecondPartSize;
   end;
@@ -6546,7 +6546,7 @@ begin
     FCount := aIndex + aCount;
 
   // 复用覆盖写入逻辑（环形两段写）
-  OverWriteUnChecked(aIndex, aPtr, aCount);
+  OverwriteUnChecked(aIndex, aPtr, aCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aArray: array of T);
@@ -6563,7 +6563,7 @@ begin
   if aIndex + LCount > FCount then
     FCount := aIndex + LCount;
 
-  OverWriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
+  OverwriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aCollection: TCollection);
@@ -6582,7 +6582,7 @@ begin
   if aIndex + LCount > FCount then
     FCount := aIndex + LCount;
 
-  OverWriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnChecked(aIndex, aCollection, LCount);
 end;
 
 procedure TVecDeque.Write(aIndex: SizeUInt; const aCollection: TCollection; aStartIndex: SizeUInt);
@@ -6634,7 +6634,7 @@ begin
       [aIndex, aIndex + aCount - 1, FCount - 1]);
   if aCount = 0 then
     Exit;
-  OverWriteUnChecked(aIndex, aPtr, aCount);
+  OverwriteUnChecked(aIndex, aPtr, aCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aArray: array of T);
@@ -6647,7 +6647,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverWriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
+  OverwriteUnChecked(aIndex, @aArray[Low(aArray)], LCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aCollection: TCollection);
@@ -6662,7 +6662,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverWriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnChecked(aIndex, aCollection, LCount);
 end;
 
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aCollection: TCollection; aStartIndex: SizeUInt);
@@ -6680,7 +6680,7 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverWriteUnChecked(aIndex, aCollection, LCount);
+  OverwriteUnChecked(aIndex, aCollection, LCount);
 end;
 
 // Push 系列方法实现

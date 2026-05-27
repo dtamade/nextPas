@@ -25,11 +25,15 @@
 - Implemented the first low-risk naming cleanup batch across collections source units: `SizeUint` is now `SizeUInt`, and missing parameter spacing such as `aIndex:SizeUInt` was normalized in `arr`, `vec`, and `vecdeque` units.
 - Verified the batch with `make -C tests/nextpas.core.collections/test_vec test`, `make -C tests/nextpas.core.collections/test_deque test`, `make -C tests/nextpas.core.collections/test_facade test`, and full `make test`; all completed with zero failures.
 
+## 2026-05-28
+
+- Implemented the second naming cleanup batch across collections source units: copied `OverWrite` identifiers, comments, internal calls, and exception messages are now spelled `Overwrite`.
+- Kept `OverwriteOldest` circular-buffer policy names unchanged because they are a separate public concept, not the contiguous block overwrite operation.
+
 ## Next
 
 - Continue the naming cleanup implementation one batch at a time.
-- Next likely mechanical batch: `OverWrite` -> `Overwrite`, with interfaces, implementations, comments, and tests updated together.
-- After that, handle `UnChecked` -> `Unchecked` as a separate larger batch because it touches many interface implementation bindings.
+- Next mechanical batch: `UnChecked` -> `Unchecked`, handled separately because it touches many interface implementation bindings.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

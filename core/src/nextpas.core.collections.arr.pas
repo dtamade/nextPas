@@ -109,9 +109,9 @@ type
     procedure Resize(aNewSize: SizeUInt);
     procedure Ensure(aCount: SizeUInt);
 
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     // Non-throwing bulk ops (pointer overloads), forwarding to TCollection.Try*
     function  TryLoadFrom(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
@@ -122,10 +122,10 @@ type
     function  TryLoadFrom(const aSrc: TCollection): Boolean;
     function  TryAppend(const aSrc: TCollection): Boolean;
 
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure ReadUnChecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -1198,7 +1198,7 @@ end;
 procedure TArray.LoadFromUnChecked(const aSrc: Pointer; aCount: SizeUInt);
 begin
   Resize(aCount);
-  OverWriteUnChecked(0, aSrc, aCount);
+  OverwriteUnChecked(0, aSrc, aCount);
 end;
 
 procedure TArray.AppendUnChecked(const aSrc: Pointer; aCount: SizeUInt);
@@ -1231,7 +1231,7 @@ begin
   else
   begin
     Resize(LCount + aCount);
-    OverWriteUnChecked(LCount, aSrc, aCount);
+    OverwriteUnChecked(LCount, aSrc, aCount);
   end;
 end;
 
@@ -3283,36 +3283,36 @@ begin
 end;
 {$ENDIF}
 
-procedure TArray.OverWrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     Exit;
 
   if aSrc = nil then
-    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.Overwrite: aSrc is nil');
 
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TArray.OverWrite: index out of range');
+    raise EOutOfRange.Create('TArray.Overwrite: index out of range');
 
   if aCount > (FCount - aIndex) then
-    raise EOutOfRange.Create('TArray.OverWrite: bounds out of range');
+    raise EOutOfRange.Create('TArray.Overwrite: bounds out of range');
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TArray.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
+procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   FElementManager.CopyElementsUnChecked(aSrc, GetPtrUnChecked(aIndex), aCount);
 end;
 
-procedure TArray.OverWrite(aIndex: SizeUInt; const aSrc: array of T);
+procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: array of T);
 var
   LLen: SizeInt;
 begin
   LLen := Length(aSrc);
   if LLen = 0 then
     Exit;
-  OverWrite(aIndex, @aSrc[0], LLen);
+  Overwrite(aIndex, @aSrc[0], LLen);
 end;
 
   { UnChecked 统一约定：
@@ -3320,40 +3320,40 @@ end;
     - open array 版本要求 aSrc 非空，否则 @aSrc[0] 未定义
     - 详见 docs/UnChecked_Methods_Summary.md }
 
-procedure TArray.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
+procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
-  OverWriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
+  OverwriteUnChecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
-procedure TArray.OverWrite(aIndex: SizeUInt; const aSrc: TCollection);
+procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: TCollection);
 begin
   if aSrc = nil then
-    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.Overwrite: aSrc is nil');
 
-  OverWrite(aIndex, aSrc, aSrc.GetCount);
+  Overwrite(aIndex, aSrc, aSrc.GetCount);
 end;
 
-procedure TArray.OverWrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TArray.Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
   if aCount = 0 then
     Exit;
 
   if aSrc = nil then
-    raise EArgumentNil.Create('TArray.OverWrite: aSrc is nil');
+    raise EArgumentNil.Create('TArray.Overwrite: aSrc is nil');
 
   if not IsCompatible(aSrc) then
-    raise ENotCompatible.Create('TArray.OverWrite: aSrc is not compatible');
+    raise ENotCompatible.Create('TArray.Overwrite: aSrc is not compatible');
 
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TArray.OverWrite: index out of range');
+    raise EOutOfRange.Create('TArray.Overwrite: index out of range');
 
   if aCount > (FCount - aIndex) then
-    raise EOutOfRange.Create('TArray.OverWrite: bounds out of range');
+    raise EOutOfRange.Create('TArray.Overwrite: bounds out of range');
 
-  OverWriteUnChecked(aIndex, aSrc, aCount);
+  OverwriteUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TArray.OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
+procedure TArray.OverwriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
   aSrc.SerializeToArrayBuffer(GetPtrUnChecked(aIndex), aCount);
 end;

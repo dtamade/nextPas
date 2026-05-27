@@ -8,7 +8,7 @@ unit nextpas.core.collections.list;
  *
  * 语义约定
  * - PushFront/PushBack/PopFront/PopBack：O(1) 双端操作；Front/Back 不移除
- * - OverWrite vs Write：链表为节点结构，通常不提供 OverWrite 批量覆盖；插入/删除为主
+ * - Overwrite vs Write：链表为节点结构，通常不提供 Overwrite 批量覆盖；插入/删除为主
  * - Checked vs UnChecked：
  *   - Checked 负责参数/状态检查，抛出 EOutOfRange/EArgumentNil/EInvalidArgument 等一致异常
  *   - UnChecked 不做任何检查，仅在必要处对零长度做 no-op
