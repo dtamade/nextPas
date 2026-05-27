@@ -65,6 +65,14 @@
   `imported-member-type-mismatch-call-check=pass`、
   `importedMemberTypeMismatchCallCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 110 把 imported direct member-call overload-set signature no-match 接进 structured diagnostics：
+  receiver type 已知、imported `project-source` unit 的 exact class type 中存在多个同 arity member
+  target、且稳定 argument signature 与所有 candidate signature 都不匹配时，`Worker.Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 110 同时固定 imported `installed-source` member overload-set no-match 继续 deferred；它不会错误
+  binding，也不会提前报 `sema.no-matching-overload`。
+- Batch 110 新增 `imported-member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `importedMemberNoMatchingOverloadCheck=pass`。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。

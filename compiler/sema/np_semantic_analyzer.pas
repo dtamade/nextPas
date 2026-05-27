@@ -1663,7 +1663,10 @@ begin
     else if SignatureMatchCount = 0 then
     begin
       if AAllowNoMatchingOverloadDiagnostic and AHasTypeMismatchEvidence and
-        SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) then
+        (
+          SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) or
+          ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId)
+        ) then
         AResolutionFailureKind := 'no-matching-overload';
       Exit;
     end;

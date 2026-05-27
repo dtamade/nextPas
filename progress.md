@@ -17,6 +17,45 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Session: 2026-05-27 (Batch 110 imported member no matching overload diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 imported direct member-call overload set 的稳定 signature no-match 从 deferred 推进到
+    `sema.no-matching-overload`，同时保持 `installed-source` imported member overload set 继续 deferred。
+- Baseline:
+  - Batch 107 已覆盖 root-owned member no matching overload。
+  - Batch 106 已覆盖 imported bare no matching overload。
+  - Batch 109 已覆盖 imported member single-target type mismatch，但 imported class receiver 的
+    `Worker.Pick(True)` 在 imported overload set 上仍不会诚实报 `sema.no-matching-overload`。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标与快节奏执行法：`单刀目标 -> RED -> 根因定位 -> 最小修复 ->
+    focused GREEN -> fresh verify -> review -> commit`。
+  - 先写 focused RED：`uses Worker; var Worker: TWorker; Worker.Pick(True);`，其中 imported
+    `project-source` `TWorker.Pick(Integer)` / `TWorker.Pick(AnsiString)` 同时可见时，必须触发
+    `sema.no-matching-overload`、semantic model status `failure`，且不注册失败 `member-call` binding。
+  - 增加 focused guard：同样的 imported member overload-set no-match 若 unit origin 是
+    `installed-source`，则继续 deferred，不发 diagnostics，也不注册错误 binding。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 现在对 imported project-source exact class type
+    复用 root-owned 的 overload-set no-match path；owner unit 是 root source 或 `project-source`
+    时才发 `no-matching-overload`，否则保守返回 deferred。
+  - 新增 `tests/fixtures/imported_member_no_matching_overload`，并把
+    `imported-member-no-matching-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-imported-member-no-matching-overload-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `imported-member-no-matching-overload-check=pass`、
+    `importedMemberNoMatchingOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 imported `project-source` exact class direct member-call overload-set no-match；
+    `installed-source` / RTL helper、imported/inherited member 其他 no-match 边界、record/property/array/deref
+    receiver、implicit conversion、default parameter ranking、var/out compatibility、visibility checking
+    继续 deferred。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
+
 ## Session: 2026-05-27 (Batch 109 imported member single-target type mismatch diagnostics)
 
 - **Status:** completed; verification passed
