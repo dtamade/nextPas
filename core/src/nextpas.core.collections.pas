@@ -112,6 +112,7 @@ type
   TGrowFunc = nextpas.core.collections.base.TGrowFunc;
   TGrowMethod = nextpas.core.collections.base.TGrowMethod;
   TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
+  TGrowProxyMethod = nextpas.core.collections.base.TGrowProxyMethod;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
