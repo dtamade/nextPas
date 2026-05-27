@@ -4,10 +4,12 @@ This workflow is the required route for adding platform API declarations from
 FPC source into `nextpas.core.platform`. It exists so API import work can pause
 and resume without losing the evidence, owner decisions, or verification state.
 
-FPC source is reference authority, not production dependency. nextPas production
-platform units must still declare their own ABI truth and must not `uses` FPC
-platform units such as `Linux`, `UnixType`, `BaseUnix`, `PThreads`, `Syscall`,
-or `Windows`.
+FPC source is reference authority, not production dependency. If an API,
+constant, record, or ABI alias is present in FPC source, nextPas treats that
+definition as correct and should copy it without inventing extra validation for
+the definition itself. nextPas production platform units must still declare
+their own ABI truth and must not `uses` FPC platform units such as `Linux`,
+`UnixType`, `BaseUnix`, `PThreads`, `Syscall`, or `Windows`.
 
 ## API import wave
 
@@ -18,19 +20,21 @@ unrelated domains just because they live in the same FPC unit.
 
 Each wave must answer these questions before it changes production code:
 
-- Which FPC source family, unit, or include file proves the declaration?
+- Which FPC source family, unit, or include file is the declaration copied from?
 - If FPC does not expose the declaration, which OS SDK or header family supplies
   the missing evidence?
 - Which nextPas host base/ffi owner receives the declaration?
 - Does the declaration need a unified public contract, or is it only raw host
   ABI surface for future consumers?
-- Which evidence class proves the change: Linux runtime, Win64 compile-only,
-  simulated host compile-only, source-surface guard, or unified-contract test?
+- Which evidence class guards the nextPas integration: Linux runtime for a
+  public contract, Win64 compile-only, simulated host compile-only,
+  source-surface guard, or unified-contract test?
 
-## Phase 1: source evidence
+## Phase 1: source authority
 
-Start with source evidence, not Pascal code. Search the local FPC source tree,
-record the source family and symbol names, then update
+Start with FPC source, not Pascal code. Search the local FPC source tree,
+copy definitions from the FPC declaration family, record the source family and
+symbol names, then update
 `docs/platform-ffi-source-evidence-index.md`.
 
 Use source family names in project docs instead of local absolute paths. Local
@@ -61,18 +65,19 @@ Choose the host base/ffi owner before writing a declaration.
 `platform.time`, `platform.sync`, and `platform.thread` are unified public
 contracts. They consume host base/ffi owners and should not create
 `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi` unless a
-future design proves the foreign ABI is independent of every host owner.
+future design shows the foreign ABI is independent of every host owner.
 
-## Phase 3: RED gate
+## Phase 3: integration guard
 
-Write the red gate before the green import. The first failing test should prove
-the missing workflow, evidence, owner, or route token. It should not fail because
-of a typo, bad path, or an accidental compile error.
+For raw FPC API import waves, do not write tests to prove that FPC's API values
+or record layouts are correct. FPC is the authority. Guards exist only to keep
+nextPas integration disciplined: owner placement, absence of feature-specific
+FFI files, no production dependency on FPC RTL units, route bookkeeping, and
+compile coherence.
 
-Source-surface gates are the default for raw ABI import waves. They check that:
+Source-surface guards for raw ABI import waves may check that:
 
 - Evidence docs name the source family.
-- Host `base/ffi` units own the symbol or token.
 - Feature-specific ffi files stay absent unless explicitly approved.
 - `build/verify_local.sh` requires the new files and emits a final envelope
   token.
@@ -80,9 +85,9 @@ Source-surface gates are the default for raw ABI import waves. They check that:
 
 Raw OS API declarations are not runtime tests. A raw OS API such as
 `clock_gettime`, `pthread_*`, `futex`, `QueryPerformanceCounter`,
-`GetSystemTimeAsFileTime`, or `WaitOnAddress` should be guarded by source
-evidence, source-surface checks, compile-only gates, and review. Runtime tests
-belong to unified nextPas public contracts.
+`GetSystemTimeAsFileTime`, or `WaitOnAddress` is accepted from FPC source. The
+nextPas checks around it are integration checks, not independent API
+correctness proof. Runtime tests belong to unified nextPas public contracts.
 
 ## Phase 4: green import
 
@@ -90,26 +95,30 @@ Only after the red gate fails correctly should production code change. Keep the
 green import narrow:
 
 - Add the minimum base constants, record layouts, aliases, and capability tokens.
-- Add the minimum ffi declarations and host-owned thin helpers.
+- Add the raw ffi declarations copied from FPC. Add host-owned helper
+  projections only when an existing unified consumer already needs that
+  projection and the helper does not become a hidden public contract.
 - Update `docs/platform-host-ffi-gap-matrix.md` to show the new owned surface or
   to remove a known gap.
 - If a unified contract consumes the API, update only that contract's focused
   tests and keep the public semantics explicit.
 
 Prefer several small waves over one large wave. A good wave can be reviewed by
-reading the evidence entry, the host owner diff, the source-surface gate, and the
-focused verification output in one sitting.
+reading the source-authority entry, the host owner diff, the integration guard,
+and the focused verification output in one sitting.
 
 ## Phase 5: verification matrix
 
 Use the evidence class honestly.
 
-- Linux runtime proves Linux behavior for the unified public contract.
-- Win64 compile-only proves the Windows branch compiles and the declarations are
-  syntactically coherent. It is not Windows runtime proof.
-- Simulated host compile-only proves branch selection and unit surface coherence
+- Linux runtime is behavior proof only for the unified public contract on the
+  Linux host.
+- Win64 compile-only guards that the Windows branch compiles and the
+  declarations are syntactically coherent. It is not Windows runtime proof.
+- Simulated host compile-only guards branch selection and unit surface coherence
   for Darwin, Android, FreeBSD, and generic Unix. It is not runtime proof.
-- Source-surface guards prove documentation, ownership, and route truth.
+- Source-surface guards keep documentation, ownership, and route truth
+  synchronized.
 - Unified-contract tests prove public `platform.time`, `platform.sync`,
   `platform.thread`, or future platform contract behavior.
 

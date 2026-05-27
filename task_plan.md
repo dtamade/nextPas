@@ -15,7 +15,43 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host ABI Completeness Wave 5；上一轮包括
+## Master Addendum: FPC Platform ABI Full Inventory
+
+### Goal
+
+最终目标是把 FPC 各平台可取证的系统 API、常量、结构体、opaque carrier、调用约定和 ABI
+差异，系统性搬运到 nextPas-owned `platform.<host>.base/ffi` inventory 中，作为未来 nextPas
+标准库、编译器和跨平台 runtime 的底座。
+
+### Non-negotiable Rules
+
+- `*.base` 只放 ABI 常量、结构体、record layout、opaque size/alignment、type alias 和 capability token。
+- `*.ffi` 只放 raw external declaration、syscall declaration、FFI symbol binding，以及极薄的 ABI
+  级错误/返回值投影；不得把跨平台 public contract、策略、业务语义或便利 API 放进 FFI。
+- FPC source 是 reference authority，不是 production dependency；production platform code 不
+  `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` / `Windows` / `Syscall` 等 FPC RTL 单元。
+- FPC 已有的平台 API、常量、结构和 ABI alias 视为正确来源；nextPas 不为这些 raw 定义额外写
+  “证明 FPC 正确”的测试。验证只覆盖 nextPas 自己的集成边界：owner、命名、无 FPC RTL 依赖、
+  编译连通、文档/路线可恢复。
+- `platform.time` / `platform.sync` / `platform.thread` / future `platform.process` 是统一抽象层；
+  它们消费 host `base/ffi`，但 raw ABI 不按 feature 建 `platform.<feature>.ffi`。
+- 全量搬运必须按平台和 API family 分批落地：FPC source authority、owner decision、
+  compile/coherence gate、docs/gap matrix、verify route 同步。不能把不属于 FPC 或未找到来源的 ABI
+  伪装成已搬运。
+
+### Work Breakdown
+
+- Phase A: 固化 import workflow 和命名边界，先修正当前 Wave 6 中 raw FFI 与 helper/API 混淆。
+- Phase B: 建平台清单：Linux / Android / Darwin / FreeBSD / generic Unix / Windows 分别列出 FPC
+  source families、已搬运 API、未搬运 API、ABI 风险。
+- Phase C: 按 API family 分波导入：process、file/path/stat、memory/mmap/virtual memory、
+  dynamic loader、time/clock、thread/TLS、sync/wait、errno/last-error、socket/network、
+  environment、filesystem metadata、terminal/console、signal/exception 等。
+- Phase D: 对每个平台补 compile-only 或 simulated-host gate；真实 runtime 只测 nextPas unified
+  public contract，不直接 runtime 单测 raw OS API。
+
+当前最新本轮为 Platform Host ABI Completeness Wave 6；上一轮包括
+Platform Host ABI Completeness Wave 5；
 Platform Host ABI Completeness Wave 4；
 Platform Host ABI Completeness Wave 3；
 Platform Host ABI Completeness Wave 2；
@@ -55,6 +91,120 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 6
+
+### Goal
+
+目标节点：`G3: RTL、core 和 framework` / `G7: FreePascal compatibility 和生态迁移`。
+
+继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
+process control raw ABI：POSIX `fork` / `execve` / `waitpid` / `_exit` / `kill`，
+以及 Windows `PROCESS_INFORMATION`、`STARTUPINFOA/W`、`SECURITY_ATTRIBUTES`、creation flags / priority class
+tokens、`CreateProcessA/W`、`GetStartupInfoA/W`、`TerminateProcess`、
+`GetExitCodeProcess` 与 `ExitProcess`。
+
+本轮明确不创建 public `platform.process` contract，不新增 `platform.process.ffi`，
+也不把 raw OS process-control API 作为 runtime unit test 目标。未来统一进程 API 应另起
+public contract 设计，处理参数/环境编码、句柄生命周期、wait/kill 语义、错误模型和跨平台能力差异。
+
+### Architecture Decision
+
+- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC
+  platform/RTL units。
+- 本轮不得再新增 host-specific `.ffi` 的 generic `platform_*` helper。`platform_*` 命名保留给统一
+  public contract（如 `platform.time` / `platform.sync` / `platform.thread`）或明确的 shared
+  POSIX owner（如 `platform_posix_*`）。Linux / Android / Darwin / FreeBSD / generic Unix
+  既有 `platform_pthread_*` / `platform_process_id` 属于历史命名债；后续应单开 host FFI hygiene
+  wave 迁到 `host_*` 或具体 host 前缀，不能在 Wave 6 里顺手大面积改名。
+- Shared POSIX process-control raw externals 放在
+  `nextpas.core.platform.posix.ffi`；Linux / Android / Darwin / FreeBSD / generic Unix
+  `.ffi` 本轮不再暴露 `platform_process_*` selector helper，避免把 raw ABI inventory 伪装成
+  unified public `platform.process` contract。
+- Windows process-control record layout、flag/priority tokens、pointer aliases 归
+  `nextpas.core.platform.windows.base`；kernel32 raw entrypoints 归
+  `nextpas.core.platform.windows.ffi`。
+- raw OS ABI 不做 runtime unit test，也不为 FPC 定义写正确性证明；本轮只做 FPC source authority
+  记录、owner/命名边界、compile coherence 与 official verify route。
+
+### Status
+
+Pre-merge verified in isolated worktree; feature branch is ready to commit and
+then needs integration into the latest safe `main` window.
+
+- Worktree:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave6-process`
+- Branch: `codex/platform-host-abi-wave6-process`
+- Base: `main@b14bd5a`
+- Started: 2026-05-28 CST
+- Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
+  wave must not touch them.
+
+### Planned Steps
+
+- [x] 从最新 `main@b14bd5a` 创建 `codex/platform-host-abi-wave6-process` isolated worktree
+- [x] 读取 workflow、host gap matrix、source evidence index、Wave 5 test pattern 与现有 host
+  base/ffi owner
+- [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows process-control ABI
+- [x] RED：新增 Wave 6 integration guard，要求 source-authority docs、owner/命名边界和 verify route
+- [x] GREEN：更新 source-authority index、gap matrix、host ffi/base raw declarations
+- [x] GREEN：修正 Wave 6 host-specific `.ffi` 中新增 generic `platform_process_*` helper 污染，新增/更新边界 gate
+- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [x] focused verification、full verification
+- [ ] commit feature branch and rebase latest `main`
+- [ ] merge, post-merge verification, cleanup
+
+### Audit Checklist
+
+- [x] 不新增 `platform.process` public API，也不新增 feature-specific `platform.process.ffi`
+- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw process-control ABI
+- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
+  `Windows`
+- [x] raw OS API 接受 FPC source authority，不写 runtime unit test；nextPas 只守 integration/compile gate
+- [x] POSIX 与 Windows process-control family 分别归 host owner，不混成伪 POSIX
+- [x] POSIX host `.ffi` 本轮不新增 `platform_process_*` unified-looking helper
+
+### Baseline Evidence
+
+- Worktree and `main` were clean before this wave resumed.
+- `git worktree list --porcelain` confirmed only this worktree plus parallel
+  `collections-refactor` and `sema-no-matching-overload`.
+- Baseline focused gates passed before mutation:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+- FPC source evidence found before implementation:
+  - POSIX: `rtl/unix/oscdeclh.inc` declares `FpFork`, `FpExecve`, `FpWaitpid`,
+    `FpExit`, and `FpKill` as libc `fork`, `execve`, `waitpid`, `_exit`, and
+    `kill`; Linux/BSD syscall wrapper families also carry process-control
+    wrappers.
+  - Windows: `rtl/win/wininc/ascfun.inc` / `unifun.inc` declare
+    `CreateProcessA/W` and `GetStartupInfoA/W`; `rtl/win/wininc/func.inc`
+    declares `ExitProcess`, `TerminateProcess`, `GetExitCodeProcess`, and
+    `WaitForSingleObject`; `rtl/win/wininc/struct.inc` carries
+    `PROCESS_INFORMATION` and `STARTUPINFOA/W`; `rtl/win/wininc/defines.inc`
+    carries process creation and priority constants.
+
+### Verification
+
+- Focused Wave 6 integration guard:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process clean test`
+  -> `5 total, 5 passed, 0 failed`.
+- Adjacent platform integration guards:
+  `test_platform_ffi_import_workflow` -> `2 total, 2 passed, 0 failed`;
+  `test_platform_ffi_source_evidence_index` -> `2 total, 2 passed, 0 failed`;
+  `test_platform_host_gap_matrix` -> `4 total, 4 passed, 0 failed`;
+  simulated host compile matrix -> Darwin / Android / FreeBSD / generic Unix
+  `status=pass`.
+- Full branch verification:
+  `make -C core test` -> `All tests passed.`;
+  `make -C core examples` -> `All examples compiled.`;
+  `make -C core benchmarks` -> `All benchmarks passed.`;
+  `bash build/verify_local.sh` -> `verify-local=pass`,
+  `human-summary=local verification passed`, final envelope includes
+  `corePlatformHostAbiWave6ProcessCheck":"pass"`;
+  `sh -n build/verify_local.sh` and `git diff --check` passed.
 
 ## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 5
 

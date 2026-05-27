@@ -178,6 +178,11 @@ function getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
 function setenv(name: PAnsiChar; value: PAnsiChar; overwrite: Int32): Int32; cdecl; external 'c' name 'setenv';
 function unsetenv(name: PAnsiChar): Int32; cdecl; external 'c' name 'unsetenv';
 function putenv(str: PAnsiChar): Int32; cdecl; external 'c' name 'putenv';
+function fork: pid_t; cdecl; external 'c' name 'fork';
+function execve(path: PAnsiChar; argv: Pointer; envp: Pointer): Int32; cdecl; external 'c' name 'execve';
+function waitpid(pid: pid_t; stat_loc: PInt32; options: Int32): pid_t; cdecl; external 'c' name 'waitpid';
+procedure posix_exit(status: Int32); cdecl; external 'c' name '_exit';
+function kill(pid: pid_t; sig: Int32): Int32; cdecl; external 'c' name 'kill';
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';

@@ -4,10 +4,10 @@ This document records the current platform host ABI surface for
 `nextpas.core.platform`. It is a source-surface guard companion, not runtime
 proof. Runtime behavior tests cover the unified public contracts in
 `platform.time`, `platform.sync`, and `platform.thread`; raw OS APIs such as
-`clock_gettime`, `pthread_*`, `futex`, `WaitOnAddress`,
-`QueryPerformanceCounter`, and `GetSystemTimeAsFileTime` are verified through
-FPC source evidence, host-owned declarations, source-surface checks, and
-compile-only gates.
+`clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, `WaitOnAddress`,
+`CreateProcessA/W`, `QueryPerformanceCounter`, and `GetSystemTimeAsFileTime`
+are accepted from FPC source, copied into host-owned declarations, and guarded
+through source-surface integration checks and compile-only gates.
 
 The source evidence route for those declarations is tracked in
 `docs/platform-ffi-source-evidence-index.md`. Keep that index, this gap matrix,
@@ -23,9 +23,10 @@ surface or closing a known gap.
 
 Host `base` units own ABI constants, record shapes, opaque carriers, scalar
 aliases, and capability tokens. Host `ffi` units own external declarations and
-thin helpers around those declarations. Feature modules are unified platform
-contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
-`platform.thread.ffi`.
+ABI-local helper projections around those declarations; new helpers must use a
+host or shared-owner prefix and must not look like a unified public
+`platform_*` contract. Feature modules are unified platform contracts and should
+not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 
 | Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -38,9 +39,26 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 6 covers the process-control raw ABI inventory for
+  host `base/ffi` owners. Shared POSIX FFI now owns raw `fork`, `execve`,
+  `waitpid`, `_exit`, and `kill` declarations only; POSIX host `ffi` units must
+  not expose `platform_process_*` helpers in this wave. FPC Unix source directly
+  declares those libc bindings through `FpFork`, `FpExecve`, `FpWaitpid`,
+  `FpExit`, and `FpKill`. Windows now carries `PROCESS_INFORMATION`, `STARTUPINFOA`,
+  `STARTUPINFOW`, `SECURITY_ATTRIBUTES`, Windows ABI aliases, process creation flags and priority class tokens,
+  `CreateProcessA`, `CreateProcessW`, `GetStartupInfoA`, `GetStartupInfoW`,
+  `TerminateProcess`, `GetExitCodeProcess`, and `ExitProcess` as raw FPC-shaped
+  declarations. This remains an integration and compile-coherence guard with no
+  public platform.process contract. There is no public platform.process
+  contract in this wave.
+- Wave 6 source evidence tokens are synchronized with the evidence index:
+  `fork`, `execve`, `waitpid`, `_exit`, `kill`, `PROCESS_INFORMATION`,
+  `STARTUPINFOA`, `STARTUPINFOW`, `CreateProcessA`, `CreateProcessW`,
+  `GetStartupInfoA`, `GetStartupInfoW`, `TerminateProcess`,
+  `GetExitCodeProcess`, and `ExitProcess`.
 - Platform Host ABI Completeness Wave 5 covers the environment ABI raw inventory for
   host `ffi` owners. POSIX hosts now expose delegated helpers for `getenv`,
-  `setenv`, `unsetenv`, and `putenv`. FPC Unix source directly proves `getenv`;
+  `setenv`, `unsetenv`, and `putenv`. FPC Unix source directly declares `getenv`;
   `setenv`, `unsetenv`, and `putenv` are recorded as POSIX libc/header fallback
   declarations because current FPC Unix units do not expose them. Windows now
   carries `GetEnvironmentVariableA`, `GetEnvironmentVariableW`,
@@ -146,10 +164,11 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 
 ## Verification Boundary
 
-The official host gap matrix check is a source-surface guard. It checks that the
-document, host `base/ffi` tokens, known gap markers, and feature-FFI absence
-stay synchronized. It is not runtime proof for Darwin, Android, FreeBSD,
-generic Unix, or Windows.
+The official host gap matrix check is a source-surface integration guard. It
+checks that the document, host `base/ffi` tokens, known gap markers, and
+feature-FFI absence stay synchronized. It is not runtime proof for Darwin,
+Android, FreeBSD, generic Unix, or Windows, and it is not a correctness proof
+for FPC's raw ABI definitions.
 
 Current evidence classes should be read separately:
 

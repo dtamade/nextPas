@@ -1,5 +1,63 @@
 # Findings & Decisions
 
+## 2026-05-28 Follow-up Findings 41
+
+- Wave 6 branch verification is complete in the isolated worktree:
+  `make -C core test`, `make -C core examples`, `make -C core benchmarks`,
+  `sh -n build/verify_local.sh`, `git diff --check`, and fresh
+  `bash build/verify_local.sh` all passed. The final official envelope includes
+  `corePlatformHostAbiWave6ProcessCheck":"pass"` with `verify-local=pass`.
+- The corrected verification boundary held: raw FPC process ABI definitions were
+  not runtime-tested as OS API behavior. The checks only guarded nextPas
+  integration discipline: owner placement, no feature-specific
+  `platform.process.ffi`, no new POSIX host `platform_process_*` helpers,
+  no production FPC RTL dependency, compile coherence, route truth, and
+  documentation synchronization.
+- Integration risk is now outside the feature branch: the main checkout has
+  unrelated collections WIP, so merging must happen through a clean integration
+  window or an isolated post-merge verification worktree. Do not mix collections
+  WIP into the platform Wave 6 commit.
+
+## 2026-05-28 Follow-up Findings 40
+
+- Wave 6 的高价值切片是 process-control raw ABI inventory，不是 public
+  `platform.process` contract。未来统一进程 API 要处理参数数组、环境块、编码、句柄生命周期、
+  wait/kill semantics、exit code 与跨平台能力差异；这些不应在 raw ABI inventory wave 里偷渡。
+- 用户明确修正搬运口径：FPC 已有的平台 API、常量、结构和 ABI alias 本身不需要 nextPas 再验证；
+  只要 FPC 源码里有，就认定为正确定义。nextPas 只验证自己的集成纪律，不做“证明 FPC 正确”的
+  source-surface/token 测试或 runtime raw OS API 单测。
+- POSIX process-control 取证清楚：FPC `rtl/unix/oscdeclh.inc` 声明 `FpFork`、`FpExecve`、
+  `FpWaitpid`、`FpExit` 和 `FpKill`，分别绑定 libc `fork`、`execve`、`waitpid`、`_exit` 与
+  `kill`。Linux/BSD syscall wrapper families 是补充证据，但 nextPas production code 仍只写
+  自有 FFI 声明。
+- Windows process-control 取证清楚：FPC `rtl/win/wininc/ascfun.inc` /
+  `unifun.inc` 声明 `CreateProcessA/W` 与 `GetStartupInfoA/W`；`func.inc` 声明
+  `ExitProcess`、`TerminateProcess`、`GetExitCodeProcess` 与 `WaitForSingleObject`；
+  `struct.inc` 记录 `PROCESS_INFORMATION`、`STARTUPINFOA/W` 与 `SECURITY_ATTRIBUTES`；
+  `base.inc` 记录 `WINBOOL`、`LPVOID`、`LPBYTE` 等 ABI alias；`defines.inc` 记录
+  process creation flags 与 priority class constants。
+- 本轮 owner 规则纠偏：POSIX shared raw externals 归 `nextpas.core.platform.posix.ffi`；
+  Linux、Android、Darwin、FreeBSD、generic Unix `.ffi` 本轮不暴露
+  `platform_process_*` host owner helper。`platform_process_*` 看起来像统一 public contract，
+  process-control 语义需要未来单独设计 `platform.process` 后再决定 public API；Windows
+  record/constant/alias 归 `windows.base`，kernel32 raw declarations 归 `windows.ffi`，本轮不新增
+  非 FPC 的 `windows_*process*` result wrapper。
+- 用户审查指出 `linux.ffi` 中 `platform_pthread_*` / `platform_process_id` 这类命名把 host
+  selector helper 和 unified public `platform.*` contract 混在一起。这个问题成立：host-specific
+  `.ffi` 应避免继续导出 generic `platform_*` helper；shared POSIX owner 可以保留明确的
+  `platform_posix_*`，Windows helper 已有 `windows_*` 前缀，POSIX host selector helper 应迁到
+  `host_*` 或具体 host 前缀。
+- 当前 Wave 6 先止住新增污染：删除新增 `platform_process_fork/execve/waitpid/exit/kill`，
+  测试改为检查这些 unified-looking helper 不存在。既有 `platform_pthread_*` /
+  `platform_process_id` 属于历史命名债，需要单独的 host FFI hygiene wave 做受控迁移，不能在
+  process ABI wave 里无计划大面积改名。
+- raw process-control ABI 不做 runtime unit test。本轮验证口径改为 nextPas integration only：
+  文档事实、official route truth、ABI owner/命名边界、无 FPC RTL 生产依赖、Win64 compile-only
+  与 simulated-host compile matrix；不再把 FPC raw 定义本身作为待证明对象。
+- 当前跨平台证明边界要诚实：Linux runtime 只能证明当前 host compile/runtime surface；
+  Windows 主要是 Win64 compile-only；Darwin/Android/FreeBSD/generic Unix 主要是 simulated-host
+  compile matrix 与 source evidence。
+
 ## 2026-05-28 Follow-up Findings 39
 
 - Wave 5 的高价值切片是 environment raw ABI inventory，不是 public `platform.env` 或

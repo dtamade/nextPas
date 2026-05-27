@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
-当前最新本轮为 platform host abi completeness wave 5；上一轮包括
+当前最新本轮为 platform host abi completeness wave 6；上一轮包括
+platform host abi completeness wave 5；
 platform host abi completeness wave 4；
 platform host abi completeness wave 3；
 platform host abi completeness wave 2；
@@ -44,6 +45,102 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-28 (platform host abi wave 6 process control)
+
+- **Status:** pre-merge verified in isolated worktree
+- Goal tree:
+  - `G3: RTL、core 和 framework`
+  - `G7: FreePascal compatibility 和生态迁移`
+- Objective:
+  - 按 `core/docs/platform-ffi-import-workflow.md` 启动第六批 host ABI completeness。
+  - 本轮聚焦 process-control raw ABI：POSIX `fork` / `execve` / `waitpid` /
+    `_exit` / `kill`，Windows `PROCESS_INFORMATION`、`STARTUPINFOA/W`、
+    `CreateProcessA/W`、`GetStartupInfoA/W`、`TerminateProcess`、
+    `GetExitCodeProcess` 与 `ExitProcess`。
+  - 不新增 public `platform.process` contract，不新增 feature-specific
+    `platform.process.ffi`，不对 raw OS API 写 runtime unit test。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` clean at `main@b14bd5a`。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave6-process`
+    on `codex/platform-host-abi-wave6-process` from `main@b14bd5a`。
+  - 其他并行 worktree 仍存在：`collections-refactor`、`sema-no-matching-overload`；本轮不触碰。
+- Baseline verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+    输出 `4 total, 4 passed, 0 failed`。
+- Source evidence so far:
+  - POSIX: FPC `rtl/unix/oscdeclh.inc` exposes `FpFork`, `FpExecve`,
+    `FpWaitpid`, `FpExit`, and `FpKill` as libc `fork`, `execve`, `waitpid`,
+    `_exit`, and `kill`; Linux/BSD syscall wrappers also carry process-control
+    wrappers.
+  - Windows: FPC `rtl/win/wininc/ascfun.inc` / `unifun.inc` expose
+    `CreateProcessA/W` and `GetStartupInfoA/W`; `func.inc` exposes
+    `ExitProcess`, `TerminateProcess`, `GetExitCodeProcess`, and
+    `WaitForSingleObject`; `struct.inc` exposes `PROCESS_INFORMATION` and
+    `STARTUPINFOA/W`; `defines.inc` exposes creation flags and priority class
+    constants.
+- Current plan:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/`
+    source-surface gate。
+  - 先确认 RED 正确失败，再补 source evidence、gap matrix、host base/ffi owner 与
+    `verify_local` route。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process clean test`
+    已按预期失败：测试编译通过；`posix.ffi` 缺 `fork`，`windows.base` 缺
+    `PROCESS_INFORMATION`，evidence/gap docs 缺 Wave 6，`verify_local` 缺 Wave 6 route。
+    `platform.process` / `platform.process.ffi` absent check 已通过。
+- GREEN partial before user review:
+  - `posix.ffi` 新增 `fork` / `execve` / `waitpid` / `_exit` / `kill` raw libc
+    declarations。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增 `platform_process_*` host owner helpers，
+    委托 shared POSIX owner。
+  - `windows.base` 新增 `PROCESS_INFORMATION`、`STARTUPINFOA/W`、process creation flags 与
+    priority class tokens；`windows.ffi` 新增 `CreateProcessA/W`、`GetStartupInfoA/W`、
+    `TerminateProcess`、`GetExitCodeProcess`、`ExitProcess` raw kernel32 declarations 与
+    `windows_*process*` helpers。
+  - Wave 6 gate 已从 `1 passed, 4 failed` 收敛到 `3 passed, 2 failed`；当前仅剩
+    evidence/gap docs 与 `verify_local` route 未接入。
+- User review correction:
+  - 用户指出 `linux.ffi` 里 `platform_pthread_*` / `platform_process_id` 等 helper 命名把 raw
+    host FFI 与 unified platform API 混在一起，这个审查意见成立。
+  - 已删除本轮新增的 POSIX host `platform_process_fork/execve/waitpid/exit/kill` 声明与实现。
+  - Wave 6 测试已改为要求 `posix.ffi` 只拥有 raw POSIX process declarations，并禁止
+    Linux / Android / Darwin / FreeBSD / generic Unix `.ffi` 出现新增 `platform_process_*`
+    unified-looking helper。
+  - 当前仍需重新跑 focused GREEN 和 full verification，未声明通过。
+- Workflow correction:
+  - 用户明确要求：搬运 FPC 平台 API/定义时，FPC 本身就是权威，不需要 nextPas 额外验证这些 raw
+    定义是否正确。
+  - 已开始把 import workflow 和 Wave 6 口径改为：FPC source authority + nextPas integration
+    checks。后续测试不再 token-by-token 证明 FPC API 正确性，只守 owner、命名、无 FPC RTL 依赖、
+    编译/路由和 unified public contract 行为。
+  - 已进一步收掉本轮新增的非 FPC Windows process wrappers；Windows 侧改为 FPC-shaped raw
+    declarations，并补入 `SECURITY_ATTRIBUTES`、`WINBOOL`、`LPVOID`、`LPBYTE` 等相关 ABI alias。
+  - Focused Wave 6 integration guard 已通过：
+    `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process clean test`
+    输出 `5 total, 5 passed, 0 failed`。
+  - Focused platform integration gates 已通过：
+    `test_platform_ffi_import_workflow` 为 `2 total, 2 passed, 0 failed`；
+    `test_platform_ffi_source_evidence_index` 为 `2 total, 2 passed, 0 failed`；
+    `test_platform_host_gap_matrix` 为 `4 total, 4 passed, 0 failed`；
+    simulated host compile matrix 输出 Darwin / Android / FreeBSD / generic Unix `status=pass`。
+  - Win64 compile-only checks 已通过：`nextpas.core.time/test_time`、`platform.thread`、
+    `platform.sync` 均可用 `-Twin64 -Cn` 编译；这只证明 Windows 分支和声明编译连通，不是
+    Windows runtime proof。
+- Final branch verification:
+  - `sh -n build/verify_local.sh` 与 `git diff --check` 通过。
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformHostAbiWave6ProcessCheck":"pass"`。
+- Integration note:
+  - 当前主 checkout 已出现 unrelated collections WIP；提交 feature branch 后，合并前必须先确认
+    `main` integration 窗口，避免把 collections WIP 混入 platform wave6 证据。
 
 ## Session: 2026-05-28 (platform host abi wave 5 environment)
 

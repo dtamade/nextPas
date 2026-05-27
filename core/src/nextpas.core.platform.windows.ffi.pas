@@ -286,6 +286,13 @@ function FreeEnvironmentStringsA(lpszEnvironmentBlock: LPSTR): BOOL; stdcall; ex
 function FreeEnvironmentStringsW(lpszEnvironmentBlock: LPWSTR): BOOL; stdcall; external 'kernel32' name 'FreeEnvironmentStringsW';
 function ExpandEnvironmentStringsA(lpSrc: LPCSTR; lpDst: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsA';
 function ExpandEnvironmentStringsW(lpSrc: LPCWSTR; lpDst: LPWSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsW';
+function CreateProcessA(lpApplicationName: LPCSTR; lpCommandLine: LPSTR; lpProcessAttributes: LPSECURITY_ATTRIBUTES; lpThreadAttributes: LPSECURITY_ATTRIBUTES; bInheritHandles: WINBOOL; dwCreationFlags: DWORD; lpEnvironment: LPVOID; lpCurrentDirectory: LPCSTR; lpStartupInfo: LPSTARTUPINFOA; lpProcessInformation: LPPROCESS_INFORMATION): WINBOOL; stdcall; external 'kernel32' name 'CreateProcessA';
+function CreateProcessW(lpApplicationName: LPCWSTR; lpCommandLine: LPWSTR; lpProcessAttributes: LPSECURITY_ATTRIBUTES; lpThreadAttributes: LPSECURITY_ATTRIBUTES; bInheritHandles: WINBOOL; dwCreationFlags: DWORD; lpEnvironment: LPVOID; lpCurrentDirectory: LPCWSTR; lpStartupInfo: LPSTARTUPINFOW; lpProcessInformation: LPPROCESS_INFORMATION): WINBOOL; stdcall; external 'kernel32' name 'CreateProcessW';
+procedure GetStartupInfoA(lpStartupInfo: LPSTARTUPINFOA); stdcall; external 'kernel32' name 'GetStartupInfoA';
+procedure GetStartupInfoW(lpStartupInfo: LPSTARTUPINFOW); stdcall; external 'kernel32' name 'GetStartupInfoW';
+function TerminateProcess(hProcess: HANDLE; uExitCode: UINT): WINBOOL; stdcall; external 'kernel32' name 'TerminateProcess';
+function GetExitCodeProcess(hProcess: HANDLE; lpExitCode: LPDWORD): WINBOOL; stdcall; external 'kernel32' name 'GetExitCodeProcess';
+procedure ExitProcess(uExitCode: UINT); stdcall; external 'kernel32' name 'ExitProcess';
 
 implementation
 
