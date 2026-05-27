@@ -29,6 +29,43 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformFreeBSDDev = UInt64;
+  TPlatformFreeBSDIno = UInt64;
+  TPlatformFreeBSDMode = UInt16;
+  TPlatformFreeBSDNLink = UInt64;
+  TPlatformFreeBSDUid = UInt32;
+  TPlatformFreeBSDGid = UInt32;
+  TPlatformFreeBSDOff = Int64;
+  TPlatformFreeBSDTime = Int64;
+  TPlatformFreeBSDLong = Int64;
+
+  TPlatformFreeBSDStat = record
+    st_dev: TPlatformFreeBSDDev;
+    st_ino: TPlatformFreeBSDIno;
+    st_nlink: TPlatformFreeBSDNLink;
+    st_mode: TPlatformFreeBSDMode;
+    st_padding0: Int16;
+    st_uid: TPlatformFreeBSDUid;
+    st_gid: TPlatformFreeBSDGid;
+    st_padding1: Int32;
+    st_rdev: TPlatformFreeBSDDev;
+    st_atime: TPlatformFreeBSDTime;
+    st_atimensec: TPlatformFreeBSDLong;
+    st_mtime: TPlatformFreeBSDTime;
+    st_mtimensec: TPlatformFreeBSDLong;
+    st_ctime: TPlatformFreeBSDTime;
+    st_ctimensec: TPlatformFreeBSDLong;
+    st_birthtime: TPlatformFreeBSDTime;
+    st_birthtimensec: TPlatformFreeBSDLong;
+    st_size: TPlatformFreeBSDOff;
+    st_blocks: Int64;
+    st_blksize: Int32;
+    st_flags: UInt32;
+    st_gen: UInt64;
+    st_spare: array[0..9] of UInt64;
+  end;
+  PPlatformFreeBSDStat = ^TPlatformFreeBSDStat;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of

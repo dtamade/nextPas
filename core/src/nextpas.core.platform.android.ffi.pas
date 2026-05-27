@@ -9,6 +9,7 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 
+function android_syscall(ANumber: PtrInt; A1: PtrUInt; A2: PtrUInt; A3: PtrUInt; A4: PtrUInt; A5: PtrUInt; A6: PtrUInt): PtrInt; cdecl; external 'c' name 'syscall';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno';
 function gettid: Int32; cdecl; external 'c' name 'gettid';
 function platform_posix_errno_value: Int32; inline;
@@ -19,6 +20,23 @@ function platform_pthread_sync_result(
   const AInvalidResult: Int32;
   const AUnsupportedResult: Int32;
   const ATimeoutResult: Int32): Int32; inline;
+function android_newfstatat(
+  const ADirectoryFileDescriptor: Int32;
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat;
+  const AFlags: Int32): Int32; inline;
+function android_fstat(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+function android_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+function android_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+function android_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -147,6 +165,77 @@ implementation
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_posix_errno_value_from_location(platform_errno_location);
+end;
+
+function android_syscall_result(const ARet: PtrInt): Int32; inline;
+begin
+  if ARet >= 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function android_newfstatat(
+  const ADirectoryFileDescriptor: Int32;
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat;
+  const AFlags: Int32): Int32; inline;
+var
+  LRet: PtrInt;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  LRet := android_syscall(
+    ANDROID_SYSCALL_NEWFSTATAT,
+    PtrUInt(ADirectoryFileDescriptor),
+    PtrUInt(APath),
+    PtrUInt(@ABuffer),
+    PtrUInt(AFlags),
+    PtrUInt(0),
+    PtrUInt(0));
+  Result := android_syscall_result(LRet);
+end;
+
+function android_fstat(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+var
+  LRet: PtrInt;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  LRet := android_syscall(
+    ANDROID_SYSCALL_FSTAT,
+    PtrUInt(AFileDescriptor),
+    PtrUInt(@ABuffer),
+    PtrUInt(0),
+    PtrUInt(0),
+    PtrUInt(0),
+    PtrUInt(0));
+  Result := android_syscall_result(LRet);
+end;
+
+function android_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+begin
+  Result := android_newfstatat(PLATFORM_ANDROID_AT_FDCWD, APath, ABuffer, 0);
+end;
+
+function android_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+begin
+  Result := android_newfstatat(
+    PLATFORM_ANDROID_AT_FDCWD,
+    APath,
+    ABuffer,
+    PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW);
+end;
+
+function android_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformAndroidStat): Int32; inline;
+begin
+  Result := android_fstat(AFileDescriptor, ABuffer);
 end;
 
 function platform_process_id: TPlatformProcessId; inline;

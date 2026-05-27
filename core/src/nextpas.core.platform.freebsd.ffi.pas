@@ -19,6 +19,24 @@ function platform_pthread_sync_result(
   const AInvalidResult: Int32;
   const AUnsupportedResult: Int32;
   const ATimeoutResult: Int32): Int32; inline;
+function freebsd_stat(
+  const APath: PAnsiChar;
+  var AStat: TPlatformFreeBSDStat): Int32; cdecl; external 'c' name 'stat';
+function freebsd_lstat(
+  const APath: PAnsiChar;
+  var AStat: TPlatformFreeBSDStat): Int32; cdecl; external 'c' name 'lstat';
+function freebsd_fstat(
+  const AFileDescriptor: Int32;
+  var AStat: TPlatformFreeBSDStat): Int32; cdecl; external 'c' name 'fstat';
+function freebsd_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
+function freebsd_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
+function freebsd_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -157,6 +175,30 @@ end;
 function platform_parent_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getppid;
+end;
+
+function freebsd_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := freebsd_stat(APath, ABuffer);
+end;
+
+function freebsd_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := freebsd_lstat(APath, ABuffer);
+end;
+
+function freebsd_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformFreeBSDStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := freebsd_fstat(Int32(AFileDescriptor), ABuffer);
 end;
 
 function platform_mmap(

@@ -5,8 +5,8 @@ This document records the current platform host ABI surface for
 proof. Runtime behavior tests cover the unified public contracts in
 `platform.time`, `platform.sync`, and `platform.thread`; raw OS APIs such as
 `clock_gettime`, `pthread_*`, `futex`, POSIX `fork`, POSIX `read` / `write` /
-`lseek`, `WaitOnAddress`, `CreateProcessA/W`, `QueryPerformanceCounter`, and
-`GetSystemTimeAsFileTime`
+`lseek`, POSIX host `stat`, `lstat`, and `fstat`, `WaitOnAddress`,
+`CreateProcessA/W`, `QueryPerformanceCounter`, and `GetSystemTimeAsFileTime`
 are accepted from FPC source, copied into host-owned declarations, and guarded
 through source-surface integration checks and compile-only gates.
 
@@ -32,14 +32,35 @@ not create `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi`.
 | Host | Base owner | FFI owner | Clock | Errno | CPU count | Native thread id | Thread lifecycle | TLS | pthread sync | Timeout capability | File / status ABI |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Linux | `nextpas.core.platform.linux.base` | `nextpas.core.platform.linux.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | `__errno_location`, Linux `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 84` | `gettid` plus `platform_posix_thread_self_token_u64` for self token | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers plus Linux futex wait/wake | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers, Linux `statx`, and Linux traditional stat records / libc wrappers |
-| Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | Android `__errno`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97` | `gettid` plus `platform_posix_thread_self_token_u64` for self token | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; traditional stat remains deferred |
-| Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime plus Mach monotonic helpers | `__error`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_threadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX file descriptor and I/O helpers; Darwin `$INODE64` stat remains deferred |
-| FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`, platform clock helpers | `__error`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_getthreadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; BSD stat remains deferred |
+| Android | `nextpas.core.platform.android.base` | `nextpas.core.platform.android.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | Android `__errno`, Android `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 97` | `gettid` plus `platform_posix_thread_self_token_u64` for self token | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; Android traditional stat records and `newfstatat` / `fstat` helpers |
+| Darwin | `nextpas.core.platform.darwin.base` | `nextpas.core.platform.darwin.ffi` | POSIX realtime plus Mach monotonic helpers | `__error`, Darwin `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_threadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX file descriptor and I/O helpers; Darwin `$INODE64` stat records and libc bindings |
+| FreeBSD | `nextpas.core.platform.freebsd.base` | `nextpas.core.platform.freebsd.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 4`, platform clock helpers | `__error`, FreeBSD `PLATFORM_POSIX_E*` values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = 58` | `pthread_getthreadid_np`, fallback to `platform_posix_thread_self_token_u64` if needed | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 1` | POSIX file descriptor and I/O helpers; FreeBSD traditional stat records and libc bindings |
 | generic Unix | `nextpas.core.platform.unix.base` | `nextpas.core.platform.unix.ffi` | `CLOCK_REALTIME = 0`, `CLOCK_MONOTONIC = 1`, platform clock helpers | generic `__errno_location`, generic `PLATFORM_POSIX_E*` fallback values | `PLATFORM_SYSCONF_NPROCESSORS_ONLN = -1` | fallback to `platform_posix_thread_self_token_u64` | pthread state helper backed by `pthread_create/join/detach` | pthread TLS helpers | pthread mutex/rwlock/condvar helpers | `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 1`, `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0` | POSIX file descriptor and I/O helpers; generic stat remains deferred |
 | Windows | `nextpas.core.platform.windows.base` | `nextpas.core.platform.windows.ffi` | Windows kernel32 path: QPC for monotonic time, FILETIME for realtime | `GetLastError` result helpers | `GetSystemInfo` | `GetCurrentThreadId` | `CreateThread`, wait, close, and state refcount helpers | `TlsAlloc`, `TlsFree`, `TlsSetValue`, `TlsGetValue` | `SRWLOCK`, `CONDITION_VARIABLE`, and `WaitOnAddress` helpers | millisecond timeout conversion and kernel32 timeout classifiers | Windows kernel32 file I/O and file status entrypoints |
 
 ## Known Gaps
 
+- Platform Host ABI Completeness Wave 10 covers Darwin / FreeBSD / Android traditional stat
+  raw ABI inventory for host `base/ffi` owners. Darwin now
+  carries `TPlatformDarwinStat`, `PPlatformDarwinStat`, `darwin_stat`,
+  `darwin_lstat`, `darwin_fstat`, `darwin_stat_path`, `darwin_lstat_path`,
+  and `darwin_fstat_fd` using FPC's `$INODE64` symbol policy. FreeBSD now
+  carries `TPlatformFreeBSDStat`, `PPlatformFreeBSDStat`, `freebsd_stat`,
+  `freebsd_lstat`, `freebsd_fstat`, `freebsd_stat_path`,
+  `freebsd_lstat_path`, and `freebsd_fstat_fd`. Android now carries
+  `TPlatformAndroidStat`, `PPlatformAndroidStat`, `PLATFORM_ANDROID_AT_FDCWD`,
+  `PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW`, `ANDROID_SYSCALL_NEWFSTATAT`,
+  `ANDROID_SYSCALL_FSTAT`, `android_syscall`, `android_newfstatat`,
+  `android_fstat`, `android_stat_path`, `android_lstat_path`, and
+  `android_fstat_fd`. FPC evidence starts in `rtl/bsd/ostypes.inc`,
+  `rtl/darwin/ptypes.inc`, `rtl/freebsd/ptypes.inc`,
+  `rtl/unix/oscdeclh.inc`, `rtl/android/Makefile`,
+  `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
+  `rtl/linux/ossysc.inc`, and `rtl/linux/bunxsysc.inc`. This remains
+  source-surface and compile evidence, not a new public platform.file contract.
+- Generic Unix remains deferred: shared POSIX owners still do not carry a
+  generic `TPlatformStat`, `stat`, `lstat`, or `fstat`, and generic Unix does
+  not invent `TPlatformUnixStat`.
 - Platform Host ABI Completeness Wave 9 covers Linux traditional stat raw ABI
   inventory for Linux host `base/ffi` owners. Linux now carries
   `TPlatformLinuxStat`, `PPlatformLinuxStat`, CPU-specific

@@ -29,6 +29,53 @@ type
 
   TPlatformProcessId = pid_t;
 
+  {$IFDEF NEXTPAS_AARCH64}
+  TPlatformAndroidStat = record
+    st_dev: UInt64;
+    st_ino: UInt64;
+    st_mode: UInt32;
+    st_nlink: UInt32;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    st_rdev: UInt64;
+    __pad1a: UInt64;
+    st_size: Int64;
+    st_blksize: Int32;
+    __pad2a: Int32;
+    st_blocks: Int64;
+    st_atime: Int64;
+    st_atime_nsec: UInt64;
+    st_mtime: Int64;
+    st_mtime_nsec: UInt64;
+    st_ctime: Int64;
+    st_ctime_nsec: UInt64;
+    __unused4a: UInt32;
+    __unused5a: UInt32;
+  end;
+  {$ELSE}
+  TPlatformAndroidStat = record
+    st_dev: UInt64;
+    st_ino: UInt64;
+    st_nlink: UInt64;
+    st_mode: UInt32;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    __pad1: UInt32;
+    st_rdev: UInt64;
+    st_size: Int64;
+    st_blksize: Int64;
+    st_blocks: Int64;
+    st_atime: UInt64;
+    st_atime_nsec: UInt64;
+    st_mtime: UInt64;
+    st_mtime_nsec: UInt64;
+    st_ctime: UInt64;
+    st_ctime_nsec: UInt64;
+    __unused2: array[0..2] of Int64;
+  end;
+  {$ENDIF}
+  PPlatformAndroidStat = ^TPlatformAndroidStat;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -96,6 +143,19 @@ const
   PLATFORM_ACCESS_EXECUTE = Int32(1);
   PLATFORM_ACCESS_WRITE = Int32(2);
   PLATFORM_ACCESS_READ = Int32(4);
+
+  PLATFORM_ANDROID_AT_FDCWD = Int32(-100);
+  PLATFORM_ANDROID_AT_SYMLINK_NOFOLLOW = Int32($100);
+
+  {$IFDEF NEXTPAS_X86_64}
+  ANDROID_SYSCALL_FSTAT = 5;
+  ANDROID_SYSCALL_NEWFSTATAT = 262;
+  {$ELSEIF defined(NEXTPAS_AARCH64)}
+  ANDROID_SYSCALL_NEWFSTATAT = 79;
+  ANDROID_SYSCALL_FSTAT = 80;
+  {$ELSE}
+    {$FATAL 'nextpas.core.platform.android.base: unsupported Android CPU for stat syscalls'}
+  {$ENDIF}
 
 implementation
 

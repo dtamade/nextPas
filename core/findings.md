@@ -1,5 +1,70 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 10 POSIX host stat decisions
+
+- Wave 10 continues the Wave 9 deferred POSIX stat family by promoting Darwin,
+  FreeBSD, and Android traditional `stat` / `lstat` / `fstat` raw ABI into
+  host-owned `base` / `ffi` units.
+- Generic Unix traditional stat remains deferred. FPC records host-specific
+  record layouts and suffix/syscall policies; nextPas must not invent a generic
+  `TPlatformUnixStat` shape just to fill a matrix row.
+- Darwin stat belongs in `nextpas.core.platform.darwin.base`, and Darwin raw
+  bindings belong in `nextpas.core.platform.darwin.ffi` with the FPC
+  `$INODE64` external symbol policy.
+- FreeBSD stat belongs in `nextpas.core.platform.freebsd.base`, and FreeBSD
+  raw bindings belong in `nextpas.core.platform.freebsd.ffi` through the direct
+  libc `stat`, `lstat`, and `fstat` symbols.
+- Android stat belongs in `nextpas.core.platform.android.base`, and Android
+  raw helpers belong in `nextpas.core.platform.android.ffi` through FPC's
+  Linux-derived syscall route (`newfstatat` / `fstat` for the current x86_64
+  and aarch64 nextPas CPU set), not Linux glibc `__xstat` wrappers.
+- Shared `nextpas.core.platform.posix.base` and
+  `nextpas.core.platform.posix.ffi` must still not own a generic POSIX stat
+  record or generic `stat` / `lstat` / `fstat` bindings.
+- Wave 10 remains raw ABI inventory, not a public `platform.file` or
+  `platform.fs` contract.
+
+## 2026-05-28: FPC source evidence for Wave 10
+
+- Darwin and FreeBSD stat record evidence starts in
+  `rtl/bsd/ostypes.inc`. The Darwin branch uses `darwin_new_iostructs` for the
+  current 64-bit nextPas Darwin target shape; the FreeBSD branch records the
+  host-specific padding, birth time, flags, generation, and spare fields.
+- Darwin scalar evidence starts in `rtl/darwin/ptypes.inc`, where FPC records
+  `dev_t`, `ino_t`, `mode_t`, `nlink_t`, `uid_t`, `gid_t`, `off_t`, and
+  `time_t` widths used by the Darwin stat record.
+- FreeBSD scalar evidence starts in `rtl/freebsd/ptypes.inc`, where FPC records
+  `dev_t`, `ino_t`, `mode_t`, `nlink_t`, `uid_t`, `gid_t`, `off_t`, and
+  `time_t` widths used by the FreeBSD stat record.
+- Non-Linux Unix symbol evidence starts in `rtl/unix/oscdeclh.inc`, where FPC
+  binds `FpFstat`, `FpLstat`, and `FpStat` to direct libc symbols with
+  large-file suffix handling, including Darwin's `darwinsuffix64bit =
+  '$INODE64'`.
+- Android source ownership starts in `rtl/android/Makefile`, which routes
+  Android POSIX type/system include ownership through Linux include families.
+  The concrete stat records for current nextPas Android CPUs come from
+  `rtl/linux/x86_64/stat.inc` and `rtl/linux/aarch64/stat.inc`.
+- Android syscall evidence starts in `rtl/android/x86_64/sysnr.inc` and
+  `rtl/android/aarch64/sysnr.inc`; FPC records `syscall_nr_newfstatat` and
+  `syscall_nr_fstat` for both current nextPas Android CPU targets.
+- Android route evidence starts in `rtl/linux/osdefs.inc`,
+  `rtl/linux/ossysc.inc`, and `rtl/linux/bunxsysc.inc`: Android defines
+  `generic_linux_syscalls`, path stat routes through `fstatat` /
+  `newfstatat`, fd stat routes through `fstat`, and lstat routes through
+  `fstatat` with `AT_SYMLINK_NOFOLLOW`.
+
+## 2026-05-28: raw ABI verification boundary reaffirmed
+
+- FPC source is the correctness authority for copied platform API definitions.
+  If FPC carries the API, constant, record shape, syscall number, external
+  symbol, or calling convention, nextPas treats that definition as correct when
+  importing raw ABI inventory.
+- Wave 10 checks must not runtime-prove FPC's Darwin, FreeBSD, or Android stat
+  layouts or syscall/libc routes. The nextPas guard checks only source-surface
+  integration: owner placement, docs truth, route truth, absence of
+  feature-specific FFI units, no FPC platform-unit dependencies, and simulated
+  compile coherence.
+
 ## 2026-05-28: Wave 9 Linux traditional stat decisions
 
 - Wave 9 is a host-specific promotion of the deferred POSIX stat family. It

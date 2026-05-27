@@ -29,6 +29,42 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformDarwinDev = UInt32;
+  TPlatformDarwinIno = UInt64;
+  TPlatformDarwinMode = UInt16;
+  TPlatformDarwinNLink = UInt16;
+  TPlatformDarwinUid = UInt32;
+  TPlatformDarwinGid = UInt32;
+  TPlatformDarwinOff = Int64;
+  TPlatformDarwinTime = Int64;
+  TPlatformDarwinLong = Int64;
+
+  TPlatformDarwinStat = record
+    st_dev: TPlatformDarwinDev;
+    st_mode: TPlatformDarwinMode;
+    st_nlink: TPlatformDarwinNLink;
+    st_ino: TPlatformDarwinIno;
+    st_uid: TPlatformDarwinUid;
+    st_gid: TPlatformDarwinGid;
+    st_rdev: TPlatformDarwinDev;
+    st_atime: TPlatformDarwinTime;
+    st_atimensec: TPlatformDarwinLong;
+    st_mtime: TPlatformDarwinTime;
+    st_mtimensec: TPlatformDarwinLong;
+    st_ctime: TPlatformDarwinTime;
+    st_ctimensec: TPlatformDarwinLong;
+    st_birthtime: TPlatformDarwinTime;
+    st_birthtimensec: TPlatformDarwinLong;
+    st_size: TPlatformDarwinOff;
+    st_blocks: Int64;
+    st_blksize: UInt32;
+    st_flags: UInt32;
+    st_gen: UInt32;
+    st_lspare: UInt32;
+    st_qspare: array[0..1] of Int64;
+  end;
+  PPlatformDarwinStat = ^TPlatformDarwinStat;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of

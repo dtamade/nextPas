@@ -21,6 +21,24 @@ function platform_pthread_sync_result(
   const AInvalidResult: Int32;
   const AUnsupportedResult: Int32;
   const ATimeoutResult: Int32): Int32; inline;
+function darwin_stat(
+  const APath: PAnsiChar;
+  var AStat: TPlatformDarwinStat): Int32; cdecl; external 'c' name 'stat$INODE64';
+function darwin_lstat(
+  const APath: PAnsiChar;
+  var AStat: TPlatformDarwinStat): Int32; cdecl; external 'c' name 'lstat$INODE64';
+function darwin_fstat(
+  const AFileDescriptor: Int32;
+  var AStat: TPlatformDarwinStat): Int32; cdecl; external 'c' name 'fstat$INODE64';
+function darwin_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
+function darwin_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
+function darwin_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -160,6 +178,30 @@ end;
 function platform_parent_process_id: TPlatformProcessId; inline;
 begin
   Result := platform_posix_getppid;
+end;
+
+function darwin_stat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := darwin_stat(APath, ABuffer);
+end;
+
+function darwin_lstat_path(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := darwin_lstat(APath, ABuffer);
+end;
+
+function darwin_fstat_fd(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformDarwinStat): Int32; inline;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  Result := darwin_fstat(Int32(AFileDescriptor), ABuffer);
 end;
 
 function platform_mmap(

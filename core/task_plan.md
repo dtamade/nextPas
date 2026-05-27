@@ -9,16 +9,15 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 9 merged to `main` as `23f0dfd`
-  (`platform: add Linux stat ABI wave 9`).
-- Closed worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
-- Closed branch: `codex/platform-host-abi-wave9-posix-stat`
-- Base: `main@524b27c`
+- Current status: Wave 9 merged and plan-closed on `main`.
+- Active worktree:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
+- Active branch: `codex/platform-host-abi-wave10-posix-stat-hosts`
+- Base: `main@eeac28c`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 9, Linux traditional stat
-  raw ABI, closed; next wave should start from latest `main`.
+- Current wave: Platform Host ABI Completeness Wave 10, Darwin / FreeBSD /
+  Android traditional stat raw ABI.
 
 ## Architecture Rules
 
@@ -49,6 +48,33 @@ the integration boundary.
 
 ## Current Phase
 
+### Wave 10: Darwin / FreeBSD / Android traditional stat raw ABI
+
+- [x] Open isolated worktree from latest `main`.
+- [x] Reconfirm Wave 10 boundary: copy FPC raw ABI definitions as authority,
+  guard nextPas integration only, and do not runtime-prove FPC records,
+  constants, syscall numbers, or libc symbols.
+- [x] Select host owners from the Wave 9 deferred stat family: Darwin,
+  FreeBSD, and Android. Keep generic Unix stat deferred because there is no
+  single trustworthy generic Unix stat layout.
+- [x] Update `/plan` files with Wave 10 scope, evidence, and verification
+  boundary.
+- [x] Add Wave 10 source-surface guard for owner, docs, route, and compile
+  discipline.
+- [x] Import Darwin `$INODE64` `stat` / `lstat` / `fstat` record and raw
+  bindings into Darwin host owners.
+- [x] Import FreeBSD `stat` / `lstat` / `fstat` record and raw bindings into
+  FreeBSD host owners.
+- [x] Import Android Linux-derived stat records and syscall-backed
+  `newfstatat` / `fstat` helpers into Android host owners.
+- [x] Keep shared `posix.base` / `posix.ffi` free of a generic POSIX stat
+  record or generic `stat` binding.
+- [x] Keep raw stat inventory out of `platform.time`, `platform.sync`,
+  `platform.thread`, and any `platform.file` feature contract.
+- [x] Update source evidence, gap matrix, and official verification route.
+- [x] Run focused and full verification.
+- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+
 ### Wave 9: Linux traditional stat raw ABI
 
 - [x] Open isolated worktree from latest `main`.
@@ -71,13 +97,15 @@ the integration boundary.
 - No runtime unit tests for FPC raw API values or record layouts.
 - No L1 abstractions such as stopwatch, thread pool, channel, future, process
   runner, or command API inside `platform`.
-- No Darwin, FreeBSD, Android, or generic Unix traditional `stat` promotion in
-  this wave; those hosts remain separate owner decisions because FPC records
-  host-specific layout and suffix policy.
+- No generic Unix traditional `stat` promotion in this wave; generic Unix stays
+  deferred until a specific FPC-backed layout can be promoted without inventing
+  ABI truth.
+- No Linux changes unless needed to keep shared route or guard naming coherent.
 
 ## Verification Commands
 
 - `git diff --check`
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
 - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
@@ -90,6 +118,8 @@ the integration boundary.
 
 ### Verification Evidence
 
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`:
+  `7 total, 7 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`:
   `5 total, 5 passed, 0 failed`.
 - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
@@ -111,7 +141,8 @@ the integration boundary.
 - `make -C core benchmarks`: `All benchmarks passed.`
 - `bash build/verify_local.sh`: `verify-local=pass`,
   `human-summary=local verification passed`, final envelope includes
-  `corePlatformHostAbiWave9LinuxStatCheck`.
+  `corePlatformHostAbiWave9LinuxStatCheck` and
+  `corePlatformHostAbiWave10PosixStatHostsCheck`.
 - Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final
   envelope reports `verify-local=pass`, `human-summary=local verification
   passed`, and includes `corePlatformHostAbiWave9LinuxStatCheck`.

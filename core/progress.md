@@ -2,6 +2,92 @@
 
 ## 2026-05-28
 
+- Started Wave 10 from `main@eeac28c` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
+  on branch `codex/platform-host-abi-wave10-posix-stat-hosts`.
+- Confirmed sibling worktrees remain `collections-refactor` and
+  `sema-no-matching-overload`; Wave 10 stays isolated from those lines.
+- `planning-with-files` catchup again reported stale unrelated mem/collections
+  context. Current `task_plan.md`, `findings.md`, `progress.md`, and clean git
+  status are authoritative for this platform worktree.
+- Reconfirmed the user's raw ABI boundary: FPC source is already the authority
+  for platform API definitions. This wave will not runtime-prove FPC's
+  constants, records, syscall numbers, external symbols, or calling
+  conventions. Checks will guard only nextPas integration discipline.
+- Selected Wave 10 from the deferred POSIX stat family: promote Darwin,
+  FreeBSD, and Android traditional stat raw ABI into host owners; leave generic
+  Unix stat deferred because there is no single FPC-backed generic Unix layout.
+- FPC evidence found for Wave 10:
+  - `rtl/bsd/ostypes.inc` defines the Darwin `darwin_new_iostructs` stat record
+    and the FreeBSD stat record.
+  - `rtl/darwin/ptypes.inc` and `rtl/freebsd/ptypes.inc` define the scalar
+    widths used by those records.
+  - `rtl/unix/oscdeclh.inc` records direct non-Linux `stat`, `lstat`, and
+    `fstat` libc symbols and Darwin `$INODE64` suffix policy.
+  - `rtl/android/Makefile` routes Android POSIX type/system ownership through
+    Linux include families; Android x86_64/aarch64 stat records come from
+    `rtl/linux/x86_64/stat.inc` and `rtl/linux/aarch64/stat.inc`.
+  - `rtl/android/x86_64/sysnr.inc`, `rtl/android/aarch64/sysnr.inc`,
+    `rtl/linux/osdefs.inc`, `rtl/linux/ossysc.inc`, and
+    `rtl/linux/bunxsysc.inc` record Android's `newfstatat` / `fstat` syscall
+    route for stat/fstat/lstat.
+- Updated `task_plan.md` active scope from closed Wave 9 to Wave 10 and added
+  Wave 10 decisions/evidence to `findings.md`.
+- Added Wave 10 source-surface guard in
+  `core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/`.
+- RED result:
+  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`
+  compiled and failed as expected with `7 total, 2 passed, 5 failed`. The
+  intended failures are missing Darwin / FreeBSD / Android host stat owner
+  tokens, missing docs evidence, and missing `verify_local` route truth.
+- Imported Wave 10 raw ABI inventory into host owners:
+  - `darwin.base` now owns `TPlatformDarwinStat`, `PPlatformDarwinStat`, and
+    Darwin stat scalar aliases copied from FPC's Darwin/BSD type surface.
+  - `darwin.ffi` now owns `darwin_stat`, `darwin_lstat`, `darwin_fstat`, and
+    thin Darwin-prefixed path/fd helpers using FPC's `$INODE64` symbol policy.
+  - `freebsd.base` now owns `TPlatformFreeBSDStat`, `PPlatformFreeBSDStat`, and
+    FreeBSD stat scalar aliases copied from FPC's FreeBSD/BSD type surface.
+  - `freebsd.ffi` now owns `freebsd_stat`, `freebsd_lstat`, `freebsd_fstat`,
+    and thin FreeBSD-prefixed path/fd helpers through direct libc symbols.
+  - `android.base` now owns `TPlatformAndroidStat`,
+    `PPlatformAndroidStat`, Android `AT_*` tokens, and the x86_64/aarch64
+    `newfstatat` / `fstat` syscall numbers from FPC's Android syscall tables.
+  - `android.ffi` now owns `android_syscall`, `android_newfstatat`,
+    `android_fstat`, `android_stat_path`, `android_lstat_path`, and
+    `android_fstat_fd`; it deliberately does not use Linux glibc `__xstat`
+    wrappers.
+- Kept shared `posix.base` / `posix.ffi` and generic Unix owners free of a
+  generic POSIX/Unix stat record or generic `stat` / `lstat` / `fstat`
+  binding. FPC has host-specific layouts and suffix/syscall policies, so a
+  generic nextPas shape would invent ABI truth.
+- Kept Wave 10 out of `platform.time`, `platform.sync`, `platform.thread`, and
+  any public `platform.file` contract. This is raw host ABI inventory only.
+- Updated `docs/platform-ffi-source-evidence-index.md`,
+  `docs/platform-host-ffi-gap-matrix.md`, and `build/verify_local.sh` with Wave
+  10 evidence, route truth, and the official focused check.
+- Focused Wave 10 verification passed:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin / Android / FreeBSD / generic Unix simulated compile passed.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat clean test`:
+    `5 total, 5 passed, 0 failed`.
+- Full Wave 10 verification passed in the isolated worktree:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave10PosixStatHostsCheck`.
+
 - Started Wave 9 from `main@524b27c` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
   on branch `codex/platform-host-abi-wave9-posix-stat`.
