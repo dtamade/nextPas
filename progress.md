@@ -82,8 +82,18 @@ platform/core 工作流保留下来的已完成记录。
   - runtime 单测仍只覆盖 `platform.sync` 抽象 API；raw OS errno/ABI truth 由 host base/ffi source
     surface、compile matrix 与 FPC-source-derived 常量负责守住。
 - Planned next action:
-  - commit 本 worktree，合并回干净的 `main`，在 main 上补跑 post-merge focused gates 后清理
-    worktree / branch。
+  - 继续下一轮 platform owner gap matrix；本轮 `codex/platform-sync-owner-audit` 已 commit、fast-forward
+    merge 回 `main`，并清理 worktree / branch。
+- Merge closeout:
+  - Commit: `fce88c3 platform: ownerize posix sync errno result mapping`。
+  - Merge: fast-forward into `main`。
+  - Cleanup: removed `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-owner-audit`
+    and deleted `codex/platform-sync-owner-audit`。
+  - Post-merge focused gates on `main` passed:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - Post-merge `git diff --check` passed and `git status --short --branch` showed clean `main`。
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 

@@ -8553,7 +8553,7 @@ source-surface gate 和 full verification 吸收。
   - `make -C core examples`
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
-- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+- [x] commit、择优合并回 `main`、清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -8598,6 +8598,15 @@ source-surface gate 和 full verification 吸收。
   - `make -C core benchmarks` 输出 `All benchmarks passed.`。
   - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
     `human-summary=local verification passed`。
+- Merge closeout:
+  - committed as `fce88c3 platform: ownerize posix sync errno result mapping`。
+  - fast-forward merged into `main`。
+  - removed `platform-sync-owner-audit` worktree and deleted `codex/platform-sync-owner-audit` branch。
+  - post-merge focused gates on `main` passed:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+  - post-merge `git diff --check` passed and `git status --short --branch` showed clean `main`。
 
 ### Non-goals
 
