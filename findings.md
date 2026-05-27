@@ -165,6 +165,15 @@
 - Batch 139 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 140 选定加速路线的下一格：project-source imported bare no-match 已有 official
+  `imported-no-matching-overload-check`，本轮补 installed-source deferred guard，避免两个
+  installed-source helper 的 incomplete overload set 被提前报成 `sema.no-matching-overload`。
+- RED focused 证明旧实现会误报 `sema.no-matching-overload`；`LookupCallBindingDeclaration(...)`
+  现在只在 imported same-arity candidate set 全部来自允许 project-source diagnostics 的 owner
+  时，才把 imported no-match 投影为 `no-matching-overload`。
+- Batch 140 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

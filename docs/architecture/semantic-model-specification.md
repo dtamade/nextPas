@@ -94,7 +94,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
   同样发 `sema.no-matching-overload`。imported `installed-source` single-target
-  type mismatch、single-target arity miss、bare callable ambiguity、class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
+  type mismatch、single-target arity miss、bare callable ambiguity、bare callable no-match、
+  class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member

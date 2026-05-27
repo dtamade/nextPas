@@ -1133,7 +1133,8 @@ begin
   end
   else if ImportedSignatureMatchCount = 0 then
   begin
-    if AHasTypeMismatchEvidence then
+    if AHasTypeMismatchEvidence and
+      (ImportedDiagnosticMatchCount = ImportedMatchCount) then
       AResolutionFailureKind := 'no-matching-overload';
     Exit(False);
   end;
