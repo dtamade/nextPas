@@ -36,9 +36,9 @@
 ## 2026-05-27: sequence indexed access semantics
 
 - `Get(Index): T` and `Put(Index, Value)` are checked operations and throw on invalid indexes.
-- `TryGet(Index, out Value): Boolean` is allowed as the non-throwing lookup form for callers that want explicit branching.
 - `GetUnchecked(Index): T` and `PutUnchecked(Index, Value)` are the unsafe fast path and require clear documentation that the caller owns bounds correctness.
-- Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other indexed sequence-like containers.
+- Do not add `TryGet(Index, out Value): Boolean` to the base array/indexed-access contract. For array-like containers, an invalid index is a caller error, and callers that want a non-throwing branch can check `Count` before indexing.
+- Apply this model consistently across `Vec`, `Array`, `List`, `Deque`, and other array-like indexed sequence containers. Keep `TryXxx` for operations where failure is normal domain behavior, such as map lookup or empty pop.
 
 ## 2026-05-27: sequence mutation method semantics
 
