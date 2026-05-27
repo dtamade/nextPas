@@ -823,7 +823,10 @@ public contract；测试需要造并发、睡眠或 TLS 场景时，也应优先
 
 当前 host ABI 覆盖面与已知缺口集中记录在 `docs/platform-host-ffi-gap-matrix.md`。该矩阵是
 source-surface guard 的文档事实源，用来约束 Linux、Android、Darwin、FreeBSD、generic Unix 与
-Windows 的 host `base/ffi` ownership；它不是跨宿主 runtime proof。
+Windows 的 host `base/ffi` ownership；它不是跨宿主 runtime proof。矩阵必须继续接入
+`build/verify_local.sh` 的 `core-platform-host-gap-matrix-check` focused route，并在最终
+verification envelope 中保留 `corePlatformHostGapMatrixCheck`，这样设计入口、文档事实源和
+official local gate 才能互相追踪。
 
 扩充顺序应保持清晰：先把各宿主平台的 ABI 声明尽可能完整地沉到
 `platform.<host>.base` / `platform.<host>.ffi`，再由 `platform.time`、`platform.sync`、

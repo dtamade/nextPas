@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform host ffi gap matrix guard；上一轮包括
+当前最新本轮为 platform host gap route guard；上一轮包括
+platform host ffi gap matrix guard；
 platform facade info boundary；
 platform.sync base extraction；
 platform.thread base extraction；
@@ -37,9 +38,64 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Session: 2026-05-27 (platform host gap route guard)
+
+- **Status:** in progress
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块；本轮不扩 public API，不碰 raw OS API，而是把 host gap
+    matrix 的 design-doc route 与 official verification envelope 冻结起来。
+  - 修正上一轮记录中 “cleanup pending” 的过期状态，避免后续会话误判还有旧 worktree/branch 要收。
+- Baseline / worktree:
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-route-guard`
+    on `codex/platform-host-gap-route-guard` from `main@d161546`。
+  - 主 checkout `/home/dtamade/projects/nextPas` 有 unrelated collections WIP：
+    `core/src/nextpas.core.collections.base.pas`、
+    `core/src/nextpas.core.collections.element_manager.pas`、
+    `core/src/nextpas.core.collections.intf.pas`、
+    `core/src/nextpas.core.collections.tree_set.pas`；本轮不触碰。
+- Baseline focused gates:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`: pass，
+    `3 total, 3 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`: pass，
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`: pass，
+    `1 total, 1 passed, 0 failed`。
+- Current plan:
+  - 扩 `test_platform_host_gap_matrix`，新增 design conventions 与 `build/verify_local.sh` route truth 检查。
+  - 更新 `core/docs/design-conventions.md`，明确 `core-platform-host-gap-matrix-check` 与
+    `corePlatformHostGapMatrixCheck` 是矩阵的 official local verification route。
+  - 同步 `task_plan.md`、`findings.md` 与本文件，再跑 focused/full verification 后提交合并。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test` 初始失败在
+    `design conventions must name the host gap matrix line token: core-platform-host-gap-matrix-check`。
+  - 失败边界正确：新增 route-truth test 可编译运行，前三项既有 host matrix 检查仍通过。
+- GREEN actions:
+  - `test_platform_host_gap_matrix` 新增第 4 项
+    `platform host gap matrix route truth stays indexed`，检查 design conventions 与
+    `build/verify_local.sh` 的矩阵索引、focused line token、final envelope token 和 summary assertion。
+  - `core/docs/design-conventions.md` 明确矩阵必须继续接入
+    `core-platform-host-gap-matrix-check` 与 `corePlatformHostGapMatrixCheck`。
+  - `build/verify_local.sh` 的 host gap matrix summary expectation 从 3 项更新到 4 项。
+- Focused verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`: pass，
+    `4 total, 4 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`: pass，
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`: pass，
+    `1 total, 1 passed, 0 failed`。
+  - `bash -n build/verify_local.sh`: pass。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、`human-summary=local verification passed`，
+    final envelope 包含 `corePlatformHostGapMatrixCheck":"pass"`。
+  - `git diff --check`: pass。
+
 ## Session: 2026-05-27 (platform host ffi gap matrix guard)
 
-- **Status:** completed; merged to main and cleanup pending
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块，但本轮不扩 public API，而是建立
     Platform Host FFI Gap Matrix Guard。
@@ -103,8 +159,8 @@ platform/core 工作流保留下来的已完成记录。
   - 证据边界已经在文档和测试里明确：Linux 是 runtime proof，Win64/simulated hosts 是 compile-only，
     source-surface gate 负责防止 host ABI owner 与 feature unified contract 再次漂移。
 - Next:
-  - 清理 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-matrix` worktree 和
-    `codex/platform-host-gap-matrix` 分支。
+  - 已清理 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-matrix` worktree 和
+    `codex/platform-host-gap-matrix` 分支；下一轮从最新 main 另开隔离 worktree。
 - Integration / post-merge verification:
   - 本分支 commit `ec1217b` rebase 到 `main@d987e80` 后变为 `253a3fa`。
   - `codex/platform-host-gap-matrix` 已 fast-forward 合并到 `main@253a3fa`。

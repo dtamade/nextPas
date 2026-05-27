@@ -26,6 +26,10 @@
   `test_platform_host_gap_matrix` 与 `build/verify_local.sh` 的
   `corePlatformHostGapMatrixCheck` 只证明 source-surface 同步，不把 Win64/simulated host 编译证据
   包装成跨宿主 runtime proof。
+- `docs/design-conventions.md`、`docs/platform-host-ffi-gap-matrix.md` 与 `build/verify_local.sh`
+  应形成 route-truth 闭环：设计规范是规则入口，gap matrix 是 host ABI 覆盖事实源，
+  `core-platform-host-gap-matrix-check` / `corePlatformHostGapMatrixCheck` 是 official local
+  verification route。后续不能只更新其中一个文件而让其他入口失真。
 - `platform.thread` 的 public carrier types 也应遵循 base owner：`TPlatformThreadHandle`、
   `TPlatformThreadToken`、`TPlatformThreadProc`、`TPlatformTLSKey` 归
   `nextpas.core.platform.thread.base`，`nextpas.core.platform.thread` 只 re-export 并实现统一

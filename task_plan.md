@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host FFI Gap Matrix Guard；上一轮包括
+当前最新本轮为 Platform Host Gap Route Guard；上一轮包括
+Platform Host FFI Gap Matrix Guard；
 Platform Facade Info Boundary；
 Platform Sync Base Extraction；
 Platform Thread Base Extraction、
@@ -48,6 +49,63 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Addendum: 2026-05-27 Platform Host Gap Route Guard
+
+### Goal
+
+把 host gap matrix 从“有文档、有 focused gate”继续收紧成“设计规范、文档事实源和 official
+verification route 互相索引”的闭环：
+
+- `core/docs/design-conventions.md` 必须明确指出 host gap matrix 由
+  `corePlatformHostGapMatrixCheck` / `core-platform-host-gap-matrix-check` 进入
+  `build/verify_local.sh` official envelope。
+- `test_platform_host_gap_matrix` 必须检查 design conventions、gap matrix 文档和
+  `build/verify_local.sh` 之间的 route truth 一致性。
+- 修正上一轮记录中 “cleanup pending” 的过期状态，记录实际 worktree/branch 已清理。
+- 不扩 `platform.time` / `platform.sync` / `platform.thread` public API，不测试 raw OS API。
+
+### Architecture Decision
+
+- `docs/design-conventions.md` 是平台分层规则入口；`docs/platform-host-ffi-gap-matrix.md` 是 host
+  ABI 覆盖和缺口事实源；`build/verify_local.sh` 是 official local verification route。
+- 三者必须互相可追踪：规则入口必须说明矩阵的 gate 名称，gate 必须检查规则入口仍指向矩阵，
+  final envelope 必须保留 `corePlatformHostGapMatrixCheck`。
+- 这轮只强化 route-truth，不改变 ABI 声明和 runtime behavior。
+
+### Status
+
+In progress in `codex/platform-host-gap-route-guard` from `main@d161546`.
+
+### Planned Steps
+
+- [x] 刷新 main/worktree 状态：主 checkout 有 unrelated collections WIP，本轮在隔离 worktree 执行
+- [x] focused baseline：
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+- [x] RED：扩 `test_platform_host_gap_matrix`，要求 design conventions 记录 official route token
+- [x] GREEN：更新 `core/docs/design-conventions.md` 与 `build/verify_local.sh` summary expectation
+- [x] 更新 `task_plan.md`、`progress.md`、`findings.md`
+- [x] focused verification：
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
+- [x] full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+  - `git diff --check`
+- [ ] commit、合并回 main、post-merge focused verification、清理 worktree/branch
+
+### Audit Checklist
+
+- [x] design conventions 明确索引 `docs/platform-host-ffi-gap-matrix.md`
+- [x] design conventions 明确 official line token `core-platform-host-gap-matrix-check`
+- [x] design conventions 明确 final envelope token `corePlatformHostGapMatrixCheck`
+- [x] host gap matrix test 检查 `build/verify_local.sh` 的 required path、line token、summary 与 envelope
+- [x] 上一轮 cleanup 记录不再误导后续会话
+
 ## Addendum: 2026-05-27 Platform Host FFI Gap Matrix Guard
 
 ### Goal
@@ -75,7 +133,8 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Completed, committed, fast-forward merged to `main@253a3fa`, and cleanup pending.
+Completed, committed, fast-forward merged to `main@253a3fa`, follow-up docs commit
+`main@c9948d5` recorded the merge, and worktree/branch cleanup is done.
 
 ### Planned Steps
 
@@ -104,7 +163,7 @@ Completed, committed, fast-forward merged to `main@253a3fa`, and cleanup pending
   - `git diff --check`
 - [x] commit、整合最新 `main@d987e80`、择优合并回 main
 - [x] post-merge focused verification
-- [ ] 清理 worktree / branch
+- [x] 清理 worktree / branch
 
 ### Audit Checklist
 

@@ -9,6 +9,10 @@ uses
 const
   DOC_PATH_FROM_TEST = '../../../docs/platform-host-ffi-gap-matrix.md';
   DOC_PATH_FROM_ROOT = 'core/docs/platform-host-ffi-gap-matrix.md';
+  DESIGN_CONVENTIONS_PATH_FROM_TEST = '../../../docs/design-conventions.md';
+  DESIGN_CONVENTIONS_PATH_FROM_ROOT = 'core/docs/design-conventions.md';
+  VERIFY_LOCAL_PATH_FROM_TEST = '../../../../build/verify_local.sh';
+  VERIFY_LOCAL_PATH_FROM_ROOT = 'build/verify_local.sh';
 
   LINUX_BASE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
   LINUX_BASE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.base.pas';
@@ -310,10 +314,44 @@ begin
     'platform.thread must not gain a feature-specific ffi unit');
 end;
 
+procedure TestRouteTruthStaysIndexed;
+var
+  LDesign: string;
+  LVerify: string;
+begin
+  LDesign := ReadSourceFile(ResolveRequiredPath(
+    DESIGN_CONVENTIONS_PATH_FROM_TEST,
+    DESIGN_CONVENTIONS_PATH_FROM_ROOT,
+    'design conventions doc must exist'));
+  LVerify := ReadSourceFile(ResolveRequiredPath(
+    VERIFY_LOCAL_PATH_FROM_TEST,
+    VERIFY_LOCAL_PATH_FROM_ROOT,
+    'verify_local route must exist'));
+
+  CheckTokenPresent(LDesign, 'docs/platform-host-ffi-gap-matrix.md',
+    'design conventions must index the host gap matrix doc');
+  CheckTokenPresent(LDesign, 'core-platform-host-gap-matrix-check',
+    'design conventions must name the host gap matrix line token');
+  CheckTokenPresent(LDesign, 'coreplatformhostgapmatrixcheck',
+    'design conventions must name the host gap matrix envelope token');
+  CheckTokenPresent(LDesign, 'build/verify_local.sh',
+    'design conventions must identify the official local route');
+
+  CheckTokenPresent(LVerify, 'require_path core/docs/platform-host-ffi-gap-matrix.md',
+    'verify_local must require the host gap matrix doc');
+  CheckTokenPresent(LVerify, 'core-platform-host-gap-matrix-check=running',
+    'verify_local must run the host gap matrix focused check');
+  CheckTokenPresent(LVerify, 'nextpas\.core\.platform\.host_gap_matrix: 4 total, 4 passed, 0 failed',
+    'verify_local must assert the host gap matrix summary');
+  CheckTokenPresent(LVerify, 'coreplatformhostgapmatrixcheck',
+    'verify_local final envelope must include the host gap matrix token');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.host_gap_matrix');
   T.Run('platform host gap matrix doc is explicit', @TestHostGapMatrixDocument);
   T.Run('platform host source tokens match gap matrix', @TestHostSourceTokensMatchMatrix);
   T.Run('platform feature ffi units stay absent', @TestFeatureFFIStaysAbsent);
+  T.Run('platform host gap matrix route truth stays indexed', @TestRouteTruthStaysIndexed);
   T.Summary;
 end.

@@ -4542,7 +4542,7 @@ if ! "$CORE_PLATFORM_HOST_GAP_MATRIX_BINARY" >>"$CORE_PLATFORM_HOST_GAP_MATRIX_O
   fail 'core-platform-host-gap-matrix-run-failed'
 fi
 cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_gap_matrix: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 'missing-core-platform-host-gap-matrix-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.host_gap_matrix: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 'missing-core-platform-host-gap-matrix-pass-summary'
 printf 'core-platform-host-gap-matrix-check=pass\n'
 
 printf 'core-platform-facade-surface-check=running\n'
