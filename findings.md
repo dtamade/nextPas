@@ -152,6 +152,19 @@
 - Batch 138 fresh `bash build/verify_local.sh` 已输出
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 139 把 imported bare callable ambiguity 的 installed-source 防误报护栏补齐：两个
+  `installed-source` helper 同时提供 `Pick(Integer)` 且 root 调用 `Pick(1);` 时，必须保持保守
+  跳过，不发 `sema.ambiguous-overload`，也不注册错误 `call` binding。
+- RED focused 证明旧实现会误报
+  `sema.ambiguous-overload`；`LookupCallBindingDeclaration(...)` 现在只在 imported signature
+  match 候选中至少两个来自 project-source owner 时，才把 imported ambiguity 投影为
+  `ambiguous-overload`。
+- 无 signature 的 imported ambiguity 判定必须按同 arity match 的 project-source 候选数判断，
+  不能只按同名 project-source 候选数判断；否则 mixed installed/project-source overload set 可能
+  在缺少稳定 signature 时误报。
+- Batch 139 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

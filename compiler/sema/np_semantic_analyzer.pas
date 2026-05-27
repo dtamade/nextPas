@@ -958,10 +958,12 @@ function TSemanticAnalyzer.LookupCallBindingDeclaration(
 ): Boolean;
 var
   Index: LongInt;
+  ImportedDiagnosticMatchCount: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
   ImportedDiagnosticNameCount: LongInt;
   ImportedNameCount: LongInt;
+  ImportedDiagnosticSignatureMatchCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
   KnownSymbolId: LongInt;
@@ -976,9 +978,11 @@ begin
   ADecl := nil;
   AOwnerUnitId := '';
   AResolutionFailureKind := '';
+  ImportedDiagnosticMatchCount := 0;
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
   ImportedDiagnosticNameCount := 0;
+  ImportedDiagnosticSignatureMatchCount := 0;
   ImportedNameCount := 0;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
@@ -1022,6 +1026,10 @@ begin
         begin
           ImportedMatchIndex := Index;
           Inc(ImportedMatchCount);
+          if ImportedUnitAllowsTypeMismatchDiagnostic(
+            FProcedureBodies[Index].OwnerUnitId
+          ) then
+            Inc(ImportedDiagnosticMatchCount);
           if AHasArgSignature and
             DeclParamSignatureMatchesArgs(
               FProcedureBodies[Index].Decl,
@@ -1031,6 +1039,10 @@ begin
           begin
             ImportedSignatureMatchIndex := Index;
             Inc(ImportedSignatureMatchCount);
+            if ImportedUnitAllowsTypeMismatchDiagnostic(
+              FProcedureBodies[Index].OwnerUnitId
+            ) then
+              Inc(ImportedDiagnosticSignatureMatchCount);
           end;
         end;
       end;
@@ -1114,7 +1126,9 @@ begin
   end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
-    AResolutionFailureKind := 'ambiguous-overload';
+    if ((not AHasArgSignature) and (ImportedDiagnosticMatchCount > 1)) or
+      (ImportedDiagnosticSignatureMatchCount > 1) then
+      AResolutionFailureKind := 'ambiguous-overload';
     Exit(False);
   end
   else if ImportedSignatureMatchCount = 0 then

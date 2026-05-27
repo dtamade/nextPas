@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,69 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续给 imported bare callable 诊断矩阵补防误报护栏：project-source 的 imported ambiguity
+已经由 `ambiguous-overload-check` 固定，但 installed-source 仍不应因为 helper/RTL truth
+不完整而提前报错。
+
+- root program `uses HelperA, HelperB;`
+- imported `HelperA` 与 `HelperB` 都标记为 `installed-source`
+- 两个 helper 都提供同签名 `procedure Pick(Value: Integer);`
+- root source 调用 `Pick(1);`
+- 调用必须保持 deferred：不发 `sema.ambiguous-overload`
+- 失败路径不能注册错误 `call` binding
+
+### Architecture Decision
+
+- 继续执行“project-source 诊断 gate 后立刻补 installed-source deferred 护栏”的节奏。
+- 只收紧 imported bare callable ambiguity 的 provenance guard；不实现 installed-source callable
+  diagnostics。
+- 不扩大到 default parameter lowering、implicit conversion、visibility、var/out、function pointer
+  或完整 overload resolver。
+- 不修改 `core/`；本轮只允许 compiler/stage0 测试与工作记录范围内的必要变更。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标节点、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare callable ambiguity deferred
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] 同步持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [ ] 简短 review 后提交
+
+### Verification
+
+- RED focused：新增 guard 后先失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-ambiguous-overload-diagnostic:sema.ambiguous-overload`。
+- GREEN focused：在 bare imported callable ambiguity 分支加 project-source provenance guard 后，
+  direct compile/run of `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Review 修正：把无 signature ambiguity 的 provenance 计数从同名 project-source 候选收紧为
+  同 arity match 的 project-source 候选，并重新跑 focused semantic 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 installed-source bare callable ambiguity 纳入 diagnostics
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 member receiver / inherited receiver / function pointer
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard
 
