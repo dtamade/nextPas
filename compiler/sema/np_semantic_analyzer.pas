@@ -2240,8 +2240,7 @@ begin
       else
       begin
         if (MethodClass <> '') and
-          ((ResolutionFailureKind = '') or
-           SameText(ResolutionFailureKind, 'unknown-callable')) then
+          SameText(ResolutionFailureKind, 'unknown-callable') then
           ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
             ANode,
             MethodClass,
@@ -2275,6 +2274,13 @@ begin
           EmitSemaError(
             'sema.no-matching-overload',
             'no matching overload for "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'unknown-member') then
+          EmitSemaError(
+            'sema.unknown-member',
+            'unknown member "' + MemberFailureName + '"',
             MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and

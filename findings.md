@@ -312,6 +312,22 @@
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
   也没有修改 `core/`。
+- Batch 130 暴露出 inherited implicit-self failure matrix 之外的相邻缺口：class method body 内
+  bare `Missing;` 处于已知 `Self` class context，旧实现既没有把它作为 ordinary
+  `sema.unknown-callable` 发出，也没有发 `sema.unknown-member`，而是 silent deferred。
+- 修复点很窄：`TryRegisterImplicitSelfBareMethodCallBinding(...)` 已能从
+  `MethodSymbolIdForClassTypeMember(...)` 拿到 `unknown-member` failure kind；缺的是
+  `SeedCallBindingsInNode(...)` bare-call emission 分支对该 failure kind 的输出。
+- Batch 130 新增 dedicated fixture
+  `tests/fixtures/implicit_self_bare_method_unknown_member` 与
+  `implicit-self-bare-method-unknown-member-check`，把 class method body 内 bare implicit-self
+  name miss 固定为 `sema.unknown-member`，且不注册失败 `member-call` binding。
+- Batch 130 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-unknown-member-check=pass`、
+  `implicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批修复仅触达 `compiler/sema` 的 narrow
+  diagnostic emission 与对应 tests/docs/records，没有修改 `core/`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败

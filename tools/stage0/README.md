@@ -901,7 +901,8 @@ type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 
 同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
 `semantic-analysis-failed` + `sema.unknown-callable`，再对 known field/property member call 及 inherited known
-field/property member call 断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member 断言
+field/property member call 断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
+和 class method body 内 bare implicit-self unknown member 断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言

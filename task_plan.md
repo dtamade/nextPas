@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,68 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 130 Implicit Self Bare Method Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 class method body 内 bare implicit-self method call 的 name miss 从 silent deferred 推进到
+structured `unknown-member` diagnostic：
+
+- `TWorker.Run` 内写 `Missing;`
+- 当前 `Self` class 与 parent chain 没有同名 method
+- 失败必须是 `sema.unknown-member`，而不是普通 top-level `sema.unknown-callable`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮只补 implicit-self fallback failure emission：当 bare call 的常规 callable lookup 失败，且
+  class method context 已知时，`TryRegisterImplicitSelfBareMethodCallBinding(...)` 会把
+  `MethodSymbolIdForClassTypeMember(...)` 的 `unknown-member` failure kind 透传回统一 emission 分支。
+- 不改变 direct member-call 的 resolver；不扩大到 typecast receiver、record method、property accessor、
+  array/deref receiver、visibility 或 full overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点和不碰 `core/`
+- [x] RED：focused semantic regression 证明 `Missing;` 在 class method body 内缺少
+      `sema.unknown-member`
+- [x] GREEN：在 bare implicit-self fallback emission 中补 `unknown-member`
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-unknown-member-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`semantic-call-bindings-failure=missing-implicit-self-bare-method-unknown-member-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-unknown-member-check=pass`、
+  `implicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` 无输出；`bash -n build/verify_local.sh` 与
+  `sh -n build/verify_local.sh` 无输出；`git diff --name-only | rg '^core/'` 无输出。
+
+### Non-goals
+
+- 不实现完整 member resolver
+- 不实现 implicit conversion / overload ranking / visibility
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics
 
