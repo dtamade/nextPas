@@ -417,6 +417,15 @@
 - installed-source direct member function-result wrong-argument-count 的 official proof 只能放在
   semantic harness 中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把
   sibling unit 当作 workspace project-source，不能证明 installed-source provenance。
+- Batch 163 把 imported inherited member function-result 家族补齐 arity miss：root `Flag: Boolean`
+  作为两个 arguments 调 imported `project-source` inherited `TBase.Pick(Integer)` 时，会失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 163 focused probe 与 stage0 probe 都直接 GREEN，证明 parent-chain member-call path 已能把
+  root-owned function-result evidence 传给 imported `project-source` inherited arity projection；本批不修改 analyzer。
+- Batch 163 新增
+  `tests/fixtures/imported_inherited_member_function_result_wrong_argument_count` 与
+  `imported-inherited-member-function-result-wrong-argument-count-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultWrongArgumentCountCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

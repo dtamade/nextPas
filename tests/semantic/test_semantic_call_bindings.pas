@@ -5844,6 +5844,111 @@ begin
   end;
 end;
 
+procedure CheckImportedInheritedMemberFunctionResultWrongArgumentCountDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-inherited-member-function-result-wrong-argument-count-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program ImportedInheritedMemberFunctionResultWrongArgumentCountCalls;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(Flag, Flag);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBase = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBase)' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBase.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'ImportedInheritedMemberFunctionResultWrongArgumentCountCalls',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-imported-inherited-member-function-result-wrong-argument-count-diagnostic');
+    if not SameText(
+      Diagnostics.LastDiagnosticCode,
+      'sema.wrong-argument-count'
+    ) then
+      Fail('unexpected-imported-inherited-member-function-result-wrong-argument-count-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-imported-inherited-member-function-result-wrong-argument-count-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('imported-inherited-member-function-result-wrong-argument-count-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-imported-inherited-member-function-result-wrong-argument-count-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-imported-inherited-member-function-result-wrong-argument-count-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-imported-inherited-member-function-result-wrong-argument-count-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInstalledSourceInheritedMemberAmbiguousOverloadStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -8837,6 +8942,7 @@ begin
     CheckInstalledSourceMemberFunctionResultNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceMemberFunctionResultAmbiguousOverloadStaysDeferred;
     CheckImportedInheritedMemberFunctionResultCallTypeMismatchDiagnostic;
+    CheckImportedInheritedMemberFunctionResultWrongArgumentCountDiagnostic;
     CheckInstalledSourceInheritedMemberFunctionResultCallTypeMismatchStaysDeferred;
     CheckInstalledSourceInheritedMemberFunctionResultNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceInheritedMemberFunctionResultAmbiguousOverloadStaysDeferred;
