@@ -131,6 +131,18 @@
 - Batch 115 新增 `imported-inherited-member-ambiguous-overload-check`，用 dedicated fixture 固定 stage0
   `sema.ambiguous-overload` projection 与 final envelope
   `importedInheritedMemberAmbiguousOverloadCheck=pass`。
+- imported inherited `project-source` 的 wrong-argument-count 在当前实现里已经天然成立：对
+  `TWorker = class(TBase)` 且 `TBase.Pick(Integer)` 可见的场景，`Worker.Pick(1, 2)` 的 stage0 build
+  会直接输出 `sema.wrong-argument-count`，不需要再改 `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` wrong-argument-count 也继续保持 deferred：由于
+  `MethodSymbolIdForExactClassTypeMember(...)` 的 arity miss 分支仍受 owner provenance guard 约束，
+  installed-source parent owner 不会被提前投影成 ordinary arity diagnostic。
+- Batch 116 新增
+  `tests/fixtures/imported_inherited_member_wrong_argument_count` 与
+  `imported-inherited-member-wrong-argument-count-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedMemberWrongArgumentCountCheck=pass`。
+- 同一家族 sema diagnostics 的加速办法已经更具体了：对只差 provenance / inherited / imported 的相邻
+  边界，先做 probe；若能力天然成立，就直接 promotion 到 official gate；只有 probe 失败时才进入最小实现修复。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。

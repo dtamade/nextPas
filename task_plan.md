@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,83 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported inherited member-call 的 `sema.wrong-argument-count` 正式纳入官方验证面：当 receiver type
+已知、exact receiver type 自身没有同名 method、parent chain 上存在 inherited member target，且 call 的
+argument count 与所有 visible inherited member target 都不匹配时，固定 project-source 路径失败为
+`sema.wrong-argument-count`，同时继续保证 installed-source inherited arity miss 保守 deferred。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1, 2);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` 可见时，必须失败为 `sema.wrong-argument-count`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` inherited wrong-argument-count 继续 deferred，不发 diagnostics，也不注册错误
+  binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-wrong-argument-count-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberWrongArgumentCountCheck`。
+- 本批继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit`，但针对同一家族相邻边界引入新的提速变体：先 probe 当前行为，若能力已天然成立，则直接
+  promotion 到 official gate，而不是机械再造一轮无意义的 compiler 改动。
+
+### Architecture Decision
+
+这是 imported inherited wrong-argument-count 的 verification promotion 批次，不是新的 resolver 设计：
+
+- 只把已存在的 imported `project-source` inherited arity miss 行为提升到 semantic regression 与 stage0
+  verify gate。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 incomplete imported truth 提前报成
+  ordinary arity error。
+- 不顺手扩大到 imported inherited `type-mismatch` / `unknown-member` / ranking / visibility /
+  implicit conversion。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：先验证 project-source inherited arity miss 当前是否已天然产生 `sema.wrong-argument-count`
+- [x] semantic：新增 imported inherited project-source regression
+- [x] semantic：新增 imported inherited installed-source deferred guard
+- [x] 新增 `tests/fixtures/imported_inherited_member_wrong_argument_count` 与
+  `imported-inherited-member-wrong-argument-count-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Probe：使用 `.sisyphus/tmp/stage0-bootstrap/nextpas build` 构造临时 imported inherited fixture，已输出
+  `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`，证明核心行为本来就成立。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_wrong_argument_count/imported_inherited_member_wrong_argument_count_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-wrong-argument-count-check=pass`、
+  `importedInheritedMemberWrongArgumentCountCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不把 imported `installed-source` inherited arity miss 纳入 diagnostics
+- 不扩大到 imported inherited `type-mismatch` / `unknown-member`
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics
 
