@@ -231,6 +231,14 @@
   `importedMemberFunctionResultTypeMismatchCallCheck":"pass"`、
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 160 把 Batch 144 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member single-target mismatch 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.type-mismatch`，也不注册错误 `member-call` binding。
+- Batch 160 focused probe 直接 GREEN：direct member-call path 的 provenance gate 已经阻止
+  installed-source direct member function-result type-mismatch 被提前投影为 ordinary type mismatch；本批不修改 analyzer。
+- installed-source direct member function-result type-mismatch 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
 - Batch 145 继续“成熟格组合流水线”：把 Batch 117 的 imported inherited direct member
   single-target mismatch 与 Batch 144 的 imported member root-owned function-result evidence 组合成新 gate。
 - Batch 145 focused probe 证明 imported `project-source` inherited direct member-call 也已天然接受

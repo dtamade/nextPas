@@ -342,9 +342,9 @@ candidate collection
   - 也用于 bare procedure/function call、direct member-call 以及 inherited direct member-call 中 imported
     `project-source` 单一 target 的 arity 已匹配、当前 argument signature 来自稳定事实且与 target
     param signature 明确不兼容的场景；该 stable evidence 包含 root-owned 零参内建标量/字符串 function result
-  - 同形状 imported `installed-source` single-target / inherited single-target mismatch 继续 deferred，
+  - 同形状 imported `installed-source` bare/direct/inherited single-target mismatch 继续 deferred，
     即使 argument evidence 是 root-owned 零参内建标量/字符串 function result，也不提前投影为 ordinary
-    `sema.type-mismatch`
+    `sema.type-mismatch`；这类 provenance guard 用 `semantic-call-bindings-check` 的 focused harness 固定
   - 也用于 class method body 内 bare implicit-self method call 找到 root-owned 单一 target，
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
     包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result，并覆盖
