@@ -95,9 +95,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   single-target arity miss 继续 deferred，不发 `sema.wrong-argument-count`；imported 同名同 arity 多候选、稳定
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
-  同样发 `sema.no-matching-overload`；imported `project-source` inherited member-call
-  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match 与
-  ambiguity evidence。
+  同样发 `sema.no-matching-overload`；imported `project-source` direct member-call 与 inherited
+  member-call overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定
+  no-match evidence；imported `project-source` inherited member-call overload set 还接受同类 evidence
+  作为 ambiguity evidence。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   single-target arity miss、bare callable ambiguity、

@@ -357,6 +357,16 @@
 - Batch 155 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 156 继续“同族成熟格交叉流水线”：把 Batch 110 的 imported direct member
+  overload-set no-match 与 Batch 144 的 direct member root-owned function-result evidence 组合成新 gate。
+- Batch 156 focused probe 已直接 GREEN：root `Flag: Boolean` 调 imported `project-source`
+  direct member overload set `TWorker.Pick(Integer)` / `TWorker.Pick(AnsiString)` 会失败为
+  `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：direct member-call path 已经把 root-owned function-result evidence
+  传给 imported `project-source` overload-set no-match projection。
+- Batch 156 新增 `tests/fixtures/imported_member_function_result_no_matching_overload` 与
+  `imported-member-function-result-no-matching-overload-check`，final envelope 新增
+  `importedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
