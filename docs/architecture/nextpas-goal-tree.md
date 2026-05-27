@@ -174,6 +174,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 已完成 source-owned bare unknown callable 与 direct class unknown member 的第一条结构化诊断。
 - `sema.unknown-member` 已推进到 class method body bare implicit-self、inherited class context，
   以及 imported `project-source` unit method body 的 owner-aware traversal。
+- imported `project-source` unit method body 的 bare implicit-self wrong-argument-count 已进入
+  official gate。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
   imported/member target no-match、non-project-source imported target type mismatch，以及非 source-owned /
   typecast / function-pointer 等更复杂 callable 边界。
@@ -198,6 +200,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss、class
   method body bare implicit-self name miss、inherited class context，以及 imported
   `project-source` unit method body。
+- `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self arity miss。
 - 语义错误覆盖仍不完整。
 
 下一步证据：

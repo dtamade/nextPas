@@ -577,6 +577,21 @@
   `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 177 沿 Batch 176 的 imported `project-source` unit method body traversal 继续补
+  bare implicit-self wrong-argument-count：root source `uses Worker;`，imported `Worker.pas`
+  的 `procedure TWorker.Run; begin Pick; end;` 面对 `Pick(Value: Integer)` 时，必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 177 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然覆盖 arity miss；本批不修改 analyzer，也不修改 `core/`。
+- Batch 177 新增 `tests/fixtures/imported_unit_body_implicit_self_wrong_argument_count` 与
+  `imported-unit-body-implicit-self-wrong-argument-count-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass"`。
+- Batch 177 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
