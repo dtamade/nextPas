@@ -803,29 +803,29 @@ type
     {$ENDIF}
 
 
-    { CountIF 容器统计算法 }
+    { CountIf 容器统计算法 }
 
     {**
-     * CountIF
+     * CountIf
      *
      * @desc 计算容器中满足条件的元素数量
      *}
-    function CountIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
 
     {**
-     * CountIF
+     * CountIf
      *
      * @desc 计算容器中满足条件的元素数量
      *}
-    function CountIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * CountIF
+     * CountIf
      *
      * @desc 计算容器中满足条件的元素数量
      *}
-    function CountIF(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
 

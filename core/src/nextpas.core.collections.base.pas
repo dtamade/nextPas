@@ -339,7 +339,7 @@ type
     function  DoForEach(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): Boolean; virtual;
     function  DoContains(aProxy: TEqualsProxyMethod;const aElement: T; aEquals, aData: Pointer): Boolean; virtual;
     function  DoCountOf(aProxy: TEqualsProxyMethod; const aElement: T; aEquals, aData: Pointer): SizeUInt; virtual;
-    function  DoCountIF(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): SizeUInt; virtual;
+    function  DoCountIf(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): SizeUInt; virtual;
     procedure DoFill(const aElement: T); virtual;
     procedure DoZero(); virtual; abstract;
     procedure DoReplace(aProxy: TEqualsProxyMethod; const aElement, aNewElement: T; aEquals, aData: Pointer); virtual;
@@ -390,10 +390,10 @@ type
     function CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function CountIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountIF(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     procedure Fill(const aElement: T);
@@ -1628,7 +1628,7 @@ begin
   end;
 end;
 
-function TGenericCollection.DoCountIF(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): SizeUInt;
+function TGenericCollection.DoCountIf(aProxy: TPredicateProxyMethod; aPredicate, aData: Pointer): SizeUInt;
 var
   LIter: TIter;
 begin
@@ -2249,29 +2249,29 @@ begin
 end;
 {$ENDIF}
 
-function TGenericCollection.CountIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TGenericCollection.CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
   if GetCount = 0 then
     exit(0);
 
-  Result := DoCountIF(@DoPredicateFuncProxy, @aPredicate, aData);
+  Result := DoCountIf(@DoPredicateFuncProxy, @aPredicate, aData);
 end;
 
-function TGenericCollection.CountIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TGenericCollection.CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
   if GetCount = 0 then
     exit(0);
 
-  Result := DoCountIF(@DoPredicateMethodProxy, @aPredicate, aData);
+  Result := DoCountIf(@DoPredicateMethodProxy, @aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TGenericCollection.CountIF(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TGenericCollection.CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
   if GetCount = 0 then
     exit(0);
 
-  Result := DoCountIF(@DoPredicateRefFuncProxy, @aPredicate, nil);
+  Result := DoCountIf(@DoPredicateRefFuncProxy, @aPredicate, nil);
 end;
 {$ENDIF}
 

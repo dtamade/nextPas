@@ -1098,7 +1098,7 @@ type
     {$ENDIF}
 
     {**
-     * FindIFUnchecked
+     * FindIfUnchecked
      *
      * @desc 在指定范围内查找满足条件的元素 (跳过边界检查).
      *
@@ -1114,14 +1114,14 @@ type
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindIFNotUnchecked
+     * FindIfNotUnchecked
      *
      * @desc 在指定范围内查找不满足条件的元素 (跳过边界检查).
      *
@@ -1137,10 +1137,10 @@ type
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
@@ -1169,7 +1169,7 @@ type
     {$ENDIF}
 
     {**
-     * FindLastIFUnchecked
+     * FindLastIfUnchecked
      *
      * @desc 在指定范围内从后向前查找满足条件的元素 (跳过边界检查).
      *
@@ -1185,14 +1185,14 @@ type
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
-     * FindLastIFNotUnchecked
+     * FindLastIfNotUnchecked
      *
      * @desc 在指定范围内从后向前查找不满足条件的元素 (跳过边界检查).
      *
@@ -1208,10 +1208,10 @@ type
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
@@ -1289,7 +1289,7 @@ type
     {$ENDIF}
 
     {**
-     * ReplaceIFUnchecked
+     * ReplaceIfUnchecked
      *
      * @desc 在指定范围内替换满足条件的元素 (跳过边界检查).
      *
@@ -1306,10 +1306,10 @@ type
      *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
      *   详见 docs/Unchecked_Methods_Summary.md。
      *}
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
@@ -1801,42 +1801,42 @@ type
 
     { FindIf 查找 }
 
-    function FindIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     { FindIfNot 查找不满足条件的元素 }
 
-    function FindIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     { FindLast 查找最后一个元素 }
@@ -1864,42 +1864,42 @@ type
 
     { FindLastIf 查找最后一个满足条件的元素 }
 
-    function FindLastIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    { FindLastIFNot 查找最后一个不满足条件的元素 }
+    { FindLastIfNot 查找最后一个不满足条件的元素 }
 
-    function FindLastIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     { CountOf 计算数量 }
@@ -2204,10 +2204,10 @@ type
     procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
 
-    { ReplaceIF 替换满足条件的元素 }
+    { ReplaceIf 替换满足条件的元素 }
 
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2217,10 +2217,10 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (过程指针版本).
      *   aData       传递给回调过程的用户自定义数据.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
 
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2230,11 +2230,11 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (对象方法版本).
      *   aData       传递给回调过程的用户自定义数据.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2246,11 +2246,11 @@ type
      * @remark
      *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
 
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2261,10 +2261,10 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (过程指针版本).
      *   aData       传递给回调过程的用户自定义数据.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
 
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2275,11 +2275,11 @@ type
      *   aPredicate  用于判断元素是否满足条件的回调 (对象方法版本).
      *   aData       传递给回调过程的用户自定义数据.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
 
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     {**
-     * ReplaceIF
+     * ReplaceIf
      *
      * @desc 替换容器中的元素.
      *
@@ -2292,7 +2292,7 @@ type
      * @remark
      *   此重载版本需要在fpc 3.3.1 及以上 并启用 `FAFAFA_CORE_ANONYMOUS_REFERENCES` 编译指令.
      *}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
 
     { IsSorted 判断是否有序 }

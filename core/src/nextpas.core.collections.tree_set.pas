@@ -64,10 +64,10 @@ type
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
     function CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
-    function CountIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function CountIF(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
     procedure Fill(const aElement: T);
     procedure Zero();
@@ -249,20 +249,20 @@ begin
 end;
 {$ENDIF}
 
-function TTreeSet.CountIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TTreeSet.CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FImpl.CountIF(aPredicate, aData);
+  Result := FImpl.CountIf(aPredicate, aData);
 end;
 
-function TTreeSet.CountIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TTreeSet.CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FImpl.CountIF(aPredicate, aData);
+  Result := FImpl.CountIf(aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TTreeSet.CountIF(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TTreeSet.CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
-  Result := FImpl.CountIF(aPredicate);
+  Result := FImpl.CountIf(aPredicate);
 end;
 {$ENDIF}
 

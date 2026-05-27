@@ -192,20 +192,20 @@ type
     function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
     procedure Reverse(aStartIndex: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -222,36 +222,36 @@ type
     function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindLastIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindLastIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
     function CountOf(const aElement: T; aStartIndex: SizeUInt): SizeUInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -291,15 +291,15 @@ type
     procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    procedure ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
     procedure Sort; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -397,22 +397,22 @@ type
     function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
     function FindLast(const aValue: T): SizeInt; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -633,20 +633,20 @@ type
     procedure ZeroUnchecked(aIndex, aCount: SizeUInt);
 
     {**
-     * FindIFUnchecked, FindIFNotUnchecked, FindLastUnchecked, FindLastIFUnchecked, FindLastIFNotUnchecked
+     * FindIfUnchecked, FindIfNotUnchecked, FindLastUnchecked, FindLastIfUnchecked, FindLastIfNotUnchecked
      * @desc 无检查版本的查找方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
@@ -656,16 +656,16 @@ type
     function FindLastUnchecked(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
     {**
@@ -694,7 +694,7 @@ type
     procedure FillUnchecked(aStartIndex, aCount: SizeUInt; const aElement: T);
 
     {**
-     * ReplaceUnchecked, ReplaceIFUnchecked
+     * ReplaceUnchecked, ReplaceIfUnchecked
      * @desc 无检查版本的替换方法，跳过所有边界检查
      * @remark 调用者必须确保参数有效性，否则可能导致程序崩溃
      *}
@@ -705,10 +705,10 @@ type
     function ReplaceUnchecked(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-    function ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
+    function ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
     {**
@@ -2756,99 +2756,99 @@ begin
 end;
 {$ENDIF}
 
-function TVec.FindIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindIF(0, FCount, aPredicate, aData);
+  Result := FindIf(0, FCount, aPredicate, aData);
 end;
 
-function TVec.FindIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindIF(0, FCount, aPredicate, aData);
+  Result := FindIf(0, FCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindIF(0, FCount, aPredicate);
+  Result := FindIf(0, FCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
-  Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVec.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
-  Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
-  Result := FindIF(aStartIndex, FCount - aStartIndex, aPredicate);
+  Result := FindIf(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: count out of bounds');
 
-  Result := FBuf.FindIF(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIf(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: count out of bounds');
 
-  Result := FBuf.FindIF(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIf(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIf: count out of bounds');
 
-  Result := FBuf.FindIF(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindIf(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -2945,195 +2945,195 @@ begin
 end;
 {$ENDIF}
 
-function TVec.FindLastIF(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIF(0, FCount, aPredicate, aData);
+  Result := FindLastIf(0, FCount, aPredicate, aData);
 end;
 
-function TVec.FindLastIF(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIF(0, FCount, aPredicate, aData);
+  Result := FindLastIf(0, FCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIF(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIF(0, FCount, aPredicate);
+  Result := FindLastIf(0, FCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
 
-  Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindLastIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVec.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
 
-  Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate, aData);
-end;
-
-{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIF(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
-begin
-  if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
-
-  Result := FindLastIF(aStartIndex, FCount - aStartIndex, aPredicate);
-end;
-{$ENDIF}
-
-function TVec.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
-begin
-  if aCount = 0 then
-    exit(-1);
-
-  if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
-
-  if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIF: count out of bounds');
-
-  Result := FBuf.FindLastIF(aStartIndex, aCount, aPredicate, aData);
-end;
-
-function TVec.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
-begin
-  if aCount = 0 then
-    exit(-1);
-
-  if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
-
-  if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIF: count out of bounds');
-
-  Result := FBuf.FindLastIF(aStartIndex, aCount, aPredicate, aData);
+  Result := FindLastIf(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+begin
+  if aStartIndex >= FCount then
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
+
+  Result := FindLastIf(aStartIndex, FCount - aStartIndex, aPredicate);
+end;
+{$ENDIF}
+
+function TVec.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIf: count out of bounds');
 
-  Result := FBuf.FindLastIF(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastIf(aStartIndex, aCount, aPredicate, aData);
+end;
+
+function TVec.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+begin
+  if aCount = 0 then
+    exit(-1);
+
+  if aStartIndex >= FCount then
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
+
+  if aCount > (FCount - aStartIndex) then
+    raise EOutOfRange.Create('TVec.FindLastIf: count out of bounds');
+
+  Result := FBuf.FindLastIf(aStartIndex, aCount, aPredicate, aData);
+end;
+
+{$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+function TVec.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+begin
+  if aCount = 0 then
+    exit(-1);
+
+  if aStartIndex >= FCount then
+    raise EOutOfRange.Create('TVec.FindLastIf: index out of bounds');
+
+  if aCount > (FCount - aStartIndex) then
+    raise EOutOfRange.Create('TVec.FindLastIf: count out of bounds');
+
+  Result := FBuf.FindLastIf(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIFNot(0, FCount, aPredicate, aData);
+  Result := FindLastIfNot(0, FCount, aPredicate, aData);
 end;
 
-function TVec.FindLastIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIFNot(0, FCount, aPredicate, aData);
+  Result := FindLastIfNot(0, FCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if FCount = 0 then
     exit(-1);
 
-  Result := FindLastIFNot(0, FCount, aPredicate);
+  Result := FindLastIfNot(0, FCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
-  Result := FindLastIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindLastIfNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVec.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
-  Result := FindLastIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindLastIfNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
-  Result := FindLastIFNot(aStartIndex, FCount - aStartIndex, aPredicate);
+  Result := FindLastIfNot(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: count out of bounds');
 
-  Result := FBuf.FindLastIFNot(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfNot(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: count out of bounds');
 
-  Result := FBuf.FindLastIFNot(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfNot(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aCount = 0 then
     exit(-1);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindLastIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindLastIfNot: count out of bounds');
 
-  Result := FBuf.FindLastIFNot(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastIfNot(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -3392,73 +3392,73 @@ begin
 end;
 {$ENDIF}
 
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
-  ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  ReplaceIf(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
-  ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  ReplaceIf(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>);
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
-  ReplaceIF(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate);
+  ReplaceIf(aNewElement, aStartIndex, FCount - aStartIndex, aPredicate);
 end;
 {$ENDIF}
 
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
 begin
   if aCount = 0 then
     exit;
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.ReplaceIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: count out of bounds');
 
-  FBuf.ReplaceIF(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  FBuf.ReplaceIf(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
 begin
   if aCount = 0 then
     exit;
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.ReplaceIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: count out of bounds');
 
-  FBuf.ReplaceIF(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  FBuf.ReplaceIf(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-procedure TVec.ReplaceIF(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>);
+procedure TVec.ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>);
 begin
   if aCount = 0 then
     exit;
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.ReplaceIF: index out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.ReplaceIF: count out of bounds');
+    raise EOutOfRange.Create('TVec.ReplaceIf: count out of bounds');
 
-  FBuf.ReplaceIF(aNewElement, aStartIndex, aCount, aPredicate);
+  FBuf.ReplaceIf(aNewElement, aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -4092,99 +4092,99 @@ begin
 end;
 {$ENDIF}
 
-function TVec.FindIFNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(0);
 
-  Result := FindIFNot(0, FCount, aPredicate, aData);
+  Result := FindIfNot(0, FCount, aPredicate, aData);
 end;
 
-function TVec.FindIFNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if FCount = 0 then
     exit(0);
 
-  Result := FindIFNot(0, FCount, aPredicate, aData);
+  Result := FindIfNot(0, FCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if FCount = 0 then
     exit(0);
 
-  Result := FindIFNot(0, FCount, aPredicate);
+  Result := FindIfNot(0, FCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
-  Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindIfNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVec.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
-  Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
+  Result := FindIfNot(aStartIndex, FCount - aStartIndex, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
-  Result := FindIFNot(aStartIndex, FCount - aStartIndex, aPredicate);
+  Result := FindIfNot(aStartIndex, FCount - aStartIndex, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCount = 0 then
     exit(0);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: count out of bounds');
 
-  Result := FBuf.FindIFNot(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfNot(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
   if aCount = 0 then
     exit(0);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: count out of bounds');
 
-  Result := FBuf.FindIFNot(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfNot(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
   if aCount = 0 then
     exit(0);
 
   if aStartIndex >= FCount then
-    raise EOutOfRange.Create('TVec.FindIFNot: index out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: index out of bounds');
 
   if aCount > (FCount - aStartIndex) then
-    raise EOutOfRange.Create('TVec.FindIFNot: count out of bounds');
+    raise EOutOfRange.Create('TVec.FindIfNot: count out of bounds');
 
-  Result := FBuf.FindIFNot(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindIfNot(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -4474,37 +4474,37 @@ begin
   FBuf.ZeroUnchecked(aIndex, aCount);
 end;
 
-function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindIFUnchecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindIfUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindIFNotUnchecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindIfNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -4535,37 +4535,37 @@ begin
   FBuf.FillUnchecked(aStartIndex, aCount, aElement);
 end;
 
-function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindLastIFUnchecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastIfUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
-function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
+function TVec.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt;
 begin
-  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
+function TVec.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt;
 begin
-  Result := FBuf.FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate);
+  Result := FBuf.FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 
@@ -4630,20 +4630,20 @@ begin
 end;
 {$ENDIF}
 
-function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
+function TVec.ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ReplaceIfUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
-function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
+function TVec.ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
+  Result := FBuf.ReplaceIfUnchecked(aNewElement, aStartIndex, aCount, aPredicate, aData);
 end;
 
 {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
-function TVec.ReplaceIFUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
+function TVec.ReplaceIfUnchecked(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
 begin
-  Result := FBuf.ReplaceIFUnchecked(aNewElement, aStartIndex, aCount, aPredicate);
+  Result := FBuf.ReplaceIfUnchecked(aNewElement, aStartIndex, aCount, aPredicate);
 end;
 {$ENDIF}
 

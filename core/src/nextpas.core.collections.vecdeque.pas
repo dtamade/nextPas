@@ -308,12 +308,12 @@ type
     function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): Boolean; overload;
     function ContainsUnchecked(const aElement: T; aIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): Boolean; overload;
 
-    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
-    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
-    function FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
-    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
-    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
-    function FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
+    function FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
+    function FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
+    function FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
+    function FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64; overload;
+    function FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64; overload;
+    function FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
 
     { IVec<T> 接口实现 }
     function GetCapacity: SizeUInt;
@@ -401,29 +401,29 @@ type
     function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
     function FindUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
-    // FindIF 系列方法
-    function FindIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIF(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIF(aPredicate: TPredicateRefFunc): SizeInt;
-    function FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    // FindIf 系列方法
+    function FindIf(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIf(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIf(aPredicate: TPredicateRefFunc): SizeInt;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
 
 
-    // FindIFNot 系列方法
-    function FindIFNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIFNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIFNot(aPredicate: TPredicateRefFunc): SizeInt;
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    // FindIfNot 系列方法
+    function FindIfNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIfNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIfNot(aPredicate: TPredicateRefFunc): SizeInt;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
 
 
@@ -446,35 +446,35 @@ type
     function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeInt;
     function FindLastUnchecked(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeInt;
 
-    // FindLastIF 系列方法
-    function FindLastIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIF(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIF(aPredicate: TPredicateRefFunc): SizeInt;
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    // FindLastIf 系列方法
+    function FindLastIf(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIf(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIf(aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
-    // FindLastIFNot 系列方法
-    function FindLastIFNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFNot(aPredicate: TPredicateRefFunc): SizeInt;
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    // FindLastIfNot 系列方法
+    function FindLastIfNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIfNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIfNot(aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
-    function FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+    function FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 
     // CountOf 系列方法
     function CountOf(const aValue: T; aStartIndex: SizeUInt): SizeUInt;
@@ -518,17 +518,17 @@ type
     function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
     function ReplaceUnchecked(const aOldValue, aNewValue: T; aStartIndex, aCount: SizeUInt; aEquals: TEqualsRefFunc): SizeUInt;
 
-    // ReplaceIF 系列方法
-    procedure ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
-    procedure ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
-    procedure ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc);
-    procedure ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
-    procedure ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
-    procedure ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
+    // ReplaceIf 系列方法
+    procedure ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
+    procedure ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
+    procedure ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc);
+    procedure ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
+    procedure ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
+    procedure ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
 
-    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
-    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
-    function ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+    function ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+    function ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+    function ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 
     // IsSorted 系列方法
     function IsSorted(aStartIndex: SizeUInt): Boolean;
@@ -596,9 +596,9 @@ type
     function CountOf(const aValue: T; aEquals: TEqualsMethod; aData: Pointer): SizeUInt;
     function CountOf(const aValue: T; aEquals: TEqualsRefFunc): SizeUInt;
 
-    function CountIF(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
-    function CountIF(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
-    function CountIF(aPredicate: TPredicateRefFunc): SizeUInt;
+    function CountIf(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+    function CountIf(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+    function CountIf(aPredicate: TPredicateRefFunc): SizeUInt;
 
     procedure Replace(const aOldValue, aNewValue: T);
     procedure Replace(const aOldValue, aNewValue: T; aEquals: TEqualsFunc; aData: Pointer);
@@ -2499,7 +2499,7 @@ end;
 
 { Find methods }
 
-function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
+function TVecDeque.FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2518,7 +2518,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
+function TVecDeque.FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2536,7 +2536,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
+function TVecDeque.FindIfUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2554,7 +2554,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
+function TVecDeque.FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2572,7 +2572,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
+function TVecDeque.FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -2590,7 +2590,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindIFNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
+function TVecDeque.FindIfNotUnchecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3928,8 +3928,8 @@ begin
   end;
 end;
 
-// ReplaceIF 系列方法实现
-function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+// ReplaceIf 系列方法实现
+function TVecDeque.ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -3950,7 +3950,7 @@ begin
   end;
 end;
 
-function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+function TVecDeque.ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
 var
   i: SizeUInt;
 begin
@@ -3968,7 +3968,7 @@ begin
   end;
 end;
 
-function TVecDeque.ReplaceIFUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
+function TVecDeque.ReplaceIfUnchecked(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeUInt;
 var
   i: SizeUInt;
 begin
@@ -4752,7 +4752,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4775,7 +4775,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4795,7 +4795,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIfUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4815,7 +4815,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
@@ -4837,7 +4837,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4857,7 +4857,7 @@ begin
   Result := -1;
 end;
 
-function TVecDeque.FindLastIFNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIfNotUnchecked(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   i: SizeUInt;
 begin
@@ -4877,32 +4877,32 @@ begin
   Result := -1;
 end;
 
-// ReplaceIF 系列方法实现
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
+// ReplaceIf 系列方法实现
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
 begin
   if aStartIndex >= GetCount then
     Exit;
 
-  ReplaceIF(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  ReplaceIf(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
 begin
   if aStartIndex >= GetCount then
     Exit;
 
-  ReplaceIF(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  ReplaceIf(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc);
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc);
 begin
   if aStartIndex >= GetCount then
     Exit;
 
-  ReplaceIF(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate);
+  ReplaceIf(aNewValue, aStartIndex, GetCount - aStartIndex, aPredicate);
 end;
 
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer);
 begin
   if aStartIndex >= GetCount then
     Exit;
@@ -4913,10 +4913,10 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIfUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
 end;
 
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer);
 begin
   if aStartIndex >= GetCount then
     Exit;
@@ -4927,10 +4927,10 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
+  ReplaceIfUnchecked(aNewValue, aStartIndex, aCount, aPredicate, aData);
 end;
 
-procedure TVecDeque.ReplaceIF(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
+procedure TVecDeque.ReplaceIf(const aNewValue: T; aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc);
 begin
   if aStartIndex >= GetCount then
     Exit;
@@ -4941,7 +4941,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  ReplaceIFUnchecked(aNewValue, aStartIndex, aCount, aPredicate);
+  ReplaceIfUnchecked(aNewValue, aStartIndex, aCount, aPredicate);
 end;
 
 // IsSorted 系列方法实现
@@ -5033,47 +5033,47 @@ begin
   Result := IsSortedUnchecked(aStartIndex, aCount, aComparer);
 end;
 
-// FindIF 系列方法实现
-function TVecDeque.FindIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+// FindIf 系列方法实现
+function TVecDeque.FindIf(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
-  Result := FindIF(0, GetCount, aPredicate, aData);
+  Result := FindIf(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindIF(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIf(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
-  Result := FindIF(0, GetCount, aPredicate, aData);
+  Result := FindIf(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindIF(aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIf(aPredicate: TPredicateRefFunc): SizeInt;
 begin
-  Result := FindIF(0, GetCount, aPredicate);
+  Result := FindIf(0, GetCount, aPredicate);
 end;
 
-function TVecDeque.FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-begin
-  if aStartIndex >= GetCount then
-    Exit(-1);
-
-  Result := FindIF(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
-end;
-
-function TVecDeque.FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
 
-  Result := FindIF(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  Result := FindIf(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindIF(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
 
-  Result := FindIF(aStartIndex, GetCount - aStartIndex, aPredicate);
+  Result := FindIf(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindIf(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+begin
+  if aStartIndex >= GetCount then
+    Exit(-1);
+
+  Result := FindIf(aStartIndex, GetCount - aStartIndex, aPredicate);
+end;
+
+function TVecDeque.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5086,11 +5086,11 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIfUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
-function TVecDeque.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5103,11 +5103,11 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIfUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
-function TVecDeque.FindIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5120,51 +5120,51 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFUnchecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindIfUnchecked(aStartIndex, aCount, aPredicate);
   Result := SizeInt(TempResult);
 end;
 
-// FindIFNot 系列方法实现
-function TVecDeque.FindIFNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+// FindIfNot 系列方法实现
+function TVecDeque.FindIfNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
-  Result := FindIFNot(0, GetCount, aPredicate, aData);
+  Result := FindIfNot(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindIFNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIfNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
-  Result := FindIFNot(0, GetCount, aPredicate, aData);
+  Result := FindIfNot(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindIFNot(aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIfNot(aPredicate: TPredicateRefFunc): SizeInt;
 begin
-  Result := FindIFNot(0, GetCount, aPredicate);
+  Result := FindIfNot(0, GetCount, aPredicate);
 end;
 
-function TVecDeque.FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-begin
-  if aStartIndex >= GetCount then
-    Exit(-1);
-
-  Result := FindIFNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
-end;
-
-function TVecDeque.FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
 
-  Result := FindIFNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  Result := FindIfNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
 
-  Result := FindIFNot(aStartIndex, GetCount - aStartIndex, aPredicate);
+  Result := FindIfNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+begin
+  if aStartIndex >= GetCount then
+    Exit(-1);
+
+  Result := FindIfNot(aStartIndex, GetCount - aStartIndex, aPredicate);
+end;
+
+function TVecDeque.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5177,11 +5177,11 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
-function TVecDeque.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5194,11 +5194,11 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := SizeInt(TempResult);
 end;
 
-function TVecDeque.FindIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   TempResult: Int64;
 begin
@@ -5211,7 +5211,7 @@ begin
   if aStartIndex + aCount > GetCount then
     aCount := GetCount - aStartIndex;
 
-  TempResult := FindIFNotUnchecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindIfNotUnchecked(aStartIndex, aCount, aPredicate);
   Result := SizeInt(TempResult);
 end;
 
@@ -5336,44 +5336,44 @@ begin
   Result := FindLastUnchecked(aValue, aStartIndex, aCount, aEquals);
 end;
 
-// FindLastIF 系列方法实现
-function TVecDeque.FindLastIF(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+// FindLastIf 系列方法实现
+function TVecDeque.FindLastIf(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
-  Result := FindLastIF(0, GetCount, aPredicate, aData);
+  Result := FindLastIf(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIF(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIf(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
-  Result := FindLastIF(0, GetCount, aPredicate, aData);
+  Result := FindLastIf(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIF(aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIf(aPredicate: TPredicateRefFunc): SizeInt;
 begin
-  Result := FindLastIF(0, GetCount, aPredicate);
+  Result := FindLastIf(0, GetCount, aPredicate);
 end;
 
-function TVecDeque.FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-begin
-  if aStartIndex >= GetCount then
-    Exit(-1);
-  Result := FindLastIF(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
-end;
-
-function TVecDeque.FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
-  Result := FindLastIF(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  Result := FindLastIf(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIF(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
-  Result := FindLastIF(aStartIndex, GetCount - aStartIndex, aPredicate);
+  Result := FindLastIf(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIf(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+begin
+  if aStartIndex >= GetCount then
+    Exit(-1);
+  Result := FindLastIf(aStartIndex, GetCount - aStartIndex, aPredicate);
+end;
+
+function TVecDeque.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5383,11 +5383,11 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIfUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
-function TVecDeque.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5397,11 +5397,11 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIfUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
-function TVecDeque.FindLastIF(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5411,48 +5411,48 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFUnchecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindLastIfUnchecked(aStartIndex, aCount, aPredicate);
   Result := TempResult;
 end;
 
-// FindLastIFNot 系列方法实现
-function TVecDeque.FindLastIFNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+// FindLastIfNot 系列方法实现
+function TVecDeque.FindLastIfNot(aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
-  Result := FindLastIFNot(0, GetCount, aPredicate, aData);
+  Result := FindLastIfNot(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIFNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNot(aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
-  Result := FindLastIFNot(0, GetCount, aPredicate, aData);
+  Result := FindLastIfNot(0, GetCount, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIFNot(aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIfNot(aPredicate: TPredicateRefFunc): SizeInt;
 begin
-  Result := FindLastIFNot(0, GetCount, aPredicate);
+  Result := FindLastIfNot(0, GetCount, aPredicate);
 end;
 
-function TVecDeque.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
-begin
-  if aStartIndex >= GetCount then
-    Exit(-1);
-  Result := FindLastIFNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
-end;
-
-function TVecDeque.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
-  Result := FindLastIFNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
+  Result := FindLastIfNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIFNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 begin
   if aStartIndex >= GetCount then
     Exit(-1);
-  Result := FindLastIFNot(aStartIndex, GetCount - aStartIndex, aPredicate);
+  Result := FindLastIfNot(aStartIndex, GetCount - aStartIndex, aPredicate, aData);
 end;
 
-function TVecDeque.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNot(aStartIndex: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+begin
+  if aStartIndex >= GetCount then
+    Exit(-1);
+  Result := FindLastIfNot(aStartIndex, GetCount - aStartIndex, aPredicate);
+end;
+
+function TVecDeque.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateFunc; aData: Pointer): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5462,11 +5462,11 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
-function TVecDeque.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
+function TVecDeque.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateMethod; aData: Pointer): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5476,11 +5476,11 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate, aData);
+  TempResult := FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate, aData);
   Result := TempResult;
 end;
 
-function TVecDeque.FindLastIFNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
+function TVecDeque.FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): SizeInt;
 var
   TempResult: SizeInt;
 begin
@@ -5490,7 +5490,7 @@ begin
     aCount := GetCount - aStartIndex;
   if aCount = 0 then
     Exit(-1);
-  TempResult := FindLastIFNotUnchecked(aStartIndex, aCount, aPredicate);
+  TempResult := FindLastIfNotUnchecked(aStartIndex, aCount, aPredicate);
   Result := TempResult;
 end;
 
@@ -5760,19 +5760,19 @@ begin
   Result := CountOf(aValue, 0, GetCount, aEquals);
 end;
 
-function TVecDeque.CountIF(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
+function TVecDeque.CountIf(aPredicate: TPredicateFunc; aData: Pointer): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
   Result := CountIfUnchecked(0, FCount, aPredicate, aData);
 end;
 
-function TVecDeque.CountIF(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
+function TVecDeque.CountIf(aPredicate: TPredicateMethod; aData: Pointer): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
   Result := CountIfUnchecked(0, FCount, aPredicate, aData);
 end;
 
-function TVecDeque.CountIF(aPredicate: TPredicateRefFunc): SizeUInt;
+function TVecDeque.CountIf(aPredicate: TPredicateRefFunc): SizeUInt;
 begin
   { 计算满足条件的元素数量 }
   Result := CountIfUnchecked(0, FCount, aPredicate);
@@ -5801,19 +5801,19 @@ end;
 procedure TVecDeque.ReplaceIf(const aNewValue: T; aPredicate: TPredicateFunc; aData: Pointer);
 begin
   { 替换满足条件的元素 }
-  ReplaceIF(aNewValue, 0, aPredicate, aData);
+  ReplaceIf(aNewValue, 0, aPredicate, aData);
 end;
 
 procedure TVecDeque.ReplaceIf(const aNewValue: T; aPredicate: TPredicateMethod; aData: Pointer);
 begin
   { 替换满足条件的元素 }
-  ReplaceIF(aNewValue, 0, aPredicate, aData);
+  ReplaceIf(aNewValue, 0, aPredicate, aData);
 end;
 
 procedure TVecDeque.ReplaceIf(const aNewValue: T; aPredicate: TPredicateRefFunc);
 begin
   { 替换满足条件的元素 }
-  ReplaceIF(aNewValue, 0, aPredicate);
+  ReplaceIf(aNewValue, 0, aPredicate);
 end;
 
 function TVecDeque.IsSorted: Boolean;
