@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,72 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“一个语义诊断矩阵空格一提交”的节奏推进真实编译器能力，把 imported
+`project-source` bare callable 的 arity miss 固定为 focused semantic truth 与 official
+stage0 gate：
+
+- root program `uses Helper;`
+- imported `Helper` 只提供 `procedure Pick(Value: Integer);`
+- root source 调用 `Pick;`
+- 调用必须失败为 `sema.wrong-argument-count`
+- 失败路径不能注册错误 `call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 本轮继续沿 G1.5/G1.6 的 source-owned、稳定事实、低误报风险边界推进。
+- 只承诺 imported `project-source` bare callable + 单一 imported target + arity miss；不扩大到
+  installed-source、default parameter lowering、implicit conversion、visibility、var/out、
+  function pointer 或完整 overload resolver。
+- 使用 TDD/probe-first：先 focused semantic test；若现有 analyzer 已 GREEN，只 promotion
+  到 fixture/gate/docs/records；若 RED，再做最小 analyzer 修复。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、范围与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 imported bare callable wrong-argument-count
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `imported-wrong-argument-count-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/imported_wrong_argument_count/imported_wrong_argument_count_fail.pas --target
+  linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.wrong-argument-count`、`diagnostic-message=wrong number of arguments
+  for "Pick"` 与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-wrong-argument-count-check=pass`、
+  `importedWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 installed-source / member receiver / inherited receiver / function pointer
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics
 

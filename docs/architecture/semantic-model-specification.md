@@ -87,7 +87,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `requiredParamCount..ParamCount` 的可接受 arity 区间，并只用当前已提供参数的 compact
   argument signature 前缀选择唯一 target；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
-  `sema.type-mismatch`；root source 没有同名 callable、imported `project-source` 单一 target 与稳定
+  `sema.type-mismatch`；root source 没有同名 callable、imported `project-source` 单一 target
+  但调用 arity 不在 target 可接受区间内时发 `sema.wrong-argument-count`，arity 已匹配但稳定
   argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported 同名同 arity 多候选、稳定
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
@@ -311,6 +312,8 @@ candidate collection
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
 - `sema.wrong-argument-count`
   - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
+  - 也用于 bare procedure/function call 中 root source 没有同名 callable、但 imported
+    `project-source` 单一 target 已知且调用 arity 不匹配的场景
   - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
     method name，但没有任何 arity-compatible target 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned

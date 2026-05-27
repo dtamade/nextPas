@@ -129,6 +129,19 @@
   `implicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 137 继续补 imported bare callable 诊断矩阵：root source 没有同名 callable、imported
+  `project-source` unit 中存在单一 `procedure Pick(Value: Integer)`，但 root 调用 `Pick;`
+  时会失败为 `sema.wrong-argument-count`，且不注册失败 `call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：既有 imported project-source
+  callable lookup 已能把 single-target arity miss 透传成 `wrong-argument-count`。
+- Batch 137 新增 `tests/fixtures/imported_wrong_argument_count` 与
+  `imported-wrong-argument-count-check`，final envelope 新增
+  `importedWrongArgumentCountCheck":"pass"`。
+- Batch 137 fresh `bash build/verify_local.sh` 已输出
+  `imported-wrong-argument-count-check=pass`、
+  `importedWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
