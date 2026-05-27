@@ -42,7 +42,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform ffi import workflow)
 
-- **Status:** committed and rebased on latest main; merge/cleanup pending
+- **Status:** merged to main; cleanup pending
 - Objective:
   - 固定从 FPC 源码补充 nextPas platform host API 的安全高效工作流。
   - 让后续每个 API wave 都能按 evidence -> owner -> RED gate -> import -> verify -> merge 的流程恢复、
@@ -123,12 +123,17 @@ platform/core 工作流保留下来的已完成记录。
     they are not staged and should remain ignored.
 - Integration:
   - Initial feature commit before rebase: `c1f3680 docs(platform): add ffi import workflow`。
-  - Rebased cleanly over latest `main@e01d069`; final feature commit is `6bbb2eb`。
-  - Rebase focused verification on `6bbb2eb`:
+  - Rebased cleanly over latest `main@e01d069`; final feature commit after amend is `e71e5d4`。
+  - Fast-forward merged to `main@e71e5d4`。
+  - Rebase focused verification on `e71e5d4`:
     `test_platform_ffi_import_workflow` 2/2 pass，
     `test_platform_ffi_source_evidence_index` 2/2 pass，
     `test_platform_host_gap_matrix` 4/4 pass，
     `test_platform_ffi_owner_boundary` 2/2 pass。
+  - Post-merge focused verification on main passed:
+    `test_platform_ffi_import_workflow` 2/2 pass，
+    `test_platform_ffi_source_evidence_index` 2/2 pass，
+    `test_platform_host_gap_matrix` 4/4 pass。
 
 ## Session: 2026-05-27 (platform ffi source evidence index)
 

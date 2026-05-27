@@ -80,9 +80,9 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Committed and rebased on latest `main@e01d069`; merge/cleanup pending.
+Completed and fast-forward merged to `main@e71e5d4`; cleanup pending.
 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-import-workflow`
-from `main@02d42d5`, rebased to final feature commit `6bbb2eb`.
+from `main@02d42d5`, rebased over `main@e01d069`, and merged as `e71e5d4`.
 
 ### Planned Steps
 
@@ -105,8 +105,9 @@ from `main@02d42d5`, rebased to final feature commit `6bbb2eb`.
   - `git diff --check`
 - [x] commit 并整合最新 main：
   - initial commit before rebase: `c1f3680`
-  - final feature commit after rebase on `main@e01d069`: `6bbb2eb`
-- [ ] 择优合并回 main、post-merge verification、清理 worktree/branch
+  - final feature commit after rebase/amend on `main@e01d069`: `e71e5d4`
+- [x] 择优合并回 main、post-merge verification
+- [ ] 清理 worktree/branch
 
 ### Full Verification Evidence
 
@@ -117,11 +118,15 @@ from `main@02d42d5`, rebased to final feature commit `6bbb2eb`.
   `human-summary=local verification passed`; final envelope includes
   `corePlatformFfiImportWorkflowCheck":"pass"`.
 - `git diff --check`: pass.
-- Rebase focused verification on `6bbb2eb`:
+- Rebase focused verification on `e71e5d4`:
   - `test_platform_ffi_import_workflow`: `2 total, 2 passed, 0 failed`
   - `test_platform_ffi_source_evidence_index`: `2 total, 2 passed, 0 failed`
   - `test_platform_host_gap_matrix`: `4 total, 4 passed, 0 failed`
   - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`
+- Post-merge focused verification on main:
+  - `test_platform_ffi_import_workflow`: `2 total, 2 passed, 0 failed`
+  - `test_platform_ffi_source_evidence_index`: `2 total, 2 passed, 0 failed`
+  - `test_platform_host_gap_matrix`: `4 total, 4 passed, 0 failed`
 
 ### Recovery Entry
 
