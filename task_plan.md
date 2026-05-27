@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host ABI Completeness Wave 1；上一轮包括
+当前最新本轮为 Platform Host ABI Completeness Wave 2；上一轮包括
+Platform Host ABI Completeness Wave 1；
 Platform FFI Import Workflow；
 Platform FFI Source Evidence Index；
 Platform Host Gap Route Guard；
@@ -51,6 +52,67 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2
+
+### Goal
+
+继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
+文件相关的低层 ABI 取证和最小可审查声明，不创建 `platform.file` public contract，也不把 raw
+OS API 加入 runtime unit tests。
+
+本轮候选范围：
+
+- POSIX/Linux/Android/Darwin/FreeBSD/generic Unix：`open`、`close`、`fcntl`、基础 file descriptor
+  scalar alias、open/access mode flags、fcntl command tokens。
+- `stat` / `fstat` / `lstat` 只在 record layout、large-file suffix 和 32/64-bit policy 取证清楚后
+  落地；如果跨 host 风险过大，本轮继续显式延期并写入 gap matrix。
+- Windows：kernel32 file handle entrypoints 与基础 file access/share/creation/attribute tokens 的
+  source evidence inventory；是否落 `CreateFileA/CloseHandle` thin helper 取决于和已有 `HANDLE`
+  owner 的冲突检查。
+
+### Architecture Decision
+
+- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
+- constants、record layouts、scalar aliases、capability tokens 放入
+  `nextpas.core.platform.<host>.base`。
+- external declarations 与 thin host helpers 放入 `nextpas.core.platform.<host>.ffi`。
+- shared POSIX declaration 只有在 ABI shape 真正跨 Linux/Android/Darwin/FreeBSD/generic Unix 一致时
+  才放入 `nextpas.core.platform.posix.base/ffi`。
+- raw file ABI 不做 runtime unit test；本轮用 source evidence、source-surface guard、
+  simulated host compile matrix 和 official verify route 证明。
+
+### Status
+
+Started on isolated worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files`
+from `main@4643daa`.
+
+### Planned Steps
+
+- [x] 从最新 `main@4643daa` 创建 `codex/platform-host-abi-wave2-files` isolated worktree
+- [x] 读取 workflow、host gap matrix、source evidence index、Wave 1 收口记录与现有 host base/ffi owner
+- [ ] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 2 最小可审查 ABI 子集
+- [ ] RED：新增 source-surface gate，要求 Wave 2 evidence、host owner tokens 和 verify route
+- [ ] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
+- [ ] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [ ] focused verification、full verification
+- [ ] commit、rebase latest main、merge、post-merge verification、cleanup
+
+### Recovery Entry
+
+If this session is interrupted, resume here:
+
+```bash
+cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files
+git status --short --branch
+sed -n '1,170p' task_plan.md
+sed -n '1,180p' progress.md
+sed -n '1,130p' findings.md
+```
+
+Then continue from the first unchecked item in this Wave 2 addendum. Do not add
+runtime tests for raw OS APIs and do not introduce `platform.file` public API in this wave.
 
 ## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1
 

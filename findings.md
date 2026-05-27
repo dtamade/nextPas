@@ -2011,6 +2011,12 @@
 - 收口后已删除临时 worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1` 与分支
   `codex/platform-host-abi-wave1`；后续 platform host ABI wave 应从 latest `main` 重新开隔离 worktree。
+- Platform Host ABI Wave 2 已从 latest `main@4643daa` 开始，worktree 为
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files`，
+  branch 为 `codex/platform-host-abi-wave2-files`。本轮目标是 file ABI raw inventory，
+  不创建 `platform.file` public contract。
+- Wave 2 的风险边界先定为 `open` / `close` / `fcntl` 与基础 flag/token；`stat` record layout、
+  large-file suffix、32/64-bit policy 和 Windows file handle 语义需要先取证，不能为了“完整”强行混入。
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。

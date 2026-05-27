@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform host abi completeness wave 1；上一轮包括
+当前最新本轮为 platform host abi completeness wave 2；上一轮包括
+platform host abi completeness wave 1；
 platform ffi import workflow；
 platform ffi source evidence index；
 platform host gap route guard；
@@ -40,6 +41,35 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform host abi completeness wave 2)
+
+- **Status:** started on isolated worktree; source evidence next
+- Objective:
+  - 按 `core/docs/platform-ffi-import-workflow.md` 启动第二批 host ABI completeness。
+  - 本轮聚焦 file ABI raw inventory，不新增 `platform.file` public contract，不新增 raw OS API
+    runtime tests。
+  - 首选候选是 POSIX `open` / `close` / `fcntl`、file descriptor alias、基础 open/access flags、
+    fcntl command tokens；`stat` record layout 如风险过大继续延期。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` at `main@4643daa`，仅有 unrelated untracked
+    `core/GPATH`、`core/GRTAGS`、`core/GTAGS`。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files`
+    on `codex/platform-host-abi-wave2-files` from `main@4643daa`。
+  - 其他并行 worktree 仍存在：`collections-refactor`、`sema-no-matching-overload`；本轮不触碰。
+- Boundary:
+  - FPC source 是 evidence，不是 production dependency。
+  - host `base/ffi` 可以厚化；统一 public contract 未来由 `platform.file` 或更高层模块另行设计。
+  - raw ABI 通过 source evidence、source-surface gate、compile-only gate 和 review 证明。
+- Current plan:
+  - 先读取 `/home/dtamade/projects/fpc` 中 Linux/Unix/Darwin/FreeBSD/Windows file API 相关 source。
+  - 再新增 `test_platform_host_abi_wave2_files` source-surface gate，先制造 RED。
+  - GREEN 阶段只落证据充分、host owner 清楚的最小子集；不把 `stat` 硬塞进本轮。
+- Recovery:
+  - 下次恢复请从本 section 和 `task_plan.md` 的
+    `Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2` 继续。
+  - 第一条未完成任务是从 FPC source 取证并确定最小可审查 ABI 子集。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 1)
 
