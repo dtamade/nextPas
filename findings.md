@@ -257,6 +257,23 @@
 - Batch 146 fresh `bash build/verify_local.sh` 已输出
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 147 继续“成熟格组合流水线”：把 Batch 114 的 imported inherited
+  `project-source` overload-set no-match 与 Batch 145 的 root-owned function-result stable evidence
+  组合成新 gate。
+- Batch 147 focused probe 已直接 GREEN：root `Flag: Boolean` 调 imported parent overload set
+  `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 会失败为 `sema.no-matching-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：parent-chain member-call path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 root-owned function-result evidence 传给 imported
+  `project-source` overload-set no-match projection。
+- Batch 147 新增 `tests/fixtures/imported_inherited_member_function_result_no_matching_overload` 与
+  `imported-inherited-member-function-result-no-matching-overload-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Batch 147 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-member-function-result-no-matching-overload-check=pass`、
+  `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

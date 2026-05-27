@@ -93,7 +93,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   single-target arity miss 继续 deferred，不发 `sema.wrong-argument-count`；imported 同名同 arity 多候选、稳定
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
-  同样发 `sema.no-matching-overload`。imported `installed-source` single-target
+  同样发 `sema.no-matching-overload`；imported `project-source` inherited member-call
+  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match evidence。
+  imported `installed-source` single-target
   type mismatch、single-target arity miss、bare callable ambiguity、bare callable no-match、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
@@ -127,7 +129,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
   `sema.no-matching-overload`，例如当前 class 的 `Pick(True);` 同时面对
   `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
-  `Touch(Integer)` / `Touch(AnsiString)`；若同 arity 有多个候选，则用当前可推断的
+  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` inherited member-call
+  overload set 同样可用 root-owned 零参内建标量/字符串 function result 作为 stable
+  no-match evidence，例如 `Worker.Pick(Flag);` 中 parent chain 暴露
+  `Pick(Integer)` / `Pick(AnsiString)` 而 `Flag` 返回 `Boolean`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
   `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
   透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
@@ -349,6 +354,8 @@ candidate collection
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence 且所有 target signature 都不匹配的场景
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
   - 当当前 unit graph 含有 `installed-source` import 时，bare callable name miss 继续保守不绑定，

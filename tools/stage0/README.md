@@ -249,7 +249,9 @@ bare call 的可接受 arity 扩展为必填参数数到总参数数，当前可
 `queryDefinitions[].targetParamSignature` 暴露 compact target signature；root-owned 单一 target 的
 type-mismatch diagnostics 现在还接受 root-owned 零参内建标量/字符串 function result 作为稳定
 argument evidence；当 target 来自 imported `project-source` 单一 callable、direct member-call
-target 或 inherited direct member-call target 时，同一类 root-owned function-result evidence 也会投影为 `sema.type-mismatch`；无法推断、
+target 或 inherited direct member-call target 时，同一类 root-owned function-result evidence 也会投影为 `sema.type-mismatch`；
+当 imported `project-source` inherited member-call overload set 的所有同 arity target 都不匹配时，
+同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；无法推断、
 imported `installed-source` target、imported/带参/member function result 或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
@@ -901,6 +903,7 @@ ambiguous imported callable overload 与 ambiguous member overload 断言
 implicit-self bare method ambiguous overload 断言同一组 semantic failure / diagnostic projection，再对 root-owned no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported no matching overload 断言
 同一组 semantic failure / diagnostic projection，再对 direct member no matching overload 断言
+同一组 semantic failure / diagnostic projection，再对 imported inherited function-result no matching overload 断言
 同一组 semantic failure / diagnostic projection，再对 imported project-source bare single-target
 type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 root-owned 与
 imported project-source bare wrong argument count 断言
