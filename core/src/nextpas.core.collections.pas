@@ -16,11 +16,15 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
+  nextpas.core.collections.arr.base,
   nextpas.core.collections.arr.intf,
+  nextpas.core.collections.vec.base,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque.intf,
+  nextpas.core.collections.vecdeque.base,
   nextpas.core.collections.vecdeque.intf,
+  nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.linkedhashmap.base,
@@ -93,6 +97,10 @@ type
   ICollection = nextpas.core.collections.intf.ICollection;
   IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
 
+  // 非泛型公共载体类型
+  TMergePosition = nextpas.core.collections.vecdeque.base.TMergePosition;
+  TSortAlgorithm = nextpas.core.collections.vecdeque.base.TSortAlgorithm;
+
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
   TGrowthStrategy          = nextpas.core.collections.base.TGrowthStrategy;
@@ -109,6 +117,16 @@ type
 {$IFDEF FAFAFA_CORE_TYPE_ALIASES}
   // 可选：常用 specialization 的类型别名，避免重复 specialization（按需开启）
 {$ENDIF}
+
+const
+  ARRAY_DEFAULT_SWAP_BUFFER_SIZE = nextpas.core.collections.arr.base.ARRAY_DEFAULT_SWAP_BUFFER_SIZE;
+  INSERTION_SORT_THRESHOLD = nextpas.core.collections.arr.base.INSERTION_SORT_THRESHOLD;
+  VEC_DEFAULT_CAPACITY = nextpas.core.collections.vec.base.VEC_DEFAULT_CAPACITY;
+  DEFAULT_SWAP_BUFFER_SIZE = nextpas.core.collections.vec.base.DEFAULT_SWAP_BUFFER_SIZE;
+  VECDEQUE_DEFAULT_CAPACITY = nextpas.core.collections.vecdeque.base.VECDEQUE_DEFAULT_CAPACITY;
+  DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;
+  SKIPLIST_MAX_LEVEL = nextpas.core.collections.skiplist.base.SKIPLIST_MAX_LEVEL;
+  SKIPLIST_P = nextpas.core.collections.skiplist.base.SKIPLIST_P;
 
 function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
 function FactorGrow(aFactor: Double): IGrowthStrategy;
