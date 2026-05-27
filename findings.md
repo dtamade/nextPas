@@ -101,6 +101,20 @@
   `implicitSelfBareMethodWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 135 继续同路径诊断矩阵补格：exact current-class bare implicit-self method call
+  `procedure TWorker.Run; begin Pick(True); end;` 中，当前 class 的 `Pick(Integer)` /
+  `Pick(AnsiString)` overload set 会失败为 `sema.no-matching-overload`，且不注册失败
+  `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126/128 的 implicit-self
+  failure propagation 已覆盖 current class root-owned overload set 的 stable signature no-match。
+- Batch 135 新增 `tests/fixtures/implicit_self_bare_method_no_matching_overload` 与
+  `implicit-self-bare-method-no-matching-overload-check`，final envelope 新增
+  `implicitSelfBareMethodNoMatchingOverloadCheck":"pass"`。
+- Batch 135 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-no-matching-overload-check=pass`、
+  `implicitSelfBareMethodNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

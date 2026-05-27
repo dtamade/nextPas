@@ -262,9 +262,10 @@ same path 的 bare implicit-self method call 若 stable argument signature 与 r
 若同一路径找到 method name 但 arity 不兼容，会失败为
 `sema.wrong-argument-count`（例如当前 class 的 `Pick;` 调 `Pick(Integer)`，或 inherited
 `Touch;` 调 `Touch(Integer)`），同样不会注册错误 binding。
-若同一路径找到多个 inherited method target 但 stable argument signature 全不匹配，会失败为
-`sema.no-matching-overload`（例如 `Touch(True);` 同时面对 `Touch(Integer)` /
-`Touch(AnsiString)`），同样不会注册错误 binding。
+若同一路径找到多个 method target 但 stable argument signature 全不匹配，会失败为
+`sema.no-matching-overload`（例如当前 class 的 `Pick(True);` 同时面对
+`Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
+`Touch(Integer)` / `Touch(AnsiString)`），同样不会注册错误 binding。
 若同一路径找到多个 inherited method target，且 compact signature collision 后仍无法唯一选择，
 会失败为 `sema.ambiguous-overload`（例如 `Touch(1);` 同时面对 `Touch(Integer)` /
 `Touch(LongInt)`），同样不会注册错误 binding。

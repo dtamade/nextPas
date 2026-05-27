@@ -122,7 +122,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `Pick(Flag);` 中 `Flag` 是 root-owned 零参 Boolean function result 的当前 class method 场景；
   receiver exact type 或 class method body bare
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
-  `sema.no-matching-overload`；若同 arity 有多个候选，则用当前可推断的
+  `sema.no-matching-overload`，例如当前 class 的 `Pick(True);` 同时面对
+  `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
+  `Touch(Integer)` / `Touch(AnsiString)`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
   `sema.ambiguous-overload`，同一 ambiguity 也会从 inherited bare implicit-self fallback
   透传出来，例如 `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`。随后再用同名
@@ -322,6 +324,8 @@ candidate collection
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
     包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result
 - `sema.no-matching-overload`
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
 - `sema.ambiguous-overload`
