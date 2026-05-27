@@ -39,6 +39,8 @@ uses
   nextpas.core.collections.skiplist.base,
   nextpas.core.collections.skiplist.intf,
   nextpas.core.collections.trie.intf,
+  nextpas.core.collections.lrucache.base,
+  nextpas.core.collections.lrucache.intf,
   nextpas.core.collections.list.intf,
   nextpas.core.collections.forward_list.intf,
   nextpas.core.collections.stack.intf,
