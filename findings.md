@@ -10,6 +10,22 @@
 
 ## Research Findings
 
+- Batch 184 收口 imported unit method body inherited implicit-self ladder 的 ambiguity 格：root source
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，
+  `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited
+  `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: LongInt)` 时，必须失败为
+  `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 184 focused semantic probe 直接 GREEN，证明 Batch 181-183 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal ambiguity；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 184 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_ambiguous_overload` 与
+  `imported-unit-body-inherited-implicit-self-ambiguous-overload-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass`。
+- Batch 184 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 183 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
   imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
   同时面对 inherited `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: AnsiString)` 时，
