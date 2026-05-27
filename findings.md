@@ -377,6 +377,14 @@
 - Batch 157 新增 `tests/fixtures/imported_member_function_result_ambiguous_overload` 与
   `imported-member-function-result-ambiguous-overload-check`，final envelope 新增
   `importedMemberFunctionResultAmbiguousOverloadCheck":"pass"`。
+- Batch 158 把 Batch 157 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member overload-set ambiguity 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.ambiguous-overload`，也不注册错误 `member-call` binding。
+- Batch 158 focused probe 直接 GREEN：direct member-call path 的 provenance gate 已经阻止
+  installed-source direct member function-result ambiguity 被提前投影为 ordinary ambiguity；本批不修改 analyzer。
+- installed-source direct member function-result ambiguity 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

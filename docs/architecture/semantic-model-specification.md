@@ -103,8 +103,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   single-target arity miss、bare callable ambiguity、
   bare callable no-match（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
-  inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned 零参
-  内建标量/字符串 function result）、
+  direct/inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned
+  零参内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 source provenance 不可信的 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
@@ -370,7 +370,7 @@ candidate collection
   - 也用于 imported `project-source` bare procedure/function overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target callable 的场景
-  - imported `installed-source` bare callable / inherited member-call overload set 继续 deferred，即使同形状
+  - imported `installed-source` bare callable / direct or inherited member-call overload set 继续 deferred，即使同形状
     function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic；这类
     provenance guard 用 `semantic-call-bindings-check` 的 focused harness 固定
 - `sema.no-matching-overload`
