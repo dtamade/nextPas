@@ -5237,6 +5237,75 @@ begin
   end;
 end;
 
+procedure CheckImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program ImplicitSelfBareMethodCallWrongArgumentCount;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-implicit-self-bare-method-call-wrong-argument-count-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.wrong-argument-count') then
+      Fail('unexpected-implicit-self-bare-method-call-wrong-argument-count-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-implicit-self-bare-method-call-wrong-argument-count-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('implicit-self-bare-method-call-wrong-argument-count-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-implicit-self-bare-method-call-wrong-argument-count-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-implicit-self-bare-method-call-wrong-argument-count-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-implicit-self-bare-method-call-wrong-argument-count-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInheritedImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -6029,6 +6098,7 @@ begin
     CheckInheritedImplicitSelfBareMethodCallBinding;
     CheckInheritedImplicitSelfBareMethodCallArgumentBinding;
     CheckImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic;
+    CheckImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallNoMatchingOverloadDiagnostic;

@@ -110,8 +110,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   exact class type 未声明同名 method，member lookup 会沿 `ParentTypeId` 链查 parent class
   method，并继续使用 parent type symbol owner 限定 target；exact type 已声明同名 method 但
   没有任何同 arity target 时会发出 `sema.wrong-argument-count`，同一条 arity failure 也会从
-  class method body 的 bare implicit-self fallback 透传出来，例如 inherited `Touch;`
-  调 `Touch(Value: Integer)`；body 不匹配或不唯一时仍会保守停止。
+  class method body 的 bare implicit-self fallback 透传出来，例如当前 class 的 `Pick;`
+  调 `Pick(Value: Integer)` 或 inherited `Touch;` 调 `Touch(Value: Integer)`；body 不匹配或不唯一时仍会保守停止。
   class method declaration 的 parameter list 会进入
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
@@ -308,6 +308,8 @@ candidate collection
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
 - `sema.wrong-argument-count`
   - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    method name，但没有任何 arity-compatible target 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     method name，但没有任何 arity-compatible target 的场景
 - `sema.type-mismatch`
