@@ -9,13 +9,14 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 12 started from `main@0da1a4a` in isolated worktree
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-purity-wave12`
-  on branch `codex/platform-host-ffi-purity-wave12`.
+- Current status: Wave 12 merged to `main` as `4d22157`
+  (`platform: clean process id host ffi names`). Post-merge verification passed
+  on `main@4d22157`.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Current wave: Platform Host ABI Completeness Wave 12, host FFI process-id
-  helper ownership cleanup, in progress.
+  helper ownership cleanup, closed. Next platform wave should start from latest
+  `main`.
 
 ## Architecture Rules
 
@@ -62,7 +63,7 @@ the integration boundary.
   `linux_*`, `android_*`, `darwin_*`, `freebsd_*`, and `unix_*`.
 - [x] Update source evidence, gap matrix, and goal-tree route truth.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, clean the worktree, and
+- [x] Commit, merge to `main`, post-merge verify, clean the worktree, and
   delete the feature branch.
 
 #### Wave 12 Verification Boundary
@@ -226,6 +227,11 @@ the integration boundary.
   `corePlatformHostAbiWave1Check`,
   `corePlatformHostAbiWave9LinuxStatCheck`,
   `corePlatformHostAbiWave10PosixStatHostsCheck`,
+  `corePlatformHostAbiWave11SignalControlCheck`, and
+  `corePlatformSimulatedHostCompileMatrixCheck`.
+- Post-merge `bash build/verify_local.sh` on `main@4d22157`: pass; final
+  envelope reports `verify-local=pass`, `human-summary=local verification
+  passed`, and includes `corePlatformHostAbiWave1Check`,
   `corePlatformHostAbiWave11SignalControlCheck`, and
   `corePlatformSimulatedHostCompileMatrixCheck`.
 - Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final

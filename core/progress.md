@@ -39,6 +39,22 @@
   phrase `Platform Host ABI Completeness Wave 11`. Root cause was docs route
   truth drift, not production code. Restored that phrase while keeping Wave 12
   as the current platform host ABI state.
+- Wave 12 pre-merge verification passed:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`.
+- Committed Wave 12 as `4d22157`
+  (`platform: clean process id host ffi names`), fast-forward merged to
+  `main@4d22157`, and post-merge `bash build/verify_local.sh` passed with
+  `verify-local=pass` / `human-summary=local verification passed`.
 
 - Started Wave 11 from `main@4923adc` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave11-signal-control`
