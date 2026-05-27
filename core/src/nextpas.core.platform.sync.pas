@@ -176,16 +176,13 @@ var
 
 function platform_posix_map_error(const ACode: Int32): Int32; inline;
 begin
-  case ACode of
-    0: Result := 0;
-    PLATFORM_POSIX_EAGAIN: Result := PLATFORM_ERR_AGAIN;
-    PLATFORM_POSIX_EBUSY: Result := PLATFORM_ERR_BUSY;
-    PLATFORM_POSIX_EINVAL: Result := PLATFORM_ERR_INVALID;
-    PLATFORM_POSIX_ENOTSUP: Result := PLATFORM_ERR_UNSUPPORTED;
-    PLATFORM_POSIX_ETIMEDOUT: Result := PLATFORM_ERR_TIMEOUT;
-  else
-    Result := ACode;
-  end;
+  Result := platform_pthread_sync_result(
+    ACode,
+    PLATFORM_ERR_AGAIN,
+    PLATFORM_ERR_BUSY,
+    PLATFORM_ERR_INVALID,
+    PLATFORM_ERR_UNSUPPORTED,
+    PLATFORM_ERR_TIMEOUT);
 end;
 
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;

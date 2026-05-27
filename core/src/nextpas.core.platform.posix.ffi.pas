@@ -56,6 +56,18 @@ function platform_posix_clock_deadline_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   out ARemainingNs: UInt64): Int32; inline;
 function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;
+function platform_posix_sync_result_from_error(
+  const AError: Int32;
+  const AEAgain: Int32;
+  const AEBusy: Int32;
+  const AEInvalid: Int32;
+  const AENotSup: Int32;
+  const AETimedOut: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
 function platform_posix_pthread_mutex_init_kind(
   AMutex: Pointer;
   const AKind: Int32): Int32; inline;
@@ -332,6 +344,35 @@ begin
   if AErrnoLocation = nil then
     Exit(0);
   Result := AErrnoLocation^;
+end;
+
+function platform_posix_sync_result_from_error(
+  const AError: Int32;
+  const AEAgain: Int32;
+  const AEBusy: Int32;
+  const AEInvalid: Int32;
+  const AENotSup: Int32;
+  const AETimedOut: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  if AError = 0 then
+    Result := 0
+  else if AError = AEAgain then
+    Result := AAgainResult
+  else if AError = AEBusy then
+    Result := ABusyResult
+  else if AError = AEInvalid then
+    Result := AInvalidResult
+  else if AError = AENotSup then
+    Result := AUnsupportedResult
+  else if AError = AETimedOut then
+    Result := ATimeoutResult
+  else
+    Result := AError;
 end;
 
 function platform_posix_pthread_mutex_init_kind(

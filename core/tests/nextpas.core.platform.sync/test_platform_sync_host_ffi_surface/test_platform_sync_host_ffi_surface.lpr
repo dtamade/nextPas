@@ -70,10 +70,19 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel: string);
 begin
   CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
     AHostLabel + ' must delegate errno-value load to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_sync_result_from_error',
+    AHostLabel + ' must delegate POSIX sync error classification to shared posix.ffi skeleton');
+  CheckTokenPresent(ASource, 'platform_pthread_sync_result',
+    AHostLabel + ' must expose host-owned POSIX sync result helper');
   CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_size',
     AHostLabel + ' base must expose pthread mutex storage size for sync');
   CheckTokenPresent(ABaseSource, 'platform_pthread_rwlock_size',
@@ -413,6 +422,8 @@ begin
     'platform.sync must consume host-owned pthread condvar signal helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_broadcast',
     'platform.sync must consume host-owned pthread condvar broadcast helper');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_sync_result',
+    'platform.sync must consume host-owned POSIX sync result helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_yield',
     'platform.sync must consume host-owned pthread yield helper');
   CheckTokenPresent(LSyncSource, 'linux_futex_wait_i32',
@@ -487,6 +498,16 @@ begin
     'platform.sync must not keep raw errno helper usage in the Unix consumer');
   Check(Pos('platform_errno_location^', LSyncSource) = 0,
     'platform.sync must not dereference errno storage directly in the consumer');
+  CheckTokenAbsent(LSyncSource, 'platform_posix_eagain',
+    'platform.sync must not keep host POSIX EAGAIN token in the Unix consumer');
+  CheckTokenAbsent(LSyncSource, 'platform_posix_ebusy',
+    'platform.sync must not keep host POSIX EBUSY token in the Unix consumer');
+  CheckTokenAbsent(LSyncSource, 'platform_posix_einval',
+    'platform.sync must not keep host POSIX EINVAL token in the Unix consumer');
+  CheckTokenAbsent(LSyncSource, 'platform_posix_enotsup',
+    'platform.sync must not keep host POSIX ENOTSUP token in the Unix consumer');
+  CheckTokenAbsent(LSyncSource, 'platform_posix_etimedout',
+    'platform.sync must not keep host POSIX ETIMEDOUT token in the Unix consumer');
   Check(Pos('function platform_posix_mutex_kind', LSyncSource) = 0,
     'platform.sync must not keep a local pthread mutex kind mapper in the Unix consumer');
   Check(Pos('platform_pthread_mutex_normal_kind', LSyncSource) = 0,

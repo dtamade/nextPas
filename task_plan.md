@@ -8531,24 +8531,24 @@ source-surface gate 和 full verification 吸收。
 
 ### Planned Steps
 
-- [ ] 在最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree
-- [ ] 跑 focused baseline：
+- [x] 在最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree
+- [x] 跑 focused baseline：
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- [ ] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 暴露
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 暴露
   `platform_pthread_sync_result`，并禁止 `platform.sync` 继续引用 `PLATFORM_POSIX_E*`
-- [ ] 在 shared `posix.ffi` 增加 caller-supplied errno classifier skeleton helper
-- [ ] 在 `linux/android/darwin/freebsd/unix.ffi` 增加 host-owned sync-result wrapper
-- [ ] 修改 `platform.sync` POSIX 路径，让所有 pthread/futex 返回码走 host helper 映射到
+- [x] 在 shared `posix.ffi` 增加 caller-supplied errno classifier skeleton helper
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 增加 host-owned sync-result wrapper
+- [x] 修改 `platform.sync` POSIX 路径，让所有 pthread/futex 返回码走 host helper 映射到
   `PLATFORM_ERR_*`
-- [ ] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [ ] 跑 focused gates：
+- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates：
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [ ] 跑 full verification：
+- [x] 跑 full verification：
   - `make -C core test`
   - `make -C core examples`
   - `make -C core benchmarks`
@@ -8557,13 +8557,47 @@ source-surface gate 和 full verification 吸收。
 
 ### Audit Checklist
 
-- [ ] `platform.sync` 不直接引用 `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` /
+- [x] `platform.sync` 不直接引用 `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` /
   `PLATFORM_POSIX_EINVAL` / `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT`
-- [ ] `platform.sync` 不新增 raw `external` 声明，不 uses FPC platform/RTL binding unit
-- [ ] `platform.sync` 不创建 feature-specific `platform.sync.ffi`
-- [ ] POSIX host `.ffi` helper 接收 caller-supplied public result，避免 host ffi 硬编码
+- [x] `platform.sync` 不新增 raw `external` 声明，不 uses FPC platform/RTL binding unit
+- [x] `platform.sync` 不创建 feature-specific `platform.sync.ffi`
+- [x] POSIX host `.ffi` helper 接收 caller-supplied public result，避免 host ffi 硬编码
   `PLATFORM_ERR_*`
-- [ ] Windows sync helper ownership 不被本轮回退
+- [x] Windows sync helper ownership 不被本轮回退
+
+### Implementation Notes
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `linux must delegate POSIX sync error classification to shared posix.ffi skeleton: platform_posix_sync_result_from_error`。
+- GREEN:
+  - `nextpas.core.platform.posix.ffi` 新增
+    `platform_posix_sync_result_from_error`，只做 caller-supplied errno token 与 caller-supplied
+    public result 的参数化投影，不保存任何宿主 errno 数字，也不硬编码 `PLATFORM_ERR_*`。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增
+    `platform_pthread_sync_result`，把各自 host-owned `PLATFORM_POSIX_E*` token 交给 shared skeleton。
+  - `platform.sync` 的 `platform_posix_map_error` 改成 thin adapter，只把 nextPas public
+    `PLATFORM_ERR_*` result 值传给 host helper。
+  - `test_platform_sync_host_ffi_surface` 现在同时冻结 shared skeleton、host wrapper 与 consumer
+    不再引用 `PLATFORM_POSIX_E*`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+    输出 `14 total, 14 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+- Full GREEN:
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`。
 
 ### Non-goals
 

@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync POSIX error result host ownership planning；上一轮包括
+当前最新本轮为 platform.sync POSIX error result host ownership；上一轮包括
 platform thread POSIX state ownerization；
 platform behavior tests abstract API boundary；
 platform.time facade/base/host shape normalization；
@@ -31,9 +31,9 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
-## Session: 2026-05-27 (platform.sync POSIX error result host ownership planning)
+## Session: 2026-05-27 (platform.sync POSIX error result host ownership)
 
-- **Status:** planned; plan committed before implementation
+- **Status:** completed; verification passed in isolated worktree
 - Objective:
   - 继续按 `/plan` 推进 platform ABI owner gap matrix，先收 `platform.sync` 中仍由 consumer 直接
     保存的 POSIX errno classifier。
@@ -44,11 +44,46 @@ platform/core 工作流保留下来的已完成记录。
   - `platform.sync` 当前 `platform_posix_map_error` 仍直接 case
     `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT`，这比 wait-bucket fallback 更接近 host
     errno classifier ownership。
+- Actions taken:
+  - 从最新 `main@06d287d` 开 `codex/platform-sync-owner-audit` isolated worktree。
+  - focused baseline 通过：
+    `test_platform_sync_host_ffi_surface` 1/1 pass，`test_platform_sync` 14/14 pass。
+  - RED：扩 `test_platform_sync_host_ffi_surface`，初始失败在
+    `linux must delegate POSIX sync error classification to shared posix.ffi skeleton: platform_posix_sync_result_from_error`。
+  - `posix.ffi` 新增 `platform_posix_sync_result_from_error` caller-supplied skeleton。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增 `platform_pthread_sync_result` host wrapper。
+  - `platform.sync` 的 `platform_posix_map_error` 改为 thin public-result adapter，不再直接 case
+    `PLATFORM_POSIX_E*`。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux must delegate POSIX sync error classification to shared posix.ffi skeleton: platform_posix_sync_result_from_error`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+      输出 `14 total, 14 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      输出 `2 total, 2 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      输出 `simulated-host-compile-matrix-status=pass`。
+  - Full GREEN:
+    - `make -C core test` 输出 `All tests passed.`。
+    - `make -C core examples` 输出 `All examples compiled.`。
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+    - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。
+- Review:
+  - 这批把 POSIX errno token ownership 从 `platform.sync` consumer 收回 host `.ffi`，但没有把
+    `PLATFORM_ERR_*` public contract 下沉到 host 层，边界是干净的。
+  - runtime 单测仍只覆盖 `platform.sync` 抽象 API；raw OS errno/ABI truth 由 host base/ffi source
+    surface、compile matrix 与 FPC-source-derived 常量负责守住。
 - Planned next action:
-  - 提交这批 plan 文件。
-  - 从最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree。
-  - 先扩 `test_platform_sync_host_ffi_surface` 成 RED，再加入 host ffi helper，并把 `platform.sync`
-    改为 thin public-result adapter。
+  - commit 本 worktree，合并回干净的 `main`，在 main 上补跑 post-merge focused gates 后清理
+    worktree / branch。
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 
@@ -6310,7 +6345,7 @@ Hello from nextPas!
 
 ### Phase 20: Platform Sync POSIX Error Result Host Ownership
 
-- **Status:** planned; plan committed before implementation
+- **Status:** completed; verification passed in isolated worktree
 - Started: 2026-05-27
 - Objective:
   - 继续 platform ABI owner gap matrix，先收 `platform.sync` 中仍由 consumer 直接读取的 POSIX errno
@@ -6322,8 +6357,32 @@ Hello from nextPas!
   - `platform.sync` 当前 `platform_posix_map_error` 仍直接 case
     `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT`，这比 wait-bucket fallback 更接近 host
     errno classifier ownership。
-- Planned next action:
-  - 提交这批 plan 文件。
-  - 从最新 `main` 开 `codex/platform-sync-owner-audit` worktree。
-  - 先扩 `test_platform_sync_host_ffi_surface` 成 RED，再加入 host ffi helper，并把 `platform.sync`
-    改为 thin public-result adapter。
+- Actions taken:
+  - 从最新 `main@06d287d` 开 `codex/platform-sync-owner-audit` worktree。
+  - 扩 `test_platform_sync_host_ffi_surface` 成 RED，冻结 host sync result helper owner boundary。
+  - `posix.ffi` 新增无宿主 truth 的 caller-supplied skeleton
+    `platform_posix_sync_result_from_error`。
+  - `linux/android/darwin/freebsd/unix.ffi` 新增 host-owned `platform_pthread_sync_result`。
+  - `platform.sync` POSIX 路径改为 thin public-result adapter，不再直接引用 `PLATFORM_POSIX_E*`。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `linux must delegate POSIX sync error classification to shared posix.ffi skeleton: platform_posix_sync_result_from_error`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+      输出 `14 total, 14 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+      输出 `2 total, 2 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      输出 `simulated-host-compile-matrix-status=pass`。
+  - Full GREEN:
+    - `make -C core test` 输出 `All tests passed.`。
+    - `make -C core examples` 输出 `All examples compiled.`。
+    - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+    - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+      `human-summary=local verification passed`。

@@ -13,6 +13,13 @@ function linux_syscall(ANumber: PtrInt; A1: PtrUInt; A2: PtrUInt; A3: PtrUInt; A
 function gettid: Int32; cdecl; external 'c' name 'gettid';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__errno_location';
 function platform_posix_errno_value: Int32; inline;
+function platform_pthread_sync_result(
+  const AError: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
 function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 function linux_futex_wake_one_i32(AAddr: PInt32): Int32;
 function linux_futex_wake_all_i32(AAddr: PInt32): Int32;
@@ -72,6 +79,28 @@ implementation
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_posix_errno_value_from_location(platform_errno_location);
+end;
+
+function platform_pthread_sync_result(
+  const AError: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  Result := platform_posix_sync_result_from_error(
+    AError,
+    PLATFORM_POSIX_EAGAIN,
+    PLATFORM_POSIX_EBUSY,
+    PLATFORM_POSIX_EINVAL,
+    PLATFORM_POSIX_ENOTSUP,
+    PLATFORM_POSIX_ETIMEDOUT,
+    AAgainResult,
+    ABusyResult,
+    AInvalidResult,
+    AUnsupportedResult,
+    ATimeoutResult);
 end;
 
 function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;

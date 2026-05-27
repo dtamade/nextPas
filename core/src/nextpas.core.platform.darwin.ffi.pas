@@ -14,6 +14,13 @@ function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; 
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
 function platform_posix_errno_value: Int32; inline;
+function platform_pthread_sync_result(
+  const AError: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -76,6 +83,28 @@ var
 function platform_posix_errno_value: Int32; inline;
 begin
   Result := platform_posix_errno_value_from_location(platform_errno_location);
+end;
+
+function platform_pthread_sync_result(
+  const AError: Int32;
+  const AAgainResult: Int32;
+  const ABusyResult: Int32;
+  const AInvalidResult: Int32;
+  const AUnsupportedResult: Int32;
+  const ATimeoutResult: Int32): Int32; inline;
+begin
+  Result := platform_posix_sync_result_from_error(
+    AError,
+    PLATFORM_POSIX_EAGAIN,
+    PLATFORM_POSIX_EBUSY,
+    PLATFORM_POSIX_EINVAL,
+    PLATFORM_POSIX_ENOTSUP,
+    PLATFORM_POSIX_ETIMEDOUT,
+    AAgainResult,
+    ABusyResult,
+    AInvalidResult,
+    AUnsupportedResult,
+    ATimeoutResult);
 end;
 
 function platform_thread_self_token_u64: UInt64; inline;

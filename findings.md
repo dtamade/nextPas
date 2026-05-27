@@ -121,11 +121,17 @@
 - 对应地，`linux/android/darwin/freebsd/unix.ffi` 现在不再各自复制
   `Result := platform_errno_location^` 与 public mutex kind 的 `case AKind of` skeleton；host ffi
   继续只保留 `platform_errno_location` symbol binding 与 `PLATFORM_PTHREAD_MUTEX_*_KIND` 这类宿主 truth。
-- `platform.sync` 当前仍保留一处待收口的 POSIX errno classifier：public `PLATFORM_ERR_*`
-  是 nextPas sync contract，应继续留在 `platform.sync`；但
-  `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT` 到 public result 的分类应由
-  `linux/android/darwin/freebsd/unix.ffi` 暴露 caller-supplied helper 承载。这样 consumer 不再直接依赖
-  host errno token，host ffi 也不硬编码 nextPas public error 值。
+- `platform.sync` 的 POSIX errno classifier 已按 host-owner 模型收口：public `PLATFORM_ERR_*`
+  仍是 nextPas sync contract，留在 `platform.sync`；但
+  `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT` 到 public result 的分类现在由
+  `linux/android/darwin/freebsd/unix.ffi` 的 `platform_pthread_sync_result` 承载，并委托 shared
+  `platform_posix_sync_result_from_error` skeleton。consumer 不再直接依赖 host errno token，host ffi
+  也不硬编码 nextPas public error 值。
+- 这条边界已用 `test_platform_sync_host_ffi_surface` 固化：host `.ffi` 必须暴露
+  `platform_pthread_sync_result` 并委托 shared `platform_posix_sync_result_from_error`，而
+  `platform.sync` 必须消费 host helper 且不得直接引用 `PLATFORM_POSIX_E*`。完整收口验证已包含
+  focused gates、`make -C core test` / `examples` / `benchmarks` 与
+  `bash build/verify_local.sh` 的 `verify-local=pass`。
 - `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
   `linux/android/darwin/freebsd/unix.ffi` 统一暴露
   `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。
