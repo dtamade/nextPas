@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 128 inherited implicit self bare method no matching overload diagnostics；Batch 127 inherited implicit self bare method wrong argument count diagnostics；Batch 126 inherited implicit self bare method type mismatch diagnostics；Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 129 inherited implicit self bare method ambiguous overload diagnostics；Batch 128 inherited implicit self bare method no matching overload diagnostics；Batch 127 inherited implicit self bare method wrong argument count diagnostics；Batch 126 inherited implicit self bare method type mismatch diagnostics；Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,49 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 129 inherited implicit self bare method ambiguous overload diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.4 Semantic model`
+- Objective:
+  - 按“同一路径失败矩阵推进”的加速打法，补齐 inherited implicit-self bare method
+    ambiguity：parent class 上 `Touch(Integer)` 与 `Touch(LongInt)` 同时可见，
+    `procedure TWorker.Run; begin Touch(1); end;` 时，`Touch(1);` 必须失败为
+    `sema.ambiguous-overload`，且不注册错误 `member-call` binding。
+- Baseline:
+  - Batch 126/127/128 已让 `type-mismatch`、`wrong-argument-count` 与
+    `no-matching-overload` 从 implicit-self fallback 透传。
+  - 本轮继续同一 resolver 热路径的 failure matrix，不重新发散找新主题。
+- Actions taken:
+  - 按 `/plan` 固定加速思路：`同一路径矩阵推进 / TDD focused probe / promotion-first`。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckInheritedImplicitSelfBareMethodCallAmbiguousOverloadDiagnostic`。
+  - focused semantic 直接输出 `semantic-call-bindings-status=pass`，证明 Batch 126 的
+    failure-kind out params 已覆盖 `ambiguous-overload`，本轮不修改 analyzer。
+  - 新增 `tests/fixtures/inherited_implicit_self_bare_method_ambiguous_overload`，并把
+    `inherited-implicit-self-bare-method-ambiguous-overload-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Stage0 focused probe 已输出 `diagnostics-summary=sema.ambiguous-overload`、
+    `diagnostic-code=sema.ambiguous-overload`、
+    `diagnostic-message=ambiguous overload for "Touch"` 与
+    `human-summary=semantic-analysis-failed`。
+  - Fresh `bash build/verify_local.sh` 已输出
+    `inherited-implicit-self-bare-method-ambiguous-overload-check=pass`、
+    `inheritedImplicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮是 promotion-first gate 补齐，不改变 semantic analyzer。
+  - 同一路径 failure matrix 现在覆盖 `type-mismatch` / `wrong-argument-count` /
+    `no-matching-overload` / `ambiguous-overload` 四格。
+  - 提交前 review 确认本轮没有修改 `core/`，也没有修改
+    `compiler/sema/np_semantic_analyzer.pas`。
 
 ## Session: 2026-05-27 (Batch 128 inherited implicit self bare method no matching overload diagnostics)
 
