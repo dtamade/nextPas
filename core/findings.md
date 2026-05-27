@@ -87,6 +87,21 @@
 - `Shrink`, `ShrinkTo`, `ShrinkToFit`, and `FreeBuffer` are explicit vector capacity-release controls. They belong to growable vector-style containers rather than the contiguous array capability base.
 - The key distinction for public docs: `Resize` is about length, `EnsureCapacity` is about absolute capacity, `Reserve` is about append headroom, and `Exact` is about bypassing the growth strategy.
 
+## 2026-05-28: Vec dynamic sequence semantics
+
+- `IVec<T>` should own growable sequence operations that change logical order or length: `Insert`, `Push`, `Pop`, `Peek`, `Delete`, `DeleteSwap`, indexed extraction, `Drain`, `SplitOff`, `Splice`, `Retain`, `Filter`, `Any`, `All`, `Dedup`, and `DedupBy`.
+- `Insert(Index, ...)` inserts before `Index`, accepts `0 <= Index <= Count`, preserves existing element order, and may grow capacity.
+- `Push(...)` is the tail append family. It can coexist with common `Append` because `Push` expresses stack/vector usage while `Append` expresses generic collection composition.
+- `Pop` removes from the tail. Checked `Pop` throws on empty; `TryPop` returns `False` for empty or invalid parameters. Batch `TryPop(..., Count = 0)` should be a successful no-op.
+- `Peek` observes tail elements without mutation. Checked `Peek` throws on empty; `TryPeek` returns `False` for empty or invalid parameters. Borrowed pointer APIs such as `PeekRange(Count)` may return `nil` for `Count = 0` because no element range exists.
+- `Delete(Index[, Count])` discards elements by position and preserves order. `DeleteSwap(Index[, Count])` discards elements by position without preserving order.
+- Indexed extraction should not keep public `Remove(Index)` because it is ambiguous with value-based removal. Final preserving extraction names should be `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean`.
+- Order-unstable indexed extraction needs an explicit swap-removal name, for example `SwapRemoveAt(Index): T` and `TrySwapRemoveAt(Index, out Element): Boolean`, rather than `RemoveSwap(Index)`.
+- Pointer and dynamic-array extraction helpers remain useful for high-performance callers, but final names should include positional intent, for example `RemoveCopyAt` / `RemoveArrayAt` and swap-removal counterparts.
+- `Drain`, `SplitOff`, and `Splice` are valid vector sequence operations, not excess API. Their range overflow policy must be explicit: current copied code clips some counts while `Delete` throws, and the final public contract should either document that difference or regularize it during interface tuning.
+- `Filter` returns a new vector and `Retain` mutates in place. `Any` and `All` are natural short-circuit sequence predicates. `Dedup` and `DedupBy` are natural adjacent-duplicate vector operations.
+- Zero-count batch operations should be successful no-ops where no element pointer is semantically required. This should be applied consistently across `TryPop`, `TryPeek`, copy/remove helpers, and future range operations.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.
