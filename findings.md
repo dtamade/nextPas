@@ -65,6 +65,21 @@
 - Batch 106 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `imported-no-matching-overload-check=pass`、`importedNoMatchingOverloadCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 107 把 direct class member-call overload signature no-match 接进 structured diagnostics：
+  root-owned exact class type 中存在同 owner / 同 qualified name / 同 arity 多个 method candidates、
+  argument signature 来自稳定 evidence、但没有任何 candidate signature 匹配时，
+  `Worker.Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 107 只改变 direct class variable receiver + root-owned exact class type 的安全分支：
+  imported/inherited member no-match、record/property/array/deref receiver、implicit conversion、
+  default parameter ranking、var/out compatibility 和 visibility checking 继续 deferred。
+- Batch 107 收口 review 增加了 inherited member no-match guard：parent-chain lookup 可继续绑定
+  inherited positive method target，但 inherited overload 全不匹配不能在本批次提前报
+  `sema.no-matching-overload`。
+- Batch 107 新增 `member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `memberNoMatchingOverloadCheck=pass`。
+- Batch 107 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `member-no-matching-overload-check=pass`、`memberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 102 已把 platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`，
   并让 official gates 指向 platform 命名空间；`nextpas.core.time/test_time` 继续只覆盖 L1
   `time` public API。

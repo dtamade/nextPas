@@ -153,6 +153,7 @@ type
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
+      const AAllowNoMatchingOverloadDiagnostic: Boolean;
       out AMethodNameFound: Boolean;
       out AResolutionFailureKind: string
     ): LongInt;
@@ -1548,6 +1549,7 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
+  const AAllowNoMatchingOverloadDiagnostic: Boolean;
   out AMethodNameFound: Boolean;
   out AResolutionFailureKind: string
 ): LongInt;
@@ -1621,7 +1623,12 @@ begin
       Exit;
     end
     else if SignatureMatchCount = 0 then
+    begin
+      if AAllowNoMatchingOverloadDiagnostic and AHasTypeMismatchEvidence and
+        SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) then
+        AResolutionFailureKind := 'no-matching-overload';
       Exit;
+    end;
   end;
   if SymbolId <= 0 then
     Exit;
@@ -1688,6 +1695,7 @@ begin
       AArgSignature,
       AHasArgSignature,
       AHasTypeMismatchEvidence,
+      Depth = 0,
       MethodNameFound,
       AResolutionFailureKind
     );
@@ -2019,6 +2027,12 @@ begin
         EmitSemaError(
           'sema.type-mismatch',
           'argument type mismatch for "' + MemberFailureName + '"',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'no-matching-overload') then
+        EmitSemaError(
+          'sema.no-matching-overload',
+          'no matching overload for "' + MemberFailureName + '"',
           MemberFailureOffset
         )
       else if SameText(ResolutionFailureKind, 'unknown-member') then

@@ -897,6 +897,143 @@ begin
   end;
 end;
 
+procedure CheckMemberNoMatchingOverloadDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program MemberNoMatchingOverloadCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: AnsiString);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Pick(Value: AnsiString);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(True);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-member-no-matching-overload-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.no-matching-overload') then
+      Fail('unexpected-member-no-matching-overload-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-member-no-matching-overload-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('member-no-matching-overload-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-member-no-matching-overload-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-member-no-matching-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-member-no-matching-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInheritedMemberNoMatchingOverloadStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedMemberNoMatchingOverloadCalls;' + LineEnding +
+    'type' + LineEnding +
+    '  TBase = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: AnsiString);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBase)' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TBase.Pick(Value: AnsiString);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Pick(True);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-member-no-matching-overload-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-inherited-member-no-matching-overload-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-inherited-member-no-matching-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-inherited-member-no-matching-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckUnknownMemberDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -2908,6 +3045,8 @@ begin
     CheckMemberOverloadBindingTargets;
     CheckMemberTypedOverloadBindingTargets;
     CheckAmbiguousMemberOverloadDiagnostic;
+    CheckMemberNoMatchingOverloadDiagnostic;
+    CheckInheritedMemberNoMatchingOverloadStaysDeferred;
     CheckUnknownMemberDiagnostic;
     CheckKnownFieldMemberCallStaysDeferred;
     CheckSystemObjectFreeMemberCallStaysDeferred;

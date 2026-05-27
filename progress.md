@@ -3,8 +3,9 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-26 记录为准。
 
-当前最新本轮为 Batch 106 imported no matching overload diagnostics；Batch 105 no matching overload
-diagnostics、Batch 104 function result call type mismatch evidence 已完成；并行收口包含
+当前最新本轮为 Batch 107 member no matching overload diagnostics；Batch 106 imported no matching
+overload diagnostics、Batch 105 no matching overload diagnostics、Batch 104 function result call type
+mismatch evidence 已完成；并行收口包含
 platform.thread L0 surface coverage、platform.time L0 surface coverage 与 platform API boundary cleanup；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
@@ -14,6 +15,47 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 107 member no matching overload diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 direct class member-call 的稳定 signature no-match 从 deferred 推进到
+    `sema.no-matching-overload`。
+- Baseline:
+  - Batch 76 已覆盖 member ambiguous overload；Batch 78 已覆盖 member wrong argument count；
+    Batch 79/80/83 已覆盖 member single-target type mismatch。
+  - Batch 105/106 已覆盖 bare/root/imported overload set 的 no-match，但 member 多候选全不匹配仍保持
+    deferred。
+- Actions taken:
+  - 先写 focused RED：`TWorker.Pick(Integer)` / `TWorker.Pick(AnsiString)` 后调用
+    `Worker.Pick(True)` 必须触发 `sema.no-matching-overload`、semantic model status `failure`，
+    且不注册失败 `member-call` binding。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 在 root-owned exact class type 的同 owner / 同名 /
+    同 arity 多候选、argument signature 稳定且 signature match count 为 0 时返回
+    `no-matching-overload` failure kind。
+  - `SeedCallBindingsInNode(...)` 的 qualified member-call path 现在把该 failure kind 投影成
+    `sema.no-matching-overload`。
+  - 收口 review 暴露 parent-chain lookup 会把 inherited parent overload no-match 也提前报成
+    `sema.no-matching-overload`；新增 focused guard 后，将 no-match diagnostic 限定回 receiver
+    exact type（`Depth = 0`）。
+  - 新增 `tests/fixtures/member_no_matching_overload`，并把
+    `member-no-matching-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-member-no-matching-overload-diagnostic`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Review RED/GREEN: inherited member no-match guard 曾失败在
+    `semantic-call-bindings-failure=unexpected-inherited-member-no-matching-overload-diagnostic:sema.no-matching-overload`；
+    修正后 focused semantic test 重新输出 `semantic-call-bindings-status=pass`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `member-no-matching-overload-check=pass`、`memberNoMatchingOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只覆盖 direct class variable receiver + root-owned exact class type 的多候选全不匹配；
+    imported/inherited member no-match、implicit conversion、default parameter ranking、var/out
+    compatibility、visibility checking 继续 deferred。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-26 (Batch 106 imported no matching overload diagnostics)
 

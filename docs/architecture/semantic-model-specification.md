@@ -88,7 +88,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   argument signature 前缀选择唯一 target；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
   `sema.type-mismatch`；root source 没有同名 callable、imported 同名同 arity 多候选、稳定
-  argument signature 全不匹配时发 `sema.no-matching-overload`。single imported target
+  argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
+  member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
+  同样发 `sema.no-matching-overload`。single imported target
   type mismatch、class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
@@ -110,8 +112,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
   set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发
-  `sema.type-mismatch`，若同 arity 有多个候选，则用当前可推断的 argument signature 做唯一匹配，并用同名
-  `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
+  `sema.type-mismatch`；receiver exact type 上的 root-owned 多候选同 arity 但稳定
+  argument signature 全不匹配时发 `sema.no-matching-overload`；若同 arity 有多个候选，则用当前可推断的
+  argument signature 做唯一匹配，并用同名 `TClass.Method` body declaration 的 argument count /
+  signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
   virtual/override dispatch 仍未完成
