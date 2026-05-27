@@ -43,8 +43,16 @@
   `test_platform_host_gap_matrix`, `test_platform_ffi_source_evidence_index`,
   `test_platform_ffi_import_workflow`, and
   `test_platform_simulated_host_compile_matrix`; all passed.
+- Committed Wave 7 as `9cc441b` (`platform: add process status ABI wave 7`).
+- Fast-forwarded `main` from `79f1a05` to `9cc441b`.
+- Post-merge `bash build/verify_local.sh` passed on the main checkout and the
+  final envelope includes `corePlatformHostAbiWave7ProcessStatusCheck`.
+- Removed the Wave 7 worktree and deleted branch
+  `codex/platform-host-abi-wave7-process-status`.
 
 ## Next
 
-- Review the final diff, commit Wave 7, merge it back to `main`, run post-merge
-  verification, and clean the temporary worktree.
+- Start the next platform ABI import wave from latest `main`; keep raw FPC ABI
+  imports source-evidence based, and reserve runtime behavior tests for unified
+  public contracts such as `platform.time`, `platform.sync`, and
+  `platform.thread`.

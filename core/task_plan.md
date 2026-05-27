@@ -60,7 +60,7 @@ the integration boundary.
 - [x] Import Windows wait/process status/access tokens into `windows.base`.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ## Non-goals
 
@@ -92,6 +92,14 @@ the integration boundary.
 - `make -C core benchmarks`: pass.
 - `bash build/verify_local.sh`: pass, including
   `corePlatformHostAbiWave7ProcessStatusCheck`.
+- Commit: `9cc441b` (`platform: add process status ABI wave 7`).
+- Merge: fast-forwarded into `main`.
+- Post-merge `bash build/verify_local.sh`: pass on
+  `/home/dtamade/projects/nextPas`, including
+  `corePlatformHostAbiWave7ProcessStatusCheck`.
+- Cleanup: removed worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave7-process-status`
+  and deleted branch `codex/platform-host-abi-wave7-process-status`.
 
 ## Errors Encountered
 
