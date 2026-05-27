@@ -359,6 +359,8 @@ candidate collection
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target method 的场景
+  - imported `installed-source` inherited member-call overload set 继续 deferred，即使同形状
+    function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
