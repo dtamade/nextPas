@@ -266,9 +266,10 @@ same path 的 bare implicit-self method call 若 stable argument signature 与 r
 `sema.no-matching-overload`（例如当前 class 的 `Pick(True);` 同时面对
 `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
 `Touch(Integer)` / `Touch(AnsiString)`），同样不会注册错误 binding。
-若同一路径找到多个 inherited method target，且 compact signature collision 后仍无法唯一选择，
-会失败为 `sema.ambiguous-overload`（例如 `Touch(1);` 同时面对 `Touch(Integer)` /
-`Touch(LongInt)`），同样不会注册错误 binding。
+若同一路径找到多个 method target，且 compact signature collision 后仍无法唯一选择，
+会失败为 `sema.ambiguous-overload`（例如当前 class 的 `Pick(1);` 同时面对
+`Pick(Integer)` / `Pick(LongInt)`，或 inherited `Touch(1);` 同时面对
+`Touch(Integer)` / `Touch(LongInt)`），同样不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
@@ -894,8 +895,8 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
 `semantic-analysis-failed` + `sema.duplicate-declaration`，再对
 ambiguous imported callable overload 与 ambiguous member overload 断言
-`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 inherited implicit-self bare method
-ambiguous overload 断言同一组 semantic failure / diagnostic projection，再对 root-owned no matching overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 current-class / inherited
+implicit-self bare method ambiguous overload 断言同一组 semantic failure / diagnostic projection，再对 root-owned no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported no matching overload 断言
 同一组 semantic failure / diagnostic projection，再对 direct member no matching overload 断言
 同一组 semantic failure / diagnostic projection，再对 imported project-source bare single-target

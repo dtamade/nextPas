@@ -126,8 +126,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
   `Touch(Integer)` / `Touch(AnsiString)`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
-  `sema.ambiguous-overload`，同一 ambiguity 也会从 inherited bare implicit-self fallback
-  透传出来，例如 `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`。随后再用同名
+  `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
+  透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
+  或 inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`。随后再用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
@@ -331,6 +332,8 @@ candidate collection
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
 - `sema.no-matching-overload`

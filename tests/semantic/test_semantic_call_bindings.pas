@@ -5379,6 +5379,79 @@ begin
   end;
 end;
 
+procedure CheckImplicitSelfBareMethodCallAmbiguousOverloadDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program ImplicitSelfBareMethodCallAmbiguousOverload;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: LongInt);' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Pick(Value: LongInt);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(1);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-implicit-self-bare-method-call-ambiguous-overload-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.ambiguous-overload') then
+      Fail('unexpected-implicit-self-bare-method-call-ambiguous-overload-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-implicit-self-bare-method-call-ambiguous-overload-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Pick', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('implicit-self-bare-method-call-ambiguous-overload-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-implicit-self-bare-method-call-ambiguous-overload-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-implicit-self-bare-method-call-ambiguous-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-implicit-self-bare-method-call-ambiguous-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckInheritedImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -6173,6 +6246,7 @@ begin
     CheckImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic;
     CheckImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
     CheckImplicitSelfBareMethodCallNoMatchingOverloadDiagnostic;
+    CheckImplicitSelfBareMethodCallAmbiguousOverloadDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallArgumentTypeMismatchDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallWrongArgumentCountDiagnostic;
     CheckInheritedImplicitSelfBareMethodCallNoMatchingOverloadDiagnostic;
