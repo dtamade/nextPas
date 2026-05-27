@@ -10,6 +10,22 @@
 
 ## Research Findings
 
+- Batch 182 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
+  调 inherited `TBaseWorker.Touch(Value: Integer)` 时，必须失败为 `sema.type-mismatch`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 182 focused semantic probe 直接 GREEN，证明 Batch 181 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal mismatch；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 182 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_type_mismatch` 与
+  `imported-unit-body-inherited-implicit-self-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass`。
+- Batch 182 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - Batch 181 开启 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
   imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch; end;`
   调 inherited `TBaseWorker.Touch(Value: Integer)` 缺参时，必须失败为

@@ -167,7 +167,10 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `procedure TWorker.Run; begin Touch; end;` 面对 `TBaseWorker.Touch(Value: Integer)`）；
   同一路径中的 stable literal mismatch（例如
   `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
-  `sema.type-mismatch`；同一路径中的 stable literal no-match（例如
+  `sema.type-mismatch`；同一路径沿 imported owner class parent chain 找到 inherited
+  method target 后，也会输出 stable literal mismatch diagnostic（例如
+  `TWorker = class(TBaseWorker)` 中 `procedure TWorker.Run; begin Touch(True); end;`
+  面对 `TBaseWorker.Touch(Value: Integer)`）；同一路径中的 stable literal no-match（例如
   `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
   `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径中的 stable literal
   ambiguity（例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
