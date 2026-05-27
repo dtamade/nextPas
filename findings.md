@@ -183,6 +183,22 @@
 - Batch 141 focused semantic 已输出 `semantic-call-bindings-status=pass`；fresh local verification
   已输出 `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 142 固定新的提速思路为“语义诊断矩阵单元流水线”：每轮先写 `/plan`，选同族相邻成熟格子，
+  focused probe 判真相；GREEN 就 promotion 到 official stage0 gate，RED 才改 analyzer。
+- Batch 142 选定 inherited implicit-self bare method + function-result type mismatch：`TWorker.Run`
+  中裸调用 parent `Touch(Flag)`，其中 `Touch(Integer)` 来自 `TBaseWorker`，`Flag` 是 root-owned
+  `Boolean` function result。
+- Focused probe 证明该能力已经由 Batch 126 的 inherited implicit-self failure propagation 与
+  Batch 132 的 function-result stable evidence 天然覆盖：输出 `semantic-call-bindings-status=pass`，
+  本批不修改 analyzer。
+- Batch 142 新增 dedicated fixture 与
+  `inherited-implicit-self-bare-method-function-result-type-mismatch-check`，final envelope 新增
+  `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`。
+- Batch 142 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-function-result-type-mismatch-check=pass`、
+  `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

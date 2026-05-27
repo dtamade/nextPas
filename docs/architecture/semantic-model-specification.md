@@ -328,7 +328,8 @@ candidate collection
     当前 argument signature 来自稳定事实且与 target param signature 明确不兼容的场景
   - 也用于 class method body 内 bare implicit-self method call 找到 root-owned 单一 target，
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
-    包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result
+    包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result，并覆盖
+    current class 与 inherited parent method target
 - `sema.no-matching-overload`
   - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
