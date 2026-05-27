@@ -49,6 +49,14 @@
 - Future interface tuning should focus on semantic ownership, naming consistency, inheritance clarity, and removing true duplicates, not on flattening useful method-style APIs. Increasing the number of interfaces or methods is acceptable when it makes capability boundaries and reuse relationships clearer; removing APIs is acceptable when the design is redundant, wrong, semantically confusing, or not worth its maintenance burden.
 - Implementation tuning should reuse shared algorithm cores where possible so rich interfaces do not imply repeated algorithm bodies in every container.
 
+## 2026-05-27: IArray contiguous capability boundary
+
+- `IArray<T>` should mean a mutable, indexable, contiguous-storage array-like sequence, not the universal parent for every linear or indexed container.
+- The large algorithm surface on `IArray<T>` is acceptable because traversal, search, replace, rearrangement, sorting, binary search, and block memory operations are natural capabilities for contiguous arrays.
+- `Vec` should inherit `IArray<T>` and reuse those capabilities because it would otherwise need to expose and implement the same operations itself.
+- Non-contiguous indexed containers, such as ring-buffer deque implementations, should not inherit `IArray<T>` just to share indexed access. They must not promise `GetMemory` or other contiguous-storage contracts unless they can actually provide them.
+- If non-contiguous sequences need shared indexed behavior later, introduce a separate indexed-sequence contract that does not expose contiguous memory.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.
