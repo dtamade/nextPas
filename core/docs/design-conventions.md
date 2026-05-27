@@ -835,6 +835,14 @@ FPC source family、OS SDK/header 补证、nextPas-owned host base/ffi owner 与
 `corePlatformFfiSourceEvidenceIndexCheck`。新增或修改 host ABI 声明时，先更新 evidence index，再更新
 gap matrix、source-surface gate 和实现代码，避免 FPC source 参考依据丢失。
 
+从 FPC 源码补充 platform API 的执行流程固定在 `docs/platform-ffi-import-workflow.md`。该 workflow
+定义 API import wave 的粒度、source evidence、host base/ffi owner 判定、RED gate、green import、
+Linux runtime / Win64 compile-only / simulated host compile-only 证据分类、`task_plan.md` /
+`progress.md` / `findings.md` 恢复入口，以及 worktree/commit/merge/cleanup 纪律。它必须继续接入
+`build/verify_local.sh` 的 `core-platform-ffi-import-workflow-check` focused route，并在最终 verification
+envelope 中保留 `corePlatformFfiImportWorkflowCheck`。后续任何 platform FFI 扩充批次都必须先按这个
+workflow 记录和验证，不能绕过它直接搬 raw API。
+
 扩充顺序应保持清晰：先把各宿主平台的 ABI 声明尽可能完整地沉到
 `platform.<host>.base` / `platform.<host>.ffi`，再由 `platform.time`、`platform.sync`、
 `platform.thread` 以及后续通用 platform 子模块抽象出统一 API、错误码、timeout 语义、对象生命周期和

@@ -29,6 +29,16 @@
 - `core/docs/platform-ffi-source-evidence-index.md` 将作为 host ABI 声明的 evidence index：它记录
   每类声明参考的 FPC source family / unit names、nextPas host owner 与证据边界。该文档不替代
   host gap matrix；gap matrix 说明当前覆盖和缺口，evidence index 说明这些声明应回到哪里取证。
+- 需要新增 `core/docs/platform-ffi-import-workflow.md` 作为工作流事实源：evidence index 说明“声明去哪里
+  取证”，gap matrix 说明“当前拥有了什么和缺什么”，import workflow 说明“每一批 API 怎么安全搬进来、
+  怎么验证、怎么恢复、怎么合并”。三者职责不同，后续不能只靠口头约定。
+- `platform-ffi-import-workflow` 已把“本次做不完，下次继续”变成硬流程：每个 API import wave 必须记录
+  worktree path、branch、起点 main、当前 phase、第一条未完成任务、RED/GREEN 输出、source evidence
+  和 merge/cleanup 状态；恢复入口固定为读 `task_plan.md`、`progress.md`、`findings.md` 后从最新
+  platform addendum 的第一条未完成任务继续。
+- `corePlatformFfiImportWorkflowCheck` 已进入 `build/verify_local.sh` 的 official final envelope；
+  这保证后续 session 不能只更新 workflow 文档而忘记 route truth，也不能绕过 workflow 直接开始
+  bulk raw OS API import。
 - 本机 `/home/dtamade/projects/fpdev/sources/fpc/fpc-main` 是空目录壳，不能写进 evidence index 作为
   可验证依据；可用 FPC source checkout 位于 `/home/dtamade/projects/fpc`，但项目文档应记录
   `rtl/linux`、`rtl/unix`、`rtl/darwin`、`rtl/freebsd`、`rtl/win32`、`rtl/win64`、

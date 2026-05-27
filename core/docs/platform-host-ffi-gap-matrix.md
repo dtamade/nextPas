@@ -15,6 +15,10 @@ and the official verification routes synchronized: FPC source evidence explains
 where ABI truth comes from; this matrix records what nextPas currently owns and
 which gaps are still deliberate.
 
+The import workflow for expanding this matrix is tracked in
+`docs/platform-ffi-import-workflow.md`. Use that workflow before adding a new API
+surface or closing a known gap.
+
 ## Host Base/FFI Ownership Matrix
 
 Host `base` units own ABI constants, record shapes, opaque carriers, scalar

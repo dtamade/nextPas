@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform ffi source evidence index；上一轮包括
+当前最新本轮为 platform ffi import workflow；上一轮包括
+platform ffi source evidence index；
 platform host gap route guard；
 platform host ffi gap matrix guard；
 platform facade info boundary；
@@ -38,6 +39,96 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform ffi import workflow)
+
+- **Status:** committed and rebased on latest main; merge/cleanup pending
+- Objective:
+  - 固定从 FPC 源码补充 nextPas platform host API 的安全高效工作流。
+  - 让后续每个 API wave 都能按 evidence -> owner -> RED gate -> import -> verify -> merge 的流程恢复、
+    追踪和审查。
+- Baseline / worktree:
+  - 主 checkout `/home/dtamade/projects/nextPas` 当前在 `main@02d42d5`，有 unrelated collections WIP：
+    `core/src/nextpas.core.collections.bitset.pas`、
+    `core/src/nextpas.core.collections.pas`、
+    `core/src/nextpas.core.collections.priorityqueue.pas`、
+    `core/src/nextpas.core.collections.bitset.base.pas`、
+    `core/src/nextpas.core.collections.priorityqueue.base.pas`；本轮不触碰。
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-import-workflow`
+    on `codex/platform-ffi-import-workflow` from `main@02d42d5`。
+- Research:
+  - 已复查 `core/docs/design-conventions.md` 第 18 节 platform 支持规则、`platform-host-ffi-gap-matrix.md`、
+    `platform-ffi-source-evidence-index.md`、现有 platform source-surface tests 和 `build/verify_local.sh`
+    focused gate 模式。
+  - 已确认可用 FPC source checkout 为 `/home/dtamade/projects/fpc`；本轮文档继续使用 source family /
+    unit names，不把本地绝对路径作为规范内容。
+  - 现有 platform host owner 已覆盖 `linux/android/darwin/freebsd/unix/windows` 的 `base/ffi`，后续 API
+    扩充应按 host owner 厚化，不按 `platform.time.ffi` / `platform.sync.ffi` /
+    `platform.thread.ffi` 切碎。
+- Current plan:
+  - 新增 `core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/`，先用缺失
+    `core/docs/platform-ffi-import-workflow.md` 与 missing verify route 制造 RED。
+  - 新增 `core/docs/platform-ffi-import-workflow.md`，固定 API import wave 的阶段、恢复入口、
+    evidence/owner/gate/verification/merge 纪律。
+  - 更新 `core/docs/design-conventions.md`、`platform-ffi-source-evidence-index.md`、
+    `platform-host-ffi-gap-matrix.md`，把 workflow 纳入 route truth。
+  - 接入 `build/verify_local.sh` required path、focused check 与 final envelope。
+- Boundary:
+  - 本轮不新增 raw OS API 声明，不扩 `platform.time` / `platform.sync` / `platform.thread` public API。
+  - 本轮的测试目标是 workflow/source-surface route truth，不测试 raw FPC/OS API。
+- Recovery:
+  - 下次恢复请从本 section 和 `task_plan.md` 的
+    `Addendum: 2026-05-27 Platform FFI Import Workflow` 继续。
+  - 第一条未完成任务是新增 RED gate `test_platform_ffi_import_workflow`。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
+    初始失败在缺失 `core/docs/platform-ffi-import-workflow.md` 和 design conventions route token：
+    `2 total, 0 passed, 2 failed`。
+- GREEN actions:
+  - 新增 `core/docs/platform-ffi-import-workflow.md`，固定 API import wave、source evidence、
+    host base/ffi owner、RED gate、green import、verification matrix、recovery entry 与
+    commit/merge/cleanup 纪律。
+  - `core/docs/design-conventions.md` 增加 workflow official route：
+    `core-platform-ffi-import-workflow-check` /
+    `corePlatformFfiImportWorkflowCheck`。
+  - `core/docs/platform-ffi-source-evidence-index.md` 与
+    `core/docs/platform-host-ffi-gap-matrix.md` 指向 workflow，形成 workflow/evidence/gap matrix 三件套。
+  - `build/verify_local.sh` 已接入 workflow required path、focused gate、cleanup 和 final envelope。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `bash -n build/verify_local.sh`: pass。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformFfiImportWorkflowCheck":"pass"`。
+  - `git diff --check`: pass。
+- Review:
+  - 本轮只固定 API import workflow、route truth 和 official gate，不新增 raw OS API，不扩统一
+    platform public contract。
+  - workflow/evidence index/gap matrix 三件套职责清晰：evidence index 记录 ABI 去哪里取证，
+    gap matrix 记录 nextPas 当前拥有什么和缺什么，import workflow 规定每一批怎么 RED/GREEN、
+    验证、恢复和合并。
+  - ignored build/cache outputs are present after verification (`.ace-tool/`, `.sisyphus/`, `core/build/`);
+    they are not staged and should remain ignored.
+- Integration:
+  - Initial feature commit before rebase: `c1f3680 docs(platform): add ffi import workflow`。
+  - Rebased cleanly over latest `main@e01d069`; final feature commit is `6bbb2eb`。
+  - Rebase focused verification on `6bbb2eb`:
+    `test_platform_ffi_import_workflow` 2/2 pass，
+    `test_platform_ffi_source_evidence_index` 2/2 pass，
+    `test_platform_host_gap_matrix` 4/4 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass。
 
 ## Session: 2026-05-27 (platform ffi source evidence index)
 

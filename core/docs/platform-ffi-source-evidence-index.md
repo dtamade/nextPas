@@ -4,6 +4,10 @@ This document records where platform host ABI declarations should be checked
 before they are copied into nextPas. It is an audit map for
 `nextpas.core.platform`, not a second platform API.
 
+The workflow for importing declarations after this evidence is recorded lives in
+`docs/platform-ffi-import-workflow.md`. Keep that workflow, this evidence index,
+the host gap matrix, and the official verification routes synchronized.
+
 ## Evidence Boundary
 
 FPC source is reference authority, not production dependency. The platform layer
