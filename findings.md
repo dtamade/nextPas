@@ -21,6 +21,11 @@
   `platform.<host>.ffi` 的跨平台统一 API contract，不是按 feature 切碎的 FFI owner。
   除非 feature 自身真的拥有独立 foreign ABI，否则不创建
   `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`。
+- `platform.thread` 的 public carrier types 也应遵循 base owner：`TPlatformThreadHandle`、
+  `TPlatformThreadToken`、`TPlatformThreadProc`、`TPlatformTLSKey` 归
+  `nextpas.core.platform.thread.base`，`nextpas.core.platform.thread` 只 re-export 并实现统一
+  thread API。这个 base 单元不是 host ABI owner，不新增 `platform.thread.ffi` 或
+  `platform.thread.intf`。
 - Windows `WaitOnAddress` 的 raw success/timeout/last-error truth 属于 `windows.ffi`，但
   `platform_wait_address32` 的 nil/mismatch/timeout/wake public result contract 属于
   `platform.sync`。因此 Windows wait path 必须像 Linux futex 与 POSIX fallback 一样，在调用

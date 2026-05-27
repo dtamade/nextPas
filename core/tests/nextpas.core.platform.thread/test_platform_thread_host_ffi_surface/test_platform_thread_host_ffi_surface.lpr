@@ -7,6 +7,8 @@ uses
   nextpas.core.testing;
 
 const
+  THREAD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.base.pas';
+  THREAD_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.base.pas';
   THREAD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.thread.pas';
   THREAD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.thread.pas';
   POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
@@ -72,6 +74,11 @@ begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckTokenAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure CheckSharedPosixThreadDelegation(const ASource, AHostLabel: string);
 begin
   CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
@@ -110,6 +117,8 @@ end;
 
 procedure TestPlatformThreadUsesHostThreadIdFFI;
 var
+  LThreadBasePath: string;
+  LThreadBaseSource: string;
   LThreadSource: string;
   LPosixSource: string;
   LLinuxBaseSource: string;
@@ -125,6 +134,10 @@ var
   LWindowsBaseSource: string;
   LWindowsSource: string;
 begin
+  LThreadBasePath := ResolveSourcePath(THREAD_BASE_SOURCE_PATH_FROM_TEST, THREAD_BASE_SOURCE_PATH_FROM_ROOT);
+  Check(FileExists(LThreadBasePath),
+    'platform.thread must have a base unit for public carrier types: ' + LThreadBasePath);
+  LThreadBaseSource := ReadSourceFile(LThreadBasePath);
   LThreadSource := ReadSourceFile(ResolveSourcePath(THREAD_SOURCE_PATH_FROM_TEST, THREAD_SOURCE_PATH_FROM_ROOT));
   LPosixSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
   LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
@@ -139,6 +152,36 @@ begin
   LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsBaseSource := ReadSourceFile(ResolveSourcePath(WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT));
   LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
+
+  CheckTokenPresent(LThreadBaseSource, 'unit nextpas.core.platform.thread.base',
+    'platform.thread.base must own the thread carrier unit identity');
+  CheckTokenPresent(LThreadBaseSource, 'tplatformthreadhandle = pointer;',
+    'platform.thread.base must own the public thread handle carrier');
+  CheckTokenPresent(LThreadBaseSource, 'tplatformthreadtoken = uint64;',
+    'platform.thread.base must own the public thread token carrier');
+  CheckTokenPresent(LThreadBaseSource, 'tplatformthreadproc = function(aarg: pointer): pointer; cdecl;',
+    'platform.thread.base must own the public thread proc carrier');
+  CheckTokenPresent(LThreadBaseSource, 'tplatformtlskey = ptruint;',
+    'platform.thread.base must own the public TLS key carrier');
+
+  CheckTokenPresent(LThreadSource, 'nextpas.core.platform.thread.base',
+    'platform.thread facade/implementation must consume platform.thread.base');
+  CheckTokenPresent(LThreadSource, 'tplatformthreadhandle = nextpas.core.platform.thread.base.tplatformthreadhandle;',
+    'platform.thread must re-export the thread handle carrier from base');
+  CheckTokenPresent(LThreadSource, 'tplatformthreadtoken = nextpas.core.platform.thread.base.tplatformthreadtoken;',
+    'platform.thread must re-export the thread token carrier from base');
+  CheckTokenPresent(LThreadSource, 'tplatformthreadproc = nextpas.core.platform.thread.base.tplatformthreadproc;',
+    'platform.thread must re-export the thread proc carrier from base');
+  CheckTokenPresent(LThreadSource, 'tplatformtlskey = nextpas.core.platform.thread.base.tplatformtlskey;',
+    'platform.thread must re-export the TLS key carrier from base');
+  CheckTokenAbsent(LThreadSource, 'tplatformthreadhandle = pointer;',
+    'platform.thread must not own raw public carrier definitions after base extraction');
+  CheckTokenAbsent(LThreadSource, 'tplatformthreadtoken = uint64;',
+    'platform.thread must not own raw public carrier definitions after base extraction');
+  CheckTokenAbsent(LThreadSource, 'tplatformthreadproc = function(aarg: pointer): pointer; cdecl;',
+    'platform.thread must not own raw public carrier definitions after base extraction');
+  CheckTokenAbsent(LThreadSource, 'tplatformtlskey = ptruint;',
+    'platform.thread must not own raw public carrier definitions after base extraction');
 
   CheckTokenPresent(LLinuxSource, 'function gettid',
     'linux.ffi must expose Linux native thread id ABI');

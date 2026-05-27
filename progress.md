@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync Windows wait-address public result boundary；上一轮包括
+当前最新本轮为 platform.thread base extraction；上一轮包括
+platform.sync Windows wait-address public result boundary；
 platform.sync POSIX wait-bucket policy ownership；
 platform.sync POSIX error result host ownership；
 platform thread POSIX state ownerization；
@@ -32,6 +33,82 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.thread base extraction)
+
+- **Status:** completed in isolated worktree; branch verification passed, merge pending
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块结构范式，把 `platform.thread` 的 public carrier type
+    抽到 `nextpas.core.platform.thread.base`，让 `platform.thread` 和 `platform.time` 一样遵循
+    facade/base 分工。
+- Baseline / worktree:
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base`
+    on `codex/platform-thread-base`。
+  - 分支已从 `c99b3b4` fast-forward 到最新 `main@c40ea69`；主线新增 collections 改动，与本轮
+    platform.thread 范围无冲突。
+  - 开始前 baseline 已通过：
+    `test_platform_thread_host_ffi_surface` 1/1、
+    `test_platform_thread` 8/8、
+    `test_platform_simulated_host_compile_matrix` pass。
+- Audit:
+  - `platform.thread` 行为实现已经只消费 host-owned base/ffi helper；问题集中在 interface 中仍直接
+    声明 `TPlatformThreadHandle = Pointer`、`TPlatformThreadToken = UInt64`、
+    `TPlatformThreadProc = ... cdecl`、`TPlatformTLSKey = PtrUInt`。
+  - 这些是 public carrier type，不是 host raw ABI；它们应进入
+    `nextpas.core.platform.thread.base`，由 `platform.thread` re-export，保持调用方兼容。
+- RED:
+  - 扩 `test_platform_thread_host_ffi_surface`，初始失败在
+    `platform.thread must have a base unit for public carrier types:
+    ../../../src/nextpas.core.platform.thread.base.pas`。
+  - 扩 `test_platform_ffi_owner_boundary`，初始失败在
+    `platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units`。
+  - 扩 `test_platform_thread_no_fpc_units`，初始失败在
+    `platform.thread.base source must exist for no-FPC guard`。
+  - 扩 `test_platform_thread_l0_boundary`，初始失败在 `platform.thread.base source stays L0 - File not found`。
+- Actions taken:
+  - 新增 `core/src/nextpas.core.platform.thread.base.pas`，只定义
+    `TPlatformThreadHandle`、`TPlatformThreadToken`、`TPlatformThreadProc`、`TPlatformTLSKey`。
+  - 修改 `core/src/nextpas.core.platform.thread.pas`，interface uses
+    `nextpas.core.platform.thread.base` 并 re-export 四个 public carrier type，行为实现不变。
+  - `test_platform_thread_host_ffi_surface` 固化 base owner 与 facade re-export，禁止
+    `platform.thread.pas` 回归 raw carrier declaration。
+  - `test_platform_ffi_owner_boundary` 把 `nextpas.core.platform.thread.base.pas` 纳入 platform source audit。
+  - `test_platform_thread_no_fpc_units` 与 `test_platform_thread_l0_boundary` 把 base 单元纳入 hard gate。
+  - `build/verify_local.sh` 新增 `core/src/nextpas.core.platform.thread.base.pas` required path，并更新
+    no-FPC / L0-boundary focused gate summary expectation。
+  - `core/docs/design-conventions.md` 写入 `platform.thread.base` 的 public carrier type ownership。
+- Focused verification so far:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    输出 `1 total, 1 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
+    输出 `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
+    输出 `4 total, 4 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+    输出 `8 total, 8 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+    输出 `simulated-host-compile-matrix-status=pass`。
+- Final branch verification:
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+    `human-summary=local verification passed`；official envelope 中
+    `corePlatformThreadCheck`、`corePlatformThreadNoFpcCheck`、
+    `corePlatformThreadL0BoundaryCheck`、`corePlatformThreadHostFfiSurfaceCheck`、
+    `corePlatformThreadWin64Check`、`corePlatformThreadExampleCheck`、
+    `corePlatformThreadBenchCheck` 与 `corePlatformSimulatedHostCompileMatrixCheck` 均为 `pass`。
+  - `git diff --check` clean。
+- Review:
+  - 这轮只移动 public carrier type owner，没有改变线程生命周期、TLS、yield/sleep、CPU count 的
+    runtime 语义，也没有新增 feature-specific `platform.thread.ffi` 或 `platform.thread.intf`。
+  - `platform.thread.base` 现在进入 source-surface、owner-boundary、no-FPC、L0-boundary 和
+    simulated-host compile proof，后续回归会更早暴露。
+- Next:
+  - commit，fast-forward merge 回 main，跑 post-merge focused verification，清理 worktree/branch。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 

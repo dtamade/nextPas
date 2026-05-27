@@ -1104,6 +1104,10 @@ yield/sleep、TLS key 与 CPU count。它不提供任务调度、线程池、cha
 `platform_thread_id` 返回宿主提供的 native thread id（例如 Linux/Android `gettid`、macOS
 `pthread_threadid_np`、FreeBSD `pthread_getthreadid_np`）；它是稳定的整数标识，但不要求与
 `platform_thread_self` 同值，也不能把它当作 join/detach handle 使用。
+`TPlatformThreadHandle`、`TPlatformThreadToken`、`TPlatformThreadProc` 与 `TPlatformTLSKey`
+这些 public carrier type 由 `nextpas.core.platform.thread.base` 统一拥有；
+`nextpas.core.platform.thread` 只做 public re-export 与行为实现，不能重新在 facade/implementation
+单元里直接声明 `Pointer`、`UInt64`、`PtrUInt` 形状。
 
 同样，当前线程 token、native thread id、TLS key create/free/set/get、CPU count、
 yield 这类宿主 helper 也应尽量继续归各自 host ffi owner。像 Windows

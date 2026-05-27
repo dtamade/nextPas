@@ -4,11 +4,14 @@ unit nextpas.core.platform.thread;
 
 interface
 
+uses
+  nextpas.core.platform.thread.base;
+
 type
-  TPlatformThreadHandle = Pointer;
-  TPlatformThreadToken = UInt64;
-  TPlatformThreadProc = function(AArg: Pointer): Pointer; cdecl;
-  TPlatformTLSKey = PtrUInt;
+  TPlatformThreadHandle = nextpas.core.platform.thread.base.TPlatformThreadHandle;
+  TPlatformThreadToken = nextpas.core.platform.thread.base.TPlatformThreadToken;
+  TPlatformThreadProc = nextpas.core.platform.thread.base.TPlatformThreadProc;
+  TPlatformTLSKey = nextpas.core.platform.thread.base.TPlatformTLSKey;
 
 { Thread lifecycle }
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;

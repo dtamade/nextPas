@@ -65,6 +65,14 @@ begin
     'core/src/nextpas.core.platform.thread.pas');
 end;
 
+procedure TestPlatformThreadBaseStaysL0;
+begin
+  CheckL0OnlySource(
+    'platform.thread.base source',
+    '../../../src/nextpas.core.platform.thread.base.pas',
+    'core/src/nextpas.core.platform.thread.base.pas');
+end;
+
 procedure TestPlatformThreadExampleStaysL0;
 begin
   CheckL0OnlySource(
@@ -84,6 +92,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.platform.thread.l0_boundary');
   T.Run('platform.thread source stays L0', @TestPlatformThreadSourceStaysL0);
+  T.Run('platform.thread.base source stays L0', @TestPlatformThreadBaseStaysL0);
   T.Run('platform.thread example stays L0', @TestPlatformThreadExampleStaysL0);
   T.Run('platform.thread benchmark stays L0', @TestPlatformThreadBenchmarkStaysL0);
   T.Summary;
