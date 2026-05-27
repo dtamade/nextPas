@@ -325,7 +325,8 @@ candidate collection
     已匹配、当前 argument signature 来自稳定 literal/纯表达式、已声明内建标量/字符串变量/参数事实，
     或 root-owned 零参内建标量/字符串 function result 且与 target param signature 明确不兼容的场景
   - 也用于 bare procedure/function call 中 imported `project-source` 单一 target 的 arity 已匹配、
-    当前 argument signature 来自稳定事实且与 target param signature 明确不兼容的场景
+    当前 argument signature 来自稳定事实且与 target param signature 明确不兼容的场景；该 stable
+    evidence 包含 root-owned 零参内建标量/字符串 function result
   - 也用于 class method body 内 bare implicit-self method call 找到 root-owned 单一 target，
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
     包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result，并覆盖

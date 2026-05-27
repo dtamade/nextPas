@@ -199,6 +199,22 @@
   `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 143 把提速方法收紧为“组合成熟格单元流水线”：优先把两个已验证能力组合成一个新矩阵格，
+  focused probe 先判真相，GREEN 直接 promotion，RED 才改 analyzer。
+- Batch 143 组合 Batch 104 的 root-owned 零参 function-result stable evidence 与 Batch 108 的
+  imported `project-source` bare callable single-target mismatch：root `Flag: Boolean` 调 imported
+  `Helper.Pick(Integer)` 会失败为 `sema.type-mismatch`，且不注册失败 `call` binding。
+- Focused probe 证明该组合能力已经天然成立：`LookupCallBindingDeclaration(...)` 的 imported
+  `project-source` type-mismatch projection 已接收 `CallArgumentSignatureIsStable(...)` 给出的
+  root-owned function-result evidence；本批不修改 analyzer。
+- Batch 143 新增 `tests/fixtures/imported_function_result_type_mismatch_call` 与
+  `imported-function-result-type-mismatch-call-check`，final envelope 新增
+  `importedFunctionResultTypeMismatchCallCheck":"pass"`。
+- Batch 143 fresh `bash build/verify_local.sh` 已输出
+  `imported-function-result-type-mismatch-call-check=pass`、
+  `importedFunctionResultTypeMismatchCallCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
