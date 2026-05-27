@@ -9,12 +9,16 @@ the integration boundary.
 
 ## Active Scope
 
-- Current worktree: `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`
-- Branch: `codex/platform-host-abi-wave8-file-io`
+- Current status: Wave 8 merged to `main` as `e6c09b3`
+  (`platform: add file I/O ABI wave 8`).
+- Closed worktree:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave8-file-io`
+- Closed branch: `codex/platform-host-abi-wave8-file-io`
 - Base: `main@ac4a6fe`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 8, file I/O continuation.
+- Current wave: Platform Host ABI Completeness Wave 8, file I/O continuation
+  closed; next wave should start from latest `main`.
 
 ## Architecture Rules
 
@@ -62,7 +66,7 @@ the integration boundary.
   and constants into `windows.base` / `windows.ffi`.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ## Non-goals
 
@@ -107,6 +111,9 @@ the integration boundary.
 - `bash build/verify_local.sh`: pass; final envelope reports
   `verify-local=pass`, `human-summary=local verification passed`, and
   includes `corePlatformHostAbiWave8FileIoCheck`.
+- Post-merge `bash build/verify_local.sh` on `main@e6c09b3`: pass; final
+  envelope reports `verify-local=pass`, `human-summary=local verification
+  passed`, and includes `corePlatformHostAbiWave8FileIoCheck`.
 
 ## Errors Encountered
 

@@ -77,6 +77,16 @@
 - After updating the `/plan` records, reran
   `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io clean test`;
   it passed with `5 total, 5 passed, 0 failed`.
+- Committed Wave 8 as `e6c09b3`
+  (`platform: add file I/O ABI wave 8`).
+- Fast-forwarded `main` from `ac4a6fe` to `e6c09b3`.
+- Post-merge `bash build/verify_local.sh` passed on the main checkout with
+  `verify-local=pass`, `human-summary=local verification passed`, and final
+  envelope token `corePlatformHostAbiWave8FileIoCheck`.
+- Removed the Wave 8 worktree and deleted branch
+  `codex/platform-host-abi-wave8-file-io`.
+- Cleaned generated untracked tag-index files `core/GPATH`, `core/GRTAGS`, and
+  `core/GTAGS` from the main checkout; they were not part of the deliverable.
 
 - Previous completed baseline from handoff: Wave 6 process-control raw ABI was
   merged to `main@79f1a05` as `platform: add process ABI wave 6`.
