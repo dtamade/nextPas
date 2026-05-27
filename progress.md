@@ -44,7 +44,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 2)
 
-- **Status:** started on isolated worktree; source evidence next
+- **Status:** implementation, rebase, and pre-merge verification completed; merge pending
 - Objective:
   - 按 `core/docs/platform-ffi-import-workflow.md` 启动第二批 host ABI completeness。
   - 本轮聚焦 file ABI raw inventory，不新增 `platform.file` public contract，不新增 raw OS API
@@ -66,10 +66,67 @@ platform/core 工作流保留下来的已完成记录。
   - 先读取 `/home/dtamade/projects/fpc` 中 Linux/Unix/Darwin/FreeBSD/Windows file API 相关 source。
   - 再新增 `test_platform_host_abi_wave2_files` source-surface gate，先制造 RED。
   - GREEN 阶段只落证据充分、host owner 清楚的最小子集；不把 `stat` 硬塞进本轮。
+- Actions taken:
+  - 新增 `test_platform_host_abi_wave2_files`，覆盖 Wave 2 source tokens、文档证据、
+    `verify_local` route truth，并确认没有引入 feature-specific `platform.file.ffi`。
+  - `posix.base` 新增 `TPlatformFileDescriptor`、`TPlatformFileModeArg` 与
+    `PLATFORM_FILE_MODE_DEFAULT`；`posix.ffi` 新增 `open`、`close`、`fcntl` binding 和
+    `platform_posix_open/close/fcntl/fcntl_i32` shared helpers。
+  - Linux、Android、Darwin、FreeBSD、generic Unix host `base` 新增基础 open/access flags 与
+    fcntl command tokens；对应 host `ffi` 新增 `platform_file_open/close/fcntl/fcntl_i32`。
+  - Windows `base` 新增 file access/share/creation/attribute tokens 和 string/pointer aliases；
+    Windows `ffi` 新增 `CreateFileA/W`、`ReadFile`、`WriteFile` binding 与 thin helpers，并让
+    `windows_file_close_handle` 复用既有 `CloseHandle` owner。
+  - 更新 `core/docs/platform-ffi-source-evidence-index.md` 与
+    `core/docs/platform-host-ffi-gap-matrix.md`，记录 Wave 2 file ABI raw inventory，并明确
+    `stat remains deferred`。
+  - `build/verify_local.sh` 新增 required paths、focused route
+    `core-platform-host-abi-wave2-files-check`、pass summary 和 final envelope token
+    `corePlatformHostAbiWave2FilesCheck`。
+- Verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
+    `4 total, 4 passed, 0 failed`。
+  - 相邻 focused gates 均通过：
+    `test_platform_ffi_source_evidence_index`、`test_platform_host_gap_matrix`、
+    `test_platform_posix_ffi_surface`、`test_platform_ffi_partition_surface`、
+    `test_platform_ffi_owner_boundary`、`test_platform_simulated_host_compile_matrix`、
+    `test_platform_host_abi_wave1`。
+  - Win64 compile checks 通过：`test_platform_thread`、`test_platform_sync`、`test_time`。
+  - `git diff --check`: pass。
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`，
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformHostAbiWave2FilesCheck":"pass"`。
+- Review:
+  - 这轮扩的是 host-owned raw ABI inventory，不是 public `platform.file` 设计；因此没有新增
+    `platform.file` public contract、example 或 benchmark。
+  - raw OS API 仍不进入 runtime unit tests；本轮测试只覆盖 source-surface、文档事实和 official route。
+  - `stat/fstat/lstat` 继续延期，原因是 record layout、large-file suffix、32/64-bit policy 和 host
+    差异需要单独取证，不能和 `open/fcntl` 混成一笔。
+- Next:
+  - 检查主 checkout 是否存在同事 WIP；安全时 fast-forward merge，post-merge verification，然后删除
+    worktree 和 feature branch。
+- Integration update:
+  - Initial feature commit after plan sync: `71d1856`。
+  - `git rebase main` 无冲突，分支更新到 `3552ded` + `1536335`，base 为
+    `main@5c0f03d`。
+  - Rebase 后 worktree 干净，无 untracked generated 文件。
+- Rebase verification:
+  - `git diff --check`: pass。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
+    `4 total, 4 passed, 0 failed`。
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`，
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformHostAbiWave2FilesCheck":"pass"`。
 - Recovery:
   - 下次恢复请从本 section 和 `task_plan.md` 的
     `Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2` 继续。
-  - 第一条未完成任务是从 FPC source 取证并确定最小可审查 ABI 子集。
+  - 第一条未完成任务是 fast-forward merge 到 main，然后执行 post-merge verification 与 cleanup。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 1)
 

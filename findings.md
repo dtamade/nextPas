@@ -2113,3 +2113,35 @@
 - 这个 guard 的证据边界必须诚实：它证明 source ownership、文档同步和 compile-surface 可回归，
   不等价于真实 macOS / Android / FreeBSD / Windows runtime proof；raw 系统 API 本身仍不进入
   nextPas runtime 单元测试。
+
+## 2026-05-27 Follow-up Findings 25
+
+- Wave 2 的正确落点是 host-owned file ABI raw inventory，而不是新建 `platform.file` public
+  contract 或 `platform.file.ffi`。`platform.time`、`platform.sync`、`platform.thread` 仍是统一
+  public contract 的范式；file 抽象要等 semantic contract 单独设计。
+- POSIX shared owner 只承载跨 Linux、Android、Darwin、FreeBSD、generic Unix 一致的薄层：
+  `TPlatformFileDescriptor`、`TPlatformFileModeArg`、`PLATFORM_FILE_MODE_DEFAULT`、
+  `open`、`close`、`fcntl` 与 `platform_posix_*` helpers。host-specific open/fcntl tokens 仍放在各
+  host `.base`。
+- Linux/Android 的 `O_CLOEXEC` 值可作为 host capability token 落入各自 `.base`；Darwin、FreeBSD
+  和 generic Unix 本轮只落已经纳入 source-surface gate 的基础 flags，避免把未完成取证的 capability
+  token 混进通用面。
+- Windows file entrypoints 使用既有 `HANDLE` / `CloseHandle` ownership：`CreateFileA/W`、
+  `ReadFile`、`WriteFile` 属于 `windows.ffi`，`windows_file_close_handle` 委托
+  `windows_thread_close_handle`，避免重复声明 `CloseHandle` owner。
+- `stat/fstat/lstat` 继续延期是架构选择，不是遗漏：record layout、large-file suffix、
+  32/64-bit policy 和 Windows `GetFileInformationByHandle`/POSIX `stat` 的语义差异需要下一波单独
+  evidence 和 gate。
+- 本轮验证口径保持 raw ABI 边界：source-surface test、文档事实、compile-only gates 和
+  `verify_local` route truth；不为 `open`、`fcntl`、`CreateFile*` 等 raw OS API 添加 runtime unit
+  tests。
+
+## 2026-05-27 Follow-up Findings 26
+
+- Wave 2 rebase 到 `main@5c0f03d` 时无冲突；并行 collections 文档提交没有覆盖 platform host
+  `base/ffi` owner，也没有改变 Wave 2 file ABI 分层。
+- Rebase 后 fresh verification 继续通过，说明 `build/verify_local.sh` 的
+  `corePlatformHostAbiWave2FilesCheck` 与既有 `corePlatformHostAbiWave1Check`、host gap matrix、
+  source evidence index 和 simulated-host compile matrix 可以共存。
+- 当前剩余集成风险主要在主 checkout 合并窗口，而不是实现本身：合并前仍要确认主 checkout
+  干净，避免把其他 worktree 或同事 WIP 混进 platform 收口。

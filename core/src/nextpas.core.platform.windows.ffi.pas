@@ -116,6 +116,33 @@ function windows_virtual_protect(
   const ASize: PtrUInt;
   const ANewProtect: DWORD;
   out AOldProtect: DWORD): Int32; inline;
+function windows_create_file_a(
+  const AFileName: LPCSTR;
+  const ADesiredAccess: DWORD;
+  const AShareMode: DWORD;
+  const ASecurityAttributes: Pointer;
+  const ACreationDisposition: DWORD;
+  const AFlagsAndAttributes: DWORD;
+  const ATemplateFile: HANDLE): HANDLE; inline;
+function windows_create_file_w(
+  const AFileName: LPCWSTR;
+  const ADesiredAccess: DWORD;
+  const AShareMode: DWORD;
+  const ASecurityAttributes: Pointer;
+  const ACreationDisposition: DWORD;
+  const AFlagsAndAttributes: DWORD;
+  const ATemplateFile: HANDLE): HANDLE; inline;
+function windows_read_file(
+  const AFile: HANDLE;
+  const ABuffer: Pointer;
+  const ABytesToRead: DWORD;
+  out ABytesRead: DWORD): Int32; inline;
+function windows_write_file(
+  const AFile: HANDLE;
+  const ABuffer: Pointer;
+  const ABytesToWrite: DWORD;
+  out ABytesWritten: DWORD): Int32; inline;
+function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -159,6 +186,10 @@ function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' na
 function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';
 function VirtualFree(lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualFree';
 function VirtualProtect(lpAddress: Pointer; dwSize: PtrUInt; flNewProtect: DWORD; var lpflOldProtect: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualProtect';
+function CreateFileA(lpFileName: LPCSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileA';
+function CreateFileW(lpFileName: LPCWSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
+function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'ReadFile';
+function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWORD; lpNumberOfBytesWritten: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'WriteFile';
 
 implementation
 
@@ -270,6 +301,75 @@ begin
     Result := 0
   else
     Result := windows_last_error_i32;
+end;
+
+function windows_create_file_a(
+  const AFileName: LPCSTR;
+  const ADesiredAccess: DWORD;
+  const AShareMode: DWORD;
+  const ASecurityAttributes: Pointer;
+  const ACreationDisposition: DWORD;
+  const AFlagsAndAttributes: DWORD;
+  const ATemplateFile: HANDLE): HANDLE; inline;
+begin
+  Result := CreateFileA(
+    AFileName,
+    ADesiredAccess,
+    AShareMode,
+    ASecurityAttributes,
+    ACreationDisposition,
+    AFlagsAndAttributes,
+    ATemplateFile);
+end;
+
+function windows_create_file_w(
+  const AFileName: LPCWSTR;
+  const ADesiredAccess: DWORD;
+  const AShareMode: DWORD;
+  const ASecurityAttributes: Pointer;
+  const ACreationDisposition: DWORD;
+  const AFlagsAndAttributes: DWORD;
+  const ATemplateFile: HANDLE): HANDLE; inline;
+begin
+  Result := CreateFileW(
+    AFileName,
+    ADesiredAccess,
+    AShareMode,
+    ASecurityAttributes,
+    ACreationDisposition,
+    AFlagsAndAttributes,
+    ATemplateFile);
+end;
+
+function windows_read_file(
+  const AFile: HANDLE;
+  const ABuffer: Pointer;
+  const ABytesToRead: DWORD;
+  out ABytesRead: DWORD): Int32; inline;
+begin
+  ABytesRead := 0;
+  if ReadFile(AFile, ABuffer, ABytesToRead, @ABytesRead, nil) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_write_file(
+  const AFile: HANDLE;
+  const ABuffer: Pointer;
+  const ABytesToWrite: DWORD;
+  out ABytesWritten: DWORD): Int32; inline;
+begin
+  ABytesWritten := 0;
+  if WriteFile(AFile, ABuffer, ABytesToWrite, @ABytesWritten, nil) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
+begin
+  Result := windows_thread_close_handle(AHandle);
 end;
 
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;

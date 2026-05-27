@@ -117,6 +117,18 @@ function platform_posix_mprotect(
   AAddress: Pointer;
   const ALength: PtrUInt;
   const AProtection: Int32): Int32; inline;
+function platform_posix_open(
+  const APath: PAnsiChar;
+  const AFlags: Int32;
+  const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
+function platform_posix_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_posix_fcntl(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32): Int32; inline;
+function platform_posix_fcntl_i32(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32;
+  const AArgument: Int32): Int32; inline;
 function platform_posix_getpid: pid_t; inline;
 function platform_posix_getppid: pid_t; inline;
 
@@ -130,6 +142,9 @@ function getppid: pid_t; cdecl; external 'c' name 'getppid';
 function mmap(addr: Pointer; len: PtrUInt; prot: Int32; flags: Int32; fd: Int32; ofs: Int64): Pointer; cdecl; external 'c' name 'mmap';
 function munmap(addr: Pointer; len: PtrUInt): Int32; cdecl; external 'c' name 'munmap';
 function mprotect(addr: Pointer; len: PtrUInt; prot: Int32): Int32; cdecl; external 'c' name 'mprotect';
+function open(path: PAnsiChar; flags: Int32; mode: TPlatformFileModeArg): TPlatformFileDescriptor; cdecl; external 'c' name 'open';
+function close(fd: TPlatformFileDescriptor): Int32; cdecl; external 'c' name 'close';
+function fcntl(fd: TPlatformFileDescriptor; cmd: Int32; arg: PtrInt): Int32; cdecl; external 'c' name 'fcntl';
 
 function pthread_create(thread: Pointer; attr: Pointer; start_routine: TPThreadStartRoutine; arg: Pointer): Int32; cdecl; external 'pthread' name 'pthread_create';
 function pthread_join(thread: pthread_t; retval: Pointer): Int32; cdecl; external 'pthread' name 'pthread_join';
@@ -391,6 +406,34 @@ end;
 function platform_posix_getpid: pid_t; inline;
 begin
   Result := getpid;
+end;
+
+function platform_posix_open(
+  const APath: PAnsiChar;
+  const AFlags: Int32;
+  const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
+begin
+  Result := open(APath, AFlags, AMode);
+end;
+
+function platform_posix_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+begin
+  Result := close(AFileDescriptor);
+end;
+
+function platform_posix_fcntl(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32): Int32; inline;
+begin
+  Result := fcntl(AFileDescriptor, ACommand, 0);
+end;
+
+function platform_posix_fcntl_i32(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32;
+  const AArgument: Int32): Int32; inline;
+begin
+  Result := fcntl(AFileDescriptor, ACommand, PtrInt(AArgument));
 end;
 
 function platform_posix_getppid: pid_t; inline;

@@ -49,9 +49,27 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
 - Wave 1 source evidence tokens are synchronized with the evidence index:
   `getpid`, `getppid`, `fpmmap`, `fpmunmap`, `dlopen`, `dlsym`,
   `LoadLibraryA`, `GetProcAddress`, and `VirtualAlloc`.
-- `stat/open/fcntl deferred`: file and stat families stay out of Wave 1 because
-  their record layouts, flag sets, and 32/64-bit suffix policy need a separate
-  evidence pass before import.
+- Historical Wave 1 marker: `stat/open/fcntl deferred`. Wave 2 resolves the
+  `open` / `fcntl` part of that marker and keeps only `stat` as the remaining
+  deferred file-family risk.
+- Platform Host ABI Completeness Wave 2 covers the file ABI raw inventory for
+  host `base/ffi` owners. POSIX hosts now carry file descriptor aliases,
+  `open`, `close`, `fcntl`, basic open/access flags, fcntl command tokens,
+  `platform_file_open`, `platform_file_close`, `platform_file_fcntl`, and
+  `platform_file_fcntl_i32`. Windows now carries `GENERIC_READ`,
+  `GENERIC_WRITE`, `FILE_SHARE_READ`, `FILE_SHARE_WRITE`,
+  `FILE_SHARE_DELETE`, `CREATE_ALWAYS`, `OPEN_EXISTING`,
+  `FILE_ATTRIBUTE_NORMAL`, `CreateFileA`, `CreateFileW`, `ReadFile`,
+  `WriteFile`, and a file close helper that delegates to the existing
+  `CloseHandle` owner. This remains source-surface and compile evidence, not a
+  new public `platform.file` contract.
+- Wave 2 source evidence tokens are synchronized with the evidence index:
+  `open`, `close`, `fcntl`, `O_CLOEXEC`, `F_DUPFD`, `F_GETFD`, `F_SETFD`,
+  `F_GETFL`, `F_SETFL`, `FD_CLOEXEC`, `CreateFileA`, `CreateFileW`,
+  `ReadFile`, and `WriteFile`.
+- `stat remains deferred`: `stat`, `fstat`, and `lstat` stay out of Wave 2
+  because their record layouts, large-file suffixes, and 32/64-bit policy need
+  a separate evidence pass before import.
 - Darwin has `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, so pthread
   condition-variable timeout policy uses the host-owned realtime clock token.
 - Darwin has `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`. Its

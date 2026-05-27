@@ -84,20 +84,55 @@ OS API 加入 runtime unit tests。
 
 ### Status
 
-Started on isolated worktree
+Implementation, rebase, and pre-merge verification completed on isolated worktree
 `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files`
-from `main@4643daa`.
+from `main@4643daa`, then rebased to latest `main@5c0f03d`. Merge,
+post-merge verification, and cleanup are still pending.
 
 ### Planned Steps
 
 - [x] 从最新 `main@4643daa` 创建 `codex/platform-host-abi-wave2-files` isolated worktree
 - [x] 读取 workflow、host gap matrix、source evidence index、Wave 1 收口记录与现有 host base/ffi owner
-- [ ] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 2 最小可审查 ABI 子集
-- [ ] RED：新增 source-surface gate，要求 Wave 2 evidence、host owner tokens 和 verify route
-- [ ] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
-- [ ] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [ ] focused verification、full verification
-- [ ] commit、rebase latest main、merge、post-merge verification、cleanup
+- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 2 最小可审查 ABI 子集
+- [x] RED：新增 source-surface gate，要求 Wave 2 evidence、host owner tokens 和 verify route
+- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
+- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [x] focused verification、full verification
+- [x] commit feature work and rebase to latest `main@5c0f03d`
+- [x] rebase 后 focused verification、full verification
+- [ ] merge、post-merge verification、cleanup
+
+### Verification Snapshot
+
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
+  `4 total, 4 passed, 0 failed`.
+- Adjacent focused gates passed:
+  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
+  `test_platform_posix_ffi_surface`, `test_platform_ffi_partition_surface`,
+  `test_platform_ffi_owner_boundary`, `test_platform_simulated_host_compile_matrix`,
+  and `test_platform_host_abi_wave1`.
+- Win64 compile checks passed for `test_platform_thread`, `test_platform_sync`, and
+  `test_time`.
+- `git diff --check`: pass.
+- `make -C core test`: `All tests passed.`
+- `make -C core examples`: `All examples compiled.`
+- `make -C core benchmarks`: `All benchmarks passed.`
+- `bash build/verify_local.sh`: `verify-local=pass`,
+  `human-summary=local verification passed`, final envelope includes
+  `corePlatformHostAbiWave2FilesCheck":"pass"`.
+
+Rebase verification on `codex/platform-host-abi-wave2-files@1536335` over
+`main@5c0f03d`:
+
+- `git diff --check`: pass.
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
+  `4 total, 4 passed, 0 failed`.
+- `make -C core test`: `All tests passed.`
+- `make -C core examples`: `All examples compiled.`
+- `make -C core benchmarks`: `All benchmarks passed.`
+- `bash build/verify_local.sh`: `verify-local=pass`,
+  `human-summary=local verification passed`, final envelope includes
+  `corePlatformHostAbiWave2FilesCheck":"pass"`.
 
 ### Recovery Entry
 

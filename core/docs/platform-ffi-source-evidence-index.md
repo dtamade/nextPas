@@ -41,14 +41,53 @@ compile-only gates, and focused runtime tests of the nextPas abstractions.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 2: file ABI raw inventory
+
+Wave 2 imports the low-level file ABI inventory that future file contracts can
+consume. It covers POSIX file descriptors, `open`, `close`, `fcntl`, basic
+open/access flags, fcntl command tokens, and Windows kernel32 file entrypoints.
+It does not create a public `platform.file` contract. `stat remains deferred`
+because `stat` / `fstat` / `lstat` record layout, large-file suffixes, and
+32/64-bit policy differ enough across hosts to deserve a separate evidence pass.
+
+- Shared POSIX file descriptor and mode argument aliases live in
+  `nextpas.core.platform.posix.base`. FPC evidence starts in
+  `rtl/unix/oscdecl.inc`, `rtl/unix/oscdeclh.inc`,
+  `rtl/linux/ossysc.inc`, and `rtl/bsd/ossysc.inc`, where `open`, `close`, and
+  `fcntl` are bound or wrapped as libc/syscall-level file descriptor APIs.
+- POSIX host open/access flags stay in host `base` units. Linux and Android use
+  the FPC `rtl/linux/ostypes.inc` / `rtl/linux/linux.pp` values for
+  `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREAT`, `O_EXCL`, `O_TRUNC`,
+  `O_APPEND`, and `O_CLOEXEC`; Darwin uses `rtl/macos/macostp.inc`; FreeBSD
+  uses `rtl/bsd/ostypes.inc`; generic Unix keeps the Darwin-style fallback until
+  a more specific host is promoted.
+- POSIX fcntl command tokens stay in host `base` units: `F_DUPFD`, `F_GETFD`,
+  `F_SETFD`, `F_GETFL`, `F_SETFL`, and `FD_CLOEXEC`. Evidence starts in
+  `rtl/bsd/ostypes.inc`, `rtl/linux/bunxsysc.inc`, `rtl/bsd/bunxsysc.inc`, and
+  `rtl/unix/oscdecl.inc`.
+- Shared POSIX externals and thin helpers live in
+  `nextpas.core.platform.posix.ffi`: `open`, `close`, `fcntl`,
+  `platform_posix_open`, `platform_posix_close`, `platform_posix_fcntl`, and
+  `platform_posix_fcntl_i32`. Host `ffi` units expose `platform_file_open`,
+  `platform_file_close`, `platform_file_fcntl`, and
+  `platform_file_fcntl_i32` by delegating to those shared helpers.
+- Windows file evidence starts in FPC `rtl/win/sysos.inc`,
+  `rtl/win/sysfile.inc`, `rtl/win/wininc/defines.inc`,
+  `rtl/win/wininc/ascfun.inc`, `rtl/win/wininc/unifun.inc`, and
+  `rtl/win/wininc/redef.inc`. Wave 2 imports `GENERIC_READ`,
+  `GENERIC_WRITE`, `FILE_SHARE_READ`, `FILE_SHARE_WRITE`,
+  `FILE_SHARE_DELETE`, `CREATE_ALWAYS`, `OPEN_EXISTING`,
+  `FILE_ATTRIBUTE_NORMAL`, `CreateFileA`, `CreateFileW`, `ReadFile`, and
+  `WriteFile`. File close delegates to the existing `CloseHandle` owner.
+
 ### Platform Host ABI Completeness Wave 1: process id, timeval, mmap, and dynamic loader
 
 Wave 1 imports the first low-risk host ABI inventory used by future
 `platform.process`, `platform.memory`, and dynamic-library contracts. It covers
-process id, `timeval`, mmap, and dynamic loader declarations. The
-`stat/open/fcntl deferred` marker is deliberate: those families have higher
-record-layout and 32/64-bit variant risk and belong in a later wave with
-narrower source evidence.
+process id, `timeval`, mmap, and dynamic loader declarations. The historical
+`stat/open/fcntl deferred` marker is deliberate: Wave 1 kept those families out
+because they needed a later, narrower evidence pass. Wave 2 now covers
+`open` / `fcntl` file ABI tokens, while `stat` remains deferred.
 
 - Shared `timeval` shape belongs in `nextpas.core.platform.posix.base`.
   Evidence starts in FPC `rtl/linux/ptypes.inc`,

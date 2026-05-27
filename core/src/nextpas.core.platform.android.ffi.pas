@@ -83,6 +83,18 @@ function platform_mprotect(
   AAddress: Pointer;
   const ALength: PtrUInt;
   const AProtection: Int32): Int32; inline;
+function platform_file_open(
+  const APath: PAnsiChar;
+  const AFlags: Int32;
+  const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
+function platform_file_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+function platform_file_fcntl(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32): Int32; inline;
+function platform_file_fcntl_i32(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32;
+  const AArgument: Int32): Int32; inline;
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;
 function platform_dlsym(ALibrary: Pointer; const AName: PAnsiChar): Pointer; inline;
 function platform_dlclose(ALibrary: Pointer): Int32; inline;
@@ -131,6 +143,34 @@ function platform_mprotect(
   const AProtection: Int32): Int32; inline;
 begin
   Result := platform_posix_mprotect(AAddress, ALength, AProtection);
+end;
+
+function platform_file_open(
+  const APath: PAnsiChar;
+  const AFlags: Int32;
+  const AMode: TPlatformFileModeArg): TPlatformFileDescriptor; inline;
+begin
+  Result := platform_posix_open(APath, AFlags, AMode);
+end;
+
+function platform_file_close(const AFileDescriptor: TPlatformFileDescriptor): Int32; inline;
+begin
+  Result := platform_posix_close(AFileDescriptor);
+end;
+
+function platform_file_fcntl(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32): Int32; inline;
+begin
+  Result := platform_posix_fcntl(AFileDescriptor, ACommand);
+end;
+
+function platform_file_fcntl_i32(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  const ACommand: Int32;
+  const AArgument: Int32): Int32; inline;
+begin
+  Result := platform_posix_fcntl_i32(AFileDescriptor, ACommand, AArgument);
 end;
 
 function platform_dlopen(const AName: PAnsiChar; const AFlags: Int32): Pointer; inline;

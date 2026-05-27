@@ -5,6 +5,9 @@ unit nextpas.core.platform.posix.base;
 interface
 
 type
+  TPlatformFileDescriptor = Int32;
+  TPlatformFileModeArg = UInt32;
+
   timespec = record
     tv_sec: Int64;
     tv_nsec: Int64;
@@ -187,6 +190,7 @@ const
   PLATFORM_POSIX_MAP_PRIVATE = Int32(2);
   PLATFORM_POSIX_MAP_FAILED = PtrInt(-1);
   PLATFORM_POSIX_MAP_FAILED_PTR = PtrUInt(High(PtrUInt));
+  PLATFORM_FILE_MODE_DEFAULT = TPlatformFileModeArg(438);
 
 implementation
 
