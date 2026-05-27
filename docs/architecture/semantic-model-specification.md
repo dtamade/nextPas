@@ -162,7 +162,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   的 bare implicit-self member miss 会按 `Worker` owner 解析 `Self`
   并输出 `sema.unknown-member`；同一路径中的 bare implicit-self arity miss（例如
   `procedure TWorker.Run; begin Pick; end;` 调 `Pick(Value: Integer)`）会输出
-  `sema.wrong-argument-count`
+  `sema.wrong-argument-count`；同一路径中的 stable literal mismatch（例如
+  `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
+  `sema.type-mismatch`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -373,6 +375,10 @@ candidate collection
     但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
     包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result，并覆盖
     current class 与 inherited parent method target
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的单一 target，arity 已匹配、stable argument signature 与 target param
+    signature 明确不兼容的场景；例如 `procedure TWorker.Run; begin Pick(True); end;`
+    面对 `Pick(Value: Integer)`，该路径不会注册失败 `member-call` binding
 - `sema.no-matching-overload`
   - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景

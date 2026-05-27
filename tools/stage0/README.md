@@ -274,8 +274,10 @@ method），还覆盖 imported `project-source` direct known field/property 被�
 `sema.invalid-call-shape` gate，以及 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
 same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
 单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
-`Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`，或 `Pick(Flag);`
-中 `Flag` 是 root-owned 零参 Boolean function result），且不会注册错误 binding。
+`Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`、imported
+`project-source` unit method body 中 `TWorker.Run` 的 `Pick(True);` 调
+`Pick(Integer)`，或 `Pick(Flag);` 中 `Flag` 是 root-owned 零参 Boolean function result），
+且不会注册错误 binding。
 若同一路径找到 method name 但 arity 不兼容，会失败为
 `sema.wrong-argument-count`（例如当前 class 的 `Pick;` 调 `Pick(Integer)`，或 inherited
 `Touch;` 调 `Touch(Integer)`，或 imported `project-source` unit method body 中
@@ -936,7 +938,9 @@ inherited known field/property member call 断言
 `project-source` unit method body）断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对 imported `project-source` unit method body
 bare implicit-self wrong argument count 断言
-`semantic-analysis-failed` + `sema.wrong-argument-count`，再对
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body bare implicit-self type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、
