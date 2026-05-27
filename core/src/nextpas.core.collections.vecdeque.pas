@@ -221,6 +221,8 @@ type
     procedure CopyForward(aSrc: Pointer; aDstIndex: SizeUInt; aCount: SizeUInt);
     procedure MoveElementsRight(aIndex: SizeUInt; aCount: SizeUInt);
     procedure MoveElementsLeft(aIndex: SizeUInt; aCount: SizeUInt);
+    procedure InsertRawNoOverlap(aIndex: SizeUInt; const aPtr: Pointer; aCount: SizeUInt);
+    procedure InsertFromOverlappingSource(aIndex: SizeUInt; const aPtr: Pointer; aCount: SizeUInt);
 
     { 高级容量管理 }
     function GetLoadFactor: Double;
@@ -1298,6 +1300,42 @@ begin
 
     LElement := FBuffer.GetUnChecked(LSrcPhysical);
     FBuffer.PutUnChecked(LDstPhysical, LElement);
+  end;
+end;
+
+procedure TVecDeque.InsertRawNoOverlap(aIndex: SizeUInt; const aPtr: Pointer; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  LPtr: PByte;
+  LPhysicalIndex: SizeUInt;
+begin
+  EnsureCapacity(FCount + aCount);
+
+  if aIndex < FCount then
+    MoveElementsRight(aIndex, aCount);
+
+  LPtr := PByte(aPtr);
+  for i := 0 to aCount - 1 do
+  begin
+    LPhysicalIndex := GetPhysicalIndex(aIndex + i);
+    FBuffer.PutUnChecked(LPhysicalIndex, PElement(LPtr)^);
+    Inc(LPtr, SizeOf(T));
+  end;
+
+  Inc(FCount, aCount);
+  FTail := WrapAdd(FHead, FCount);
+end;
+
+procedure TVecDeque.InsertFromOverlappingSource(aIndex: SizeUInt; const aPtr: Pointer; aCount: SizeUInt);
+var
+  LSnapshot: TVecDeque;
+begin
+  LSnapshot := TVecDeque.Create(aCount, FBuffer.GetAllocator, FGrowStrategy);
+  try
+    LSnapshot.PushBack(aPtr, aCount);
+    InsertRawNoOverlap(aIndex, LSnapshot.GetMemory, aCount);
+  finally
+    LSnapshot.Free;
   end;
 end;
 
@@ -6438,11 +6476,6 @@ end;
 
 // Insert 系列方法实现
 procedure TVecDeque.Insert(aIndex: SizeUInt; const aPtr: Pointer; aCount: SizeUInt);
-var
-  i: SizeUInt;
-  LPtr: PByte;
-  LPhysicalIndex: SizeUInt;
-  LSnapshot: TVecDeque;
 begin
   { 在指定位置插入指针数据 }
   if aPtr = nil then
@@ -6456,34 +6489,11 @@ begin
 
   if IsOverlap(aPtr, aCount) then
   begin
-    LSnapshot := TVecDeque.Create(aCount, FBuffer.GetAllocator, FGrowStrategy);
-    try
-      LSnapshot.PushBack(aPtr, aCount);
-      Insert(aIndex, LSnapshot.GetMemory, aCount);
-    finally
-      LSnapshot.Free;
-    end;
+    InsertFromOverlappingSource(aIndex, aPtr, aCount);
     Exit;
   end;
 
-  // 确保有足够容量
-  EnsureCapacity(FCount + aCount);
-
-  // 移动现有元素为新元素腾出空间
-  if aIndex < FCount then
-    MoveElementsRight(aIndex, aCount);
-
-  // 插入新元素 - 优化：减少 GetPhysicalIndex 调用
-  LPtr := PByte(aPtr);
-  for i := 0 to aCount - 1 do
-  begin
-    LPhysicalIndex := GetPhysicalIndex(aIndex + i);
-    FBuffer.PutUnChecked(LPhysicalIndex, PElement(LPtr)^);
-    Inc(LPtr, SizeOf(T));
-  end;
-
-  Inc(FCount, aCount);
-  FTail := WrapAdd(FHead, FCount);
+  InsertRawNoOverlap(aIndex, aPtr, aCount);
 end;
 
 procedure TVecDeque.Insert(aIndex: SizeUInt; const aElement: T);
