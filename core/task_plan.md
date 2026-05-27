@@ -43,7 +43,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Do not add default semantic interface aliases such as `IMap<K,V>` or `ISet<T>` for now. Default semantics live at the factory layer; interfaces keep concrete semantic names such as `IHashMap<K,V>` and `ITreeMap<K,V>`.
 - Map-like APIs must not treat `Get`/`Put` as mere aliases for `TryGetValue`/`AddOrAssign`. `TryGetValue(Key, out Value)` is a non-throwing lookup, `Get(Key): Value` requires the key and throws on absence, `Put(Key, Value)` writes without reporting insert/update, and `AddOrAssign` reports whether it inserted or updated.
 - Sequence-like indexed APIs use three access tiers: checked `Get(Index)`/`Put(Index, Value)` that throw on invalid indexes, optional non-throwing `TryGet(Index, out Value)`, and explicitly unsafe `GetUnchecked`/`PutUnchecked` for performance-sensitive code.
-- Sequence mutation APIs use Pascal-style names: `Delete(Index)` means positional removal, `Remove(Value)` means value-based removal. Do not add `RemoveAt` as a duplicate synonym unless a later design review finds a strong reason.
+- Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Current copied `Vec`/`VecDeque` APIs use `Remove(Index): T` and `Remove(Index, var Element)` for positional extraction. During interface tuning, consider promoting `RemoveAt(Index): T` as the clearer final indexed-extraction name instead of keeping both names as long-term duplicate primary APIs. Value-based removal belongs only to containers that explicitly support value lookup/removal semantics.
 
 ## Verification Commands
 
