@@ -84,6 +84,12 @@ function platform_clock_monotonic_ns_u64: UInt64; inline;
 function platform_clock_realtime_ns_u64: UInt64; inline;
 function platform_clock_monotonic_resolution_ns_u64: UInt64; inline;
 function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
+function platform_pthread_timeout_deadline_after_ns(
+  const ANanoseconds: UInt64;
+  out ADeadline: timespec): Int32; inline;
+function platform_pthread_timeout_remaining_ns_u64(
+  const ADeadline: PTimeSpec;
+  out ARemainingNs: UInt64): Int32; inline;
 function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
@@ -274,6 +280,28 @@ begin
     PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
     ATime,
     platform_errno_location);
+end;
+
+function platform_pthread_timeout_deadline_after_ns(
+  const ANanoseconds: UInt64;
+  out ADeadline: timespec): Int32; inline;
+begin
+  Result := platform_posix_clock_deadline_after_ns(
+    PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
+    platform_errno_location,
+    ANanoseconds,
+    ADeadline);
+end;
+
+function platform_pthread_timeout_remaining_ns_u64(
+  const ADeadline: PTimeSpec;
+  out ARemainingNs: UInt64): Int32; inline;
+begin
+  Result := platform_posix_clock_deadline_remaining_ns_u64(
+    PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
+    platform_errno_location,
+    ADeadline,
+    ARemainingNs);
 end;
 
 function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;

@@ -170,11 +170,6 @@ begin
   end;
 end;
 
-function platform_posix_now(out ATime: timespec): Int32;
-begin
-  Result := platform_posix_map_error(platform_pthread_timeout_clock_now(@ATime));
-end;
-
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
 begin
   Result := (PtrUInt(AAddr) shr 2) and PtrUInt(POSIX_WAIT_BUCKET_COUNT - 1);
@@ -359,11 +354,10 @@ begin
   if ATimeoutNs < 0 then
     Exit(platform_condvar_wait(ACondVar, AMutex));
 
-  Result := platform_posix_now(LDeadline);
+  Result := platform_posix_map_error(
+    platform_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
   if Result <> 0 then
     Exit;
-
-  platform_posix_timespec_add_ns(LDeadline, UInt64(ATimeoutNs));
   Result := platform_posix_condvar_timedwait_abs(ACondVar, AMutex, LDeadline);
 end;
 
@@ -384,7 +378,6 @@ function platform_posix_wait_address_fallback(
 var
   LBucket: ^TPosixWaitBucket;
   LDeadline: timespec;
-  LNow: timespec;
   LRemainingNs: UInt64;
   LGeneration: UInt64;
   LRet: Int32;
@@ -423,10 +416,9 @@ begin
 
       if ATimeoutNs > 0 then
       begin
-        Result := platform_posix_now(LDeadline);
-        if Result = 0 then
-          platform_posix_timespec_add_ns(LDeadline, UInt64(ATimeoutNs))
-        else
+        Result := platform_posix_map_error(
+          platform_pthread_timeout_deadline_after_ns(UInt64(ATimeoutNs), LDeadline));
+        if Result <> 0 then
           LDone := True;
       end;
 
@@ -436,10 +428,10 @@ begin
           LRet := platform_condvar_wait(LBucket^.CondVar, LBucket^.Mutex)
         else
         begin
-          Result := platform_posix_now(LNow);
+          Result := platform_posix_map_error(
+            platform_pthread_timeout_remaining_ns_u64(@LDeadline, LRemainingNs));
           if Result <> 0 then
             Break;
-          LRemainingNs := platform_posix_timespec_remaining_ns_u64(@LDeadline, @LNow);
           if LRemainingNs = 0 then
           begin
             Result := PLATFORM_ERR_TIMEOUT;

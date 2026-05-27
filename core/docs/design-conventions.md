@@ -964,12 +964,22 @@ projection skeleton，例如 `platform_posix_errno_value_from_location` 与
 symbol binding 与 `PLATFORM_PTHREAD_MUTEX_*_KIND` 这类宿主 truth，不再各自复制同一份 load/case
 skeleton。
 
-因此，优先消费 `platform_pthread_timeout_clock_now`、
+同样，只要 helper 本身不携带宿主 truth，shared `posix.ffi` 也可以继续拥有参数化的 timeout
+deadline skeleton，例如 `platform_posix_clock_deadline_after_ns` 与
+`platform_posix_clock_deadline_remaining_ns_u64`。前者统一承载“按 caller-supplied clock id
+读取当前时间并追加 ns timeout”的通用样板；后者统一承载“按同一 clock id 读取当前时间并计算离
+absolute deadline 还剩多少 ns”的通用样板。各 host ffi owner 继续只保留
+`PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 与 `platform_errno_location` 这类宿主 truth，再把这些 truth
+作为参数交给 shared helper。
+
+因此，优先消费 `platform_pthread_timeout_deadline_after_ns`、
+`platform_pthread_timeout_remaining_ns_u64`、`platform_pthread_timeout_clock_now`、
 `platform_pthread_mutex_init_platform_kind`、`platform_pthread_mutex_*`、
 `platform_pthread_rwlock_*`、`platform_pthread_condvar_*` 这类 helper；`platform.sync`
-只继续保留 nextPas 的 public opaque storage contract、error mapping、deadline 计算与
-wait-bucket 策略。对应地，`platform.sync` 不应继续自留 public mutex kind 到宿主 pthread kind 的
-映射逻辑，也不应继续复制 shared POSIX `timespec` deadline arithmetic。
+只继续保留 nextPas 的 public opaque storage contract、error mapping、wait-bucket 策略与
+跨平台 wake/wait public contract。对应地，`platform.sync` 不应继续自留 public mutex kind 到
+宿主 pthread kind 的映射逻辑，也不应继续在 consumer 里直接读取 pthread timeout clock 或复制
+shared POSIX `timespec` deadline arithmetic。
 
 ### `platform.thread` 的边界
 

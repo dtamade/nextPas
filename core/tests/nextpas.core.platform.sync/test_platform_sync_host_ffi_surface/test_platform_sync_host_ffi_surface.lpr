@@ -76,6 +76,10 @@ begin
     AHostLabel + ' must expose pthread condvar align carrier type for sync');
   CheckTokenPresent(ASource, 'platform_pthread_timeout_clock_now',
     AHostLabel + ' must expose pthread timeout clock helper for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_timeout_deadline_after_ns',
+    AHostLabel + ' must expose pthread timeout deadline helper for sync');
+  CheckTokenPresent(ASource, 'platform_pthread_timeout_remaining_ns_u64',
+    AHostLabel + ' must expose pthread timeout remaining helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init',
     AHostLabel + ' must expose pthread mutex init helper for sync');
   CheckTokenPresent(ASource, 'platform_pthread_mutex_init_platform_kind',
@@ -124,6 +128,10 @@ begin
     AHostLabel + ' must expose pthread condvar broadcast helper for sync');
   CheckTokenPresent(ASource, 'platform_posix_clock_now',
     AHostLabel + ' must delegate timeout clock reads to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_clock_deadline_after_ns',
+    AHostLabel + ' must delegate timeout deadline creation to shared posix.ffi');
+  CheckTokenPresent(ASource, 'platform_posix_clock_deadline_remaining_ns_u64',
+    AHostLabel + ' must delegate timeout remaining checks to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_destroy',
     AHostLabel + ' must delegate pthread mutex destroy to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_lock',
@@ -313,12 +321,10 @@ begin
 
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init_platform_kind',
     'platform.sync must consume host-owned pthread mutex init helper for public kind contract');
-  CheckTokenPresent(LSyncSource, 'platform_posix_timespec_add_ns',
-    'platform.sync must consume shared POSIX timespec deadline arithmetic');
-  CheckTokenPresent(LSyncSource, 'platform_posix_timespec_remaining_ns_u64',
-    'platform.sync must consume shared POSIX timespec remaining-time arithmetic');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_clock_now',
-    'platform.sync must consume host-owned pthread timeout clock helper');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_deadline_after_ns',
+    'platform.sync must consume host-owned pthread timeout deadline helper');
+  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_remaining_ns_u64',
+    'platform.sync must consume host-owned pthread timeout remaining helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init',
     'platform.sync must consume host-owned pthread mutex init helper');
   CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_destroy',
@@ -439,6 +445,8 @@ begin
     'platform.sync must not keep local POSIX timespec-to-ns arithmetic');
   Check(Pos('function platform_posix_remaining_ns', LSyncSource) = 0,
     'platform.sync must not keep local POSIX remaining-time arithmetic');
+  Check(Pos('function platform_posix_now(', LSyncSource) = 0,
+    'platform.sync must not keep a local pthread timeout-clock read helper');
   Check(Pos('getlasterror', LSyncSource) = 0,
     'platform.sync must not call GetLastError directly in the Windows consumer');
   Check(Pos('error_timeout', LSyncSource) = 0,
@@ -465,6 +473,12 @@ begin
     'platform.sync must not assemble raw FUTEX_WAKE operations in the Linux consumer');
   Check(Pos('clock_gettime(', LSyncSource) = 0,
     'platform.sync must not call clock_gettime directly in the Unix consumer');
+  Check(Pos('platform_posix_timespec_add_ns', LSyncSource) = 0,
+    'platform.sync must not build timeout deadlines from shared POSIX arithmetic in the consumer');
+  Check(Pos('platform_posix_timespec_remaining_ns_u64', LSyncSource) = 0,
+    'platform.sync must not compute timeout remaining time from shared POSIX arithmetic in the consumer');
+  Check(Pos('platform_pthread_timeout_clock_now', LSyncSource) = 0,
+    'platform.sync must not read the pthread timeout clock directly in the consumer');
   Check(Pos('pthread_mutexattr_init(', LSyncSource) = 0,
     'platform.sync must not call pthread_mutexattr_init directly in the Unix consumer');
   Check(Pos('pthread_mutexattr_settype(', LSyncSource) = 0,

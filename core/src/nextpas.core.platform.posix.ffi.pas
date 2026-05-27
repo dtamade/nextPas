@@ -195,6 +195,16 @@ function platform_posix_clock_ns_u64(
 function platform_posix_clock_resolution_ns_u64(
   const AClockId: Int32;
   const AErrnoLocation: PInt32): UInt64; inline;
+function platform_posix_clock_deadline_after_ns(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32;
+  const ANanoseconds: UInt64;
+  out ADeadline: timespec): Int32; inline;
+function platform_posix_clock_deadline_remaining_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32;
+  const ADeadline: PTimeSpec;
+  out ARemainingNs: UInt64): Int32; inline;
 function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;
 function platform_posix_pthread_mutex_init_kind(
   AMutex: Pointer;
@@ -465,6 +475,35 @@ begin
   Result := platform_posix_timespec_to_ns_u64(@LTime);
   if Result = 0 then
     Result := 1;
+end;
+
+function platform_posix_clock_deadline_after_ns(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32;
+  const ANanoseconds: UInt64;
+  out ADeadline: timespec): Int32; inline;
+begin
+  Result := platform_posix_clock_now(AClockId, @ADeadline, AErrnoLocation);
+  if Result <> 0 then
+    Exit;
+  platform_posix_timespec_add_ns(ADeadline, ANanoseconds);
+end;
+
+function platform_posix_clock_deadline_remaining_ns_u64(
+  const AClockId: Int32;
+  const AErrnoLocation: PInt32;
+  const ADeadline: PTimeSpec;
+  out ARemainingNs: UInt64): Int32; inline;
+var
+  LNow: timespec;
+begin
+  ARemainingNs := 0;
+  if ADeadline = nil then
+    Exit(-1);
+  Result := platform_posix_clock_now(AClockId, @LNow, AErrnoLocation);
+  if Result <> 0 then
+    Exit;
+  ARemainingNs := platform_posix_timespec_remaining_ns_u64(ADeadline, @LNow);
 end;
 
 function platform_posix_errno_value_from_location(const AErrnoLocation: PInt32): Int32; inline;

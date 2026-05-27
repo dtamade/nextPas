@@ -19,6 +19,11 @@
 - 当前不能直接把 `TCollection` / `TGenericCollection<T>` 强搬到 `collections.abstract`：现有
   interface contracts 大量引用 `TCollection` class，如果 `intf` 为此引用 `abstract`，会和
   `abstract` 引用 `intf` 形成循环。下一步需要先设计 class API 与 interface API 的过渡边界。
+- `platform_posix_clock_deadline_after_ns` 与
+  `platform_posix_clock_deadline_remaining_ns_u64` 现在是 shared `posix.ffi` 的单一事实源；
+  `platform.sync` 应继续只消费 host-owned
+  `platform_pthread_timeout_deadline_after_ns` /
+  `platform_pthread_timeout_remaining_ns_u64`，不再直接组装 POSIX timeout deadline arithmetic。
 - 错误的 `codex/platform-time-extras-preview` 分支只存在于隔离 worktree，尚未合入 main；已删除
   该 worktree/branch，避免 stopwatch 示例污染 platform 收口。
 - `platform.time` 的 helper/no-FPC focused tests 原先位于 `core/tests/nextpas.core.time/`，

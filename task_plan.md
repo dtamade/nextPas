@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Collections Interface Ownership Normalization；上一轮 platform 主线包括
+当前最新本轮为 Platform POSIX Timeout Deadline Helper Ownership；上一轮包括
+Collections Interface Ownership Normalization、
 Platform POSIX Pthread Attr-init Shared Helper Ownership；
 Platform POSIX Errno/Mutex Projection Shared Helper Ownership；
 Platform POSIX Clock/Sync Shared Helper Ownership；
@@ -33,6 +34,80 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform POSIX Timeout Deadline Helper Ownership
+
+### Goal
+
+把 pthread timeout deadline/remaining 语义从 `platform.sync` 继续收回到 host ffi / shared
+`posix.ffi` owner：
+
+- `posix.ffi` 统一拥有 “clock now + add ns -> absolute deadline” helper
+- `posix.ffi` 统一拥有 “deadline vs now -> remaining ns” helper
+- host ffi 继续只暴露 `platform_pthread_timeout_deadline_after_ns` /
+  `platform_pthread_timeout_remaining_ns_u64` 给 `platform.sync` 消费
+- `platform.sync` 不再直接调用 pthread timeout-clock read helper，也不再在 consumer 里直接拼
+  shared POSIX `timespec` deadline arithmetic
+
+### Architecture Decision
+
+- `platform_posix_timespec_add_ns` 与 `platform_posix_timespec_remaining_ns_u64` 仍留在
+  shared owner，但 consumer 不再直接用它们拼 timeout policy。
+- 新增更高一层 shared helper：
+  `platform_posix_clock_deadline_after_ns` /
+  `platform_posix_clock_deadline_remaining_ns_u64`。
+- host ffi 通过 `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 薄委托到上述 shared helper，`platform.sync`
+  只消费 host-owned pthread timeout helper。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_posix_ffi_surface`，冻结 shared timeout deadline helper surface
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，冻结 host pthread timeout helper / consumer boundary
+- [x] 在 `posix.ffi` 增加 shared deadline / remaining helper
+- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 暴露 host-owned pthread timeout deadline / remaining helper
+- [x] 让 `platform.sync` 改为消费 host-owned pthread timeout deadline / remaining helper
+- [x] focused：`test_platform_posix_ffi_surface` /
+  `test_platform_sync_host_ffi_surface` /
+  `test_platform_sync` /
+  `test_platform_thread_host_ffi_surface` /
+  `test_platform_time_host_ffi_surface` /
+  `test_platform_simulated_host_compile_matrix` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+    初始失败在
+    `posix.ffi must expose shared POSIX clock deadline helper for host ffi owners`。
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `linux.ffi must expose pthread timeout deadline helper for sync`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 本轮不改 `platform.sync` / `platform.posix.ffi` public API 名称。
+- 本轮不把 wait-bucket policy 从 `platform.sync` consumer 移到 ffi owner。
+- 本轮不扩到 `platform.thread` 或 `platform.time` 的额外 timeout policy。
 
 ## Addendum: 2026-05-27 Platform POSIX Errno/Mutex Projection Shared Helper Ownership
 
