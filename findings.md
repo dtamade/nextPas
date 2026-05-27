@@ -42,6 +42,20 @@
 - Batch 104 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 131 证明同一条 root-owned 零参 function-result evidence 在 direct class member-call 中
+  也已天然成立：`Self.Pick(Flag);` 中 `Pick(Integer)` 与 root-owned `function Flag:
+  Boolean` 会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：member-call path 已经复用
+  `CallArgumentSignatureIsStable(...)` 与 `ExpressionTypeFactIsStable(...)`，因此本轮走
+  promotion-first，把 focused truth 提升为 dedicated fixture 和 official verify gate。
+- Batch 131 新增 `tests/fixtures/member_type_mismatch_function_result_call` 与
+  `member-type-mismatch-function-result-call-check`，final envelope 新增
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`。
+- Batch 131 fresh `bash build/verify_local.sh` 已输出
+  `member-type-mismatch-function-result-call-check=pass`、
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为

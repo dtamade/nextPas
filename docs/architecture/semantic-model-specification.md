@@ -115,7 +115,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   class method declaration 的 parameter list 会进入
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
-  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发
+  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、已声明内建标量/字符串变量/参数、
+  或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
   `sema.type-mismatch`，同一条 failure kind 也会从 class method body 的 bare implicit-self
   fallback 透传出来，例如 inherited `Touch(True);`；receiver exact type 或 class method body bare
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发

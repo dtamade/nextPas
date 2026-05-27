@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,71 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 131 Member Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“同路径矩阵连续补格”的加速打法，把 Batch 104 已证明安全的 root-owned 零参
+function-result evidence 从 bare call 推进到 direct class member-call：
+
+- `Self.Pick(Flag);`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- `Flag: Boolean` 是 root-owned、零参、builtin scalar return type 的 function
+- 调用必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮只复用现有 `ExpressionTypeFactIsStable(...)` / `CallArgumentSignatureIsStable(...)`
+  evidence 规则，不引入完整 function-reference、function pointer 或 member function result 语义。
+- imported function result、带参 function result、member function result、class/record/alias/Pointer/Text/
+  Variant return type 继续 deferred。
+- 不实现 implicit conversion、default parameter ranking、var/out compatibility 或 visibility checking。
+- 不修改 `core/`；在隔离 worktree 中推进 compiler/stage0 切片，避开主 checkout 的 core WIP。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速打法与不碰 `core/`
+- [x] PROBE：focused semantic regression 证明现有实现已天然支持 member-call function-result
+      type-mismatch diagnostic
+- [x] GREEN：确认现有实现天然成立，本轮不改 analyzer
+- [x] promotion：新增 dedicated fixture 与 official
+      `member-type-mismatch-function-result-call-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- First attempted focused command used an invalid harness group and failed with `unknown-group:
+  semantic-call-bindings`; corrected to the same direct compile/run route used by `build/verify_local.sh`.
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 已输出
+  `member-type-mismatch-function-result-call-check=pass`、
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` 无输出；`bash -n build/verify_local.sh` 与
+  `sh -n build/verify_local.sh` 无输出；`git diff --name-only | rg '^core/'` 无输出。
+
+### Non-goals
+
+- 不把 imported / 带参 / member function result 纳入 type mismatch diagnostics
+- 不实现 function pointer / full expression typing
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 130 Implicit Self Bare Method Unknown Member Diagnostics
 
