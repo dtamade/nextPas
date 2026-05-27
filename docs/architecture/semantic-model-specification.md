@@ -89,11 +89,12 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
   `sema.type-mismatch`；root source 没有同名 callable、imported `project-source` 单一 target
   但调用 arity 不在 target 可接受区间内时发 `sema.wrong-argument-count`，arity 已匹配但稳定
-  argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported 同名同 arity 多候选、稳定
+  argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported `installed-source`
+  single-target arity miss 继续 deferred，不发 `sema.wrong-argument-count`；imported 同名同 arity 多候选、稳定
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
   同样发 `sema.no-matching-overload`。imported `installed-source` single-target
-  type mismatch、class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
+  type mismatch、single-target arity miss、class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
   无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member

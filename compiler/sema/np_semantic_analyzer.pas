@@ -960,6 +960,7 @@ var
   Index: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
+  ImportedDiagnosticNameCount: LongInt;
   ImportedNameCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
@@ -977,6 +978,7 @@ begin
   AResolutionFailureKind := '';
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
+  ImportedDiagnosticNameCount := 0;
   ImportedNameCount := 0;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
@@ -1012,6 +1014,10 @@ begin
       else
       begin
         Inc(ImportedNameCount);
+        if ImportedUnitAllowsTypeMismatchDiagnostic(
+          FProcedureBodies[Index].OwnerUnitId
+        ) then
+          Inc(ImportedDiagnosticNameCount);
         if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
         begin
           ImportedMatchIndex := Index;
@@ -1083,7 +1089,7 @@ begin
 
   if ImportedMatchCount = 0 then
   begin
-    if ImportedNameCount > 0 then
+    if ImportedDiagnosticNameCount > 0 then
       AResolutionFailureKind := 'wrong-argument-count';
     Exit(False);
   end;

@@ -142,6 +142,16 @@
   `importedWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 138 把 Batch 137 的 installed-source 防误报护栏补齐：imported `installed-source`
+  single-target bare callable arity miss（例如 installed `Helper.Pick(Integer)` 面对 root `Pick;`）
+  必须保持 deferred，不发 `sema.wrong-argument-count`，也不注册错误 `call` binding。
+- RED focused 证明旧实现会误报
+  `sema.wrong-argument-count`；`LookupCallBindingDeclaration(...)` 现在只在 imported callable
+  owner 允许 project-source diagnostics 时，才把 imported arity miss 投影为
+  `wrong-argument-count`。
+- Batch 138 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 `core/`。
 - Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
   root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
   argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
