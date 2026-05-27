@@ -121,6 +121,11 @@
 - 对应地，`linux/android/darwin/freebsd/unix.ffi` 现在不再各自复制
   `Result := platform_errno_location^` 与 public mutex kind 的 `case AKind of` skeleton；host ffi
   继续只保留 `platform_errno_location` symbol binding 与 `PLATFORM_PTHREAD_MUTEX_*_KIND` 这类宿主 truth。
+- `platform.sync` 当前仍保留一处待收口的 POSIX errno classifier：public `PLATFORM_ERR_*`
+  是 nextPas sync contract，应继续留在 `platform.sync`；但
+  `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT` 到 public result 的分类应由
+  `linux/android/darwin/freebsd/unix.ffi` 暴露 caller-supplied helper 承载。这样 consumer 不再直接依赖
+  host errno token，host ffi 也不硬编码 nextPas public error 值。
 - `platform.sync` 不应继续自己保存 public mutex kind 到宿主 pthread 编号的映射；现在
   `linux/android/darwin/freebsd/unix.ffi` 统一暴露
   `platform_pthread_mutex_init_platform_kind`，consumer 只传 public `AKind`。

@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform thread POSIX state ownerization；上一轮包括
+当前最新本轮为 platform.sync POSIX error result host ownership planning；上一轮包括
+platform thread POSIX state ownerization；
 platform behavior tests abstract API boundary；
 platform.time facade/base/host shape normalization；
 platform.sync Windows busy-result helper ownership；
@@ -29,6 +30,25 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync POSIX error result host ownership planning)
+
+- **Status:** planned; plan committed before implementation
+- Objective:
+  - 继续按 `/plan` 推进 platform ABI owner gap matrix，先收 `platform.sync` 中仍由 consumer 直接
+    保存的 POSIX errno classifier。
+- Audit:
+  - `platform.time` 当前没有更高优先级的 host-policy leak；它已经是 facade/base/host 形态，并消费
+    host-owned clock helper。
+  - `platform.sync` 的 public `PLATFORM_ERR_*` 常量属于统一抽象 contract，不能下沉到 host ffi。
+  - `platform.sync` 当前 `platform_posix_map_error` 仍直接 case
+    `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT`，这比 wait-bucket fallback 更接近 host
+    errno classifier ownership。
+- Planned next action:
+  - 提交这批 plan 文件。
+  - 从最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree。
+  - 先扩 `test_platform_sync_host_ffi_surface` 成 RED，再加入 host ffi helper，并把 `platform.sync`
+    改为 thin public-result adapter。
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 
@@ -6287,3 +6307,23 @@ Hello from nextPas!
   - 从最新 `main` 开 `codex/platform-thread-owner-audit` worktree。
   - 跑 focused baseline 后，扩 `test_platform_thread_host_ffi_surface` 或
     `test_platform_ffi_owner_boundary` 成 RED，再实施最小 owner fix。
+
+### Phase 20: Platform Sync POSIX Error Result Host Ownership
+
+- **Status:** planned; plan committed before implementation
+- Started: 2026-05-27
+- Objective:
+  - 继续 platform ABI owner gap matrix，先收 `platform.sync` 中仍由 consumer 直接读取的 POSIX errno
+    classification。
+- Current audit:
+  - `platform.time` 当前没有更高优先级的 host-policy leak；它已经是 facade/base/host 形态，并消费
+    host-owned clock helper。
+  - `platform.sync` 的 public error constants 属于统一抽象 contract，不能下沉到 host ffi。
+  - `platform.sync` 当前 `platform_posix_map_error` 仍直接 case
+    `PLATFORM_POSIX_EAGAIN/EBUSY/EINVAL/ENOTSUP/ETIMEDOUT`，这比 wait-bucket fallback 更接近 host
+    errno classifier ownership。
+- Planned next action:
+  - 提交这批 plan 文件。
+  - 从最新 `main` 开 `codex/platform-sync-owner-audit` worktree。
+  - 先扩 `test_platform_sync_host_ffi_surface` 成 RED，再加入 host ffi helper，并把 `platform.sync`
+    改为 thin public-result adapter。

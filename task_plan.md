@@ -15,7 +15,9 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Behavior Tests Abstract API Boundary；上一轮包括
+当前最新本轮为 Platform Sync POSIX Error Result Host Ownership；上一轮包括
+Platform ABI Owner Audit And Gap Matrix、
+Platform Behavior Tests Abstract API Boundary；
 Platform Time Facade/Base/Host Shape Normalization；
 Platform Sync Windows Busy-result Helper Ownership；
 Platform Sync Windows Destroy Helper Ownership；
@@ -8502,3 +8504,70 @@ source-surface gate 和 full verification 吸收。
   - `codex/platform-thread-owner-audit` worktree 与分支已删除。
   - 注意：主线仍有非本轮 collections WIP（`core/src/nextpas.core.collections.deque.pas` 与
     `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`），本轮未修改、未提交。
+
+## Addendum: 2026-05-27 Platform Sync POSIX Error Result Host Ownership
+
+### Goal
+
+继续从最新 `main` 执行 platform ABI owner gap matrix，这轮只收 `platform.sync` 中仍由 consumer
+直接保存的 POSIX errno classifier：
+
+- `PLATFORM_ERR_*` 是 nextPas public sync result contract，继续归 `platform.sync` 所有。
+- `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` / `PLATFORM_POSIX_EINVAL` /
+  `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT` 是 host errno truth，不应继续被
+  `platform.sync` consumer 直接 case。
+- POSIX host `.ffi` 暴露 caller-supplied public-result helper，让 host owner 负责 errno
+  分类，consumer 只传入 public result 值。
+
+### Architecture Decision
+
+- 不新增 `platform.sync.ffi`。`platform.sync` 是统一跨宿主 L0 public contract，不是 FFI owner。
+- shared `posix.ffi` 可以承载无宿主 truth 的 classifier skeleton，但具体 errno token 来自
+  `linux/android/darwin/freebsd/unix.base`，并通过各 host `.ffi` helper 暴露。
+- `platform.sync` 保留 public opaque storage、public error constants、wait-bucket fallback 策略与
+  wait/wake public contract。
+- raw pthread/futex/errno API 不进入 runtime 单元测试；本轮 evidence 以 RED/GREEN source-surface
+  guard、focused public behavior test 与 compile-only matrix 为主。
+
+### Planned Steps
+
+- [ ] 在最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree
+- [ ] 跑 focused baseline：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- [ ] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 暴露
+  `platform_pthread_sync_result`，并禁止 `platform.sync` 继续引用 `PLATFORM_POSIX_E*`
+- [ ] 在 shared `posix.ffi` 增加 caller-supplied errno classifier skeleton helper
+- [ ] 在 `linux/android/darwin/freebsd/unix.ffi` 增加 host-owned sync-result wrapper
+- [ ] 修改 `platform.sync` POSIX 路径，让所有 pthread/futex 返回码走 host helper 映射到
+  `PLATFORM_ERR_*`
+- [ ] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [ ] 跑 focused gates：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [ ] 跑 full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+- [ ] commit、择优合并回 `main`、清理 worktree / 分支
+
+### Audit Checklist
+
+- [ ] `platform.sync` 不直接引用 `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` /
+  `PLATFORM_POSIX_EINVAL` / `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT`
+- [ ] `platform.sync` 不新增 raw `external` 声明，不 uses FPC platform/RTL binding unit
+- [ ] `platform.sync` 不创建 feature-specific `platform.sync.ffi`
+- [ ] POSIX host `.ffi` helper 接收 caller-supplied public result，避免 host ffi 硬编码
+  `PLATFORM_ERR_*`
+- [ ] Windows sync helper ownership 不被本轮回退
+
+### Non-goals
+
+- 不改变 `platform.sync` public API 名称或 public result 常量值。
+- 不移动 wait-bucket fallback 策略。
+- 不对 raw pthread/futex/errno API 写 runtime 单元测试。
+- 不宣称新增 macOS / Android / FreeBSD / Windows runtime evidence。
