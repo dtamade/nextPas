@@ -5,7 +5,8 @@ program test_queue;
 uses
   nextpas.core.testing,
   nextpas.core.collections,
-  nextpas.core.collections.queue.intf;
+  nextpas.core.collections.queue.intf,
+  nextpas.core.collections.deque.intf;
 
 type
   IIntQueue = specialize IQueue<Integer>;

@@ -8,7 +8,9 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.queue.intf,
-  nextpas.core.collections.hashmap.intf;
+  nextpas.core.collections.deque.intf,
+  nextpas.core.collections.hashmap.intf,
+  nextpas.core.collections.hashset.intf;
 
 type
   IIntVec = specialize IVec<Integer>;

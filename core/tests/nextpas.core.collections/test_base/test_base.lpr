@@ -1,16 +1,16 @@
-program test_abstract;
+program test_base;
 
 {$I nextpas.core.settings.inc}
 
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.abstract;
+  nextpas.core.collections.base;
 
 var
   T: TTestRunner;
 
-procedure TestAbstractExportsCollectionSkeleton;
+procedure TestBaseExportsCollectionSkeleton;
 var
   LClass: TCollectionClass;
 begin
@@ -18,7 +18,7 @@ begin
   Check(LClass <> nil, 'TCollectionClass should accept TCollection');
 end;
 
-procedure TestAbstractExportsGrowthStrategies;
+procedure TestBaseExportsGrowthStrategies;
 var
   LStrategy: IGrowthStrategy;
 begin
@@ -104,9 +104,9 @@ begin
 end;
 
 begin
-  T := TTestRunner.Create('nextpas.core.collections.abstract');
-  T.Run('exports collection skeleton', @TestAbstractExportsCollectionSkeleton);
-  T.Run('exports growth strategies', @TestAbstractExportsGrowthStrategies);
+  T := TTestRunner.Create('nextpas.core.collections.base');
+  T.Run('exports collection skeleton', @TestBaseExportsCollectionSkeleton);
+  T.Run('exports growth strategies', @TestBaseExportsGrowthStrategies);
   T.Run('growth strategy interface lives in base', @TestGrowthStrategyInterfaceLivesInBase);
   T.Run('collection interfaces live in intf', @TestCollectionInterfacesLiveInIntf);
   T.Summary;

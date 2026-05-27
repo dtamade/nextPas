@@ -5,8 +5,8 @@ program test_hashset;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.collections.hashmap.intf,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashset.intf,
+  nextpas.core.collections.hashset;
 
 type
   IIntSet = specialize IHashSet<Integer>;

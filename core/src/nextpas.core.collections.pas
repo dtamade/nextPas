@@ -19,7 +19,10 @@ uses
   nextpas.core.collections.arr.intf,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.queue.intf,
+  nextpas.core.collections.deque.intf,
+  nextpas.core.collections.vecdeque.intf,
   nextpas.core.collections.hashmap.intf,
+  nextpas.core.collections.hashset.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.collections.iterators,
@@ -39,6 +42,7 @@ uses
   nextpas.core.collections.element_manager,
   // HashMap / HashSet (OA default)
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashset,
   nextpas.core.collections.linkedhashmap,
   nextpas.core.collections.multimap,
   nextpas.core.collections.multiset,

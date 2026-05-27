@@ -7,6 +7,8 @@ uses
   nextpas.core.testing,
   nextpas.core.base,
   nextpas.core.collections.queue.intf,
+  nextpas.core.collections.deque.intf,
+  nextpas.core.collections.vecdeque.intf,
   nextpas.core.collections.deque,
   nextpas.core.collections.vecdeque;
 
