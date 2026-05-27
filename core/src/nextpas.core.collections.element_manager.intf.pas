@@ -8,17 +8,10 @@ uses
   sysutils,
   typinfo,
   nextpas.core.base,
-  nextpas.core.mem.allocator;
+  nextpas.core.mem.allocator,
+  nextpas.core.collections.element_manager.base;
 
 type
-
-  generic TGenericHelper<T> = class
-  public
-    type
-      PElement = ^T;
-  end;
-
-  type
 
   {**
    * IElementManager<T>
