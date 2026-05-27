@@ -177,6 +177,15 @@
   diagnostics 正式纳入 final envelope `knownFieldMemberCallCheck=pass`。
 - `System.Free` 与 specialized generic member-call 继续 deferred；这一批只收 known field/property
   member call 的最小稳定边界，不冒进到更复杂 receiver 或完整 member access 语义。
+- Batch 120 证明同一条 known non-callable diagnostics 在 direct class property 上也已天然成立：
+  当 `TWorker.Value` 是已知 class property 而不是 callable 时，`Worker.Value(1)` 会失败为
+  `sema.invalid-call-shape`，且不注册失败 `member-call` binding。
+- property 这条边界不需要再改 `compiler/sema/np_semantic_analyzer.pas`：现有
+  `ClassTypeHasKnownNonMethodMember(...)` 已经通过 `$read` / `$write` truth 覆盖 property，因此本轮是
+  纯 promotion。
+- Batch 120 新增 `tests/fixtures/known_property_member_call` 与 `known-property-member-call-check`，把
+  direct class property non-callable 也正式纳入 final envelope
+  `knownPropertyMemberCallCheck=pass`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
