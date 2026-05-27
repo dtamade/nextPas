@@ -1708,7 +1708,9 @@ begin
     Exit;
   end;
 
-  // 清空并重置
+  if aSrc = nil then
+    raise EArgumentNil.Create('TVecDeque.LoadFromPointer: aSrc is nil but aCount > 0');
+
   Clear;
   EnsureCapacity(aCount);
   PushBack(aSrc, aCount);

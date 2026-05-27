@@ -5,6 +5,7 @@ program test_deque;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.base,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque,
   nextpas.core.collections.vecdeque;
@@ -188,6 +189,29 @@ begin
   CheckEqual(Int64(1), Int64(LDst.Get(0)), 'destination contents unchanged');
 end;
 
+procedure TestLoadFromPointerNilFailureKeepsContents;
+var
+  LD: IIntVecDeque;
+  LRaised: Boolean;
+begin
+  LD := TIntDeque.Create as IIntVecDeque;
+  LD.PushBack(1);
+  LD.PushBack(2);
+
+  LRaised := False;
+  try
+    LD.LoadFromPointer(nil, 1);
+  except
+    on E: EArgumentNil do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'nil source should raise EArgumentNil');
+  CheckEqual(Int64(2), Int64(LD.Count), 'count preserved after failed load');
+  CheckEqual(Int64(1), Int64(LD.Get(0)), 'first element preserved');
+  CheckEqual(Int64(2), Int64(LD.Get(1)), 'second element preserved');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -202,5 +226,6 @@ begin
   T.Run('Reserve', @TestReserve);
   T.Run('Auto free (interface)', @TestAutoFree);
   T.Run('AppendFrom zero count is no-op', @TestAppendFromZeroCountIsNoOp);
+  T.Run('LoadFromPointer nil failure keeps contents', @TestLoadFromPointerNilFailureKeepsContents);
   T.Summary;
 end.
