@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,50 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 117 imported inherited member type mismatch diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 imported inherited direct member-call 的 source-owned single-target mismatch 正式接进 semantic
+    regression 与 stage0 verify gate，同时保持 installed-source inherited type-mismatch 继续 deferred。
+- Baseline:
+  - Batch 109 已覆盖 imported exact member type-mismatch。
+  - Batch 116 刚验证过 imported inherited wrong-argument-count 可以走 promotion-only 快路径。
+  - quick probe 显示 `Worker.Pick(True)` 在 imported inherited `project-source` 路径已经会失败为
+    `sema.type-mismatch`，但这条边界尚未进入 official verification surface。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续复用“probe 后 promotion”提速法：先验证相邻边界是否天然成立，
+    成立就直接升格为 semantic/stage0/verify contract。
+  - 先用 `.sisyphus/tmp/stage0-bootstrap/nextpas build` 对临时 imported inherited fixture 做 probe，确认
+    project-source 路径已输出 `sema.type-mismatch`。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加 imported inherited project-source
+    regression，以及 installed-source deferred guard。
+  - 新增 `tests/fixtures/imported_inherited_member_type_mismatch_call`，并把
+    `imported-inherited-member-type-mismatch-call-check` 纳入 `build/verify_local.sh` 与 final envelope。
+  - 本批没有修改 `compiler/sema/np_semantic_analyzer.pas`；核心语义逻辑保持不变。
+- Verification:
+  - Probe：临时 fixture 的 stage0 build 已输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.type-mismatch`、
+    `diagnostic-message=argument type mismatch for "Pick"`。
+  - GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/imported_inherited_member_type_mismatch_call/imported_inherited_member_type_mismatch_call_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.type-mismatch`、
+    `diagnostic-message=argument type mismatch for "Pick"`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `imported-inherited-member-type-mismatch-call-check=pass`、
+    `importedInheritedMemberTypeMismatchCallCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - “probe 后 promotion”连续两轮成立，说明在 imported inherited 相邻边界上，这已经是稳定可靠的提速手法，
+    而不是一次偶然命中。
+  - 后续继续沿 sema diagnostics 家族切批时，可以优先 probe `unknown-member` 这类仍未接进 inherited
+    official gate 的相邻边界，再决定是否要动实现。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 116 imported inherited member wrong argument count diagnostics)
 

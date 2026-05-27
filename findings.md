@@ -141,6 +141,16 @@
   `tests/fixtures/imported_inherited_member_wrong_argument_count` 与
   `imported-inherited-member-wrong-argument-count-check`，把这条已存在行为正式纳入 final envelope
   `importedInheritedMemberWrongArgumentCountCheck=pass`。
+- imported inherited `project-source` 的 type-mismatch 在当前实现里也已经天然成立：对
+  `TWorker = class(TBase)` 且 `TBase.Pick(Integer)` 可见的场景，`Worker.Pick(True)` 的 stage0 build
+  会直接输出 `sema.type-mismatch`，不需要再改 `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` type-mismatch 继续保持 deferred；这和 imported exact member /
+  imported inherited wrong-argument-count 的 provenance 策略一致，避免把 incomplete imported truth
+  提前投影成 ordinary type mismatch。
+- Batch 117 新增
+  `tests/fixtures/imported_inherited_member_type_mismatch_call` 与
+  `imported-inherited-member-type-mismatch-call-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedMemberTypeMismatchCallCheck=pass`。
 - 同一家族 sema diagnostics 的加速办法已经更具体了：对只差 provenance / inherited / imported 的相邻
   边界，先做 probe；若能力天然成立，就直接 promotion 到 official gate；只有 probe 失败时才进入最小实现修复。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
