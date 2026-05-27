@@ -136,16 +136,16 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
   `sema.no-matching-overload`，例如当前 class 的 `Pick(True);` 同时面对
   `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
-  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` inherited member-call
-  overload set 同样可用 root-owned 零参内建标量/字符串 function result 作为 stable
-  no-match evidence，例如 `Worker.Pick(Flag);` 中 parent chain 暴露
+  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` bare callable 或
+  inherited member-call overload set 同样可用 root-owned 零参内建标量/字符串 function result
+  作为 stable no-match evidence，例如 `Pick(Flag);` 或 `Worker.Pick(Flag);` 面对
   `Pick(Integer)` / `Pick(AnsiString)` 而 `Flag` 返回 `Boolean`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
   `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
   透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
   inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`，或 imported
-  `project-source` inherited `Worker.Pick(Count);` 同时面对 parent chain 的 `Pick(Integer)`
-  与 `Pick(LongInt)` 且 root-owned `Count` 返回 `Integer`。随后再用同名
+  `project-source` bare `Pick(Count);` / inherited `Worker.Pick(Count);` 同时面对
+  `Pick(Integer)` 与 `Pick(LongInt)` 且 root-owned `Count` 返回 `Integer`。随后再用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
@@ -363,14 +363,17 @@ candidate collection
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target method 的场景
-  - imported `installed-source` inherited member-call overload set 继续 deferred，即使同形状
+  - 也用于 imported `project-source` bare procedure/function overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
+    target callable 的场景
+  - imported `installed-source` bare callable / inherited member-call overload set 继续 deferred，即使同形状
     function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence 且所有 target signature 都不匹配的场景
-  - imported `installed-source` inherited member-call overload set 继续 deferred，即使同形状
+  - imported `installed-source` bare callable / inherited member-call overload set 继续 deferred，即使同形状
     argument evidence 已可推断，也不提前发 ordinary no-match diagnostic
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类

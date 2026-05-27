@@ -254,8 +254,8 @@ target 或 inherited direct member-call target 时，同一类 root-owned functi
 deferred，不投影为 ordinary `sema.type-mismatch`；
 当 imported `project-source` bare callable 或 inherited member-call overload set 的所有同 arity target 都不匹配时，
 同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；当同一
-imported inherited overload set 出现 compact signature collision 且无法唯一选择时，同一类
-root-owned function-result evidence 会投影为 `sema.ambiguous-overload`；无法推断、
+imported `project-source` bare callable 或 inherited overload set 出现 compact signature collision 且无法唯一选择时，
+同一类 root-owned function-result evidence 会投影为 `sema.ambiguous-overload`；无法推断、
 imported `installed-source` target 或 inherited installed-source overload set、imported/带参/member function result
 或 source provenance 不可信的 signature 不唯一时仍保守不绑定；对应 installed-source inherited
 function-result ambiguity 用 `semantic-call-bindings-check` 的 focused guard 固定，不用普通 stage0
