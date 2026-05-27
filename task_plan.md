@@ -8408,7 +8408,7 @@ source-surface gate 和 full verification 吸收。
 - [x] 同步 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
 - [x] 跑 fresh `bash build/verify_local.sh`
-- [ ] 复盘、提交、合并回 `main`，再清理 worktree / 分支
+- [x] 复盘、提交、合并回 `main`，再清理 worktree / 分支
 
 ### Audit Checklist
 
@@ -8486,3 +8486,19 @@ source-surface gate 和 full verification 吸收。
   - `make -C core benchmarks` 输出 `All benchmarks passed.`。
   - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
     `human-summary=local verification passed`。
+- Merge closeout:
+  - worktree commit `45f867a platform: ownerize posix thread state`。
+  - feature 分支合入最新 `main@9793e94` 后生成整合提交 `a49af35`，无冲突，并保留主线新增
+    collections/mem contract tests。
+  - `main` 已 fast-forward 到 `a49af35`。
+  - 合并后主线 focused verification:
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+      输出 `1 total, 1 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
+      输出 `8 total, 8 passed, 0 failed`。
+    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+      输出 `simulated-host-compile-matrix-status=pass`。
+    - `git diff --check` 无输出。
+  - `codex/platform-thread-owner-audit` worktree 与分支已删除。
+  - 注意：主线仍有非本轮 collections WIP（`core/src/nextpas.core.collections.deque.pas` 与
+    `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`），本轮未修改、未提交。

@@ -93,8 +93,14 @@ platform/core 工作流保留下来的已完成记录。
     拥有 lifecycle helper，`platform.thread` 只维持 public handle contract。
   - Linux 是真实 runtime proof；Darwin/Android/FreeBSD/generic Unix 仍是 simulated compile-only
     proof，不能包装成真实 runtime 证据。
-  - 下一步收口动作是 diff hygiene、提交分支、检查 `main` 是否可安全合并，然后在合并后复验和清理
-    worktree / 分支。
+  - 收口完成：commit `45f867a` 先在 isolated worktree 生成；feature 分支合入最新
+    `main@9793e94` 后生成整合提交 `a49af35`；`main` 已 fast-forward 到 `a49af35`。
+  - 合并后在主线重跑：
+    `test_platform_thread_host_ffi_surface`、`test_platform_thread`、
+    `test_platform_simulated_host_compile_matrix` 和 `git diff --check`，均通过。
+  - `codex/platform-thread-owner-audit` worktree 与分支已删除。
+  - 主线仍存在非本轮 collections WIP：`core/src/nextpas.core.collections.deque.pas` 与
+    `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`。本轮 platform 收口没有触碰这些文件。
 
 ## Session: 2026-05-27 (platform behavior tests abstract API boundary)
 
