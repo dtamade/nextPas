@@ -291,7 +291,9 @@ same path 的 bare implicit-self method call 若 stable argument signature 与 r
 若同一路径找到多个 method target，且 compact signature collision 后仍无法唯一选择，
 会失败为 `sema.ambiguous-overload`（例如当前 class 的 `Pick(1);` 同时面对
 `Pick(Integer)` / `Pick(LongInt)`，或 inherited `Touch(1);` 同时面对
-`Touch(Integer)` / `Touch(LongInt)`），同样不会注册错误 binding。
+`Touch(Integer)` / `Touch(LongInt)`，或 imported `project-source` unit method body 中
+`TWorker.Run` 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`），
+同样不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
@@ -944,7 +946,9 @@ bare implicit-self wrong argument count 断言
 unit method body bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
 unit method body bare implicit-self no matching overload 断言
-`semantic-analysis-failed` + `sema.no-matching-overload`，再对
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body bare implicit-self ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、

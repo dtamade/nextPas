@@ -166,7 +166,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
   `sema.type-mismatch`；同一路径中的 stable literal no-match（例如
   `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
-  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`
+  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径中的 stable literal
+  ambiguity（例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
+  `Pick(Integer)` 与 `Pick(LongInt)`）会输出 `sema.ambiguous-overload`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -397,6 +399,10 @@ candidate collection
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的同名同 arity多候选，但 compact signature collision 后无法唯一选择
+    target method 的场景；例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
+    `Pick(Integer)` 与 `Pick(LongInt)`，该路径不会注册失败 `member-call` binding
   - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target method 的场景
