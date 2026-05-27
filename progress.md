@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,53 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 114 imported inherited member no matching overload diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 imported `project-source` inherited direct member-call 的 stable signature no-match 从 deferred
+    推进到 `sema.no-matching-overload`。
+- Baseline:
+  - Batch 110 已覆盖 imported exact class member no matching overload。
+  - Batch 113 已覆盖 root-owned inherited member no matching overload。
+  - 旧实现把 parent-chain no-match gate 限定为 exact receiver 或 root-owned parent，因此 imported
+    inherited `Worker.Pick(True)` 仍保持 deferred。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续沿用同一家族 sema diagnostics 连续切批的提速策略：
+    `单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify -> review -> commit`。
+  - 先在 `tests/semantic/test_semantic_call_bindings.pas` 增加 imported inherited project-source
+    no-match focused regression，以及 installed-source deferred guard。
+  - RED focused test 失败在
+    `semantic-call-bindings-failure=missing-imported-inherited-member-no-matching-overload-diagnostic`，
+    证明当前 imported parent-chain no-match 还没进入 structured diagnostic。
+  - `MethodSymbolIdForClassTypeMember(...)` 现在把 parent-chain `AAllowNoMatchingOverloadDiagnostic`
+    收紧为：exact receiver 继续允许；parent depth 对 root-owned 或 imported `project-source`
+    current type 放开；installed-source 继续保守 deferred。
+  - 新增 `tests/fixtures/imported_inherited_member_no_matching_overload`，并把
+    `imported-inherited-member-no-matching-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED：focused semantic test 失败在
+    `semantic-call-bindings-failure=missing-imported-inherited-member-no-matching-overload-diagnostic`。
+  - GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/imported_inherited_member_no_matching_overload/imported_inherited_member_no_matching_overload_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.no-matching-overload`、
+    `diagnostic-message=no matching overload for "Pick"`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `imported-inherited-member-no-matching-overload-check=pass`、
+    `importedInheritedMemberNoMatchingOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 imported `project-source` inherited member no-match；imported `installed-source`
+    inherited no-match、exact receiver own-method mismatch 穿透 parent 的代偿路径、default parameter
+    ranking、implicit conversion、visibility checking 与更复杂 receiver form 继续 deferred。
+  - 后续继续沿同一家族 sema diagnostics 切批，优先挑只差 provenance / inherited / imported
+    guard 的热点，最大化复用现成 RED 和 verify 模板。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 113 inherited member no matching overload diagnostics)
 

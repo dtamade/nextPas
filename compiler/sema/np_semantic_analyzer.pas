@@ -1744,9 +1744,12 @@ begin
       AHasTypeMismatchEvidence,
       (Depth = 0) or (
         TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) and
-        SameText(
-          TypeSymbol.OwnerUnitId,
-          NormalizeUnitIdentity(FUnitGraph.RootName)
+        (
+          SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or
+          ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId)
         )
       ),
       MethodNameFound,
