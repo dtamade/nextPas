@@ -117,8 +117,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
   set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发
   `sema.type-mismatch`，同一条 failure kind 也会从 class method body 的 bare implicit-self
-  fallback 透传出来，例如 inherited `Touch(True);`；receiver exact type 上的 root-owned 多候选同 arity 但稳定
-  argument signature 全不匹配时发 `sema.no-matching-overload`；若同 arity 有多个候选，则用当前可推断的
+  fallback 透传出来，例如 inherited `Touch(True);`；receiver exact type 或 class method body bare
+  implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
+  `sema.no-matching-overload`；若同 arity 有多个候选，则用当前可推断的
   argument signature 做唯一匹配，并用同名 `TClass.Method` body declaration 的 argument count /
   signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
@@ -312,6 +313,9 @@ candidate collection
     当前 argument signature 来自稳定事实且与 target param signature 明确不兼容的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     单一 target，但 stable argument signature 与 target param signature 明确不兼容的场景
+- `sema.no-matching-overload`
+  - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
+    同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景

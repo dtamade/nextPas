@@ -260,6 +260,9 @@ same path 的 inherited bare implicit-self method call 若 stable argument signa
 `Touch(Integer)`），且不会注册错误 binding。
 若同一路径找到 inherited method name 但 arity 不兼容，会失败为
 `sema.wrong-argument-count`（例如 `Touch;` 调 `Touch(Integer)`），同样不会注册错误 binding。
+若同一路径找到多个 inherited method target 但 stable argument signature 全不匹配，会失败为
+`sema.no-matching-overload`（例如 `Touch(True);` 同时面对 `Touch(Integer)` /
+`Touch(AnsiString)`），同样不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
