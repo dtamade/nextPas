@@ -102,6 +102,17 @@
 - `Filter` returns a new vector and `Retain` mutates in place. `Any` and `All` are natural short-circuit sequence predicates. `Dedup` and `DedupBy` are natural adjacent-duplicate vector operations.
 - Zero-count batch operations should be successful no-ops where no element pointer is semantically required. This should be applied consistently across `TryPop`, `TryPeek`, copy/remove helpers, and future range operations.
 
+## 2026-05-28: naming cleanup batch
+
+- Naming cleanup is required for framework polish, but it should be mechanical and complete rather than scattered across unrelated refactors.
+- `Unchecked` is the final spelling for unsafe fast-path methods. Rename all copied `UnChecked` identifiers and references as one batch.
+- `Overwrite` is the final spelling. Rename copied `OverWrite` identifiers and references as one batch.
+- Algorithm names should use normal PascalCase word boundaries: `FindIf`, `FindIfNot`, `FindLastIf`, `FindLastIfNot`, `CountIf`, `ReplaceIf`. Copied `FindIF`, `CountIF`, and `ReplaceIF` spellings are transitional.
+- Type spelling should consistently use `SizeUInt`, not `SizeUint`.
+- Parameter declarations should follow project spacing, for example `aIndex: SizeUInt` instead of `aIndex:SizeUInt`.
+- The batch must update public interfaces, implementation method declarations/bodies, comments/docs, tests, examples, and facade references together, then run compile verification. Partial renames will break interface implementation matching in FPC.
+- Pure comment cleanup can ride with the matching identifier batch when it prevents stale docs; unrelated prose cleanup should wait.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.

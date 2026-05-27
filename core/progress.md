@@ -21,6 +21,7 @@
 - Agreed to preserve the distinct block operation semantics: `Overwrite` writes inside an existing range without changing `Count`, `Read` copies out, `Copy` copies internally, `Write` may extend using normal growth, and `WriteExact` may extend with exact capacity growth. `Overwrite` belongs to contiguous array capability; `Write`/`WriteExact` belong to growable vector-style capability.
 - Agreed on size/capacity vocabulary: `Resize` changes logical `Count`; `EnsureCapacity` ensures absolute capacity; `Reserve` ensures append headroom (`Count + Additional`); `Exact` variants bypass the growth strategy; shrink/free-buffer operations belong to growable vector-style containers, not the array capability base.
 - Reviewed `IVec<T>` dynamic sequence methods and recorded the interface direction: preserve the rich Vec sequence API, keep `Push`/`Pop`/`Peek`, distinguish `Delete` from `RemoveAt`, use explicit swap-removal naming for order-unstable extraction, keep `Drain`/`SplitOff`/`Splice`/`Retain`/`Filter`/`Dedup`, and regularize zero-count batch no-op behavior.
+- Recorded the naming cleanup batch: `UnChecked` to `Unchecked`, `OverWrite` to `Overwrite`, `FindIF`/`CountIF`/`ReplaceIF` to `FindIf`/`CountIf`/`ReplaceIf`, `SizeUint` to `SizeUInt`, and parameter spacing cleanup. This should be done as a complete mechanical refactor with compile verification.
 
 ## Next
 
