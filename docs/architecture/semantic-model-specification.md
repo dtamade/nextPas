@@ -164,7 +164,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `procedure TWorker.Run; begin Pick; end;` 调 `Pick(Value: Integer)`）会输出
   `sema.wrong-argument-count`；同一路径中的 stable literal mismatch（例如
   `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
-  `sema.type-mismatch`
+  `sema.type-mismatch`；同一路径中的 stable literal no-match（例如
+  `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
+  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -384,6 +386,10 @@ candidate collection
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的同名同 arity多候选，但 stable argument signature 与全部 target param
+    signature 都不兼容的场景；例如 `procedure TWorker.Run; begin Pick(True); end;`
+    同时面对 `Pick(Integer)` 与 `Pick(AnsiString)`，该路径不会注册失败 `member-call` binding
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景

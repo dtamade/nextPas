@@ -178,6 +178,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   official gate。
 - imported `project-source` unit method body 的 bare implicit-self type-mismatch 已进入
   official gate。
+- imported `project-source` unit method body 的 bare implicit-self no-matching-overload 已进入
+  official gate。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
   imported/member target no-match、non-project-source imported target type mismatch，以及非 source-owned /
   typecast / function-pointer 等更复杂 callable 边界。
@@ -206,6 +208,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   implicit-self arity miss。
 - `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self stable literal mismatch。
+- `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self stable literal no-match。
 - 语义错误覆盖仍不完整。
 
 下一步证据：

@@ -608,6 +608,23 @@
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
   也没有修改 `core/`。
+- Batch 179 沿同一 imported `project-source` unit method body surface 继续补
+  bare implicit-self no-matching-overload：root source `uses Worker;`，imported `Worker.pas`
+  的 `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
+  `Pick(AnsiString)` 时，必须失败为 `sema.no-matching-overload`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 179 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然复用 stable literal no-match evidence；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 179 新增 `tests/fixtures/imported_unit_body_implicit_self_no_matching_overload` 与
+  `imported-unit-body-implicit-self-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass"`。
+- Batch 179 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
