@@ -15,10 +15,10 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 108 Imported Single-target Type Mismatch Diagnostics；Batch 107 Member No Matching
-Overload Diagnostics；Batch 106 Imported No Matching
-Overload Diagnostics、Batch 105 No Matching Overload Diagnostics、Batch 104 Function Result Call Type
-Mismatch Evidence 已完成；并行收口包含
+当前最新本轮为 Batch 112 Imported Member Wrong Argument Count Diagnostics；Batch 111 Imported Member
+Unknown Member Diagnostics；Batch 110 Imported Member No Matching Overload Diagnostics、Batch 109 Imported
+Member Single-target Type Mismatch Diagnostics、Batch 108 Imported Single-target Type Mismatch Diagnostics、
+Batch 107 Member No Matching Overload Diagnostics；并行收口包含
 Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
 Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
@@ -27,6 +27,70 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 112 Imported Member Wrong Argument Count Diagnostics
+
+### Goal
+
+把 `sema.wrong-argument-count` 从 root-owned direct member-call 推进到第一条 imported direct
+member-call 安全边界：当 receiver type 已知、imported `project-source` unit 的 exact class / parent chain
+里存在同名 method，但当前 argument count 与任何 visible member target 都不匹配时，发出
+`sema.wrong-argument-count`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1, 2);`，其中 imported project-source `TWorker.Pick(Value: Integer)`
+  可见时，必须失败为 `sema.wrong-argument-count`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member wrong-argument-count 继续 deferred，不注册错误 binding，也不提前诊断。
+- `build/verify_local.sh` 新增 `imported-member-wrong-argument-count-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `importedMemberWrongArgumentCountCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+
+### Architecture Decision
+
+这是 imported member wrong-argument-count 的第一条 source-owned 切片，不是完整 Pascal member resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class / inherited class direct member-call arity miss。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 runtime baseline / helper surface 的
+  incomplete truth 误报成 ordinary arity error。
+- imported/inherited member 其他 deferred 边界、record/property/array/deref receiver、implicit
+  conversion、default parameter lowering/ranking、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与模板化快节奏执行法
+- [x] RED：新增 imported project-source member wrong-argument-count focused regression
+- [x] RED：新增 imported installed-source member wrong-argument-count deferred guard
+- [x] 在 exact member lookup 的 `wrong-argument-count` 分支增加 imported owner provenance guard
+- [x] 新增 `tests/fixtures/imported_member_wrong_argument_count` 与
+  `imported-member-wrong-argument-count-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-imported-member-wrong-argument-count-diagnostic:sema.wrong-argument-count`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused: `nextpas build tests/fixtures/imported_member_wrong_argument_count/imported_member_wrong_argument_count_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-member-wrong-argument-count-check=pass`、
+  `importedMemberWrongArgumentCountCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member wrong-argument-count 纳入 diagnostics
+- 不把 default parameter ranking / implicit conversion / visibility checking 纳入这轮
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 111 Imported Member Unknown Member Diagnostics
 

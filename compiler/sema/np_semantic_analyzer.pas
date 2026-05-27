@@ -1634,7 +1634,12 @@ begin
   end;
   if SymbolMatchCount = 0 then
   begin
-    if AMethodNameFound then
+    if AMethodNameFound and (
+      SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId)
+    ) then
       AResolutionFailureKind := 'wrong-argument-count';
     Exit;
   end;

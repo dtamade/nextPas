@@ -1,12 +1,12 @@
 # Progress Log
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
-2026-05-26 记录为准。
+2026-05-27 记录为准。
 
-当前最新本轮为 Batch 108 imported single-target type mismatch diagnostics；Batch 107 member no matching
-overload diagnostics；Batch 106 imported no matching
-overload diagnostics、Batch 105 no matching overload diagnostics、Batch 104 function result call type
-mismatch evidence 已完成；并行收口包含
+当前最新本轮为 Batch 112 imported member wrong argument count diagnostics；Batch 111 imported member
+unknown-member diagnostics；Batch 110 imported member no matching overload diagnostics、Batch 109 imported
+member single-target type mismatch diagnostics、Batch 108 imported single-target type mismatch diagnostics、
+Batch 107 member no matching overload diagnostics 已完成；并行收口包含
 platform.thread L0 surface coverage、platform.time L0 surface coverage 与 platform API boundary cleanup；
 Batch 103 object release
 invalid trap policy、Batch 102 object release invalid boundary、Batch 101 object release poison contract、
@@ -16,6 +16,47 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 112 imported member wrong argument count diagnostics)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 imported direct member-call 的 source-owned arity miss 正式纳入 `sema.wrong-argument-count`，
+    同时保持 `installed-source` imported member wrong-argument-count 继续 deferred。
+- Baseline:
+  - Batch 78 已覆盖 root-owned direct member wrong argument count。
+  - Batch 109-111 已覆盖 imported member `type-mismatch` / `no-matching-overload` / `unknown-member`，
+    但 imported class receiver 的 `Worker.Pick(1, 2)` 还没有进入结构化 gate，且 installed-source
+    同场景会过早报 `sema.wrong-argument-count`。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续使用模板化快节奏执行法：
+    `单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify -> review -> commit`。
+  - 先扩展 `tests/semantic/test_semantic_call_bindings.pas`：新增 imported project-source
+    member wrong-argument-count regression，以及 installed-source deferred guard。
+  - RED focused test 失败在
+    `semantic-call-bindings-failure=unexpected-installed-imported-member-wrong-argument-count-diagnostic:sema.wrong-argument-count`，
+    证明当前 imported member arity miss 对 installed-source 过宽报错。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 的 `SymbolMatchCount = 0 / AMethodNameFound` 分支
+    现在新增 owner provenance guard：只有 root source 或 imported `project-source` owner 才允许
+    落 `wrong-argument-count`，其余 imported owner 继续 deferred。
+  - 新增 `tests/fixtures/imported_member_wrong_argument_count`，并把
+    `imported-member-wrong-argument-count-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED: focused semantic test 失败在
+    `semantic-call-bindings-failure=unexpected-installed-imported-member-wrong-argument-count-diagnostic:sema.wrong-argument-count`。
+  - GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Stage0 focused: `nextpas build tests/fixtures/imported_member_wrong_argument_count/imported_member_wrong_argument_count_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+    `diagnostic-message=wrong number of arguments for "Pick"`。
+  - Full: fresh `bash build/verify_local.sh` 输出
+    `imported-member-wrong-argument-count-check=pass`、
+    `importedMemberWrongArgumentCountCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 imported `project-source` direct member-call 的 arity miss；`installed-source` /
+    RTL helper 继续 deferred，default parameter ranking、implicit conversion、visibility checking 与
+    更复杂 receiver form 继续留在后续轮次。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 111 imported member unknown-member diagnostics)
 

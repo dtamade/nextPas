@@ -80,6 +80,19 @@
   也不会把 `System` / runtime baseline 或 helper surface 提前报成 ordinary unknown member。
 - Batch 111 新增 `imported-unknown-member-check`，用 dedicated fixture 固定 stage0
   `sema.unknown-member` projection 与 final envelope `importedUnknownMemberCheck=pass`。
+- Batch 112 把 imported direct member-call 的 source-owned arity miss 正式纳入 gate：receiver type 已知、
+  imported `project-source` unit 的 exact class / parent chain 存在同名 method，但没有任何
+  visible member target 的参数个数与 call 匹配时，`Worker.Pick(1, 2)` 会失败为
+  `sema.wrong-argument-count`，且不注册失败 `member-call` binding。
+- Batch 112 同时把 imported `installed-source` member wrong-argument-count 收回 deferred；它不会错误
+  binding，也不会把 helper / runtime baseline 的 incomplete imported truth 提前报成 ordinary
+  arity error。
+- `MethodSymbolIdForExactClassTypeMember(...)` 的 `wrong-argument-count` 分支现在也受 owner provenance
+  guard 约束：只有 root source 或 imported `project-source` owner 才允许落诊断，`installed-source`
+  继续保守 deferred。
+- Batch 112 新增 `imported-member-wrong-argument-count-check`，用 dedicated fixture 固定 stage0
+  `sema.wrong-argument-count` projection 与 final envelope
+  `importedMemberWrongArgumentCountCheck=pass`。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。
