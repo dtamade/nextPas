@@ -207,6 +207,7 @@ type
     function  IsFull: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  IsValidIndex(aIndex: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  IsEmpty: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
     procedure EnsureCapacity(aRequiredCapacity: SizeUInt);
     procedure Grow(aNewCapacity: SizeUInt);
     function  CalcGrowSize(aCurrentSize, aRequiredSize: SizeUInt): SizeUInt;
@@ -1060,6 +1061,13 @@ begin
   Result := aIndex < FCount;
 end;
 
+function TVecDeque.RequireAddCount(aBase, aAdditional: SizeUInt; const aCallerName: string): SizeUInt;
+begin
+  if IsAddOverflow(aBase, aAdditional) then
+    raise EOverflow.CreateFmt('%s: size overflow', [aCallerName]);
+  Result := aBase + aAdditional;
+end;
+
 procedure TVecDeque.EnsureCapacity(aRequiredCapacity: SizeUInt);
 var
   LCurrentCapacity: SizeUInt;
@@ -1308,8 +1316,10 @@ var
   i: SizeUInt;
   LPtr: PByte;
   LPhysicalIndex: SizeUInt;
+  LRequiredCapacity: SizeUInt;
 begin
-  EnsureCapacity(FCount + aCount);
+  LRequiredCapacity := RequireAddCount(FCount, aCount, 'TVecDeque.Insert');
+  EnsureCapacity(LRequiredCapacity);
 
   if aIndex < FCount then
     MoveElementsRight(aIndex, aCount);
@@ -1782,11 +1792,12 @@ var
   LSrcPtr1, LSrcPtr2: PElement;
   LSrcLen1, LSrcLen2: SizeUInt;
   LSnapshot: TVecDeque;
+  LRequiredCapacity: SizeUInt;
 begin
   if (aSrc = nil) or (aCount = 0) then Exit;
 
   // 验证范围
-  if aSrcIndex + aCount > aSrc.Count then
+  if (aSrcIndex > aSrc.Count) or (aCount > aSrc.Count - aSrcIndex) then
     raise EOutOfRange.Create('Source index or count out of range');
 
   if aSrc = Self then
@@ -1802,7 +1813,8 @@ begin
   end;
 
   // 提前扩容，避免 PushBack 过程中重新分配导致指针失效
-  EnsureCapacity(FCount + aCount);
+  LRequiredCapacity := RequireAddCount(FCount, aCount, 'TVecDeque.AppendFrom');
+  EnsureCapacity(LRequiredCapacity);
 
   // 获取源的两段切片
   aSrc.GetTwoSlices(aSrcIndex, aCount, LSrcPtr1, LSrcLen1, LSrcPtr2, LSrcLen2);
@@ -2732,6 +2744,12 @@ function TVecDeque.TryReserve(aAdditional: SizeUint): Boolean;
 var
   LRequiredCapacity: SizeUInt;
 begin
+  if IsAddOverflow(FCount, aAdditional) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
   LRequiredCapacity := FCount + aAdditional;
   if LRequiredCapacity <= FBuffer.GetCount then
   begin
@@ -2955,6 +2973,7 @@ var
   LNewHead: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
   LSrcPtr: Pointer;
+  LRequiredCapacity: SizeUInt;
 
 
 
@@ -2964,8 +2983,9 @@ begin
     Exit;
 
   // 检查是否需要扩容（双指针设计不需要预留空位，保持与 IsFull/PushBack 一致）
-  if FCount + LElementCount > FBuffer.GetCount then
-    EnsureCapacity(FCount + LElementCount);
+  LRequiredCapacity := RequireAddCount(FCount, LElementCount, 'TVecDeque.PushFront');
+  if LRequiredCapacity > FBuffer.GetCount then
+    EnsureCapacity(LRequiredCapacity);
 
   LSrcPtr := @aElements[Low(aElements)];
 
@@ -3001,6 +3021,7 @@ var
   LFirstPartSize, LSecondPartSize: SizeUInt;
   LSrcPtr: PByte;
   LElementSize: SizeUInt;
+  LRequiredCapacity: SizeUInt;
 
   procedure CopyReversedBlock(aSrcPtr: Pointer; aDstIndex: SizeUInt; aCount: SizeUInt);
   var
@@ -3027,8 +3048,9 @@ begin
     raise EInvalidArgument.Create('TVecDeque.PushFront: source overlaps with collection memory');
 
   // 检查是否需要扩容
-  if FCount + aElementCount > FBuffer.GetCount then
-    EnsureCapacity(FCount + aElementCount);
+  LRequiredCapacity := RequireAddCount(FCount, aElementCount, 'TVecDeque.PushFront');
+  if LRequiredCapacity > FBuffer.GetCount then
+    EnsureCapacity(LRequiredCapacity);
 
   LElementSize := GetElementSize;
   LSrcPtr := PByte(aSrc);
@@ -3077,14 +3099,16 @@ var
   LAvailableSpace: SizeUInt;
   LFirstPartSize, LSecondPartSize: SizeUInt;
   LSrcPtr: Pointer;
+  LRequiredCapacity: SizeUInt;
 begin
   LElementCount := Length(aElements);
   if LElementCount = 0 then
     Exit;
 
   // 检查是否需要扩容
-  if FCount + LElementCount > FBuffer.GetCount then
-    EnsureCapacity(FCount + LElementCount);
+  LRequiredCapacity := RequireAddCount(FCount, LElementCount, 'TVecDeque.PushBack');
+  if LRequiredCapacity > FBuffer.GetCount then
+    EnsureCapacity(LRequiredCapacity);
 
   // 计算尾部到缓冲区末尾的可用空间
   LAvailableSpace := FBuffer.GetCount - FTail;
@@ -3120,6 +3144,7 @@ procedure TVecDeque.PushBack(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   LFirstPartSize, LSecondPartSize: SizeUInt;
   LAvailableSpace: SizeUInt;
+  LRequiredCapacity: SizeUInt;
 begin
   if aSrc = nil then
   begin
@@ -3135,8 +3160,9 @@ begin
     raise EInvalidArgument.Create('TVecDeque.PushBack: source overlaps with collection memory');
 
   // 检查是否需要扩容
-  if FCount + aElementCount > FBuffer.GetCount then
-    EnsureCapacity(FCount + aElementCount);
+  LRequiredCapacity := RequireAddCount(FCount, aElementCount, 'TVecDeque.PushBack');
+  if LRequiredCapacity > FBuffer.GetCount then
+    EnsureCapacity(LRequiredCapacity);
 
   // 计算尾部到缓冲区末尾的可用空间
   LAvailableSpace := FBuffer.GetCount - FTail;
@@ -3293,7 +3319,8 @@ end;
 
 function TVecDeque.ShouldGrow(aAdditionalElements: SizeUInt): Boolean;
 begin
-  Result := (FCount + aAdditionalElements) > FBuffer.GetCount;
+  Result := IsAddOverflow(FCount, aAdditionalElements) or
+            (FCount + aAdditionalElements > FBuffer.GetCount);
 end;
 
 function TVecDeque.CalculateOptimalCapacity(aRequiredSize: SizeUInt): SizeUInt;
@@ -6506,6 +6533,8 @@ procedure TVecDeque.Insert(aIndex: SizeUInt; const aArray: array of T);
 var
   i: SizeUInt;
   LPhysicalIndex: SizeUInt;
+  LInsertCount: SizeUInt;
+  LRequiredCapacity: SizeUInt;
 begin
   { 在指定位置插入数组 }
   if Length(aArray) = 0 then
@@ -6514,12 +6543,15 @@ begin
   if aIndex > FCount then
     raise EOutOfRange.CreateFmt('TVecDeque.Insert: index %d out of range [0..%d]', [aIndex, FCount]);
 
+  LInsertCount := SizeUInt(Length(aArray));
+  LRequiredCapacity := RequireAddCount(FCount, LInsertCount, 'TVecDeque.Insert');
+
   // 确保有足够容量
-  EnsureCapacity(FCount + SizeUInt(Length(aArray)));
+  EnsureCapacity(LRequiredCapacity);
 
   // 移动现有元素
   if aIndex < FCount then
-    MoveElementsRight(aIndex, SizeUInt(Length(aArray)));
+    MoveElementsRight(aIndex, LInsertCount);
 
   // 插入数组元素 - 优化：减少 GetPhysicalIndex 调用
   for i := 0 to High(aArray) do
@@ -6528,7 +6560,7 @@ begin
     FBuffer.PutUnChecked(LPhysicalIndex, aArray[i]);
   end;
 
-  Inc(FCount, SizeUInt(Length(aArray)));
+  Inc(FCount, LInsertCount);
   FTail := WrapAdd(FHead, FCount);
 end;
 
@@ -6538,6 +6570,7 @@ var
   LIter: TPtrIter;
   LCopied: SizeUInt;
   LPhysicalIndex: SizeUInt;
+  LRequiredCapacity: SizeUInt;
 begin
   { 从集合插入元素 }
   if aCollection = nil then
@@ -6554,7 +6587,8 @@ begin
   if aStartIndex >= LTotal then Exit;
   LInsertCount := LTotal - aStartIndex;
 
-  EnsureCapacity(FCount + LInsertCount);
+  LRequiredCapacity := RequireAddCount(FCount, LInsertCount, 'TVecDeque.Insert');
+  EnsureCapacity(LRequiredCapacity);
 
   // 为插入腾出空间
   if aIndex < FCount then

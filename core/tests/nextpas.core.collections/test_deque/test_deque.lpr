@@ -259,6 +259,36 @@ begin
   end;
 end;
 
+procedure TestAppendFromRangeOverflowRaises;
+var
+  LSrc: TIntVecDeque;
+  LDst: TIntVecDeque;
+  LRaised: Boolean;
+begin
+  LSrc := TIntVecDeque.Create;
+  LDst := TIntVecDeque.Create;
+  try
+    LSrc.PushBack(1);
+    LDst.PushBack(10);
+
+    LRaised := False;
+    try
+      LDst.AppendFrom(LSrc, High(SizeUInt), 2);
+    except
+      on E: EOutOfRange do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'overflowing source range should raise EOutOfRange');
+    CheckEqual(Int64(1), Int64(LSrc.Count), 'source count preserved');
+    CheckEqual(Int64(1), Int64(LDst.Count), 'destination count preserved');
+    CheckEqual(Int64(10), Int64(LDst.Get(0)), 'destination contents preserved');
+  finally
+    LDst.Free;
+    LSrc.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -276,5 +306,6 @@ begin
   T.Run('LoadFromPointer nil failure keeps contents', @TestLoadFromPointerNilFailureKeepsContents);
   T.Run('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
   T.Run('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
+  T.Run('AppendFrom range overflow raises', @TestAppendFromRangeOverflowRaises);
   T.Summary;
 end.
