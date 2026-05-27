@@ -47,7 +47,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-28 (platform host abi wave 5 environment)
 
-- **Status:** ready for commit and merge refresh
+- **Status:** completed; merged and cleaned up
 - Goal tree:
   - `G3: RTL、core 和 framework`
   - `G7: FreePascal compatibility 和生态迁移`
@@ -124,6 +124,30 @@ platform/core 工作流保留下来的已完成记录。
     `core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/Makefile` 与
     `test_platform_host_abi_wave5_env.lpr`。
   - `.nextpas`、`.sisyphus`、`core/build/projects` 等验证产物未进入待提交列表。
+- Integration closeout:
+  - Feature commit `7c4db4a platform: add host environment ABI wave 5` 已从
+    `codex/platform-host-abi-wave5-env` fast-forward merge 到 `main`。
+  - Post-merge focused gate:
+    `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`
+    输出 `5 total, 5 passed, 0 failed`。
+  - Post-merge build/test/example/benchmark:
+    `make -C core build` 输出 units compile on demand；
+    `make -C core test` 输出 `All tests passed`；
+    `make -C core examples` 输出 `All examples compiled`；
+    `make -C core benchmarks` 输出 `All benchmarks passed`。
+  - Post-merge official gate: fresh `bash build/verify_local.sh` 输出
+    `verify-local=pass`、`human-summary=local verification passed`，final envelope
+    包含 `corePlatformHostAbiWave5EnvCheck":"pass"`。
+  - 临时 worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
+    已删除，分支 `codex/platform-host-abi-wave5-env` 已删除，`git worktree prune` 已执行。
+  - 复盘：本轮把 environment raw ABI 留在 host-owned `posix/windows` FFI surface，
+    没有创建 `platform.env` public contract，也没有把 raw OS API 误包装成 runtime unit test。
+    跨平台结论仍需诚实：Linux runtime 已实际运行；Windows 是 Win64 compile-only；Darwin /
+    Android / FreeBSD / generic Unix 是 simulated-host compile matrix 和 source evidence。
+  - 下一步：从 latest `main` 新开下一批 platform host ABI wave，优先评估 process/file descriptor
+    或 filesystem metadata 里仍缺的高复用 raw ABI；继续保持 raw ABI inventory 与 public contract
+    分层，不把 feature-specific `.ffi` 带回平台子模块。
 
 ## Session: 2026-05-28 (platform host abi completeness wave 4)
 

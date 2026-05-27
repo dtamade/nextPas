@@ -86,12 +86,13 @@ test 目标。后续统一环境变量 API 应另起 public contract 设计。
 
 ### Status
 
-Ready for commit and merge refresh.
+Completed; merged to `main`, post-merge verified, and temporary worktree/branch cleaned up.
 
 - Worktree:
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
 - Branch: `codex/platform-host-abi-wave5-env`
-- Base: `main@46acefb`
+- Base: `main@46acefb`; rebased over latest `main@af4b8fb`; merged as
+  `main@7c4db4a`
 - Started: 2026-05-28 02:28:43 CST
 - Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
   wave does not touch them.
@@ -106,8 +107,8 @@ Ready for commit and merge refresh.
 - [x] GREEN：更新 evidence index、gap matrix、host ffi declarations/helpers
 - [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
 - [x] focused verification、full verification
-- [ ] commit feature branch and rebase latest `main`
-- [ ] merge, post-merge verification, cleanup
+- [x] commit feature branch and rebase latest `main`
+- [x] merge, post-merge verification, cleanup
 
 ### Audit Checklist
 
@@ -147,17 +148,34 @@ Ready for commit and merge refresh.
     `human-summary=local verification passed`, final envelope contains
     `corePlatformHostAbiWave5EnvCheck":"pass"`.
   - `git diff --check` and `sh -n build/verify_local.sh`: no output.
+- Post-merge main verification:
+  - Fast-forward merged `codex/platform-host-abi-wave5-env` into `main@7c4db4a`.
+  - `git diff --check`: no output.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`:
+    `5 total, 5 passed, 0 failed`.
+  - `make -C core build`: nothing to compile yet; units compile on demand.
+  - `make -C core test`: `All tests passed`.
+  - `make -C core examples`: `All examples compiled`.
+  - `make -C core benchmarks`: `All benchmarks passed`.
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope contains
+    `corePlatformHostAbiWave5EnvCheck":"pass"`.
+  - Temporary worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
+    and branch `codex/platform-host-abi-wave5-env` were removed; `git worktree prune`
+    was run.
 
 ### Recovery Entry
 
-If this session is interrupted, resume here:
+This wave is closed. If work continues, resume from latest `main` and start the next host
+ABI wave from the workflow and gap matrix:
 
 ```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env
+cd /home/dtamade/projects/nextPas
 git status --short --branch
 sed -n '1,190p' task_plan.md
-sed -n '1,140p' progress.md
-tail -n 140 findings.md
+sed -n '1,170p' progress.md
+sed -n '1,80p' findings.md
 ```
 
 ## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 4

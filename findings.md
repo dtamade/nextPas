@@ -30,6 +30,15 @@
 - 本轮仍没有真实 Windows/macOS/Android runtime execution evidence；当前跨平台保证来自 FPC/source
   evidence、host-owned declarations、Win64 compile-only smoke、simulated-host compile matrix 与
   source-surface gates，不能把它包装成所有平台 runtime 已执行。
+- Wave 5 已 fast-forward merge 到 `main@7c4db4a`，并完成 post-merge verification：
+  focused Wave 5 gate `5 total, 5 passed, 0 failed`，`make -C core test` / `examples` /
+  `benchmarks` 通过，fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`，final envelope 保留
+  `corePlatformHostAbiWave5EnvCheck":"pass"`。
+- 临时 worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env` 与分支
+  `codex/platform-host-abi-wave5-env` 已清理。剩余并行 worktree 仍是 collections 与 sema，本轮没有
+  触碰它们。
 
 ## Requirements
 
