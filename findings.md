@@ -346,6 +346,17 @@
   `importedFunctionResultAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
   `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 155 把 Batch 154 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  bare callable overload-set ambiguity 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.ambiguous-overload`，也不注册错误 `call` binding。
+- Batch 155 focused probe 直接 GREEN：bare callable path 的 provenance gate 已经阻止 installed-source
+  bare function-result ambiguity 被提前投影为 ordinary ambiguity；本批不修改 analyzer。
+- installed-source bare function-result ambiguity 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 155 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。

@@ -367,7 +367,8 @@ candidate collection
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target callable 的场景
   - imported `installed-source` bare callable / inherited member-call overload set 继续 deferred，即使同形状
-    function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic
+    function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic；这类
+    provenance guard 用 `semantic-call-bindings-check` 的 focused harness 固定
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
