@@ -6,10 +6,12 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.collections.queue.intf,
-  nextpas.core.collections.deque;
+  nextpas.core.collections.deque,
+  nextpas.core.collections.vecdeque;
 
 type
   IIntDeque = specialize IDeque<Integer>;
+  IIntVecDeque = specialize IVecDeque<Integer>;
   TIntDeque = specialize TArrayDeque<Integer>;
   IStrDeque = specialize IDeque<string>;
   TStrDeque = specialize TArrayDeque<string>;
@@ -168,6 +170,24 @@ begin
   Check(True);
 end;
 
+procedure TestAppendFromZeroCountIsNoOp;
+var
+  LSrc: IIntVecDeque;
+  LDst: IIntVecDeque;
+begin
+  LSrc := TIntDeque.Create as IIntVecDeque;
+  LDst := TIntDeque.Create as IIntVecDeque;
+
+  LSrc.PushBack(10);
+  LDst.PushBack(1);
+
+  LDst.AppendFrom(LSrc, LSrc.Count, 0);
+
+  CheckEqual(Int64(1), Int64(LSrc.Count), 'source count unchanged');
+  CheckEqual(Int64(1), Int64(LDst.Count), 'destination count unchanged');
+  CheckEqual(Int64(1), Int64(LDst.Get(0)), 'destination contents unchanged');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -181,5 +201,6 @@ begin
   T.Run('String type', @TestString);
   T.Run('Reserve', @TestReserve);
   T.Run('Auto free (interface)', @TestAutoFree);
+  T.Run('AppendFrom zero count is no-op', @TestAppendFromZeroCountIsNoOp);
   T.Summary;
 end.

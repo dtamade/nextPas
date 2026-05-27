@@ -5,12 +5,9 @@ unit nextpas.core.collections.deque;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
-  nextpas.core.math,
-  nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.base,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.vecdeque;
 
@@ -39,7 +36,6 @@ type
     TInternalDeque = specialize TVecDeque<T>;
     TQueueIntf = specialize IQueue<T>;
     TVecDequeIntf = specialize IVecDeque<T>;
-    PElement = ^T;
   private
     FDeque: TInternalDeque;
     FAllocator: IAllocator;
@@ -149,23 +145,13 @@ begin
 end;
 
 procedure TArrayDeque.Push(const aSrc: array of T);
-var
-  I: SizeUInt;
 begin
-  for I := 0 to High(aSrc) do
-    FDeque.PushBack(aSrc[I]);
+  FDeque.Push(aSrc);
 end;
 
 procedure TArrayDeque.Push(const aSrc: Pointer; aElementCount: SizeUInt);
-var
-  I: SizeUInt;
-  LElement: T;
 begin
-  for I := 0 to aElementCount - 1 do
-  begin
-    LElement := PElement(aSrc)[I];
-    FDeque.PushBack(LElement);
-  end;
+  FDeque.Push(aSrc, aElementCount);
 end;
 
 function TArrayDeque.Pop(out aElement: T): Boolean;
@@ -251,23 +237,13 @@ begin
 end;
 
 procedure TArrayDeque.PushFront(const aElements: array of T);
-var
-  I: SizeUInt;
 begin
-  for I := High(aElements) downto 0 do
-    FDeque.PushFront(aElements[I]);
+  FDeque.PushFront(aElements);
 end;
 
 procedure TArrayDeque.PushFront(const aSrc: Pointer; aElementCount: SizeUInt);
-var
-  I: SizeUInt;
-  LElement: T;
 begin
-  for I := aElementCount - 1 downto 0 do
-  begin
-    LElement := PElement(aSrc)[I];
-    FDeque.PushFront(LElement);
-  end;
+  FDeque.PushFront(aSrc, aElementCount);
 end;
 
 procedure TArrayDeque.PushBack(const aElement: T);
@@ -276,23 +252,13 @@ begin
 end;
 
 procedure TArrayDeque.PushBack(const aElements: array of T);
-var
-  I: SizeUInt;
 begin
-  for I := 0 to High(aElements) do
-    FDeque.PushBack(aElements[I]);
+  FDeque.PushBack(aElements);
 end;
 
 procedure TArrayDeque.PushBack(const aSrc: Pointer; aElementCount: SizeUInt);
-var
-  I: SizeUInt;
-  LElement: T;
 begin
-  for I := 0 to aElementCount - 1 do
-  begin
-    LElement := PElement(aSrc)[I];
-    FDeque.PushBack(LElement);
-  end;
+  FDeque.PushBack(aSrc, aElementCount);
 end;
 
 function TArrayDeque.PopFront: T;
@@ -392,22 +358,8 @@ begin
 end;
 
 procedure TArrayDeque.Truncate(aLen: SizeUInt);
-var
-  I: SizeUInt;
-  LDefaultVal: T;
 begin
-  if aLen < FDeque.Count then
-  begin
-    // Remove excess elements
-    FDeque.Delete(aLen, FDeque.Count - aLen);
-  end
-  else if aLen > FDeque.Count then
-  begin
-    // Add default elements to reach desired length
-    LDefaultVal := Default(T);
-    for I := FDeque.Count to aLen - 1 do
-      FDeque.PushBack(LDefaultVal);
-  end;
+  FDeque.Truncate(aLen);
 end;
 
 procedure TArrayDeque.Resize(aNewSize: SizeUInt; const aValue: T);
@@ -455,31 +407,8 @@ begin
 end;
 
 function TArrayDeque.SplitOff(aAt: SizeUInt): specialize IQueue<T>;
-var
-  I: SizeUInt;
-  LElement: T;
-  LCountToMove: SizeUInt;
-  LNewDeque: TArrayDeque;
 begin
-  if aAt > FDeque.Count then
-    raise EOutOfRange.CreateFmt('TArrayDeque.SplitOff: aAt %d out of range [0..%d]', [aAt, FDeque.Count]);
-
-  LNewDeque := TArrayDeque.Create(FAllocator);
-  Result := LNewDeque as TQueueIntf;  // Cast to interface
-
-  if aAt < FDeque.Count then
-  begin
-    LCountToMove := FDeque.Count - aAt;
-    LNewDeque.FDeque.Reserve(LCountToMove);
-    // Copy elements from aAt to end to new deque
-    for I := aAt to FDeque.Count - 1 do
-    begin
-      LElement := FDeque.Get(I);
-      LNewDeque.FDeque.PushBack(LElement);
-    end;
-    // Remove moved elements from original deque
-    FDeque.Delete(aAt, LCountToMove);
-  end;
+  Result := FDeque.SplitOff(aAt);
 end;
 
 { IVecDeque 批量操作实现 }
@@ -496,18 +425,29 @@ end;
 
 procedure TArrayDeque.AppendFrom(const aSrc: specialize IVecDeque<T>; aSrcIndex: SizeUInt; aCount: SizeUInt);
 var
-  I: SizeUInt;
-  LElement: T;
+  LVecDequeSrc: TInternalDeque;
 begin
-  // Copy element by element from interface
+  if aCount = 0 then
+    Exit;
+
+  if aSrc = nil then
+    Exit;
+
+  if Supports(aSrc, TInternalDeque, LVecDequeSrc) then
+  begin
+    FDeque.AppendFrom(LVecDequeSrc, aSrcIndex, aCount);
+    Exit;
+  end;
+
   if (aSrcIndex + aCount) > aSrc.Count then
     raise EOutOfRange.CreateFmt('TArrayDeque.AppendFrom: range [%d..%d) exceeds source count %d', [aSrcIndex, aSrcIndex + aCount, aSrc.Count]);
 
   FDeque.Reserve(aCount);
-  for I := 0 to aCount - 1 do
+  while aCount > 0 do
   begin
-    LElement := aSrc.Get(aSrcIndex + I);
-    FDeque.PushBack(LElement);
+    FDeque.PushBack(aSrc.Get(aSrcIndex));
+    Inc(aSrcIndex);
+    Dec(aCount);
   end;
 end;
 
