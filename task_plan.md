@@ -15,7 +15,7 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+当前最新本轮为 Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
 Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
 Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
 并行收口包含
@@ -27,6 +27,78 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 `sema.ambiguous-overload` 从 root-owned / exact member-call 推进到第一条 imported `project-source`
+inherited direct member-call 安全边界：当 receiver type 已知、exact receiver type 自身没有同名 method、
+parent chain 上存在同名同 arity 的多个 inherited member target，且当前 stable argument signature
+无法唯一选择候选时，发出 `sema.ambiguous-overload`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` / `TBase.Pick(LongInt)` 可见时，必须失败为
+  `sema.ambiguous-overload`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` inherited ambiguity 继续 deferred，不发 diagnostics，也不注册错误 binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-ambiguous-overload-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberAmbiguousOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏；提速仍依赖同一家族 sema diagnostics 连续切批。
+
+### Architecture Decision
+
+这是 imported inherited member ambiguity 的第一条 source-owned 切片，不是完整 Pascal inherited resolver：
+
+- 只覆盖 imported `project-source` unit 的 inherited direct member-call ambiguity。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 runtime baseline / helper surface 的
+  incomplete imported truth 提前误报成 ordinary ambiguity。
+- exact receiver own-method mismatch 穿透 parent 的代偿路径、record/property/array/deref receiver、
+  implicit conversion、default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与加速策略
+- [x] RED：新增 imported inherited project-source ambiguity focused regression
+- [x] RED：新增 imported inherited installed-source deferred guard
+- [x] 在 exact member ambiguity 分支增加 imported provenance guard
+- [x] 新增 `tests/fixtures/imported_inherited_member_ambiguous_overload` 与
+  `imported-inherited-member-ambiguous-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED：focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-imported-inherited-member-ambiguous-overload-diagnostic:sema.ambiguous-overload`。
+- GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_ambiguous_overload/imported_inherited_member_ambiguous_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.ambiguous-overload`、
+  `diagnostic-message=ambiguous overload for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-ambiguous-overload-check=pass`、
+  `importedInheritedMemberAmbiguousOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` inherited ambiguity 纳入 diagnostics
+- 不扩大到 imported inherited `wrong-argument-count` / `unknown-member`
+- 不修改 `core/`
 
 ## Addendum: 2026-05-27 Batch 114 Imported Inherited Member No Matching Overload Diagnostics
 

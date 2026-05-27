@@ -119,6 +119,18 @@
 - Batch 114 新增 `imported-inherited-member-no-matching-overload-check`，用 dedicated fixture 固定
   stage0 `sema.no-matching-overload` projection 与 final envelope
   `importedInheritedMemberNoMatchingOverloadCheck=pass`。
+- Batch 115 把 imported `project-source` inherited direct member-call 的 ambiguity 正式纳入 gate：
+  exact receiver type 自身没有同名 method、parent chain 上存在同名同 arity 的多个 inherited member target，
+  且当前稳定 argument signature 无法唯一选择候选时，`Worker.Pick(1)` 会失败为
+  `sema.ambiguous-overload`，且不注册失败 `member-call` binding。
+- Batch 115 同时固定 imported `installed-source` inherited ambiguity 继续 deferred；它不会错误 binding，
+  也不会把 helper / runtime baseline 的 incomplete imported truth 提前报成 ordinary ambiguity。
+- `MethodSymbolIdForExactClassTypeMember(...)` 的 ambiguity 分支现在受 owner provenance guard 约束：
+  只有 root source 或 imported `project-source` owner 才允许落 `ambiguous-overload`，其余 imported owner
+  继续保守 deferred。
+- Batch 115 新增 `imported-inherited-member-ambiguous-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.ambiguous-overload` projection 与 final envelope
+  `importedInheritedMemberAmbiguousOverloadCheck=pass`。
 - 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
   最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
   一条热路径，避免并行猜修拖慢收口。

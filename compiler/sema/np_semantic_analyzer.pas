@@ -1662,7 +1662,11 @@ begin
       SymbolId := SignatureSymbolId
     else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
     begin
-      AResolutionFailureKind := 'ambiguous-overload';
+      if SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or ImportedUnitAllowsTypeMismatchDiagnostic(TypeSymbol.OwnerUnitId) then
+        AResolutionFailureKind := 'ambiguous-overload';
       Exit;
     end
     else if SignatureMatchCount = 0 then

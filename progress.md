@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,53 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 115 imported inherited member ambiguous overload diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 imported `project-source` inherited direct member-call 的 ambiguity 从 installed-source 混报中收紧成
+    结构化 `sema.ambiguous-overload` 边界。
+- Baseline:
+  - Batch 76 已覆盖 root-owned member ambiguity。
+  - Batch 114 已覆盖 imported inherited member no matching overload。
+  - 旧实现的 `MethodSymbolIdForExactClassTypeMember(...)` ambiguity 分支没有 provenance guard，因此
+    installed-source inherited `Worker.Pick(1)` 也会过早报 `sema.ambiguous-overload`。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，并继续沿用同一家族 sema diagnostics 连续切批的提速策略：
+    `单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify -> review -> commit`。
+  - 先在 `tests/semantic/test_semantic_call_bindings.pas` 增加 imported inherited project-source
+    ambiguity regression，以及 installed-source deferred guard。
+  - RED focused test 失败在
+    `semantic-call-bindings-failure=unexpected-installed-imported-inherited-member-ambiguous-overload-diagnostic:sema.ambiguous-overload`，
+    证明当前 imported member ambiguity 对 installed-source 过宽。
+  - `MethodSymbolIdForExactClassTypeMember(...)` 的 ambiguity 分支现在新增 provenance guard：只有
+    root source 或 imported `project-source` owner 才允许落 `ambiguous-overload`，其余 imported owner
+    继续 deferred。
+  - 新增 `tests/fixtures/imported_inherited_member_ambiguous_overload`，并把
+    `imported-inherited-member-ambiguous-overload-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - RED：focused semantic test 失败在
+    `semantic-call-bindings-failure=unexpected-installed-imported-inherited-member-ambiguous-overload-diagnostic:sema.ambiguous-overload`。
+  - GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/imported_inherited_member_ambiguous_overload/imported_inherited_member_ambiguous_overload_fail.pas`
+    输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.ambiguous-overload`、
+    `diagnostic-message=ambiguous overload for "Pick"`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `imported-inherited-member-ambiguous-overload-check=pass`、
+    `importedInheritedMemberAmbiguousOverloadCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批只打开 imported `project-source` inherited member ambiguity；installed-source inherited
+    ambiguity、default parameter ranking、implicit conversion、visibility checking 与更复杂 receiver form
+    继续 deferred。
+  - 后续继续沿同一家族 sema diagnostics 切批，优先挑只差 provenance / inherited / imported
+    guard 的热点，最大化复用 RED / fixture / verify 模板。
+  - 本轮不修改 `core/`；继续在隔离 worktree `codex/sema-no-matching-overload` 中完成。
 
 ## Session: 2026-05-27 (Batch 114 imported inherited member no matching overload diagnostics)
 
