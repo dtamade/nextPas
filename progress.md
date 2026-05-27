@@ -40,7 +40,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform host gap route guard)
 
-- **Status:** in progress
+- **Status:** completed; merged to main and cleanup done
 - Objective:
   - 继续按 `/plan` 推进 platform 模块；本轮不扩 public API，不碰 raw OS API，而是把 host gap
     matrix 的 design-doc route 与 official verification envelope 冻结起来。
@@ -92,6 +92,15 @@ platform/core 工作流保留下来的已完成记录。
   - `bash build/verify_local.sh`: `verify-local=pass`、`human-summary=local verification passed`，
     final envelope 包含 `corePlatformHostGapMatrixCheck":"pass"`。
   - `git diff --check`: pass。
+- Integration / post-merge:
+  - 验证期间 main 从 `d161546` 前进到 `9e82d70`，新提交是 collections element-manager contract；
+    本分支 rebase 到 `main@9e82d70` 后无冲突，保留最新 collections 代码，只叠加本轮 platform/doc/gate 改动。
+  - rebase 后 commit 为 `4fe1391`，已 fast-forward merged 到 `main@4fe1391`。
+  - post-merge focused verification passed:
+    `test_platform_host_gap_matrix` 4/4 pass，
+    `test_platform_ffi_owner_boundary` 2/2 pass。
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-gap-route-guard` worktree 已删除，
+    `codex/platform-host-gap-route-guard` 分支已删除。
 
 ## Session: 2026-05-27 (platform host ffi gap matrix guard)
 

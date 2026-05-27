@@ -74,7 +74,8 @@ verification route 互相索引”的闭环：
 
 ### Status
 
-In progress in `codex/platform-host-gap-route-guard` from `main@d161546`.
+Completed, committed as `4fe1391`, fast-forward merged to `main@4fe1391`, and
+worktree/branch cleanup done.
 
 ### Planned Steps
 
@@ -96,7 +97,7 @@ In progress in `codex/platform-host-gap-route-guard` from `main@d161546`.
   - `make -C core benchmarks`
   - `bash build/verify_local.sh`
   - `git diff --check`
-- [ ] commit、合并回 main、post-merge focused verification、清理 worktree/branch
+- [x] commit、合并回 main、post-merge focused verification、清理 worktree/branch
 
 ### Audit Checklist
 
