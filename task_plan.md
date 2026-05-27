@@ -82,9 +82,8 @@ platform/core 工作流保留下来的已完成记录。
 
 ### Status
 
-Rebased over latest `main@52c2e2d` and pre-merge verified on isolated worktree
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1`
-on `codex/platform-host-abi-wave1`; merge, post-merge verification, and cleanup are next.
+Fast-forward merged to `main@54b19bd` and post-merge verified. Cleanup of the
+temporary worktree/branch is next.
 
 ### Planned Steps
 
@@ -98,7 +97,9 @@ on `codex/platform-host-abi-wave1`; merge, post-merge verification, and cleanup 
 - [x] focused verification、full verification
 - [x] feature commit and rebase over latest `main@52c2e2d`
 - [x] pre-merge focused/full verification after rebase
-- [ ] merge、post-merge verification、cleanup
+- [x] fast-forward merge to `main@54b19bd`
+- [x] post-merge focused gate and `bash build/verify_local.sh`
+- [ ] cleanup temporary worktree / branch
 
 ### Recovery Entry
 
@@ -112,7 +113,7 @@ sed -n '1,180p' progress.md
 sed -n '1,130p' findings.md
 ```
 
-Then continue from merge / post-merge verification / cleanup. Do not add runtime tests for raw OS APIs.
+Then continue from cleanup. Do not add runtime tests for raw OS APIs.
 
 ## Addendum: 2026-05-27 Platform FFI Import Workflow
 

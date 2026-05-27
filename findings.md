@@ -2004,6 +2004,10 @@
   gate、`make -C core test`、`make -C core examples`、`make -C core benchmarks`、`git diff --check`
   与 `bash build/verify_local.sh`，final envelope 继续包含
   `corePlatformHostAbiWave1Check":"pass"`。
+- Wave 1 最终以 fast-forward 方式合入 `main@54b19bd`；post-merge focused gate 通过 3/3，
+  `git diff --check` 通过，`bash build/verify_local.sh` 输出 `verify-local=pass` /
+  `human-summary=local verification passed`，final envelope 继续包含
+  `corePlatformHostAbiWave1Check":"pass"`。
 - runtime 单元测试的判断口径也已固定：只测 `platform.time`、`platform.sync`、`platform.thread`
   等通用抽象子模块的 public contract；raw `clock_gettime`、`pthread_*`、`futex`、`gettid` 等系统
   API 本身不作为 nextPas 单元测试目标。

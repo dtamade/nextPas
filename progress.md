@@ -43,7 +43,7 @@ platform/core 工作流保留下来的已完成记录。
 
 ## Session: 2026-05-27 (platform host abi completeness wave 1)
 
-- **Status:** rebased and pre-merge verified on feature worktree; merge and cleanup next
+- **Status:** merged to main and post-merge verified; cleanup next
 - Objective:
   - 按 `core/docs/platform-ffi-import-workflow.md` 启动第一批 host ABI completeness。
   - 本轮不新增 raw OS API runtime tests，不扩 `platform.time` / `platform.sync` /
@@ -60,8 +60,8 @@ platform/core 工作流保留下来的已完成记录。
   - Initial feature commit after first verification: `05e9213`。
   - 主线随后前进到 `main@52c2e2d`；本轮执行 `git rebase main` 无冲突，feature commit 变为
     `865ae8f`。
-  - Rebase 后 `git log --left-right main...HEAD` 只剩一笔 feature commit：
-    `865ae8f feat(platform): add host ABI wave one inventory`。
+  - 记录 rebase/post-verify evidence 后 amend，最终 feature commit 为 `54b19bd`。
+  - 已 fast-forward merge 到 `main@54b19bd`。
 - Boundary:
   - FPC source 是 evidence，不是 production dependency。
   - host `base/ffi` 可以厚化；统一 public contract 继续由 platform 子模块整理。
@@ -124,10 +124,17 @@ platform/core 工作流保留下来的已完成记录。
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave1Check":"pass"`.
+- Post-merge verification on `main@54b19bd`:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave1 clean test`:
+    `3 total, 3 passed, 0 failed`.
+  - `git diff --check`: pass.
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave1Check":"pass"`.
 - Recovery:
   - 下次恢复请从本 section 和 `task_plan.md` 的
     `Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1` 继续。
-  - 第一条未完成任务是 merge、post-merge verification、cleanup。
+  - 第一条未完成任务是 cleanup temporary worktree / branch。
 
 ## Session: 2026-05-27 (platform ffi import workflow)
 
