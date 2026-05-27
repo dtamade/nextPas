@@ -57,6 +57,24 @@
 - Non-contiguous indexed containers, such as ring-buffer deque implementations, should not inherit `IArray<T>` just to share indexed access. They must not promise `GetMemory` or other contiguous-storage contracts unless they can actually provide them.
 - If non-contiguous sequences need shared indexed behavior later, introduce a separate indexed-sequence contract that does not expose contiguous memory.
 
+## 2026-05-27: bulk load and append ownership
+
+- `TryLoadFrom` and `TryAppend` are natural capabilities for collections in general: load a container and append a container without throwing on normal failure.
+- These methods should not be removed merely because they appear while reviewing `IArray<T>`. They are not array-only concepts, but they are valid for array-like containers too.
+- Interface tuning should regularize where these methods are declared. The likely owner is the common collection interface layer, with array/vector interfaces exposing inherited or specialized overloads where needed.
+- Keep the semantic split between throwing `LoadFrom`/`Append`, unchecked `LoadFromUnchecked`/`AppendUnchecked`, and non-throwing `TryLoadFrom`/`TryAppend`.
+
+## 2026-05-27: contiguous block read/write semantics
+
+- Preserve the richer block operation model instead of collapsing it into fewer names.
+- `Overwrite` is an array-like operation: it writes into an existing valid range and must not change `Count`.
+- `Read` copies an existing valid range out to caller-owned storage and must not mutate the container.
+- `Copy` copies an existing valid range within the same contiguous container and must not change `Count`.
+- `Write` is a vector-style operation: it writes at an index and may extend `Count`; capacity growth follows the container's normal growth strategy.
+- `WriteExact` has the same write/extend shape as `Write`, but when growth is required it grows capacity exactly to the required size instead of applying the growth strategy. Its name should be documented around exact capacity behavior, not mistaken for "must not extend" behavior.
+- `Overwrite` naturally belongs on the contiguous array capability layer. `Write` and `WriteExact` naturally belong on the vector/growable sequence layer because they can extend logical length.
+- Interface tuning should make overload symmetry explicit, especially checked and unchecked partial container overloads such as `Overwrite(Collection, Count)`.
+
 ## 2026-05-27: sequence mutation method semantics
 
 - `Delete(Index)` means delete by position and discard the element.
