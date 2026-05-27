@@ -195,6 +195,15 @@
 - Batch 121 新增 `tests/fixtures/inherited_known_field_member_call` 与
   `inherited-known-field-member-call-check`，把 inherited known field non-callable 也正式纳入
   final envelope `inheritedKnownFieldMemberCallCheck=pass`。
+- Batch 122 证明同一条 known non-callable diagnostics 在 inherited class property 上也已天然成立：
+  当 `TWorker = class(TBaseWorker)` 且 `TBaseWorker.Value` 是已知 class property 而不是 callable 时，
+  `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`，且不注册失败 `member-call` binding。
+- 这条 inherited known property 边界同样不需要再改 `compiler/sema/np_semantic_analyzer.pas`：
+  现有 `MethodSymbolIdForClassTypeMember(...)` 已沿 `ParentTypeId` 逐层调用
+  `ClassTypeHasKnownNonMethodMember(...)`，而后者已经通过 `$read` / `$write` truth 覆盖 property，因此本轮仍是纯 promotion。
+- Batch 122 新增 `tests/fixtures/inherited_known_property_member_call` 与
+  `inherited-known-property-member-call-check`，把 inherited known property non-callable 也正式纳入
+  final envelope `inheritedKnownPropertyMemberCallCheck=pass`。
 - Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
   root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
   candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败

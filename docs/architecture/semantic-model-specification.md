@@ -330,6 +330,7 @@ candidate collection
     `Worker.Value(1)` 在 `Value` 是 property 时也会失败为 `sema.invalid-call-shape`
   - 当 member lookup 沿 `ParentTypeId` 命中 inherited field/property，且该 member 不是 callable 时，
     同样失败为 `sema.invalid-call-shape`
+  - 上述 inherited non-callable 边界同样覆盖 inherited class property
   - specialized generic receiver、record/property/array/deref receiver 与更完整 member access 仍继续 deferred
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
     receiver pointer operand 与 effective `Destroy` target，并把紧随其后的匹配 `Destroy`

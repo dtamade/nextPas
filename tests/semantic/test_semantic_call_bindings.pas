@@ -1305,6 +1305,75 @@ begin
   end;
 end;
 
+procedure CheckInheritedKnownPropertyMemberCallDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedKnownPropertyMemberCall;' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '  private' + LineEnding +
+    '    FValue: Integer;' + LineEnding +
+    '  public' + LineEnding +
+    '    property Value: Integer read FValue write FValue;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Worker: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  Worker.Value(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-inherited-known-property-member-call-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.invalid-call-shape') then
+      Fail('unexpected-inherited-known-property-member-call-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-inherited-known-property-member-call-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Value', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('inherited-known-property-member-call-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-inherited-known-property-member-call-semantic-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-inherited-known-property-member-call-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-inherited-known-property-member-call-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckSystemObjectFreeMemberCallStaysDeferred;
 var
   Analyzer: TSemanticAnalyzer;
@@ -5122,6 +5191,7 @@ begin
     CheckKnownFieldMemberCallDiagnostic;
     CheckKnownPropertyMemberCallDiagnostic;
     CheckInheritedKnownFieldMemberCallDiagnostic;
+    CheckInheritedKnownPropertyMemberCallDiagnostic;
     CheckSystemObjectFreeMemberCallStaysDeferred;
     CheckSourceBackedSystemObjectFreeMemberCallBinding;
     CheckImplicitSystemObjectFreeLowersToInheritedDestroy;

@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -17,9 +17,52 @@ Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
+## Session: 2026-05-27 (Batch 122 inherited known property member invalid-call-shape)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 known non-callable 家族从 inherited class field 继续推进到 inherited class property，并继续保持
+    `System.Free` 与 specialized generic member-call deferred。
+- Baseline:
+  - Batch 120 已收 direct class property，Batch 121 已收 inherited class field。
+  - `MethodSymbolIdForClassTypeMember(...)` 已沿 `ParentTypeId` lookup，且
+    `ClassTypeHasKnownNonMethodMember(...)` 已通过 `$read` / `$write` truth 覆盖 property，因此 inherited
+    property 很可能已有天然行为，适合优先 probe。
+- Actions taken:
+  - 按 `/plan` 固定本轮单刀目标，继续沿用 promotion-first 提速法：先 focused semantic probe，再做
+    stage0 probe，天然成立就直接补 official gate。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加 inherited known property member-call regression。
+  - focused semantic 直接输出 `semantic-call-bindings-status=pass`，证明 inherited known property 边界已经天然
+    失败为 `sema.invalid-call-shape`。
+  - stage0 probe 对临时 fixture 也直接输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.invalid-call-shape`、
+    `diagnostic-message=member "Value" is not callable`，因此本轮不修改
+    `compiler/sema/np_semantic_analyzer.pas`。
+  - 新增 `tests/fixtures/inherited_known_property_member_call`，并把
+    `inherited-known-property-member-call-check` 纳入 `build/verify_local.sh` 与 final envelope。
+- Verification:
+  - Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Stage0 focused：
+    `nextpas build tests/fixtures/inherited_known_property_member_call/inherited_known_property_member_call_fail.pas`
+    应输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.invalid-call-shape`、
+    `diagnostic-message=member "Value" is not callable`。
+  - Full：fresh `bash build/verify_local.sh` 输出
+    `inherited-known-property-member-call-check=pass`、
+    `inheritedKnownPropertyMemberCallCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 这轮继续证明同一家族的相邻 inherited/property 边界很适合先 probe 再 promotion，不必每次都先碰实现。
+  - 如果 full verify 通过，known non-callable 家族将完成 direct/inherited 的 field/property 四格基本面，
+    后续需要重新挑下一条最高价值 diagnostics 热点，而不是无脑扩大家族。
+
 ## Session: 2026-05-27 (Batch 121 inherited known field member invalid-call-shape)
 
-- **Status:** in_progress
+- **Status:** completed; verification passed
 - Goal nodes:
   - `G1.5 Call, member, and overload resolution`
   - `G1.6 Diagnostics`
@@ -50,7 +93,7 @@ platform/core 工作流保留下来的已完成记录。
     应输出 `failure-kind=semantic-analysis-failed`、
     `diagnostic-code=sema.invalid-call-shape`、
     `diagnostic-message=member "Value" is not callable`。
-  - Full：fresh `bash build/verify_local.sh` 应输出
+  - Full：fresh `bash build/verify_local.sh` 输出
     `inherited-known-field-member-call-check=pass`、
     `inheritedKnownFieldMemberCallCheck":"pass"`、
     `verify-local=pass` 与 `human-summary=local verification passed`。
