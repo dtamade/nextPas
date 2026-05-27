@@ -450,19 +450,19 @@ type
     function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     {$ENDIF}
 
-    function  GetCapacity: SizeUint; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure SetCapacity(aCapacity: SizeUint); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  GetCapacity: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure SetCapacity(aCapacity: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  GetGrowStrategy: IGrowthStrategy; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure SetGrowStrategy(aGrowStrategy: IGrowthStrategy); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
-    function  TryReserve(aAdditional: SizeUint): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Reserve(aAdditional: SizeUint); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  TryReserveExact(aAdditional: SizeUint): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure ReserveExact(aAdditional: SizeUint); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure EnsureCapacity(aCapacity: SizeUint); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  TryReserve(aAdditional: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Reserve(aAdditional: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  TryReserveExact(aAdditional: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure ReserveExact(aAdditional: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure EnsureCapacity(aCapacity: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Shrink;
-    procedure ShrinkTo(aCapacity: SizeUint);
+    procedure ShrinkTo(aCapacity: SizeUInt);
     procedure ShrinkToFit;
     // Java 兼容别名：TrimToSize -> ShrinkToFit
     procedure TrimToSize; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -471,10 +471,10 @@ type
     procedure EnableAlignedGrowth(aAlignElements: SizeUInt = 64);
     procedure DisableAlignedGrowth;
     function  IsAlignedGrowthEnabled: Boolean;
-    procedure Truncate(aCount: SizeUint);
-    procedure ResizeExact(aNewSize: SizeUint); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Truncate(aCount: SizeUInt);
+    procedure ResizeExact(aNewSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
-    procedure Insert(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure InsertUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Insert(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure InsertUnChecked(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -484,19 +484,19 @@ type
 
     procedure Write(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex:SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Write(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex:SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex:SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure WriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
-    procedure WriteExact(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUint; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnChecked(aIndex: SizeUint; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExactUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
 
     procedure Push(const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     procedure Push(const aSrc: array of T); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -510,7 +510,7 @@ type
 
 
     function  Pop: T; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function  TryPeekCopy(aDst: Pointer; aCount: SizeUint): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function  TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  TryPeek(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  PeekRange(aCount: SizeUInt): PElement; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
     function  Peek: T; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
@@ -761,10 +761,10 @@ type
      *}
     procedure ReverseUnChecked(aStartIndex, aCount: SizeUInt);
 
-    property Capacity:                SizeUint        read GetCapacity     write SetCapacity;
+    property Capacity:                SizeUInt        read GetCapacity     write SetCapacity;
     property GrowStrategy:            IGrowthStrategy read GetGrowStrategy write SetGrowStrategy;
-    property Items[aIndex: SizeUint]: T               read Get             write Put; default;
-    property Ptr[aIndex: SizeUint]:   PElement        read GetPtr;
+    property Items[aIndex: SizeUInt]: T               read Get             write Put; default;
+    property Ptr[aIndex: SizeUInt]:   PElement        read GetPtr;
     property Memory:                  PElement        read GetMemory;
 
   end;
@@ -1095,12 +1095,12 @@ begin
     Resize(aCount);
 end;
 
-function TVec.GetCapacity: SizeUint;
+function TVec.GetCapacity: SizeUInt;
 begin
   Result := FBuf.GetCount;
 end;
 
-procedure TVec.SetCapacity(aCapacity: SizeUint);
+procedure TVec.SetCapacity(aCapacity: SizeUInt);
 begin
   FBuf.Resize(aCapacity);
 
@@ -1127,11 +1127,11 @@ end;
 
 
 
-function TVec.TryReserve(aAdditional: SizeUint): Boolean;
+function TVec.TryReserve(aAdditional: SizeUInt): Boolean;
 var
-  LCapacity: SizeUint;
-  LTarget:   SizeUint;
-  LExpected:   SizeUint;
+  LCapacity: SizeUInt;
+  LTarget:   SizeUInt;
+  LExpected:   SizeUInt;
 begin
   if aAdditional = 0 then
     exit(True);
@@ -1156,15 +1156,15 @@ begin
   end;
 end;
 
-procedure TVec.Reserve(aAdditional: SizeUint);
+procedure TVec.Reserve(aAdditional: SizeUInt);
 begin
   if not TryReserve(aAdditional) then
     raise ECore.Create('TVec.Reserve: failed to reserve');
 end;
 
-function TVec.TryReserveExact(aAdditional: SizeUint): Boolean;
+function TVec.TryReserveExact(aAdditional: SizeUInt): Boolean;
 var
-  LExpect: SizeUint;
+  LExpect: SizeUInt;
 begin
   if aAdditional = 0 then
     exit(True);
@@ -1186,15 +1186,15 @@ begin
   end;
 end;
 
-procedure TVec.ReserveExact(aAdditional: SizeUint);
+procedure TVec.ReserveExact(aAdditional: SizeUInt);
 begin
   if not TryReserveExact(aAdditional) then
     raise ECore.Create('TVec.ReserveExact: failed to reserve exact additional capacity');
 end;
 
-procedure TVec.EnsureCapacity(aCapacity: SizeUint);
+procedure TVec.EnsureCapacity(aCapacity: SizeUInt);
 var
-  LCap: SizeUint;
+  LCap: SizeUInt;
 begin
   LCap := GetCapacity;
   if aCapacity > LCap then
@@ -1206,7 +1206,7 @@ begin
   SetCapacity(FCount);
 end;
 
-procedure TVec.ShrinkTo(aCapacity: SizeUint);
+procedure TVec.ShrinkTo(aCapacity: SizeUInt);
 begin
   if aCapacity >= GetCapacity then
     exit;
@@ -1254,13 +1254,13 @@ begin
 end;
 
 
-procedure TVec.Truncate(aCount: SizeUint);
+procedure TVec.Truncate(aCount: SizeUInt);
 begin
   if FCount > aCount then
     Resize(aCount);
 end;
 
-procedure TVec.ResizeExact(aNewSize: SizeUint);
+procedure TVec.ResizeExact(aNewSize: SizeUInt);
 var
   LCap: SizeUInt;
 begin
@@ -1394,7 +1394,7 @@ end;
 
 function TVec.TryPop(aDst: Pointer; aCount: SizeUInt): Boolean;
 var
-  LIndex: SizeUint;
+  LIndex: SizeUInt;
 begin
   // Try 方法完整参数检查：确保永不抛异常
   Result := (aCount > 0) and (FCount >= aCount) and (aDst <> nil);
@@ -1409,7 +1409,7 @@ end;
 
 function TVec.TryPop(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean;
 var
-  LLen: SizeUint;
+  LLen: SizeUInt;
 begin
   if aCount = 0 then
     exit(True);  // aCount = 0 是成功的无操作
@@ -1451,7 +1451,7 @@ begin
     raise EEmptyCollection.Create('TVec.Peek: failed to peek (empty)');
 end;
 
-function TVec.TryPeekCopy(aDst: Pointer; aCount: SizeUint): Boolean;
+function TVec.TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean;
 var
   LP: Pointer;
 begin
@@ -1467,7 +1467,7 @@ end;
 
 function TVec.TryPeek(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean;
 var
-  LLen: SizeUint;
+  LLen: SizeUInt;
 begin
   if aCount = 0 then
     exit(True);  // aCount = 0 是成功的无操作
@@ -1502,7 +1502,7 @@ begin
   InsertUnChecked(aIndex, @aElement, 1);
 end;
 
-procedure TVec.Insert(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
@@ -1674,7 +1674,7 @@ begin
     FCount := LEnd;
 end;
 
-procedure TVec.WriteExact(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
@@ -1688,7 +1688,7 @@ begin
   WriteExactUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt);
+procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1705,7 +1705,7 @@ begin
     FCount := LEnd;
 end;
 
-procedure TVec.WriteExact(aIndex: SizeUint; const aSrc: array of T);
+procedure TVec.WriteExact(aIndex: SizeUInt; const aSrc: array of T);
 var
   LLen: SizeInt;
 begin
@@ -1722,12 +1722,12 @@ end;
     - 写入范围 [aIndex, aIndex + Length(aSrc) - 1] 在 [0..Capacity) 内；WriteExactUnChecked 不会自动扩容
     - 本方法不做任何参数/边界检查，违反前置条件将导致未定义行为 }
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUint; const aSrc: array of T);
+procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: array of T);
 begin
   WriteExactUnChecked(aIndex, @aSrc[0], Length(aSrc));
 end;
 
-procedure TVec.WriteExact(aIndex: SizeUint; const aSrc: TCollection);
+procedure TVec.WriteExact(aIndex: SizeUInt; const aSrc: TCollection);
 begin
   if aSrc = nil then
     raise EInvalidArgument.Create('TVec.WriteExact: source is nil');
@@ -1735,7 +1735,7 @@ begin
   WriteExact(aIndex, aSrc, aSrc.GetCount);
 end;
 
-procedure TVec.WriteExact(aIndex: SizeUint; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 begin
   if aCount = 0 then
     exit;
@@ -1755,7 +1755,7 @@ begin
   WriteExactUnChecked(aIndex, aSrc, aCount);
 end;
 
-procedure TVec.WriteExactUnChecked(aIndex: SizeUint; const aSrc: TCollection; aCount: SizeUInt);
+procedure TVec.WriteExactUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 var
   LEnd:      SizeUInt;
   LCapacity: SizeUInt;
@@ -1774,8 +1774,8 @@ end;
 
 procedure TVec.Delete(aIndex, aCount: SizeUInt);
 var
-  LRight:      SizeUint;
-  LRightCount: SizeUint;
+  LRight:      SizeUInt;
+  LRightCount: SizeUInt;
 begin
   if aCount = 0 then
     exit;
@@ -1802,8 +1802,8 @@ end;
 
 procedure TVec.DeleteSwap(aIndex, aCount: SizeUInt);
 var
-  LRight:      SizeUint;
-  LRightCount: SizeUint;
+  LRight:      SizeUInt;
+  LRightCount: SizeUInt;
 begin
   if aCount = 0 then
     exit;

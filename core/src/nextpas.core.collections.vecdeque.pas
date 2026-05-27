@@ -316,14 +316,14 @@ type
     function FindIFNotUnChecked(aIndex, aCount: SizeUInt; aPredicate: TPredicateRefFunc): Int64; overload;
 
     { IVec<T> 接口实现 }
-    function GetCapacity: SizeUint;
-    procedure SetCapacity(aCapacity: SizeUint);
+    function GetCapacity: SizeUInt;
+    procedure SetCapacity(aCapacity: SizeUInt);
     // IGrowthStrategy（接口统一，对齐 IVec<T> 签名）
     function GetGrowStrategy: IGrowthStrategy;
     procedure SetGrowStrategy(aGrowStrategy: IGrowthStrategy);
-    function TryReserve(aAdditional: SizeUint): Boolean;
+    function TryReserve(aAdditional: SizeUInt): Boolean;
         procedure FreeBuffer;
-    procedure Reserve(aAdditional: SizeUint);
+    procedure Reserve(aAdditional: SizeUInt);
     procedure ShrinkToFit;
     procedure ShrinkToFitExact;
     function InsertElement(aIndex: SizeUInt; const aElement: T): SizeUInt;
@@ -844,7 +844,7 @@ type
     function First: T;
     function Last: T;
 
-    property Capacity:     SizeUint        read GetCapacity     write SetCapacity;
+    property Capacity:     SizeUInt        read GetCapacity     write SetCapacity;
     property GrowStrategy: IGrowthStrategy read GetGrowStrategy write SetGrowStrategy;
 
 
@@ -2612,12 +2612,12 @@ end;
 
 { IVec<T> 接口实现 }
 
-function TVecDeque.GetCapacity: SizeUint;
+function TVecDeque.GetCapacity: SizeUInt;
 begin
   Result := FBuffer.GetCount;
 end;
 
-procedure TVecDeque.SetCapacity(aCapacity: SizeUint);
+procedure TVecDeque.SetCapacity(aCapacity: SizeUInt);
 begin
   if aCapacity < FCount then
     raise EInvalidArgument.CreateFmt('TVecDeque.SetCapacity: capacity %d < count %d', [aCapacity, FCount]);
@@ -2643,7 +2643,7 @@ begin
   FGrowStrategy := aGrowStrategy;
 end;
 
-function TVecDeque.TryReserve(aAdditional: SizeUint): Boolean;
+function TVecDeque.TryReserve(aAdditional: SizeUInt): Boolean;
 var
   LRequiredCapacity: SizeUInt;
 begin
@@ -2668,7 +2668,7 @@ begin
   end;
 end;
 
-procedure TVecDeque.Reserve(aAdditional: SizeUint);
+procedure TVecDeque.Reserve(aAdditional: SizeUInt);
 begin
   if not TryReserve(aAdditional) then
     raise EOutOfMemory.Create('TVecDeque.Reserve: failed to reserve additional capacity');

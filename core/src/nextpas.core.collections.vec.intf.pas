@@ -35,11 +35,11 @@ type
      *
      * @desc 获取当前容量
      *
-     * @return SizeUint 当前容量
+     * @return SizeUInt 当前容量
      *
      * @complexity O(1)
      *}
-    function GetCapacity: SizeUint;
+    function GetCapacity: SizeUInt;
 
     {**
      * SetCapacity
@@ -48,7 +48,7 @@ type
      * @param aCapacity The capacity to set
      * @note Throws exception if operation fails
      *}
-    procedure SetCapacity(aCapacity: SizeUint);
+    procedure SetCapacity(aCapacity: SizeUInt);
 
     {**
      * GetGrowStrategy
@@ -112,7 +112,7 @@ type
      *   Reserved space may be larger than requested due to growth strategy
      *   If current capacity is sufficient, no operation is performed
      *}
-    function TryReserve(aAdditional: SizeUint): Boolean;
+    function TryReserve(aAdditional: SizeUInt): Boolean;
 
     { Non-exception bulk import/append (pointer overload) }
     function TryLoadFrom(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; overload;
@@ -133,7 +133,7 @@ type
      *
      * @note 实际容量可能大于请求值（受增长策略影响）
      *}
-    procedure Reserve(aAdditional: SizeUint);
+    procedure Reserve(aAdditional: SizeUInt);
 
     {**
      * TryReserveExact
@@ -146,15 +146,15 @@ type
      *   Unlike Reserve, this tries to allocate exactly the requested space
      *   May fail if allocation is not possible
      *}
-    function TryReserveExact(aAdditional: SizeUint): Boolean;
-    procedure ReserveExact(aAdditional: SizeUint);
+    function TryReserveExact(aAdditional: SizeUInt): Boolean;
+    procedure ReserveExact(aAdditional: SizeUInt);
 
     {**
      * EnsureCapacity
      *
      * @desc 确保容量至少为指定值（仅扩容，不改变 Count）
      *}
-    procedure EnsureCapacity(aCapacity: SizeUint);
+    procedure EnsureCapacity(aCapacity: SizeUInt);
 
     {**
      * Shrink
@@ -181,7 +181,7 @@ type
      *   如果指定的容量小于当前元素数量则会抛出异常(因为会截断元素)
      *   如果指定收缩的容量大于当前容量,什么也不会发生
      *}
-    procedure ShrinkTo(aCapacity: SizeUint);
+    procedure ShrinkTo(aCapacity: SizeUInt);
 
     {**
      * ShrinkToFit
@@ -213,7 +213,7 @@ type
      *   不会释放内存空间（不影响 Capacity），仅修改元素数量
      *   如需同时缩减容量，请组合使用 Truncate + Shrink
      *}
-    procedure Truncate(aCount: SizeUint);
+    procedure Truncate(aCount: SizeUInt);
 
     {**
      * ResizeExact
@@ -230,7 +230,7 @@ type
      * @exceptions
      *   EAlloc 内存分配/调整失败.
      *}
-    procedure ResizeExact(aNewSize: SizeUint);
+    procedure ResizeExact(aNewSize: SizeUInt);
 
 
 
@@ -253,7 +253,7 @@ type
      *   索引必须小于等于当前元素数量(<= Count)
      *   插入成功后指定索引处的元素会向后移动(低效)
      *}
-    procedure Insert(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
 
     {**
      * Insert
@@ -347,7 +347,7 @@ type
      *   EAlloc           如果内存分配失败.
      *   ERangeOutOfIndex 索引越界
      *}
-    procedure Write(aIndex:SizeUInt; const aSrc: array of T); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: array of T); overload;
 
     {**
      * Write
@@ -369,7 +369,7 @@ type
      *   ENotCompatible   `aSrc` 与当前容器不兼容.
      *   EAlloc           如果内存分配失败.
      *}
-    procedure Write(aIndex:SizeUInt; const aSrc: TCollection); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection); overload;
 
     {**
      * Write
@@ -392,7 +392,7 @@ type
      *   ENotCompatible 如果 aCollection 与当前容器不兼容.
      *   EAlloc         如果内存分配失败.
      *}
-    procedure Write(aIndex:SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
     {**
      * WriteExact
@@ -412,7 +412,7 @@ type
      *   aCount  必须大于 0
      *   遇到扩容时不再遵循增长策略，而是精确扩容到正好容纳元素的容量
      *}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: Pointer; aCount: SizeUInt);
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt);
 
     {**
      * WriteExact
@@ -431,7 +431,7 @@ type
      *   aCount 必须大于 0
      *   遇到扩容时不再遵循增长策略，而是精确扩容到正好容纳元素的容量
      *}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: array of T);
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: array of T);
 
     {**
      * WriteExact
@@ -449,7 +449,7 @@ type
      *   aCollection 必须为有效容器
      *   遇到扩容时不再遵循增长策略，而是精确扩容到正好容纳元素的容量
      *}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: TCollection); overload;
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection); overload;
 
     {**
      * WriteExact
@@ -469,7 +469,7 @@ type
      *   aCount 必须大于 0
      *   遇到扩容时不再遵循增长策略，而是精确扩容到正好容纳元素的容量
      *}
-    procedure WriteExact(aIndex: SizeUint; const aSrc: TCollection; aCount: SizeUInt);
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt);
 
 
 
@@ -592,7 +592,7 @@ type
      *
      * @return 如果成功读取返回 True,否则返回 False
      *}
-    function TryPeekCopy(aDst: Pointer; aCount: SizeUint): Boolean; overload;
+    function TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean; overload;
 
     {**
      * TryPeek
@@ -1076,7 +1076,7 @@ type
      *}
     function Last: T;
 
-    property Capacity:     SizeUint        read GetCapacity     write SetCapacity;
+    property Capacity:     SizeUInt        read GetCapacity     write SetCapacity;
     property GrowStrategy: IGrowthStrategy read GetGrowStrategy write SetGrowStrategy;
   end;
 

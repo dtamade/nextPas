@@ -265,7 +265,7 @@ type
      *   ENotCompatible  源容器与目标容器不兼容.
      *   EOutOfRange     索引/范围越界.
      *}
-    procedure OverWrite(aIndex:SizeUInt; const aSrc: TCollection); overload;
+    procedure OverWrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
 
     {**
      * OverWrite
@@ -295,7 +295,7 @@ type
      *   详见 docs/UnChecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
-    procedure OverWriteUnChecked(aIndex:SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure OverWriteUnChecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
     {**
      * Read

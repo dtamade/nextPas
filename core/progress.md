@@ -22,10 +22,14 @@
 - Agreed on size/capacity vocabulary: `Resize` changes logical `Count`; `EnsureCapacity` ensures absolute capacity; `Reserve` ensures append headroom (`Count + Additional`); `Exact` variants bypass the growth strategy; shrink/free-buffer operations belong to growable vector-style containers, not the array capability base.
 - Reviewed `IVec<T>` dynamic sequence methods and recorded the interface direction: preserve the rich Vec sequence API, keep `Push`/`Pop`/`Peek`, distinguish `Delete` from `RemoveAt`, use explicit swap-removal naming for order-unstable extraction, keep `Drain`/`SplitOff`/`Splice`/`Retain`/`Filter`/`Dedup`, and regularize zero-count batch no-op behavior.
 - Recorded the naming cleanup batch: `UnChecked` to `Unchecked`, `OverWrite` to `Overwrite`, `FindIF`/`CountIF`/`ReplaceIF` to `FindIf`/`CountIf`/`ReplaceIf`, `SizeUint` to `SizeUInt`, and parameter spacing cleanup. This should be done as a complete mechanical refactor with compile verification.
+- Implemented the first low-risk naming cleanup batch across collections source units: `SizeUint` is now `SizeUInt`, and missing parameter spacing such as `aIndex:SizeUInt` was normalized in `arr`, `vec`, and `vecdeque` units.
+- Verified the batch with `make -C tests/nextpas.core.collections/test_vec test`, `make -C tests/nextpas.core.collections/test_deque test`, `make -C tests/nextpas.core.collections/test_facade test`, and full `make test`; all completed with zero failures.
 
 ## Next
 
-- Continue the interface design discussion one decision at a time before more code changes.
+- Continue the naming cleanup implementation one batch at a time.
+- Next likely mechanical batch: `OverWrite` -> `Overwrite`, with interfaces, implementations, comments, and tests updated together.
+- After that, handle `UnChecked` -> `Unchecked` as a separate larger batch because it touches many interface implementation bindings.
 - Continue the structural audit across remaining containers.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.
