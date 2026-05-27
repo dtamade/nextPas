@@ -622,10 +622,7 @@ end;
 
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
 begin
-  if windows_mutex_trylock(@AMutex.FOpaque[0]) then
-    Result := 0
-  else
-    Result := PLATFORM_ERR_BUSY;
+  Result := windows_mutex_trylock_busy_result(@AMutex.FOpaque[0], PLATFORM_ERR_BUSY);
 end;
 
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
@@ -653,10 +650,7 @@ end;
 
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  if windows_rwlock_tryrdlock(@ARwLock.FOpaque[0]) then
-    Result := 0
-  else
-    Result := PLATFORM_ERR_BUSY;
+  Result := windows_rwlock_tryrdlock_busy_result(@ARwLock.FOpaque[0], PLATFORM_ERR_BUSY);
 end;
 
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
@@ -666,10 +660,7 @@ end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  if windows_rwlock_trywrlock(@ARwLock.FOpaque[0]) then
-    Result := 0
-  else
-    Result := PLATFORM_ERR_BUSY;
+  Result := windows_rwlock_trywrlock_busy_result(@ARwLock.FOpaque[0], PLATFORM_ERR_BUSY);
 end;
 
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;

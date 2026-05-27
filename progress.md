@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.sync Windows destroy helper ownership；上一轮包括
+当前最新本轮为 platform.sync Windows busy-result helper ownership；上一轮包括
+platform.sync Windows destroy helper ownership；
 platform.time host-ffi facade collapse；
 platform POSIX timeout deadline helper ownership、
 collections interface ownership normalization、
@@ -25,6 +26,54 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (platform.sync Windows busy-result helper ownership)
+
+- **Status:** completed; verification passed
+- Objective:
+  - 把 Windows mutex/rwlock trylock 的 busy classifier 从 `platform.sync` consumer 收回
+    `windows.ffi` owner，同时不把 nextPas public busy 常量硬编码进 ffi。
+- Baseline:
+  - `windows.ffi` 已经拥有 raw `windows_mutex_trylock`、
+    `windows_rwlock_tryrdlock`、`windows_rwlock_trywrlock`，但
+    `platform.sync` 仍自己写三处：
+    - `if windows_mutex_trylock(...) then 0 else PLATFORM_ERR_BUSY`
+    - `if windows_rwlock_tryrdlock(...) then 0 else PLATFORM_ERR_BUSY`
+    - `if windows_rwlock_trywrlock(...) then 0 else PLATFORM_ERR_BUSY`
+  - 这层逻辑和之前已收回的 timeout-result classifier 类似，本质上是宿主 `BOOL` 语义到 caller-chosen
+    public result 的最后一小段残留。
+- Actions taken:
+  - 先把 `core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/` 扩成 RED gate，
+    要求：
+    - `windows.ffi` 暴露 `windows_mutex_trylock_busy_result`、
+      `windows_rwlock_tryrdlock_busy_result`、
+      `windows_rwlock_trywrlock_busy_result`
+    - `platform.sync` 消费这些 helper
+    - `platform.sync` 不得再保留 `if windows_*trylock(...)` 本地 busy mapping
+  - `core/src/nextpas.core.platform.windows.ffi.pas` 新增上述 caller-supplied busy-result helper，
+    让 Windows trylock false=>busy classifier 继续留在 host ffi owner。
+  - `core/src/nextpas.core.platform.sync.pas` 的 Windows trylock 分支改为直接消费这些 helper，只继续传
+    `PLATFORM_ERR_BUSY` public contract。
+  - `core/docs/design-conventions.md`、`task_plan.md`、`progress.md`、`findings.md`
+    回写这条 owner boundary。
+- Verification:
+  - RED:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+      初始失败在
+      `windows.ffi must expose Windows mutex trylock helper that maps busy semantics for sync: windows_mutex_trylock_busy_result`。
+  - Focused GREEN:
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - Full:
+    - fresh `make -C core test`
+    - fresh `make -C core examples`
+    - fresh `make -C core benchmarks`
+    - fresh `bash build/verify_local.sh`
+- Review:
+  - 这批把 Windows helper family 又补齐了一截：timeout-result 之前已经归位，这次 busy-result 也不再漏回
+    consumer。
+  - 现在 `platform.sync` 的 Windows 分支更稳定地维持在“public contract + policy caller”的角色上，
+    宿主 try-acquire classifier 则继续落在 `windows.ffi`。
 
 ## Session: 2026-05-27 (platform.sync Windows destroy helper ownership)
 

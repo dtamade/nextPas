@@ -253,6 +253,8 @@ begin
     'windows.ffi must expose Windows mutex lock helper');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_trylock',
     'windows.ffi must expose Windows mutex trylock helper');
+  CheckTokenPresent(LWindowsSource, 'windows_mutex_trylock_busy_result',
+    'windows.ffi must expose Windows mutex trylock helper that maps busy semantics for sync');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_unlock',
     'windows.ffi must expose Windows mutex unlock helper');
   CheckTokenPresent(LWindowsSource, 'windows_mutex_destroy',
@@ -263,10 +265,14 @@ begin
     'windows.ffi must expose Windows rwlock read-lock helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_tryrdlock',
     'windows.ffi must expose Windows rwlock try-read-lock helper');
+  CheckTokenPresent(LWindowsSource, 'windows_rwlock_tryrdlock_busy_result',
+    'windows.ffi must expose Windows rwlock try-read-lock helper that maps busy semantics for sync');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_wrlock',
     'windows.ffi must expose Windows rwlock write-lock helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_trywrlock',
     'windows.ffi must expose Windows rwlock try-write-lock helper');
+  CheckTokenPresent(LWindowsSource, 'windows_rwlock_trywrlock_busy_result',
+    'windows.ffi must expose Windows rwlock try-write-lock helper that maps busy semantics for sync');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_rdunlock',
     'windows.ffi must expose Windows rwlock read-unlock helper');
   CheckTokenPresent(LWindowsSource, 'windows_rwlock_wrunlock',
@@ -381,8 +387,8 @@ begin
     'platform.sync must consume Windows mutex init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_lock',
     'platform.sync must consume Windows mutex lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_trylock',
-    'platform.sync must consume Windows mutex trylock helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_mutex_trylock_busy_result',
+    'platform.sync must consume Windows mutex trylock busy-result helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_unlock',
     'platform.sync must consume Windows mutex unlock helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_mutex_destroy',
@@ -391,12 +397,12 @@ begin
     'platform.sync must consume Windows rwlock init helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_rdlock',
     'platform.sync must consume Windows rwlock read-lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_tryrdlock',
-    'platform.sync must consume Windows rwlock try-read-lock helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_rwlock_tryrdlock_busy_result',
+    'platform.sync must consume Windows rwlock try-read-lock busy-result helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_wrlock',
     'platform.sync must consume Windows rwlock write-lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_trywrlock',
-    'platform.sync must consume Windows rwlock try-write-lock helper through windows.ffi');
+  CheckTokenPresent(LSyncSource, 'windows_rwlock_trywrlock_busy_result',
+    'platform.sync must consume Windows rwlock try-write-lock busy-result helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_rdunlock',
     'platform.sync must consume Windows rwlock read-unlock helper through windows.ffi');
   CheckTokenPresent(LSyncSource, 'windows_rwlock_wrunlock',
@@ -475,6 +481,12 @@ begin
     'platform.sync must not keep the raw Windows condvar timedwait helper in the consumer');
   Check(Pos('windows_wait_address_i32_timeout_ns', LSyncSource) = 0,
     'platform.sync must not keep the raw Windows wait-address timeout helper in the consumer');
+  Check(Pos('if windows_mutex_trylock(', LSyncSource) = 0,
+    'platform.sync must not keep local Windows mutex trylock busy mapping in the consumer');
+  Check(Pos('if windows_rwlock_tryrdlock(', LSyncSource) = 0,
+    'platform.sync must not keep local Windows rwlock try-read busy mapping in the consumer');
+  Check(Pos('if windows_rwlock_trywrlock(', LSyncSource) = 0,
+    'platform.sync must not keep local Windows rwlock try-write busy mapping in the consumer');
   Check(Pos(': dword', LSyncSource) = 0,
     'platform.sync must not keep raw DWORD temporaries in the Windows consumer');
   Check(Pos('linux_syscall', LSyncSource) = 0,

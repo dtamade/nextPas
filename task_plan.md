@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Sync Windows Destroy Helper Ownership；上一轮包括
+当前最新本轮为 Platform Sync Windows Busy-result Helper Ownership；上一轮包括
+Platform Sync Windows Destroy Helper Ownership；
 Platform Time Host-FFI Facade Collapse；
 Platform POSIX Timeout Deadline Helper Ownership、
 Collections Interface Ownership Normalization、
@@ -36,6 +37,65 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Windows Busy-result Helper Ownership
+
+### Goal
+
+继续把 Windows trylock 的 busy classifier 从 `platform.sync` consumer 收回 `windows.ffi` owner：
+
+- `platform.sync` 不再自己写三处 `if windows_*trylock(...) then ... else ...`
+- `windows.ffi` 显式拥有
+  `windows_mutex_trylock_busy_result`、
+  `windows_rwlock_tryrdlock_busy_result`、
+  `windows_rwlock_trywrlock_busy_result`
+- caller 仍保留 nextPas public busy result 常量的最终选择权
+
+### Architecture Decision
+
+- Windows `TryAcquireSRWLock*` 返回 `BOOL` 且失败语义在这里就是 busy；这层 classifier 更接近宿主 helper
+  组合，而不是 generic platform policy。
+- 为了不把 `PLATFORM_ERR_BUSY` 硬编码进 ffi owner，这批继续采用 caller-supplied busy result 形态；
+  `platform.sync` 只把 public busy contract 作为参数传给 `windows.ffi`。
+
+### Status
+
+Completed; verification passed.
+
+### Planned Steps
+
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 trylock busy-result helper，
+  且 `platform.sync` 消费这些 helper
+- [x] RED：禁止 `platform.sync` 继续保留三处本地 Windows trylock busy mapping
+- [x] 在 `windows.ffi` 增加 busy-result helper
+- [x] 让 `platform.sync` Windows trylock 分支改为 delegation
+- [x] 更新 design/tracking 文档
+- [x] focused：`test_platform_sync_host_ffi_surface` / `test_platform_sync` 通过
+- [x] fresh `make -C core test`
+- [x] fresh `make -C core examples`
+- [x] fresh `make -C core benchmarks`
+- [x] fresh `bash build/verify_local.sh`
+
+### Verification
+
+- RED:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    初始失败在
+    `windows.ffi must expose Windows mutex trylock helper that maps busy semantics for sync: windows_mutex_trylock_busy_result`。
+- Focused GREEN:
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+- Full:
+  - fresh `make -C core test`
+  - fresh `make -C core examples`
+  - fresh `make -C core benchmarks`
+  - fresh `bash build/verify_local.sh`
+
+### Non-goals
+
+- 这批不移走 POSIX errno 到 `PLATFORM_ERR_*` 的映射
+- 这批不改变 Windows public opaque storage contract
+- 这批不把 timeout-result helper 重新改回 consumer 逻辑
 
 ## Addendum: 2026-05-27 Platform Sync Windows Destroy Helper Ownership
 

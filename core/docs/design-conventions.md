@@ -264,13 +264,14 @@ TFileStream = class(TInterfacedObject, IReader, IWriter, IStream)
 
 ### interface vs class vs record 选择标准
 
-| 选择 | 判断条件 | 示例 |
-|------|----------|------|
-| `record` | 纯数据、值语义、无生命周期管理 | `TPoint`、`TDuration`、`TColor` |
-| `interface` | 对外 API 契约、需要多实现或自动释放 | `IHasher`、`IReader`、`ILogger` |
-| `class` | 内部实现细节、实现 interface 的具体类 | `TSha256Hasher`、`TFileReader` |
+| 选择        | 判断条件                              | 示例                            |
+| ----------- | ------------------------------------- | ------------------------------- |
+| `record`    | 纯数据、值语义、无生命周期管理        | `TPoint`、`TDuration`、`TColor` |
+| `interface` | 对外 API 契约、需要多实现或自动释放   | `IHasher`、`IReader`、`ILogger` |
+| `class`     | 内部实现细节、实现 interface 的具体类 | `TSha256Hasher`、`TFileReader`  |
 
 简单判断流程：
+
 1. 纯数据、无行为或行为简单 → **record**
 2. 对外 API 契约、需要多实现或自动释放 → **interface**
 3. 内部实现细节 → **class**
@@ -414,12 +415,12 @@ Server.OnData(@HandleData);
 
 ### 保留标签
 
-| 标签 | 用途 |
-|------|------|
-| `@desc` | 功能简述 |
-| `@params` | 参数说明（有必要时） |
+| 标签      | 用途                   |
+| --------- | ---------------------- |
+| `@desc`   | 功能简述               |
+| `@params` | 参数说明（有必要时）   |
 | `@return` | 返回值说明（有必要时） |
-| `@note` | 需要注意的点 |
+| `@note`   | 需要注意的点           |
 
 ### 轻量类型注释
 
@@ -539,19 +540,19 @@ end;
 
 ### 大小写惯例
 
-| 类别 | 惯例 | 示例 |
-|------|------|------|
-| 关键字 | 全小写 | `begin`, `end`, `function`, `type`, `var` |
-| 类型名 | PascalCase + `T` 前缀 | `TMutex`, `TVec` |
-| 接口名 | PascalCase + `I` 前缀 | `IMutex`, `IVec` |
-| 异常类 | PascalCase + `E` 前缀 | `ENotFound`, `ETimeout` |
-| 常量 | UPPER_SNAKE_CASE | `MAX_BUFFER_SIZE` |
-| 字段 | PascalCase + `F` 前缀 | `FCount`, `FBuffer` |
-| 参数 | PascalCase + `A` 前缀 | `ACapacity`, `AValue` |
-| 局部变量 | PascalCase + `L` 前缀 | `LValue`, `LCount`, `LIdx` |
-| 函数/方法/类名 | PascalCase（首字母大写） | `GetCapacity`, `TryReserve` |
-| platform 层函数 | C 风格 snake_case + `platform_` 前缀 | `platform_mutex_lock`, `platform_futex_wait` |
-| 编译器宏 | UPPER_SNAKE_CASE | `NEXTPAS_CORE_USE_FUTEX` |
+| 类别            | 惯例                                 | 示例                                         |
+| --------------- | ------------------------------------ | -------------------------------------------- |
+| 关键字          | 全小写                               | `begin`, `end`, `function`, `type`, `var`    |
+| 类型名          | PascalCase + `T` 前缀                | `TMutex`, `TVec`                             |
+| 接口名          | PascalCase + `I` 前缀                | `IMutex`, `IVec`                             |
+| 异常类          | PascalCase + `E` 前缀                | `ENotFound`, `ETimeout`                      |
+| 常量            | UPPER_SNAKE_CASE                     | `MAX_BUFFER_SIZE`                            |
+| 字段            | PascalCase + `F` 前缀                | `FCount`, `FBuffer`                          |
+| 参数            | PascalCase + `A` 前缀                | `ACapacity`, `AValue`                        |
+| 局部变量        | PascalCase + `L` 前缀                | `LValue`, `LCount`, `LIdx`                   |
+| 函数/方法/类名  | PascalCase（首字母大写）             | `GetCapacity`, `TryReserve`                  |
+| platform 层函数 | C 风格 snake*case + `platform*` 前缀 | `platform_mutex_lock`, `platform_futex_wait` |
+| 编译器宏        | UPPER_SNAKE_CASE                     | `NEXTPAS_CORE_USE_FUTEX`                     |
 
 ### 参数声明风格
 
@@ -645,70 +646,70 @@ build/
 
 ### L0: 内核（只依赖 FPC RTL）
 
-| 模块 | 职责 |
-|------|------|
-| `base` | 基础类型、公共定义、编译器设置（settings.inc） |
-| `errors` | 异常层次结构 |
-| `platform` | OS/CPU 检测、平台类型（句柄等） |
-| `mem` | 内存管理（分配器抽象、arena、pool） |
-| `log.intf` | ILogger 接口 + NullLogger（零开销） |
+| 模块       | 职责                                           |
+| ---------- | ---------------------------------------------- |
+| `base`     | 基础类型、公共定义、编译器设置（settings.inc） |
+| `errors`   | 异常层次结构                                   |
+| `platform` | OS/CPU 检测、平台类型（句柄等）                |
+| `mem`      | 内存管理（分配器抽象、arena、pool）            |
+| `log.intf` | ILogger 接口 + NullLogger（零开销）            |
 
 ### L1: 基础设施（只依赖 L0）
 
-| 模块 | 职责 |
-|------|------|
-| `bytes` | 字节容器（Buffer、Builder、字节序） |
-| `text` | 字符串操作、Unicode、格式化 |
-| `encoding` | 编解码（base64、hex、url、字符集、varint） |
+| 模块          | 职责                                              |
+| ------------- | ------------------------------------------------- |
+| `bytes`       | 字节容器（Buffer、Builder、字节序）               |
+| `text`        | 字符串操作、Unicode、格式化                       |
+| `encoding`    | 编解码（base64、hex、url、字符集、varint）        |
 | `collections` | 容器（Vec、HashMap、Deque、Set、List、LRU、Pool） |
-| `sync` | 同步原语（Mutex、RWLock、Atomic、WaitGroup） |
-| `thread` | 线程池、Channel、Future |
-| `async` | 事件循环、Reactor、异步运行时 |
-| `io` | 流抽象（Reader、Writer、Buffer） |
-| `time` | DateTime、Duration、Timer、Stopwatch |
-| `id` | UUID/ULID/Snowflake/NanoID |
-| `testing` | 测试框架（初期极简，后期迭代） |
+| `sync`        | 同步原语（Mutex、RWLock、Atomic、WaitGroup）      |
+| `thread`      | 线程池、Channel、Future                           |
+| `async`       | 事件循环、Reactor、异步运行时                     |
+| `io`          | 流抽象（Reader、Writer、Buffer）                  |
+| `time`        | DateTime、Duration、Timer、Stopwatch              |
+| `id`          | UUID/ULID/Snowflake/NanoID                        |
+| `testing`     | 测试框架（初期极简，后期迭代）                    |
 
 ### L2: 系统能力（只依赖 L0-L1）
 
-| 模块 | 职责 |
-|------|------|
-| `fs` | 文件系统（同步 + 异步） |
-| `net` | TCP/UDP Socket、地址解析 |
-| `tls` | TLS/SSL |
-| `dns` | DNS 解析 |
-| `crypto` | 哈希、加密、签名 |
-| `compress` | gzip/zlib/zstd |
-| `json` | JSON |
-| `yaml` | YAML |
-| `toml` | TOML |
-| `xml` | XML（低优先级） |
-| `regex` | 正则表达式 |
-| `sqlite` | SQLite |
-| `pg` | PostgreSQL |
-| `process` | 进程管理 |
-| `args` | 命令行解析 |
+| 模块         | 职责                               |
+| ------------ | ---------------------------------- |
+| `fs`         | 文件系统（同步 + 异步）            |
+| `net`        | TCP/UDP Socket、地址解析           |
+| `tls`        | TLS/SSL                            |
+| `dns`        | DNS 解析                           |
+| `crypto`     | 哈希、加密、签名                   |
+| `compress`   | gzip/zlib/zstd                     |
+| `json`       | JSON                               |
+| `yaml`       | YAML                               |
+| `toml`       | TOML                               |
+| `xml`        | XML（低优先级）                    |
+| `regex`      | 正则表达式                         |
+| `sqlite`     | SQLite                             |
+| `pg`         | PostgreSQL                         |
+| `process`    | 进程管理                           |
+| `args`       | 命令行解析                         |
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
 
 ### L3: 框架（只依赖 L0-L2）
 
-| 模块 | 职责 |
-|------|------|
-| `log` | 完整日志实现（格式化、输出、异步） |
-| `config` | 配置管理（多源、热加载） |
-| `redis` | Redis 客户端 |
-| `http` | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
-| `websocket` | WebSocket（帧协议、Room、广播） |
-| `mail` | SMTP/IMAP/POP3 |
-| `tui` | 终端 UI（渲染、布局、Widget、事件） |
-| `migration` | 数据库迁移 |
-| `ratelimit` | 限流、熔断、重试、降级 |
-| `auth` | JWT/Session/认证/权限 |
-| `template` | 模板引擎 |
-| `metrics` | 指标采集、Prometheus、健康检查 |
-| `event` | 进程内事件总线（pub/sub） |
-| `job` | 异步任务队列（重试、死信、优先级） |
-| `app` | 应用启动编排（Bootstrap、Graceful Shutdown） |
+| 模块        | 职责                                                       |
+| ----------- | ---------------------------------------------------------- |
+| `log`       | 完整日志实现（格式化、输出、异步）                         |
+| `config`    | 配置管理（多源、热加载）                                   |
+| `redis`     | Redis 客户端                                               |
+| `http`      | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
+| `websocket` | WebSocket（帧协议、Room、广播）                            |
+| `mail`      | SMTP/IMAP/POP3                                             |
+| `tui`       | 终端 UI（渲染、布局、Widget、事件）                        |
+| `migration` | 数据库迁移                                                 |
+| `ratelimit` | 限流、熔断、重试、降级                                     |
+| `auth`      | JWT/Session/认证/权限                                      |
+| `template`  | 模板引擎                                                   |
+| `metrics`   | 指标采集、Prometheus、健康检查                             |
+| `event`     | 进程内事件总线（pub/sub）                                  |
+| `job`       | 异步任务队列（重试、死信、优先级）                         |
+| `app`       | 应用启动编排（Bootstrap、Graceful Shutdown）               |
 
 ---
 
@@ -930,8 +931,13 @@ init/lock/trylock/unlock/destroy/wait/wake helper，都应尽量继续归
 `nextpas.core.platform.windows.ffi` owner。`platform.sync` 只消费像
 `windows_mutex_*`、`windows_rwlock_*`、`windows_condvar_*`、
 `windows_wait_address_i32`、`windows_wake_address_*` 这类 host-owned helper，并保留
-nextPas 自己的 public opaque storage contract、busy/timeout error mapping 与跨平台 wait
-policy；不要在 consumer 里重新散落 raw `InitializeSRWLock`、
+nextPas 自己的 public opaque storage contract 与跨平台 wait policy；如果 Windows helper 还需要把
+宿主 false/timeout 结果投影成 nextPas public busy/timeout result，优先像
+`windows_mutex_trylock_busy_result`、`windows_rwlock_tryrdlock_busy_result`、
+`windows_rwlock_trywrlock_busy_result`、
+`windows_condvar_timedwait_timeout_result`、
+`windows_wait_address_i32_timeout_result` 这样用 caller-supplied result helper 继续留在 ffi owner，
+而不是让 consumer 自己再写 `if windows_* ... then ... else ...` 分支。不要在 consumer 里重新散落 raw `InitializeSRWLock`、
 `AcquireSRWLock*`、`SleepConditionVariableSRW`、`WaitOnAddress`、`WakeByAddress*`
 调用。
 
@@ -1043,11 +1049,11 @@ type / calling convention 细节。
 
 ### 框架整体依赖规则
 
-| 允许依赖 | 不允许依赖 |
-|----------|------------|
-| FPC System 单元（隐式）— nextPas 会平替 | SysUtils、Classes、Linux、PThreads、UnixType、BaseUnix、Syscall、Windows 等 FPC 库单元 |
-| 编译器内置特性（string、动态数组、interface、try/except、GetMem） | 任何 FPC 特有的库/包 |
-| 自己的 FFI 声明（cdecl/stdcall external） | |
+| 允许依赖                                                          | 不允许依赖                                                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| FPC System 单元（隐式）— nextPas 会平替                           | SysUtils、Classes、Linux、PThreads、UnixType、BaseUnix、Syscall、Windows 等 FPC 库单元 |
+| 编译器内置特性（string、动态数组、interface、try/except、GetMem） | 任何 FPC 特有的库/包                                                                   |
+| 自己的 FFI 声明（cdecl/stdcall external）                         |                                                                                        |
 
 **注意：** 当前自举阶段（FPC 3.3.1 编译），部分模块暂时使用了 SysUtils（Exception、TBytes、Format 等）。这是已知的临时依赖，需要逐步替换为框架自身提供的等价实现。新代码应尽量避免引入新的 FPC 单元依赖。
 

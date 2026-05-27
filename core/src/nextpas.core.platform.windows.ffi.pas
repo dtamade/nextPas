@@ -72,13 +72,16 @@ function windows_wait_for_single_object_is_signaled(const AWaitResult: DWORD): B
 function windows_mutex_init(const AMutex: Pointer): Int32; inline;
 function windows_mutex_lock(const AMutex: Pointer): Int32; inline;
 function windows_mutex_trylock(const AMutex: Pointer): Boolean; inline;
+function windows_mutex_trylock_busy_result(const AMutex: Pointer; const ABusyResult: Int32): Int32; inline;
 function windows_mutex_unlock(const AMutex: Pointer): Int32; inline;
 function windows_mutex_destroy(const AMutex: Pointer): Int32; inline;
 function windows_rwlock_init(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_rdlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_tryrdlock(const ARwLock: Pointer): Boolean; inline;
+function windows_rwlock_tryrdlock_busy_result(const ARwLock: Pointer; const ABusyResult: Int32): Int32; inline;
 function windows_rwlock_wrlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_trywrlock(const ARwLock: Pointer): Boolean; inline;
+function windows_rwlock_trywrlock_busy_result(const ARwLock: Pointer; const ABusyResult: Int32): Int32; inline;
 function windows_rwlock_rdunlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_wrunlock(const ARwLock: Pointer): Int32; inline;
 function windows_rwlock_destroy(const ARwLock: Pointer): Int32; inline;
@@ -287,6 +290,13 @@ begin
   Result := TryAcquireSRWLockExclusive(AMutex);
 end;
 
+function windows_mutex_trylock_busy_result(const AMutex: Pointer; const ABusyResult: Int32): Int32; inline;
+begin
+  if windows_mutex_trylock(AMutex) then
+    Exit(0);
+  Result := ABusyResult;
+end;
+
 function windows_mutex_unlock(const AMutex: Pointer): Int32; inline;
 begin
   ReleaseSRWLockExclusive(AMutex);
@@ -315,6 +325,13 @@ begin
   Result := TryAcquireSRWLockShared(ARwLock);
 end;
 
+function windows_rwlock_tryrdlock_busy_result(const ARwLock: Pointer; const ABusyResult: Int32): Int32; inline;
+begin
+  if windows_rwlock_tryrdlock(ARwLock) then
+    Exit(0);
+  Result := ABusyResult;
+end;
+
 function windows_rwlock_wrlock(const ARwLock: Pointer): Int32; inline;
 begin
   AcquireSRWLockExclusive(ARwLock);
@@ -324,6 +341,13 @@ end;
 function windows_rwlock_trywrlock(const ARwLock: Pointer): Boolean; inline;
 begin
   Result := TryAcquireSRWLockExclusive(ARwLock);
+end;
+
+function windows_rwlock_trywrlock_busy_result(const ARwLock: Pointer; const ABusyResult: Int32): Int32; inline;
+begin
+  if windows_rwlock_trywrlock(ARwLock) then
+    Exit(0);
+  Result := ABusyResult;
 end;
 
 function windows_rwlock_rdunlock(const ARwLock: Pointer): Int32; inline;

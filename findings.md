@@ -51,6 +51,12 @@
   `platform.sync` consumer 里写三处 `Result := 0`。现在 `windows.ffi` 显式拥有
   `windows_mutex_destroy`、`windows_rwlock_destroy`、`windows_condvar_destroy`，Windows sync helper
   family 在 ffi owner 侧更完整了。
+- Windows `TryAcquireSRWLock*` 的 false=>busy classifier 也不该继续留在 `platform.sync` consumer 里写
+  `if ... then 0 else PLATFORM_ERR_BUSY`。现在 `windows.ffi` 显式拥有
+  `windows_mutex_trylock_busy_result`、
+  `windows_rwlock_tryrdlock_busy_result`、
+  `windows_rwlock_trywrlock_busy_result`，同时继续采用 caller-supplied busy result，避免把
+  `PLATFORM_ERR_BUSY` 硬编码进 ffi owner。
 - 新增 `core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/`，把
   `platform.time` 对 `posix.ffi` / `darwin.ffi` / `windows.ffi` 的 clock ABI 消费关系冻结成
   source-surface gate；fresh `bash build/verify_local.sh` 已把
