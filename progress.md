@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 Batch 148 installed-source inherited member function result no matching overload deferred guard；Batch 147 imported inherited member function result no matching overload diagnostics；Batch 146 installed-source inherited member function result deferred guard；Batch 145 imported inherited member function result type mismatch diagnostics；Batch 144 imported member function result type mismatch diagnostics；Batch 143 imported function result type mismatch diagnostics；Batch 142 inherited implicit self bare method function result type mismatch diagnostics；Batch 141 installed-source bare unknown callable deferred guard；Batch 140 installed-source bare callable no matching overload deferred guard；Batch 139 installed-source bare callable ambiguous overload deferred guard；Batch 138 installed-source bare callable wrong argument count deferred guard；Batch 137 imported bare callable wrong argument count diagnostics；Batch 136 implicit self bare method ambiguous overload diagnostics；Batch 135 implicit self bare method no matching overload diagnostics；Batch 134 implicit self bare method wrong argument count diagnostics；Batch 133 implicit self bare method literal type mismatch diagnostics；Batch 132 implicit self bare method function result type mismatch diagnostics；Batch 131 member function result type mismatch diagnostics；Batch 130 implicit self bare method unknown-member diagnostics；Batch 129 inherited implicit self bare method ambiguous overload diagnostics；Batch 128 inherited implicit self bare method no matching overload diagnostics；Batch 127 inherited implicit self bare method wrong argument count diagnostics；Batch 126 inherited implicit self bare method type mismatch diagnostics；Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
+当前最新本轮为 Batch 149 imported inherited member function result ambiguous overload diagnostics；Batch 148 installed-source inherited member function result no matching overload deferred guard；Batch 147 imported inherited member function result no matching overload diagnostics；Batch 146 installed-source inherited member function result deferred guard；Batch 145 imported inherited member function result type mismatch diagnostics；Batch 144 imported member function result type mismatch diagnostics；Batch 143 imported function result type mismatch diagnostics；Batch 142 inherited implicit self bare method function result type mismatch diagnostics；Batch 141 installed-source bare unknown callable deferred guard；Batch 140 installed-source bare callable no matching overload deferred guard；Batch 139 installed-source bare callable ambiguous overload deferred guard；Batch 138 installed-source bare callable wrong argument count deferred guard；Batch 137 imported bare callable wrong argument count diagnostics；Batch 136 implicit self bare method ambiguous overload diagnostics；Batch 135 implicit self bare method no matching overload diagnostics；Batch 134 implicit self bare method wrong argument count diagnostics；Batch 133 implicit self bare method literal type mismatch diagnostics；Batch 132 implicit self bare method function result type mismatch diagnostics；Batch 131 member function result type mismatch diagnostics；Batch 130 implicit self bare method unknown-member diagnostics；Batch 129 inherited implicit self bare method ambiguous overload diagnostics；Batch 128 inherited implicit self bare method no matching overload diagnostics；Batch 127 inherited implicit self bare method wrong argument count diagnostics；Batch 126 inherited implicit self bare method type mismatch diagnostics；Batch 125 inherited implicit self bare method call argument binding；Batch 124 inherited implicit self bare method call binding；Batch 123 implicit self bare method call binding；Batch 122 inherited known property member invalid-call-shape；Batch 121 inherited known field member invalid-call-shape；Batch 120 known property member invalid-call-shape；Batch 119 known field member invalid-call-shape；Batch 118 imported inherited unknown-member diagnostics；Batch 117 imported inherited member type mismatch diagnostics；Batch 116 imported inherited member wrong argument count diagnostics；Batch 115 imported inherited member ambiguous overload diagnostics；Batch 114 imported inherited member no matching overload diagnostics；Batch 113 inherited member no matching overload diagnostics；Batch 112 imported member
 wrong argument count diagnostics；Batch 111 imported member unknown-member diagnostics、Batch 110 imported
 member no matching overload diagnostics、Batch 109 imported member single-target type mismatch diagnostics
 已完成；并行收口包含
@@ -16,6 +16,41 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-27 (Batch 149 imported inherited member function result ambiguous overload diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Objective:
+  - 把 Batch 115 的 imported inherited `project-source` ambiguity 与 Batch 145/147 的
+    root-owned function-result stable evidence 组合成 official gate。
+  - root `function Count: Integer` 调 imported parent overload set
+    `TBase.Pick(Integer)` / `TBase.Pick(LongInt)` 时必须失败为
+    `sema.ambiguous-overload`，且不注册失败 `member-call` binding。
+- Actions taken:
+  - 在 `task_plan.md` 新增 Batch 149 `/plan`，明确本轮只收一个 semantic matrix cell。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckImportedInheritedMemberFunctionResultAmbiguousOverloadDiagnostic`。
+  - Focused probe 已直接 GREEN：现有 analyzer 已把 root-owned function-result stable evidence
+    传给 imported inherited `project-source` overload-set ambiguity；本批不修改 analyzer。
+  - 新增 `tests/fixtures/imported_inherited_member_function_result_ambiguous_overload`，并把
+    `imported-inherited-member-function-result-ambiguous-overload-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+  - 同步 `docs/architecture/semantic-model-specification.md` 与 `tools/stage0/README.md`。
+- Verification:
+  - Focused semantic：`semantic-call-bindings-status=pass`。
+  - Stage0 focused：fixture 输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.ambiguous-overload`、`diagnostic-message=ambiguous overload for "Pick"`。
+  - Fresh local：`bash build/verify_local.sh` 输出
+    `imported-inherited-member-function-result-ambiguous-overload-check=pass`、
+    `importedInheritedMemberFunctionResultAmbiguousOverloadCheck":"pass"`、
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+    `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review:
+  - 本批是 promotion-first：新增 focused test、fixture、official gate 与 spec/README 说明，不修改 analyzer。
+  - Review 确认 changed files do not include `core/`，符合当前协作边界。
 
 ## Session: 2026-05-27 (Batch 148 installed-source inherited member function result no matching overload deferred guard)
 

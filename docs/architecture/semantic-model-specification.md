@@ -94,13 +94,14 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
   member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
   同样发 `sema.no-matching-overload`；imported `project-source` inherited member-call
-  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match evidence。
+  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match 与
+  ambiguity evidence。
   imported `installed-source` single-target
   type mismatch、single-target arity miss、bare callable ambiguity、bare callable no-match、
-  inherited member-call overload-set no-match（即使 argument evidence 是 root-owned 零参
+  inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned 零参
   内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
-  无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  无法推断或 source provenance 不可信的 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
@@ -138,7 +139,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
   `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
   透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
-  或 inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`。随后再用同名
+  inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`，或 imported
+  `project-source` inherited `Worker.Pick(Count);` 同时面对 parent chain 的 `Pick(Integer)`
+  与 `Pick(LongInt)` 且 root-owned `Count` 返回 `Integer`。随后再用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
@@ -353,6 +356,9 @@ candidate collection
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
+    target method 的场景
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景

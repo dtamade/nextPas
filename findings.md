@@ -274,6 +274,17 @@
   `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`、
   `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
   与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 149 证明 root-owned 零参 builtin function-result evidence 也能穿过 imported
+  `project-source` inherited member-call ambiguity：`Worker.Pick(Count)` 面对 parent chain 中
+  `Pick(Integer)` / `Pick(LongInt)` 的 compact signature collision 会失败为
+  `sema.ambiguous-overload`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：parent-chain member-call path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 root-owned function-result evidence 传给 imported
+  `project-source` overload-set ambiguity projection。
+- Batch 149 新增
+  `tests/fixtures/imported_inherited_member_function_result_ambiguous_overload` 与
+  `imported-inherited-member-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultAmbiguousOverloadCheck":"pass"`。
 - Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
   inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
   deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
