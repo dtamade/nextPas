@@ -9,15 +9,17 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 9 merged and plan-closed on `main`.
-- Active worktree:
+- Current status: Wave 10 merged to `main` as `8ed96da`
+  (`platform: add POSIX host stat ABI wave 10`).
+- Closed worktree:
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
-- Active branch: `codex/platform-host-abi-wave10-posix-stat-hosts`
+- Closed branch: `codex/platform-host-abi-wave10-posix-stat-hosts`
 - Base: `main@eeac28c`
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Current wave: Platform Host ABI Completeness Wave 10, Darwin / FreeBSD /
-  Android traditional stat raw ABI.
+  Android traditional stat raw ABI, closed; next wave should start from latest
+  `main`.
 
 ## Architecture Rules
 
@@ -73,7 +75,7 @@ the integration boundary.
   `platform.thread`, and any `platform.file` feature contract.
 - [x] Update source evidence, gap matrix, and official verification route.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [x] Commit, merge to `main`, post-merge verify, and clean the worktree.
 
 ### Wave 9: Linux traditional stat raw ABI
 
@@ -146,9 +148,13 @@ the integration boundary.
 - Post-merge `bash build/verify_local.sh` on `main@23f0dfd`: pass; final
   envelope reports `verify-local=pass`, `human-summary=local verification
   passed`, and includes `corePlatformHostAbiWave9LinuxStatCheck`.
+- Post-merge `bash build/verify_local.sh` on `main@8ed96da`: pass; final
+  envelope reports `verify-local=pass`, `human-summary=local verification
+  passed`, and includes `corePlatformHostAbiWave10PosixStatHostsCheck`.
 
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
 | --- | --- | --- |
 | Active planning files still described collections work in the Wave 7 platform worktree. | Session recovery | Replaced the active plan with platform ABI Wave 7 scope before implementation. |
+| Cleanup command removed tracked `build/` files while clearing generated artifacts. | Wave 10 post-merge cleanup | Immediately restored tracked `build/` with `git restore build`; avoid broad `rm -rf build` in future cleanups. |

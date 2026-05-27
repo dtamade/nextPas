@@ -87,6 +87,20 @@
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`, final envelope includes
     `corePlatformHostAbiWave10PosixStatHostsCheck`.
+- Committed Wave 10 as `8ed96da`
+  (`platform: add POSIX host stat ABI wave 10`).
+- Fast-forwarded `main` from `eeac28c` to `8ed96da`.
+- Post-merge `bash build/verify_local.sh` passed on the main checkout with
+  `verify-local=pass`, `human-summary=local verification passed`, and final
+  envelope token `corePlatformHostAbiWave10PosixStatHostsCheck`.
+- Removed the Wave 10 worktree and deleted branch
+  `codex/platform-host-abi-wave10-posix-stat-hosts`.
+- Remaining active sibling worktrees are `collections-refactor` and
+  `sema-no-matching-overload`.
+- Cleanup note: after post-merge verify, a broad cleanup command removed tracked
+  `build/` files along with generated artifacts. The tracked files were restored
+  immediately with `git restore build`; future cleanup must target ignored
+  generated paths precisely.
 
 - Started Wave 9 from `main@524b27c` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave9-posix-stat`
