@@ -67,9 +67,29 @@ contracts and should not create `platform.time.ffi`, `platform.sync.ffi`, or
   `open`, `close`, `fcntl`, `O_CLOEXEC`, `F_DUPFD`, `F_GETFD`, `F_SETFD`,
   `F_GETFL`, `F_SETFL`, `FD_CLOEXEC`, `CreateFileA`, `CreateFileW`,
   `ReadFile`, and `WriteFile`.
-- `stat remains deferred`: `stat`, `fstat`, and `lstat` stay out of Wave 2
-  because their record layouts, large-file suffixes, and 32/64-bit policy need
-  a separate evidence pass before import.
+- Platform Host ABI Completeness Wave 3 covers the file status ABI raw inventory
+  for host `base/ffi` owners. Linux now carries `statx` records,
+  `STATX_BASIC_STATS`, `AT_FDCWD`, `AT_SYMLINK_NOFOLLOW`, `AT_EMPTY_PATH`,
+  `LINUX_SYSCALL_STATX`, `linux_statx`, `linux_statx_path_basic`, and
+  `linux_statx_fd_basic`. Windows now carries `GET_FILEEX_INFO_LEVELS`,
+  `WIN32_FILE_ATTRIBUTE_DATA`, `BY_HANDLE_FILE_INFORMATION`, expanded
+  `FILE_ATTRIBUTE_*` constants, `GetFileAttributesExA`,
+  `GetFileAttributesExW`, `GetFileInformationByHandle`, and thin result helpers.
+  This remains source-surface and compile evidence, not a new public
+  `platform.file` contract.
+- Wave 3 source evidence tokens are synchronized with the evidence index:
+  `statx`, `__xstat`, `__lxstat`, `__fxstat`, Darwin `$INODE64`,
+  `GetFileAttributesExA`, `GetFileAttributesExW`,
+  `GetFileInformationByHandle`, `WIN32_FILE_ATTRIBUTE_DATA`, and
+  `BY_HANDLE_FILE_INFORMATION`.
+- The older Wave 2 marker `stat remains deferred` remains intentionally present
+  as route-truth compatibility. Wave 3 refines that marker to the narrower
+  `posix stat record remains deferred` decision below.
+- `posix stat record remains deferred`: traditional POSIX `stat`, `fstat`, and
+  `lstat` record import is still out of the shared POSIX owner because record
+  layouts, symbol suffixes, large-file policy, and 32/64-bit behavior differ by
+  host. Linux `statx` and Windows file status are host-owned raw ABI inventory,
+  not proof of a unified file-status contract.
 - Darwin has `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0`, so pthread
   condition-variable timeout policy uses the host-owned realtime clock token.
 - Darwin has `PLATFORM_PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0`. Its

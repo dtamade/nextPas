@@ -143,6 +143,15 @@ function windows_write_file(
   const ABytesToWrite: DWORD;
   out ABytesWritten: DWORD): Int32; inline;
 function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
+function windows_get_file_attributes_ex_a(
+  const AFileName: LPCSTR;
+  out AFileInformation: WIN32_FILE_ATTRIBUTE_DATA): Int32; inline;
+function windows_get_file_attributes_ex_w(
+  const AFileName: LPCWSTR;
+  out AFileInformation: WIN32_FILE_ATTRIBUTE_DATA): Int32; inline;
+function windows_get_file_information_by_handle(
+  const AFile: HANDLE;
+  out AFileInformation: BY_HANDLE_FILE_INFORMATION): Int32; inline;
 
 function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStartAddress: TWinThreadStartRoutine; lpParameter: Pointer; dwCreationFlags: DWORD; lpThreadId: Pointer): HANDLE; stdcall; external 'kernel32' name 'CreateThread';
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
@@ -190,6 +199,9 @@ function CreateFileA(lpFileName: LPCSTR; dwDesiredAccess: DWORD; dwShareMode: DW
 function CreateFileW(lpFileName: LPCWSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
 function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'ReadFile';
 function WriteFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToWrite: DWORD; lpNumberOfBytesWritten: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'WriteFile';
+function GetFileAttributesExA(lpFileName: LPCSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExA';
+function GetFileAttributesExW(lpFileName: LPCWSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExW';
+function GetFileInformationByHandle(hFile: HANDLE; lpFileInformation: PBY_HANDLE_FILE_INFORMATION): BOOL; stdcall; external 'kernel32' name 'GetFileInformationByHandle';
 
 implementation
 
@@ -370,6 +382,39 @@ end;
 function windows_file_close_handle(const AHandle: HANDLE): Int32; inline;
 begin
   Result := windows_thread_close_handle(AHandle);
+end;
+
+function windows_get_file_attributes_ex_a(
+  const AFileName: LPCSTR;
+  out AFileInformation: WIN32_FILE_ATTRIBUTE_DATA): Int32; inline;
+begin
+  FillChar(AFileInformation, SizeOf(AFileInformation), 0);
+  if GetFileAttributesExA(AFileName, GetFileExInfoStandard, @AFileInformation) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_get_file_attributes_ex_w(
+  const AFileName: LPCWSTR;
+  out AFileInformation: WIN32_FILE_ATTRIBUTE_DATA): Int32; inline;
+begin
+  FillChar(AFileInformation, SizeOf(AFileInformation), 0);
+  if GetFileAttributesExW(AFileName, GetFileExInfoStandard, @AFileInformation) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
+end;
+
+function windows_get_file_information_by_handle(
+  const AFile: HANDLE;
+  out AFileInformation: BY_HANDLE_FILE_INFORMATION): Int32; inline;
+begin
+  FillChar(AFileInformation, SizeOf(AFileInformation), 0);
+  if GetFileInformationByHandle(AFile, @AFileInformation) then
+    Result := 0
+  else
+    Result := windows_last_error_i32;
 end;
 
 function windows_last_error_is_timeout(const AError: DWORD): Boolean; inline;

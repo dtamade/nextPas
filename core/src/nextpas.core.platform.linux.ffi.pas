@@ -23,6 +23,18 @@ function platform_pthread_sync_result(
 function linux_futex_wait_i32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 function linux_futex_wake_one_i32(AAddr: PInt32): Int32;
 function linux_futex_wake_all_i32(AAddr: PInt32): Int32;
+function linux_statx(
+  const ADirectoryFileDescriptor: Int32;
+  const APath: PAnsiChar;
+  const AFlags: UInt32;
+  const AMask: UInt32;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
+function linux_statx_path_basic(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
+function linux_statx_fd_basic(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
 function platform_thread_self_token_u64: UInt64; inline;
 function platform_native_thread_id_u64: UInt64; inline;
 function platform_cpu_count_i32: Int32; inline;
@@ -267,6 +279,56 @@ begin
     Result := 0
   else
     Result := platform_posix_errno_value;
+end;
+
+function linux_statx(
+  const ADirectoryFileDescriptor: Int32;
+  const APath: PAnsiChar;
+  const AFlags: UInt32;
+  const AMask: UInt32;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
+var
+  LRet: PtrInt;
+begin
+  FillChar(ABuffer, SizeOf(ABuffer), 0);
+  LRet := linux_syscall(
+    LINUX_SYSCALL_STATX,
+    PtrUInt(ADirectoryFileDescriptor),
+    PtrUInt(APath),
+    PtrUInt(AFlags),
+    PtrUInt(AMask),
+    PtrUInt(@ABuffer),
+    PtrUInt(0));
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_posix_errno_value;
+end;
+
+function linux_statx_path_basic(
+  const APath: PAnsiChar;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
+begin
+  Result := linux_statx(
+    PLATFORM_LINUX_AT_FDCWD,
+    APath,
+    UInt32(PLATFORM_LINUX_AT_NO_AUTOMOUNT),
+    PLATFORM_LINUX_STATX_BASIC_STATS,
+    ABuffer);
+end;
+
+function linux_statx_fd_basic(
+  const AFileDescriptor: TPlatformFileDescriptor;
+  out ABuffer: TPlatformLinuxStatx): Int32; inline;
+const
+  EMPTY_PATH: array[0..0] of AnsiChar = (#0);
+begin
+  Result := linux_statx(
+    Int32(AFileDescriptor),
+    @EMPTY_PATH[0],
+    UInt32(PLATFORM_LINUX_AT_EMPTY_PATH),
+    PLATFORM_LINUX_STATX_BASIC_STATS,
+    ABuffer);
 end;
 
 function platform_thread_self_token_u64: UInt64; inline;

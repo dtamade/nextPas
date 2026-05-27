@@ -41,6 +41,40 @@ compile-only gates, and focused runtime tests of the nextPas abstractions.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 3: file status ABI raw inventory
+
+Wave 3 imports the file status ABI raw inventory that is safe to own without
+creating a public `platform.file` contract. It covers Linux `statx` raw ABI
+inventory and Windows file-attribute / file-information entry points. POSIX
+stat record remains deferred because the traditional POSIX `stat` / `fstat` /
+`lstat` family is not a single shared ABI shape across the supported hosts.
+
+- Linux `statx` evidence starts in FPC `rtl/linux/linux.pp`,
+  `rtl/linux/ostypes.inc`, `rtl/linux/ossysc.inc`,
+  `rtl/linux/x86_64/sysnr.inc`, and generic syscall-number include files such
+  as `rtl/linux/sysnr-gen.inc`. `nextpas.core.platform.linux.base` owns
+  `TPlatformLinuxStatxTimestamp`, `TPlatformLinuxStatx`,
+  `PLATFORM_LINUX_STATX_BASIC_STATS`, Linux `AT_*` stat flags, and the
+  `LINUX_SYSCALL_STATX` token. `nextpas.core.platform.linux.ffi` owns
+  `linux_statx`, `linux_statx_path_basic`, and `linux_statx_fd_basic`.
+- Traditional Linux libc `stat` evidence starts in FPC `rtl/linux/osmacro.inc`
+  and `rtl/linux/ostypes.inc`: FPC routes `FpStat`, `FpLstat`, and `FpFstat`
+  through `__xstat`, `__lxstat`, and `__fxstat` with `_STAT_VER`. `_STAT_VER`
+  itself differs by CPU family, so nextPas does not import a generic Linux
+  libc stat wrapper in this wave.
+- Generic Unix / BSD / Darwin stat symbol evidence starts in
+  `rtl/unix/oscdeclh.inc` and `rtl/bsd/ostypes.inc`. Those files show
+  `suffix64bit` and Darwin `$INODE64` suffix handling, plus host-specific
+  record layouts and padding. POSIX stat record remains deferred until each
+  host layout and symbol suffix policy has its own owner decision.
+- Windows file status evidence starts in FPC `rtl/win/wininc/struct.inc`,
+  `rtl/win/wininc/defines.inc`, `rtl/win/wininc/ascfun.inc`,
+  `rtl/win/wininc/unifun.inc`, and `rtl/win/wininc/func.inc`. Wave 3 imports
+  `GET_FILEEX_INFO_LEVELS`, `WIN32_FILE_ATTRIBUTE_DATA`,
+  `BY_HANDLE_FILE_INFORMATION`, additional `FILE_ATTRIBUTE_*` constants,
+  `GetFileAttributesExA`, `GetFileAttributesExW`, and
+  `GetFileInformationByHandle`.
+
 ### Platform Host ABI Completeness Wave 2: file ABI raw inventory
 
 Wave 2 imports the low-level file ABI inventory that future file contracts can

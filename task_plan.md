@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host ABI Completeness Wave 2；上一轮包括
+当前最新本轮为 Platform Host ABI Completeness Wave 3；上一轮包括
+Platform Host ABI Completeness Wave 2；
 Platform Host ABI Completeness Wave 1；
 Platform FFI Import Workflow；
 Platform FFI Source Evidence Index；
@@ -52,6 +53,90 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 3
+
+### Goal
+
+继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
+文件状态 ABI 取证：POSIX `stat` / `fstat` / `lstat` family 与 Windows 文件属性/文件信息
+family。目标是把能够可靠取证、能够被 host owner 承载的低层声明先落进
+`platform.<host>.base` / `platform.<host>.ffi`，并把 layout、large-file suffix 或语义映射仍不稳的
+部分诚实写进 gap matrix。
+
+本轮明确不创建 `platform.file` public contract，不新增 `platform.file.ffi`，也不把 raw
+`stat` / `GetFileAttributesEx*` / `GetFileInformationByHandle` 作为 runtime unit test 目标。
+
+### Architecture Decision
+
+- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
+- POSIX shared scalar/record 只有在 Linux / Android / Darwin / FreeBSD / generic Unix ABI shape
+  确认一致时才放入 `nextpas.core.platform.posix.base`；否则放入具体 host `.base` 或继续延期。
+- `stat` record layout、`stat64` suffix、time fields 与 device/inode width 是本轮最高风险点；
+  如果无法在当前证据内形成跨宿主安全形状，只导入函数 family 的 source evidence 和 gap matrix，
+  不硬造不可信 record。
+- Windows `WIN32_FILE_ATTRIBUTE_DATA`、`BY_HANDLE_FILE_INFORMATION`、文件属性常量和
+  `GetFileAttributesExA/W` / `GetFileInformationByHandle` 归 Windows base/ffi owner。
+- raw OS ABI 不做 runtime unit test；本轮用 FPC source evidence、source-surface guard、
+  simulated host compile matrix、Win64 compile-only gate 与 official verify route 证明。
+
+### Status
+
+Implementation, focused verification, and full verification are complete in isolated worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat` from
+`main@846b9d1`. Commit, rebase/merge, post-merge verification, and cleanup
+remain pending.
+
+### Planned Steps
+
+- [x] 从最新 `main@846b9d1` 创建 `codex/platform-host-abi-wave3-stat` isolated worktree
+- [x] 读取 workflow、host gap matrix、source evidence index、Wave 1/2 tests 与现有 host base/ffi owner
+- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 3 最小可审查 ABI 子集
+- [x] RED：新增 source-surface gate，要求 Wave 3 evidence、host owner tokens 和 verify route
+- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
+- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
+- [x] focused verification、full verification
+- [ ] commit、rebase latest main、merge、post-merge verification、cleanup
+
+### Audit Checklist
+
+- [x] 不新增 `platform.file` public API，也不新增 `platform.file.ffi`
+- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw file status ABI
+- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` / `Windows`
+- [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
+- [x] Windows 与 POSIX 文件状态 family 分别归 host owner，不混成伪 POSIX
+
+### Focused Verification Snapshot
+
+- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+  `5 total, 5 passed, 0 failed`.
+- Adjacent source-surface gates passed:
+  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
+  and `test_platform_simulated_host_compile_matrix`.
+- Forced Windows compile-only checks passed for `test_platform_thread` and
+  `test_platform_sync` after creating their temporary output directories.
+- Full verification passed:
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`, final envelope includes
+    `corePlatformHostAbiWave3StatCheck":"pass"`.
+
+### Recovery Entry
+
+If this session is interrupted, resume here:
+
+```bash
+cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat
+git status --short --branch
+sed -n '1,190p' task_plan.md
+sed -n '1,200p' progress.md
+sed -n '1,170p' findings.md
+```
+
+Then continue from the first unchecked item in this Wave 3 addendum. Do not add
+runtime tests for raw OS APIs and do not introduce `platform.file` public API in this wave.
 
 ## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2
 

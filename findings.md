@@ -2145,3 +2145,66 @@
   source evidence index 和 simulated-host compile matrix 可以共存。
 - 当前剩余集成风险主要在主 checkout 合并窗口，而不是实现本身：合并前仍要确认主 checkout
   干净，避免把其他 worktree 或同事 WIP 混进 platform 收口。
+
+## 2026-05-27 Follow-up Findings 27
+
+- Wave 3 的正确切片是 file status raw ABI evidence，不是 `platform.file` public contract。
+  POSIX `stat` / `fstat` / `lstat` 与 Windows `GetFileAttributesEx*` /
+  `GetFileInformationByHandle` 都属于 host-owned L0 ABI inventory，未来是否抽象成统一文件 API
+  要单独设计。
+- `stat` 的风险高于 Wave 2 的 `open` / `fcntl`：record layout、large-file suffix、time field
+  形态、device/inode width 和 32/64-bit policy 都可能跨 Linux / Android / Darwin / FreeBSD /
+  generic Unix 分裂。因此本轮必须先做 FPC source evidence，再决定只落函数 family、落 host-specific
+  record，还是继续延期部分 host。
+- Windows 不能被伪装成 POSIX `stat`。如果本轮落 Windows 文件状态 ABI，应使用 Windows
+  base/ffi owner 承载 `WIN32_FILE_ATTRIBUTE_DATA`、`BY_HANDLE_FILE_INFORMATION`、
+  `GetFileAttributesExA/W`、`GetFileInformationByHandle` 这类 kernel32 family。
+- raw 文件状态 ABI 不进入 runtime 单元测试。验证口径仍是 source-surface gate、文档事实、
+  simulated host compile matrix、Win64 compile-only gate 与 `verify_local` route truth。
+
+## 2026-05-27 Follow-up Findings 28
+
+- FPC `rtl/unix/oscdeclh.inc` 证明 `stat` family 的外部符号名不是简单全平台一致：
+  generic Unix 用 `stat` / `lstat` / `fstat` 加 `suffix64bit`，Darwin x86/x86_64 new iostructs 用
+  `stat$INODE64` / `lstat$INODE64` / `fstat$INODE64`。
+- FPC Linux libc 路径在 `rtl/linux/osmacro.inc` 证明 `FpStat` / `FpLstat` / `FpFstat` 走
+  `__xstat` / `__lxstat` / `__fxstat` 并传 `_STAT_VER`，而 `_STAT_VER` 在
+  `rtl/linux/ostypes.inc` 按 CPU family 分裂：x86_64 是 1，aarch64/riscv64 是 0，非这些 CPU 还有
+  old/kernel/SVR4/Linux 版本常量。不能把 Linux `stat` family 当作一个普通 `stat` external。
+- FPC Linux `stat.inc` 证明 record layout 按架构分裂：x86_64、aarch64、riscv64 等字段顺序和类型
+  都不完全一样；BSD `rtl/bsd/ostypes.inc` 还按 Darwin/FreeBSD/OpenBSD/NetBSD 等分支改变字段顺序、
+  birthtime 和 padding。
+- 因此本轮 POSIX 侧不能新增 shared `stat` record 到 `posix.base`，也不能在
+  `posix.ffi` 里声明一个无条件 `stat/lstat/fstat`。安全落点应是 host-specific evidence、host
+  capability token、或把 record/import 留在 gap matrix，直到每个 target 的 ABI shape 被逐一证明。
+- Windows file status ABI 证据更稳定：FPC `rtl/win/wininc/struct.inc` 提供
+  `BY_HANDLE_FILE_INFORMATION` 与 `WIN32_FILE_ATTRIBUTE_DATA` record；`ascfun.inc` /
+  `unifun.inc` / `func.inc` 提供 `GetFileAttributesExA/W` 和
+  `GetFileInformationByHandle`；`defines.inc` 提供 `FILE_ATTRIBUTE_*` 常量。Wave 3 可以优先把这组
+  Windows base/ffi owner 补全。
+
+## 2026-05-27 Follow-up Findings 29
+
+- Wave 3 source-surface gate 不能只搜字符串；本轮增加了 ABI size guard，直接编译检查
+  `TPlatformLinuxStatxTimestamp = 16`、`TPlatformLinuxStatx = 256`、
+  `GET_FILEEX_INFO_LEVELS = 4`、`WIN32_FILE_ATTRIBUTE_DATA = 36`、
+  `BY_HANDLE_FILE_INFORMATION = 52`。这不调用 raw OS API，但能守住 nextPas-owned record layout。
+- `PLATFORM_LINUX_AT_SYMLINK_NOFOLLOW` 应贴近 FPC/kernel token `AT_SYMLINK_NOFOLLOW`，不要自行拆成
+  `NO_FOLLOW`。platform host base/ffi 里的 raw ABI token 命名应优先保持 source evidence
+  可追溯性。
+- `platform.time` / `platform.sync` / `platform.thread` 不应消费 Wave 3 file-status raw ABI；本轮
+  focused gate 已显式检查这些统一抽象子模块中不存在 `linux_statx`、`GetFileAttributesEx*`、
+  `GetFileInformationByHandle` 消费痕迹。
+
+## 2026-05-27 Follow-up Findings 30
+
+- Wave 3 的 full verification 已完成：`make -C core test`、`make -C core examples`、
+  `make -C core benchmarks` 均通过，fresh `bash build/verify_local.sh` 输出
+  `verify-local=pass` 与 `human-summary=local verification passed`，final envelope 包含
+  `corePlatformHostAbiWave3StatCheck":"pass"`。
+- 本轮验证边界仍保持 L0 raw ABI 口径：Linux `statx` 与 Windows file status declaration 通过
+  FPC source evidence、source-surface guard、ABI size gate、compile-only gate 和 official route
+  truth 固定；没有把 raw 系统 API 当成 nextPas runtime unit test 目标。
+- 收口前剩余风险在集成窗口：需要 rebase 最新 `main` 并确认主 checkout 没有会被覆盖的同事/用户
+  WIP，再 fast-forward 或 merge。合并后必须重跑 focused Wave 3 gate、`git diff --check` 和
+  official verify，确认 route truth 在主线仍成立。

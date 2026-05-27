@@ -29,6 +29,38 @@ type
 
   TPlatformProcessId = pid_t;
 
+  TPlatformLinuxStatxTimestamp = record
+    tv_sec: Int64;
+    tv_nsec: UInt32;
+    __reserved: Int32;
+  end;
+  PPlatformLinuxStatxTimestamp = ^TPlatformLinuxStatxTimestamp;
+
+  TPlatformLinuxStatx = record
+    stx_mask: UInt32;
+    stx_blksize: UInt32;
+    stx_attributes: UInt64;
+    stx_nlink: UInt32;
+    stx_uid: UInt32;
+    stx_gid: UInt32;
+    stx_mode: UInt16;
+    __spare0: array[0..0] of UInt16;
+    stx_ino: UInt64;
+    stx_size: UInt64;
+    stx_blocks: UInt64;
+    stx_attributes_mask: UInt64;
+    stx_atime: TPlatformLinuxStatxTimestamp;
+    stx_btime: TPlatformLinuxStatxTimestamp;
+    stx_ctime: TPlatformLinuxStatxTimestamp;
+    stx_mtime: TPlatformLinuxStatxTimestamp;
+    stx_rdev_major: UInt32;
+    stx_rdev_minor: UInt32;
+    stx_dev_major: UInt32;
+    stx_dev_minor: UInt32;
+    __spare2: array[0..13] of UInt64;
+  end;
+  PPlatformLinuxStatx = ^TPlatformLinuxStatx;
+
   PPlatformPThreadState = ^TPlatformPThreadState;
   TPlatformPThreadState = record
     case Integer of
@@ -83,10 +115,22 @@ const
   PLATFORM_FCNTL_SET_FLAGS = Int32(4);
   PLATFORM_FCNTL_FD_CLOEXEC = Int32(1);
 
+  PLATFORM_LINUX_STATX_BASIC_STATS = UInt32($000007ff);
+  PLATFORM_LINUX_AT_FDCWD = Int32(-100);
+  PLATFORM_LINUX_AT_SYMLINK_NOFOLLOW = Int32($100);
+  PLATFORM_LINUX_AT_NO_AUTOMOUNT = Int32($800);
+  PLATFORM_LINUX_AT_EMPTY_PATH = Int32($1000);
+  PLATFORM_LINUX_AT_STATX_SYNC_TYPE = Int32($6000);
+  PLATFORM_LINUX_AT_STATX_SYNC_AS_STAT = Int32($0000);
+  PLATFORM_LINUX_AT_STATX_FORCE_SYNC = Int32($2000);
+  PLATFORM_LINUX_AT_STATX_DONT_SYNC = Int32($4000);
+
   {$IFDEF NEXTPAS_X86_64}
   LINUX_SYSCALL_FUTEX = 202;
+  LINUX_SYSCALL_STATX = 332;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
   LINUX_SYSCALL_FUTEX = 98;
+  LINUX_SYSCALL_STATX = 291;
   {$ELSE}
     {$FATAL 'nextpas.core.platform.linux.base: unsupported Linux CPU for futex syscall'}
   {$ENDIF}

@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform host abi completeness wave 2；上一轮包括
+当前最新本轮为 platform host abi completeness wave 3；上一轮包括
+platform host abi completeness wave 2；
 platform host abi completeness wave 1；
 platform ffi import workflow；
 platform ffi source evidence index；
@@ -1001,24 +1002,93 @@ platform/core 工作流保留下来的已完成记录。
     - `make -C core benchmarks` 输出 `All benchmarks passed.`。
     - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`。
+
+### Phase 21: Platform Host ABI Completeness Wave 3
+
+- **Status:** completed; verification passed in isolated worktree
+- Started: 2026-05-27
+- Objective:
+  - 继续按 `core/docs/platform-ffi-import-workflow.md` 从 FPC source evidence 扩充 platform host-owned
+    raw ABI inventory。
+  - 本轮聚焦 POSIX `stat` / `fstat` / `lstat` family 与 Windows file status / file information
+    family，先取证，再决定最小安全落点。
+- Worktree:
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`
+  - branch `codex/platform-host-abi-wave3-stat`
+  - base `main@846b9d1`
+- Actions taken:
+  - 检查主 checkout：`main@846b9d1`，工作树干净。
+  - 确认现有并行 worktree 只有 `collections-refactor` 与 `sema-no-matching-overload`，本轮不触碰。
+  - 读取 Wave 1/2 source-surface tests、`platform-ffi-source-evidence-index.md`、
+    `platform-host-ffi-gap-matrix.md`、`posix/linux/windows` base/ffi owner。
+  - 更新 `task_plan.md`、`findings.md`、`progress.md`，固定 Wave 3 范围、非目标和恢复入口。
+  - 新增 `test_platform_host_abi_wave3_stat` source-surface gate，覆盖 Wave 3 文档证据、host owner
+    tokens、`verify_local` route truth、ABI record size、`platform.file.ffi` 禁止项，以及
+    `platform.time/sync/thread` 不消费 raw file-status ABI。
+  - `linux.base` 新增 `TPlatformLinuxStatxTimestamp` / `TPlatformLinuxStatx`、
+    `PLATFORM_LINUX_STATX_BASIC_STATS`、Linux `AT_*` statx flag 和 `LINUX_SYSCALL_STATX`。
+  - `linux.ffi` 新增 `linux_statx`、`linux_statx_path_basic`、`linux_statx_fd_basic` syscall helpers。
+  - `windows.base` 新增 `GET_FILEEX_INFO_LEVELS`、`WIN32_FILE_ATTRIBUTE_DATA`、
+    `BY_HANDLE_FILE_INFORMATION`、扩展 `FILE_ATTRIBUTE_*` 常量和 `OPEN_ALWAYS` /
+    `TRUNCATE_EXISTING`。
+  - `windows.ffi` 新增 `GetFileAttributesExA/W`、`GetFileInformationByHandle` binding 和
+    `windows_get_file_attributes_ex_a/w`、`windows_get_file_information_by_handle` helpers。
+  - 更新 `core/docs/platform-ffi-source-evidence-index.md` 与
+    `core/docs/platform-host-ffi-gap-matrix.md`，记录 Linux `statx` 与 Windows file status
+    raw inventory，并明确 `posix stat record remains deferred`。
+  - `build/verify_local.sh` 新增 Wave 3 required path、focused route
+    `core-platform-host-abi-wave3-stat-check` 和 final envelope token
+    `corePlatformHostAbiWave3StatCheck`。
+  - 复核后把 Linux flag token 命名收紧为 `PLATFORM_LINUX_AT_SYMLINK_NOFOLLOW`，贴近 FPC/kernel
+    `AT_SYMLINK_NOFOLLOW`。
+- Evidence found:
+  - `rtl/unix/oscdeclh.inc` 证明 POSIX `stat` family external name 受 `suffix64bit` /
+    `darwinsuffix64bit` 影响，Darwin x86/x86_64 new iostructs 走 `$INODE64` suffix。
+  - `rtl/linux/osmacro.inc` + `rtl/linux/ostypes.inc` 证明 Linux libc stat family 走
+    `__xstat` / `__lxstat` / `__fxstat` 加 `_STAT_VER`，且 `_STAT_VER` 按 CPU family 分裂。
+  - Linux `stat.inc` 与 BSD `ostypes.inc` 证明 POSIX record layout 不能作为 shared
+    `posix.base` shape 草率导入。
+  - Windows `rtl/win/wininc/struct.inc` / `ascfun.inc` / `unifun.inc` / `func.inc` /
+    `defines.inc` 证据足够支持本轮导入 Windows file status raw ABI。
+  - FPC Linux `linux.pp` / `ostypes.inc` 证明 `statx_timestamp` 为 16 bytes、`tstatx` 为
+    256 bytes；FPC Windows `struct.inc` 证明 `WIN32_FILE_ATTRIBUTE_DATA` 为 36 bytes、
+    `BY_HANDLE_FILE_INFORMATION` 为 52 bytes；本轮已用非系统调用的 ABI size gate 守住这些声明。
+- RED:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`
+    初始失败在 3 个预期缺口：
+    - `linux.base must own Linux statx timestamp record`
+    - `docs must name Platform Host ABI Completeness Wave 3`
+    - `verify_local must require the Wave 3 file status ABI source-surface test`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
+    `5 total, 5 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`:
+    `2 total, 2 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`。
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    `simulated-host-compile-matrix-status=pass`。
+  - Forced Windows compile-only checks passed for:
+    `core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr` and
+    `core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr` with
+    `-dNEXTPAS_FORCE_HOST_WINDOWS -Cn`。
+- Full verification:
+  - `make -C core test` 输出 `All tests passed.`。
+  - `make -C core examples` 输出 `All examples compiled.`。
+  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
+  - `bash build/verify_local.sh` 输出 `verify-local=pass`、
+    `human-summary=local verification passed`，final envelope 包含
+    `corePlatformHostAbiWave3StatCheck":"pass"`。
 - Review:
-  - 这批把 POSIX errno token ownership 从 `platform.sync` consumer 收回 host `.ffi`，但没有把
-    `PLATFORM_ERR_*` public contract 下沉到 host 层，边界是干净的。
-  - runtime 单测仍只覆盖 `platform.sync` 抽象 API；raw OS errno/ABI truth 由 host base/ffi source
-    surface、compile matrix 与 FPC-source-derived 常量负责守住。
-- Planned next action:
-  - 继续下一轮 platform owner gap matrix；本轮 `codex/platform-sync-owner-audit` 已 commit、fast-forward
-    merge 回 `main`，并清理 worktree / branch。
-- Merge closeout:
-  - Commit: `fce88c3 platform: ownerize posix sync errno result mapping`。
-  - Merge: fast-forward into `main`。
-  - Cleanup: removed `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-owner-audit`
-    and deleted `codex/platform-sync-owner-audit`。
-  - Post-merge focused gates on `main` passed:
-    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-  - Post-merge `git diff --check` passed and `git status --short --branch` showed clean `main`。
+  - 本轮没有新增 `platform.file` public API、example 或 benchmark，因为 scope 是 raw host ABI
+    inventory，不是统一文件抽象。
+  - POSIX `stat/fstat/lstat` 继续延期是正确选择；Linux 只落更稳定的 `statx` syscall ABI，
+    Windows 只落 kernel32 file status ABI，二者不伪装成一个共享 contract。
+  - raw OS API 仍不进入 runtime unit tests；新增的 size gate 只验证 nextPas-owned record layout，
+    不调用 OS API。
+- Current next action:
+  - 运行 `git diff --check`，审查 diff 并提交 feature branch。
+  - rebase latest `main`，安全时合并、post-merge verification、cleanup。
 
 ## Session: 2026-05-27 (platform thread POSIX state ownerization)
 
