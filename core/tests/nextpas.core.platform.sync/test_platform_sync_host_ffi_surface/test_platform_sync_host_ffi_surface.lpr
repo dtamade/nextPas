@@ -7,6 +7,8 @@ uses
   nextpas.core.testing;
 
 const
+  SYNC_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.base.pas';
+  SYNC_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.base.pas';
   SYNC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.pas';
   SYNC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.pas';
   LINUX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
@@ -228,6 +230,7 @@ end;
 
 procedure TestPlatformSyncUsesHostFFISurface;
 var
+  LSyncBaseSource: string;
   LSyncSource: string;
   LLinuxBaseSource: string;
   LLinuxSource: string;
@@ -242,6 +245,7 @@ var
   LWindowsBaseSource: string;
   LWindowsSource: string;
 begin
+  LSyncBaseSource := ReadSourceFile(ResolveSourcePath(SYNC_BASE_SOURCE_PATH_FROM_TEST, SYNC_BASE_SOURCE_PATH_FROM_ROOT));
   LSyncSource := ReadSourceFile(ResolveSourcePath(SYNC_SOURCE_PATH_FROM_TEST, SYNC_SOURCE_PATH_FROM_ROOT));
   LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
   LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
@@ -384,6 +388,39 @@ begin
   CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowscondvaralign',
     'windows.base must expose Windows condvar align carrier type for sync');
 
+  CheckTokenPresent(LSyncBaseSource, 'tplatformmutexalign',
+    'platform.sync.base must own public mutex align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlockalign',
+    'platform.sync.base must own public rwlock align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvaralign',
+    'platform.sync.base must own public condvar align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'platform_mutex_size',
+    'platform.sync.base must own public mutex opaque size token');
+  CheckTokenPresent(LSyncBaseSource, 'platform_rwlock_size',
+    'platform.sync.base must own public rwlock opaque size token');
+  CheckTokenPresent(LSyncBaseSource, 'platform_condvar_size',
+    'platform.sync.base must own public condvar opaque size token');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformmutex = record',
+    'platform.sync.base must own public mutex opaque record');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlock = record',
+    'platform.sync.base must own public rwlock opaque record');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvar = record',
+    'platform.sync.base must own public condvar opaque record');
+  CheckTokenPresent(LSyncBaseSource, 'platform_mutex_errorcheck',
+    'platform.sync.base must own public mutex kind constants');
+  CheckTokenPresent(LSyncBaseSource, 'platform_err_timeout',
+    'platform.sync.base must own public sync error constants');
+  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.sync.base',
+    'platform.sync must re-export public sync carrier types/constants from base');
+  CheckTokenPresent(LSyncSource, 'tplatformmutex = nextpas.core.platform.sync.base.tplatformmutex',
+    'platform.sync must re-export TPlatformMutex from platform.sync.base');
+  CheckTokenPresent(LSyncSource, 'platform_err_timeout = nextpas.core.platform.sync.base.platform_err_timeout',
+    'platform.sync must re-export public error constants from platform.sync.base');
+  Check(Pos('tplatformmutex = record', LSyncSource) = 0,
+    'platform.sync must not keep public mutex opaque record after base extraction');
+  Check(Pos('platform_mutex_size   =', LSyncSource) = 0,
+    'platform.sync must not keep public opaque size constants after base extraction');
+
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
     'platform.sync must use linux.ffi for Linux futex bindings');
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.windows.ffi',
@@ -503,24 +540,24 @@ begin
       LSyncSource,
       'result := platform_sync_validate_wait_address(aaddr, aexpected);') >= 3,
     'platform.sync must consume wait-address public precheck in Linux, POSIX fallback, and Windows wait paths');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_size',
-    'platform.sync must consume host-owned pthread mutex storage size');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_size',
-    'platform.sync must consume host-owned pthread rwlock storage size');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_size',
-    'platform.sync must consume host-owned pthread condvar storage size');
-  CheckTokenPresent(LSyncSource, 'platform_windows_mutex_size',
-    'platform.sync must consume host-owned Windows mutex storage size');
-  CheckTokenPresent(LSyncSource, 'platform_windows_rwlock_size',
-    'platform.sync must consume host-owned Windows rwlock storage size');
-  CheckTokenPresent(LSyncSource, 'platform_windows_condvar_size',
-    'platform.sync must consume host-owned Windows condvar storage size');
-  CheckTokenPresent(LSyncSource, 'tplatformmutexalign',
-    'platform.sync must consume host-owned mutex align carrier type');
-  CheckTokenPresent(LSyncSource, 'tplatformrwlockalign',
-    'platform.sync must consume host-owned rwlock align carrier type');
-  CheckTokenPresent(LSyncSource, 'tplatformcondvaralign',
-    'platform.sync must consume host-owned condvar align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_mutex_size',
+    'platform.sync.base must consume host-owned pthread mutex storage size');
+  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_rwlock_size',
+    'platform.sync.base must consume host-owned pthread rwlock storage size');
+  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_condvar_size',
+    'platform.sync.base must consume host-owned pthread condvar storage size');
+  CheckTokenPresent(LSyncBaseSource, 'platform_windows_mutex_size',
+    'platform.sync.base must consume host-owned Windows mutex storage size');
+  CheckTokenPresent(LSyncBaseSource, 'platform_windows_rwlock_size',
+    'platform.sync.base must consume host-owned Windows rwlock storage size');
+  CheckTokenPresent(LSyncBaseSource, 'platform_windows_condvar_size',
+    'platform.sync.base must consume host-owned Windows condvar storage size');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformmutexalign',
+    'platform.sync.base must consume host-owned mutex align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlockalign',
+    'platform.sync.base must consume host-owned rwlock align carrier type');
+  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvaralign',
+    'platform.sync.base must consume host-owned condvar align carrier type');
   Check(Pos('platform_posix_errno_value', LSyncSource) = 0,
     'platform.sync must not keep raw errno helper usage in the Unix consumer');
   Check(Pos('platform_errno_location^', LSyncSource) = 0,

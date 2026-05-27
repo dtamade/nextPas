@@ -15,7 +15,8 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Thread Base Extraction；上一轮包括
+当前最新本轮为 Platform Sync Base Extraction；上一轮包括
+Platform Thread Base Extraction、
 Platform Sync Windows Wait-Address Public Result Boundary、
 Platform Sync POSIX Wait-Bucket Policy Ownership、
 Platform Sync POSIX Error Result Host Ownership、
@@ -44,6 +45,120 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-27 Platform Sync Base Extraction
+
+### Goal
+
+把 `platform.sync` 的 public carrier type、opaque storage size、mutex kind 与 public error
+constant 从行为实现单元中抽到 `platform.sync.base`，让 sync 子模块和 `platform.time` /
+`platform.thread` 一样遵循 facade/base/implementation 结构：
+
+- `nextpas.core.platform.sync.base` 拥有 `TPlatformMutexAlign`、`TPlatformRwLockAlign`、
+  `TPlatformCondVarAlign`、`TPlatformMutex`、`TPlatformRwLock`、`TPlatformCondVar`。
+- `nextpas.core.platform.sync.base` 拥有 `PLATFORM_MUTEX_SIZE`、`PLATFORM_RWLOCK_SIZE`、
+  `PLATFORM_CONDVAR_SIZE`、`PLATFORM_MUTEX_*` 和 `PLATFORM_ERR_*`。
+- `nextpas.core.platform.sync` 只 re-export public types/constants，并保留 mutex/rwlock/condvar/
+  wait-address 统一 API 实现。
+- 不新增 `platform.sync.ffi` 或 `platform.sync.intf`；host ABI truth 仍归
+  `platform.<host>.base` / `platform.<host>.ffi`。
+
+### Architecture Decision
+
+- `platform.sync.base` 是 public contract carrier owner，不是 host ABI owner，也不包含逻辑或
+  `external` declaration。
+- `platform.sync` 的 public API 名称保持不变；调用方仍可只 `uses nextpas.core.platform.sync`。
+- 这轮只做结构收口，不改变 Linux/Windows/POSIX 运行时语义，不测试 raw OS API。
+- regression gate 通过 source-surface、owner-boundary、no-FPC 与 L0-boundary 四条线固定：
+  base 必须存在、实现单元必须 re-export、base 也不得引用 FPC 平台单元或 L1 sync 抽象。
+
+### Status
+
+Code and verification completed in `codex/platform-sync-base`; commit/merge cleanup remains.
+
+### Planned Steps
+
+- [x] 从最新 `main@56b4729` 开 `codex/platform-sync-base` isolated worktree
+- [x] 跑 focused baseline：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `platform.sync.base` 存在并拥有
+  public carrier types/constants，且 `platform.sync` re-export 而不是直接声明 raw shapes
+- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.sync.base.pas` 纳入
+  platform source owner audit
+- [x] RED：扩 `test_platform_sync_no_fpc_units` 与 `test_platform_sync_l0_boundary`，把
+  `platform.sync.base` 纳入 hard boundary
+- [x] GREEN：新增 `core/src/nextpas.core.platform.sync.base.pas`，并让
+  `platform.sync` re-export base types/constants
+- [x] 更新 `build/verify_local.sh` required path 与 focused gate summary expectation
+- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
+- [x] 跑 focused gates：
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
+- [x] 跑 full verification：
+  - `make -C core test`
+  - `make -C core examples`
+  - `make -C core benchmarks`
+  - `bash build/verify_local.sh`
+  - `git diff --check`
+- [ ] commit、择优合并回 `main`
+- [ ] 清理 worktree / 分支
+
+### Audit Checklist
+
+- [x] `platform.sync.base` 只承载 public carrier type/constants，不含逻辑和 FFI
+- [x] `platform.sync` 保持调用方兼容的 public type/constant re-export
+- [x] 不新增 `platform.sync.ffi` 或 `platform.sync.intf`
+- [x] `platform.sync.base` 进入 no-FPC / L0-boundary / owner-boundary gate
+- [x] simulated host compile matrix 覆盖新 base 单元在 Darwin/Android/FreeBSD/generic Unix 分支下可编译
+
+### Implementation Notes
+
+- Baseline:
+  - `test_platform_sync_host_ffi_surface` 1/1 pass。
+  - `test_platform_sync_no_fpc_units` 1/1 pass。
+  - `test_platform_sync_l0_boundary` 3/3 pass。
+  - `test_platform_ffi_owner_boundary` 2/2 pass。
+- RED proof:
+  - `test_platform_sync_host_ffi_surface` 初始失败：缺
+    `core/src/nextpas.core.platform.sync.base.pas`。
+  - `test_platform_ffi_owner_boundary` 初始失败：non-ffi owner count 不含 sync feature base。
+  - `test_platform_sync_no_fpc_units` 初始失败：
+    `platform.sync.base source must exist for no-FPC guard`。
+  - `test_platform_sync_l0_boundary` 初始失败：
+    `platform.sync.base source stays L0 - File not found`。
+- Focused GREEN:
+  - `test_platform_sync_host_ffi_surface`: `1 total, 1 passed, 0 failed`。
+  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
+  - `test_platform_sync_no_fpc_units`: `2 total, 2 passed, 0 failed`。
+  - `test_platform_sync_l0_boundary`: `4 total, 4 passed, 0 failed`。
+  - `test_platform_sync`: `14 total, 14 passed, 0 failed`。
+  - `test_platform_sync_sizes`: `5 total, 5 passed, 0 failed`。
+  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
+  - `test_platform_sync_posix_surface`: `1 total, 1 passed, 0 failed`。
+  - `test_platform_sync_posix_fallback`: `14 total, 14 passed, 0 failed`。
+  - `test_platform_ffi_partition_surface`、`test_platform_posix_ffi_surface` pass。
+  - `platform_sync_basics` example 输出 `platform-sync-basics-status=pass`。
+  - `bench_platform_sync` benchmark 输出 `platform-sync-bench-status=pass`。
+- Full verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`。
+  - `git diff --check`: pass。
+- Note:
+  - 曾误跑不存在的
+    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_win64 clean test`；
+    这不是代码失败，实际 Win64 compile-only coverage 由 `build/verify_local.sh` 的
+    `corePlatformSyncWin64Check=pass` 覆盖。
 
 ## Addendum: 2026-05-27 Platform Thread Base Extraction
 

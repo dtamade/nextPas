@@ -3,7 +3,8 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-27 记录为准。
 
-当前最新本轮为 platform.thread base extraction；上一轮包括
+当前最新本轮为 platform.sync base extraction；上一轮包括
+platform.thread base extraction；
 platform.sync Windows wait-address public result boundary；
 platform.sync POSIX wait-bucket policy ownership；
 platform.sync POSIX error result host ownership；
@@ -120,9 +121,76 @@ platform/core 工作流保留下来的已完成记录。
     `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`；本轮未修改也未提交该文件。
   - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base` worktree 已删除，
     `codex/platform-thread-base` 分支已删除。
+
+## Session: 2026-05-27 (platform.sync base extraction)
+
+- **Status:** code and verification completed in isolated worktree; commit/merge cleanup remains
+- Objective:
+  - 继续按 `/plan` 推进 platform 模块结构范式，把 `platform.sync` 的 public carrier type、
+    opaque size、mutex kind 与 public error constant 抽到
+    `nextpas.core.platform.sync.base`。
+  - `platform.sync` 保持调用方兼容的 public re-export，并只保留 mutex/rwlock/condvar/address-wait
+    统一 API 实现；不新增 `platform.sync.ffi` 或 `platform.sync.intf`。
+- Baseline / worktree:
+  - Worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-base`
+    on `codex/platform-sync-base` from `main@56b4729`。
+  - 开始前 focused baseline 已通过：
+    `test_platform_sync_host_ffi_surface` 1/1、
+    `test_platform_sync_no_fpc_units` 1/1、
+    `test_platform_sync_l0_boundary` 3/3、
+    `test_platform_ffi_owner_boundary` 2/2。
+- RED:
+  - `test_platform_sync_host_ffi_surface` 初始失败在 `File not found`，因为缺少
+    `core/src/nextpas.core.platform.sync.base.pas`。
+  - `test_platform_ffi_owner_boundary` 初始失败在 non-ffi owner count 不包含 sync feature base。
+  - `test_platform_sync_no_fpc_units` 初始失败在
+    `platform.sync.base source must exist for no-FPC guard`。
+  - `test_platform_sync_l0_boundary` 初始失败在 `platform.sync.base source stays L0 - File not found`。
+- Actions taken:
+  - 新增 `core/src/nextpas.core.platform.sync.base.pas`，只定义
+    `TPlatformMutexAlign`、`TPlatformRwLockAlign`、`TPlatformCondVarAlign`、
+    `TPlatformMutex`、`TPlatformRwLock`、`TPlatformCondVar`、`PLATFORM_*_SIZE`、
+    `PLATFORM_MUTEX_*` 与 `PLATFORM_ERR_*`。
+  - 修改 `core/src/nextpas.core.platform.sync.pas`，interface uses
+    `nextpas.core.platform.sync.base` 并 re-export public types/constants，行为实现不变。
+  - `test_platform_sync_host_ffi_surface` 固化 base owner 与 facade re-export，并把 host storage/align
+    token 消费主体从 `platform.sync` 调整为 `platform.sync.base`。
+  - `test_platform_ffi_owner_boundary`、`test_platform_sync_no_fpc_units`、
+    `test_platform_sync_l0_boundary` 纳入 `platform.sync.base`。
+  - `build/verify_local.sh` 新增 required path，并更新 no-FPC / L0-boundary focused summary expectation。
+  - `core/docs/design-conventions.md` 与 `findings.md` 写入 `platform.sync.base` 的 public carrier
+    type/constants ownership。
+- Focused GREEN so far:
+  - `test_platform_sync_host_ffi_surface` 输出 `1 total, 1 passed, 0 failed`。
+  - `test_platform_ffi_owner_boundary` 输出 `2 total, 2 passed, 0 failed`。
+  - `test_platform_sync_no_fpc_units` 输出 `2 total, 2 passed, 0 failed`。
+  - `test_platform_sync_l0_boundary` 输出 `4 total, 4 passed, 0 failed`。
+  - `test_platform_sync` 输出 `14 total, 14 passed, 0 failed`。
+  - `test_platform_sync_sizes` 输出 `5 total, 5 passed, 0 failed`。
+  - `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
+- Additional focused GREEN:
+  - `test_platform_sync_posix_surface` 输出 `1 total, 1 passed, 0 failed`。
+  - `test_platform_sync_posix_fallback` 输出 `14 total, 14 passed, 0 failed`。
+  - `test_platform_ffi_partition_surface` 与 `test_platform_posix_ffi_surface` 通过。
+  - `platform_sync_basics` example 输出 `platform-sync-basics-status=pass`。
+  - `bench_platform_sync` benchmark 输出 `platform-sync-bench-status=pass`。
+- Aggregate / official verification:
+  - `make -C core test`: `All tests passed.`。
+  - `make -C core examples`: `All examples compiled.`。
+  - `make -C core benchmarks`: `All benchmarks passed.`。
+  - `bash build/verify_local.sh`: `verify-local=pass`、
+    `human-summary=local verification passed`。
+  - `git diff --check`: pass。
+- Notes:
+  - 中途误跑不存在的
+    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_win64 clean test`。
+    这不是代码失败；Win64 compile-only coverage 由 official
+    `build/verify_local.sh` 中的 `corePlatformSyncWin64Check=pass` 覆盖。
 - Next:
-  - 下一轮 platform 优先做 facade/base 结构完整性巡检：确认 `platform.sync` 是否也需要单独 base
-    owner，或继续推进 Windows/macOS/Linux/Android/FreeBSD host FFI surface parity。
+  - commit 本轮，择优合并回 `main`，清理 `platform-sync-base` worktree/branch。
+  - 下一轮 platform 优先做 facade/base 结构完整性巡检，或继续推进
+    Windows/macOS/Linux/Android/FreeBSD host FFI surface parity。
 
 ## Session: 2026-05-27 (platform.sync Windows wait-address public result boundary)
 

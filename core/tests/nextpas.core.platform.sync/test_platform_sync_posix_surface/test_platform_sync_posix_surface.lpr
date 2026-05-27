@@ -7,6 +7,8 @@ uses
   nextpas.core.testing;
 
 const
+  SYNC_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.base.pas';
+  SYNC_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.base.pas';
   SYNC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.pas';
   SYNC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
@@ -89,9 +91,11 @@ end;
 procedure TestSyncExposesGenericPosixSurface;
 var
   LSource: string;
+  LBaseSource: string;
   LBehaviorTestSource: string;
 begin
   LSource := ReadSourceFile(ResolveSyncSourcePath);
+  LBaseSource := ReadSourceFile(ResolveSourcePath(SYNC_BASE_SOURCE_PATH_FROM_TEST, SYNC_BASE_SOURCE_PATH_FROM_ROOT));
   LBehaviorTestSource := ReadSourceFile(
     ResolveSourcePath(SYNC_BEHAVIOR_TEST_PATH_FROM_TEST, SYNC_BEHAVIOR_TEST_PATH_FROM_ROOT));
   CheckTokenPresent(LSource, 'nextpas_platform_sync_force_posix_wait_fallback',
@@ -102,18 +106,18 @@ begin
     'platform.sync must declare a POSIX wait bucket fallback for address-wait emulation');
   CheckTokenPresent(LSource, 'platform_posix_wait_address_released',
     'platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi');
-  CheckTokenPresent(LSource, 'platform_mutex_size   = platform_pthread_mutex_size',
-    'platform.sync must derive POSIX mutex storage from the host pthread ffi owner token');
-  CheckTokenPresent(LSource, 'platform_rwlock_size  = platform_pthread_rwlock_size',
-    'platform.sync must derive POSIX rwlock storage from the host pthread ffi owner token');
-  CheckTokenPresent(LSource, 'platform_condvar_size = platform_pthread_condvar_size',
-    'platform.sync must derive POSIX condvar storage from the host pthread ffi owner token');
-  CheckTokenPresent(LSource, 'platform_mutex_size   = platform_windows_mutex_size',
-    'platform.sync must derive Windows mutex storage from the windows ffi owner token');
-  CheckTokenPresent(LSource, 'platform_rwlock_size  = platform_windows_rwlock_size',
-    'platform.sync must derive Windows rwlock storage from the windows ffi owner token');
-  CheckTokenPresent(LSource, 'platform_condvar_size = platform_windows_condvar_size',
-    'platform.sync must derive Windows condvar storage from the windows ffi owner token');
+  CheckTokenPresent(LBaseSource, 'platform_mutex_size   = platform_pthread_mutex_size',
+    'platform.sync.base must derive POSIX mutex storage from the host pthread base owner token');
+  CheckTokenPresent(LBaseSource, 'platform_rwlock_size  = platform_pthread_rwlock_size',
+    'platform.sync.base must derive POSIX rwlock storage from the host pthread base owner token');
+  CheckTokenPresent(LBaseSource, 'platform_condvar_size = platform_pthread_condvar_size',
+    'platform.sync.base must derive POSIX condvar storage from the host pthread base owner token');
+  CheckTokenPresent(LBaseSource, 'platform_mutex_size   = platform_windows_mutex_size',
+    'platform.sync.base must derive Windows mutex storage from the windows base owner token');
+  CheckTokenPresent(LBaseSource, 'platform_rwlock_size  = platform_windows_rwlock_size',
+    'platform.sync.base must derive Windows rwlock storage from the windows base owner token');
+  CheckTokenPresent(LBaseSource, 'platform_condvar_size = platform_windows_condvar_size',
+    'platform.sync.base must derive Windows condvar storage from the windows base owner token');
   CheckTokenPresent(LBehaviorTestSource, 'platform_wait_address32(nil',
     'platform.sync behavior tests must cover nil wait-address public API');
   CheckTokenPresent(LBehaviorTestSource, 'platform_wake_address_one(nil',

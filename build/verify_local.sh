@@ -900,6 +900,7 @@ require_path core/src/nextpas.core.platform.time.base.pas
 require_path core/src/nextpas.core.platform.time.host.pas
 require_path core/src/nextpas.core.platform.thread.base.pas
 require_path core/src/nextpas.core.platform.thread.pas
+require_path core/src/nextpas.core.platform.sync.base.pas
 require_path core/src/nextpas.core.platform.sync.pas
 require_path core/src/nextpas.core.platform.time.pas
 require_path core/src/nextpas.core.time.base.pas
@@ -4567,7 +4568,7 @@ if ! "$CORE_PLATFORM_SYNC_NO_FPC_BINARY" >>"$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 2
   fail 'core-platform-sync-no-fpc-run-failed'
 fi
 cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.no_fpc_units: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 'missing-core-platform-sync-no-fpc-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.no_fpc_units: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 'missing-core-platform-sync-no-fpc-pass-summary'
 printf 'core-platform-sync-no-fpc-check=pass\n'
 
 printf 'core-platform-sync-l0-boundary-check=running\n'
@@ -4588,7 +4589,7 @@ if ! "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY" >>"$CORE_PLATFORM_SYNC_L0_BOUNDARY
   fail 'core-platform-sync-l0-boundary-run-failed'
 fi
 cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
 printf 'core-platform-sync-l0-boundary-check=pass\n'
 
 printf 'core-platform-sync-posix-surface-check=running\n'

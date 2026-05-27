@@ -26,6 +26,12 @@
   `nextpas.core.platform.thread.base`，`nextpas.core.platform.thread` 只 re-export 并实现统一
   thread API。这个 base 单元不是 host ABI owner，不新增 `platform.thread.ffi` 或
   `platform.thread.intf`。
+- `platform.sync` 的 public carrier types/constants 也应遵循 base owner：
+  `TPlatformMutexAlign`、`TPlatformRwLockAlign`、`TPlatformCondVarAlign`、
+  `TPlatformMutex`、`TPlatformRwLock`、`TPlatformCondVar`、opaque size token、public mutex
+  kind 与 `PLATFORM_ERR_*` 归 `nextpas.core.platform.sync.base`。`platform.sync` 只 re-export
+  并实现统一 sync API；这个 base 单元不是 host ABI owner，不新增 `platform.sync.ffi` 或
+  `platform.sync.intf`。
 - Windows `WaitOnAddress` 的 raw success/timeout/last-error truth 属于 `windows.ffi`，但
   `platform_wait_address32` 的 nil/mismatch/timeout/wake public result contract 属于
   `platform.sync`。因此 Windows wait path 必须像 Linux futex 与 POSIX fallback 一样，在调用

@@ -108,6 +108,7 @@ var
   LFoundPlatformThread: Boolean;
   LFoundPlatformThreadBase: Boolean;
   LFoundPlatformSync: Boolean;
+  LFoundPlatformSyncBase: Boolean;
   LFoundPosixBase: Boolean;
   LFoundPosixFfi: Boolean;
   LFoundPosixMath: Boolean;
@@ -135,6 +136,7 @@ begin
   LFoundPlatformThread := False;
   LFoundPlatformThreadBase := False;
   LFoundPlatformSync := False;
+  LFoundPlatformSyncBase := False;
   LFoundPosixBase := False;
   LFoundPosixFfi := False;
   LFoundPosixMath := False;
@@ -182,6 +184,8 @@ begin
         LFoundPlatformThreadBase := True
       else if LFileName = 'nextpas.core.platform.sync.pas' then
         LFoundPlatformSync := True
+      else if LFileName = 'nextpas.core.platform.sync.base.pas' then
+        LFoundPlatformSyncBase := True
       else if LFileName = 'nextpas.core.platform.posix.base.pas' then
         LFoundPosixBase := True
       else if LFileName = 'nextpas.core.platform.posix.ffi.pas' then
@@ -231,7 +235,7 @@ begin
     FindClose(LSearch);
   end;
 
-  Check(LNonFfiCount >= 17, 'platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units');
+  Check(LNonFfiCount >= 18, 'platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units');
   Check(LFfiCount >= 7, 'platform source audit must see the host/shared ffi owner units');
 
   Check(LFoundPlatform, 'platform source audit must include nextpas.core.platform.pas');
@@ -242,6 +246,7 @@ begin
   Check(LFoundPlatformThread, 'platform source audit must include nextpas.core.platform.thread.pas');
   Check(LFoundPlatformThreadBase, 'platform source audit must include nextpas.core.platform.thread.base.pas');
   Check(LFoundPlatformSync, 'platform source audit must include nextpas.core.platform.sync.pas');
+  Check(LFoundPlatformSyncBase, 'platform source audit must include nextpas.core.platform.sync.base.pas');
   Check(LFoundPosixBase, 'platform source audit must include nextpas.core.platform.posix.base.pas');
   Check(LFoundPosixFfi, 'platform source audit must include nextpas.core.platform.posix.ffi.pas');
   Check(LFoundPosixMath, 'platform source audit must include nextpas.core.platform.posix.math.pas');

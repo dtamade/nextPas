@@ -64,6 +64,14 @@ begin
     'core/src/nextpas.core.platform.sync.pas');
 end;
 
+procedure TestPlatformSyncBaseStaysL0;
+begin
+  CheckL0OnlySource(
+    'platform.sync.base source',
+    '../../../src/nextpas.core.platform.sync.base.pas',
+    'core/src/nextpas.core.platform.sync.base.pas');
+end;
+
 procedure TestPlatformSyncExampleStaysL0;
 begin
   CheckL0OnlySource(
@@ -83,6 +91,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.platform.sync.l0_boundary');
   T.Run('platform.sync source stays L0', @TestPlatformSyncSourceStaysL0);
+  T.Run('platform.sync.base source stays L0', @TestPlatformSyncBaseStaysL0);
   T.Run('platform.sync example stays L0', @TestPlatformSyncExampleStaysL0);
   T.Run('platform.sync benchmark stays L0', @TestPlatformSyncBenchmarkStaysL0);
   T.Summary;
