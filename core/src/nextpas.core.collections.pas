@@ -97,7 +97,7 @@ uses
   nextpas.core.collections.bitset;
 
 type
-  // 统一对外导出的关键接口类型（非泛型别名；泛型类型请直接使用其本单元 uses 引入的原始定义）
+  // 统一对外导出的关键接口类型
   ICollection = nextpas.core.collections.intf.ICollection;
   IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
 
@@ -117,6 +117,38 @@ type
   TGrowMethod = nextpas.core.collections.base.TGrowMethod;
   TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
   TGrowProxyMethod = nextpas.core.collections.base.TGrowProxyMethod;
+
+  // 算法公共回调类型
+  generic TPredicateFunc<T> = function(const aElement: T; aData: Pointer): Boolean;
+  generic TPredicateMethod<T> = function(const aElement: T; aData: Pointer): Boolean of object;
+  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  generic TPredicateRefFunc<T> = reference to function(const aElement: T): Boolean;
+  {$ENDIF}
+  generic TMapperFunc<T,U> = function(const aElement: T; aData: Pointer): U;
+  generic TMapperMethod<T,U> = function(const aElement: T; aData: Pointer): U of object;
+  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  generic TMapperRefFunc<T,U> = reference to function(const aElement: T): U;
+  {$ENDIF}
+  generic TCompareFunc<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt;
+  generic TCompareMethod<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt of object;
+  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  generic TCompareRefFunc<T> = reference to function(const aLeft, aRight: T): SizeInt;
+  {$ENDIF}
+  generic TEqualsFunc<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean;
+  generic TEqualsMethod<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean of object;
+  {$IFDEF FAFAFA_CORE_ANONYMOUS_REFERENCES}
+  generic TEqualsRefFunc<T> = reference to function(const aLeft, aRight: T): Boolean;
+  {$ENDIF}
+
+  // HashMap / TreeMap / LRU public callback types
+  generic TKeyHashFunc<K> = function(const AKey: K): UInt32;
+  generic TKeyEqualsFunc<K> = function(const L, R: K): Boolean;
+  generic TValueSupplierFunc<V> = function: V;
+  generic TValueModifierProc<V> = procedure(var Value: V);
+  generic TKeyValueCallback<K,V> = procedure(const aEntry: specialize TMapEntry<K,V>; aData: Pointer);
+  generic TTreeValueSupplierFunc<V> = function: V;
+  generic TTreeValueModifierProc<V> = procedure(var Value: V);
+  generic THashFunc<T> = function(const aValue: T; aData: Pointer): UInt64;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
