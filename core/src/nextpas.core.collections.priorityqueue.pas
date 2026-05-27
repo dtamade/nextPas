@@ -12,6 +12,7 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
+  nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,
   nextpas.core.collections.element_manager;
 
@@ -51,7 +52,7 @@ type
   public
     function GetCount: SizeUInt; override;
 
-    constructor Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt = 16; aAllocator: IAllocator = nil); reintroduce;
+    constructor Create(aComparer: TPQCompareFunc; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil); reintroduce;
     destructor Destroy; override;
 
     { IPriorityQueue<T> }
@@ -72,7 +73,7 @@ type
   end;
 
 { 工厂函数声明 }
-generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = 16; aAllocator: IAllocator = nil): specialize IPriorityQueue<T>;
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): specialize IPriorityQueue<T>;
 
 implementation
 
@@ -91,8 +92,8 @@ begin
     raise EArgumentNil.Create('TPriorityQueue.Create: comparer function cannot be nil');
   FComparer := aComparer;
   FCapacity := aCapacity;
-  if FCapacity < 4 then
-    FCapacity := 4;
+  if FCapacity < PRIORITYQUEUE_MIN_CAPACITY then
+    FCapacity := PRIORITYQUEUE_MIN_CAPACITY;
   SetLength(FItems, FCapacity);
   FCount := 0;
 end;
@@ -107,7 +108,7 @@ end;
 procedure TPriorityQueue.Grow;
 begin
   if FCapacity = 0 then
-    FCapacity := 16
+    FCapacity := PRIORITYQUEUE_DEFAULT_CAPACITY
   else
     FCapacity := FCapacity * 2;
   SetLength(FItems, FCapacity);

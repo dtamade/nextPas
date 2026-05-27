@@ -51,7 +51,9 @@ uses
   nextpas.core.collections.forward_list.intf,
   nextpas.core.collections.stack.intf,
   nextpas.core.collections.circularbuffer.intf,
+  nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,
+  nextpas.core.collections.bitset.base,
   nextpas.core.collections.bitset.intf,
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
@@ -141,6 +143,10 @@ const
   DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;
   SKIPLIST_MAX_LEVEL = nextpas.core.collections.skiplist.base.SKIPLIST_MAX_LEVEL;
   SKIPLIST_P = nextpas.core.collections.skiplist.base.SKIPLIST_P;
+  BITSET_BITS_PER_WORD = nextpas.core.collections.bitset.base.BITSET_BITS_PER_WORD;
+  BITSET_DEFAULT_CAPACITY = nextpas.core.collections.bitset.base.BITSET_DEFAULT_CAPACITY;
+  PRIORITYQUEUE_DEFAULT_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_DEFAULT_CAPACITY;
+  PRIORITYQUEUE_MIN_CAPACITY = nextpas.core.collections.priorityqueue.base.PRIORITYQUEUE_MIN_CAPACITY;
 
 function FixedGrow(aStep: SizeUInt): IGrowthStrategy;
 function FactorGrow(aFactor: Double): IGrowthStrategy;
@@ -225,7 +231,7 @@ generic function MakeLruCache<K,V>(aMaxSize: SizeUInt = 100; aAllocator: IAlloca
 generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize ILinkedHashMap<K,V>;
 
 // ==== BitSet (Efficient bit set) ====
-function MakeBitSet(aInitialCapacity: SizeUInt = 64; aAllocator: IAllocator = nil): IBitSet;
+function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): IBitSet;
 //
 
 

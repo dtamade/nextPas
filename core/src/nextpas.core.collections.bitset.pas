@@ -11,6 +11,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
+  nextpas.core.collections.bitset.base,
   nextpas.core.collections.bitset.intf;
 
 type
@@ -67,14 +68,11 @@ type
 
 implementation
 
-const
-  BITS_PER_WORD = 64;
-
 { TBitSet }
 
 constructor TBitSet.Create;
 begin
-  Create(64, nil);
+  Create(BITSET_DEFAULT_CAPACITY, nil);
 end;
 
 constructor TBitSet.Create(aInitialCapacity: SizeUInt);
@@ -84,7 +82,7 @@ end;
 
 constructor TBitSet.Create(aAllocator: IAllocator);
 begin
-  Create(64, aAllocator);
+  Create(BITSET_DEFAULT_CAPACITY, aAllocator);
 end;
 
 constructor TBitSet.Create(aInitialCapacity: SizeUInt; aAllocator: IAllocator);
@@ -94,12 +92,12 @@ begin
   inherited Create(aAllocator);
 
   if aInitialCapacity = 0 then
-    aInitialCapacity := 64;
+    aInitialCapacity := BITSET_DEFAULT_CAPACITY;
 
   // Round up to nearest word boundary
-  LWordCount := (aInitialCapacity + BITS_PER_WORD - 1) div BITS_PER_WORD;
+  LWordCount := (aInitialCapacity + BITSET_BITS_PER_WORD - 1) div BITSET_BITS_PER_WORD;
   SetLength(FBits, LWordCount);
-  FBitCapacity := LWordCount * BITS_PER_WORD;
+  FBitCapacity := LWordCount * BITSET_BITS_PER_WORD;
 
   // Initialize to zero
   FillChar(FBits[0], Length(FBits) * SizeOf(UInt64), 0);
@@ -119,12 +117,12 @@ begin
     Exit;
 
   // Calculate required word count
-  LRequiredWords := (aIndex + BITS_PER_WORD) div BITS_PER_WORD;
+  LRequiredWords := (aIndex + BITSET_BITS_PER_WORD) div BITSET_BITS_PER_WORD;
   LOldLen := Length(FBits);
 
   // Expand array
   SetLength(FBits, LRequiredWords);
-  FBitCapacity := LRequiredWords * BITS_PER_WORD;
+  FBitCapacity := LRequiredWords * BITSET_BITS_PER_WORD;
 
   // Zero out new words
   for i := LOldLen to LRequiredWords - 1 do
@@ -151,8 +149,8 @@ var
   LWordIndex, LBitIndex: SizeUInt;
 begin
   EnsureCapacity(aIndex);
-  LWordIndex := aIndex div BITS_PER_WORD;
-  LBitIndex := aIndex mod BITS_PER_WORD;
+  LWordIndex := aIndex div BITSET_BITS_PER_WORD;
+  LBitIndex := aIndex mod BITSET_BITS_PER_WORD;
   FBits[LWordIndex] := FBits[LWordIndex] or (UInt64(1) shl LBitIndex);
 end;
 
@@ -163,8 +161,8 @@ begin
   if aIndex >= FBitCapacity then
     Exit;  // Bit is already 0 (doesn't exist)
 
-  LWordIndex := aIndex div BITS_PER_WORD;
-  LBitIndex := aIndex mod BITS_PER_WORD;
+  LWordIndex := aIndex div BITSET_BITS_PER_WORD;
+  LBitIndex := aIndex mod BITSET_BITS_PER_WORD;
   FBits[LWordIndex] := FBits[LWordIndex] and not (UInt64(1) shl LBitIndex);
 end;
 
@@ -175,8 +173,8 @@ begin
   if aIndex >= FBitCapacity then
     Exit(False);
 
-  LWordIndex := aIndex div BITS_PER_WORD;
-  LBitIndex := aIndex mod BITS_PER_WORD;
+  LWordIndex := aIndex div BITSET_BITS_PER_WORD;
+  LBitIndex := aIndex mod BITSET_BITS_PER_WORD;
   Result := (FBits[LWordIndex] and (UInt64(1) shl LBitIndex)) <> 0;
 end;
 
@@ -185,8 +183,8 @@ var
   LWordIndex, LBitIndex: SizeUInt;
 begin
   EnsureCapacity(aIndex);
-  LWordIndex := aIndex div BITS_PER_WORD;
-  LBitIndex := aIndex mod BITS_PER_WORD;
+  LWordIndex := aIndex div BITSET_BITS_PER_WORD;
+  LBitIndex := aIndex mod BITSET_BITS_PER_WORD;
   FBits[LWordIndex] := FBits[LWordIndex] xor (UInt64(1) shl LBitIndex);
 end;
 
@@ -248,7 +246,7 @@ begin
   if Length(LOtherBitSet.FBits) > LMaxWords then
     LMaxWords := Length(LOtherBitSet.FBits);
 
-  LResult := TBitSet.Create(LMaxWords * BITS_PER_WORD, FAllocator);
+  LResult := TBitSet.Create(LMaxWords * BITSET_BITS_PER_WORD, FAllocator);
 
   for i := 0 to Length(FBits) - 1 do
     LResult.FBits[i] := FBits[i];
@@ -270,7 +268,7 @@ begin
   if Length(LOtherBitSet.FBits) > LMaxWords then
     LMaxWords := Length(LOtherBitSet.FBits);
 
-  LResult := TBitSet.Create(LMaxWords * BITS_PER_WORD, FAllocator);
+  LResult := TBitSet.Create(LMaxWords * BITSET_BITS_PER_WORD, FAllocator);
 
   for i := 0 to Length(FBits) - 1 do
     LResult.FBits[i] := FBits[i];
