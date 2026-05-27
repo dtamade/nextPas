@@ -9,15 +9,14 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 11 pre-commit verification passed from `main@4923adc`
-  in isolated worktree
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave11-signal-control`
-  on branch `codex/platform-host-abi-wave11-signal-control`; commit, merge,
-  post-merge verification, and cleanup are pending.
+- Current status: Wave 11 merged to `main` as `96c3c1e`
+  (`platform: add POSIX signal-control ABI wave 11`). Post-merge verification
+  passed on `main@96c3c1e`; the Wave 11 worktree and branch were removed.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Current wave: Platform Host ABI Completeness Wave 11, POSIX signal-control
-  raw ABI inventory, pre-commit verified.
+  raw ABI inventory, closed. Next platform wave should start from latest
+  `main`.
 
 ## Architecture Rules
 
@@ -70,7 +69,8 @@ the integration boundary.
 - [x] Update source evidence, gap matrix, goal-tree platform route text, and
   official verification route.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, and clean the worktree.
+- [x] Commit, merge to `main`, post-merge verify, clean the worktree, and
+  delete the feature branch.
 
 #### Wave 11 Verification Boundary
 
@@ -198,6 +198,9 @@ the integration boundary.
 - Post-merge `bash build/verify_local.sh` on `main@8ed96da`: pass; final
   envelope reports `verify-local=pass`, `human-summary=local verification
   passed`, and includes `corePlatformHostAbiWave10PosixStatHostsCheck`.
+- Post-merge `bash build/verify_local.sh` on `main@96c3c1e`: pass; final
+  envelope reports `verify-local=pass`, `human-summary=local verification
+  passed`, and includes `corePlatformHostAbiWave11SignalControlCheck`.
 
 ## Errors Encountered
 

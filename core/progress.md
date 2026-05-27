@@ -99,6 +99,16 @@
 - Guardrail note: raw Wave 11 signal-control ABI was not runtime-probed.
   Verification stayed on owner placement, docs truth, route truth, absence of
   feature-specific FFI, no FPC platform-unit dependency, and compile coherence.
+- Committed Wave 11 as `96c3c1e`
+  (`platform: add POSIX signal-control ABI wave 11`).
+- Fast-forwarded `main` from `4923adc` to `96c3c1e`.
+- Post-merge `bash build/verify_local.sh` passed on the main checkout with
+  `verify-local=pass`, `human-summary=local verification passed`, and final
+  envelope token `corePlatformHostAbiWave11SignalControlCheck`.
+- Closeout note: Wave 11 added host-owned signal-control ABI inventory only.
+  Existing pre-Wave host FFI naming debt such as `platform_process_id` and
+  `platform_pthread_sync_result` remains visible and should be addressed in the
+  next platform cleanup wave before further public API growth.
 
 - Started Wave 10 from `main@eeac28c` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`
