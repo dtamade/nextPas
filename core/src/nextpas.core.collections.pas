@@ -98,14 +98,27 @@ type
   IBitSet = nextpas.core.collections.bitset.intf.IBitSet;
 
   // 非泛型公共载体类型
+  PPtrIter = nextpas.core.collections.base.PPtrIter;
+  TPtrIter = nextpas.core.collections.base.TPtrIter;
+  TCollection = nextpas.core.collections.base.TCollection;
+  TCollectionClass = nextpas.core.collections.base.TCollectionClass;
   TMergePosition = nextpas.core.collections.vecdeque.base.TMergePosition;
   TSortAlgorithm = nextpas.core.collections.vecdeque.base.TSortAlgorithm;
+
+  // 非泛型公共回调类型
+  TRandomGeneratorFunc = nextpas.core.collections.base.TRandomGeneratorFunc;
+  TRandomGeneratorMethod = nextpas.core.collections.base.TRandomGeneratorMethod;
+  TRandomGeneratorRefFunc = nextpas.core.collections.base.TRandomGeneratorRefFunc;
+  TGrowFunc = nextpas.core.collections.base.TGrowFunc;
+  TGrowMethod = nextpas.core.collections.base.TGrowMethod;
+  TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
   TGrowthStrategy          = nextpas.core.collections.base.TGrowthStrategy;
   TGrowthStrategyClass     = nextpas.core.collections.base.TGrowthStrategyClass;
   TCustomGrowthStrategy    = nextpas.core.collections.base.TCustomGrowthStrategy;
+  TCalcGrowStrategy        = nextpas.core.collections.base.TCalcGrowStrategy;
   TDoublingGrowStrategy    = nextpas.core.collections.base.TDoublingGrowStrategy;
   TFixedGrowStrategy       = nextpas.core.collections.base.TFixedGrowStrategy;
   TFactorGrowStrategy      = nextpas.core.collections.base.TFactorGrowStrategy;
