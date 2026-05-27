@@ -10,6 +10,19 @@
 
 ## Research Findings
 
+- Batch 185 收口 imported unit method body implicit-self same-unit function-result type-mismatch：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` 与
+  `function Flag: Boolean;` 同属 `project-source` owner unit，`procedure TWorker.Run; begin Pick(Flag); end;`
+  必须失败为 `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 185 RED focused 证明旧实现只接受 root-owned 零参 function result 作为 stable evidence；
+  imported method body same-owner `project-source` function result 会被 deferred，导致缺少
+  `sema.type-mismatch`。
+- Batch 185 将 stable function-result evidence 扩展为 root-owned 或 same-owner `project-source`
+  unit-owned 零参内建标量/字符串 function result；installed-source provenance 仍不作为 ordinary
+  type-mismatch evidence。
+- Batch 185 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_type_mismatch` 与
+  `imported-unit-body-implicit-self-function-result-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultTypeMismatchCheck":"pass`。
 - Batch 184 收口 imported unit method body inherited implicit-self ladder 的 ambiguity 格：root source
   `uses Worker;`，imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，
   `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited

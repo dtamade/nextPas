@@ -148,9 +148,13 @@ type
       const ACallNode: TGreenNode;
       out ASignature: string
     ): Boolean;
-    function ExpressionTypeFactIsStable(const ANode: TGreenNode): Boolean;
+    function ExpressionTypeFactIsStable(
+      const ANode: TGreenNode;
+      const ACurrentOwnerUnitId: string
+    ): Boolean;
     function CallArgumentSignatureIsStable(
-      const ACallNode: TGreenNode
+      const ACallNode: TGreenNode;
+      const ACurrentOwnerUnitId: string
     ): Boolean;
     function MethodSymbolIdForExactClassTypeMember(
       const AClassTypeId: LongInt;
@@ -1180,9 +1184,11 @@ begin
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
-  const ANode: TGreenNode
+  const ANode: TGreenNode;
+  const ACurrentOwnerUnitId: string
 ): Boolean;
 var
+  CurrentOwnerUnitId: string;
   Index: LongInt;
   RootOwnerUnitId: string;
   Sym: TSemanticSymbol;
@@ -1191,6 +1197,9 @@ begin
   Result := False;
   if ANode = nil then
     Exit;
+
+  CurrentOwnerUnitId := NormalizeUnitIdentity(ACurrentOwnerUnitId);
+  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
 
   case ANode.NodeKind of
     gnkIntegerLiteral, gnkRealLiteral, gnkStringLiteral, gnkCharLiteral:
@@ -1205,9 +1214,15 @@ begin
         Sym := FModel.SymbolAt(SymId - 1);
         if SameText(Sym.Kind, 'function') then
         begin
-          RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
           Exit((Sym.ParamCount = 0) and
-            SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+            (
+              SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+              (
+                (CurrentOwnerUnitId <> '') and
+                SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
+                OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
+              )
+            ) and
             TypeIdHasStableScalarFact(Sym.TypeId));
         end
         else if (not SameText(Sym.Kind, 'variable')) and
@@ -1221,15 +1236,24 @@ begin
         if SymId <= 0 then
           Exit(False);
         Sym := FModel.SymbolAt(SymId - 1);
-        RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
         Exit(SameText(Sym.Kind, 'function') and (Sym.ParamCount = 0) and
-          SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+          (
+            SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+            (
+              (CurrentOwnerUnitId <> '') and
+              SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
+              OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
+            )
+          ) and
           (ANode.ChildCount <= 1) and TypeIdHasStableScalarFact(Sym.TypeId));
       end;
     gnkBinaryExpression, gnkUnaryExpression:
       begin
         for Index := 0 to ANode.ChildCount - 1 do
-          if not ExpressionTypeFactIsStable(ANode.ChildAt(Index)) then
+          if not ExpressionTypeFactIsStable(
+            ANode.ChildAt(Index),
+            CurrentOwnerUnitId
+          ) then
             Exit(False);
         Exit(True);
       end;
@@ -1237,7 +1261,8 @@ begin
 end;
 
 function TSemanticAnalyzer.CallArgumentSignatureIsStable(
-  const ACallNode: TGreenNode
+  const ACallNode: TGreenNode;
+  const ACurrentOwnerUnitId: string
 ): Boolean;
 var
   ArgRoot: TGreenNode;
@@ -1258,7 +1283,10 @@ begin
     Exit(True);
 
   for Index := 1 to ArgRoot.ChildCount - 1 do
-    if not ExpressionTypeFactIsStable(ArgRoot.ChildAt(Index)) then
+    if not ExpressionTypeFactIsStable(
+      ArgRoot.ChildAt(Index),
+      ACurrentOwnerUnitId
+    ) then
       Exit(False);
   Result := True;
 end;
@@ -1915,7 +1943,7 @@ begin
     Exit;
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
-    CallArgumentSignatureIsStable(ACallNode);
+    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
 
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
@@ -1981,7 +2009,7 @@ begin
   ArgCount := CallArgumentCount(ACallNode);
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
-    CallArgumentSignatureIsStable(ACallNode);
+    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
     CallName,
@@ -2282,7 +2310,7 @@ begin
       MemberFailureOffset := ANode.ByteOffset;
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       HasTypeMismatchEvidence := HasArgSignature and
-        CallArgumentSignatureIsStable(ANode);
+        CallArgumentSignatureIsStable(ANode, ACurrentOwnerUnitId);
       ImplicitSelfBound := False;
       if LookupCallBindingDeclaration(
         ANode.Text,
