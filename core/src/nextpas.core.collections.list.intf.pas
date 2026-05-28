@@ -171,57 +171,6 @@ type
      *}
     function TryPopBack(out aElement: T): Boolean;
 
-    {**
-     * 高性能方法（无安全检查版本）
-     *
-     * @remark
-     *   这些方法跳过所有安全检查以获得最佳性能
-     *   调用者必须确保参数和状态的有效性
-     *   遵循项目 Unchecked 命名规范
-     *}
-
-    {**
-     * PushFrontUnchecked
-     *
-     * @desc 在链表头部插入元素（无安全检查版本）
-     *}
-    procedure PushFrontUnchecked(const aElement: T);
-
-    {**
-     * PushBackUnchecked
-     *
-     * @desc 在链表尾部插入元素（无安全检查版本）
-     *}
-    procedure PushBackUnchecked(const aElement: T);
-
-    {**
-     * PopFrontUnchecked
-     *
-     * @desc 移除并返回头部元素（无安全检查版本）
-     *}
-    function PopFrontUnchecked: T;
-
-    {**
-     * PopBackUnchecked
-     *
-     * @desc 移除并返回尾部元素（无安全检查版本）
-     *}
-    function PopBackUnchecked: T;
-
-    {**
-     * PushRangeUnchecked
-     *
-     * @desc 批量插入数组元素到链表尾部（无安全检查版本）
-     *}
-    procedure PushRangeUnchecked(const aArray: array of T);
-
-    {**
-     * ClearUnchecked
-     *
-     * @desc 清空链表（无安全检查版本）
-     *}
-    procedure ClearUnchecked;
-
   end;
 
 implementation
