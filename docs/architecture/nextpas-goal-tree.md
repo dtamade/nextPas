@@ -62,7 +62,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 每轮开始前从这里取最高优先级项。完成后划掉并补充新项。
 
-1. **protected visibility + same-unit private access** — 补齐 visibility 语义：protected 允许子类访问，同一 unit 内可访问 private（FPC 语义）
+1. **protected visibility subclass access** — protected 允许子类通过 implicit-self 访问（当前 protected 只做了 cross-unit 拒绝，还没做子类允许）
 2. **implicit type conversion (Integer ↔ LongInt, Char → String)** — overload resolution 和 type checking 的核心缺口，真实代码大量依赖
 3. **function result as expression** — `X := Foo()` 的 result 类型推断和 assignment 类型检查
 4. **generic instantiation** — `specialize TList<Integer>` 的 member truth 生成
@@ -71,6 +71,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 完成项（保留追溯）：
 - ~~default parameter member method call binding~~ (Batch 217-218)
 - ~~private member visibility enforcement~~ (Batch 219-220)
+- ~~same-unit private access (FPC semantics)~~ (Batch 221)
 - ~~installed-source unit body deferred guard matrix~~ (Batch 198-216)
 
 ## 语义能力路线图
