@@ -2075,7 +2075,9 @@ begin
                   if CurrentToken(ALexer, ACursor).Kind = tkVirtualKeyword then
                     ElementNode.FText := ElementNode.FText + ';virtual'
                   else if CurrentToken(ALexer, ACursor).Kind = tkOverrideKeyword then
-                    ElementNode.FText := ElementNode.FText + ';override';
+                    ElementNode.FText := ElementNode.FText + ';override'
+                  else if CurrentToken(ALexer, ACursor).Kind = tkAbstractKeyword then
+                    ElementNode.FText := ElementNode.FText + ';virtual;abstract';
                   Inc(ACursor);
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end;

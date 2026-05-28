@@ -4324,6 +4324,9 @@ begin
               ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
               ClsName + '.' + NameNode.Text);
             FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal + 1);
+            if Pos(';abstract', Child.Text) > 0 then
+              FModel.AddStringConstValue(
+                ClsName + '$abstract_' + NameNode.Text, 'true');
           end
           else if Pos(';override', Child.Text) > 0 then
           begin
@@ -4393,6 +4396,7 @@ begin
     if Child.Text = '' then
       Continue;
     TypeId := FModel.AddType(Child.Text, 'declared');
+    FModel.SetTypeOwner(TypeId, AOwnerUnitId);
     SymbolId := FModel.AddSymbol(Child.Text, 'type', AOwnerUnitId, TypeId,
       Child.ByteOffset);
     if FCurrentScopeId > 0 then
@@ -4516,13 +4520,14 @@ begin
   ArgStr := Copy(ASpecText, LtPos + 1, GtPos - LtPos - 1);
 
   GenericTypeId := 0;
-  for I := 0 to FModel.SymbolCount - 1 do
+  for I := 0 to FModel.TypeCount - 1 do
   begin
-    if SameText(FModel.SymbolAt(I).Name, GenericName) and
-      SameText(FModel.SymbolAt(I).Kind, 'type') and
-      SameText(FModel.SymbolAt(I).OwnerUnitId, AOwnerUnitId) then
+    GenericType := FModel.TypeAt(I);
+    if SameText(GenericType.Name, GenericName) and
+      (GenericType.TypeParams <> '') and
+      SameText(GenericType.OwnerUnitId, AOwnerUnitId) then
     begin
-      GenericTypeId := FModel.SymbolAt(I).TypeId;
+      GenericTypeId := GenericType.TypeId;
       Break;
     end;
   end;
@@ -4670,7 +4675,7 @@ begin
   end;
   FModel.SetTypeParent(AInstanceTypeId,
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
-  if FModel.LookupStringConstValue(AOwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
+  if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
     for I := 0 to High(ParamNames) do
     begin
@@ -4784,14 +4789,15 @@ begin
   if GenericTypeId <= 0 then
     Exit;
   NewTypeId := FModel.AddType(ASpecText, 'declared');
+  FModel.SetTypeOwner(NewTypeId, AOwnerUnitId);
   FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, NewTypeId, 0);
-  InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
 
   SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
   FGenericCacheKeys[High(FGenericCacheKeys)] := CacheKey;
   SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
   FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := NewTypeId;
 
+  InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
   Result := NewTypeId;
 end;
 
