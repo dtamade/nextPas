@@ -503,7 +503,6 @@ type
     function  TryPop(aDst: Pointer; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  TryPop(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  TryPop(var aDst: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  Pop(out aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  TryPeek(out aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
@@ -1418,11 +1417,6 @@ begin
 end;
 
 
-
-function TVec.Pop(out aElement: T): Boolean;
-begin
-  Result := TryPop(@aElement, 1);
-end;
 
 function TVec.Pop: T;
 begin

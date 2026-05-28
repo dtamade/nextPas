@@ -150,3 +150,5 @@
 - Exact scans found no remaining `FindIF`, `FindIFNot`, `CountIF`, `ReplaceIF`, `UnChecked`, or `SizeUint` symbols in collections source/tests.
 - `TVec.TrimToSize` was only a Java compatibility alias for `ShrinkToFit`. Because nextpas.core has no published compatibility burden, the alias should be removed rather than carried as a stale public concrete-class method.
 - `TVecDeque.TrimToSize(aNewSize)` is a different logical-length trimming helper used by deque split/trim flows. It should not be changed in the `TVec` capacity-alias cleanup batch.
+- `TVec.Pop(out Element): Boolean` was another concrete-class-only compatibility alias for `TryPop(var Element): Boolean`. `IVec<T>` already exposes the intended split: non-throwing `TryPop(...)` and checked throwing `Pop: T`.
+- `Stack`, `Queue`, `Deque`, and `VecDeque` have their own `Pop(out): Boolean` contracts. Removing the `TVec` alias does not imply changing those container families in the same batch.

@@ -50,6 +50,8 @@
 - Started the next naming cleanup batch. Exact scans found no remaining `FindIF` / `CountIF` / `ReplaceIF` / `UnChecked` / `SizeUint` residues in collections source/tests, so the actionable cleanup is the copied `TVec.TrimToSize` Java compatibility alias.
 - Removed `TVec.TrimToSize`; callers should use `ShrinkToFit`. Left `TVecDeque.TrimToSize(aNewSize)` unchanged because it trims logical length and is not the same capacity-shrink alias.
 - Verified the alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the next Vec surface cleanup batch. Removed the concrete-class-only `TVec.Pop(out Element): Boolean` alias, leaving `TryPop(var Element): Boolean` for non-throwing extraction and `Pop: T` for checked throwing extraction. Other container families with intentional `Pop(out): Boolean` contracts were left untouched.
+- Verified the Vec pop alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

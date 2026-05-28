@@ -12,7 +12,15 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec TrimToSize Alias Removal
+### Current Micro Batch: Vec Pop Alias Removal
+
+- [x] Remove the concrete-class-only `TVec.Pop(out Element): Boolean` alias.
+- [x] Keep `TryPop(var Element): Boolean` as the non-throwing Vec API.
+- [x] Keep `Pop: T` as the checked throwing Vec API.
+- [x] Leave `Stack` / `Queue` / `Deque` `Pop(out): Boolean` APIs untouched because they are separate container contracts.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec TrimToSize Alias Removal
 
 - [x] Confirm `FindIF` / `CountIF` / `ReplaceIF` / `UnChecked` / `SizeUint` naming residues are already absent.
 - [x] Remove the copied `TVec.TrimToSize` Java compatibility alias and keep `ShrinkToFit` as the single capacity-shrink API.
