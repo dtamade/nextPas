@@ -115,6 +115,40 @@ begin
   platform_file_unlink(@Path2[0]);
 end;
 
+procedure TestMkdirP;
+const
+  DEEP = '/tmp/nextpas_test_mkdir_p/a/b/c';
+begin
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b/c');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p');
+  Check(platform_fs_mkdir_p(DEEP, 493) = 0, 'mkdir_p succeeds');
+  Check(platform_fs_is_dir(DEEP), 'deep dir exists');
+  Check(platform_fs_mkdir_p(DEEP, 493) = 0, 'mkdir_p idempotent');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b/c');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p');
+end;
+
+procedure TestCopyFile;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  Size: Int64;
+begin
+  platform_file_open('/tmp/nextpas_copy_src.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('hello copy'), 10, W);
+  platform_file_close(H);
+  Check(platform_fs_copy_file('/tmp/nextpas_copy_src.txt', '/tmp/nextpas_copy_dst.txt') = 0, 'copy ok');
+  Check(platform_fs_is_file('/tmp/nextpas_copy_dst.txt'), 'dst exists');
+  Check(platform_fs_file_size('/tmp/nextpas_copy_dst.txt', Size) = 0, 'stat dst');
+  Check(Size = 10, 'dst size = 10');
+  platform_file_unlink('/tmp/nextpas_copy_src.txt');
+  platform_file_unlink('/tmp/nextpas_copy_dst.txt');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -125,5 +159,7 @@ begin
   T.Run('temp_dir', @TestTempDir);
   T.Run('mktemp', @TestMktemp);
   T.Run('mktemp unique', @TestMktempUnique);
+  T.Run('mkdir_p', @TestMkdirP);
+  T.Run('copy_file', @TestCopyFile);
   T.Summary;
 end.

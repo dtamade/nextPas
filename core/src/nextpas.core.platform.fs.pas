@@ -11,6 +11,8 @@ function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 function platform_fs_temp_dir(ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
+function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
+function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 
 implementation
 
@@ -93,6 +95,81 @@ begin
       Result := -1;
   end;
 {$ENDIF}
+end;
+
+function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
+var
+  LBuf: array[0..1023] of AnsiChar;
+  LLen, I: Int32;
+  LR: Int32;
+begin
+  if (APath = nil) or (APath[0] = #0) then
+    Exit(-1);
+  LLen := 0;
+  while (LLen < 1023) and (APath[LLen] <> #0) do
+  begin
+    LBuf[LLen] := APath[LLen];
+    Inc(LLen);
+  end;
+  LBuf[LLen] := #0;
+
+  I := 1;
+  while I <= LLen do
+  begin
+  {$IFDEF NEXTPAS_WINDOWS}
+    if (LBuf[I] = '\') or (LBuf[I] = '/') or (I = LLen) then
+  {$ELSE}
+    if (LBuf[I] = '/') or (I = LLen) then
+  {$ENDIF}
+    begin
+      if I = LLen then
+      begin
+        LR := platform_file_mkdir(@LBuf[0], AMode);
+        if (LR <> 0) and platform_fs_is_dir(@LBuf[0]) then
+          LR := 0;
+        if LR <> 0 then Exit(LR);
+      end
+      else
+      begin
+        LBuf[I] := #0;
+        LR := platform_file_mkdir(@LBuf[0], AMode);
+        if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+          Exit(LR);
+      {$IFDEF NEXTPAS_WINDOWS}
+        LBuf[I] := '\';
+      {$ELSE}
+        LBuf[I] := '/';
+      {$ENDIF}
+      end;
+    end;
+    Inc(I);
+  end;
+  Result := 0;
+end;
+
+function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+var
+  LSrcH, LDstH: TPlatformFileHandle;
+  LBuf: array[0..8191] of Byte;
+  LRead, LWritten: PtrUInt;
+  LR: Int32;
+begin
+  LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
+  if LR <> 0 then Exit(LR);
+  LR := platform_file_open(ADst, fomWriteOnly, fcmCreateAlways, LDstH);
+  if LR <> 0 then
+  begin
+    platform_file_close(LSrcH);
+    Exit(LR);
+  end;
+  repeat
+    LR := platform_file_read(LSrcH, @LBuf[0], SizeOf(LBuf), LRead);
+    if (LR <> 0) or (LRead = 0) then Break;
+    LR := platform_file_write(LDstH, @LBuf[0], LRead, LWritten);
+  until (LR <> 0) or (LWritten < LRead);
+  platform_file_close(LDstH);
+  platform_file_close(LSrcH);
+  Result := LR;
 end;
 
 function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
