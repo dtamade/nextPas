@@ -132,6 +132,7 @@ begin
   if FPoolNext >= FPoolEnd then
   begin
     GetMem(LBlock, BLOCK_SIZE * SizeOf(TNode));
+    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TNode), 0);
     Inc(FPoolBlockCount);
     SetLength(FPoolBlocks, FPoolBlockCount);
     FPoolBlocks[FPoolBlockCount - 1] := LBlock;

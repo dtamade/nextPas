@@ -601,7 +601,7 @@ uses
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
 begin
-  CopyUnChecked(aSrc, aDst, aSize);
+  System.Move(aSrc^, aDst^, aSize);
 end;
 
 function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;

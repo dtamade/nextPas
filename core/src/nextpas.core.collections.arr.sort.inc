@@ -18,6 +18,48 @@ const
   INSERTION_THRESHOLD = 24;
   PARTIAL_INSERTION_LIMIT = 12;
 
+  {$IF SizeOf(TElem) = 4}
+  procedure RadixSort32(aP: PElem; aN: SizeUInt);
+  const
+    {$IFDEF SORT_INT32}
+    FLIP_MASK = UInt32($80000000);
+    {$ELSE}
+    FLIP_MASK = UInt32(0);
+    {$ENDIF}
+  var
+    LBuf: PElem;
+    LSrc, LDst, LTmp: PElem;
+    LCounts: array[0..255] of SizeUInt;
+    i, pass: SizeUInt;
+    LKey: UInt32;
+  begin
+    GetMem(LBuf, aN * SizeOf(TElem));
+    LSrc := aP;
+    LDst := LBuf;
+    for pass := 0 to 3 do
+    begin
+      FillChar(LCounts, SizeOf(LCounts), 0);
+      for i := 0 to aN - 1 do
+      begin
+        LKey := UInt32(LSrc[i]) xor FLIP_MASK;
+        Inc(LCounts[(LKey shr (pass * 8)) and $FF]);
+      end;
+      for i := 1 to 255 do
+        Inc(LCounts[i], LCounts[i - 1]);
+      for i := aN - 1 downto 0 do
+      begin
+        LKey := UInt32(LSrc[i]) xor FLIP_MASK;
+        Dec(LCounts[(LKey shr (pass * 8)) and $FF]);
+        LDst[LCounts[(LKey shr (pass * 8)) and $FF]] := LSrc[i];
+      end;
+      LTmp := LSrc; LSrc := LDst; LDst := LTmp;
+    end;
+    if LSrc <> aP then
+      System.Move(LSrc^, aP^, aN * SizeOf(TElem));
+    FreeMem(LBuf);
+  end;
+  {$ENDIF}
+
   procedure InsertionSort(aL, aR: SizeUInt); inline;
   var
     i, j: SizeUInt;
@@ -201,6 +243,14 @@ begin
       Exit;
     end;
   end;
+
+  {$IF SizeOf(TElem) = 4}
+  if aCount >= 256 then
+  begin
+    RadixSort32(aData, aCount);
+    Exit;
+  end;
+  {$ENDIF}
 
   LDepth := 0;
   LN := aCount;
