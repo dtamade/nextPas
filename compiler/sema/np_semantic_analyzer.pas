@@ -4125,7 +4125,7 @@ begin
       end;
       if not FModel.LookupStringConstValue(AArgType + '$interfaces', IntfList) then
         IntfList := '';
-      if (IntfList = '') or (Pos(SC, IntfList) = 0) then
+      if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
@@ -4701,7 +4701,30 @@ begin
   else if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
   if FModel.LookupStringConstValue(GenericName + '$parent_class', SubstSig) then
-    FModel.AddStringConstValue(InstanceName + '$parent_class', SubstSig)
+  begin
+    if Pos('<', SubstSig) > 0 then
+    begin
+      for I := 0 to High(ParamNames) do
+      begin
+        J := 1;
+        while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
+        begin
+          if SameText(Copy(SubstSig, J, Length(ParamNames[I])), ParamNames[I]) and
+            ((J = 1) or not (SubstSig[J-1] in ['A'..'Z','a'..'z','0'..'9','_'])) and
+            ((J + Length(ParamNames[I]) - 1 = Length(SubstSig)) or
+             not (SubstSig[J + Length(ParamNames[I])] in ['A'..'Z','a'..'z','0'..'9','_'])) then
+          begin
+            SubstSig := Copy(SubstSig, 1, J - 1) + ArgTypes[I] +
+              Copy(SubstSig, J + Length(ParamNames[I]), MaxInt);
+            J := J + Length(ArgTypes[I]);
+          end
+          else
+            Inc(J);
+        end;
+      end;
+    end;
+    FModel.AddStringConstValue(InstanceName + '$parent_class', SubstSig);
+  end
   else
     FModel.AddStringConstValue(InstanceName + '$parent_class',
       FModel.TypeAt(GenericTypeId - 1).Name);
