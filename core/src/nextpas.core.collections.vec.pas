@@ -79,9 +79,12 @@ type
     TSpan   = specialize TReadOnlySpan<T>;
   private
     FBuf:          TVecBuf;
+    FData:         PElement;
     FCount:        SizeUInt;
     FGrowStrategy: IGrowthStrategy;
-    FPrevNonAlignedStrategy: IGrowthStrategy; // 保存启用对齐包装前的策略以便恢复
+    FPrevNonAlignedStrategy: IGrowthStrategy;
+
+    procedure SyncDataPtr; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
   { 迭代器回调}
@@ -829,6 +832,7 @@ begin
   FGrowStrategy := aGrowStrategy;
   FBuf   := TVecBuf.Create(aCapacity, aAllocator, aData);
   FCount := 0;
+  SyncDataPtr;
 end;
 
 constructor TVec.Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
@@ -862,6 +866,11 @@ constructor TVec.Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStr
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc);
+end;
+
+procedure TVec.SyncDataPtr;
+begin
+  FData := PElement(FBuf.GetMemory);
 end;
 
 destructor TVec.Destroy;
@@ -974,6 +983,7 @@ end;
 procedure TVec.LoadFromUnchecked(const aSrc: Pointer; aCount: SizeUInt);
 begin
   FBuf.LoadFromUnchecked(aSrc, aCount);
+  SyncDataPtr;
   FCount := aCount;
 end;
 
@@ -1009,20 +1019,19 @@ end;
 
 function TVec.GetMemory: PElement;
 begin
-  Result := FBuf.GetMemory;
+  Result := FData;
 end;
 
 function TVec.Get(aIndex: SizeUInt): T;
 begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TVec.Get: aIndex out of bounds');
-
-  Result := GetUnchecked(aIndex);
+  Result := FData[aIndex];
 end;
 
 function TVec.GetUnchecked(aIndex: SizeUInt): T;
 begin
-  Result := FBuf.GetUnchecked(aIndex);
+  Result := FData[aIndex];
 end;
 
 procedure TVec.Put(aIndex: SizeUInt; const aValue: T);
@@ -1102,6 +1111,7 @@ end;
 procedure TVec.SetCapacity(aCapacity: SizeUInt);
 begin
   FBuf.Resize(aCapacity);
+  SyncDataPtr;
 
   if (aCapacity < FCount) then
     FCount := aCapacity;
@@ -1288,7 +1298,7 @@ procedure TVec.Push(const aElement: T);
 begin
   if FCount < FBuf.GetCount then
   begin
-    FBuf.PutUnchecked(FCount, aElement);
+    FData[FCount] := aElement;
     Inc(FCount);
   end
   else
@@ -1432,9 +1442,9 @@ begin
   if FCount = 0 then
     raise EEmptyCollection.Create('TVec.Pop: failed to pop (empty)');
   Dec(FCount);
-  Result := FBuf.GetUnchecked(FCount);
+  Result := FData[FCount];
   if System.IsManagedType(T) then
-    GetElementManager.FinalizeManagedElementsUnchecked(FBuf.GetPtrUnchecked(FCount), 1);
+    GetElementManager.FinalizeManagedElementsUnchecked(FData + FCount, 1);
 end;
 
 function TVec.TryPeek(out aElement: T): Boolean;
