@@ -14,16 +14,14 @@ type
   TReplaceFlags = set of (rfReplaceAll, rfIgnoreCase);
 
 const
-{$IFDEF NEXTPAS_WINDOWS}
-  PathDelim = '\';
-  DriveDelim = ':';
-  PathSep = ';';
-{$ELSE}
-  PathDelim = '/';
-  DriveDelim = '';
-  PathSep = ':';
-{$ENDIF}
+  PathDelim = PLATFORM_PATH_DELIM;
+  PathSep = PLATFORM_PATH_SEP;
   LineEnding = PLATFORM_LINE_ENDING;
+{$IFDEF NEXTPAS_WINDOWS}
+  DriveDelim = ':';
+{$ELSE}
+  DriveDelim = '';
+{$ENDIF}
 
   faReadOnly   = $00000001;
   faHidden     = $00000002;
@@ -98,6 +96,26 @@ function ForceDirectories(const Dir: string): Boolean;
 function GetEnvironmentVariable(const EnvVar: string): string;
 procedure Sleep(Milliseconds: Cardinal);
 function GetTempDir: string;
+
+{ --- Exception Classes --- }
+
+type
+  Exception = class(TObject)
+  private
+    FMessage: string;
+  public
+    constructor Create(const Msg: string);
+    constructor CreateFmt(const Fmt: string; const Args: array of const);
+    property Message: string read FMessage write FMessage;
+  end;
+
+  EConvertError = class(Exception);
+  EInOutError = class(Exception);
+  EAbort = class(Exception);
+
+{ --- Utility --- }
+
+procedure FreeAndNil(var Obj);
 
 { --- Format and String Operations (P1) --- }
 
@@ -570,6 +588,31 @@ begin
 {$ELSE}
   Result := 0;
 {$ENDIF}
+end;
+
+{ --- Exception Classes --- }
+
+constructor Exception.Create(const Msg: string);
+begin
+  inherited Create;
+  FMessage := Msg;
+end;
+
+constructor Exception.CreateFmt(const Fmt: string; const Args: array of const);
+begin
+  inherited Create;
+  FMessage := Format(Fmt, Args);
+end;
+
+{ --- Utility --- }
+
+procedure FreeAndNil(var Obj);
+var
+  LTemp: TObject;
+begin
+  LTemp := TObject(Obj);
+  Pointer(Obj) := nil;
+  LTemp.Free;
 end;
 
 { --- Directory Search (P2) --- }
