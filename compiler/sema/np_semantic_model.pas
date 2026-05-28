@@ -22,6 +22,11 @@ type
     ByteOffset: LongInt;
   end;
 
+  TGenericParentRef = record
+    TemplateTypeId: LongInt;
+    ArgIndices: array of LongInt;
+  end;
+
   TSemanticType = record
     TypeId: LongInt;
     Name: string;
@@ -31,6 +36,7 @@ type
     TypeParams: string;
     TypeConstraints: string;
     InstantiatedFrom: LongInt;
+    GenericParent: TGenericParentRef;
   end;
 
   TTypedHirNode = record
@@ -132,6 +138,8 @@ type
     function AddType(const AName: string; const AKind: string): LongInt;
     procedure SetTypeOwner(const ATypeId: LongInt; const AOwnerUnitId: string);
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
+    procedure SetTypeGenericParent(const ATypeId: LongInt;
+      const ATemplateTypeId: LongInt; const AArgIndices: array of LongInt);
     procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
     procedure SetTypeInstantiatedFrom(const ATypeId: LongInt; const AFromTypeId: LongInt);
     procedure AppendTypeConstraint(const ATypeId: LongInt;
@@ -298,6 +306,21 @@ begin
   Idx := ATypeId - 1;
   if (Idx >= 0) and (Idx < Length(FTypes)) then
     FTypes[Idx].ParentTypeId := AParentTypeId;
+end;
+
+procedure TSemanticModel.SetTypeGenericParent(const ATypeId: LongInt;
+  const ATemplateTypeId: LongInt; const AArgIndices: array of LongInt);
+var
+  Idx, I: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx >= 0) and (Idx < Length(FTypes)) then
+  begin
+    FTypes[Idx].GenericParent.TemplateTypeId := ATemplateTypeId;
+    SetLength(FTypes[Idx].GenericParent.ArgIndices, Length(AArgIndices));
+    for I := 0 to High(AArgIndices) do
+      FTypes[Idx].GenericParent.ArgIndices[I] := AArgIndices[I];
+  end;
 end;
 
 procedure TSemanticModel.SetTypeParams(const ATypeId: LongInt;

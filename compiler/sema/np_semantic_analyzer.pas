@@ -39,6 +39,13 @@ type
     FProcedureBodies: array of TProcedureBodyEntry;
     FGenericCacheKeys: array of string;
     FGenericCacheTypeIds: array of LongInt;
+    FPendingSignatures: array of record
+      SymbolId: LongInt;
+      GenericName: string;
+      MethodShortName: string;
+      ParamNames: array of string;
+      ArgTypes: array of string;
+    end;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
@@ -283,6 +290,9 @@ type
       const AWhereSpec: string);
     function CheckSingleConstraint(const AArgType: string;
       const AConstraint: string): Boolean;
+    procedure RegisterStructuredGenericParent(const ATypeId: LongInt;
+      const AParentSpec: string; const AOwnerUnitId: string);
+    procedure CompletePendingSignatures;
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -3677,7 +3687,10 @@ begin
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
   else
+  begin
+    CompletePendingSignatures;
     FModel.MarkReady;
+  end;
 end;
 
 function TSemanticAnalyzer.DetachModel: TSemanticModel;
@@ -4137,6 +4150,113 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.RegisterStructuredGenericParent(
+  const ATypeId: LongInt; const AParentSpec: string;
+  const AOwnerUnitId: string);
+var
+  LtPos, GtPos, I, J: LongInt;
+  ParentName, ArgStr: string;
+  ParentTypeId: LongInt;
+  OwnerParams: string;
+  ArgNames: array of string;
+  ArgIndices: array of LongInt;
+begin
+  LtPos := Pos('<', AParentSpec);
+  if LtPos <= 0 then
+    Exit;
+  ParentName := Copy(AParentSpec, 1, LtPos - 1);
+  GtPos := 0;
+  J := 1;
+  for I := LtPos + 1 to Length(AParentSpec) do
+  begin
+    if AParentSpec[I] = '<' then Inc(J)
+    else if AParentSpec[I] = '>' then
+    begin
+      Dec(J);
+      if J = 0 then begin GtPos := I; Break; end;
+    end;
+  end;
+  if GtPos <= LtPos then
+    GtPos := Length(AParentSpec) + 1;
+  ArgStr := Copy(AParentSpec, LtPos + 1, GtPos - LtPos - 1);
+
+  ParentTypeId := 0;
+  for I := 0 to FModel.TypeCount - 1 do
+    if SameText(FModel.TypeAt(I).Name, ParentName) and
+      (FModel.TypeAt(I).TypeParams <> '') then
+    begin
+      ParentTypeId := FModel.TypeAt(I).TypeId;
+      Break;
+    end;
+  if ParentTypeId <= 0 then
+    Exit;
+
+  OwnerParams := FModel.TypeAt(ATypeId - 1).TypeParams;
+
+  SetLength(ArgNames, 0);
+  I := 1;
+  while I <= Length(ArgStr) do
+  begin
+    J := I;
+    while (J <= Length(ArgStr)) and (ArgStr[J] <> ',') do Inc(J);
+    SetLength(ArgNames, Length(ArgNames) + 1);
+    ArgNames[High(ArgNames)] := Trim(Copy(ArgStr, I, J - I));
+    I := J + 1;
+  end;
+
+  SetLength(ArgIndices, Length(ArgNames));
+  for I := 0 to High(ArgNames) do
+  begin
+    ArgIndices[I] := -1;
+    J := 1;
+    while J <= Length(OwnerParams) do
+    begin
+      if SameText(Copy(OwnerParams, J, Length(ArgNames[I])), ArgNames[I]) and
+        ((J + Length(ArgNames[I]) - 1 = Length(OwnerParams)) or
+         (OwnerParams[J + Length(ArgNames[I])] = ',')) then
+      begin
+        ArgIndices[I] := I;
+        Break;
+      end;
+      while (J <= Length(OwnerParams)) and (OwnerParams[J] <> ',') do Inc(J);
+      Inc(J);
+    end;
+  end;
+
+  FModel.SetTypeGenericParent(ATypeId, ParentTypeId, ArgIndices);
+end;
+
+procedure TSemanticAnalyzer.CompletePendingSignatures;
+var
+  I, BodyIdx: LongInt;
+  Decl: TGreenNode;
+  SubstSig: string;
+  QualName: string;
+begin
+  for I := 0 to Length(FPendingSignatures) - 1 do
+  begin
+    QualName := FPendingSignatures[I].GenericName + '.' +
+      FPendingSignatures[I].MethodShortName;
+    Decl := nil;
+    for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+    begin
+      if SameText(FProcedureBodies[BodyIdx].Name, QualName) then
+      begin
+        Decl := FProcedureBodies[BodyIdx].Decl;
+        Break;
+      end;
+    end;
+    if Decl <> nil then
+    begin
+      SubstSig := GetSubstitutedParamSignature(Decl,
+        FPendingSignatures[I].ParamNames,
+        FPendingSignatures[I].ArgTypes);
+      FModel.SetSymbolParamSignature(FPendingSignatures[I].SymbolId, SubstSig);
+    end;
+  end;
+  SetLength(FPendingSignatures, 0);
+end;
+
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
@@ -4434,9 +4554,13 @@ begin
               (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
               ParentTypeId := 0;
             if (ParentTypeId = 0) and (Pos('<', TypeChild.ChildAt(0).Text) > 0) then
+            begin
               FModel.AddStringConstValue(
                 AOwnerUnitId + '.' + Child.Text + '$generic_parent',
                 TypeChild.ChildAt(0).Text);
+              RegisterStructuredGenericParent(TypeId, TypeChild.ChildAt(0).Text,
+                AOwnerUnitId);
+            end;
           end;
         end
         else
@@ -4651,7 +4775,21 @@ begin
           end;
         end;
         if Decl <> nil then
-          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames, ArgTypes);
+          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames, ArgTypes)
+        else
+        begin
+          BodyIdx := Length(FPendingSignatures);
+          SetLength(FPendingSignatures, BodyIdx + 1);
+          FPendingSignatures[BodyIdx].SymbolId := NewSymbolId;
+          FPendingSignatures[BodyIdx].GenericName := GenericName;
+          FPendingSignatures[BodyIdx].MethodShortName := MethodShortName;
+          SetLength(FPendingSignatures[BodyIdx].ParamNames, Length(ParamNames));
+          for BodyIdx := 0 to High(ParamNames) do
+            FPendingSignatures[High(FPendingSignatures)].ParamNames[BodyIdx] := ParamNames[BodyIdx];
+          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, Length(ArgTypes));
+          for BodyIdx := 0 to High(ArgTypes) do
+            FPendingSignatures[High(FPendingSignatures)].ArgTypes[BodyIdx] := ArgTypes[BodyIdx];
+        end;
       end;
       FModel.SetSymbolParamSignature(NewSymbolId, SubstSig);
     end;
@@ -4675,7 +4813,25 @@ begin
   end;
   FModel.SetTypeParent(AInstanceTypeId,
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
-  if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
+  if GenericType.GenericParent.TemplateTypeId > 0 then
+  begin
+    SubstSig := FModel.TypeAt(GenericType.GenericParent.TemplateTypeId - 1).Name + '<';
+    for I := 0 to High(GenericType.GenericParent.ArgIndices) do
+    begin
+      if I > 0 then
+        SubstSig := SubstSig + ',';
+      J := GenericType.GenericParent.ArgIndices[I];
+      if (J >= 0) and (J <= High(ArgTypes)) then
+        SubstSig := SubstSig + ArgTypes[J]
+      else
+        SubstSig := SubstSig + '?';
+    end;
+    SubstSig := SubstSig + '>';
+    GtPos := ResolveOrInstantiateInlineGeneric(SubstSig, AOwnerUnitId);
+    if GtPos > 0 then
+      FModel.SetTypeParent(AInstanceTypeId, GtPos);
+  end
+  else if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
     for I := 0 to High(ParamNames) do
     begin
