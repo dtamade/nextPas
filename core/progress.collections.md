@@ -95,6 +95,8 @@
   - Deleted 6 obsolete files: `rbset.pas`, `rbset.intf.pas`, `orderedset.rb.pas`, `orderedset.rb.intf.pas`, `orderedset.pas`, `orderedset.intf.pas`.
   - Added `test_treeset` suite with 9 tests covering both TreeSet and LinkedHashSet.
   - Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
+- Added `MakeMultiMap<K,V>` and `MakeMultiSet<T>` to facade with contract probes in `test_facade`.
+- Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
 
 ## Next
 

@@ -113,6 +113,27 @@ begin
     CheckEqual(Int64(3), Int64(LQueueValue), 'priority queue peek value');
     CheckEqual(Int64(3), Int64(Pop), 'priority queue pop value');
   end;
+
+  with specialize MakeMultiMap<Integer, string> do
+  begin
+    Add(1, 'a');
+    Add(1, 'b');
+    Add(2, 'c');
+    CheckEqual(Int64(2), Int64(GetValueCount(1)), 'multimap value count');
+    CheckEqual(Int64(2), Int64(KeyCount), 'multimap key count');
+    CheckEqual(Int64(3), Int64(TotalCount), 'multimap total count');
+  end;
+
+  with specialize MakeMultiSet<Integer> do
+  begin
+    Add(5);
+    Add(5);
+    Add(10);
+    CheckEqual(Int64(2), Int64(CountOf(5)), 'multiset count of 5');
+    CheckEqual(Int64(1), Int64(CountOf(10)), 'multiset count of 10');
+    CheckEqual(Int64(2), Int64(Count), 'multiset unique count');
+    CheckEqual(Int64(3), Int64(TotalCount), 'multiset total count');
+  end;
 end;
 
 procedure TestFacadeExportsGrowthStrategies;

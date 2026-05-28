@@ -241,6 +241,10 @@ generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAl
 generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean = True): specialize ICircularBuffer<T>;
 generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): specialize IPriorityQueue<T>;
 
+// ==== MultiMap / MultiSet ====
+generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>;
+generic function MakeMultiSet<T>: specialize IMultiSet<T>;
+
 // ==== BitSet (Efficient bit set) ====
 function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): IBitSet;
 //
@@ -865,6 +869,18 @@ end;
 generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: IAllocator): specialize IPriorityQueue<T>;
 begin
   Result := specialize TPriorityQueue<T>.Create(aComparer, aCapacity, aAllocator);
+end;
+
+// ==== MultiMap / MultiSet factories ====
+
+generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>;
+begin
+  Result := specialize TMultiMap<K,V>.Create;
+end;
+
+generic function MakeMultiSet<T>: specialize IMultiSet<T>;
+begin
+  Result := specialize TMultiSet<T>.Create;
 end;
 
 // ==== BitSet factories ====

@@ -177,6 +177,12 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Add `test_treeset` suite (9 tests: TreeSet basic/remove/min-max/bounds/union/intersect/difference + LinkedHashSet basic/remove).
 - [x] Verify all focused collections tests (10 suites, 79 tests, 0 failures).
 
+### Completed Micro Batch: MultiMap / MultiSet Facade Factories
+
+- [x] Add `MakeMultiMap<K,V>` and `MakeMultiSet<T>` to facade.
+- [x] Add facade contract probes for both new factories.
+- [x] Verify all focused collections tests (10 suites, 79 tests, 0 failures).
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
