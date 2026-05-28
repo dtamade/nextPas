@@ -4586,7 +4586,9 @@ var
   DotPos, IdxPos: LongInt;
   ParentTypeId: LongInt;
   SymbolId: LongInt;
-  Meta: TTypeMetadata;
+  Meta, ParentMeta: TTypeMetadata;
+  VmtCount: LongInt;
+  HasParentMeta: Boolean;
 begin
   if ANode = nil then
     Exit;
@@ -4603,69 +4605,107 @@ begin
     if (ParentTypeId > 0) and (ParentTypeId <= FModel.TypeCount) then
       ParentName := FModel.TypeAt(ParentTypeId - 1).Name;
   end;
+  VmtCount := 0;
+  SetLength(Meta.Fields, 0);
+  SetLength(Meta.VmtSlots, 0);
+  SetLength(Meta.RetPtrMethods, 0);
+  SetLength(Meta.Properties, 0);
+  HasParentMeta := (ParentName <> '') and FModel.GetTypeMetaByName(ParentName, ParentMeta);
   if ParentName <> '' then
   begin
     ParentFieldVal := TypeMetaSize(ParentName);
     if ParentFieldVal > 0 then
     begin
       FieldIndex := LongInt(ParentFieldVal) div 8;
-      for J := 0 to FModel.ConstValueCount - 1 do
+      if HasParentMeta then
       begin
-        ConstName := FModel.ConstValueNameAt(J);
-        if (Pos(ParentName + '.', ConstName) = 1) and
-          (Pos('$idx', ConstName) > 0) then
+        for J := 0 to High(ParentMeta.Fields) do
         begin
-          DotPos := Pos('.', ConstName);
-          IdxPos := Pos('$idx', ConstName);
-          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
-          FModel.AddConstValue(
-            ClsName + '.' + FieldName + '$idx',
-            FModel.ConstValueAt(J));
-        end
-        else if (Pos(ParentName + '.', ConstName) = 1) and
-          (Pos('$str', ConstName) > 0) then
+          FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$idx',
+            ParentMeta.Fields[J].Index);
+          if ParentMeta.Fields[J].IsString then
+            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$str', 1);
+          if ParentMeta.Fields[J].IsPointer then
+            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$ptr', 1);
+          SetLength(Meta.Fields, Length(Meta.Fields) + 1);
+          Meta.Fields[High(Meta.Fields)] := ParentMeta.Fields[J];
+        end;
+      end
+      else
+      begin
+        for J := 0 to FModel.ConstValueCount - 1 do
         begin
-          DotPos := Pos('.', ConstName);
-          IdxPos := Pos('$str', ConstName);
-          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
-          FModel.AddConstValue(
-            ClsName + '.' + FieldName + '$str',
-            FModel.ConstValueAt(J));
-        end
-        else if (Pos(ParentName + '.', ConstName) = 1) and
-          (Pos('$ptr', ConstName) > 0) then
-        begin
-          DotPos := Pos('.', ConstName);
-          IdxPos := Pos('$ptr', ConstName);
-          FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
-          FModel.AddConstValue(
-            ClsName + '.' + FieldName + '$ptr',
-            FModel.ConstValueAt(J));
+          ConstName := FModel.ConstValueNameAt(J);
+          if (Pos(ParentName + '.', ConstName) = 1) and
+            (Pos('$idx', ConstName) > 0) then
+          begin
+            DotPos := Pos('.', ConstName);
+            IdxPos := Pos('$idx', ConstName);
+            FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+            FModel.AddConstValue(ClsName + '.' + FieldName + '$idx',
+              FModel.ConstValueAt(J));
+          end
+          else if (Pos(ParentName + '.', ConstName) = 1) and
+            (Pos('$str', ConstName) > 0) then
+          begin
+            DotPos := Pos('.', ConstName);
+            IdxPos := Pos('$str', ConstName);
+            FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+            FModel.AddConstValue(ClsName + '.' + FieldName + '$str',
+              FModel.ConstValueAt(J));
+          end
+          else if (Pos(ParentName + '.', ConstName) = 1) and
+            (Pos('$ptr', ConstName) > 0) then
+          begin
+            DotPos := Pos('.', ConstName);
+            IdxPos := Pos('$ptr', ConstName);
+            FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+            FModel.AddConstValue(ClsName + '.' + FieldName + '$ptr',
+              FModel.ConstValueAt(J));
+          end;
         end;
       end;
     end;
-    ParentFieldVal := TypeMetaVmtCount(ParentName);
-    if ParentFieldVal >= 0 then
+    if HasParentMeta then
     begin
-      FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal);
-      for J := 0 to FModel.ConstValueCount - 1 do
+      VmtCount := ParentMeta.VmtCount;
+      FModel.AddConstValue(ClsName + '$vmt_count', VmtCount);
+      for J := 0 to High(ParentMeta.VmtSlots) do
       begin
-        ConstName := FModel.ConstValueNameAt(J);
-        if (Pos(ParentName + '$vmt_slot_', ConstName) = 1) then
-        begin
-          FieldName := Copy(ConstName,
-            Length(ParentName + '$vmt_slot_') + 1, Length(ConstName));
-          FModel.AddConstValue(
-            ClsName + '$vmt_slot_' + FieldName,
-            FModel.ConstValueAt(J));
-        end;
+        FModel.AddConstValue(ClsName + '$vmt_slot_' +
+          ParentMeta.VmtSlots[J].MethodName, ParentMeta.VmtSlots[J].SlotIndex);
+        FModel.AddStringConstValue(ClsName + '$vmt_func_' +
+          IntToStr(ParentMeta.VmtSlots[J].SlotIndex),
+          ParentMeta.VmtSlots[J].FuncQualName);
+        SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
+        Meta.VmtSlots[High(Meta.VmtSlots)] := ParentMeta.VmtSlots[J];
       end;
-      for J := 0 to ParentFieldVal - 1 do
+    end
+    else
+    begin
+      ParentFieldVal := TypeMetaVmtCount(ParentName);
+      if ParentFieldVal >= 0 then
       begin
-        ConstName := ParentName + '$vmt_func_' + IntToStr(J);
-        if FModel.LookupStringConstValue(ConstName, FieldName) then
-          FModel.AddStringConstValue(
-            ClsName + '$vmt_func_' + IntToStr(J), FieldName);
+        VmtCount := LongInt(ParentFieldVal);
+        FModel.AddConstValue(ClsName + '$vmt_count', VmtCount);
+        for J := 0 to FModel.ConstValueCount - 1 do
+        begin
+          ConstName := FModel.ConstValueNameAt(J);
+          if (Pos(ParentName + '$vmt_slot_', ConstName) = 1) then
+          begin
+            FieldName := Copy(ConstName,
+              Length(ParentName + '$vmt_slot_') + 1, Length(ConstName));
+            FModel.AddConstValue(ClsName + '$vmt_slot_' + FieldName,
+              FModel.ConstValueAt(J));
+          end;
+        end;
+        for J := 0 to VmtCount - 1 do
+        begin
+          ConstName := ParentName + '$vmt_func_' + IntToStr(J);
+          if FModel.LookupStringConstValue(ConstName, FieldName) then
+            FModel.AddStringConstValue(
+              ClsName + '$vmt_func_' + IntToStr(J), FieldName);
+        end;
       end;
     end;
     FModel.AddStringConstValue(ClsName + '$parent_class', ParentName);
@@ -4737,6 +4777,19 @@ begin
       end
       else
         Inc(FieldIndex);
+      SetLength(Meta.Fields, Length(Meta.Fields) + 1);
+      Meta.Fields[High(Meta.Fields)].Name := Child.Text;
+      Meta.Fields[High(Meta.Fields)].Index :=
+        TypeMetaFieldIndex(ClsName, Child.Text);
+      Meta.Fields[High(Meta.Fields)].IsString :=
+        (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        (SameText(Child.ChildAt(0).Text, 'String') or
+         SameText(Child.ChildAt(0).Text, 'AnsiString'));
+      Meta.Fields[High(Meta.Fields)].IsPointer :=
+        (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        ((TypeMetaSize(Child.ChildAt(0).Text) > 0) or
+         SameText(Child.ChildAt(0).Text, ClsName));
+      Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
     end
     else if Child.NodeKind = gnkClassMethod then
     begin
@@ -4755,14 +4808,18 @@ begin
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin
-            if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
-              ParentFieldVal := 0;
             FModel.AddConstValue(
-              ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
+              ClsName + '$vmt_slot_' + NameNode.Text, VmtCount);
             FModel.AddStringConstValue(
-              ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
+              ClsName + '$vmt_func_' + IntToStr(VmtCount),
               ClsName + '.' + NameNode.Text);
-            FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal + 1);
+            SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
+            Meta.VmtSlots[High(Meta.VmtSlots)].MethodName := NameNode.Text;
+            Meta.VmtSlots[High(Meta.VmtSlots)].SlotIndex := VmtCount;
+            Meta.VmtSlots[High(Meta.VmtSlots)].FuncQualName :=
+              ClsName + '.' + NameNode.Text;
+            Inc(VmtCount);
+            FModel.AddConstValue(ClsName + '$vmt_count', VmtCount);
             if Pos(';abstract', Child.Text) > 0 then
               FModel.AddStringConstValue(
                 ClsName + '$abstract_' + NameNode.Text, 'true');
@@ -4777,6 +4834,12 @@ begin
               FModel.AddStringConstValue(
                 ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
                 ClsName + '.' + NameNode.Text);
+              for J := 0 to High(Meta.VmtSlots) do
+                if Meta.VmtSlots[J].SlotIndex = ParentFieldVal then
+                begin
+                  Meta.VmtSlots[J].FuncQualName := ClsName + '.' + NameNode.Text;
+                  Break;
+                end;
             end;
           end;
           if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
@@ -4810,57 +4873,17 @@ begin
   FModel.AddConstValue(
     ClsName + '$size',
     FieldIndex * 8);
-  if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
-  begin
+  if VmtCount = 0 then
     FModel.AddConstValue(ClsName + '$vmt_count', 0);
-    ParentFieldVal := 0;
-  end;
   Meta.TypeId := ATypeId;
   Meta.Size := FieldIndex * 8;
   Meta.IsRecord := False;
-  Meta.VmtCount := ParentFieldVal;
+  Meta.VmtCount := VmtCount;
   Meta.ParentClassId := FModel.TypeAt(ATypeId - 1).ParentTypeId;
   Meta.ParentClassName := ParentName;
   Meta.Interfaces := '';
   Meta.ArrElemSize := 0;
   Meta.ArrElemType := '';
-  SetLength(Meta.Fields, 0);
-  SetLength(Meta.VmtSlots, 0);
-  SetLength(Meta.RetPtrMethods, 0);
-  SetLength(Meta.Properties, 0);
-  for I := 0 to FModel.ConstValueCount - 1 do
-  begin
-    ConstName := FModel.ConstValueNameAt(I);
-    if (Pos(ClsName + '.', ConstName) = 1) and (Pos('$idx', ConstName) > 0) then
-    begin
-      DotPos := Pos('.', ConstName);
-      IdxPos := Pos('$idx', ConstName);
-      FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
-      SetLength(Meta.Fields, Length(Meta.Fields) + 1);
-      Meta.Fields[High(Meta.Fields)].Name := FieldName;
-      Meta.Fields[High(Meta.Fields)].Index := FModel.ConstValueAt(I);
-      Meta.Fields[High(Meta.Fields)].IsString :=
-        FModel.LookupConstValue(ClsName + '.' + FieldName + '$str', ParentFieldVal);
-      Meta.Fields[High(Meta.Fields)].IsPointer :=
-        FModel.LookupConstValue(ClsName + '.' + FieldName + '$ptr', ParentFieldVal);
-      Meta.Fields[High(Meta.Fields)].TypeId := 0;
-    end;
-  end;
-  for I := 0 to Meta.VmtCount - 1 do
-  begin
-    if FModel.LookupStringConstValue(ClsName + '$vmt_func_' + IntToStr(I), FieldName) then
-    begin
-      SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
-      Meta.VmtSlots[High(Meta.VmtSlots)].SlotIndex := I;
-      Meta.VmtSlots[High(Meta.VmtSlots)].FuncQualName := FieldName;
-      DotPos := Pos('.', FieldName);
-      if DotPos > 0 then
-        Meta.VmtSlots[High(Meta.VmtSlots)].MethodName :=
-          Copy(FieldName, DotPos + 1, MaxInt)
-      else
-        Meta.VmtSlots[High(Meta.VmtSlots)].MethodName := FieldName;
-    end;
-  end;
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
@@ -4993,6 +5016,8 @@ var
   MethodShortName: string;
   SubstSig: string;
   Decl: TGreenNode;
+  GenericMeta: TTypeMetadata;
+  HasGenericMeta: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -5179,7 +5204,8 @@ begin
       MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
       FModel.AddSymbol(InstanceName + '.' + MethodShortName,
         'field', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
-      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$idx', SizeVal) then
+      SizeVal := TypeMetaFieldIndex(GenericName, MethodShortName);
+      if SizeVal >= 0 then
         FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$idx', SizeVal);
       if TypeMetaFieldIsStr(GenericName, MethodShortName) then
         FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', 1);
@@ -5248,7 +5274,22 @@ begin
   else
     FModel.AddConstValue(InstanceName + '$size', 8);
   SizeVal := TypeMetaVmtCount(GenericName);
-  if SizeVal >= 0 then
+  HasGenericMeta := FModel.GetTypeMetaByName(GenericName, GenericMeta);
+  if (SizeVal >= 0) and HasGenericMeta then
+  begin
+    FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal);
+    for I := 0 to High(GenericMeta.VmtSlots) do
+    begin
+      SubstSig := GenericMeta.VmtSlots[I].FuncQualName;
+      if Pos(GenericName + '.', SubstSig) = 1 then
+        SubstSig := InstanceName + Copy(SubstSig, Length(GenericName) + 1, MaxInt);
+      FModel.AddStringConstValue(InstanceName + '$vmt_func_' +
+        IntToStr(GenericMeta.VmtSlots[I].SlotIndex), SubstSig);
+      FModel.AddConstValue(InstanceName + '$vmt_slot_' +
+        GenericMeta.VmtSlots[I].MethodName, GenericMeta.VmtSlots[I].SlotIndex);
+    end;
+  end
+  else if SizeVal >= 0 then
   begin
     FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal);
     for I := 0 to SizeVal - 1 do
@@ -5259,11 +5300,9 @@ begin
           SubstSig := InstanceName + Copy(SubstSig, Length(GenericName) + 1, MaxInt);
         FModel.AddStringConstValue(InstanceName + '$vmt_func_' + IntToStr(I), SubstSig);
       end;
-      if FModel.LookupConstValue(GenericName + '$vmt_slot_' + IntToStr(I), SizeVal) then
-        FModel.AddConstValue(InstanceName + '$vmt_slot_' + IntToStr(I), SizeVal);
     end;
   end
-  else if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
+  else if TypeMetaVmtCount(InstanceName) < 0 then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
   SubstSig := TypeMetaParentClass(GenericName);
   if SubstSig <> '' then
