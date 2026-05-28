@@ -1974,6 +1974,17 @@ begin
   if TargetSymbolId <= 0 then
     Exit;
 
+  if (ACurrentMethodClass = '') or
+    (not SameText(ACurrentMethodClass,
+      FModel.TypeAt(ReceiverTypeId - 1).Name)) then
+  begin
+    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'private') then
+    begin
+      AResolutionFailureKind := 'inaccessible-member';
+      Exit;
+    end;
+  end;
+
   FModel.AddBinding(
     'member-call',
     MemberName,
@@ -2319,6 +2330,12 @@ begin
         EmitSemaError(
           'sema.invalid-call-shape',
           'member "' + MemberFailureName + '" is not callable',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'inaccessible-member') then
+        EmitSemaError(
+          'sema.inaccessible-member',
+          'cannot access private member "' + MemberFailureName + '"',
           MemberFailureOffset
         );
     end
