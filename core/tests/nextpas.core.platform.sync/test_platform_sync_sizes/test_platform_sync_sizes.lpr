@@ -6,6 +6,7 @@ uses
   SysUtils,
   {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.posix.base,{$ENDIF}
   nextpas.core.testing,
+  nextpas.core.platform.sync.base,
   nextpas.core.platform.sync;
 
 var
@@ -52,23 +53,23 @@ end;
 {$IFDEF NEXTPAS_LINUX}
 procedure TestMutexSize;
 begin
-  Check(SizeOf(pthread_mutex_t) <= PLATFORM_MUTEX_SIZE,
+  Check(SizeOf(pthread_mutex_t) <= PTHREAD_MUTEX_SIZE,
     'SizeOf(pthread_mutex_t)=' + IntToStr(SizeOf(pthread_mutex_t)) +
-    ' exceeds PLATFORM_MUTEX_SIZE=' + IntToStr(PLATFORM_MUTEX_SIZE));
+    ' exceeds PTHREAD_MUTEX_SIZE=' + IntToStr(PTHREAD_MUTEX_SIZE));
 end;
 
 procedure TestRwLockSize;
 begin
-  Check(SizeOf(pthread_rwlock_t) <= PLATFORM_RWLOCK_SIZE,
+  Check(SizeOf(pthread_rwlock_t) <= PTHREAD_RWLOCK_SIZE,
     'SizeOf(pthread_rwlock_t)=' + IntToStr(SizeOf(pthread_rwlock_t)) +
-    ' exceeds PLATFORM_RWLOCK_SIZE=' + IntToStr(PLATFORM_RWLOCK_SIZE));
+    ' exceeds PTHREAD_RWLOCK_SIZE=' + IntToStr(PTHREAD_RWLOCK_SIZE));
 end;
 
 procedure TestCondVarSize;
 begin
-  Check(SizeOf(pthread_cond_t) <= PLATFORM_CONDVAR_SIZE,
+  Check(SizeOf(pthread_cond_t) <= PTHREAD_CONDVAR_SIZE,
     'SizeOf(pthread_cond_t)=' + IntToStr(SizeOf(pthread_cond_t)) +
-    ' exceeds PLATFORM_CONDVAR_SIZE=' + IntToStr(PLATFORM_CONDVAR_SIZE));
+    ' exceeds PTHREAD_CONDVAR_SIZE=' + IntToStr(PTHREAD_CONDVAR_SIZE));
 end;
 
 procedure TestOpaqueAlignmentMatchesNativeLinuxABI;
