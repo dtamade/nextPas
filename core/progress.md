@@ -89,6 +89,13 @@
   remains unmerged and should be handled separately.
 - Main checkout still has untracked `GPATH`, `GRTAGS`, and `GTAGS`. They are
   not Wave 15 platform deliverables and were not staged.
+- Final closeout verification note: one attempted log-capture command used
+  nested `bash -lc` and failed before build with `missing-compiler: fpc`
+  because that subshell did not inherit the zsh login PATH. This was a command
+  environment error, not a project failure. The correct project entry
+  `bash build/verify_local.sh > /tmp/nextpas-wave15-final-verify.log 2>&1`
+  was rerun from the repository root and passed with `verify-local=pass` and
+  `human-summary=local verification passed`.
 
 - Started Wave 14 from `main@dcf3fd3` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`
