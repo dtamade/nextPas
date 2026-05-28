@@ -16,8 +16,11 @@ type
    *}
   generic ISkipList<K, V> = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function Put(const aKey: K; const aValue: V): Boolean;
-    function Get(const aKey: K; out aValue: V): Boolean;
+    function TryGetValue(const aKey: K; out aValue: V): Boolean;
+    function Get(const aKey: K): V;
+    function Add(const aKey: K; const aValue: V): Boolean;
+    function AddOrAssign(const aKey: K; const aValue: V): Boolean;
+    procedure Put(const aKey: K; const aValue: V);
     function ContainsKey(const aKey: K): Boolean;
     function Remove(const aKey: K): Boolean;
     procedure Clear;

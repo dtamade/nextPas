@@ -143,6 +143,7 @@ type
   // HashMap / TreeMap / LRU public callback types
   generic TKeyHashFunc<K> = function(const AKey: K): UInt32;
   generic TKeyEqualsFunc<K> = function(const L, R: K): Boolean;
+  generic TSkipListCompareFunc<K> = function(const A, B: K): SizeInt;
   generic TValueSupplierFunc<V> = function: V;
   generic TValueModifierProc<V> = procedure(var Value: V);
   generic TKeyValueCallback<K,V> = procedure(const aEntry: specialize TMapEntry<K,V>; aData: Pointer);
@@ -226,6 +227,9 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: IAllocator = nil): specialize ITreeMap<K,V>;
 // 注意：MakeTreeSet 移除了 aCapacity 和 aCompare 参数，因为 TTreeSet 当前不支持这些参数
 generic function MakeTreeSet<T>(aAllocator: IAllocator = nil): specialize ITreeSet<T>;
+generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
+generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
+generic function MakeTrie<V>: specialize ITrie<V>;
 
 // ==== LRU Cache (Caching) ====
 generic function MakeLruCache<K,V>(aMaxSize: SizeUInt = 100; aAllocator: IAllocator = nil;
@@ -803,6 +807,21 @@ begin
     Result := specialize TTreeSet<T>.Create(aAllocator)
   else
     Result := specialize TTreeSet<T>.Create;
+end;
+
+generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
+begin
+  Result := specialize TSkipList<K,V>.Create;
+end;
+
+generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
+begin
+  Result := specialize TSkipList<K,V>.Create(aCompare);
+end;
+
+generic function MakeTrie<V>: specialize ITrie<V>;
+begin
+  Result := specialize TTrie<V>.Create;
 end;
 
 // ==== LRU Cache factories ====

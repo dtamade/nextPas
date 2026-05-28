@@ -72,11 +72,15 @@
 - Removed concrete `TVecDeque<T>.Enqueue` / `Dequeue` aliases. The real public interface contracts already use `Push` / `Pop` / `Peek` / `TryPeek`, and explicit deque direction remains available through `PushFront` / `PushBack` / `PopFront` / `PopBack`.
 - Started the HashMap-family map semantics batch. `IHashMap.Get(Key)` now returns the value as a checked lookup, `IHashMap.Put(Key, Value)` no longer reports insert/update, and `TryGetValue` / `AddOrAssign` keep the non-throwing/reporting roles. `TLinkedHashMap` was updated with the inherited `IHashMap` contract. TreeMap was deliberately left to a separate focused batch because its internal `Put` return flag needs semantic correction.
 - Aligned TreeMap with the HashMap map vocabulary: `TryGetValue` is non-throwing lookup, public `Get(Key)` is checked lookup, public `Put` writes without returning status, and `Add` / `AddOrAssign` carry absent-only and inserted-vs-updated semantics. Also fixed `TRedBlackTree.Put` to return True for new inserts instead of returning the internal existed flag.
+- Reviewed the next key/value candidates and aligned SkipList / Trie with the same map vocabulary. LruCache stayed unchanged because its `Get(out)` is a cache hit/miss + recency/statistics operation, and orderedmap.rb was left for a separate ordered-map adapter batch.
+- Added facade `MakeSkipList` and `MakeTrie` factories and a minimal facade contract probe for the new factories and vocabulary.
+- Verification: `git diff --check` passed, `test_facade` passed, and all focused `tests/nextpas.core.collections/*` suites passed.
+- Full `make test` is currently blocked by unrelated platform WIP: `tests/nextpas.core.platform/test_platform_host_abi_wave2_files` fails because `posix.base must own shared POSIX file descriptor scalar: tplatformfiledescriptor = int32`. This batch did not touch platform files.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: review SkipList / Trie map-like APIs for the same vocabulary, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
+- Next likely interface-tuning batch: review `orderedmap.rb` vocabulary against TreeMap/HashMap, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

@@ -13,6 +13,7 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.trie.base,
   nextpas.core.collections.trie.intf;
@@ -56,17 +57,45 @@ type
      * @param aValue 值
      * @return Boolean 如果是新键返回 True
      *}
-    function Put(const aKey: string; const aValue: V): Boolean;
+    function AddOrAssign(const aKey: string; const aValue: V): Boolean;
 
     {**
-     * Get
+     * TryGetValue
      *
-     * @desc 获取值
+     * @desc 尝试获取值
      * @param aKey 键
      * @param aValue 输出值
      * @return Boolean 如果键存在返回 True
      *}
-    function Get(const aKey: string; out aValue: V): Boolean;
+    function TryGetValue(const aKey: string; out aValue: V): Boolean;
+
+    {**
+     * Get
+     *
+     * @desc 获取值，键不存在时抛出异常
+     * @param aKey 键
+     * @return V 键对应的值
+     *}
+    function Get(const aKey: string): V;
+
+    {**
+     * Add
+     *
+     * @desc 仅当键不存在时插入键值对
+     * @param aKey 键
+     * @param aValue 值
+     * @return Boolean 如果是新键返回 True
+     *}
+    function Add(const aKey: string; const aValue: V): Boolean;
+
+    {**
+     * Put
+     *
+     * @desc 写入键值对，不报告新增或更新
+     * @param aKey 键
+     * @param aValue 值
+     *}
+    procedure Put(const aKey: string; const aValue: V);
 
     {**
      * ContainsKey
@@ -225,7 +254,7 @@ begin
       Inc(Result, CountKeysInSubtree(aNode^.Children[i]));
 end;
 
-function TTrie.Put(const aKey: string; const aValue: V): Boolean;
+function TTrie.AddOrAssign(const aKey: string; const aValue: V): Boolean;
 var
   node: PNode;
   i: Integer;
@@ -249,7 +278,7 @@ begin
     Inc(FCount);
 end;
 
-function TTrie.Get(const aKey: string; out aValue: V): Boolean;
+function TTrie.TryGetValue(const aKey: string; out aValue: V): Boolean;
 var
   node: PNode;
 begin
@@ -262,6 +291,24 @@ begin
   end;
 
   Result := False;
+end;
+
+function TTrie.Get(const aKey: string): V;
+begin
+  if not TryGetValue(aKey, Result) then
+    raise EInvalidOperation.Create('TTrie.Get: key not found');
+end;
+
+function TTrie.Add(const aKey: string; const aValue: V): Boolean;
+begin
+  if ContainsKey(aKey) then
+    Exit(False);
+  Result := AddOrAssign(aKey, aValue);
+end;
+
+procedure TTrie.Put(const aKey: string; const aValue: V);
+begin
+  AddOrAssign(aKey, aValue);
 end;
 
 function TTrie.ContainsKey(const aKey: string): Boolean;

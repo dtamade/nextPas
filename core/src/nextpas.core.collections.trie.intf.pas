@@ -16,8 +16,11 @@ type
    *}
   generic ITrie<V> = interface
     ['{B2C3D4E5-F6A7-8901-BCDE-F23456789012}']
-    function Put(const aKey: string; const aValue: V): Boolean;
-    function Get(const aKey: string; out aValue: V): Boolean;
+    function TryGetValue(const aKey: string; out aValue: V): Boolean;
+    function Get(const aKey: string): V;
+    function Add(const aKey: string; const aValue: V): Boolean;
+    function AddOrAssign(const aKey: string; const aValue: V): Boolean;
+    procedure Put(const aKey: string; const aValue: V);
     function ContainsKey(const aKey: string): Boolean;
     function Remove(const aKey: string): Boolean;
     procedure Clear;

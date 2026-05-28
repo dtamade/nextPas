@@ -14,6 +14,7 @@ const
 
 
 type
+  generic TSkipListCompareFunc<K> = function(const A, B: K): SizeInt;
 
   {**
    * TSkipListEntry<K,V>

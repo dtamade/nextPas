@@ -194,3 +194,13 @@
 - `Add(Key, Value): Boolean` inserts only when the key is absent and leaves existing values unchanged.
 - `TRedBlackTree.Put` now returns `True` for newly inserted keys and `False` for updates, matching `AddOrAssign`.
 - Ordered search APIs such as `GetLowerBound`, `GetUpperBound`, `Ceiling`, and `Floor` keep their existing Boolean found/not-found shape because missing search results are normal range-query outcomes.
+
+## 2026-05-28: SkipList / Trie map vocabulary review
+
+- `SkipList` and `Trie` are key/value containers, so their normal lookup/write vocabulary should match HashMap and TreeMap instead of keeping copied `Get(Key, out Value)` / `Put(...): Boolean` shapes.
+- `ISkipList<K,V>` and `ITrie<V>` now expose `TryGetValue`, checked `Get`, absent-only `Add`, reporting `AddOrAssign`, and status-free `Put`.
+- `TSkipList.AddOrAssign` keeps the original return convention: `True` means inserted, `False` means updated. `TTrie.AddOrAssign` keeps the same convention.
+- `MakeSkipList` and `MakeTrie` are now exposed from the collections facade because both containers are working public implementations and should have interface-first factories.
+- `MakeSkipList` exposes both default construction and custom comparer construction. The facade declares a same-signature `TSkipListCompareFunc<K>` rather than aliasing the child-unit generic type, to avoid the known FPC open-generic re-export/identity pitfalls.
+- `LruCache.Get(Key, out Value): Boolean` is deliberately not changed in this batch. It is a cache hit/miss operation that increments hit/miss counters and moves successful keys to MRU position, so missing keys are a normal cache outcome rather than an exceptional key-required map lookup.
+- `orderedmap.rb` is a separate RB-tree adapter line with `InsertOrAssign` / `TryAdd` / `TryUpdate` vocabulary. It should be reviewed in its own ordered-map batch instead of being folded into the SkipList/Trie cleanup.

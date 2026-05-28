@@ -29,7 +29,7 @@ type
   public type
     TEntry = specialize TSkipListEntry<K, V>;
     TEntryArray = array of TEntry;
-    TKeyCompareFunc = function(const A, B: K): SizeInt;
+    TKeyCompareFunc = specialize TSkipListCompareFunc<K>;
   private type
     PNode = ^TNode;
     TNode = record
@@ -62,17 +62,45 @@ type
      * @param aValue 值
      * @return Boolean 如果是新键返回 True
      *}
-    function Put(const aKey: K; const aValue: V): Boolean;
+    function AddOrAssign(const aKey: K; const aValue: V): Boolean;
 
     {**
-     * Get
+     * TryGetValue
      *
-     * @desc 获取值
+     * @desc 尝试获取值
      * @param aKey 键
      * @param aValue 输出值
      * @return Boolean 如果键存在返回 True
      *}
-    function Get(const aKey: K; out aValue: V): Boolean;
+    function TryGetValue(const aKey: K; out aValue: V): Boolean;
+
+    {**
+     * Get
+     *
+     * @desc 获取值，键不存在时抛出异常
+     * @param aKey 键
+     * @return V 键对应的值
+     *}
+    function Get(const aKey: K): V;
+
+    {**
+     * Add
+     *
+     * @desc 仅当键不存在时插入键值对
+     * @param aKey 键
+     * @param aValue 值
+     * @return Boolean 如果是新键返回 True
+     *}
+    function Add(const aKey: K; const aValue: V): Boolean;
+
+    {**
+     * Put
+     *
+     * @desc 写入键值对，不报告新增或更新
+     * @param aKey 键
+     * @param aValue 值
+     *}
+    procedure Put(const aKey: K; const aValue: V);
 
     {**
      * ContainsKey
@@ -236,7 +264,7 @@ begin
   Result := x^.Forward[0];
 end;
 
-function TSkipList.Put(const aKey: K; const aValue: V): Boolean;
+function TSkipList.AddOrAssign(const aKey: K; const aValue: V): Boolean;
 var
   update: array[0..SKIPLIST_MAX_LEVEL-1] of PNode;
   x: PNode;
@@ -280,7 +308,7 @@ begin
   Result := True;
 end;
 
-function TSkipList.Get(const aKey: K; out aValue: V): Boolean;
+function TSkipList.TryGetValue(const aKey: K; out aValue: V): Boolean;
 var
   update: array[0..SKIPLIST_MAX_LEVEL-1] of PNode;
   x: PNode;
@@ -305,11 +333,29 @@ begin
   Result := False;
 end;
 
+function TSkipList.Get(const aKey: K): V;
+begin
+  if not TryGetValue(aKey, Result) then
+    raise EInvalidOperation.Create('TSkipList.Get: key not found');
+end;
+
+function TSkipList.Add(const aKey: K; const aValue: V): Boolean;
+begin
+  if ContainsKey(aKey) then
+    Exit(False);
+  Result := AddOrAssign(aKey, aValue);
+end;
+
+procedure TSkipList.Put(const aKey: K; const aValue: V);
+begin
+  AddOrAssign(aKey, aValue);
+end;
+
 function TSkipList.ContainsKey(const aKey: K): Boolean;
 var
   dummy: V;
 begin
-  Result := Get(aKey, dummy);
+  Result := TryGetValue(aKey, dummy);
 end;
 
 function TSkipList.Remove(const aKey: K): Boolean;

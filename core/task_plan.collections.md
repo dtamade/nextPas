@@ -127,6 +127,16 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Fix `TRedBlackTree.Put` to return True for newly inserted keys and False for updates.
 - [x] Keep range/floor/ceiling APIs unchanged.
 
+### Current Micro Batch: SkipList / Trie Map Vocabulary
+
+- [x] Review `SkipList`, `Trie`, `LruCache`, and `orderedmap.rb` key/value API semantics before editing.
+- [x] Align `ISkipList<K,V>` / `TSkipList<K,V>` with `TryGetValue`, checked `Get`, `Add`, `AddOrAssign`, and procedure `Put`.
+- [x] Align `ITrie<V>` / `TTrie<V>` with the same key/value vocabulary for string keys.
+- [x] Add facade `MakeSkipList` and `MakeTrie` factories so working public containers have interface-first constructors.
+- [x] Keep `LruCache.Get(out)` unchanged in this batch because it is a cache hit/miss operation that mutates recency and statistics.
+- [x] Verify focused collections tests.
+- [x] Record full-suite blocker from unrelated platform WIP.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -173,6 +183,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Queue-like containers use `Push` / `Pop` / `Peek` as the default entry/exit vocabulary. `Enqueue` / `Dequeue` are duplicate aliases and should not be kept in concrete classes unless a future compatibility policy explicitly requires them.
 - HashMap-family `Get(Key)` is checked lookup and returns `Value`; absence is exceptional. `TryGetValue(Key, out Value)` remains the non-throwing lookup. `Put(Key, Value)` writes without reporting insert/update; `AddOrAssign(Key, Value): Boolean` remains the API that reports whether the key was newly inserted.
 - TreeMap follows the same map vocabulary as HashMap: `TryGetValue` is non-throwing lookup, `Get` is checked lookup, `Put` writes without a status result, `Add` inserts only when absent, and `AddOrAssign` reports `True` for inserted and `False` for updated. Ordered range/floor/ceiling APIs keep their existing Boolean found/not-found shape because they are search queries, not key-required map indexing.
+- SkipList and Trie are key/value containers and follow the same normal key lookup/write vocabulary as HashMap and TreeMap. LruCache is a cache, not a plain map: `Get(out)` currently means hit/miss lookup plus recency/statistics update, so it should not be renamed or made checked as part of map vocabulary cleanup.
 
 ## Verification Commands
 
