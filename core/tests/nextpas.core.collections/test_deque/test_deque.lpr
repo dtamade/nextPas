@@ -405,6 +405,82 @@ begin
   end;
 end;
 
+procedure TestTryGet;
+var
+  LD: TIntVecDeque;
+  LVal: Integer;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    Check(LD.TryGet(0, LVal), 'try get 0');
+    CheckEqual(Int64(10), Int64(LVal), 'value at 0');
+    Check(LD.TryGet(1, LVal), 'try get 1');
+    CheckEqual(Int64(20), Int64(LVal), 'value at 1');
+    Check(not LD.TryGet(5, LVal), 'try get out of range');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestTryRemoveAt;
+var
+  LD: TIntVecDeque;
+  LVal: Integer;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LD.PushBack(30);
+    Check(LD.TryRemoveAt(1, LVal), 'try remove at 1');
+    CheckEqual(Int64(20), Int64(LVal), 'removed value');
+    CheckEqual(Int64(2), Int64(LD.Count), 'count after');
+    Check(not LD.TryRemoveAt(99, LVal), 'try remove invalid');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestReserveExact;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.ReserveExact(10);
+    Check(LD.GetCapacity >= 12, 'capacity grew');
+    CheckEqual(Int64(2), Int64(LD.Count), 'count unchanged');
+    CheckEqual(Int64(1), Int64(LD.Get(0)), 'data preserved');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestSplitOff;
+var
+  LD: TIntVecDeque;
+  LRight: specialize IQueue<Integer>;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.PushBack(3);
+    LD.PushBack(4);
+    LD.PushBack(5);
+    LRight := LD.SplitOff(3);
+    CheckEqual(Int64(3), Int64(LD.Count), 'left count');
+    CheckEqual(Int64(2), Int64(LRight.Count), 'right count');
+    CheckEqual(Int64(4), Int64(LRight.Pop), 'right first');
+  finally
+    LD.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -428,5 +504,9 @@ begin
   T.Run('SwapRemoveAt then PushBack', @TestSwapRemoveAtThenPushBack);
   T.Run('PushFront(Pointer) order matches array', @TestPushFrontPointerOrderMatchesArray);
   T.Run('MakeContiguous full buffer', @TestMakeContiguousFullBuffer);
+  T.Run('TryGet', @TestTryGet);
+  T.Run('TryRemoveAt', @TestTryRemoveAt);
+  T.Run('ReserveExact', @TestReserveExact);
+  T.Run('SplitOff', @TestSplitOff);
   T.Summary;
 end.

@@ -7,6 +7,7 @@ uses
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections,
+  nextpas.core.collections.base,
   nextpas.core.collections.list.intf;
 
 type
@@ -132,6 +133,26 @@ begin
   CheckEqual('hello', LVal, 'string value');
 end;
 
+procedure TestTryLoadFromTryAppend;
+var
+  LL: IIntList;
+  LSrc: specialize IList<Integer>;
+begin
+  LL := specialize MakeList<Integer>;
+  LSrc := specialize MakeList<Integer>;
+  LSrc.PushBack(10);
+  LSrc.PushBack(20);
+  LSrc.PushBack(30);
+  Check(LL.TryLoadFrom(LSrc as TCollection), 'try load from');
+  CheckEqual(Int64(3), Int64(LL.GetCount), 'loaded count');
+
+  LSrc.Clear;
+  LSrc.PushBack(40);
+  LSrc.PushBack(50);
+  Check(LL.TryAppend(LSrc as TCollection), 'try append');
+  CheckEqual(Int64(5), Int64(LL.GetCount), 'appended count');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.list');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -142,5 +163,6 @@ begin
   T.Run('Mixed Push/Pop', @TestMixedPushPop);
   T.Run('Clear', @TestClear);
   T.Run('String type (leak check)', @TestStringType);
+  T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
   T.Summary;
 end.

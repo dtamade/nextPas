@@ -161,6 +161,74 @@ begin
   end;
 end;
 
+procedure TestFindIf;
+var
+  LL: TIntFList;
+  LIter: TIntIter;
+begin
+  LL := TIntFList.Create;
+  try
+    LL.PushFront(1);
+    LL.PushFront(3);
+    LL.PushFront(4);
+    LL.PushFront(5);
+    LIter := LL.FindIf(@IsEven, nil);
+    Check(LIter.MoveNext, 'findif finds even');
+    CheckEqual(Int64(4), Int64(LIter.GetCurrent), 'found 4');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestInsertAfterEraseAfter;
+var
+  LL: TIntFList;
+  LIter, LInserted: TIntIter;
+begin
+  LL := TIntFList.Create;
+  try
+    LL.PushFront(3);
+    LL.PushFront(1);
+    LIter := LL.Find(1);
+    Check(LIter.MoveNext, 'find 1');
+    LInserted := LL.InsertAfter(LIter, 2);
+    CheckEqual(Int64(3), Int64(LL.GetCount), 'count after insert');
+    CheckEqual(Int64(1), Int64(LL.Front), 'front still 1');
+
+    LIter := LL.Find(2);
+    Check(LIter.MoveNext, 'find inserted 2');
+    LL.EraseAfter(LIter);
+    CheckEqual(Int64(2), Int64(LL.GetCount), 'count after erase');
+  finally
+    LL.Free;
+  end;
+end;
+
+procedure TestTryLoadFromTryAppend;
+var
+  LL: TIntFList;
+  LSrc: TIntFList;
+begin
+  LL := TIntFList.Create;
+  LSrc := TIntFList.Create;
+  try
+    LSrc.PushFront(3);
+    LSrc.PushFront(2);
+    LSrc.PushFront(1);
+    Check(LL.TryLoadFrom(LSrc), 'try load from');
+    CheckEqual(Int64(3), Int64(LL.GetCount), 'loaded count');
+
+    LSrc.Clear;
+    LSrc.PushFront(5);
+    LSrc.PushFront(4);
+    Check(LL.TryAppend(LSrc), 'try append');
+    CheckEqual(Int64(5), Int64(LL.GetCount), 'appended count');
+  finally
+    LSrc.Free;
+    LL.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.forwardlist');
   T.Run('PushFront/PopFront', @TestPushFrontPopFront);
@@ -173,5 +241,8 @@ begin
   T.Run('Clear', @TestClear);
   T.Run('String type (leak check)', @TestStringType);
   T.Run('Find', @TestFind);
+  T.Run('FindIf', @TestFindIf);
+  T.Run('InsertAfter/EraseAfter', @TestInsertAfterEraseAfter);
+  T.Run('TryLoadFrom/TryAppend', @TestTryLoadFromTryAppend);
   T.Summary;
 end.
