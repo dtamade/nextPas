@@ -1,172 +1,257 @@
 #!/usr/bin/env python3
 """
 Convert fafafa.core FPCUnit VecDeque tests to nextpas.core TTestRunner format.
-
-Handles:
-- Class-based TTestCase → standalone procedures
-- SetUp/TearDown → inline create/free per test
-- AssertEquals/AssertTrue/AssertFalse → CheckEqual/Check
-- fafafa.core.* → nextpas.core.*
-- FAFAFA_* → NEXTPAS_*
-- Generates program .lpr with TTestRunner registration
+V2: Better handling of test structure, API name mapping, var blocks.
 """
 
 import re
 import sys
 from pathlib import Path
 
+# API name mappings (old fafafa → new nextpas)
+API_RENAMES = {
+    '.Remove(': '.RemoveAt(',
+    '.RemoveSwap(': '.SwapRemoveAt(',
+    '.TryRemove(': '.TryRemoveAt(',
+    'OverWrite(': 'Overwrite(',
+    'UnChecked': 'Unchecked',
+    'FindIF(': 'FindIf(',
+    'FindIFNot(': 'FindIfNot(',
+    'CountIF(': 'CountIf(',
+    'ReplaceIF(': 'ReplaceIf(',
+    'SizeUint': 'SizeUInt',
+}
 
-def extract_test_bodies(content: str) -> list:
-    """Extract all test procedure implementations from the unit."""
-    tests = []
-    # Match: procedure TTestCase_VecDeque.Test_Xxx;
-    pattern = re.compile(
-        r'^procedure\s+TTestCase_VecDeque\.(Test_\w+)\s*;(.*?)(?=^procedure\s+TTestCase_VecDeque\.|^end\.)',
-        re.MULTILINE | re.DOTALL
+# Symbols that should NOT be renamed (Remove is value-based in some contexts)
+# We only rename .Remove( when preceded by a VecDeque variable
+
+
+def apply_api_renames(line: str) -> str:
+    """Apply API name mappings."""
+    for old, new in API_RENAMES.items():
+        line = line.replace(old, new)
+    return line
+
+
+def convert_asserts(line: str) -> str:
+    """Convert FPCUnit assertions to TTestRunner."""
+    # AssertEquals('msg', SizeInt(x), SizeInt(y))
+    line = re.sub(
+        r"AssertEquals\('([^']*)',\s*SizeInt\(([^)]+)\),\s*SizeInt\(([^)]+)\)\)",
+        r"CheckEqual(Int64(\2), Int64(\3), '\1')",
+        line
     )
-    for m in pattern.finditer(content):
-        name = m.group(1)
-        body = m.group(2).strip()
-        tests.append((name, body))
+    # AssertEquals('msg', Integer, expr) - integer literal
+    line = re.sub(
+        r"AssertEquals\('([^']*)',\s*(-?\d+),\s*(.+?)\)\s*;",
+        r"CheckEqual(Int64(\2), Int64(\3), '\1');",
+        line
+    )
+    # AssertEquals(Integer, expr) without msg
+    line = re.sub(
+        r"AssertEquals\((-?\d+),\s*(.+?)\)\s*;",
+        r"CheckEqual(Int64(\1), Int64(\2), '');",
+        line
+    )
+    # AssertEquals('msg', 'str', expr) - string
+    line = re.sub(
+        r"AssertEquals\('([^']*)',\s*'([^']*)',\s*(.+?)\)\s*;",
+        r"CheckEqual('\2', \3, '\1');",
+        line
+    )
+    # AssertTrue('msg', expr)
+    line = re.sub(
+        r"AssertTrue\('([^']*)',\s*(.+?)\)\s*;",
+        r"Check(\2, '\1');",
+        line
+    )
+    # AssertTrue(expr)
+    line = re.sub(
+        r"AssertTrue\((.+?)\)\s*;",
+        r"Check(\1, '');",
+        line
+    )
+    # AssertFalse('msg', expr)
+    line = re.sub(
+        r"AssertFalse\('([^']*)',\s*(.+?)\)\s*;",
+        r"Check(not (\2), '\1');",
+        line
+    )
+    # AssertFalse(expr)
+    line = re.sub(
+        r"AssertFalse\((.+?)\)\s*;",
+        r"Check(not (\1), '');",
+        line
+    )
+    # Fail('msg')
+    line = re.sub(
+        r"Fail\('([^']*)'\)\s*;",
+        r"Check(False, '\1');",
+        line
+    )
+    return line
+
+
+def convert_symbols(line: str) -> str:
+    """Replace fafafa symbols with nextpas."""
+    line = line.replace('fafafa.core.', 'nextpas.core.')
+    line = line.replace('FAFAFA_CORE_', 'NEXTPAS_CORE_')
+    line = line.replace('FAFAFA_COLLECTIONS_', 'NEXTPAS_COLLECTIONS_')
+    line = line.replace('{$I fafafa.core.settings.inc}', '{$I nextpas.core.settings.inc}')
+    return line
+
+
+def extract_tests(content: str) -> list:
+    """Extract test procedure implementations."""
+    # Split on procedure boundaries
+    parts = re.split(r'^(procedure\s+TTestCase_VecDeque\.)', content, flags=re.MULTILINE)
+
+    tests = []
+    i = 1
+    while i < len(parts) - 1:
+        header = parts[i]  # "procedure TTestCase_VecDeque."
+        body = parts[i + 1]
+
+        # Extract name and body
+        m = re.match(r'(Test_\w+)\s*;(.*)', body, re.DOTALL)
+        if m:
+            name = m.group(1)
+            impl = m.group(2).strip()
+            # Find the end of this procedure (next 'end;' at indent 0)
+            # Simple heuristic: find 'end;' followed by newline
+            end_match = re.search(r'^end;', impl, re.MULTILINE)
+            if end_match:
+                impl = impl[:end_match.end()]
+            tests.append((name, impl))
+        i += 2
+
     return tests
 
 
-def convert_body(body: str) -> str:
-    """Convert a single test body from FPCUnit to TTestRunner style."""
-    lines = body.split('\n')
-    result = []
-    for line in lines:
-        # Skip empty SetUp-like calls (FVecDeque.Clear at start is fine)
-        converted = line
-
-        # AssertEquals('msg', SizeInt(x), SizeInt(y))
-        converted = re.sub(
-            r"AssertEquals\('([^']*)',\s*SizeInt\((\d+)\),\s*SizeInt\((.+?)\)\)",
-            r"CheckEqual(Int64(\2), Int64(\3), '\1')",
-            converted
-        )
-        # AssertEquals('msg', integer, expr)
-        converted = re.sub(
-            r"AssertEquals\('([^']*)',\s*(-?\d+),\s*(.+?)\)",
-            r"CheckEqual(Int64(\2), Int64(\3), '\1')",
-            converted
-        )
-        # AssertEquals(integer, expr) without msg
-        converted = re.sub(
-            r"AssertEquals\((-?\d+),\s*(.+?)\)",
-            r"CheckEqual(Int64(\1), Int64(\2), '')",
-            converted
-        )
-        # AssertTrue('msg', expr)
-        converted = re.sub(
-            r"AssertTrue\('([^']*)',\s*(.+?)\)",
-            r"Check(\2, '\1')",
-            converted
-        )
-        # AssertTrue(expr)
-        converted = re.sub(
-            r"AssertTrue\((.+?)\)",
-            r"Check(\1, '')",
-            converted
-        )
-        # AssertFalse('msg', expr)
-        converted = re.sub(
-            r"AssertFalse\('([^']*)',\s*(.+?)\)",
-            r"Check(not (\2), '\1')",
-            converted
-        )
-        # Fail('msg')
-        converted = re.sub(
-            r"Fail\('([^']*)'\)",
-            r"Check(False, '\1')",
-            converted
-        )
-
-        # Replace FVecDeque with LD
-        converted = converted.replace('FVecDeque', 'LD')
-
-        # fafafa → nextpas
-        converted = converted.replace('fafafa.core.', 'nextpas.core.')
-        converted = converted.replace('FAFAFA_CORE_', 'NEXTPAS_CORE_')
-        converted = converted.replace('FAFAFA_COLLECTIONS_', 'NEXTPAS_COLLECTIONS_')
-
-        # UnChecked → Unchecked (naming cleanup already done in nextpas)
-        converted = converted.replace('UnChecked', 'Unchecked')
-
-        result.append(converted)
-
-    return '\n'.join(result)
-
-
-def make_procedure_name(test_name: str) -> str:
-    """Convert Test_Insert_Index_Element → TestInsertIndexElement."""
+def make_proc_name(test_name: str) -> str:
+    """Test_Insert_Index_Element → TestInsertIndexElement"""
     parts = test_name.split('_')
     return ''.join(p.capitalize() for p in parts)
 
 
-def generate_lpr(tests: list, module_name: str) -> str:
-    """Generate the complete .lpr program file."""
-    proc_names = []
-    proc_bodies = []
+def convert_test_body(name: str, body: str) -> str:
+    """Convert a single test body."""
+    lines = body.split('\n')
+    result = []
+    in_begin = False
+    begin_injected = False
+    for line in lines:
+        line = convert_symbols(line)
+        line = convert_asserts(line)
+        line = apply_api_renames(line)
+        line = line.replace('FVecDeque', 'LD')
 
-    for name, body in tests:
-        proc_name = make_procedure_name(name)
-        proc_names.append(proc_name)
+        # Inject LD := Create after first 'begin'
+        if not begin_injected and re.match(r'^\s*begin\s*$', line):
+            result.append(line)
+            result.append('  LD := TVecDequeInt.Create;')
+            result.append('  try')
+            in_begin = True
+            begin_injected = True
+            continue
 
-        converted_body = convert_body(body)
+        # Replace final 'end;' with 'finally LD.Free; end;'
+        if in_begin and re.match(r'^end;', line):
+            result.append('  finally')
+            result.append('    LD.Free;')
+            result.append('  end;')
+            result.append('end;')
+            in_begin = False
+            continue
 
-        # Wrap in procedure with local LD variable
-        proc = f"""procedure {proc_name};
-var
-  LD: TVecDequeInt;
-begin
-  LD := TVecDequeInt.Create;
-  try
-{indent(converted_body, '    ')}
-  finally
-    LD.Free;
-  end;
-end;"""
-        proc_bodies.append(proc)
+        # Indent body inside try block
+        if in_begin and begin_injected:
+            if line.strip():
+                result.append('  ' + line)
+            else:
+                result.append(line)
+        else:
+            result.append(line)
 
-    # Build registration block
-    registrations = []
-    for name, proc_name in zip([t[0] for t in tests], proc_names):
-        human_name = name.replace('Test_', '').replace('_', ' ')
-        registrations.append(f"  T.Run('{human_name}', @{proc_name});")
+    return '\n'.join(result)
 
-    return f"""program test_vecdeque_full;
 
-{{$I nextpas.core.settings.inc}}
+def generate_output(tests: list) -> str:
+    """Generate the complete .lpr file."""
+    # Header
+    header = """program test_vecdeque_full;
+
+{$I nextpas.core.settings.inc}
 
 uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.mem.allocator,
   nextpas.core.collections.base,
+  nextpas.core.collections.vecdeque.base,
   nextpas.core.collections.vecdeque;
 
 type
   TVecDequeInt = specialize TVecDeque<Integer>;
   TIntegerArray = specialize TGenericArray<Integer>;
+  TCompareFunc = specialize TCompareFunc<Integer>;
+
+function CompareInt(const A, B: Integer; aData: Pointer): SizeInt;
+begin
+  if A < B then Result := -1
+  else if A > B then Result := 1
+  else Result := 0;
+end;
+
+function CompareIntDesc(const A, B: Integer; aData: Pointer): SizeInt;
+begin
+  Result := CompareInt(B, A, aData);
+end;
 
 var
   T: TTestRunner;
 
-{''.join(chr(10) + b + chr(10) for b in proc_bodies)}
+"""
 
+    # Procedures
+    procs = []
+    registrations = []
+
+    for name, body in tests:
+        proc_name = make_proc_name(name)
+        converted = convert_test_body(name, body)
+
+        # Check if body already has var block with LD
+        if 'LD: TVecDequeInt' not in converted:
+            # Inject var LD declaration
+            converted = re.sub(
+                r'^(\s*var\b)',
+                r'\1\n  LD: TVecDequeInt;',
+                converted,
+                count=1,
+                flags=re.MULTILINE
+            )
+            if 'var' not in converted.split('begin')[0]:
+                # No var block at all - add one
+                converted = f"var\n  LD: TVecDequeInt;\n{converted}"
+
+        proc = f"procedure {proc_name};\n{converted}\n"
+        procs.append(proc)
+
+        human_name = name.replace('Test_', '').replace('_', ' ')
+        registrations.append(f"  T.Run('{human_name}', @{proc_name});")
+
+    # Footer
+    footer = f"""
 begin
-  T := TTestRunner.Create('{module_name}');
+  T := TTestRunner.Create('nextpas.core.collections.vecdeque.full');
 {chr(10).join(registrations)}
   T.Summary;
 end.
 """
 
-
-def indent(text: str, prefix: str) -> str:
-    """Indent all lines of text."""
-    lines = text.split('\n')
-    return '\n'.join(prefix + line if line.strip() else line for line in lines)
+    return header + '\n'.join(procs) + footer
 
 
 def main():
@@ -178,21 +263,15 @@ def main():
     output_path = Path(sys.argv[2])
 
     content = input_path.read_text(encoding='utf-8')
-    tests = extract_test_bodies(content)
 
-    print(f"Found {len(tests)} test procedures")
+    # Skip helper methods (SetUp, TearDown, ExpectSeq, etc.)
+    # Only extract Test_* procedures
+    tests = extract_tests(content)
+    print(f"Extracted {len(tests)} test procedures")
 
-    if not tests:
-        print("ERROR: No tests found!")
-        sys.exit(1)
-
-    lpr = generate_lpr(tests, 'nextpas.core.collections.vecdeque.full')
-    output_path.write_text(lpr, encoding='utf-8')
-    print(f"Generated {output_path} with {len(tests)} tests")
-    print("NOTE: Manual review needed for:")
-    print("  - Helper methods (ExpectSeq, etc.) need to be inlined or extracted")
-    print("  - CheckException patterns need try/except")
-    print("  - Some tests may reference class fields beyond FVecDeque")
+    output = generate_output(tests)
+    output_path.write_text(output, encoding='utf-8')
+    print(f"Written to {output_path} ({len(output)} bytes)")
 
 
 if __name__ == '__main__':
