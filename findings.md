@@ -10,6 +10,11 @@
 
 ## Research Findings
 
+- Batch 212 re-rank 结论：Batch 184 已打开 imported `project-source` unit method body inherited
+  implicit-self ambiguous-overload；补同形 installed-source deferred guard。
+- Batch 212 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 212 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodAmbiguousOverloadStaysDeferred`。
 - Batch 211 re-rank 结论：Batch 183 已打开 imported `project-source` unit method body inherited
   implicit-self no-matching-overload；补同形 installed-source deferred guard。
 - Batch 211 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
