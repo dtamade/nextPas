@@ -10,6 +10,14 @@
 
 ## Research Findings
 
+- Batch 219-220 visibility 能力落地：parser 从跳过 visibility keywords 改为产出 gnkVisibilityLabel
+  nodes；analyzer 在 ProcessClassFields 中追踪 current visibility state 并存储到 symbol；
+  TryRegisterMemberCallBinding 在 resolution 成功后检查 target visibility，private member
+  从外部访问时返回 'inaccessible-member' failure kind，触发 sema.inaccessible-member 诊断。
+- 设计决策：class 内部（ACurrentMethodClass = owner type name）可以访问自身 private members，
+  这符合 Pascal 语义（同一 class 内部无 visibility 限制）。
+- 当前只检查 direct member call（W.Secret）；implicit-self 和 inherited 路径暂不检查
+  （class 内部调用自身 method 本来就应该允许）。
 - Batch 217-218 default parameter 能力落地：member method overload resolution 从 exact ParamCount
   match 改为 MinParamCount..ParamCount 范围检查；signature 比较改为 prefix match。
 - 影响面：`TSemanticSymbol` 新增 `MinParamCount` 字段，`MethodSymbolIdForExactClassTypeMember`
