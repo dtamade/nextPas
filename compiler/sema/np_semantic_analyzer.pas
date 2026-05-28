@@ -1744,12 +1744,12 @@ begin
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       AMethodNameFound := True;
-      if Symbol.ParamCount = AArgCount then
+      if (AArgCount >= Symbol.MinParamCount) and (AArgCount <= Symbol.ParamCount) then
       begin
         Inc(SymbolMatchCount);
         SymbolId := Symbol.SymbolId;
         if AHasArgSignature and
-          SameText(Symbol.ParamSignature, AArgSignature) then
+          SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature) then
         begin
           Inc(SignatureMatchCount);
           SignatureSymbolId := Symbol.SymbolId;
@@ -1815,7 +1815,7 @@ begin
       SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       Inc(BodyCandidateCount);
-      if (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) and
+      if (DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount)) and
         ((not AHasArgSignature) or
          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
         Inc(BodyMatchCount);
@@ -2206,6 +2206,7 @@ begin
     ADecl.ByteOffset
   );
   FModel.SetSymbolParamCount(Result, ParamCount);
+  FModel.SetSymbolMinParamCount(Result, CountRequiredDeclParams(ADecl));
   FModel.SetSymbolParamSignature(Result, ParamSignature);
   FModel.SetSymbolScope(Result, EnsureUnitScope(AOwnerUnitId));
 end;
@@ -3743,6 +3744,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
   FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
@@ -3807,6 +3809,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
   FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
@@ -4036,6 +4039,7 @@ begin
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
+          FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
           FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
@@ -7217,6 +7221,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       ANode.ByteOffset
     );
     FModel.SetSymbolParamCount(SymbolId, ParamCount);
+    FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
     FModel.SetSymbolParamSignature(SymbolId, ParamSignature);
 
     if AUnitScopeId > 0 then

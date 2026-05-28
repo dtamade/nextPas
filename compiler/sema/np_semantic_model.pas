@@ -13,6 +13,7 @@ type
     ScopeId: LongInt;
     TypeId: LongInt;
     ParamCount: LongInt;
+    MinParamCount: LongInt;
     ParamSignature: string;
     ByteOffset: LongInt;
   end;
@@ -128,6 +129,7 @@ type
       const AParentScopeId: LongInt): LongInt;
     procedure SetSymbolScope(const ASymbolId: LongInt; const AScopeId: LongInt);
     procedure SetSymbolParamCount(const ASymbolId: LongInt; const ACount: LongInt);
+    procedure SetSymbolMinParamCount(const ASymbolId: LongInt; const ACount: LongInt);
     procedure SetSymbolParamSignature(const ASymbolId: LongInt;
       const ASignature: string);
     function FindSymbolInScope(const AName: string;
@@ -334,6 +336,16 @@ begin
   Idx := ASymbolId - 1;
   if (Idx >= 0) and (Idx < Length(FSymbols)) then
     FSymbols[Idx].ParamCount := ACount;
+end;
+
+procedure TSemanticModel.SetSymbolMinParamCount(const ASymbolId: LongInt;
+  const ACount: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := ASymbolId - 1;
+  if (Idx >= 0) and (Idx < Length(FSymbols)) then
+    FSymbols[Idx].MinParamCount := ACount;
 end;
 
 procedure TSemanticModel.SetSymbolParamSignature(const ASymbolId: LongInt;

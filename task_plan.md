@@ -12109,3 +12109,45 @@ Completed
 - 同步 spec / records / goal tree。
 - Fresh `bash build/verify_local.sh`。
 - Git commit。
+
+## Addendum: 2026-05-28 Batch 217 Default Parameter Member Method Call Binding
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+让 member method call binding 正确处理 default parameters：当 `TWorker.Pick(Value: Integer; Extra: Integer = 0)` 被调用为 `Obj.Pick(1)` 时，应该成功绑定（当前 exact-match 逻辑会失败）。
+
+### 问题分析
+
+1. `TSemanticSymbol.ParamCount` 只存总参数数，没有 `MinParamCount`
+2. `MethodSymbolIdForExactClassTypeMember` 用 `Symbol.ParamCount = AArgCount` 做精确匹配
+3. Body matching fallback 用 `CountDeclParams(...) = AArgCount` 也是精确匹配
+
+### 实现计划
+
+1. **TDD：先写失败测试**
+   - 新增 `tests/semantic/test_semantic_default_params.pas`
+   - 测试 member method call with default parameter binding
+   - 预期：call binding 成功，model status = ready
+
+2. **最小实现改动**
+   - `np_semantic_model.pas`：在 `TSemanticSymbol` 增加 `MinParamCount: LongInt`
+   - `np_semantic_model.pas`：新增 `SetSymbolMinParamCount` 方法
+   - `np_semantic_analyzer.pas`：symbol 注册时同时设置 `MinParamCount`
+   - `np_semantic_analyzer.pas`：`MethodSymbolIdForExactClassTypeMember` 改用范围检查
+
+3. **验证**
+   - Focused test pass
+   - Fresh `bash build/verify_local.sh` pass
+   - 确认不破坏现有 semantic-call-bindings 测试
+
+### 不做
+
+- 不碰 `core/`
+- 不实现 default value 的 codegen/emission（那是后续 batch）
+- 不实现 default parameter 的 diagnostics（如 default value type mismatch）
+- 只做 member method binding 修复，free-standing 已经工作
