@@ -116,14 +116,19 @@ var
   LMode: DWORD;
 begin
   LHandle := GetStdHandle(STD_OUTPUT_HANDLE);
-  if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(Int32(GetLastError));
-  LMode := 0;
-  if GetConsoleMode(LHandle, @LMode) = 0 then
-    Exit(Int32(GetLastError));
-  LMode := LMode or ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-  if SetConsoleMode(LHandle, LMode) = 0 then
-    Exit(Int32(GetLastError));
+  if LHandle <> HANDLE(PtrInt(-1)) then
+  begin
+    LMode := 0;
+    if GetConsoleMode(LHandle, @LMode) <> 0 then
+      SetConsoleMode(LHandle, LMode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  end;
+  LHandle := GetStdHandle(STD_ERROR_HANDLE);
+  if LHandle <> HANDLE(PtrInt(-1)) then
+  begin
+    LMode := 0;
+    if GetConsoleMode(LHandle, @LMode) <> 0 then
+      SetConsoleMode(LHandle, LMode or ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  end;
   Result := 0;
 end;
 {$ENDIF}

@@ -65,7 +65,7 @@ begin
     LResult := platform_env_get('TMP', ABuf, ABufLen, LLen);
   if LResult <> 0 then
   begin
-    if ABufLen >= 5 then
+    if ABufLen >= 4 then
     begin
       ABuf[0] := 'C'; ABuf[1] := ':'; ABuf[2] := '\';
       ABuf[3] := #0;

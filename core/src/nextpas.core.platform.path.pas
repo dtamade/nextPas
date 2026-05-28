@@ -193,11 +193,18 @@ end;
 function platform_path_extension(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LLen, I: Int32;
+  LLen, I, LNameStart: Int32;
 begin
   LLen := StrLen(APath);
+  LNameStart := 0;
+  for I := LLen - 1 downto 0 do
+    if IsSep(APath[I]) then
+    begin
+      LNameStart := I + 1;
+      Break;
+    end;
   I := LLen - 1;
-  while (I >= 0) and not IsSep(APath[I]) do
+  while I > LNameStart do
   begin
     if APath[I] = PLATFORM_EXT_SEP then
       Exit(CopyToBuf(@APath[I], LLen - I, ABuf, ABufLen));
@@ -209,13 +216,20 @@ end;
 function platform_path_extension_ptr(const APath: PAnsiChar;
   out AStart: PAnsiChar; out ALen: Int32): Int32;
 var
-  LLen, I: Int32;
+  LLen, I, LNameStart: Int32;
 begin
   AStart := nil;
   ALen := 0;
   LLen := StrLen(APath);
+  LNameStart := 0;
+  for I := LLen - 1 downto 0 do
+    if IsSep(APath[I]) then
+    begin
+      LNameStart := I + 1;
+      Break;
+    end;
   I := LLen - 1;
-  while (I >= 0) and not IsSep(APath[I]) do
+  while I > LNameStart do
   begin
     if APath[I] = PLATFORM_EXT_SEP then
     begin
