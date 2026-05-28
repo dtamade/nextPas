@@ -899,6 +899,10 @@ begin
               Result := Result + 's'
             else if (SubstType = 'boolean') or (SubstType = 'bool') then
               Result := Result + 'b'
+            else if FModel.LookupConstValue(AArgTypes[P] + '$record', Dummy) then
+              Result := Result + 'r'
+            else if FModel.LookupConstValue(AArgTypes[P] + '$size', Dummy) then
+              Result := Result + 'p'
             else
               Result := Result + 'i';
             Found := True;
@@ -1824,7 +1828,9 @@ begin
   begin
     Symbol := FModel.SymbolAt(Index);
     if SameText(Symbol.Name, QualifiedName) and
-      SameText(Symbol.Kind, 'method') and
+      (SameText(Symbol.Kind, 'method') or
+       SameText(Symbol.Kind, 'constructor') or
+       SameText(Symbol.Kind, 'destructor')) and
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       AMethodNameFound := True;
@@ -4501,7 +4507,8 @@ begin
       Continue;
     if SameText(Constraints[I], 'class') then
     begin
-      if not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal) then
+      if FModel.LookupConstValue(ArgTypes[I] + '$record', SizeVal) or
+        (not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal)) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
@@ -4576,6 +4583,12 @@ begin
       MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
       FModel.AddSymbol(InstanceName + '.' + MethodShortName,
         'field', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
+      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$idx', SizeVal) then
+        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$idx', SizeVal);
+      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$str', SizeVal) then
+        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', SizeVal);
+      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$ptr', SizeVal) then
+        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$ptr', SizeVal);
     end;
   end;
   FModel.SetTypeParent(AInstanceTypeId,
@@ -4585,11 +4598,27 @@ begin
   else
     FModel.AddConstValue(InstanceName + '$size', 8);
   if FModel.LookupConstValue(GenericName + '$vmt_count', SizeVal) then
-    FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal)
+  begin
+    FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal);
+    for I := 0 to SizeVal - 1 do
+    begin
+      if FModel.LookupStringConstValue(GenericName + '$vmt_func_' + IntToStr(I), SubstSig) then
+      begin
+        if Pos(GenericName + '.', SubstSig) = 1 then
+          SubstSig := InstanceName + Copy(SubstSig, Length(GenericName) + 1, MaxInt);
+        FModel.AddStringConstValue(InstanceName + '$vmt_func_' + IntToStr(I), SubstSig);
+      end;
+      if FModel.LookupConstValue(GenericName + '$vmt_slot_' + IntToStr(I), SizeVal) then
+        FModel.AddConstValue(InstanceName + '$vmt_slot_' + IntToStr(I), SizeVal);
+    end;
+  end
   else if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
-  FModel.AddStringConstValue(InstanceName + '$parent_class',
-    FModel.TypeAt(GenericTypeId - 1).Name);
+  if FModel.LookupStringConstValue(GenericName + '$parent_class', SubstSig) then
+    FModel.AddStringConstValue(InstanceName + '$parent_class', SubstSig)
+  else
+    FModel.AddStringConstValue(InstanceName + '$parent_class',
+      FModel.TypeAt(GenericTypeId - 1).Name);
 end;
 
 function TSemanticAnalyzer.ResolveOrInstantiateInlineGeneric(
