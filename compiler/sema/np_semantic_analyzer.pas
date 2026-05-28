@@ -1671,13 +1671,15 @@ var
   MemberPrefix: string;
   StringValue: string;
   TypeSymbol: TSemanticSymbol;
+  FieldMeta: TFieldMeta;
 begin
   Result := False;
   if (AClassTypeId <= 0) or (AMemberName = '') then
     Exit;
+  if FModel.GetFieldMetaByName(AClassTypeId, AMemberName, FieldMeta) then
+    Exit(True);
   if not TypeSymbolForTypeId(AClassTypeId, TypeSymbol) then
     Exit;
-
   MemberPrefix := TypeSymbol.Name + '.' + AMemberName;
   Result :=
     FModel.LookupConstValue(MemberPrefix + '$idx', ConstValue) or
