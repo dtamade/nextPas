@@ -1357,6 +1357,7 @@ function ParseTypeReference(
 var
   Token: TToken;
   NameNode, ArgNode: TGreenNode;
+  SpecArgs: string;
 begin
   if ACursor >= ALexer.TokenCount then
     Exit(nil);
@@ -1439,15 +1440,21 @@ begin
       begin
         Inc(ACursor);
         Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
-        if (ACursor < ALexer.TokenCount) and
+        if (Result <> nil) and (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
         begin
+          SpecArgs := '<';
           Inc(ACursor);
           while (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          begin
+            SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
             Inc(ACursor);
+          end;
+          SpecArgs := SpecArgs + '>';
           MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
+          Result.FText := Result.FText + SpecArgs;
         end;
       end;
   else
