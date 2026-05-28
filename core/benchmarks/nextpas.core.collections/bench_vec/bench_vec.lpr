@@ -149,7 +149,6 @@ begin
     B.Run('Vec.Pop/N=100000', @BenchPop);
     B.Run('Vec.Get/N=100000', @BenchGet);
     B.Run('Vec.Iterate/N=100000', @BenchIterate);
-    B.Run('Vec.Contains/10 worst-case', @BenchContains);
     B.Run('Vec.Insert(mid)/N=1000', @BenchInsertMiddle);
     B.Run('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle);
     B.Summary;

@@ -32,10 +32,10 @@ uses
   nextpas.core.platform.time;
 
 const
-  TARGET_NS = 100000000;
-  WARMUP_ITERS = 10;
-  SAMPLES = 5;
-  MAX_ITERS = 10000;
+  TARGET_NS = 50000000;
+  WARMUP_ITERS = 5;
+  SAMPLES = 3;
+  MAX_ITERS = 1000;
 
 constructor TBenchRunner.Create;
 begin
@@ -87,7 +87,7 @@ end;
 procedure TBenchRunner.Run(const aName: string; aProc: TBenchProc);
 var
   LIters: Int64;
-  LSamples: array[0..SAMPLES-1] of UInt64;
+  LSamples: array[0..2] of UInt64;
   i, j: Integer;
   LTmp: UInt64;
   LMedianNs: UInt64;
