@@ -43,8 +43,8 @@
 - Wave 15 closed the code path on `main@6d3d17f`:
   post-merge `bash build/verify_local.sh` passed with `verify-local=pass` and
   `human-summary=local verification passed`. The temporary
-  `platform-ffi-raw-boundary` worktree is clean and can be removed after this
-  closeout record is committed.
+  `platform-ffi-raw-boundary` worktree and feature branch were removed after
+  closeout record commit.
 - The rejected `platform-host-ffi-wave15-helper-names` worktree remains dirty
   by design and must not be treated as a valid continuation source. It belongs
   to the abandoned helper-name direction that the user rejected.

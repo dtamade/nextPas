@@ -10,9 +10,9 @@ the integration boundary.
 ## Active Scope
 
 - Current status: Wave 15 is merged to `main@6d3d17f` and post-merge
-  verification passed. The temporary worktree
+  verification passed. The temporary worktree and feature branch
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
-  is ready for cleanup.
+  / `codex/platform-ffi-raw-boundary` have been removed.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Last closed wave: Platform Host ABI Completeness Wave 15 on `main@6d3d17f`.
@@ -80,7 +80,7 @@ Status: merged to `main@6d3d17f`; post-merge verification passed.
 - [x] Run focused checks, `make -C core test`, examples, benchmarks, and
   `bash build/verify_local.sh`.
 - [x] Commit, merge to `main`, and run post-merge verification.
-- [ ] Clean the merged temporary worktree / branch. The stale rejected
+- [x] Clean the merged temporary worktree / branch. The stale rejected
   `platform-host-ffi-wave15-helper-names` worktree remains a separate cleanup
   decision because it is dirty and must not be merged.
 

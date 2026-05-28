@@ -81,9 +81,10 @@
   `corePlatformHostAbiWave11SignalControlCheck`,
   `corePlatformFacadeSurfaceCheck`, and
   `corePlatformSimulatedHostCompileMatrixCheck`.
-- Current cleanup note: the merged worktree
+- Cleanup completed: the merged worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
-  is clean and ready to remove. The rejected dirty worktree
+  was removed, branch `codex/platform-ffi-raw-boundary` was deleted, and
+  `git worktree prune` was run. The rejected dirty worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave15-helper-names`
   remains unmerged and should be handled separately.
 - Main checkout still has untracked `GPATH`, `GRTAGS`, and `GTAGS`. They are
