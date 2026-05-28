@@ -4,6 +4,9 @@ unit np_semantic_model;
 
 interface
 
+uses
+  np_green_tree;
+
 type
   TSemanticSymbol = record
     SymbolId: LongInt;
@@ -24,6 +27,8 @@ type
     Name: string;
     Kind: string;
     ParentTypeId: LongInt;
+    TypeParams: string;
+    InstantiatedFrom: LongInt;
   end;
 
   TTypedHirNode = record
@@ -124,6 +129,7 @@ type
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
+    procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
     function IsTypeDescendantOf(const ATypeId: LongInt;
       const AAncestorTypeId: LongInt): Boolean;
     function AddScope(const AKind: TScopeKind; const AName: string;
@@ -276,6 +282,31 @@ begin
   Idx := ATypeId - 1;
   if (Idx >= 0) and (Idx < Length(FTypes)) then
     FTypes[Idx].ParentTypeId := AParentTypeId;
+end;
+
+procedure TSemanticModel.SetTypeParams(const ATypeId: LongInt;
+  const AParamListNode: TGreenNode);
+var
+  Idx, I: LongInt;
+  Params: string;
+begin
+  Idx := ATypeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypes)) then
+    Exit;
+  if AParamListNode = nil then
+    Exit;
+  Params := '';
+  for I := 0 to AParamListNode.ChildCount - 1 do
+  begin
+    if (AParamListNode.ChildAt(I) <> nil) and
+      (AParamListNode.ChildAt(I).NodeKind = gnkIdentifier) then
+    begin
+      if Params <> '' then
+        Params := Params + ',';
+      Params := Params + AParamListNode.ChildAt(I).Text;
+    end;
+  end;
+  FTypes[Idx].TypeParams := Params;
 end;
 
 function TSemanticModel.IsTypeDescendantOf(const ATypeId: LongInt;

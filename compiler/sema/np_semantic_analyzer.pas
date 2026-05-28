@@ -4220,6 +4220,15 @@ begin
     for J := 0 to Child.ChildCount - 1 do
     begin
       TypeChild := Child.ChildAt(J);
+      if (TypeChild <> nil) and (TypeChild.NodeKind = gnkTypeParamList) then
+      begin
+        FModel.SetTypeParams(TypeId, TypeChild);
+        Break;
+      end;
+    end;
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      TypeChild := Child.ChildAt(J);
       if TypeChild = nil then
         Continue;
       if TypeChild.NodeKind = gnkEnumType then

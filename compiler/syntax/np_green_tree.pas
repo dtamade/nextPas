@@ -44,6 +44,7 @@ type
     gnkRecordType, gnkArrayType, gnkClassType, gnkEnumType,
     gnkClassField, gnkClassMethod, gnkClassProperty,
     gnkVisibilityLabel,
+    gnkTypeParamList,
     gnkIdentifier, gnkStringLiteral, gnkIntegerLiteral,
     gnkRealLiteral, gnkCharLiteral,
     gnkBinaryExpression, gnkUnaryExpression,
@@ -447,6 +448,7 @@ begin
     gnkClassMethod: Result := 'class-method';
     gnkClassProperty: Result := 'class-property';
     gnkVisibilityLabel: Result := 'visibility-label';
+    gnkTypeParamList: Result := 'type-param-list';
     gnkEnumType: Result := 'enum-type';
     gnkIdentifier: Result := 'identifier';
     gnkStringLiteral: Result := 'string-literal';
@@ -1756,6 +1758,7 @@ var
   Decl: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
+  TypeParamNode: TGreenNode;
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
 begin
@@ -1784,12 +1787,26 @@ begin
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
     begin
+      TypeParamNode := TGreenNode.Create(gnkTypeParamList,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
       Inc(ACursor);
       while (ACursor < ALexer.TokenCount) and
         (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
         (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      begin
+        if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+        begin
+          ElementNode := TGreenNode.Create(gnkIdentifier,
+            CurrentToken(ALexer, ACursor).ByteOffset, 0,
+            CurrentToken(ALexer, ACursor).Lexeme);
+          TypeParamNode.AppendChild(ElementNode);
+          Inc(ATree.FNodeCount);
+        end;
         Inc(ACursor);
+      end;
       MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
+      Decl.AppendChild(TypeParamNode);
+      Inc(ATree.FNodeCount);
     end;
 
     if (ACursor < ALexer.TokenCount) and
