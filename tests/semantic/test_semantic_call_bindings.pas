@@ -3524,6 +3524,8 @@ begin
     ParentName := Model.TypeAt(ParentTypeId - 1).Name;
     if not SameText(ParentName, 'TBase<Integer>') then
       Fail('generic-parent-chain-wrong-parent:' + ParentName);
+    if Model.TypeAt(ParentTypeId - 1).InstantiatedFrom <= 0 then
+      Fail('generic-parent-chain-parent-not-instantiated');
     FoundSig := False;
     for I := 0 to Model.BindingCount - 1 do
       if SameText(Model.BindingAt(I).Name, 'DoChild') and
