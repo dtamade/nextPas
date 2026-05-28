@@ -58,6 +58,68 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - fresh `bash build/verify_local.sh` 结果。
 - 下一轮最自然的目标节点。
 
+## 当前优先级栈（按投入产出比排序）
+
+每轮开始前从这里取最高优先级项。完成后划掉并补充新项。
+
+1. **protected visibility + same-unit private access** — 补齐 visibility 语义：protected 允许子类访问，同一 unit 内可访问 private（FPC 语义）
+2. **implicit type conversion (Integer ↔ LongInt, Char → String)** — overload resolution 和 type checking 的核心缺口，真实代码大量依赖
+3. **function result as expression** — `X := Foo()` 的 result 类型推断和 assignment 类型检查
+4. **generic instantiation** — `specialize TList<Integer>` 的 member truth 生成
+5. **interface/implementation visibility 区分** — interface section 的 symbol 对外可见，implementation 的不可见
+
+完成项（保留追溯）：
+- ~~default parameter member method call binding~~ (Batch 217-218)
+- ~~private member visibility enforcement~~ (Batch 219-220)
+- ~~installed-source unit body deferred guard matrix~~ (Batch 198-216)
+
+## 语义能力路线图
+
+量化当前 G1.5 overload resolution 的覆盖状态：
+
+### 已完成
+
+| 能力 | 覆盖场景 | 验证 |
+|------|----------|------|
+| bare function call binding | root + imported project-source | stage0 + semantic harness |
+| member method call binding | direct + inherited + implicit-self | semantic harness |
+| overload resolution (ambiguous/no-match) | bare + member + inherited | stage0 + semantic harness |
+| wrong-argument-count | bare + member + inherited | stage0 + semantic harness |
+| type-mismatch (stable evidence) | literal + variable + param + function-result | stage0 + semantic harness |
+| unknown-member | direct + implicit-self + inherited | stage0 + semantic harness |
+| invalid-call-shape (field/property as callable) | direct + inherited | semantic harness |
+| default parameters | direct + inherited + implicit-self + multi-default | semantic harness |
+| visibility (private) | direct member call from external | semantic harness |
+| installed-source deferred guards | 全矩阵闭合 | semantic harness |
+
+### 未完成（按优先级）
+
+| 能力 | 缺口 | 影响 |
+|------|------|------|
+| protected/published visibility | 子类访问 protected、same-unit private | 真实 FPC 代码大量使用 |
+| implicit conversion | Integer→LongInt, Char→String, enum→ordinal | overload ranking 依赖 |
+| function result type propagation | `X := Foo()` 的 type checking | assignment 类型安全 |
+| generic instantiation | `specialize TList<Integer>` | 容器/集合类型 |
+| default parameter value codegen | 缺省值的 runtime emission | 完整 default param 支持 |
+| operator overloading | `+`, `-`, `=` 等 | 数学/字符串操作 |
+| property read/write accessor binding | `Obj.Prop := X` | 封装模式 |
+| with statement scope | `with Obj do Method` | 旧代码兼容 |
+
+## 真实项目验证目标（G7）
+
+目标：用真实 FPC 项目作为 conformance target，证明 nextPas 不只能处理 fixture。
+
+阶段：
+
+1. **Phase 1（当前）**：nextPas 能正确解析并产出语义模型的 fixture 数量 > 100
+2. **Phase 2**：选取 LazUtils 中一个简单 unit（如 `LazUTF8`），nextPas 能完成 lexer + parser + unit resolution 无错误
+3. **Phase 3**：同一 unit 能通过 semantic analysis 无误报（可能需要 deferred 大量 installed-source）
+4. **Phase 4**：nextPas 能自举编译自身的一个 unit（如 `np_lexer.pas`）
+
+当前状态：Phase 1 已达成（fixture 数量远超 100）。Phase 2 需要先补齐 generic instantiation 和更完整的 uses clause resolution。
+
+---
+
 ## G0: 项目控制面和质量纪律
 
 目标：让 nextPas 的开发节奏可追踪、可验证、可回滚。
