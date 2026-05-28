@@ -94,6 +94,8 @@ jobs:
         run: |
           fpc -iV
           fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
+
+      - name: Run tests (best-effort)
         run: |
           TOTAL=0; PASSED=0; SKIPPED=0; FIRST_FAIL=""
           while IFS= read -r mk; do
