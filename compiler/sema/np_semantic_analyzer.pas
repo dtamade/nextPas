@@ -2304,6 +2304,7 @@ var
   MemberFailureOffset: LongInt;
   MemberActualArgCount: LongInt;
   MemberCandidates: TOverloadCandidateArray;
+  Payload: TDiagnosticPayload;
   MethodClass: string;
   CallableOwnerUnitId: string;
   QualifiedPos: LongInt;
@@ -2339,17 +2340,31 @@ begin
         MemberActualArgCount,
         MemberCandidates
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
-        EmitSemaError(
-          'sema.ambiguous-overload',
+      begin
+        Payload.Kind := dpkOverloadCandidates;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.ambiguous-overload', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
           'ambiguous overload for "' + MemberFailureName + '"',
-          MemberFailureOffset
-        )
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
-        EmitSemaError(
-          'sema.wrong-argument-count',
+      begin
+        Payload.Kind := dpkWrongArgumentCount;
+        Payload.ActualCount := MemberActualArgCount;
+        Payload.ExpectedCount := 0;
+        if Length(MemberCandidates) > 0 then
+          Payload.ExpectedCount := MemberCandidates[0].ParamCount;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.wrong-argument-count', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
           'wrong number of arguments for "' + MemberFailureName + '"',
-          MemberFailureOffset
-        )
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'type-mismatch') then
         EmitSemaError(
           'sema.type-mismatch',
@@ -2357,11 +2372,16 @@ begin
           MemberFailureOffset
         )
       else if SameText(ResolutionFailureKind, 'no-matching-overload') then
-        EmitSemaError(
-          'sema.no-matching-overload',
+      begin
+        Payload.Kind := dpkOverloadCandidates;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.no-matching-overload', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
           'no matching overload for "' + MemberFailureName + '"',
-          MemberFailureOffset
-        )
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'unknown-member') then
         EmitSemaError(
           'sema.unknown-member',
