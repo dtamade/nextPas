@@ -179,7 +179,7 @@ var
 begin
   FillChar(AStat, SizeOf(AStat), 0);
 {$IFDEF NEXTPAS_LINUX}
-  if __xstat(_STAT_VER_LINUX, APath, LStat) <> 0 then
+  if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
     Exit(platform_get_errno);
   AStat.Size := LStat.st_size;
   AStat.Mode := LStat.st_mode;

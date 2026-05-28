@@ -10,6 +10,7 @@ type
     osMacOS,
     osWindows,
     osAndroid,
+    osFreeBSD,
     osUnix,
     osUnknown
   );
@@ -17,6 +18,8 @@ type
   TCPUArch = (
     cpuX86_64,
     cpuAArch64,
+    cpuARM32,
+    cpuRISCV64,
     cpuUnknown
   );
 
@@ -34,6 +37,8 @@ const
   CURRENT_OS: TOSKind = osWindows;
   {$ELSEIF defined(NEXTPAS_ANDROID)}
   CURRENT_OS: TOSKind = osAndroid;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  CURRENT_OS: TOSKind = osFreeBSD;
   {$ELSEIF defined(NEXTPAS_UNIX)}
   CURRENT_OS: TOSKind = osUnix;
   {$ELSE}
@@ -44,6 +49,10 @@ const
   CURRENT_CPU: TCPUArch = cpuX86_64;
   {$ELSEIF defined(NEXTPAS_AARCH64)}
   CURRENT_CPU: TCPUArch = cpuAArch64;
+  {$ELSEIF defined(NEXTPAS_ARM)}
+  CURRENT_CPU: TCPUArch = cpuARM32;
+  {$ELSEIF defined(NEXTPAS_RISCV64)}
+  CURRENT_CPU: TCPUArch = cpuRISCV64;
   {$ELSE}
   CURRENT_CPU: TCPUArch = cpuUnknown;
   {$ENDIF}

@@ -158,5 +158,3 @@ function __error: PInt32; cdecl; external 'c' name '__error';
 implementation
 
 end.
-
-end.

@@ -56,7 +56,7 @@ begin
     Exit(platform_get_errno);
 
 {$IFDEF NEXTPAS_LINUX}
-  if __xstat(_STAT_VER_LINUX, APath, LStat) <> 0 then
+  if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
   begin
     close(LFd);
     Exit(platform_get_errno);
