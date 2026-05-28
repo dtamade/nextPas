@@ -4773,6 +4773,18 @@ begin
       Result := FGenericCacheTypeIds[I];
       Exit;
     end;
+  CacheKey := LowerCase(ASpecText);
+  for I := 0 to Length(FGenericCacheKeys) - 1 do
+    if Pos(CacheKey, FGenericCacheKeys[I]) > 0 then
+    begin
+      Result := FGenericCacheTypeIds[I];
+      FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, Result, 0);
+      SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
+      FGenericCacheKeys[High(FGenericCacheKeys)] := LowerCase(AOwnerUnitId + '#' + ASpecText);
+      SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
+      FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := Result;
+      Exit;
+    end;
 
   GenericName := Copy(ASpecText, 1, LtPos - 1);
   GenericTypeId := 0;
