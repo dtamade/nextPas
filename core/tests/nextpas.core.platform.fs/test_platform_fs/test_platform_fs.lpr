@@ -72,6 +72,49 @@ begin
   Check(platform_fs_is_dir(@Buf[0]), 'temp dir exists');
 end;
 
+procedure TestMktemp;
+var
+  Path: array[0..511] of AnsiChar;
+  Fd: Int32;
+  R: Int32;
+  H: TPlatformFileHandle;
+begin
+  Fd := -1;
+  R := platform_fs_mktemp('nxp_', '.s', @Path[0], 512, Fd);
+  Check(R = 0, 'mktemp succeeds');
+  Check(Fd >= 0, 'fd is valid');
+  Check(platform_fs_exists(@Path[0]), 'temp file exists');
+  H.Value := Fd;
+  platform_file_close(H);
+  platform_file_unlink(@Path[0]);
+end;
+
+procedure TestMktempUnique;
+var
+  Path1, Path2: array[0..511] of AnsiChar;
+  Fd1, Fd2: Int32;
+  I: Int32;
+  Same: Boolean;
+  H: TPlatformFileHandle;
+begin
+  Fd1 := -1; Fd2 := -1;
+  Check(platform_fs_mktemp('u_', '', @Path1[0], 512, Fd1) = 0, 'mktemp 1');
+  Check(platform_fs_mktemp('u_', '', @Path2[0], 512, Fd2) = 0, 'mktemp 2');
+  Same := True;
+  I := 0;
+  while (Path1[I] <> #0) and (Path2[I] <> #0) do
+  begin
+    if Path1[I] <> Path2[I] then begin Same := False; Break; end;
+    Inc(I);
+  end;
+  if Path1[I] <> Path2[I] then Same := False;
+  Check(not Same, 'paths are unique');
+  H.Value := Fd1; platform_file_close(H);
+  H.Value := Fd2; platform_file_close(H);
+  platform_file_unlink(@Path1[0]);
+  platform_file_unlink(@Path2[0]);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -80,5 +123,7 @@ begin
   T.Run('is_dir', @TestIsDir);
   T.Run('file_size', @TestFileSize);
   T.Run('temp_dir', @TestTempDir);
+  T.Run('mktemp', @TestMktemp);
+  T.Run('mktemp unique', @TestMktempUnique);
   T.Summary;
 end.
