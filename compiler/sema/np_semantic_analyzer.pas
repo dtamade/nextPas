@@ -187,7 +187,8 @@ type
       out AResolutionFailureKind: string;
       out AFailureName: string;
       out AFailureOffset: LongInt;
-      out AActualArgCount: LongInt
+      out AActualArgCount: LongInt;
+      out ACandidates: TOverloadCandidateArray
     ): Boolean;
     function TryRegisterImplicitSelfBareMethodCallBinding(
       const ACallNode: TGreenNode;
@@ -1944,7 +1945,8 @@ function TSemanticAnalyzer.TryRegisterMemberCallBinding(
   out AResolutionFailureKind: string;
   out AFailureName: string;
   out AFailureOffset: LongInt;
-  out AActualArgCount: LongInt
+  out AActualArgCount: LongInt;
+  out ACandidates: TOverloadCandidateArray
 ): Boolean;
 var
   ArgCount: LongInt;
@@ -1995,6 +1997,7 @@ begin
     AResolutionFailureKind,
     Candidates
   );
+  ACandidates := Candidates;
   if TargetSymbolId <= 0 then
     Exit;
 
@@ -2300,6 +2303,7 @@ var
   MemberFailureName: string;
   MemberFailureOffset: LongInt;
   MemberActualArgCount: LongInt;
+  MemberCandidates: TOverloadCandidateArray;
   MethodClass: string;
   CallableOwnerUnitId: string;
   QualifiedPos: LongInt;
@@ -2332,7 +2336,8 @@ begin
         ResolutionFailureKind,
         MemberFailureName,
         MemberFailureOffset,
-        MemberActualArgCount
+        MemberActualArgCount,
+        MemberCandidates
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
         EmitSemaError(
           'sema.ambiguous-overload',
