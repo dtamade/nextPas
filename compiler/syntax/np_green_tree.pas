@@ -43,7 +43,6 @@ type
     gnkProcedureDecl, gnkFunctionDecl,
     gnkRecordType, gnkArrayType, gnkClassType, gnkEnumType,
     gnkClassField, gnkClassMethod, gnkClassProperty,
-    gnkVisibilityLabel,
     gnkIdentifier, gnkStringLiteral, gnkIntegerLiteral,
     gnkRealLiteral, gnkCharLiteral,
     gnkBinaryExpression, gnkUnaryExpression,
@@ -446,7 +445,6 @@ begin
     gnkClassField: Result := 'class-field';
     gnkClassMethod: Result := 'class-method';
     gnkClassProperty: Result := 'class-property';
-    gnkVisibilityLabel: Result := 'visibility-label';
     gnkEnumType: Result := 'enum-type';
     gnkIdentifier: Result := 'identifier';
     gnkStringLiteral: Result := 'string-literal';
@@ -1851,14 +1849,7 @@ begin
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                  tkPublishedKeyword] then
-              begin
-                ElementNode := TGreenNode.Create(gnkVisibilityLabel,
-                  CurrentToken(ALexer, ACursor).ByteOffset, 0,
-                  CurrentToken(ALexer, ACursor).Lexeme);
-                TypeNode.AppendChild(ElementNode);
-                Inc(ATree.FNodeCount);
-                Inc(ACursor);
-              end
+                Inc(ACursor)
               else if CurrentToken(ALexer, ACursor).Kind = tkCaseKeyword then
               begin
                 while (ACursor < ALexer.TokenCount) and
@@ -1949,14 +1940,7 @@ begin
               if CurrentToken(ALexer, ACursor).Kind in
                 [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                  tkPublishedKeyword] then
-              begin
-                ElementNode := TGreenNode.Create(gnkVisibilityLabel,
-                  CurrentToken(ALexer, ACursor).ByteOffset, 0,
-                  CurrentToken(ALexer, ACursor).Lexeme);
-                TypeNode.AppendChild(ElementNode);
-                Inc(ATree.FNodeCount);
-                Inc(ACursor);
-              end
+                Inc(ACursor)
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword,
                  tkConstructorKeyword, tkDestructorKeyword] then

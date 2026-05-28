@@ -256,6 +256,9 @@ CORE_TIME_TEST_BINARY="$CORE_TIME_TEST_BUILD_DIR/test_time"
 CORE_PLATFORM_TIME_HELPERS_OUTPUT=$(mktemp)
 CORE_PLATFORM_TIME_HELPERS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_helpers"
 CORE_PLATFORM_TIME_HELPERS_BINARY="$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR/test_platform_time_helpers"
+CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_host_ffi_surface"
+CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BINARY="$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR/test_platform_time_host_ffi_surface"
 CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_l0_boundary"
 CORE_PLATFORM_TIME_L0_BOUNDARY_BINARY="$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR/test_platform_time_l0_boundary"
@@ -279,6 +282,9 @@ CORE_PLATFORM_THREAD_NO_FPC_BINARY="$CORE_PLATFORM_THREAD_NO_FPC_BUILD_DIR/test_
 CORE_PLATFORM_THREAD_L0_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_THREAD_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_thread_l0_boundary"
 CORE_PLATFORM_THREAD_L0_BOUNDARY_BINARY="$CORE_PLATFORM_THREAD_L0_BOUNDARY_BUILD_DIR/test_platform_thread_l0_boundary"
+CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_thread_host_ffi_surface"
+CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BINARY="$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR/test_platform_thread_host_ffi_surface"
 CORE_PLATFORM_THREAD_WIN64_OUTPUT=$(mktemp)
 CORE_PLATFORM_THREAD_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_thread_win64"
 CORE_PLATFORM_THREAD_EXAMPLE_OUTPUT=$(mktemp)
@@ -287,14 +293,94 @@ CORE_PLATFORM_THREAD_EXAMPLE_BINARY="$CORE_PLATFORM_THREAD_EXAMPLE_BUILD_DIR/pla
 CORE_PLATFORM_THREAD_BENCH_OUTPUT=$(mktemp)
 CORE_PLATFORM_THREAD_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_thread_bench"
 CORE_PLATFORM_THREAD_BENCH_BINARY="$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR/bench_platform_thread_lifecycle"
+CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_posix_ffi_surface"
+CORE_PLATFORM_POSIX_FFI_SURFACE_BINARY="$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR/test_platform_posix_ffi_surface"
+CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_partition_surface"
+CORE_PLATFORM_FFI_PARTITION_SURFACE_BINARY="$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR/test_platform_ffi_partition_surface"
+CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT=$(mktemp)
+CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_owner_boundary"
+CORE_PLATFORM_FFI_OWNER_BOUNDARY_BINARY="$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR/test_platform_ffi_owner_boundary"
+CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_gap_matrix"
+CORE_PLATFORM_HOST_GAP_MATRIX_BINARY="$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR/test_platform_host_gap_matrix"
+CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave1"
+CORE_PLATFORM_HOST_ABI_WAVE1_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR/test_platform_host_abi_wave1"
+CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave2_files"
+CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR/test_platform_host_abi_wave2_files"
+CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave3_stat"
+CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR/test_platform_host_abi_wave3_stat"
+CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave4_paths"
+CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR/test_platform_host_abi_wave4_paths"
+CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave5_env"
+CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR/test_platform_host_abi_wave5_env"
+CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave6_process"
+CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR/test_platform_host_abi_wave6_process"
+CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave7_process_status"
+CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR/test_platform_host_abi_wave7_process_status"
+CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave8_file_io"
+CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR/test_platform_host_abi_wave8_file_io"
+CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave9_linux_stat"
+CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR/test_platform_host_abi_wave9_linux_stat"
+CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave10_posix_stat_hosts"
+CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR/test_platform_host_abi_wave10_posix_stat_hosts"
+CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT=$(mktemp)
+CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave11_signal_control"
+CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR/test_platform_host_abi_wave11_signal_control"
+CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT=$(mktemp)
+CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_source_evidence_index"
+CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BINARY="$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR/test_platform_ffi_source_evidence_index"
+CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT=$(mktemp)
+CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_import_workflow"
+CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BINARY="$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR/test_platform_ffi_import_workflow"
+CORE_PLATFORM_FACADE_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_facade_surface"
+CORE_PLATFORM_FACADE_SURFACE_BINARY="$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR/test_platform_facade_surface"
+CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT=$(mktemp)
+CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_simulated_host_compile_matrix"
 CORE_PLATFORM_SYNC_TEST_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_test"
 CORE_PLATFORM_SYNC_TEST_BINARY="$CORE_PLATFORM_SYNC_TEST_BUILD_DIR/test_platform_sync"
+CORE_PLATFORM_SYNC_NO_FPC_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_no_fpc"
+CORE_PLATFORM_SYNC_NO_FPC_BINARY="$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR/test_platform_sync_no_fpc_units"
+CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_l0_boundary"
+CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY="$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR/test_platform_sync_l0_boundary"
+CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_posix_surface"
+CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY="$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR/test_platform_sync_posix_surface"
+CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_host_ffi_surface"
+CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BINARY="$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR/test_platform_sync_host_ffi_surface"
 CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
 CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
 CORE_PLATFORM_SYNC_WIN64_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_WIN64_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_win64"
+CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_example"
+CORE_PLATFORM_SYNC_EXAMPLE_BINARY="$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR/platform_sync_basics"
+CORE_PLATFORM_SYNC_BENCH_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_bench"
+CORE_PLATFORM_SYNC_BENCH_BINARY="$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR/bench_platform_sync"
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT=$(mktemp)
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_posix_fallback"
+CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY="$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR/test_platform_sync_posix_fallback"
+CORE_SYNC_POSIX_FALLBACK_OUTPUT=$(mktemp)
+CORE_SYNC_POSIX_FALLBACK_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_sync_posix_fallback"
+CORE_SYNC_POSIX_FALLBACK_BINARY="$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR/test_sync_posix_fallback"
 HIR_LATE_ALLOCA_BUILD_DIR=$(mktemp -d)
 HIR_LATE_ALLOCA_BINARY="$HIR_LATE_ALLOCA_BUILD_DIR/test_hir_late_alloca_hoist"
 HIR_LATE_ALLOCA_LL=$(mktemp)
@@ -327,65 +413,8 @@ UNIT_CYCLE_OUTPUT=$(mktemp)
 DUPLICATE_IMPORT_OUTPUT=$(mktemp)
 AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
 AMBIGUOUS_MEMBER_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-MEMBER_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
 WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
 MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT=$(mktemp)
-IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT=$(mktemp)
 TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
 MEMBER_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
 TYPE_MISMATCH_VARIABLE_CALL_OUTPUT=$(mktemp)
@@ -393,21 +422,8 @@ MEMBER_TYPE_MISMATCH_VARIABLE_CALL_OUTPUT=$(mktemp)
 TYPE_MISMATCH_PARAMETER_CALL_OUTPUT=$(mktemp)
 MEMBER_TYPE_MISMATCH_PARAMETER_CALL_OUTPUT=$(mktemp)
 TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT=$(mktemp)
-IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT=$(mktemp)
-MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT=$(mktemp)
-IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT=$(mktemp)
-INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT=$(mktemp)
 UNKNOWN_CALLABLE_OUTPUT=$(mktemp)
-KNOWN_FIELD_MEMBER_CALL_OUTPUT=$(mktemp)
-IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT=$(mktemp)
-KNOWN_PROPERTY_MEMBER_CALL_OUTPUT=$(mktemp)
-IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT=$(mktemp)
-IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT=$(mktemp)
-INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT=$(mktemp)
-INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT=$(mktemp)
 UNKNOWN_MEMBER_OUTPUT=$(mktemp)
-IMPORTED_UNKNOWN_MEMBER_OUTPUT=$(mktemp)
 MISSING_EXTERNAL_SYMBOL_NAME_OUTPUT=$(mktemp)
 ROOT_IMPLEMENTATION_OUTPUT=$(mktemp)
 REQUESTED_NAME_MISMATCH_OUTPUT=$(mktemp)
@@ -627,6 +643,8 @@ cleanup() {
   rm -rf "$CORE_TIME_TEST_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
   rm -rf "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT"
   rm -rf "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
@@ -643,18 +661,56 @@ cleanup() {
   rm -rf "$CORE_PLATFORM_THREAD_NO_FPC_BUILD_DIR"
   rm -f "$CORE_PLATFORM_THREAD_L0_BOUNDARY_OUTPUT"
   rm -rf "$CORE_PLATFORM_THREAD_L0_BOUNDARY_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_THREAD_WIN64_OUTPUT"
   rm -rf "$CORE_PLATFORM_THREAD_WIN64_BUILD_DIR"
   rm -f "$CORE_PLATFORM_THREAD_EXAMPLE_OUTPUT"
   rm -rf "$CORE_PLATFORM_THREAD_EXAMPLE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_THREAD_BENCH_OUTPUT"
   rm -rf "$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
+  rm -rf "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
+  rm -rf "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
+  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
+  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
+  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT"
+  rm -rf "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
+  rm -rf "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_WIN64_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR"
+  rm -f "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  rm -rf "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR"
+  rm -f "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  rm -rf "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR"
   rm -rf "$HIR_LATE_ALLOCA_BUILD_DIR"
   rm -f "$HIR_LATE_ALLOCA_LL"
   rm -rf "$HIR_CLASS_ALLOC_BUILD_DIR"
@@ -676,79 +732,9 @@ cleanup() {
   rm -f "$MULTIPLE_MISSING_OUTPUT"
   rm -f "$UNIT_CYCLE_OUTPUT"
   rm -f "$DUPLICATE_IMPORT_OUTPUT"
-  rm -f "$AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$AMBIGUOUS_MEMBER_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT"
-  rm -f "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-  rm -f "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-  rm -f "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
   rm -f "$TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT"
-  rm -f "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT"
-  rm -f "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
   rm -f "$UNKNOWN_CALLABLE_OUTPUT"
-  rm -f "$KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  rm -f "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  rm -f "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  rm -f "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  rm -f "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  rm -f "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  rm -f "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
   rm -f "$UNKNOWN_MEMBER_OUTPUT"
-  rm -f "$IMPORTED_UNKNOWN_MEMBER_OUTPUT"
   rm -f "$MISSING_EXTERNAL_SYMBOL_NAME_OUTPUT"
   rm -f "$ROOT_IMPLEMENTATION_OUTPUT"
   rm -f "$REQUESTED_NAME_MISMATCH_OUTPUT"
@@ -951,20 +937,81 @@ require_path rtl/core/base/np_base_types.pas
 require_path rtl/core/mem/np_allocator.pas
 require_path rtl/core/text/np_text_primitives.pas
 require_path core/src/nextpas.core.platform.pas
+require_path core/src/nextpas.core.platform.info.pas
+require_path core/src/nextpas.core.platform.posix.base.pas
+require_path core/src/nextpas.core.platform.posix.math.pas
+require_path core/src/nextpas.core.platform.linux.base.pas
+require_path core/src/nextpas.core.platform.darwin.base.pas
+require_path core/src/nextpas.core.platform.android.base.pas
+require_path core/src/nextpas.core.platform.freebsd.base.pas
+require_path core/src/nextpas.core.platform.unix.base.pas
+require_path core/src/nextpas.core.platform.windows.base.pas
 require_path core/src/nextpas.core.platform.linux.ffi.pas
 require_path core/src/nextpas.core.platform.posix.ffi.pas
 require_path core/src/nextpas.core.platform.darwin.ffi.pas
+require_path core/src/nextpas.core.platform.android.ffi.pas
+require_path core/src/nextpas.core.platform.freebsd.ffi.pas
+require_path core/src/nextpas.core.platform.unix.ffi.pas
 require_path core/src/nextpas.core.platform.windows.ffi.pas
+require_path core/src/nextpas.core.platform.windows.math.pas
+require_path core/src/nextpas.core.platform.time.base.pas
+require_path core/src/nextpas.core.platform.time.host.pas
+require_path core/src/nextpas.core.platform.thread.base.pas
 require_path core/src/nextpas.core.platform.thread.pas
+require_path core/src/nextpas.core.platform.sync.base.pas
 require_path core/src/nextpas.core.platform.sync.pas
-require_path core/src/nextpas.core.platform.sync.windows.ffi.pas
 require_path core/src/nextpas.core.platform.time.pas
+require_path core/docs/platform-host-ffi-gap-matrix.md
+require_path core/docs/platform-ffi-source-evidence-index.md
+require_path core/docs/platform-ffi-import-workflow.md
 require_path core/src/nextpas.core.time.base.pas
 require_path core/src/nextpas.core.time.pas
 require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr
+require_path core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
+require_path core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/test_platform_posix_ffi_surface.lpr
+require_path core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr
+require_path core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary/test_platform_ffi_owner_boundary.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_gap_matrix/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave1/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/test_platform_host_abi_wave5_env.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/test_platform_host_abi_wave10_posix_stat_hosts.lpr
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr
+require_path core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/test_platform_ffi_source_evidence_index.lpr
+require_path core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/test_platform_ffi_import_workflow.lpr
+require_path core/tests/nextpas.core.platform/test_platform_facade_surface/test_platform_facade_surface.lpr
+require_path core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix/Makefile
+require_path core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix/test_platform_simulated_host_compile_matrix.lpr
+require_path core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr
+require_path core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr
+require_path core/tests/nextpas.core.sync/test_sync/test_sync.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr
+require_path core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
 require_path core/examples/nextpas.core.platform.time/platform_time_clock/platform_time_clock.lpr
@@ -972,6 +1019,7 @@ require_path core/benchmarks/nextpas.core.platform.time/bench_platform_time_cloc
 require_path core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr
 require_path core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units/test_platform_thread_no_fpc_units.lpr
 require_path core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary/test_platform_thread_l0_boundary.lpr
+require_path core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface/test_platform_thread_host_ffi_surface.lpr
 require_path core/examples/nextpas.core.platform.thread/platform_thread_lifecycle/platform_thread_lifecycle.lpr
 require_path core/benchmarks/nextpas.core.platform.thread/bench_platform_thread_lifecycle/bench_platform_thread_lifecycle.lpr
 require_path core/tests/nextpas.core.time/test_time/test_time.lpr
@@ -1033,40 +1081,8 @@ require_path tests/snapshots/compiler-fail-missing_external_symbol_name.stderr.t
 require_path tests/snapshots/compiler-fail-root_implementation_missing_unit.stderr.txt
 require_path tests/snapshots/compiler-fail-requested_name_mismatch.stderr.txt
 require_path tests/snapshots/compiler-fail-explicit_system_missing_unit.stderr.txt
-require_path tests/fixtures/no_matching_overload/no_matching_overload_fail.pas
-require_path tests/fixtures/imported_function_result_ambiguous_overload/imported_function_result_ambiguous_overload_fail.pas
-require_path tests/fixtures/imported_function_result_ambiguous_overload/HelperA.pas
-require_path tests/fixtures/imported_function_result_ambiguous_overload/HelperB.pas
-require_path tests/fixtures/imported_function_result_no_matching_overload/imported_function_result_no_matching_overload_fail.pas
-require_path tests/fixtures/imported_function_result_no_matching_overload/HelperA.pas
-require_path tests/fixtures/imported_function_result_no_matching_overload/HelperB.pas
-require_path tests/fixtures/imported_type_mismatch_call/imported_type_mismatch_call_fail.pas
-require_path tests/fixtures/imported_type_mismatch_call/Helper.pas
-require_path tests/fixtures/imported_wrong_argument_count/imported_wrong_argument_count_fail.pas
-require_path tests/fixtures/imported_wrong_argument_count/Helper.pas
-require_path tests/fixtures/imported_member_type_mismatch_call/imported_member_type_mismatch_call_fail.pas
-require_path tests/fixtures/imported_member_type_mismatch_call/Worker.pas
-require_path tests/fixtures/imported_member_no_matching_overload/imported_member_no_matching_overload_fail.pas
-require_path tests/fixtures/imported_member_no_matching_overload/Worker.pas
-require_path tests/fixtures/imported_member_function_result_no_matching_overload/imported_member_function_result_no_matching_overload_fail.pas
-require_path tests/fixtures/imported_member_function_result_no_matching_overload/Worker.pas
-require_path tests/fixtures/imported_member_function_result_ambiguous_overload/imported_member_function_result_ambiguous_overload_fail.pas
-require_path tests/fixtures/imported_member_function_result_ambiguous_overload/Worker.pas
-require_path tests/fixtures/member_no_matching_overload/member_no_matching_overload_fail.pas
 require_path tests/fixtures/type_mismatch_function_result_call/type_mismatch_function_result_call_fail.pas
-require_path tests/fixtures/member_type_mismatch_function_result_call/member_type_mismatch_function_result_call_fail.pas
 require_path tests/fixtures/unknown_member/unknown_member_fail.pas
-require_path tests/fixtures/implicit_self_bare_method_unknown_member/implicit_self_bare_method_unknown_member_fail.pas
-require_path tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape/imported_unit_body_implicit_self_known_field_invalid_call_shape_fail.pas
-require_path tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape/Worker.pas
-require_path tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape/imported_unit_body_implicit_self_known_property_invalid_call_shape_fail.pas
-require_path tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape/Worker.pas
-require_path tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape_fail.pas
-require_path tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape/Worker.pas
-require_path tests/fixtures/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape_fail.pas
-require_path tests/fixtures/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape/Worker.pas
-require_path tests/fixtures/imported_unknown_member/imported_unknown_member_fail.pas
-require_path tests/fixtures/imported_unknown_member/Worker.pas
 require_path units/linux-x86_64/Stage0Greeter.pas
 require_path units/linux-x86_64/Stage0GreeterImpl.pas
 require_path units/linux-x86_64/System.pas
@@ -4233,8 +4249,29 @@ if ! "$CORE_PLATFORM_TIME_HELPERS_BINARY" >>"$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
   fail 'core-platform-time-helpers-run-failed'
 fi
 cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.time\.helpers: 9 total, 9 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 'missing-core-platform-time-helpers-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.time\.helpers: 11 total, 11 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 'missing-core-platform-time-helpers-pass-summary'
 printf 'core-platform-time-helpers-check=pass\n'
+
+printf 'core-platform-time-host-ffi-surface-check=running\n'
+printf 'core-platform-time-host-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr" \
+  >"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-time-host-ffi-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-time-host-ffi-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.time\.host_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 'missing-core-platform-time-host-ffi-surface-pass-summary'
+printf 'core-platform-time-host-ffi-surface-check=pass\n'
 
 printf 'core-platform-time-l0-boundary-check=running\n'
 printf 'core-platform-time-l0-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
@@ -4254,7 +4291,7 @@ if ! "$CORE_PLATFORM_TIME_L0_BOUNDARY_BINARY" >>"$CORE_PLATFORM_TIME_L0_BOUNDARY
   fail 'core-platform-time-l0-boundary-run-failed'
 fi
 cat "$CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.time\.l0_boundary: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT" 'missing-core-platform-time-l0-boundary-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.time\.l0_boundary: 6 total, 6 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT" 'missing-core-platform-time-l0-boundary-pass-summary'
 printf 'core-platform-time-l0-boundary-check=pass\n'
 
 printf 'core-platform-time-no-fpc-check=running\n'
@@ -4384,7 +4421,7 @@ if ! "$CORE_PLATFORM_THREAD_NO_FPC_BINARY" >>"$CORE_PLATFORM_THREAD_NO_FPC_OUTPU
   fail 'core-platform-thread-no-fpc-run-failed'
 fi
 cat "$CORE_PLATFORM_THREAD_NO_FPC_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.thread\.no_fpc_units: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_THREAD_NO_FPC_OUTPUT" 'missing-core-platform-thread-no-fpc-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.thread\.no_fpc_units: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_THREAD_NO_FPC_OUTPUT" 'missing-core-platform-thread-no-fpc-pass-summary'
 printf 'core-platform-thread-no-fpc-check=pass\n'
 
 printf 'core-platform-thread-l0-boundary-check=running\n'
@@ -4405,8 +4442,29 @@ if ! "$CORE_PLATFORM_THREAD_L0_BOUNDARY_BINARY" >>"$CORE_PLATFORM_THREAD_L0_BOUN
   fail 'core-platform-thread-l0-boundary-run-failed'
 fi
 cat "$CORE_PLATFORM_THREAD_L0_BOUNDARY_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.thread\.l0_boundary: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_THREAD_L0_BOUNDARY_OUTPUT" 'missing-core-platform-thread-l0-boundary-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.thread\.l0_boundary: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_THREAD_L0_BOUNDARY_OUTPUT" 'missing-core-platform-thread-l0-boundary-pass-summary'
 printf 'core-platform-thread-l0-boundary-check=pass\n'
+
+printf 'core-platform-thread-host-ffi-surface-check=running\n'
+printf 'core-platform-thread-host-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface/test_platform_thread_host_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface/test_platform_thread_host_ffi_surface.lpr" \
+  >"$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-thread-host-ffi-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-thread-host-ffi-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.thread\.host_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_THREAD_HOST_FFI_SURFACE_OUTPUT" 'missing-core-platform-thread-host-ffi-surface-pass-summary'
+printf 'core-platform-thread-host-ffi-surface-check=pass\n'
 
 printf 'core-platform-thread-win64-check=running\n'
 if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
@@ -4480,6 +4538,402 @@ require_output_pattern '^platform-thread-create-join-iterations=1000$' "$CORE_PL
 require_output_pattern '^platform-thread-bench-status=pass$' "$CORE_PLATFORM_THREAD_BENCH_OUTPUT" 'missing-core-platform-thread-bench-pass'
 printf 'core-platform-thread-bench-check=pass\n'
 
+printf 'core-platform-posix-ffi-surface-check=running\n'
+printf 'core-platform-posix-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/test_platform_posix_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/test_platform_posix_ffi_surface.lpr" \
+  >"$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-posix-ffi-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_POSIX_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-posix-ffi-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.posix_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT" 'missing-core-platform-posix-ffi-surface-pass-summary'
+printf 'core-platform-posix-ffi-surface-check=pass\n'
+
+printf 'core-platform-ffi-partition-surface-check=running\n'
+printf 'core-platform-ffi-partition-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr" \
+  >"$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
+  fail 'core-platform-ffi-partition-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BINARY" >>"$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
+  fail 'core-platform-ffi-partition-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.ffi_partition_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 'missing-core-platform-ffi-partition-surface-pass-summary'
+printf 'core-platform-ffi-partition-surface-check=pass\n'
+
+printf 'core-platform-ffi-owner-boundary-check=running\n'
+printf 'core-platform-ffi-owner-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary/test_platform_ffi_owner_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary/test_platform_ffi_owner_boundary.lpr" \
+  >"$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
+  fail 'core-platform-ffi-owner-boundary-build-failed'
+fi
+if ! "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BINARY" >>"$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
+  fail 'core-platform-ffi-owner-boundary-run-failed'
+fi
+cat "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.ffi_owner_boundary: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 'missing-core-platform-ffi-owner-boundary-pass-summary'
+printf 'core-platform-ffi-owner-boundary-check=pass\n'
+
+printf 'core-platform-host-gap-matrix-check=running\n'
+printf 'core-platform-host-gap-matrix-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr" \
+  >"$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
+  fail 'core-platform-host-gap-matrix-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_GAP_MATRIX_BINARY" >>"$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
+  fail 'core-platform-host-gap-matrix-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_gap_matrix: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 'missing-core-platform-host-gap-matrix-pass-summary'
+printf 'core-platform-host-gap-matrix-check=pass\n'
+
+printf 'core-platform-ffi-source-evidence-index-check=running\n'
+printf 'core-platform-ffi-source-evidence-index-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/test_platform_ffi_source_evidence_index.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/test_platform_ffi_source_evidence_index.lpr" \
+  >"$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT"
+  fail 'core-platform-ffi-source-evidence-index-build-failed'
+fi
+if ! "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BINARY" >>"$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT"
+  fail 'core-platform-ffi-source-evidence-index-run-failed'
+fi
+cat "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.ffi_source_evidence_index: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT" 'missing-core-platform-ffi-source-evidence-index-pass-summary'
+printf 'core-platform-ffi-source-evidence-index-check=pass\n'
+
+printf 'core-platform-ffi-import-workflow-check=running\n'
+printf 'core-platform-ffi-import-workflow-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/test_platform_ffi_import_workflow.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR" "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/test_platform_ffi_import_workflow.lpr" \
+  >"$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
+  fail 'core-platform-ffi-import-workflow-build-failed'
+fi
+if ! "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_BINARY" >>"$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
+  fail 'core-platform-ffi-import-workflow-run-failed'
+fi
+cat "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.ffi_import_workflow: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT" 'missing-core-platform-ffi-import-workflow-pass-summary'
+printf 'core-platform-ffi-import-workflow-check=pass\n'
+
+printf 'core-platform-host-abi-wave1-check=running\n'
+printf 'core-platform-host-abi-wave1-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
+  fail 'core-platform-host-abi-wave1-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE1_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
+  fail 'core-platform-host-abi-wave1-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave1: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 'missing-core-platform-host-abi-wave1-pass-summary'
+printf 'core-platform-host-abi-wave1-check=pass\n'
+
+printf 'core-platform-host-abi-wave2-files-check=running\n'
+printf 'core-platform-host-abi-wave2-files-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
+  fail 'core-platform-host-abi-wave2-files-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
+  fail 'core-platform-host-abi-wave2-files-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave2_files: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 'missing-core-platform-host-abi-wave2-files-pass-summary'
+printf 'core-platform-host-abi-wave2-files-check=pass\n'
+
+printf 'core-platform-host-abi-wave3-stat-check=running\n'
+printf 'core-platform-host-abi-wave3-stat-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
+  fail 'core-platform-host-abi-wave3-stat-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
+  fail 'core-platform-host-abi-wave3-stat-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave3_stat: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 'missing-core-platform-host-abi-wave3-stat-pass-summary'
+printf 'core-platform-host-abi-wave3-stat-check=pass\n'
+
+printf 'core-platform-host-abi-wave4-paths-check=running\n'
+printf 'core-platform-host-abi-wave4-paths-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
+  fail 'core-platform-host-abi-wave4-paths-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
+  fail 'core-platform-host-abi-wave4-paths-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave4_paths: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 'missing-core-platform-host-abi-wave4-paths-pass-summary'
+printf 'core-platform-host-abi-wave4-paths-check=pass\n'
+
+printf 'core-platform-host-abi-wave5-env-check=running\n'
+printf 'core-platform-host-abi-wave5-env-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/test_platform_host_abi_wave5_env.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/test_platform_host_abi_wave5_env.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT"
+  fail 'core-platform-host-abi-wave5-env-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT"
+  fail 'core-platform-host-abi-wave5-env-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave5_env: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT" 'missing-core-platform-host-abi-wave5-env-pass-summary'
+printf 'core-platform-host-abi-wave5-env-check=pass\n'
+
+printf 'core-platform-host-abi-wave6-process-check=running\n'
+printf 'core-platform-host-abi-wave6-process-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
+  fail 'core-platform-host-abi-wave6-process-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
+  fail 'core-platform-host-abi-wave6-process-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave6_process: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 'missing-core-platform-host-abi-wave6-process-pass-summary'
+printf 'core-platform-host-abi-wave6-process-check=pass\n'
+
+printf 'core-platform-host-abi-wave7-process-status-check=running\n'
+printf 'core-platform-host-abi-wave7-process-status-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
+  fail 'core-platform-host-abi-wave7-process-status-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
+  fail 'core-platform-host-abi-wave7-process-status-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave7_process_status: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 'missing-core-platform-host-abi-wave7-process-status-pass-summary'
+printf 'core-platform-host-abi-wave7-process-status-check=pass\n'
+
+printf 'core-platform-host-abi-wave8-file-io-check=running\n'
+printf 'core-platform-host-abi-wave8-file-io-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
+  fail 'core-platform-host-abi-wave8-file-io-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
+  fail 'core-platform-host-abi-wave8-file-io-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave8_file_io: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 'missing-core-platform-host-abi-wave8-file-io-pass-summary'
+printf 'core-platform-host-abi-wave8-file-io-check=pass\n'
+
+printf 'core-platform-host-abi-wave9-linux-stat-check=running\n'
+printf 'core-platform-host-abi-wave9-linux-stat-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
+  fail 'core-platform-host-abi-wave9-linux-stat-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
+  fail 'core-platform-host-abi-wave9-linux-stat-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave9_linux_stat: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 'missing-core-platform-host-abi-wave9-linux-stat-pass-summary'
+printf 'core-platform-host-abi-wave9-linux-stat-check=pass\n'
+
+printf 'core-platform-host-abi-wave10-posix-stat-hosts-check=running\n'
+printf 'core-platform-host-abi-wave10-posix-stat-hosts-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/test_platform_host_abi_wave10_posix_stat_hosts.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/test_platform_host_abi_wave10_posix_stat_hosts.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT"
+  fail 'core-platform-host-abi-wave10-posix-stat-hosts-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT"
+  fail 'core-platform-host-abi-wave10-posix-stat-hosts-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave10_posix_stat_hosts: 7 total, 7 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT" 'missing-core-platform-host-abi-wave10-posix-stat-hosts-pass-summary'
+printf 'core-platform-host-abi-wave10-posix-stat-hosts-check=pass\n'
+
+printf 'core-platform-host-abi-wave11-signal-control-check=running\n'
+printf 'core-platform-host-abi-wave11-signal-control-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr" \
+  >"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
+  fail 'core-platform-host-abi-wave11-signal-control-build-failed'
+fi
+if ! "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
+  fail 'core-platform-host-abi-wave11-signal-control-run-failed'
+fi
+cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave11_signal_control: 7 total, 7 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 'missing-core-platform-host-abi-wave11-signal-control-pass-summary'
+printf 'core-platform-host-abi-wave11-signal-control-check=pass\n'
+
+printf 'core-platform-facade-surface-check=running\n'
+printf 'core-platform-facade-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_facade_surface/test_platform_facade_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" "$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_facade_surface/test_platform_facade_surface.lpr" \
+  >"$CORE_PLATFORM_FACADE_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FACADE_SURFACE_OUTPUT"
+  fail 'core-platform-facade-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_FACADE_SURFACE_BINARY" >>"$CORE_PLATFORM_FACADE_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_FACADE_SURFACE_OUTPUT"
+  fail 'core-platform-facade-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_FACADE_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.facade_surface: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_FACADE_SURFACE_OUTPUT" 'missing-core-platform-facade-surface-pass-summary'
+printf 'core-platform-facade-surface-check=pass\n'
+
+printf 'core-platform-simulated-host-compile-matrix-check=running\n'
+printf 'core-platform-simulated-host-compile-matrix-command=make -C %s/core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix BUILD_DIR=%s clean test\n' "$REPO_ROOT" "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_BUILD_DIR"
+if ! make \
+  -C "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix" \
+  BUILD_DIR="$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_BUILD_DIR" \
+  clean test \
+  >"$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT"
+  fail 'core-platform-simulated-host-compile-matrix-check-failed'
+fi
+cat "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT"
+require_output_pattern '^simulated-host-compile-target=darwin status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-darwin-pass'
+require_output_pattern '^simulated-host-compile-target=android status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-android-pass'
+require_output_pattern '^simulated-host-compile-target=freebsd status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-freebsd-pass'
+require_output_pattern '^simulated-host-compile-target=unix status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-unix-pass'
+require_output_pattern '^simulated-host-compile-matrix-status=pass$' "$CORE_PLATFORM_SIMULATED_HOST_COMPILE_MATRIX_OUTPUT" 'missing-core-platform-simulated-host-compile-matrix-pass'
+printf 'core-platform-simulated-host-compile-matrix-check=pass\n'
+
 printf 'core-platform-sync-check=running\n'
 printf 'core-platform-sync-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_SYNC_TEST_BUILD_DIR"
@@ -4501,6 +4955,90 @@ cat "$CORE_PLATFORM_SYNC_TEST_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.sync: 14 total, 14 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_TEST_OUTPUT" 'missing-core-platform-sync-pass-summary'
 printf 'core-platform-sync-check=pass\n'
 
+printf 'core-platform-sync-no-fpc-check=running\n'
+printf 'core-platform-sync-no-fpc-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr" \
+  >"$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  fail 'core-platform-sync-no-fpc-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_NO_FPC_BINARY" >>"$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+  fail 'core-platform-sync-no-fpc-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.no_fpc_units: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_NO_FPC_OUTPUT" 'missing-core-platform-sync-no-fpc-pass-summary'
+printf 'core-platform-sync-no-fpc-check=pass\n'
+
+printf 'core-platform-sync-l0-boundary-check=running\n'
+printf 'core-platform-sync-l0-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr" \
+  >"$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  fail 'core-platform-sync-l0-boundary-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY" >>"$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+  fail 'core-platform-sync-l0-boundary-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
+printf 'core-platform-sync-l0-boundary-check=pass\n'
+
+printf 'core-platform-sync-posix-surface-check=running\n'
+printf 'core-platform-sync-posix-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr" \
+  >"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  fail 'core-platform-sync-posix-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY" >>"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+  fail 'core-platform-sync-posix-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.posix_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 'missing-core-platform-sync-posix-surface-pass-summary'
+printf 'core-platform-sync-posix-surface-check=pass\n'
+
+printf 'core-platform-sync-host-ffi-surface-check=running\n'
+printf 'core-platform-sync-host-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr" \
+  >"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-sync-host-ffi-surface-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
+  fail 'core-platform-sync-host-ffi-surface-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.host_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 'missing-core-platform-sync-host-ffi-surface-pass-summary'
+printf 'core-platform-sync-host-ffi-surface-check=pass\n'
+
 printf 'core-platform-sync-size-check=running\n'
 printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
@@ -4519,7 +5057,7 @@ if ! "$CORE_PLATFORM_SYNC_SIZE_BINARY" >>"$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 2>&1;
   fail 'core-platform-sync-size-run-failed'
 fi
 cat "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
+require_output_pattern '^--- nextpas\.core\.platform\.sync\.sizes: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_SIZE_OUTPUT" 'missing-core-platform-sync-size-pass-summary'
 printf 'core-platform-sync-size-check=pass\n'
 
 printf 'core-platform-sync-win64-check=running\n'
@@ -4543,6 +5081,99 @@ if fpc -Twin64 -iTO -iTP >/dev/null 2>&1; then
 else
   printf 'core-platform-sync-win64-check=skip\n'
 fi
+
+printf 'core-platform-sync-example-check=running\n'
+printf 'core-platform-sync-example-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_EXAMPLE_BUILD_DIR" \
+  "$REPO_ROOT/core/examples/nextpas.core.platform.sync/platform_sync_basics/platform_sync_basics.lpr" \
+  >"$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  fail 'core-platform-sync-example-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_EXAMPLE_BINARY" >>"$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+  fail 'core-platform-sync-example-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT"
+require_output_pattern '^platform-sync-basics=ready$' "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 'missing-core-platform-sync-example-ready'
+require_output_pattern '^platform-sync-basics-status=pass$' "$CORE_PLATFORM_SYNC_EXAMPLE_OUTPUT" 'missing-core-platform-sync-example-pass'
+printf 'core-platform-sync-example-check=pass\n'
+
+printf 'core-platform-sync-bench-check=running\n'
+printf 'core-platform-sync-bench-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR"
+if ! fpc \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_BENCH_BUILD_DIR" \
+  "$REPO_ROOT/core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  fail 'core-platform-sync-bench-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_BENCH_BINARY" >>"$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+  fail 'core-platform-sync-bench-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_BENCH_OUTPUT"
+require_output_pattern '^platform-sync-bench=running$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-running'
+require_output_pattern '^platform-sync-mutex-lock-unlock-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-mutex-iterations'
+require_output_pattern '^platform-sync-rwlock-read-unlock-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-rwlock-iterations'
+require_output_pattern '^platform-sync-address-mismatch-iterations=1000000$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-address-iterations'
+require_output_pattern '^platform-sync-bench-status=pass$' "$CORE_PLATFORM_SYNC_BENCH_OUTPUT" 'missing-core-platform-sync-bench-pass'
+printf 'core-platform-sync-bench-check=pass\n'
+
+printf 'core-platform-sync-posix-fallback-check=running\n'
+printf 'core-platform-sync-posix-fallback-command=fpc -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s -o%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" "$REPO_ROOT"
+mkdir -p "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR"
+if ! fpc \
+  -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -FU"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -o"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" \
+  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr" \
+  >"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-platform-sync-posix-fallback-build-failed'
+fi
+if ! "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-platform-sync-posix-fallback-run-failed'
+fi
+cat "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.platform\.sync: 14 total, 14 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-platform-sync-posix-fallback-pass-summary'
+printf 'core-platform-sync-posix-fallback-check=pass\n'
+
+printf 'core-sync-posix-fallback-check=running\n'
+printf 'core-sync-posix-fallback-command=fpc -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s -o%s %s/core/tests/nextpas.core.sync/test_sync/test_sync.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" "$CORE_SYNC_POSIX_FALLBACK_BINARY" "$REPO_ROOT"
+mkdir -p "$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR"
+if ! fpc \
+  -dNEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK \
+  -Fi"$REPO_ROOT/core/src" \
+  -Fu"$REPO_ROOT/core/src" \
+  -FE"$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -FU"$CORE_SYNC_POSIX_FALLBACK_BUILD_DIR" \
+  -o"$CORE_SYNC_POSIX_FALLBACK_BINARY" \
+  "$REPO_ROOT/core/tests/nextpas.core.sync/test_sync/test_sync.lpr" \
+  >"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-sync-posix-fallback-build-failed'
+fi
+if ! "$CORE_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&1; then
+  cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+  fail 'core-sync-posix-fallback-run-failed'
+fi
+cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
+require_output_pattern '^--- nextpas\.core\.sync: 11 total, 11 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
+printf 'core-sync-posix-fallback-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)
@@ -4694,312 +5325,6 @@ require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$AMBIGU
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$AMBIGUOUS_MEMBER_OVERLOAD_OUTPUT" 'missing-ambiguous-member-overload-human-summary-envelope-field'
 printf 'ambiguous-member-overload-check=pass\n'
 
-printf 'imported-function-result-ambiguous-overload-check=running\n'
-printf 'imported-function-result-ambiguous-overload-command=%s build tests/fixtures/imported_function_result_ambiguous_overload/imported_function_result_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_function_result_ambiguous_overload/imported_function_result_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-function-result-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-function-result-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-function-result-ambiguous-overload-check=pass\n'
-
-printf 'imported-inherited-member-ambiguous-overload-check=running\n'
-printf 'imported-inherited-member-ambiguous-overload-command=%s build tests/fixtures/imported_inherited_member_ambiguous_overload/imported_inherited_member_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_inherited_member_ambiguous_overload/imported_inherited_member_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-inherited-member-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-inherited-member-ambiguous-overload-check=pass\n'
-
-printf 'imported-member-function-result-ambiguous-overload-check=running\n'
-printf 'imported-member-function-result-ambiguous-overload-command=%s build tests/fixtures/imported_member_function_result_ambiguous_overload/imported_member_function_result_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_member_function_result_ambiguous_overload/imported_member_function_result_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-member-function-result-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-member-function-result-ambiguous-overload-check=pass\n'
-
-printf 'imported-inherited-member-function-result-ambiguous-overload-check=running\n'
-printf 'imported-inherited-member-function-result-ambiguous-overload-command=%s build tests/fixtures/imported_inherited_member_function_result_ambiguous_overload/imported_inherited_member_function_result_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_inherited_member_function_result_ambiguous_overload/imported_inherited_member_function_result_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-inherited-member-function-result-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-inherited-member-function-result-ambiguous-overload-check=pass\n'
-
-printf 'implicit-self-bare-method-ambiguous-overload-check=running\n'
-printf 'implicit-self-bare-method-ambiguous-overload-command=%s build tests/fixtures/implicit_self_bare_method_ambiguous_overload/implicit_self_bare_method_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/implicit_self_bare_method_ambiguous_overload/implicit_self_bare_method_ambiguous_overload_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-implicit-self-bare-method-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-ambiguous-overload-human-summary-envelope-field'
-printf 'implicit-self-bare-method-ambiguous-overload-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-ambiguous-overload-check=running\n'
-printf 'inherited-implicit-self-bare-method-ambiguous-overload-command=%s build tests/fixtures/inherited_implicit_self_bare_method_ambiguous_overload/inherited_implicit_self_bare_method_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_ambiguous_overload/inherited_implicit_self_bare_method_ambiguous_overload_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Touch"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-ambiguous-overload-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-ambiguous-overload-check=pass\n'
-
-printf 'no-matching-overload-check=running\n'
-printf 'no-matching-overload-command=%s build tests/fixtures/no_matching_overload/no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/no_matching_overload/no_matching_overload_fail.pas; then
-  cat "$NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-no-matching-overload-failure-did-not-fail'
-fi
-cat "$NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$NO_MATCHING_OVERLOAD_OUTPUT" 'missing-no-matching-overload-human-summary-envelope-field'
-printf 'no-matching-overload-check=pass\n'
-
-printf 'imported-no-matching-overload-check=running\n'
-printf 'imported-no-matching-overload-command=%s build tests/fixtures/imported_no_matching_overload/imported_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_no_matching_overload/imported_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-no-matching-overload-human-summary-envelope-field'
-printf 'imported-no-matching-overload-check=pass\n'
-
-printf 'imported-function-result-no-matching-overload-check=running\n'
-printf 'imported-function-result-no-matching-overload-command=%s build tests/fixtures/imported_function_result_no_matching_overload/imported_function_result_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_function_result_no_matching_overload/imported_function_result_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-function-result-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-function-result-no-matching-overload-human-summary-envelope-field'
-printf 'imported-function-result-no-matching-overload-check=pass\n'
-
-printf 'member-no-matching-overload-check=running\n'
-printf 'member-no-matching-overload-command=%s build tests/fixtures/member_no_matching_overload/member_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/member_no_matching_overload/member_no_matching_overload_fail.pas; then
-  cat "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-member-no-matching-overload-failure-did-not-fail'
-fi
-cat "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-member-no-matching-overload-human-summary-envelope-field'
-printf 'member-no-matching-overload-check=pass\n'
-
-printf 'inherited-member-no-matching-overload-check=running\n'
-printf 'inherited-member-no-matching-overload-command=%s build tests/fixtures/inherited_member_no_matching_overload/inherited_member_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/inherited_member_no_matching_overload/inherited_member_no_matching_overload_fail.pas; then
-  cat "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-inherited-member-no-matching-overload-failure-did-not-fail'
-fi
-cat "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-member-no-matching-overload-human-summary-envelope-field'
-printf 'inherited-member-no-matching-overload-check=pass\n'
-
-printf 'imported-member-no-matching-overload-check=running\n'
-printf 'imported-member-no-matching-overload-command=%s build tests/fixtures/imported_member_no_matching_overload/imported_member_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_member_no_matching_overload/imported_member_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-member-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-no-matching-overload-human-summary-envelope-field'
-printf 'imported-member-no-matching-overload-check=pass\n'
-
-printf 'imported-member-function-result-no-matching-overload-check=running\n'
-printf 'imported-member-function-result-no-matching-overload-command=%s build tests/fixtures/imported_member_function_result_no_matching_overload/imported_member_function_result_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_member_function_result_no_matching_overload/imported_member_function_result_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-member-function-result-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-member-function-result-no-matching-overload-human-summary-envelope-field'
-printf 'imported-member-function-result-no-matching-overload-check=pass\n'
-
-printf 'imported-inherited-member-no-matching-overload-check=running\n'
-printf 'imported-inherited-member-no-matching-overload-command=%s build tests/fixtures/imported_inherited_member_no_matching_overload/imported_inherited_member_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_inherited_member_no_matching_overload/imported_inherited_member_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-inherited-member-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-no-matching-overload-human-summary-envelope-field'
-printf 'imported-inherited-member-no-matching-overload-check=pass\n'
-
-printf 'imported-inherited-member-function-result-no-matching-overload-check=running\n'
-printf 'imported-inherited-member-function-result-no-matching-overload-command=%s build tests/fixtures/imported_inherited_member_function_result_no_matching_overload/imported_inherited_member_function_result_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_inherited_member_function_result_no_matching_overload/imported_inherited_member_function_result_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-inherited-member-function-result-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-inherited-member-function-result-no-matching-overload-human-summary-envelope-field'
-printf 'imported-inherited-member-function-result-no-matching-overload-check=pass\n'
-
-printf 'implicit-self-bare-method-no-matching-overload-check=running\n'
-printf 'implicit-self-bare-method-no-matching-overload-command=%s build tests/fixtures/implicit_self_bare_method_no_matching_overload/implicit_self_bare_method_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/implicit_self_bare_method_no_matching_overload/implicit_self_bare_method_no_matching_overload_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-implicit-self-bare-method-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-implicit-self-bare-method-no-matching-overload-human-summary-envelope-field'
-printf 'implicit-self-bare-method-no-matching-overload-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-no-matching-overload-check=running\n'
-printf 'inherited-implicit-self-bare-method-no-matching-overload-command=%s build tests/fixtures/inherited_implicit_self_bare_method_no_matching_overload/inherited_implicit_self_bare_method_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_no_matching_overload/inherited_implicit_self_bare_method_no_matching_overload_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-no-matching-overload-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Touch"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-inherited-implicit-self-bare-method-no-matching-overload-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-no-matching-overload-check=pass\n'
-
 printf 'wrong-argument-count-check=running\n'
 printf 'wrong-argument-count-command=%s build tests/fixtures/wrong_argument_count/wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if run_stage0_build_capture "$WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/wrong_argument_count/wrong_argument_count_fail.pas; then
@@ -5018,42 +5343,6 @@ require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$WRON
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-wrong-argument-count-human-summary-envelope-field'
 printf 'wrong-argument-count-check=pass\n'
 
-printf 'imported-wrong-argument-count-check=running\n'
-printf 'imported-wrong-argument-count-command=%s build tests/fixtures/imported_wrong_argument_count/imported_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_wrong_argument_count/imported_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-wrong-argument-count-check=pass\n'
-
-printf 'imported-function-result-wrong-argument-count-check=running\n'
-printf 'imported-function-result-wrong-argument-count-command=%s build tests/fixtures/imported_function_result_wrong_argument_count/imported_function_result_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_function_result_wrong_argument_count/imported_function_result_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-function-result-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-function-result-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-function-result-wrong-argument-count-check=pass\n'
-
 printf 'member-wrong-argument-count-check=running\n'
 printf 'member-wrong-argument-count-command=%s build tests/fixtures/member_wrong_argument_count/member_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if run_stage0_build_capture "$MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/member_wrong_argument_count/member_wrong_argument_count_fail.pas; then
@@ -5071,258 +5360,6 @@ require_output_pattern '^human-summary=semantic-analysis-failed$' "$MEMBER_WRONG
 require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-member-wrong-argument-count-diagnostics-summary-envelope-field'
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-member-wrong-argument-count-human-summary-envelope-field'
 printf 'member-wrong-argument-count-check=pass\n'
-
-printf 'imported-member-wrong-argument-count-check=running\n'
-printf 'imported-member-wrong-argument-count-command=%s build tests/fixtures/imported_member_wrong_argument_count/imported_member_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_member_wrong_argument_count/imported_member_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-member-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-member-wrong-argument-count-check=pass\n'
-
-printf 'imported-member-function-result-wrong-argument-count-check=running\n'
-printf 'imported-member-function-result-wrong-argument-count-command=%s build tests/fixtures/imported_member_function_result_wrong_argument_count/imported_member_function_result_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_member_function_result_wrong_argument_count/imported_member_function_result_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-member-function-result-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-member-function-result-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-member-function-result-wrong-argument-count-check=pass\n'
-
-printf 'imported-inherited-member-function-result-wrong-argument-count-check=running\n'
-printf 'imported-inherited-member-function-result-wrong-argument-count-command=%s build tests/fixtures/imported_inherited_member_function_result_wrong_argument_count/imported_inherited_member_function_result_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_inherited_member_function_result_wrong_argument_count/imported_inherited_member_function_result_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-inherited-member-function-result-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-function-result-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-inherited-member-function-result-wrong-argument-count-check=pass\n'
-
-printf 'imported-inherited-member-wrong-argument-count-check=running\n'
-printf 'imported-inherited-member-wrong-argument-count-command=%s build tests/fixtures/imported_inherited_member_wrong_argument_count/imported_inherited_member_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_inherited_member_wrong_argument_count/imported_inherited_member_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-inherited-member-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-inherited-member-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-inherited-member-wrong-argument-count-check=pass\n'
-
-printf 'implicit-self-bare-method-wrong-argument-count-check=running\n'
-printf 'implicit-self-bare-method-wrong-argument-count-command=%s build tests/fixtures/implicit_self_bare_method_wrong_argument_count/implicit_self_bare_method_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/implicit_self_bare_method_wrong_argument_count/implicit_self_bare_method_wrong_argument_count_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-implicit-self-bare-method-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-implicit-self-bare-method-wrong-argument-count-human-summary-envelope-field'
-printf 'implicit-self-bare-method-wrong-argument-count-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-wrong-argument-count-check=running\n'
-printf 'inherited-implicit-self-bare-method-wrong-argument-count-command=%s build tests/fixtures/inherited_implicit_self_bare_method_wrong_argument_count/inherited_implicit_self_bare_method_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_wrong_argument_count/inherited_implicit_self_bare_method_wrong_argument_count_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Touch"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-inherited-implicit-self-bare-method-wrong-argument-count-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-wrong-argument-count-check=pass\n'
-
-printf 'imported-type-mismatch-call-check=running\n'
-printf 'imported-type-mismatch-call-command=%s build tests/fixtures/imported_type_mismatch_call/imported_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_type_mismatch_call/imported_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-type-mismatch-call-check=pass\n'
-
-printf 'imported-member-type-mismatch-call-check=running\n'
-printf 'imported-member-type-mismatch-call-command=%s build tests/fixtures/imported_member_type_mismatch_call/imported_member_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_member_type_mismatch_call/imported_member_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-member-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-member-type-mismatch-call-check=pass\n'
-
-printf 'imported-member-function-result-type-mismatch-call-check=running\n'
-printf 'imported-member-function-result-type-mismatch-call-command=%s build tests/fixtures/imported_member_function_result_type_mismatch_call/imported_member_function_result_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_member_function_result_type_mismatch_call/imported_member_function_result_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-member-function-result-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-member-function-result-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-member-function-result-type-mismatch-call-check=pass\n'
-
-printf 'imported-inherited-member-type-mismatch-call-check=running\n'
-printf 'imported-inherited-member-type-mismatch-call-command=%s build tests/fixtures/imported_inherited_member_type_mismatch_call/imported_inherited_member_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_inherited_member_type_mismatch_call/imported_inherited_member_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-inherited-member-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-inherited-member-type-mismatch-call-check=pass\n'
-
-printf 'imported-inherited-member-function-result-type-mismatch-call-check=running\n'
-printf 'imported-inherited-member-function-result-type-mismatch-call-command=%s build tests/fixtures/imported_inherited_member_function_result_type_mismatch_call/imported_inherited_member_function_result_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_inherited_member_function_result_type_mismatch_call/imported_inherited_member_function_result_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-inherited-member-function-result-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_MEMBER_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-inherited-member-function-result-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-inherited-member-function-result-type-mismatch-call-check=pass\n'
-
-printf 'implicit-self-bare-method-type-mismatch-check=running\n'
-printf 'implicit-self-bare-method-type-mismatch-command=%s build tests/fixtures/implicit_self_bare_method_type_mismatch/implicit_self_bare_method_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" tests/fixtures/implicit_self_bare_method_type_mismatch/implicit_self_bare_method_type_mismatch_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-implicit-self-bare-method-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-type-mismatch-human-summary-envelope-field'
-printf 'implicit-self-bare-method-type-mismatch-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-type-mismatch-check=running\n'
-printf 'inherited-implicit-self-bare-method-type-mismatch-command=%s build tests/fixtures/inherited_implicit_self_bare_method_type_mismatch/inherited_implicit_self_bare_method_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_type_mismatch/inherited_implicit_self_bare_method_type_mismatch_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-type-mismatch-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Touch"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-type-mismatch-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-type-mismatch-check=pass\n'
-
-printf 'imported-inherited-unknown-member-check=running\n'
-printf 'imported-inherited-unknown-member-command=%s build tests/fixtures/imported_inherited_unknown_member/imported_inherited_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/imported_inherited_unknown_member/imported_inherited_unknown_member_fail.pas; then
-  cat "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-imported-inherited-unknown-member-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-inherited-unknown-member-human-summary-envelope-field'
-printf 'imported-inherited-unknown-member-check=pass\n'
 
 printf 'type-mismatch-call-check=running\n'
 printf 'type-mismatch-call-command=%s build tests/fixtures/type_mismatch_call/type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -5450,78 +5487,6 @@ require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$TYPE_MISMAT
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-type-mismatch-function-result-call-human-summary-envelope-field'
 printf 'type-mismatch-function-result-call-check=pass\n'
 
-printf 'imported-function-result-type-mismatch-call-check=running\n'
-printf 'imported-function-result-type-mismatch-call-command=%s build tests/fixtures/imported_function_result_type_mismatch_call/imported_function_result_type_mismatch_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" tests/fixtures/imported_function_result_type_mismatch_call/imported_function_result_type_mismatch_call_fail.pas; then
-  cat "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-  fail 'expected-imported-function-result-type-mismatch-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_FUNCTION_RESULT_TYPE_MISMATCH_CALL_OUTPUT" 'missing-imported-function-result-type-mismatch-call-human-summary-envelope-field'
-printf 'imported-function-result-type-mismatch-call-check=pass\n'
-
-printf 'member-type-mismatch-function-result-call-check=running\n'
-printf 'member-type-mismatch-function-result-call-command=%s build tests/fixtures/member_type_mismatch_function_result_call/member_type_mismatch_function_result_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" tests/fixtures/member_type_mismatch_function_result_call/member_type_mismatch_function_result_call_fail.pas; then
-  cat "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT"
-  fail 'expected-member-type-mismatch-function-result-call-failure-did-not-fail'
-fi
-cat "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$MEMBER_TYPE_MISMATCH_FUNCTION_RESULT_CALL_OUTPUT" 'missing-member-type-mismatch-function-result-call-human-summary-envelope-field'
-printf 'member-type-mismatch-function-result-call-check=pass\n'
-
-printf 'implicit-self-bare-method-function-result-type-mismatch-check=running\n'
-printf 'implicit-self-bare-method-function-result-type-mismatch-command=%s build tests/fixtures/implicit_self_bare_method_function_result_type_mismatch/implicit_self_bare_method_function_result_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" tests/fixtures/implicit_self_bare_method_function_result_type_mismatch/implicit_self_bare_method_function_result_type_mismatch_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-implicit-self-bare-method-function-result-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-implicit-self-bare-method-function-result-type-mismatch-human-summary-envelope-field'
-printf 'implicit-self-bare-method-function-result-type-mismatch-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-function-result-type-mismatch-check=running\n'
-printf 'inherited-implicit-self-bare-method-function-result-type-mismatch-command=%s build tests/fixtures/inherited_implicit_self_bare_method_function_result_type_mismatch/inherited_implicit_self_bare_method_function_result_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_function_result_type_mismatch/inherited_implicit_self_bare_method_function_result_type_mismatch_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-function-result-type-mismatch-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Touch"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-inherited-implicit-self-bare-method-function-result-type-mismatch-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-function-result-type-mismatch-check=pass\n'
-
 printf 'unknown-callable-check=running\n'
 printf 'unknown-callable-command=%s build tests/fixtures/unknown_callable/unknown_callable_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if run_stage0_build_capture "$UNKNOWN_CALLABLE_OUTPUT" tests/fixtures/unknown_callable/unknown_callable_fail.pas; then
@@ -5540,150 +5505,6 @@ require_output_pattern '"diagnosticsSummary":"sema.unknown-callable"' "$UNKNOWN_
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$UNKNOWN_CALLABLE_OUTPUT" 'missing-unknown-callable-human-summary-envelope-field'
 printf 'unknown-callable-check=pass\n'
 
-printf 'known-field-member-call-check=running\n'
-printf 'known-field-member-call-command=%s build tests/fixtures/known_field_member_call/known_field_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" tests/fixtures/known_field_member_call/known_field_member_call_fail.pas; then
-  cat "$KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  fail 'expected-known-field-member-call-failure-did-not-fail'
-fi
-cat "$KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-known-field-member-call-human-summary-envelope-field'
-printf 'known-field-member-call-check=pass\n'
-
-printf 'imported-known-field-member-call-check=running\n'
-printf 'imported-known-field-member-call-command=%s build tests/fixtures/imported_known_field_member_call/imported_known_field_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" tests/fixtures/imported_known_field_member_call/imported_known_field_member_call_fail.pas; then
-  cat "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  fail 'expected-imported-known-field-member-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-known-field-member-call-human-summary-envelope-field'
-printf 'imported-known-field-member-call-check=pass\n'
-
-printf 'imported-inherited-known-field-member-call-check=running\n'
-printf 'imported-inherited-known-field-member-call-command=%s build tests/fixtures/imported_inherited_known_field_member_call/imported_inherited_known_field_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" tests/fixtures/imported_inherited_known_field_member_call/imported_inherited_known_field_member_call_fail.pas; then
-  cat "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  fail 'expected-imported-inherited-known-field-member-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-field-member-call-human-summary-envelope-field'
-printf 'imported-inherited-known-field-member-call-check=pass\n'
-
-printf 'known-property-member-call-check=running\n'
-printf 'known-property-member-call-command=%s build tests/fixtures/known_property_member_call/known_property_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" tests/fixtures/known_property_member_call/known_property_member_call_fail.pas; then
-  cat "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  fail 'expected-known-property-member-call-failure-did-not-fail'
-fi
-cat "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-known-property-member-call-human-summary-envelope-field'
-printf 'known-property-member-call-check=pass\n'
-
-printf 'imported-known-property-member-call-check=running\n'
-printf 'imported-known-property-member-call-command=%s build tests/fixtures/imported_known_property_member_call/imported_known_property_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" tests/fixtures/imported_known_property_member_call/imported_known_property_member_call_fail.pas; then
-  cat "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  fail 'expected-imported-known-property-member-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-known-property-member-call-human-summary-envelope-field'
-printf 'imported-known-property-member-call-check=pass\n'
-
-printf 'imported-inherited-known-property-member-call-check=running\n'
-printf 'imported-inherited-known-property-member-call-command=%s build tests/fixtures/imported_inherited_known_property_member_call/imported_inherited_known_property_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" tests/fixtures/imported_inherited_known_property_member_call/imported_inherited_known_property_member_call_fail.pas; then
-  cat "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  fail 'expected-imported-inherited-known-property-member-call-failure-did-not-fail'
-fi
-cat "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-imported-inherited-known-property-member-call-human-summary-envelope-field'
-printf 'imported-inherited-known-property-member-call-check=pass\n'
-
-printf 'inherited-known-field-member-call-check=running\n'
-printf 'inherited-known-field-member-call-command=%s build tests/fixtures/inherited_known_field_member_call/inherited_known_field_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" tests/fixtures/inherited_known_field_member_call/inherited_known_field_member_call_fail.pas; then
-  cat "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-  fail 'expected-inherited-known-field-member-call-failure-did-not-fail'
-fi
-cat "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_KNOWN_FIELD_MEMBER_CALL_OUTPUT" 'missing-inherited-known-field-member-call-human-summary-envelope-field'
-printf 'inherited-known-field-member-call-check=pass\n'
-
-printf 'inherited-known-property-member-call-check=running\n'
-printf 'inherited-known-property-member-call-command=%s build tests/fixtures/inherited_known_property_member_call/inherited_known_property_member_call_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" tests/fixtures/inherited_known_property_member_call/inherited_known_property_member_call_fail.pas; then
-  cat "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-  fail 'expected-inherited-known-property-member-call-failure-did-not-fail'
-fi
-cat "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_KNOWN_PROPERTY_MEMBER_CALL_OUTPUT" 'missing-inherited-known-property-member-call-human-summary-envelope-field'
-printf 'inherited-known-property-member-call-check=pass\n'
-
 printf 'unknown-member-check=running\n'
 printf 'unknown-member-command=%s build tests/fixtures/unknown_member/unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
 if run_stage0_build_capture "$UNKNOWN_MEMBER_OUTPUT" tests/fixtures/unknown_member/unknown_member_fail.pas; then
@@ -5701,456 +5522,6 @@ require_output_pattern '^human-summary=semantic-analysis-failed$' "$UNKNOWN_MEMB
 require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$UNKNOWN_MEMBER_OUTPUT" 'missing-unknown-member-diagnostics-summary-envelope-field'
 require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$UNKNOWN_MEMBER_OUTPUT" 'missing-unknown-member-human-summary-envelope-field'
 printf 'unknown-member-check=pass\n'
-
-printf 'implicit-self-bare-method-unknown-member-check=running\n'
-printf 'implicit-self-bare-method-unknown-member-command=%s build tests/fixtures/implicit_self_bare_method_unknown_member/implicit_self_bare_method_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/implicit_self_bare_method_unknown_member/implicit_self_bare_method_unknown_member_fail.pas; then
-  cat "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-implicit-self-bare-method-unknown-member-failure-did-not-fail'
-fi
-cat "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-implicit-self-bare-method-unknown-member-human-summary-envelope-field'
-printf 'implicit-self-bare-method-unknown-member-check=pass\n'
-
-printf 'inherited-implicit-self-bare-method-unknown-member-check=running\n'
-printf 'inherited-implicit-self-bare-method-unknown-member-command=%s build tests/fixtures/inherited_implicit_self_bare_method_unknown_member/inherited_implicit_self_bare_method_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/inherited_implicit_self_bare_method_unknown_member/inherited_implicit_self_bare_method_unknown_member_fail.pas; then
-  cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-inherited-implicit-self-bare-method-unknown-member-failure-did-not-fail'
-fi
-cat "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$INHERITED_IMPLICIT_SELF_BARE_METHOD_UNKNOWN_MEMBER_OUTPUT" 'missing-inherited-implicit-self-bare-method-unknown-member-human-summary-envelope-field'
-printf 'inherited-implicit-self-bare-method-unknown-member-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-unknown-member-check=running\n'
-printf 'imported-unit-body-implicit-self-unknown-member-command=%s build tests/fixtures/imported_unit_body_implicit_self_unknown_member/imported_unit_body_implicit_self_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_unknown_member/imported_unit_body_implicit_self_unknown_member_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-unknown-member-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-implicit-self-unknown-member-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-unknown-member-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-unknown-member-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-unknown-member-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_unknown_member/imported_unit_body_inherited_implicit_self_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_unknown_member/imported_unit_body_inherited_implicit_self_unknown_member_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-unknown-member-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-unknown-member-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-unknown-member-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-known-field-invalid-call-shape-check=running\n'
-printf 'imported-unit-body-implicit-self-known-field-invalid-call-shape-command=%s build tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape/imported_unit_body_implicit_self_known_field_invalid_call_shape_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape/imported_unit_body_implicit_self_known_field_invalid_call_shape_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-known-field-invalid-call-shape-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-known-field-invalid-call-shape-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-known-property-invalid-call-shape-check=running\n'
-printf 'imported-unit-body-implicit-self-known-property-invalid-call-shape-command=%s build tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape/imported_unit_body_implicit_self_known_property_invalid_call_shape_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape/imported_unit_body_implicit_self_known_property_invalid_call_shape_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-known-property-invalid-call-shape-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-implicit-self-known-property-invalid-call-shape-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-known-property-invalid-call-shape-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_FIELD_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.invalid-call-shape$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.invalid-call-shape$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostic-phase'
-require_output_pattern '^diagnostic-message=member "Value" is not callable$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostic-message'
-require_output_pattern '"code":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.invalid-call-shape"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_KNOWN_PROPERTY_INVALID_CALL_SHAPE_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-wrong-argument-count-check=running\n'
-printf 'imported-unit-body-implicit-self-wrong-argument-count-command=%s build tests/fixtures/imported_unit_body_implicit_self_wrong_argument_count/imported_unit_body_implicit_self_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_wrong_argument_count/imported_unit_body_implicit_self_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-wrong-argument-count-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-wrong-argument-count-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-wrong-argument-count-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_wrong_argument_count/imported_unit_body_inherited_implicit_self_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_wrong_argument_count/imported_unit_body_inherited_implicit_self_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-wrong-argument-count-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-type-mismatch-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-type-mismatch-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_type_mismatch/imported_unit_body_inherited_implicit_self_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_type_mismatch/imported_unit_body_inherited_implicit_self_type_mismatch_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-type-mismatch-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-type-mismatch-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-function-result-type-mismatch-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_type_mismatch/imported_unit_body_inherited_implicit_self_function_result_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_type_mismatch/imported_unit_body_inherited_implicit_self_function_result_type_mismatch_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_no_matching_overload/imported_unit_body_inherited_implicit_self_function_result_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_no_matching_overload/imported_unit_body_inherited_implicit_self_function_result_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-no-matching-overload-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-no-matching-overload-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_no_matching_overload/imported_unit_body_inherited_implicit_self_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_no_matching_overload/imported_unit_body_inherited_implicit_self_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-no-matching-overload-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-no-matching-overload-check=pass\n'
-
-printf 'imported-unit-body-inherited-implicit-self-ambiguous-overload-check=running\n'
-printf 'imported-unit-body-inherited-implicit-self-ambiguous-overload-command=%s build tests/fixtures/imported_unit_body_inherited_implicit_self_ambiguous_overload/imported_unit_body_inherited_implicit_self_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_inherited_implicit_self_ambiguous_overload/imported_unit_body_inherited_implicit_self_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-inherited-implicit-self-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Touch"$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_INHERITED_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-inherited-implicit-self-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-unit-body-inherited-implicit-self-ambiguous-overload-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-type-mismatch-check=running\n'
-printf 'imported-unit-body-implicit-self-type-mismatch-command=%s build tests/fixtures/imported_unit_body_implicit_self_type_mismatch/imported_unit_body_implicit_self_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_type_mismatch/imported_unit_body_implicit_self_type_mismatch_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-type-mismatch-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-type-mismatch-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-function-result-type-mismatch-check=running\n'
-printf 'imported-unit-body-implicit-self-function-result-type-mismatch-command=%s build tests/fixtures/imported_unit_body_implicit_self_function_result_type_mismatch/imported_unit_body_implicit_self_function_result_type_mismatch_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_function_result_type_mismatch/imported_unit_body_implicit_self_function_result_type_mismatch_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-function-result-type-mismatch-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.type-mismatch$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.type-mismatch$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostic-phase'
-require_output_pattern '^diagnostic-message=argument type mismatch for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostic-message'
-require_output_pattern '"code":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.type-mismatch"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_TYPE_MISMATCH_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-type-mismatch-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-function-result-type-mismatch-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-function-result-wrong-argument-count-check=running\n'
-printf 'imported-unit-body-implicit-self-function-result-wrong-argument-count-command=%s build tests/fixtures/imported_unit_body_implicit_self_function_result_wrong_argument_count/imported_unit_body_implicit_self_function_result_wrong_argument_count_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_function_result_wrong_argument_count/imported_unit_body_implicit_self_function_result_wrong_argument_count_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-function-result-wrong-argument-count-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.wrong-argument-count$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.wrong-argument-count$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostic-phase'
-require_output_pattern '^diagnostic-message=wrong number of arguments for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostic-message'
-require_output_pattern '"code":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.wrong-argument-count"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_WRONG_ARGUMENT_COUNT_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-wrong-argument-count-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-function-result-wrong-argument-count-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-function-result-no-matching-overload-check=running\n'
-printf 'imported-unit-body-implicit-self-function-result-no-matching-overload-command=%s build tests/fixtures/imported_unit_body_implicit_self_function_result_no_matching_overload/imported_unit_body_implicit_self_function_result_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_function_result_no_matching_overload/imported_unit_body_implicit_self_function_result_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-function-result-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-no-matching-overload-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-function-result-no-matching-overload-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-function-result-ambiguous-overload-check=running\n'
-printf 'imported-unit-body-implicit-self-function-result-ambiguous-overload-command=%s build tests/fixtures/imported_unit_body_implicit_self_function_result_ambiguous_overload/imported_unit_body_implicit_self_function_result_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_function_result_ambiguous_overload/imported_unit_body_implicit_self_function_result_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-function-result-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_FUNCTION_RESULT_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-function-result-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-function-result-ambiguous-overload-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-no-matching-overload-check=running\n'
-printf 'imported-unit-body-implicit-self-no-matching-overload-command=%s build tests/fixtures/imported_unit_body_implicit_self_no_matching_overload/imported_unit_body_implicit_self_no_matching_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_no_matching_overload/imported_unit_body_implicit_self_no_matching_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-no-matching-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.no-matching-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.no-matching-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=no matching overload for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostic-message'
-require_output_pattern '"code":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.no-matching-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_NO_MATCHING_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-no-matching-overload-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-no-matching-overload-check=pass\n'
-
-printf 'imported-unit-body-implicit-self-ambiguous-overload-check=running\n'
-printf 'imported-unit-body-implicit-self-ambiguous-overload-command=%s build tests/fixtures/imported_unit_body_implicit_self_ambiguous_overload/imported_unit_body_implicit_self_ambiguous_overload_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" tests/fixtures/imported_unit_body_implicit_self_ambiguous_overload/imported_unit_body_implicit_self_ambiguous_overload_fail.pas; then
-  cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
-  fail 'expected-imported-unit-body-implicit-self-ambiguous-overload-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.ambiguous-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.ambiguous-overload$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostic-phase'
-require_output_pattern '^diagnostic-message=ambiguous overload for "Pick"$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostic-message'
-require_output_pattern '"code":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.ambiguous-overload"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNIT_BODY_IMPLICIT_SELF_AMBIGUOUS_OVERLOAD_OUTPUT" 'missing-imported-unit-body-implicit-self-ambiguous-overload-human-summary-envelope-field'
-printf 'imported-unit-body-implicit-self-ambiguous-overload-check=pass\n'
-
-printf 'imported-unknown-member-check=running\n'
-printf 'imported-unknown-member-command=%s build tests/fixtures/imported_unknown_member/imported_unknown_member_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
-if run_stage0_build_capture "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" tests/fixtures/imported_unknown_member/imported_unknown_member_fail.pas; then
-  cat "$IMPORTED_UNKNOWN_MEMBER_OUTPUT"
-  fail 'expected-imported-unknown-member-failure-did-not-fail'
-fi
-cat "$IMPORTED_UNKNOWN_MEMBER_OUTPUT"
-require_output_pattern '^failure-kind=semantic-analysis-failed$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-failure-kind'
-require_output_pattern '^diagnostics-summary=sema\.unknown-member$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostics-summary'
-require_output_pattern '^diagnostic-code=sema.unknown-member$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostic-code'
-require_output_pattern '^diagnostic-phase=sema$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostic-phase'
-require_output_pattern '^diagnostic-message=unknown member "Missing"$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostic-message'
-require_output_pattern '"code":"sema.unknown-member"' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostic-envelope'
-require_output_pattern '^human-summary=semantic-analysis-failed$' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-human-summary'
-require_output_pattern '"diagnosticsSummary":"sema.unknown-member"' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-diagnostics-summary-envelope-field'
-require_output_pattern '"humanSummary":"semantic-analysis-failed"' "$IMPORTED_UNKNOWN_MEMBER_OUTPUT" 'missing-imported-unknown-member-human-summary-envelope-field'
-printf 'imported-unknown-member-check=pass\n'
 
 printf 'missing-external-symbol-name-check=running\n'
 printf 'missing-external-symbol-name-command=%s build tests/compiler/fail/missing_external_symbol_name_fail.pas --target linux-x86_64 --workspace %s\n' "$STAGE0_BINARY" "$REPO_ROOT"
@@ -7314,17 +6685,6 @@ MEMBER_SELF_SET_VALUE_OFFSET=$(awk '
     offset += length($0) + 1;
   }
 ' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
-MEMBER_IMPLICIT_TOUCH_OFFSET=$(awk '
-  BEGIN { offset = 0 }
-  {
-    idx = index($0, "  Touch;");
-    if (idx > 0) {
-      print offset + idx + length("  ") - 1;
-      exit;
-    }
-    offset += length($0) + 1;
-  }
-' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
 MEMBER_ADD_OFFSET=$(awk '
   BEGIN { offset = 0 }
   {
@@ -7353,38 +6713,6 @@ MEMBER_TOUCH_OFFSET=$(awk '
     idx = index($0, "Child.Touch");
     if (idx > 0) {
       print offset + idx + length("Child.") - 1;
-      exit;
-    }
-    offset += length($0) + 1;
-  }
-' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
-MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET=$(awk '
-  BEGIN { offset = 0; in_child_run = 0 }
-  {
-    if (index($0, "procedure TChildWorker.Run;") > 0) {
-      in_child_run = 1;
-    } else if (in_child_run && index($0, "end;") > 0) {
-      in_child_run = 0;
-    }
-    idx = index($0, "  Touch;");
-    if (in_child_run && idx > 0) {
-      print offset + idx + length("  ") - 1;
-      exit;
-    }
-    offset += length($0) + 1;
-  }
-' "$REPO_ROOT/tests/fixtures/query_member_call_bindings/member_call_bindings.pas")
-MEMBER_INHERITED_IMPLICIT_TOUCH_ARG_OFFSET=$(awk '
-  BEGIN { offset = 0; in_child_run = 0 }
-  {
-    if (index($0, "procedure TChildWorker.Run;") > 0) {
-      in_child_run = 1;
-    } else if (in_child_run && index($0, "end;") > 0) {
-      in_child_run = 0;
-    }
-    idx = index($0, "Touch(7)");
-    if (in_child_run && idx > 0) {
-      print offset + idx - 1;
       exit;
     }
     offset += length($0) + 1;
@@ -7426,48 +6754,36 @@ MEMBER_PICK_BOOL_OFFSET=$(awk '
 require_output_pattern '^query-bindings=\[.*"kind":"member-call".*"name":"Run".*"ownerUnitId":"querymembercallbindings".*"targetSymbolId":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SELF_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-self-binding'
-require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-implicit-self-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-binding'
-require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-binding'
-require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_ARG_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-argument-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-binding'
 require_output_pattern "^query-bindings=\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-binding'
 require_output_pattern '^query-definitions=\[.*"bindingKind":"member-call".*"bindingName":"Run".*"targetName":"TWorker.Run".*"targetKind":"method".*"targetOwnerUnitName":"QueryMemberCallBindings"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SELF_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-self-definition'
-require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-implicit-self-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-definition'
-require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-definition'
-require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_ARG_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-argument-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":0.*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-definition'
 require_output_pattern "^query-definitions=\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"b\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-definition'
 require_output_pattern '^command-envelope=.*"queryBindings":\[.*"kind":"member-call".*"name":"Run".*"ownerUnitId":"querymembercallbindings".*"targetSymbolId":[1-9][0-9]*' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"SetValue\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_SELF_SET_VALUE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-self-binding-envelope'
-require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-implicit-self-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Add\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_ADD_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Create\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_CREATE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-binding-envelope'
-require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-binding-envelope'
-require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Touch\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_ARG_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-argument-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-binding-envelope'
 require_output_pattern "^command-envelope=.*\"queryBindings\":\\[.*\"kind\":\"member-call\".*\"name\":\"Pick\".*\"ownerUnitId\":\"querymembercallbindings\".*\"byteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetSymbolId\":[1-9][0-9]*" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-binding-envelope'
 require_output_pattern '^command-envelope=.*"queryDefinitions":\[.*"bindingKind":"member-call".*"bindingName":"Run".*"targetName":"TWorker.Run".*"targetKind":"method".*"targetOwnerUnitName":"QueryMemberCallBindings"' "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-run-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-argument-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"SetValue\".*\"bindingByteOffset\":$MEMBER_SELF_SET_VALUE_OFFSET.*\"targetName\":\"TWorker.SetValue\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-self-definition-envelope'
-require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-implicit-self-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Add\".*\"bindingByteOffset\":$MEMBER_ADD_OFFSET.*\"targetName\":\"TWorker.Add\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-expression-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Create\".*\"bindingByteOffset\":$MEMBER_CREATE_OFFSET.*\"targetName\":\"TWorker.Create\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-constructor-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-definition-envelope'
-require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-definition-envelope'
-require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Touch\".*\"bindingByteOffset\":$MEMBER_INHERITED_IMPLICIT_TOUCH_ARG_OFFSET.*\"targetName\":\"TBaseWorker.Touch\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-inherited-implicit-self-argument-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ZERO_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":0.*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-zero-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_ONE_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"i\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-one-definition-envelope'
 require_output_pattern "^command-envelope=.*\"queryDefinitions\":\\[.*\"bindingKind\":\"member-call\".*\"bindingName\":\"Pick\".*\"bindingByteOffset\":$MEMBER_PICK_BOOL_OFFSET.*\"targetName\":\"TWorker.Pick\".*\"targetKind\":\"method\".*\"targetParamCount\":1.*\"targetParamSignature\":\"b\".*\"targetOwnerUnitName\":\"QueryMemberCallBindings\"" "$STAGE0_QUERY_SYMBOLS_OUTPUT" 'missing-stage0-query-member-overload-bool-definition-envelope'
@@ -8226,6 +7542,6 @@ printf 'smoke-check=pass\n'
 printf 'status=ready\n'
 printf 'result=pass\n'
 printf 'command-outcome=success\n'
-printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","corePlatformTimeHelpersCheck":"pass","corePlatformTimeL0BoundaryCheck":"pass","corePlatformTimeNoFpcCheck":"pass","corePlatformTimeWin64Check":"pass","corePlatformTimeExampleCheck":"pass","corePlatformTimeBenchCheck":"pass","corePlatformThreadCheck":"pass","corePlatformThreadNoFpcCheck":"pass","corePlatformThreadL0BoundaryCheck":"pass","corePlatformThreadWin64Check":"pass","corePlatformThreadExampleCheck":"pass","corePlatformThreadBenchCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","importedFunctionResultAmbiguousOverloadCheck":"pass","importedMemberFunctionResultAmbiguousOverloadCheck":"pass","importedInheritedMemberAmbiguousOverloadCheck":"pass","importedInheritedMemberFunctionResultAmbiguousOverloadCheck":"pass","implicitSelfBareMethodAmbiguousOverloadCheck":"pass","inheritedImplicitSelfBareMethodAmbiguousOverloadCheck":"pass","noMatchingOverloadCheck":"pass","importedNoMatchingOverloadCheck":"pass","importedFunctionResultNoMatchingOverloadCheck":"pass","memberNoMatchingOverloadCheck":"pass","inheritedMemberNoMatchingOverloadCheck":"pass","importedMemberNoMatchingOverloadCheck":"pass","importedMemberFunctionResultNoMatchingOverloadCheck":"pass","importedInheritedMemberNoMatchingOverloadCheck":"pass","importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass","implicitSelfBareMethodNoMatchingOverloadCheck":"pass","inheritedImplicitSelfBareMethodNoMatchingOverloadCheck":"pass","wrongArgumentCountCheck":"pass","importedWrongArgumentCountCheck":"pass","importedFunctionResultWrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","importedMemberWrongArgumentCountCheck":"pass","importedMemberFunctionResultWrongArgumentCountCheck":"pass","importedInheritedMemberFunctionResultWrongArgumentCountCheck":"pass","importedInheritedMemberWrongArgumentCountCheck":"pass","implicitSelfBareMethodWrongArgumentCountCheck":"pass","inheritedImplicitSelfBareMethodWrongArgumentCountCheck":"pass","importedTypeMismatchCallCheck":"pass","importedMemberTypeMismatchCallCheck":"pass","importedMemberFunctionResultTypeMismatchCallCheck":"pass","importedInheritedMemberTypeMismatchCallCheck":"pass","importedInheritedMemberFunctionResultTypeMismatchCallCheck":"pass","implicitSelfBareMethodTypeMismatchCheck":"pass","inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass","importedInheritedUnknownMemberCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","typeMismatchFunctionResultCallCheck":"pass","importedFunctionResultTypeMismatchCallCheck":"pass","memberTypeMismatchFunctionResultCallCheck":"pass","implicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass","inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass","unknownCallableCheck":"pass","knownFieldMemberCallCheck":"pass","importedKnownFieldMemberCallCheck":"pass","importedInheritedKnownFieldMemberCallCheck":"pass","knownPropertyMemberCallCheck":"pass","importedKnownPropertyMemberCallCheck":"pass","importedInheritedKnownPropertyMemberCallCheck":"pass","inheritedKnownFieldMemberCallCheck":"pass","inheritedKnownPropertyMemberCallCheck":"pass","unknownMemberCheck":"pass","implicitSelfBareMethodUnknownMemberCheck":"pass","inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass","importedUnitBodyImplicitSelfUnknownMemberCheck":"pass","importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass","importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass","importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass","importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass","importedUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass","importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass","importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass","importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass","importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass","importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass","importedUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass","importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass","importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass","importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass","importedUnitBodyImplicitSelfTypeMismatchCheck":"pass","importedUnitBodyImplicitSelfFunctionResultTypeMismatchCheck":"pass","importedUnitBodyImplicitSelfFunctionResultWrongArgumentCountCheck":"pass","importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass","importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass","importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass","importedUnitBodyImplicitSelfAmbiguousOverloadCheck":"pass","importedUnknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
+printf 'command-envelope={"command":"verify-local","exitCode":0,"result":{"selector":"%s","target":"%s","status":"ready","result":"pass","docsCheck":"pass","inputsCheck":"pass","stage0Build":"pass","lexerConformance":"pass","lexerBench":"pass","stage0Smoke":"pass","compilerModuleSelfCompileCheck":"pass","llvmBindingSmoke":"pass","llvmEmptyProgram":"pass","llvmHaltProgram":"pass","llvmHaltExprProgram":"pass","llvmHaltConstProgram":"pass","llvmWritelnProgram":"pass","llvmWritelnIntProgram":"pass","llvmWritelnMultiProgram":"pass","llvmWritelnMixedProgram":"pass","llvmHelloThenHaltProgram":"pass","llvmVarHaltProgram":"pass","llvmNoFoldHaltProgram":"pass","llvmNoFoldHaltExprProgram":"pass","llvmNoFoldVarHaltProgram":"pass","llvmNoFoldVarChainProgram":"pass","llvmNoFoldIfHaltProgram":"pass","llvmNoFoldIfElseHaltProgram":"pass","llvmNoFoldIfVarProgram":"pass","llvmNoFoldRepeatHaltProgram":"pass","llvmNoFoldWhileSumProgram":"pass","llvmNoFoldForSumHaltProgram":"pass","llvmNoFoldForWritelnProgram":"pass","llvmNoFoldWhileCountProgram":"pass","llvmNoFoldForDowntoProgram":"pass","llvmNoFoldRepeatCountProgram":"pass","llvmVarWritelnProgram":"pass","llvmVarChainProgram":"pass","llvmIfHaltProgram":"pass","llvmIfElseHaltProgram":"pass","llvmForWritelnProgram":"pass","llvmForSumHaltProgram":"pass","llvmForDowntoProgram":"pass","llvmIfNotProgram":"pass","llvmIfTrueProgram":"pass","llvmWhileCountProgram":"pass","llvmWhileSumProgram":"pass","llvmRepeatCountProgram":"pass","llvmRepeatHaltProgram":"pass","llvmConstStringProgram":"pass","llvmStringConcatProgram":"pass","llvmProcGreetProgram":"pass","llvmProcTwoProgram":"pass","llvmFnConstHaltProgram":"pass","llvmFnComposeProgram":"pass","llvmFnCallHaltProgram":"pass","llvmFnCallChainProgram":"pass","llvmProcArgProgram":"pass","llvmFnSquareProgram":"pass","llvmCaseProgram":"pass","llvmClassProgram":"pass","llvmClassInheritProgram":"pass","llvmLinkedListProgram":"pass","llvmStackProgram":"pass","llvmIterProgram":"pass","semanticCallBindingsCheck":"pass","semanticSmokeCheck":"pass","toolchainContractCheck":"pass","toolchainFailureCheck":"pass","assemblerFailureAttributionCheck":"pass","linkerFailureAttributionCheck":"pass","coreTextSmokeCheck":"pass","coreTimeCheck":"pass","corePlatformTimeHelpersCheck":"pass","corePlatformTimeHostFfiSurfaceCheck":"pass","corePlatformTimeL0BoundaryCheck":"pass","corePlatformTimeNoFpcCheck":"pass","corePlatformTimeWin64Check":"pass","corePlatformTimeExampleCheck":"pass","corePlatformTimeBenchCheck":"pass","corePlatformThreadCheck":"pass","corePlatformThreadNoFpcCheck":"pass","corePlatformThreadL0BoundaryCheck":"pass","corePlatformThreadHostFfiSurfaceCheck":"pass","corePlatformThreadWin64Check":"pass","corePlatformThreadExampleCheck":"pass","corePlatformThreadBenchCheck":"pass","corePlatformPosixFfiSurfaceCheck":"pass","corePlatformFfiPartitionSurfaceCheck":"pass","corePlatformFfiOwnerBoundaryCheck":"pass","corePlatformHostGapMatrixCheck":"pass","corePlatformFfiSourceEvidenceIndexCheck":"pass","corePlatformFfiImportWorkflowCheck":"pass","corePlatformHostAbiWave1Check":"pass","corePlatformHostAbiWave2FilesCheck":"pass","corePlatformHostAbiWave3StatCheck":"pass","corePlatformHostAbiWave4PathsCheck":"pass","corePlatformHostAbiWave5EnvCheck":"pass","corePlatformHostAbiWave6ProcessCheck":"pass","corePlatformHostAbiWave7ProcessStatusCheck":"pass","corePlatformHostAbiWave8FileIoCheck":"pass","corePlatformHostAbiWave9LinuxStatCheck":"pass","corePlatformHostAbiWave10PosixStatHostsCheck":"pass","corePlatformHostAbiWave11SignalControlCheck":"pass","corePlatformFacadeSurfaceCheck":"pass","corePlatformSimulatedHostCompileMatrixCheck":"pass","corePlatformSyncCheck":"pass","corePlatformSyncNoFpcCheck":"pass","corePlatformSyncL0BoundaryCheck":"pass","corePlatformSyncPosixSurfaceCheck":"pass","corePlatformSyncHostFfiSurfaceCheck":"pass","corePlatformSyncSizeCheck":"pass","corePlatformSyncWin64Check":"pass","corePlatformSyncExampleCheck":"pass","corePlatformSyncBenchCheck":"pass","corePlatformSyncPosixFallbackCheck":"pass","coreSyncPosixFallbackCheck":"pass","syntaxFailureCheck":"pass","missingUnitCheck":"pass","ambiguousUnitCheck":"pass","unitCycleCheck":"pass","duplicateImportCheck":"pass","ambiguousOverloadCheck":"pass","ambiguousMemberOverloadCheck":"pass","wrongArgumentCountCheck":"pass","memberWrongArgumentCountCheck":"pass","typeMismatchCallCheck":"pass","memberTypeMismatchCallCheck":"pass","typeMismatchVariableCallCheck":"pass","memberTypeMismatchVariableCallCheck":"pass","typeMismatchParameterCallCheck":"pass","memberTypeMismatchParameterCallCheck":"pass","typeMismatchFunctionResultCallCheck":"pass","unknownCallableCheck":"pass","unknownMemberCheck":"pass","rootImplementationCheck":"pass","requestedNameMismatchCheck":"pass","explicitSystemCheck":"pass","explicitUnitRootCheck":"pass","packageManifestSourceRootCheck":"pass","workspaceMemberSourceRootCheck":"pass","sourceDirectoryFallbackCheck":"pass","packageManifestSourcePrecedenceCheck":"pass","outDirOverrideCheck":"pass","rootSourcePrecedenceCheck":"pass","unitRootPrecedenceCheck":"pass","invalidUnitRootCheck":"pass","invalidOutDirCheck":"pass","invalidArtifactRootCheck":"pass","harnessBootstrapDiagnosticsCheck":"pass","stage0TestListGroupsCheck":"pass","stage0TestInvalidArgumentsCheck":"pass","stage0TestUnknownGroupCheck":"pass","stage0TestCompilerPassCheck":"pass","stage0TestSmokeCheck":"pass","stage0EnvStatusCheck":"pass","stage0EnvUseCheck":"pass","stage0EnvSyncCheck":"pass","stage0EnvCleanCheck":"pass","stage0EnvCleanRepeatCheck":"pass","stage0EnvCleanInvalidArgumentsCheck":"pass","stage0DoctorCheck":"pass","stage0DoctorPackageWorkspaceCheck":"pass","stage0DoctorWorkspaceMemberCheck":"pass","stage0DoctorDeclaredDependenciesCheck":"pass","stage0DoctorMalformedDependenciesCheck":"pass","stage0DoctorInvalidArgumentsCheck":"pass","stage0QueryCheck":"pass","stage0QueryBindingsCheck":"pass","stage0QueryDefinitionsCheck":"pass","stage0QueryCallBindingsCheck":"pass","stage0QueryMemberCallBindingsCheck":"pass","stage0QuerySystemObjectFreeCheck":"pass","stage0QuerySystemObjectFreeImplicitCheck":"pass","stage0QueryInvalidArgumentsCheck":"pass","stage0PkgCheck":"pass","stage0PkgLockDetailCheck":"pass","stage0PkgLockSnapshotCheck":"pass","stage0PkgPlanCheck":"pass","stage0PkgPlanBlockedCheck":"pass","stage0PkgPlanMissingCheck":"pass","stage0PkgPlanDependencyBlockedCheck":"pass","stage0PkgPlanSourceRootsBlockedCheck":"pass","stage0PkgPlanLockInvalidCheck":"pass","stage0PkgPlanLockSnapshotInvalidCheck":"pass","stage0PkgPlanLockTargetSnapshotMissingCheck":"pass","stage0PkgPlanLockOutOfSyncCheck":"pass","stage0PkgPlanInvalidArgumentsCheck":"pass","stage0PkgWorkspaceMemberCheck":"pass","stage0PkgDeclaredDependenciesCheck":"pass","stage0PkgGraphCheck":"pass","stage0PkgGraphInvalidArgumentsCheck":"pass","stage0PkgMalformedDependenciesCheck":"pass","stage0PkgInvalidArgumentsCheck":"pass","stage0EnvInvalidArgumentsCheck":"pass","harnessCompilerPassCheck":"pass","smokeCheck":"pass"},"diagnostics":[],"buildTraceRef":null,"humanSummary":"local verification passed"}\n' "$VERIFY_SELECTOR" "$TARGET_ID"
 printf 'verify-local=pass\n'
 printf 'human-summary=local verification passed\n'
