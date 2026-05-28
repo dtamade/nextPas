@@ -167,7 +167,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `procedure TWorker.Run; begin Touch; end;` 面对 `TBaseWorker.Touch(Value: Integer)`）；
   同一路径接受同一 project-source owner unit 中零参内建标量/字符串 function result 作为
   arity evidence（例如 `Pick(Count, Count);` 面对 `Pick(Value: Integer)` 且 `Count`
-  返回 `Integer`）；
+  返回 `Integer`，或 `Touch(Count, Count);` 面对 inherited `Touch(Value: Integer)`）；
   同一路径中的 stable literal mismatch（例如
   `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
   `sema.type-mismatch`；同一路径沿 imported owner class parent chain 找到 inherited
@@ -393,7 +393,8 @@ candidate collection
     function result 作为 argument evidence
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 parent
     chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；该路径同样不会注册失败
-    `member-call` binding
+    `member-call` binding，且接受同一 project-source owner unit 中零参内建标量/字符串
+    function result 作为 argument evidence
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 imported
     owner class parent chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；
     该路径不会注册失败 `member-call` binding

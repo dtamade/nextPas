@@ -10,6 +10,26 @@
 
 ## Research Findings
 
+- Batch 192 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)`、
+  `TWorker = class(TBaseWorker)` 与 `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Count, Count); end;` 必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 192 加速策略是补齐 Batch 188-190 inherited function-result ladder 中缺失的 arity 格子：
+  focused semantic 先判真相；GREEN 直接升 dedicated fixture / `verify_local.sh` official gate / docs，
+  RED 才最小修 analyzer。本批不碰 `core/`。
+- Batch 192 focused semantic probe 直接 GREEN，证明 Batch 181 的 imported unit body inherited
+  implicit-self arity miss 与 Batch 188-190 的 inherited same-owner project-source function-result
+  stable evidence 已自然组合；本批不需要修改 analyzer。
+- Batch 192 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count` 与
+  `imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`。
+- Batch 192 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 191 继续 imported unit method body implicit-self same-unit function-result evidence 面：
   root `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` 与
   `function Count: Integer;` 同属 `project-source` owner unit，
