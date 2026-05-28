@@ -11305,6 +11305,102 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceUnitBodyImplicitSelfBareMethodNoMatchingOverloadStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-source-unit-body-implicit-self-no-matching-overload-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledSourceUnitBodyImplicitSelfNoMatchingOverload;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(Value: Integer);' + LineEnding +
+    '    procedure Pick(Value: AnsiString);' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TWorker.Pick(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Pick(Value: AnsiString);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(True);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledSourceUnitBodyImplicitSelfNoMatchingOverload',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-source-unit-body-implicit-self-no-matching-overload-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-source-unit-body-implicit-self-no-matching-overload-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-source-unit-body-implicit-self-no-matching-overload-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-source-unit-body-implicit-self-no-matching-overload-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -13100,6 +13196,7 @@ begin
     CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred;
     CheckInstalledSourceUnitBodyImplicitSelfBareMethodAmbiguousOverloadStaysDeferred;
+    CheckInstalledSourceUnitBodyImplicitSelfBareMethodNoMatchingOverloadStaysDeferred;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodAmbiguousOverloadDiagnostic;

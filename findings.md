@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 206 re-rank 结论：Batch 179 已打开 imported `project-source` unit method body bare
+  implicit-self stable literal no-matching-overload；按"矩阵双拍"，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.no-matching-overload`。
+- Batch 206 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self stable literal no-match。本批不修改 analyzer。
+- Batch 206 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodNoMatchingOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
 - Batch 205 re-rank 结论：Batch 180 已打开 imported `project-source` unit method body bare
   implicit-self stable literal ambiguous-overload；按"矩阵双拍"，当前最高价值是补同形
   installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
