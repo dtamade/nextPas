@@ -10,8 +10,6 @@ var
   T: TTestRunner;
 
 procedure TestFacadeFactoriesReturnPublicInterfaces;
-var
-  LValue: Integer;
 begin
   with specialize MakeVec<Integer> do
   begin
@@ -23,8 +21,7 @@ begin
   with specialize MakeHashMap<Integer, Integer> do
   begin
     Put(1, 100);
-    Check(Get(1, LValue), 'map get');
-    CheckEqual(Int64(100), Int64(LValue), 'map value');
+    CheckEqual(Int64(100), Int64(Get(1)), 'map value');
   end;
 
   with specialize MakeHashSet<Integer> do

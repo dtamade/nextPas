@@ -70,11 +70,12 @@
 - Removed `IPriorityQueue<T>.Enqueue` / `Dequeue` and aligned PriorityQueue with the framework `Push` / `TryPop` / checked `Pop` / `TryPeek` / checked `Peek` vocabulary. Capacity behavior and factory shape were left unchanged.
 - Verified the PriorityQueue push/pop naming batch with `git diff --check`, focused `test_facade` / `test_queue`, and full `make test`; all completed with zero failures.
 - Removed concrete `TVecDeque<T>.Enqueue` / `Dequeue` aliases. The real public interface contracts already use `Push` / `Pop` / `Peek` / `TryPeek`, and explicit deque direction remains available through `PushFront` / `PushBack` / `PopFront` / `PopBack`.
+- Started the HashMap-family map semantics batch. `IHashMap.Get(Key)` now returns the value as a checked lookup, `IHashMap.Put(Key, Value)` no longer reports insert/update, and `TryGetValue` / `AddOrAssign` keep the non-throwing/reporting roles. `TLinkedHashMap` was updated with the inherited `IHashMap` contract. TreeMap was deliberately left to a separate focused batch because its internal `Put` return flag needs semantic correction.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: continue Map family `Get` / `Put` / `TryGetValue` / `AddOrAssign` alignment, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
+- Next likely interface-tuning batch: align TreeMap with the same map `Get` / `Put` / `TryGetValue` / `AddOrAssign` contract and fix its `Put` return semantics, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

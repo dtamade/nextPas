@@ -178,36 +178,33 @@ type
     {**
      * Put
      *
-     * @desc 添加或更新键值对（AddOrAssign 别名）
+     * @desc 写入键值对，不报告新增或更新
      *
      * @params
      *   AKey    键
      *   AValue  值
      *
-     * @return Boolean True 表示新增, False 表示更新
-     *
      * @complexity O(1) 平均
      *
-     * @note 与 TreeMap API 保持一致
+     * @note 需要区分新增或更新时使用 AddOrAssign
      *}
-    function Put(const AKey: K; const AValue: V): Boolean;
+    procedure Put(const AKey: K; const AValue: V);
 
     {**
      * Get
      *
-     * @desc 尝试获取值（TryGetValue 别名）
+     * @desc 获取键对应的值，键不存在时抛出异常
      *
      * @params
-     *   AKey    要查找的键
-     *   AValue  输出参数
+     *   AKey  要查找的键
      *
-     * @return Boolean 键存在返回 True
+     * @return V 键对应的值
      *
      * @complexity O(1) 平均
      *
-     * @note 与 TreeMap API 保持一致
+     * @note 非抛出查找使用 TryGetValue
      *}
-    function Get(const AKey: K; out AValue: V): Boolean;
+    function Get(const AKey: K): V;
 
     {**
      * Capacity

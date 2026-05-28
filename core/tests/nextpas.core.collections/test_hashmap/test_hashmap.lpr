@@ -27,13 +27,10 @@ begin
   LMap.Put(2, 200);
   LMap.Put(3, 300);
 
-  Check(LMap.Get(1, LVal), 'get key 1');
-  CheckEqual(Int64(100), Int64(LVal), 'value 1');
-  Check(LMap.Get(2, LVal), 'get key 2');
-  CheckEqual(Int64(200), Int64(LVal), 'value 2');
-  Check(LMap.Get(3, LVal), 'get key 3');
-  CheckEqual(Int64(300), Int64(LVal), 'value 3');
-  Check(not LMap.Get(99, LVal), 'missing key');
+  CheckEqual(Int64(100), Int64(LMap.Get(1)), 'value 1');
+  CheckEqual(Int64(200), Int64(LMap.Get(2)), 'value 2');
+  CheckEqual(Int64(300), Int64(LMap.Get(3)), 'value 3');
+  Check(not LMap.TryGetValue(99, LVal), 'missing key');
 end;
 
 procedure TestContains;
@@ -59,35 +56,30 @@ begin
 
   Check(LMap.Remove(2), 'remove existing');
   Check(not LMap.ContainsKey(2), 'removed key gone');
-  Check(not LMap.Get(2, LVal), 'get removed returns false');
+  Check(not LMap.TryGetValue(2, LVal), 'get removed returns false');
   CheckEqual(Int64(2), Int64(LMap.Count), 'count after remove');
 
   Check(not LMap.Remove(99), 'remove missing');
 
-  Check(LMap.Get(1, LVal), 'other keys intact 1');
-  CheckEqual(Int64(10), Int64(LVal), 'value intact 1');
-  Check(LMap.Get(3, LVal), 'other keys intact 3');
-  CheckEqual(Int64(30), Int64(LVal), 'value intact 3');
+  CheckEqual(Int64(10), Int64(LMap.Get(1)), 'value intact 1');
+  CheckEqual(Int64(30), Int64(LMap.Get(3)), 'value intact 3');
 end;
 
 procedure TestOverwrite;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
 begin
   LMap := TIntIntMap.Create;
   LMap.Put(1, 100);
   LMap.Put(1, 999);
 
   CheckEqual(Int64(1), Int64(LMap.Count), 'count stays 1');
-  Check(LMap.Get(1, LVal), 'get overwritten');
-  CheckEqual(Int64(999), Int64(LVal), 'new value');
+  CheckEqual(Int64(999), Int64(LMap.Get(1)), 'new value');
 end;
 
 procedure TestRehash;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
   LIdx: Integer;
 begin
   LMap := TIntIntMap.Create;
@@ -98,8 +90,7 @@ begin
 
   for LIdx := 0 to 99 do
   begin
-    Check(LMap.Get(LIdx, LVal), 'get after rehash ' + IntToStr(LIdx));
-    CheckEqual(Int64(LIdx * 10), Int64(LVal), 'value after rehash');
+    CheckEqual(Int64(LIdx * 10), Int64(LMap.Get(LIdx)), 'value after rehash');
   end;
 end;
 
@@ -113,17 +104,14 @@ begin
   LMap.Put('world', 2);
   LMap.Put('foo', 3);
 
-  Check(LMap.Get('hello', LVal), 'get hello');
-  CheckEqual(Int64(1), Int64(LVal), 'value hello');
-  Check(LMap.Get('world', LVal), 'get world');
-  CheckEqual(Int64(2), Int64(LVal), 'value world');
-  Check(not LMap.Get('missing', LVal), 'missing string key');
+  CheckEqual(Int64(1), Int64(LMap.Get('hello')), 'value hello');
+  CheckEqual(Int64(2), Int64(LMap.Get('world')), 'value world');
+  Check(not LMap.TryGetValue('missing', LVal), 'missing string key');
 end;
 
 procedure TestRemoveThenInsert;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
 begin
   LMap := TIntIntMap.Create;
   LMap.Put(1, 10);
@@ -131,8 +119,7 @@ begin
   LMap.Remove(1);
   LMap.Put(1, 99);
 
-  Check(LMap.Get(1, LVal), 'get re-inserted');
-  CheckEqual(Int64(99), Int64(LVal), 're-inserted value');
+  CheckEqual(Int64(99), Int64(LMap.Get(1)), 're-inserted value');
   CheckEqual(Int64(2), Int64(LMap.Count), 'count correct');
 end;
 
@@ -148,7 +135,7 @@ begin
 
   Check(LMap.IsEmpty, 'empty after clear');
   CheckEqual(Int64(0), Int64(LMap.Count), 'count 0');
-  Check(not LMap.Get(1, LVal), 'cleared key gone');
+  Check(not LMap.TryGetValue(1, LVal), 'cleared key gone');
 end;
 
 procedure TestGetOrInsert;
@@ -166,25 +153,21 @@ end;
 procedure TestAddOnly;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
 begin
   LMap := TIntIntMap.Create;
   Check(LMap.Add(1, 100), 'add new key');
   Check(not LMap.Add(1, 200), 'add existing key fails');
-  Check(LMap.Get(1, LVal), 'get after add');
-  CheckEqual(Int64(100), Int64(LVal), 'value unchanged');
+  CheckEqual(Int64(100), Int64(LMap.Get(1)), 'value unchanged');
 end;
 
 procedure TestAddOrAssign;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
 begin
   LMap := TIntIntMap.Create;
   Check(LMap.AddOrAssign(1, 100), 'addorassign new');
   Check(not LMap.AddOrAssign(1, 200), 'addorassign existing');
-  Check(LMap.Get(1, LVal), 'get after addorassign');
-  CheckEqual(Int64(200), Int64(LVal), 'value updated');
+  CheckEqual(Int64(200), Int64(LMap.Get(1)), 'value updated');
 end;
 
 procedure TestTryGetValue;
@@ -215,7 +198,6 @@ end;
 procedure TestTombstoneRehash;
 var
   LMap: IIntIntMap;
-  LVal: Integer;
   LI: Integer;
 begin
   LMap := TIntIntMap.Create;
@@ -229,8 +211,7 @@ begin
   CheckEqual(Int64(50), Int64(LMap.Count), 'reinserted count');
   for LI := 100 to 149 do
   begin
-    Check(LMap.Get(LI, LVal), 'get after tombstone rehash');
-    CheckEqual(Int64(LI * 2), Int64(LVal), 'value correct');
+    CheckEqual(Int64(LI * 2), Int64(LMap.Get(LI)), 'value correct');
   end;
 end;
 

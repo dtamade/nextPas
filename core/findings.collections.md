@@ -176,3 +176,12 @@
 - `IQueue<T>`, `IDeque<T>`, and `IVecDeque<T>` already expose the queue contract through `Push`, `Pop`, `TryPeek`, and `Peek`; they do not require `Enqueue` / `Dequeue`.
 - `TVecDeque<T>.Enqueue` / `Dequeue` were concrete-class aliases over `PushBack` / `PopFront`, duplicating the public queue vocabulary without adding capability.
 - Because `nextpas.core` has no published compatibility burden, concrete `VecDeque` should not retain these Java-style aliases. Keep `Push` / `Pop` as the default queue entry/exit API and `PushFront` / `PushBack` / `PopFront` / `PopBack` for explicit deque direction.
+
+## 2026-05-28: HashMap Get/Put semantic alignment
+
+- `IHashMap<K,V>.Get(Key)` now follows the agreed map-like checked lookup contract: it returns `V` and raises if the key is absent.
+- `IHashMap<K,V>.TryGetValue(Key, out Value)` remains the safe non-throwing lookup and is the correct API for missing-key branches.
+- `IHashMap<K,V>.Put(Key, Value)` now writes without reporting whether the write inserted or updated.
+- `IHashMap<K,V>.AddOrAssign(Key, Value): Boolean` remains the insert/update reporting API: `True` means newly inserted, `False` means updated.
+- `TLinkedHashMap<K,V>` inherits `IHashMap<K,V>`, so it was aligned in the same batch.
+- `TreeMap` still has copied `Get(Key, out Value)` / `Put(...): Boolean` shape. Its `TRedBlackTree.Put` currently returns the internal `Existed` flag, which appears opposite to the interface comment, so TreeMap should be handled as its own focused semantic batch rather than hidden inside the HashMap change.

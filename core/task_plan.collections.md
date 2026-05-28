@@ -109,6 +109,15 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Keep explicit deque direction APIs (`PushFront` / `PushBack` / `PopFront` / `PopBack`) unchanged.
 - [x] Verify focused collections tests and full `make test`.
 
+### Completed Micro Batch: HashMap Get/Put Semantics
+
+- [x] Change `IHashMap<T>.Get(Key)` to checked lookup returning the value.
+- [x] Change `IHashMap<T>.Put(Key, Value)` to write without reporting insert/update.
+- [x] Keep `TryGetValue(Key, out Value)` as the non-throwing lookup.
+- [x] Keep `AddOrAssign(Key, Value): Boolean` as the insert/update reporting API.
+- [x] Apply the same `IHashMap` contract to `TLinkedHashMap<T>`.
+- [x] Leave `TreeMap` for a separate batch because its internal `Put` return flag needs a focused semantic correction.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -153,6 +162,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Indexed sequence APIs use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for explicit positional extraction. `Vec.Remove(Index)` may remain as a container-specific indexed extraction API when documented clearly; value-based `Remove(Value)` belongs only to containers that explicitly support value lookup/removal semantics.
 - `Vec` exposes `TryRemoveAt` and `TrySwapRemoveAt` because indexed extraction is a core contiguous-vector operation. `Deque` / `VecDeque` should not receive a symmetric `TrySwapRemoveAt` in this batch: their ring-buffer indexing semantics are weaker, and adding the API would imply a stronger Vec-like positional contract than we currently want.
 - Queue-like containers use `Push` / `Pop` / `Peek` as the default entry/exit vocabulary. `Enqueue` / `Dequeue` are duplicate aliases and should not be kept in concrete classes unless a future compatibility policy explicitly requires them.
+- HashMap-family `Get(Key)` is checked lookup and returns `Value`; absence is exceptional. `TryGetValue(Key, out Value)` remains the non-throwing lookup. `Put(Key, Value)` writes without reporting insert/update; `AddOrAssign(Key, Value): Boolean` remains the API that reports whether the key was newly inserted.
 
 ## Verification Commands
 

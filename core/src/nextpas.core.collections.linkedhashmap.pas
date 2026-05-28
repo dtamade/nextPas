@@ -70,9 +70,9 @@ type
     function GetLoadFactor: Single;
     procedure Reserve(aCapacity: SizeUInt);
 
-    // API 一致性别名 (与 TreeMap 统一)
-    function Put(const aKey: K; const aValue: V): Boolean; inline;
-    function Get(const aKey: K; out aValue: V): Boolean; inline;
+    // Map convenience API
+    procedure Put(const aKey: K; const aValue: V); inline;
+    function Get(const aKey: K): V; inline;
 
     // Entry API (Rust-style)
     function GetOrInsert(const aKey: K; const aDefaultValue: V): V;
@@ -319,16 +319,15 @@ begin
   FNodeMap.Reserve(aCapacity);
 end;
 
-function TLinkedHashMap.Put(const aKey: K; const aValue: V): Boolean;
+procedure TLinkedHashMap.Put(const aKey: K; const aValue: V);
 begin
-  // Put 是 AddOrAssign 的别名，与 TreeMap API 保持一致
-  Result := AddOrAssign(aKey, aValue);
+  AddOrAssign(aKey, aValue);
 end;
 
-function TLinkedHashMap.Get(const aKey: K; out aValue: V): Boolean;
+function TLinkedHashMap.Get(const aKey: K): V;
 begin
-  // Get 是 TryGetValue 的别名，与 TreeMap API 保持一致
-  Result := TryGetValue(aKey, aValue);
+  if not TryGetValue(aKey, Result) then
+    raise EInvalidOperation.Create('TLinkedHashMap.Get: key not found');
 end;
 
 function TLinkedHashMap.GetCount: SizeUInt;

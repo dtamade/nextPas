@@ -235,9 +235,9 @@ type
     function AddOrAssign(const AKey: K; const AValue: V): Boolean;
     function Remove(const AKey: K): Boolean;
 
-    // API 一致性别名 (与 TreeMap 统一)
-    function Put(const AKey: K; const AValue: V): Boolean; inline;
-    function Get(const AKey: K; out AValue: V): Boolean; inline;
+    // Map convenience API
+    procedure Put(const AKey: K; const AValue: V); inline;
+    function Get(const AKey: K): V; inline;
 
     {**
      * GetKeys
@@ -786,16 +786,15 @@ begin
   Result := True;
 end;
 
-function THashMap.Put(const AKey: K; const AValue: V): Boolean;
+procedure THashMap.Put(const AKey: K; const AValue: V);
 begin
-  // Put 是 AddOrAssign 的别名，与 TreeMap API 保持一致
-  Result := AddOrAssign(AKey, AValue);
+  AddOrAssign(AKey, AValue);
 end;
 
-function THashMap.Get(const AKey: K; out AValue: V): Boolean;
+function THashMap.Get(const AKey: K): V;
 begin
-  // Get 是 TryGetValue 的别名，与 TreeMap API 保持一致
-  Result := TryGetValue(AKey, AValue);
+  if not TryGetValue(AKey, Result) then
+    raise EInvalidOperation.Create('THashMap.Get: key not found');
 end;
 
 function THashMap.GetKeys: TKeyArray;
