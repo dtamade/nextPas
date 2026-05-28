@@ -4293,11 +4293,13 @@ end;
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
-  I, J: LongInt;
+  I, J, K: LongInt;
   Child, TypeChild: TGreenNode;
   SymbolId: LongInt;
   TypeId: LongInt;
   ParentTypeId: LongInt;
+  InterfaceList: string;
+  SizeVal: Int64;
 begin
   if ANode = nil then
     Exit;
@@ -4346,6 +4348,24 @@ begin
           ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
         if ParentTypeId > 0 then
           FModel.SetTypeParent(TypeId, ParentTypeId);
+        if not FModel.LookupConstValue(Child.Text + '$size', SizeVal) then
+          FModel.AddConstValue(Child.Text + '$size', 8);
+        InterfaceList := '';
+        for K := 0 to TypeChild.ChildCount - 1 do
+        begin
+          if (TypeChild.ChildAt(K) <> nil) and
+            (TypeChild.ChildAt(K).NodeKind = gnkIdentifier) and
+            (Pos('where:', TypeChild.ChildAt(K).Text) = 0) then
+          begin
+            if (K = 0) and (ParentTypeId > 0) then
+              Continue;
+            if InterfaceList <> '' then
+              InterfaceList := InterfaceList + ',';
+            InterfaceList := InterfaceList + TypeChild.ChildAt(K).Text;
+          end;
+        end;
+        if InterfaceList <> '' then
+          FModel.AddStringConstValue(Child.Text + '$interfaces', InterfaceList);
         ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
