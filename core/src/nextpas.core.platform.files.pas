@@ -391,7 +391,7 @@ begin
   end;
   AHandle.Value := CreateFileA(APath, LAccess, FILE_SHARE_READ, nil, LDisposition, $80, nil);
   if AHandle.Value = HANDLE(PtrInt(-1)) then
-    Result := -1
+    Result := Int32(GetLastError)
   else
     Result := 0;
 end;
@@ -403,7 +403,7 @@ begin
   if CloseHandle(AHandle.Value) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
   AHandle.Value := HANDLE(PtrInt(-1));
 end;
 
@@ -421,7 +421,7 @@ begin
   else
   begin
     ABytesRead := 0;
-    Result := -1;
+    Result := Int32(GetLastError);
   end;
 end;
 
@@ -439,7 +439,7 @@ begin
   else
   begin
     ABytesWritten := 0;
-    Result := -1;
+    Result := Int32(GetLastError);
   end;
 end;
 
@@ -458,7 +458,7 @@ begin
   else
   begin
     ANewPos := -1;
-    Result := -1;
+    Result := Int32(GetLastError);
   end;
 end;
 
@@ -467,7 +467,7 @@ begin
   if FlushFileBuffers(AHandle.Value) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
@@ -479,7 +479,7 @@ begin
   if SetEndOfFile(AHandle.Value) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
@@ -505,7 +505,7 @@ begin
   if CreateDirectoryA(APath, nil) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
@@ -513,7 +513,7 @@ begin
   if RemoveDirectoryA(APath) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_unlink(const APath: PAnsiChar): Int32;
@@ -521,7 +521,7 @@ begin
   if DeleteFileA(APath) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
@@ -529,7 +529,7 @@ begin
   if MoveFileA(AOldPath, ANewPath) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
@@ -545,7 +545,7 @@ begin
   if SetCurrentDirectoryA(APath) then
     Result := 0
   else
-    Result := -1;
+    Result := Int32(GetLastError);
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;

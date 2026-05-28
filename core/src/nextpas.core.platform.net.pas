@@ -260,32 +260,62 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+var
+  GWsaInitialized: Boolean = False;
+procedure EnsureWsaInit;
+var LData: TWSAData;
+begin
+  if not GWsaInitialized then begin WSAStartup($0202, @LData); GWsaInitialized := True; end;
+end;
 function platform_socket_create(AFamily: TPlatformAddressFamily; AType: TPlatformSocketType; AProto: TPlatformProtocol; out ASock: TPlatformSocket): Int32;
-begin ASock.Value := TSocket(not PtrUInt(0)); Result := -1; end;
+var LAF, LST, LPR: Int32;
+begin
+  EnsureWsaInit;
+  case AFamily of afInet4: LAF := AF_INET; afInet6: LAF := AF_INET6; afUnix: LAF := AF_UNIX; end;
+  case AType of stStream: LST := SOCK_STREAM; stDgram: LST := SOCK_DGRAM; end;
+  case AProto of spTCP: LPR := IPPROTO_TCP; spUDP: LPR := IPPROTO_UDP; spDefault: LPR := 0; end;
+  ASock.Value := winsock_socket(LAF, LST, LPR);
+  if ASock.Value = TSocket(not PtrUInt(0)) then Result := Int32(WSAGetLastError) else Result := 0;
+end;
 function platform_socket_close(var ASock: TPlatformSocket): Int32;
-begin Result := -1; end;
+begin
+  if ASock.Value = TSocket(not PtrUInt(0)) then Exit(9);
+  if closesocket(ASock.Value) = 0 then Result := 0 else Result := Int32(WSAGetLastError);
+  ASock.Value := TSocket(not PtrUInt(0));
+end;
 function platform_socket_bind(const ASock: TPlatformSocket; const AAddr: TPlatformSockAddr): Int32;
-begin Result := -1; end;
+begin if winsock_bind(ASock.Value, @AAddr.Storage, AAddr.Len) = 0 then Result := 0 else Result := Int32(WSAGetLastError); end;
 function platform_socket_listen(const ASock: TPlatformSocket; ABacklog: Int32): Int32;
-begin Result := -1; end;
+begin if winsock_listen(ASock.Value, ABacklog) = 0 then Result := 0 else Result := Int32(WSAGetLastError); end;
 function platform_socket_accept(const ASock: TPlatformSocket; out AClient: TPlatformSocket; out AAddr: TPlatformSockAddr): Int32;
-begin FillChar(AClient, SizeOf(AClient), 0); FillChar(AAddr, SizeOf(AAddr), 0); Result := -1; end;
+var LLen: Int32;
+begin
+  FillChar(AAddr, SizeOf(AAddr), 0); LLen := SizeOf(AAddr.Storage);
+  AClient.Value := winsock_accept(ASock.Value, @AAddr.Storage, @LLen);
+  if AClient.Value = TSocket(not PtrUInt(0)) then Result := Int32(WSAGetLastError)
+  else begin AAddr.Len := LLen; Result := 0; end;
+end;
 function platform_socket_connect(const ASock: TPlatformSocket; const AAddr: TPlatformSockAddr): Int32;
-begin Result := -1; end;
+begin if winsock_connect(ASock.Value, @AAddr.Storage, AAddr.Len) = 0 then Result := 0 else Result := Int32(WSAGetLastError); end;
 function platform_socket_send(const ASock: TPlatformSocket; ABuf: Pointer; ALen: PtrUInt; out ASent: PtrUInt): Int32;
-begin ASent := 0; Result := -1; end;
+var LR: Int32;
+begin LR := winsock_send(ASock.Value, ABuf, Int32(ALen), 0); if LR < 0 then begin ASent := 0; Result := Int32(WSAGetLastError); end else begin ASent := PtrUInt(LR); Result := 0; end; end;
 function platform_socket_recv(const ASock: TPlatformSocket; ABuf: Pointer; ALen: PtrUInt; out ARecvd: PtrUInt): Int32;
-begin ARecvd := 0; Result := -1; end;
+var LR: Int32;
+begin LR := winsock_recv(ASock.Value, ABuf, Int32(ALen), 0); if LR < 0 then begin ARecvd := 0; Result := Int32(WSAGetLastError); end else begin ARecvd := PtrUInt(LR); Result := 0; end; end;
 function platform_socket_shutdown(const ASock: TPlatformSocket; AHow: TPlatformShutdownHow): Int32;
-begin Result := -1; end;
+var LH: Int32;
+begin case AHow of shRead: LH := SHUT_RD; shWrite: LH := SHUT_WR; shBoth: LH := SHUT_RDWR; end; if winsock_shutdown(ASock.Value, LH) = 0 then Result := 0 else Result := Int32(WSAGetLastError); end;
 function platform_socket_setopt_int(const ASock: TPlatformSocket; ALevel: Int32; AOptName: Int32; AValue: Int32): Int32;
-begin Result := -1; end;
+begin if winsock_setsockopt(ASock.Value, ALevel, AOptName, @AValue, SizeOf(AValue)) = 0 then Result := 0 else Result := Int32(WSAGetLastError); end;
 function platform_socket_fd(const ASock: TPlatformSocket): Int32;
-begin Result := -1; end;
+begin Result := Int32(ASock.Value); end;
 function platform_sockaddr_ipv4(APort: UInt16; AAddr: UInt32; out AResult: TPlatformSockAddr): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+var LAddr: ^sockaddr_in;
+begin FillChar(AResult, SizeOf(AResult), 0); LAddr := @AResult.Storage; LAddr^.sin_family := AF_INET; LAddr^.sin_port := htons(APort); LAddr^.sin_addr.s_addr := AAddr; AResult.Len := SizeOf(sockaddr_in); Result := 0; end;
 function platform_sockaddr_loopback4(APort: UInt16; out AResult: TPlatformSockAddr): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+var LAddr: ^sockaddr_in;
+begin FillChar(AResult, SizeOf(AResult), 0); LAddr := @AResult.Storage; LAddr^.sin_family := AF_INET; LAddr^.sin_port := htons(APort); LAddr^.sin_addr.s_addr := htonl($7F000001); AResult.Len := SizeOf(sockaddr_in); Result := 0; end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}

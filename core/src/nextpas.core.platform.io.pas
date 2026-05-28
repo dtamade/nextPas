@@ -279,18 +279,18 @@ end;
 function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 begin
-  Result := -1;
+  Result := Int32(WSAGetLastError);
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: Int32;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 begin
-  Result := -1;
+  Result := Int32(WSAGetLastError);
 end;
 
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: Int32): Int32;
 begin
-  Result := -1;
+  Result := Int32(WSAGetLastError);
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
@@ -298,7 +298,7 @@ function platform_poller_wait(var APoller: TPlatformPoller;
   out ACount: Int32): Int32;
 begin
   ACount := 0;
-  Result := -1;
+  Result := Int32(WSAGetLastError);
 end;
 {$ENDIF}
 

@@ -117,16 +117,52 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi;
+
+function BuildCmdLine(const APath: PAnsiChar; AArgv: PPAnsiChar): AnsiString;
+var LP: PPAnsiChar;
+begin
+  Result := APath;
+  if AArgv <> nil then begin LP := AArgv; Inc(LP); while LP^ <> nil do begin Result := Result + ' ' + LP^; Inc(LP); end; end;
+end;
+
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
-begin FillChar(AProc, SizeOf(AProc), 0); Result := -1; end;
+var LSI: STARTUPINFOA; LPI: PROCESS_INFORMATION; LCmd: AnsiString;
+begin
+  FillChar(AProc, SizeOf(AProc), 0); FillChar(LSI, SizeOf(LSI), 0); FillChar(LPI, SizeOf(LPI), 0);
+  LSI.cb := SizeOf(LSI); LCmd := BuildCmdLine(APath, AArgv);
+  if not CreateProcessA(nil, @LCmd[1], nil, nil, False, 0, nil, nil, @LSI, @LPI) then Exit(Int32(GetLastError));
+  AProc.ProcessHandle := PtrUInt(LPI.hProcess); AProc.ThreadHandle := PtrUInt(LPI.hThread);
+  AProc.Pid := LPI.dwProcessId; CloseHandle(HANDLE(AProc.ThreadHandle)); AProc.ThreadHandle := 0; Result := 0;
+end;
+
 function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+var LExitCode: DWORD;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  if WaitForSingleObject(HANDLE(AProc.ProcessHandle), $FFFFFFFF) <> 0 then Exit(Int32(GetLastError));
+  LExitCode := 0; if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then Exit(Int32(GetLastError));
+  AResult.Status := psExited; AResult.ExitCode := Int32(LExitCode); CloseHandle(HANDLE(AProc.ProcessHandle)); Result := 0;
+end;
+
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
-begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+var LExitCode, LWait: DWORD;
+begin
+  FillChar(AResult, SizeOf(AResult), 0);
+  LWait := WaitForSingleObject(HANDLE(AProc.ProcessHandle), 0);
+  if LWait = $00000102 then begin AResult.Status := psRunning; Exit(0); end;
+  if LWait <> 0 then Exit(Int32(GetLastError));
+  LExitCode := 0; GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
+  AResult.Status := psExited; AResult.ExitCode := Int32(LExitCode); CloseHandle(HANDLE(AProc.ProcessHandle)); Result := 0;
+end;
+
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then Result := 0 else Result := Int32(GetLastError); end;
+
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
-begin Result := -1; end;
+begin Result := Int32(AProc.Pid); end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
