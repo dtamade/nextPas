@@ -275,8 +275,7 @@ generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator
 generic function MakeQueue<T>(const aSrcCollection: TCollection; aAllocator: IAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; overload;
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; overload;
 
-// ==== Stack (source-based) ====
-// 注意：MakeStack 移除了 aCapacity 和 aGrowStrategy 参数，因为 TArrayStack 当前不支持这些参数
+// ==== Stack ====
 generic function MakeStack<T>: specialize IStack<T>; overload;
 generic function MakeStack<T>(aAllocator: IAllocator): specialize IStack<T>; overload;
 generic function MakeStack<T>(const aSrc: array of T; aAllocator: IAllocator = nil): specialize IStack<T>; overload;
@@ -646,8 +645,7 @@ begin
     Exit(specialize TVecDeque<T>.Create(aSrc, aElementCount, GetRtlAllocator(), aData));
 end;
 
-// Stack factories (based on TArrayStack)
-// 注意：移除了 aCapacity 和 aGrowStrategy 参数，因为 TArrayStack 当前不支持这些参数
+// Stack factories (based on TStack)
 generic function MakeStack<T>: specialize IStack<T>;
 begin
   Result := specialize MakeStack<T>(IAllocator(nil));
@@ -655,7 +653,7 @@ end;
 
 generic function MakeStack<T>(aAllocator: IAllocator): specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
+  TStackImpl = specialize TStack<T>;
 var
   LStack: TStackImpl;
 begin
@@ -665,7 +663,7 @@ end;
 
 generic function MakeStack<T>(const aSrc: array of T; aAllocator: IAllocator): specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
+  TStackImpl = specialize TStack<T>;
 var
   LStack: TStackImpl;
 begin
@@ -681,7 +679,7 @@ end;
 
 generic function MakeStack<T>(const aSrcCollection: TCollection; aAllocator: IAllocator): specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
+  TStackImpl = specialize TStack<T>;
   PT = ^T;
 var
   LStack: TStackImpl;
@@ -689,7 +687,6 @@ var
 begin
   LStack := TStackImpl.Create(aAllocator);
   try
-    // 从 aSrcCollection 复制元素
     if (aSrcCollection <> nil) and (not aSrcCollection.IsEmpty) then
     begin
       LIter := aSrcCollection.PtrIter;
@@ -705,7 +702,7 @@ end;
 
 generic function MakeStack<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: IAllocator): specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
+  TStackImpl = specialize TStack<T>;
 var
   LStack: TStackImpl;
 begin

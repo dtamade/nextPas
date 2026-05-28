@@ -222,4 +222,10 @@
 
 - `TCircularBuffer<T>` and `TPriorityQueue<T>` are working public implementations already aggregated by `nextpas.core.collections`, but they were missing facade-level `MakeXxx` factories.
 - `MakeCircularBuffer` and `MakePriorityQueue` are clean additions to the interface-first facade because their constructor semantics are stable and their interface types are already part of the public facade.
-- `stack.pas` also exposes child-unit `MakeArrayStack` and `MakeLinkedStack`, but `TLinkedStack<T>` currently uses the same `TVecDeque<T>` backend as `TArrayStack<T>`. That naming/implementation mismatch should be reviewed before promoting these factories through the top-level facade.
+
+## 2026-05-28: stack identity consolidation
+
+- `TArrayStack<T>` and `TLinkedStack<T>` were both backed by `TVecDeque<T>` with 100% duplicated code. The "Linked" name was a lie — no linked-list backend existed.
+- Merged into a single `TStack<T>` backed by `TVec<T>`. Rationale: a stack only needs tail push/pop, so `TVec` is the natural fit (no ring-buffer overhead from `TVecDeque`).
+- Removed `MakeArrayStack` and `MakeLinkedStack` from the child unit. The facade's `MakeStack<T>` is the only public stack factory.
+- If a real linked-list stack is ever needed (e.g., for very large non-copyable elements), it should be introduced as a separate container with a distinct name and a genuine singly-linked-list backend, not as a naming alias over the same array storage.

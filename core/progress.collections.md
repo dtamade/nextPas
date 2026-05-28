@@ -84,11 +84,15 @@
 - Continued the facade public-surface map and added top-level `MakeCircularBuffer` and `MakePriorityQueue` to `nextpas.core.collections`, so those working implementations now have interface-first entry points at the facade layer.
 - Extended `test_facade` with minimal public-surface probes for `MakeCircularBuffer` and `MakePriorityQueue`.
 - Recorded that `MakeArrayStack` / `MakeLinkedStack` remain child-unit-only for now because `TLinkedStack` currently shares the same `TVecDeque` backend as `TArrayStack`; that naming/identity issue should be reviewed before broader facade promotion.
+- Completed stack identity consolidation: merged `TArrayStack` and `TLinkedStack` (both used `TVecDeque`, code 100% duplicated) into a single `TStack<T>` backed by `TVec<T>`.
+- Removed `MakeArrayStack` / `MakeLinkedStack` from child unit; facade `MakeStack<T>` now uses `TStack<T>` directly.
+- Added dedicated `test_stack` suite with 6 tests covering LIFO semantics, array construction, peek, try-pop-empty, pop-raises, and clear.
+- Verified all focused collections tests: 9 suites, 70 tests, 0 failures.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: review `stack` implementation identity and decide whether `ArrayStack` / `LinkedStack` should both remain, be renamed, or gain distinct backends before facade promotion.
+- Next likely batch: audit remaining `.base/.intf/.pas` structural relationships across containers.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

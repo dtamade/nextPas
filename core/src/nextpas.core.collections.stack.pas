@@ -5,47 +5,26 @@ unit nextpas.core.collections.stack;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
-  nextpas.core.math,
-  nextpas.core.mem.utils,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
-  nextpas.core.collections.intf,
   nextpas.core.collections.stack.intf,
-  nextpas.core.collections.vecdeque;
+  nextpas.core.collections.vec;
 
 type
-  {**
-   * TArrayStack<T>
-   *
-   * @desc 基于数组的栈实现
-   * @param T 元素类型
-   * @note
-   *   - 内部使用 TVecDeque 作为底层容器
-   *   - 支持接口引用计数
-   *   - 使用 MakeArrayStack<T>() 工厂函数创建
-   *
-   *   示例:
-   *     var Stack: specialize IStack<Integer>;
-   *     Stack := specialize MakeArrayStack<Integer>();
-   *     Stack.Push(1);
-   *     Stack.Push(2);
-   *     WriteLn(Stack.Pop); // 2 (LIFO)
-   *}
-  generic TArrayStack<T> = class(TInterfacedObject, specialize IStack<T>)
+  generic TStack<T> = class(TInterfacedObject, specialize IStack<T>)
   type
     PElement = ^T;
-    TInternalVecDeque = specialize TVecDeque<T>;
+    TInternalVec = specialize TVec<T>;
   private
-    FStack: TInternalVecDeque;
-    FAllocator: IAllocator;
+    FVec: TInternalVec;
 
   public
     constructor Create(const aAllocator: IAllocator = nil);
     destructor Destroy; override;
 
-    { IStack 接口实现 }
+    { IStack implementation }
     procedure Push(const aElement: T); overload;
     procedure Push(const aSrc: array of T); overload;
     procedure Push(const aSrc: Pointer; aElementCount: SizeUInt); overload;
@@ -61,251 +40,102 @@ type
     function Count: SizeUInt;
   end;
 
-  { TLinkedStack 基于链表的栈实现 - 使用 TVecDeque 作为底层容器 }
-  generic TLinkedStack<T> = class(TInterfacedObject, specialize IStack<T>)
-  type
-    PElement = ^T;
-    TInternalVecDeque = specialize TVecDeque<T>;
-  private
-    FStack: TInternalVecDeque;
-    FAllocator: IAllocator;
-
-  public
-    constructor Create(const aAllocator: IAllocator = nil);
-    destructor Destroy; override;
-
-    { IStack 接口实现 }
-    procedure Push(const aElement: T); overload;
-    procedure Push(const aSrc: array of T); overload;
-    procedure Push(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-
-    function Pop(out aElement: T): Boolean; overload;
-    function Pop: T; overload;
-
-    function TryPeek(out aElement: T): Boolean; overload;
-    function Peek: T; overload;
-
-    function IsEmpty: Boolean;
-    procedure Clear;
-    function Count: SizeUInt;
-  end;
-
-  { 数组栈工厂函数 - 简化为3个最常用重载 }
-
-  generic function MakeArrayStack<T>: specialize IStack<T>;
-  generic function MakeArrayStack<T>(const aSrc: array of T): specialize IStack<T>;
-  generic function MakeArrayStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
-
-  { 链表栈工厂函数 - 简化为3个最常用重载 }
-
-  generic function MakeLinkedStack<T>: specialize IStack<T>;
-  generic function MakeLinkedStack<T>(const aSrc: array of T): specialize IStack<T>;
-  generic function MakeLinkedStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
+  generic function MakeStack<T>: specialize IStack<T>;
+  generic function MakeStack<T>(const aSrc: array of T): specialize IStack<T>;
+  generic function MakeStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
 
 implementation
 
-{ TArrayStack<T> }
+{ TStack<T> }
 
-constructor TArrayStack.Create(const aAllocator: IAllocator = nil);
+constructor TStack.Create(const aAllocator: IAllocator = nil);
 begin
   inherited Create;
   if aAllocator <> nil then
-    FAllocator := aAllocator
+    FVec := TInternalVec.Create(aAllocator)
   else
-    FAllocator := GetRtlAllocator;
-  FStack := TInternalVecDeque.Create(FAllocator);
+    FVec := TInternalVec.Create(GetRtlAllocator);
 end;
 
-destructor TArrayStack.Destroy;
+destructor TStack.Destroy;
 begin
-  FStack.Free;
+  FVec.Free;
   inherited Destroy;
 end;
 
-procedure TArrayStack.Push(const aElement: T);
+procedure TStack.Push(const aElement: T);
 begin
-  FStack.PushBack(aElement);
+  FVec.Push(aElement);
 end;
 
-procedure TArrayStack.Push(const aSrc: array of T);
-var
-  I: SizeUInt;
+procedure TStack.Push(const aSrc: array of T);
 begin
-  for I := 0 to High(aSrc) do
-    FStack.PushBack(aSrc[I]);
+  FVec.Push(aSrc);
 end;
 
-procedure TArrayStack.Push(const aSrc: Pointer; aElementCount: SizeUInt);
+procedure TStack.Push(const aSrc: Pointer; aElementCount: SizeUInt);
 var
-  I: SizeUInt;
+  LIdx: SizeUInt;
   LElement: T;
 begin
-  for I := 0 to aElementCount - 1 do
+  for LIdx := 0 to aElementCount - 1 do
   begin
-    LElement := PElement(aSrc)[I];
-    FStack.PushBack(LElement);
+    LElement := PElement(aSrc)[LIdx];
+    FVec.Push(LElement);
   end;
 end;
 
-function TArrayStack.Pop(out aElement: T): Boolean;
+function TStack.Pop(out aElement: T): Boolean;
 begin
-  if FStack.IsEmpty then
-    Exit(False);
-  aElement := FStack.PopBack;
-  Result := True;
+  Result := FVec.TryPop(aElement);
 end;
 
-function TArrayStack.Pop: T;
+function TStack.Pop: T;
 begin
-  if FStack.IsEmpty then
-    raise EEmptyCollection.Create('TArrayStack.Pop: collection is empty');
-  Result := FStack.PopBack;
+  if FVec.IsEmpty then
+    raise EEmptyCollection.Create('TStack.Pop: collection is empty');
+  Result := FVec.Pop;
 end;
 
-function TArrayStack.TryPeek(out aElement: T): Boolean;
+function TStack.TryPeek(out aElement: T): Boolean;
 begin
-  if FStack.IsEmpty then
-    Exit(False);
-  aElement := FStack.Back;
-  Result := True;
+  Result := FVec.TryPeek(aElement);
 end;
 
-function TArrayStack.Peek: T;
+function TStack.Peek: T;
 begin
-  if FStack.IsEmpty then
-    raise EEmptyCollection.Create('TArrayStack.Peek: collection is empty');
-  Result := FStack.Back;
+  if FVec.IsEmpty then
+    raise EEmptyCollection.Create('TStack.Peek: collection is empty');
+  Result := FVec.Peek;
 end;
 
-function TArrayStack.IsEmpty: Boolean;
+function TStack.IsEmpty: Boolean;
 begin
-  Result := FStack.IsEmpty;
+  Result := FVec.IsEmpty;
 end;
 
-procedure TArrayStack.Clear;
+procedure TStack.Clear;
 begin
-  FStack.Clear;
+  FVec.Clear;
 end;
 
-function TArrayStack.Count: SizeUInt;
+function TStack.Count: SizeUInt;
 begin
-  Result := FStack.Count;
+  Result := FVec.Count;
 end;
 
-{ TLinkedStack<T> }
+{ MakeStack factories }
 
-constructor TLinkedStack.Create(const aAllocator: IAllocator = nil);
-begin
-  inherited Create;
-  if aAllocator <> nil then
-    FAllocator := aAllocator
-  else
-    FAllocator := GetRtlAllocator;
-  FStack := TInternalVecDeque.Create(FAllocator);
-end;
-
-destructor TLinkedStack.Destroy;
-begin
-  FStack.Free;
-  inherited Destroy;
-end;
-
-procedure TLinkedStack.Push(const aElement: T);
-begin
-  FStack.PushBack(aElement);
-end;
-
-procedure TLinkedStack.Push(const aSrc: array of T);
-var
-  I: SizeUInt;
-begin
-  for I := 0 to High(aSrc) do
-    FStack.PushBack(aSrc[I]);
-end;
-
-procedure TLinkedStack.Push(const aSrc: Pointer; aElementCount: SizeUInt);
-var
-  I: SizeUInt;
-  LElement: T;
-begin
-  for I := 0 to aElementCount - 1 do
-  begin
-    LElement := PElement(aSrc)[I];
-    FStack.PushBack(LElement);
-  end;
-end;
-
-function TLinkedStack.Pop(out aElement: T): Boolean;
-begin
-  if FStack.IsEmpty then
-    Exit(False);
-  aElement := FStack.PopBack;
-  Result := True;
-end;
-
-function TLinkedStack.Pop: T;
-begin
-  if FStack.IsEmpty then
-    raise EEmptyCollection.Create('TLinkedStack.Pop: collection is empty');
-  Result := FStack.PopBack;
-end;
-
-function TLinkedStack.TryPeek(out aElement: T): Boolean;
-begin
-  if FStack.IsEmpty then
-    Exit(False);
-  aElement := FStack.Back;
-  Result := True;
-end;
-
-function TLinkedStack.Peek: T;
-begin
-  if FStack.IsEmpty then
-    raise EEmptyCollection.Create('TLinkedStack.Peek: collection is empty');
-  Result := FStack.Back;
-end;
-
-function TLinkedStack.IsEmpty: Boolean;
-begin
-  Result := FStack.IsEmpty;
-end;
-
-procedure TLinkedStack.Clear;
-begin
-  FStack.Clear;
-end;
-
-function TLinkedStack.Count: SizeUInt;
-begin
-  Result := FStack.Count;
-end;
-
-{ MakeArrayStack 实现 }
-
-generic function MakeArrayStack<T>: specialize IStack<T>;
+generic function MakeStack<T>: specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
-var
-  LStack: TStackImpl;
+  TStackImpl = specialize TStack<T>;
 begin
-  LStack := TStackImpl.Create;
-  Result := LStack;
+  Result := TStackImpl.Create;
 end;
 
-generic function MakeArrayStack<T>(aAllocator: IAllocator): specialize IStack<T>;
+generic function MakeStack<T>(const aSrc: array of T): specialize IStack<T>;
 type
-  TStackImpl = specialize TArrayStack<T>;
-var
-  LStack: TStackImpl;
-begin
-  LStack := TStackImpl.Create(aAllocator);
-  Result := LStack;
-end;
-
-
-generic function MakeArrayStack<T>(const aSrc: array of T): specialize IStack<T>;
-type
-  TStackImpl = specialize TArrayStack<T>;
+  TStackImpl = specialize TStack<T>;
 var
   LStack: TStackImpl;
 begin
@@ -319,40 +149,11 @@ begin
   end;
 end;
 
-generic function MakeLinkedStack<T>: specialize IStack<T>;
+generic function MakeStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
 type
-  TStackImpl = specialize TLinkedStack<T>;
-var
-  LStack: TStackImpl;
+  TStackImpl = specialize TStack<T>;
 begin
-  LStack := TStackImpl.Create;
-  Result := LStack;
-end;
-
-generic function MakeLinkedStack<T>(const aSrc: array of T): specialize IStack<T>;
-type
-  TStackImpl = specialize TLinkedStack<T>;
-var
-  LStack: TStackImpl;
-begin
-  LStack := TStackImpl.Create;
-  try
-    LStack.Push(aSrc);
-    Result := LStack;
-  except
-    LStack.Free;
-    raise;
-  end;
-end;
-
-generic function MakeLinkedStack<T>(const aAllocator: IAllocator): specialize IStack<T>;
-type
-  TStackImpl = specialize TLinkedStack<T>;
-var
-  LStack: TStackImpl;
-begin
-  LStack := TStackImpl.Create(aAllocator);
-  Result := LStack;
+  Result := TStackImpl.Create(aAllocator);
 end;
 
 end.

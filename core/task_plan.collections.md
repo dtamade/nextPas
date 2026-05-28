@@ -157,6 +157,15 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Verify focused collections tests.
 - [x] Record full-suite blocker from unrelated platform WIP if it still applies.
 
+### Completed Micro Batch: Stack Identity Consolidation
+
+- [x] Review `TArrayStack` / `TLinkedStack` implementation identity: both used `TVecDeque` backend, code was 100% duplicated.
+- [x] Merge into single `TStack<T>` backed by `TVec<T>` (natural fit for LIFO tail-only operations).
+- [x] Remove `TArrayStack`, `TLinkedStack`, `MakeArrayStack`, `MakeLinkedStack` from child unit.
+- [x] Update facade `MakeStack` factories to use `TStack<T>`.
+- [x] Add dedicated `test_stack` suite (6 tests: LIFO, from-array, peek, try-pop-empty, pop-raises, clear).
+- [x] Verify all focused collections tests (9 suites, 70 tests, 0 failures).
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -206,7 +215,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - SkipList and Trie are key/value containers and follow the same normal key lookup/write vocabulary as HashMap and TreeMap. LruCache is a cache, not a plain map: `Get(out)` currently means hit/miss lookup plus recency/statistics update, so it should not be renamed or made checked as part of map vocabulary cleanup.
 - RBTreeMap is an ordered key/value map adapter and should use the same normal map vocabulary. Its `TryUpdate` method may remain because "update only if present" is a distinct operation rather than a duplicate of `Put` or `AddOrAssign`.
 - Facade public-surface hardening should prioritize unambiguous working implementations first. `CircularBuffer` and `PriorityQueue` are clean additions to the `MakeXxx` facade family.
-- `stack.pas` still exposes `MakeArrayStack` and `MakeLinkedStack` inside the implementation unit, but `TLinkedStack` currently uses the same `TVecDeque` backend as `TArrayStack`. Do not promote that naming more broadly until stack implementation identity is reviewed.
+- `stack.pas` now exposes a single `TStack<T>` backed by `TVec<T>`. The previous `TArrayStack` / `TLinkedStack` split was a naming fiction (both used `TVecDeque`). The facade exposes `MakeStack<T>` as the only public stack factory. If a linked-list stack is ever needed, it can be added as a separate container with a distinct name and a real linked backend.
 
 ## Verification Commands
 
