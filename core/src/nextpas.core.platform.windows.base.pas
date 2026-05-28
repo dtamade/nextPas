@@ -256,6 +256,9 @@ const
 { additional kernel32 types, error codes, and constants }
 {$I nextpas.core.platform.windows.base.kernel32.inc}
 
+{ winsock2 types and constants }
+{$I nextpas.core.platform.windows.base.winsock2.inc}
+
 implementation
 
 end.
