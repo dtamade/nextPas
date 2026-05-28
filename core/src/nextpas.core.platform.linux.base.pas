@@ -285,6 +285,9 @@ const
 {$I nextpas.core.platform.linux.base.syscall.generic.inc}
 {$ENDIF}
 
+{ core OS types - pollfd, iovec, dirent, statfs, rlimit, flock, tms, utsname, fdset, cpu_set }
+{$I nextpas.core.platform.linux.base.ostypes.inc}
+
 implementation
 
 end.
