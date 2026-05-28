@@ -106,10 +106,10 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 ### G5: Windows host 全量 API ✅
 - [x] windows.base: kernel32 类型/常量 (HANDLE, DWORD, OVERLAPPED, CRITICAL_SECTION, WIN32_FIND_DATA, SYSTEMTIME, error codes, MAX_PATH, STD_*_HANDLE, STARTF_*, FILE_FLAG_*)
 - [x] windows.base: ws2_32 类型/常量 (TSocket, TWSAData, WSABUF, AF_*/SOCK_*/SOL_*/SO_*/IPPROTO_*/TCP_*/MSG_*/AI_*/NI_*, WSA error codes, IOCTL)
-- [ ] windows.base: advapi32/ntdll 类型
+- [x] windows.base: advapi32 类型/常量 (Registry, Token, Service)
 - [x] windows.ffi: kernel32 (CreateFile, ReadFile, WriteFile, CreateProcess, WaitForSingleObject, CreateThread, CriticalSection, IOCP, FindFirstFile/FindNextFile/FindClose, GetSystemTime, GetOverlappedResult, CancelIo)
 - [x] windows.ffi: ws2_32 (WSAStartup, socket, bind, listen, accept, connect, send, recv, closesocket, shutdown, select, ioctlsocket, setsockopt, getsockopt, getaddrinfo, freeaddrinfo, getnameinfo, WSARecv, WSASend, WSASocketW, htons/ntohs/htonl/ntohl)
-- [ ] windows.ffi: advapi32 (RegOpenKeyEx, OpenProcessToken...)
+- [x] windows.ffi: advapi32 (Registry 14 + Token 10 + Service 9 = 37 functions)
 
 ### G6: POSIX 共享层完善 ✅
 - [x] posix.ffi 补齐所有共享签名 API (42+ functions)
@@ -121,10 +121,12 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.sync
 - [x] platform.thread
 - [x] platform.files (文件/目录操作, 11 tests)
-- [x] platform.io (I/O 多路复用: epoll/kqueue, 6 tests)
+- [x] platform.io (I/O 多路复用: epoll/kqueue/WSAPoll, 6 tests)
 - [x] platform.net (socket 统一抽象, 5 tests)
-- [x] platform.process (进程管理, 5 tests)
-- [ ] 每个模块无内存泄漏验证 (heaptrc)
+- [x] platform.process (进程管理: fork+execve/CreateProcess, 5 tests)
+- [x] platform.pipe (管道+dup2 统一抽象, 5 tests)
+- [x] platform.mmap (内存映射文件: mmap/CreateFileMapping, 5 tests)
+- [x] 每个模块无内存泄漏验证 (heaptrc: 9 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持
