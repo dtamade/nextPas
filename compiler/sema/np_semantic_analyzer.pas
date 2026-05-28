@@ -640,11 +640,9 @@ begin
   if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
     Exit(ANode.Text);
   if (ANode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') and
-    FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.Text + '$str', FieldIdx) and
-    FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.Text + '$idx', FieldIdx) then
+    TypeMetaFieldIsStr(FCurrentMethodClass, ANode.Text) then
   begin
+    FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text);
     Inc(FBlockLabelCounter);
     TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
     RegisterRuntimeVar(TempName);
@@ -4353,7 +4351,6 @@ end;
 function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
-  SizeVal: Int64;
   IntfList: string;
   SubConstraints: array of string;
   I, J: LongInt;
@@ -4378,8 +4375,7 @@ begin
       Continue;
     if SameText(SC, 'class') then
     begin
-      if FModel.LookupConstValue(AArgType + '$record', SizeVal) or
-        (not FModel.LookupConstValue(AArgType + '$size', SizeVal)) then
+      if not TypeMetaIsClass(AArgType) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
@@ -4390,7 +4386,7 @@ begin
     end
     else if SameText(SC, 'record') then
     begin
-      if not FModel.LookupConstValue(AArgType + '$record', SizeVal) then
+      if not TypeMetaIsRecord(AArgType) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
@@ -4401,7 +4397,7 @@ begin
     end
     else
     begin
-      if not FModel.LookupConstValue(AArgType + '$size', SizeVal) then
+      if not TypeMetaIsClass(AArgType) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
@@ -4591,7 +4587,8 @@ begin
   end;
   if ParentName <> '' then
   begin
-    if FModel.LookupConstValue(ParentName + '$size', ParentFieldVal) then
+    ParentFieldVal := TypeMetaSize(ParentName);
+    if ParentFieldVal > 0 then
     begin
       FieldIndex := LongInt(ParentFieldVal) div 8;
       for J := 0 to FModel.ConstValueCount - 1 do
@@ -4687,7 +4684,7 @@ begin
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
       if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
-        (FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) or
+        ((TypeMetaSize(Child.ChildAt(0).Text) > 0) or
          SameText(Child.ChildAt(0).Text, ClsName)) then
         FModel.AddConstValue(
           ClsName + '.' + Child.Text + '$ptr', 1);
@@ -4699,9 +4696,10 @@ begin
         Inc(FieldIndex, 2);
       end
       else if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
-        FModel.LookupConstValue(Child.ChildAt(0).Text + '$record', ParentFieldVal) and
-        FModel.LookupConstValue(Child.ChildAt(0).Text + '$size', ParentFieldVal) then
+        TypeMetaIsRecord(Child.ChildAt(0).Text) and
+        (TypeMetaSize(Child.ChildAt(0).Text) > 0) then
       begin
+        ParentFieldVal := TypeMetaSize(Child.ChildAt(0).Text);
         for J := 0 to FModel.ConstValueCount - 1 do
         begin
           ConstName := FModel.ConstValueNameAt(J);
@@ -4752,8 +4750,8 @@ begin
           end
           else if Pos(';override', Child.Text) > 0 then
           begin
-            if FModel.LookupConstValue(
-              ParentName + '$vmt_slot_' + NameNode.Text, ParentFieldVal) then
+            ParentFieldVal := TypeMetaVmtSlot(ParentName, NameNode.Text);
+            if ParentFieldVal >= 0 then
             begin
               FModel.AddConstValue(
                 ClsName + '$vmt_slot_' + NameNode.Text, ParentFieldVal);
@@ -4764,7 +4762,7 @@ begin
           end;
           if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
             (Child.ChildAt(1).NodeKind = gnkIdentifier) and
-            (FModel.LookupConstValue(Child.ChildAt(1).Text + '$size', ParentFieldVal) or
+            ((TypeMetaSize(Child.ChildAt(1).Text) > 0) or
              SameText(Child.ChildAt(1).Text, ClsName)) then
             FModel.AddConstValue(
               ClsName + '$ret_ptr_' + NameNode.Text, 1);
@@ -4920,7 +4918,7 @@ begin
         if ParentTypeId > 0 then
           FModel.SetTypeParent(TypeId, ParentTypeId);
         if (not SameText(TypeChild.Text, 'interface')) and
-          (not FModel.LookupConstValue(Child.Text + '$size', SizeVal)) then
+          (TypeMetaSize(Child.Text) <= 0) then
           FModel.AddConstValue(Child.Text + '$size', 8);
         InterfaceList := '';
         for K := 0 to TypeChild.ChildCount - 1 do
@@ -5164,10 +5162,10 @@ begin
         'field', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
       if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$idx', SizeVal) then
         FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$idx', SizeVal);
-      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$str', SizeVal) then
-        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', SizeVal);
-      if FModel.LookupConstValue(GenericName + '.' + MethodShortName + '$ptr', SizeVal) then
-        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$ptr', SizeVal);
+      if TypeMetaFieldIsStr(GenericName, MethodShortName) then
+        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$str', 1);
+      if TypeMetaFieldIsPtr(GenericName, MethodShortName) then
+        FModel.AddConstValue(InstanceName + '.' + MethodShortName + '$ptr', 1);
     end;
   end;
   FModel.SetTypeParent(AInstanceTypeId,
@@ -5225,7 +5223,8 @@ begin
     if GtPos > 0 then
       FModel.SetTypeParent(AInstanceTypeId, GtPos);
   end;
-  if FModel.LookupConstValue(GenericName + '$size', SizeVal) then
+  SizeVal := TypeMetaSize(GenericName);
+  if SizeVal > 0 then
     FModel.AddConstValue(InstanceName + '$size', SizeVal)
   else
     FModel.AddConstValue(InstanceName + '$size', 8);
@@ -5246,7 +5245,8 @@ begin
   end
   else if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
-  if FModel.LookupStringConstValue(GenericName + '$parent_class', SubstSig) then
+  SubstSig := TypeMetaParentClass(GenericName);
+  if SubstSig <> '' then
   begin
     if Pos('<', SubstSig) > 0 then
     begin
@@ -5875,11 +5875,9 @@ begin
     (ANode.ChildAt(1) <> nil) and
     (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
     (FCurrentMethodClass <> '') and
-    FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.ChildAt(1).Text + '$str', Folded) and
-    FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+    TypeMetaFieldIsStr(FCurrentMethodClass, ANode.ChildAt(1).Text) then
   begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(1).Text);
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
@@ -6065,14 +6063,13 @@ begin
           Inc(StrCallArgCount);
         end;
       end;
-      if FModel.LookupConstValue(
-        FuncName + '$vmt_slot_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+      Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(0).ChildAt(1).Text);
+      if Folded >= 0 then
       begin
         ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
           ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
           IntToStr(StrCallArgCount);
-        if FModel.LookupConstValue(
-          FuncName + '$ret_ptr_' + ANode.ChildAt(0).ChildAt(1).Text, Folded) then
+        if TypeMetaRetPtr(FuncName, ANode.ChildAt(0).ChildAt(1).Text) then
           ABlob := ABlob + ' p' + #10
         else
           ABlob := ABlob + #10;
@@ -6113,11 +6110,11 @@ begin
   end;
   if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
     (ANode.Text <> '') and
-    FModel.LookupConstValue(FCurrentMethodClass + '.' + ANode.Text + '$idx', Folded) then
+    (TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text) >= 0) then
   begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.Text);
     ABlob := 'field self ' + IntToStr(Folded);
-    if FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.Text + '$ptr', Folded) then
+    if TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.Text) then
       ABlob := ABlob + ' p' + #10
     else
       ABlob := ABlob + #10;
@@ -6139,12 +6136,11 @@ begin
     (ANode.Text <> '') and
     (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.Text) > 0) then
   begin
-    if FModel.LookupConstValue(
-      FCurrentMethodClass + '$vmt_slot_' + ANode.Text, Folded) then
+    Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.Text);
+    if Folded >= 0 then
     begin
       ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0';
-      if FModel.LookupConstValue(
-        FCurrentMethodClass + '$ret_ptr_' + ANode.Text, Folded) then
+      if TypeMetaRetPtr(FCurrentMethodClass, ANode.Text) then
         ABlob := ABlob + ' p' + #10
       else
         ABlob := ABlob + #10;
@@ -6160,11 +6156,10 @@ begin
   begin
     FuncName := LookupClassVar(ANode.ChildAt(0).Text);
     if (FuncName = '') and (FCurrentMethodClass <> '') and
-      FModel.LookupConstValue(
-        FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '$ptr', Folded) and
-      FModel.LookupConstValue(
-        FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '$idx', Folded) then
+      TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.ChildAt(0).Text) and
+      (TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text) >= 0) then
     begin
+      Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text);
       ArgName := 'field self ' + IntToStr(Folded) + ' p' + #10;
       FuncName := '';
       for StrCallIdx := 1 to FModel.SymbolCount do
@@ -6178,12 +6173,11 @@ begin
         end;
       if FuncName <> '' then
       begin
-        if FModel.LookupConstValue(
-          FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
+        Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
+        if Folded >= 0 then
         begin
           ABlob := ArgName + 'vcall ' + IntToStr(Folded) + ' 0';
-          if FModel.LookupConstValue(
-            FuncName + '$ret_ptr_' + ANode.ChildAt(1).Text, Folded) then
+          if TypeMetaRetPtr(FuncName, ANode.ChildAt(1).Text) then
             ABlob := ABlob + ' p' + #10
           else
             ABlob := ABlob + #10;
@@ -6201,43 +6195,47 @@ begin
         FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) then
         ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
           'call ' + FuncName + '.' + ArgName + ' 1' + #10
-      else if FModel.LookupConstValue(
-        FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
-      begin
-        ABlob := 'field ' + ANode.ChildAt(0).Text + ' ' + IntToStr(Folded);
-        if FModel.LookupConstValue(
-          FuncName + '.' + ANode.ChildAt(1).Text + '$ptr', Folded) then
-          ABlob := ABlob + ' p' + #10
-        else
-          ABlob := ABlob + #10;
-      end
-      else if FModel.LookupConstValue(
-        FuncName + '$vmt_slot_' + ANode.ChildAt(1).Text, Folded) then
-      begin
-        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-          'vcall ' + IntToStr(Folded) + ' 0';
-        if FModel.LookupConstValue(
-          FuncName + '$ret_ptr_' + ANode.ChildAt(1).Text, Folded) then
-          ABlob := ABlob + ' p' + #10
-        else
-          ABlob := ABlob + #10;
-      end
       else
       begin
-        ArgName := FuncName;
-        while (ArgName <> '') and
-          (FModel.FindSymbolByName(ArgName + '.' + ANode.ChildAt(1).Text) = 0) do
+        Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
+        if Folded >= 0 then
         begin
-          Folded := FModel.FindTypeByName(ArgName);
-          if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
-            ArgName := FModel.TypeAt(
-              FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+          ABlob := 'field ' + ANode.ChildAt(0).Text + ' ' + IntToStr(Folded);
+          if TypeMetaFieldIsPtr(FuncName, ANode.ChildAt(1).Text) then
+            ABlob := ABlob + ' p' + #10
           else
-            ArgName := '';
+            ABlob := ABlob + #10;
+        end
+        else
+        begin
+          Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
+          if Folded >= 0 then
+          begin
+            ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+              'vcall ' + IntToStr(Folded) + ' 0';
+            if TypeMetaRetPtr(FuncName, ANode.ChildAt(1).Text) then
+              ABlob := ABlob + ' p' + #10
+            else
+              ABlob := ABlob + #10;
+          end
+          else
+          begin
+            ArgName := FuncName;
+            while (ArgName <> '') and
+              (FModel.FindSymbolByName(ArgName + '.' + ANode.ChildAt(1).Text) = 0) do
+            begin
+              Folded := FModel.FindTypeByName(ArgName);
+              if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+                ArgName := FModel.TypeAt(
+                  FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+              else
+                ArgName := '';
+            end;
+            if ArgName = '' then ArgName := FuncName;
+            ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+              'call ' + ArgName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+          end;
         end;
-        if ArgName = '' then ArgName := FuncName;
-        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-          'call ' + ArgName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
       end;
       Exit(True);
     end;
@@ -6296,8 +6294,8 @@ begin
     FModel.LookupStringConstValue(
       ANode.ChildAt(0).ChildAt(0).Text + '$arr_elem_type', FuncName) then
   begin
-    if FModel.LookupConstValue(
-      FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+    Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
+    if Folded >= 0 then
     begin
       StrCallIdx := LongInt(Folded);
       if FModel.LookupConstValue(
@@ -6317,9 +6315,10 @@ begin
     IsRecordVar(ANode.ChildAt(0).Text) then
   begin
     FuncName := LookupRecordVar(ANode.ChildAt(0).Text);
-    if (FuncName <> '') and
-      FModel.LookupConstValue(
-        FuncName + '.' + ANode.ChildAt(1).Text + '$idx', Folded) then
+    Folded := -1;
+    if FuncName <> '' then
+      Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
+    if Folded >= 0 then
     begin
       ABlob := 'rload ' + ANode.ChildAt(0).Text + ' ' +
         IntToStr(Folded) + #10;
@@ -6557,10 +6556,11 @@ begin
         if FNoFold and IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) then
         begin
           StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
-          if (StringValue <> '') and
-            FModel.LookupConstValue(
-              StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text + '$idx',
-              Value) then
+          Value := -1;
+          if StringValue <> '' then
+            Value := TypeMetaFieldIndex(StringValue,
+              Child.ChildAt(0).ChildAt(1).Text);
+          if Value >= 0 then
           begin
             Arg := nil;
             if Child.ChildCount >= 2 then
@@ -6583,10 +6583,11 @@ begin
         begin
           FuncName := Child.ChildAt(0).ChildAt(0).ChildAt(0).Text;
           if FModel.LookupStringConstValue(FuncName + '$arr_elem_type', StringValue) and
-            FModel.LookupConstValue(
-              StringValue + '.' + Child.ChildAt(0).ChildAt(1).Text + '$idx', Value) and
+            (TypeMetaFieldIndex(StringValue, Child.ChildAt(0).ChildAt(1).Text) >= 0) and
             FModel.LookupConstValue(FuncName + '$arr_elem_size', CondValue) then
           begin
+            Value := TypeMetaFieldIndex(StringValue,
+              Child.ChildAt(0).ChildAt(1).Text);
             Arg := nil;
             if Child.ChildCount >= 2 then
               Arg := Child.ChildAt(1);
@@ -6684,9 +6685,10 @@ begin
             else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
               Operand := Operand + #9 + StringValue;
           end;
-          if (FCurrentMethodClass <> '') and
-            FModel.LookupConstValue(
-              FCurrentMethodClass + '.' + Decoded + '$idx', CondValue) then
+          CondValue := -1;
+          if FCurrentMethodClass <> '' then
+            CondValue := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+          if CondValue >= 0 then
           begin
             Inc(FBlockLabelCounter);
             FuncName := '$obj_tmp_' + IntToStr(FBlockLabelCounter);
@@ -6726,8 +6728,8 @@ begin
         (Arg.NodeKind = gnkDotAccess) and (Arg.ChildCount >= 2) and
         (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
       begin
-        if FModel.LookupConstValue(
-          Arg.ChildAt(0).Text + '$size', Value) then
+        Value := TypeMetaSize(Arg.ChildAt(0).Text);
+        if Value > 0 then
         begin
           InhParentName := Arg.ChildAt(0).Text;
           StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
@@ -6810,14 +6812,14 @@ begin
           end
           else if (Arg.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
-            FModel.LookupConstValue(
-              FCurrentMethodClass + '.' + Arg.Text + '$str', Value) and
-            FModel.LookupConstValue(
-              FCurrentMethodClass + '.' + Arg.Text + '$idx', Value) then
+            TypeMetaFieldIsStr(FCurrentMethodClass, Arg.Text) then
+          begin
+            Value := TypeMetaFieldIndex(FCurrentMethodClass, Arg.Text);
             FModel.AddTypedHirNode(
               'assign-str-field-load-runtime', Decoded, 0, 0,
               Decoded + #9 + IntToStr(Value)
-            )
+            );
+          end
           else if (Arg.NodeKind = gnkIdentifier) and
             LookupProcedureBody(Arg.Text, BranchNode, DeclNode) and
             IsRuntimeStrVar(Arg.Text) then
@@ -6843,8 +6845,8 @@ begin
             (LookupClassVar(Arg.ChildAt(0).Text) <> '') then
           begin
             FuncName := LookupClassVar(Arg.ChildAt(0).Text);
-            if FModel.LookupConstValue(
-              FuncName + '$vmt_slot_' + Arg.ChildAt(1).Text, Value) then
+            Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
+            if Value >= 0 then
               FModel.AddTypedHirNode(
                 'assign-str-vcall-runtime', Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).Text + #9 +
@@ -6875,11 +6877,9 @@ begin
           end;
         end
         else if FNoFold and (FCurrentMethodClass <> '') and
-          FModel.LookupConstValue(
-            FCurrentMethodClass + '.' + Decoded + '$str', Value) and
-          FModel.LookupConstValue(
-            FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
+          TypeMetaFieldIsStr(FCurrentMethodClass, Decoded) then
         begin
+          Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
           if (Arg.NodeKind = gnkStringLiteral) then
           begin
             StringValue := DecodePascalStringLiteral(Arg.Text);
@@ -6975,13 +6975,32 @@ begin
                   Operand
                 );
               end
-              else if (StringValue <> '') and
-                FModel.LookupConstValue(
-                  StringValue + '.' + FuncName + '$idx', Value) then
+              else if StringValue <> '' then
+              begin
+                Value := TypeMetaFieldIndex(StringValue, FuncName);
+                if Value >= 0 then
+                  FModel.AddTypedHirNode(
+                    'field-store-runtime', Decoded, 0, 0,
+                    Copy(Decoded, 1, DotPos - 1) + #9 +
+                    IntToStr(Value) + #9 + Operand
+                  )
+                else
+                begin
+                  RegisterRuntimeVar(Decoded);
+                  FModel.AddTypedHirNode(
+                    'assign-runtime', Decoded, 0, 0,
+                    Decoded + #9 + Operand
+                  );
+                end;
+              end
+            end
+            else if FCurrentMethodClass <> '' then
+            begin
+              Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+              if Value >= 0 then
                 FModel.AddTypedHirNode(
                   'field-store-runtime', Decoded, 0, 0,
-                  Copy(Decoded, 1, DotPos - 1) + #9 +
-                  IntToStr(Value) + #9 + Operand
+                  'self' + #9 + IntToStr(Value) + #9 + Operand
                 )
               else
               begin
@@ -6992,13 +7011,6 @@ begin
                 );
               end;
             end
-            else if (FCurrentMethodClass <> '') and
-              FModel.LookupConstValue(
-                FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
-              FModel.AddTypedHirNode(
-                'field-store-runtime', Decoded, 0, 0,
-                'self' + #9 + IntToStr(Value) + #9 + Operand
-              )
             else
             begin
               RegisterRuntimeVar(Decoded);
@@ -7117,8 +7129,8 @@ begin
               (LookupClassVar(RhsNode.ChildAt(0).Text) <> '') then
             begin
               FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
-              if FModel.LookupConstValue(
-                FuncName + '$vmt_slot_' + RhsNode.ChildAt(1).Text, Value) then
+              Value := TypeMetaVmtSlot(FuncName, RhsNode.ChildAt(1).Text);
+              if Value >= 0 then
               begin
                 Inc(FBlockLabelCounter);
                 Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
@@ -7238,9 +7250,10 @@ begin
               StringValue := 'add'
             else
               StringValue := 'sub';
-            if (FCurrentMethodClass <> '') and
-              FModel.LookupConstValue(
-                FCurrentMethodClass + '.' + Decoded + '$idx', Value) then
+            Value := -1;
+            if FCurrentMethodClass <> '' then
+              Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+            if Value >= 0 then
             begin
               if (Arg.ChildCount > ArgIndex + 1) and
                 EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
@@ -7348,8 +7361,8 @@ begin
         StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
         if StringValue <> '' then
         begin
-          if FModel.LookupConstValue(
-            StringValue + '$vmt_slot_Destroy', Value) then
+          Value := TypeMetaVmtSlot(StringValue, 'Destroy');
+          if Value >= 0 then
           begin
             ReceiverName := Child.ChildAt(0).ChildAt(0).Text;
             DestroyFuncName := StringValue + '.Destroy';
@@ -8197,11 +8210,9 @@ begin
                 ParamTypes := ParamTypes + 's'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
-                FModel.LookupConstValue(
-                  ParamChild.ChildAt(0).Text + '$size', Folded) then
+                (TypeMetaSize(ParamChild.ChildAt(0).Text) > 0) then
               begin
-                if FModel.LookupConstValue(
-                  ParamChild.ChildAt(0).Text + '$record', Value) then
+                if TypeMetaIsRecord(ParamChild.ChildAt(0).Text) then
                   ParamTypes := ParamTypes + 'r'
                 else if IsVarP then
                   ParamTypes := ParamTypes + 'v'

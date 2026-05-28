@@ -4,6 +4,9 @@ unit nextpas.core.fpc.sysutils;
 
 interface
 
+uses
+  nextpas.core.platform.base;
+
 { --- Types and Constants --- }
 
 type
@@ -15,13 +18,12 @@ const
   PathDelim = '\';
   DriveDelim = ':';
   PathSep = ';';
-  LineEnding = #13#10;
 {$ELSE}
   PathDelim = '/';
   DriveDelim = '';
   PathSep = ':';
-  LineEnding = #10;
 {$ENDIF}
+  LineEnding = PLATFORM_LINE_ENDING;
 
   faReadOnly   = $00000001;
   faHidden     = $00000002;

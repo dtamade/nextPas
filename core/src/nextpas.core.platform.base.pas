@@ -59,6 +59,17 @@ const
 
   CURRENT_ENDIAN: TEndianness = endLittle;
 
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_PATH_DELIM = '\';
+  PLATFORM_PATH_SEP = ';';
+  PLATFORM_LINE_ENDING = #13#10;
+{$ELSE}
+  PLATFORM_PATH_DELIM = '/';
+  PLATFORM_PATH_SEP = ':';
+  PLATFORM_LINE_ENDING = #10;
+{$ENDIF}
+  PLATFORM_EXT_SEP = '.';
+
 implementation
 
 end.
