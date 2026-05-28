@@ -167,7 +167,8 @@ type
       const AHasTypeMismatchEvidence: Boolean;
       const AAllowNoMatchingOverloadDiagnostic: Boolean;
       out AMethodNameFound: Boolean;
-      out AResolutionFailureKind: string
+      out AResolutionFailureKind: string;
+      out ACandidates: TOverloadCandidateArray
     ): LongInt;
     function MethodSymbolIdForClassTypeMember(
       const AClassTypeId: LongInt;
@@ -176,7 +177,8 @@ type
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
-      out AResolutionFailureKind: string
+      out AResolutionFailureKind: string;
+      out ACandidates: TOverloadCandidateArray
     ): LongInt;
     function TryRegisterMemberCallBinding(
       const ACallNode: TGreenNode;
@@ -1710,7 +1712,8 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AHasTypeMismatchEvidence: Boolean;
   const AAllowNoMatchingOverloadDiagnostic: Boolean;
   out AMethodNameFound: Boolean;
-  out AResolutionFailureKind: string
+  out AResolutionFailureKind: string;
+  out ACandidates: TOverloadCandidateArray
 ): LongInt;
 var
   BodyCandidateCount: LongInt;
@@ -1737,6 +1740,7 @@ begin
   SignatureSymbolId := 0;
   SymbolMatchCount := 0;
   SignatureMatchCount := 0;
+  SetLength(ACandidates, 0);
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -1745,6 +1749,18 @@ begin
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       AMethodNameFound := True;
+      SetLength(ACandidates, Length(ACandidates) + 1);
+      ACandidates[High(ACandidates)].Name := Symbol.Name;
+      ACandidates[High(ACandidates)].ParamCount := Symbol.ParamCount;
+      ACandidates[High(ACandidates)].ParamSignature := Symbol.ParamSignature;
+      ACandidates[High(ACandidates)].DeclByteOffset := Symbol.ByteOffset;
+      if (AArgCount < Symbol.MinParamCount) or (AArgCount > Symbol.ParamCount) then
+        ACandidates[High(ACandidates)].MismatchReason := 'param-count'
+      else if AHasArgSignature and
+        (not SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature)) then
+        ACandidates[High(ACandidates)].MismatchReason := 'type-mismatch'
+      else
+        ACandidates[High(ACandidates)].MismatchReason := '';
       if (AArgCount >= Symbol.MinParamCount) and (AArgCount <= Symbol.ParamCount) then
       begin
         Inc(SymbolMatchCount);
@@ -1846,7 +1862,8 @@ function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
-  out AResolutionFailureKind: string
+  out AResolutionFailureKind: string;
+  out ACandidates: TOverloadCandidateArray
 ): LongInt;
 var
   CurrentTypeId: LongInt;
@@ -1894,7 +1911,8 @@ begin
         )
       ),
       MethodNameFound,
-      AResolutionFailureKind
+      AResolutionFailureKind,
+      ACandidates
     );
     if Result > 0 then
       Exit;
@@ -1931,6 +1949,7 @@ function TSemanticAnalyzer.TryRegisterMemberCallBinding(
 var
   ArgCount: LongInt;
   ArgSignature: string;
+  Candidates: TOverloadCandidateArray;
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
   MemberName: string;
@@ -1973,7 +1992,8 @@ begin
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
-    AResolutionFailureKind
+    AResolutionFailureKind,
+    Candidates
   );
   if TargetSymbolId <= 0 then
     Exit;
@@ -2022,6 +2042,7 @@ var
   CallName: string;
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
+  ImplicitCandidates: TOverloadCandidateArray;
   ReceiverTypeId: LongInt;
   TargetSymbolId: LongInt;
 begin
@@ -2058,7 +2079,8 @@ begin
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
-    AResolutionFailureKind
+    AResolutionFailureKind,
+    ImplicitCandidates
   );
   if TargetSymbolId <= 0 then
     Exit;
