@@ -68,6 +68,17 @@
   - `make -C core benchmarks`: `All benchmarks passed.`
   - `bash build/verify_local.sh`: `verify-local=pass`,
     `human-summary=local verification passed`.
+- Wave 14 was rebased onto latest `main@82e996c` and fast-forward merged as
+  `main@7c50af6` with commit `7c50af6 platform: clean remaining host ffi helper
+  names`.
+- Post-merge verification on `main@7c50af6` passed:
+  `bash build/verify_local.sh` exited 0 with `verify-local=pass` and
+  `human-summary=local verification passed`.
+- Cleaned the Wave 14 temporary worktree and branch:
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`
+  was removed, `codex/platform-host-ffi-wave14-posix-names` was deleted, and
+  `git worktree prune` was run. Remaining worktrees are `collections-refactor`
+  and `sema-no-matching-overload`.
 
 - Started Wave 13 from `main@eab4c19` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave13-names`

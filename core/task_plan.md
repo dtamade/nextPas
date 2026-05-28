@@ -9,15 +9,17 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 14 is active in worktree
-  `platform-host-ffi-wave14-posix-names` from `main@dcf3fd3`.
+- Current status: Wave 14 is closed on `main@7c50af6`. The feature commit was
+  rebased onto the latest main, fast-forward merged, post-merge
+  `bash build/verify_local.sh` passed, and the temporary worktree / branch were
+  removed.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Current wave: Platform Host ABI Completeness Wave 14, remaining thread/sync/
-  time host FFI helper ownership-name cleanup. This wave corrects Android,
-  Darwin, FreeBSD, generic Unix, and Windows clock `platform_*` host-owned
-  helper names for pthread, clock, errno, native thread id, and CPU count before
-  the next broad FPC raw API import wave.
+- Last closed wave: Platform Host ABI Completeness Wave 14, remaining
+  thread/sync/time host FFI helper ownership-name cleanup. This wave corrected
+  Android, Darwin, FreeBSD, generic Unix, and Windows clock `platform_*`
+  host-owned helper names for pthread, clock, errno, native thread id, and CPU
+  count before the next broad FPC raw API import wave.
 
 ## Architecture Rules
 
@@ -77,7 +79,7 @@ the integration boundary.
   `platform_*` helpers, as a later cleanup wave instead of expanding this
   pthread/clock/errno/thread/cpu wave mid-flight.
 - [x] Run focused and full verification.
-- [ ] Commit, merge to `main`, post-merge verify, clean the worktree, and
+- [x] Commit, merge to `main`, post-merge verify, clean the worktree, and
   delete the feature branch.
 
 #### Wave 14 Verification Boundary
@@ -328,6 +330,18 @@ the integration boundary.
     `corePlatformFfiPartitionSurfaceCheck`,
     `corePlatformHostGapMatrixCheck`, and
     `corePlatformSimulatedHostCompileMatrixCheck`.
+- Wave 14 merge / post-merge closeout:
+  - Feature branch commit after rebase: `7c50af6 platform: clean remaining host
+    ffi helper names`.
+  - Fast-forward merged to `main@7c50af6`.
+  - Post-merge `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`.
+  - Removed worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`.
+  - Deleted branch `codex/platform-host-ffi-wave14-posix-names` and ran
+    `git worktree prune`.
+  - Remaining parallel worktrees are `collections-refactor` and
+    `sema-no-matching-overload`.
 - Wave 13 RED:
   `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
   failed as expected on missing `linux_errno_location`.

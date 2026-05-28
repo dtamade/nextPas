@@ -20,6 +20,11 @@
   that also still carry `platform_*` names in host FFI units. That family should
   be handled as a separate cleanup wave after the thread/sync/time helper
   surface is no longer misleading.
+- Wave 14 closed cleanly on `main@7c50af6`: post-merge
+  `bash build/verify_local.sh` passed with `verify-local=pass`, and the
+  temporary worktree / feature branch were removed. The next platform wave
+  should start from latest `main` and should not reuse the closed Wave 14
+  worktree.
 
 ## 2026-05-28: Wave 13 Linux host helper naming cleanup
 
