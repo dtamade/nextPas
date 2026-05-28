@@ -243,6 +243,12 @@ const
 
   MAP_ANONYMOUS = $20;
   MAP_GROWSDOWN = $100;
+  MAP_POPULATE  = $8000;
+  MAP_STACK     = $20000;
+  MAP_HUGETLB   = $40000;
+
+  PR_SET_NAME = cint(15);
+  PR_GET_NAME = cint(16);
 
   AT_FDCWD            = cint(-100);
   AT_SYMLINK_NOFOLLOW = cint($100);

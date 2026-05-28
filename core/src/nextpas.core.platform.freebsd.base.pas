@@ -49,7 +49,7 @@ type
     AInfo: Pointer;
     AContext: Pointer); cdecl;
 
-  TPlatformFreeBSDSigAction = packed record
+  TPlatformFreeBSDSigAction = record
     sa_handler: TPlatformFreeBSDSigActionHandler;
     sa_flags: Int32;
     sa_mask: TPlatformFreeBSDSignalSet;

@@ -140,6 +140,18 @@ function isatty(fd: cint): cint; cdecl; external 'c' name 'isatty';
 function ioctl(fd: cint; request: culong; args: Pointer): cint; cdecl; varargs; external 'c' name 'ioctl';
 function strerror(errnum: cint): PAnsiChar; cdecl; external 'c' name 'strerror';
 function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'realpath';
+function pread(fd: cint; buf: Pointer; count: size_t; offset: off_t): ssize_t; cdecl; external 'c' name 'pread';
+function pwrite(fd: cint; buf: Pointer; count: size_t; offset: off_t): ssize_t; cdecl; external 'c' name 'pwrite';
+function truncate(path: PAnsiChar; length: off_t): cint; cdecl; external 'c' name 'truncate';
+function mkstemp(template: PAnsiChar): cint; cdecl; external 'c' name 'mkstemp';
+function mkdtemp(template: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'mkdtemp';
+function flock(fd: cint; operation: cint): cint; cdecl; external 'c' name 'flock';
+function madvise(addr: Pointer; length: size_t; advice: cint): cint; cdecl; external 'c' name 'madvise';
+function msync(addr: Pointer; length: size_t; flags: cint): cint; cdecl; external 'c' name 'msync';
+function mlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'mlock';
+function munlock(addr: Pointer; length: size_t): cint; cdecl; external 'c' name 'munlock';
+function getrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'getrlimit';
+function setrlimit(resource: cint; rlim: Pointer): cint; cdecl; external 'c' name 'setrlimit';
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';

@@ -258,8 +258,26 @@ const
   PLATFORM_POSIX_PROT_EXEC = Int32(4);
   PLATFORM_POSIX_MAP_SHARED = Int32(1);
   PLATFORM_POSIX_MAP_PRIVATE = Int32(2);
+  PLATFORM_POSIX_MAP_FIXED = Int32($10);
+  PLATFORM_POSIX_MAP_ANONYMOUS = Int32($20);
   PLATFORM_POSIX_MAP_FAILED = PtrInt(-1);
   PLATFORM_POSIX_MAP_FAILED_PTR = PtrUInt(High(PtrUInt));
+
+  LOCK_SH = cint(1);
+  LOCK_EX = cint(2);
+  LOCK_NB = cint(4);
+  LOCK_UN = cint(8);
+
+  MADV_NORMAL     = cint(0);
+  MADV_RANDOM     = cint(1);
+  MADV_SEQUENTIAL = cint(2);
+  MADV_WILLNEED   = cint(3);
+  MADV_DONTNEED   = cint(4);
+
+  MS_ASYNC      = cint(1);
+  MS_INVALIDATE = cint(2);
+  MS_SYNC       = cint(4);
+
   PLATFORM_WAIT_CORE_FLAG = Int32($80);
   PLATFORM_FILE_MODE_DEFAULT = TPlatformFileModeArg(438);
 

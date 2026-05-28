@@ -34,12 +34,12 @@ function dlerror: PAnsiChar; cdecl; external 'dl' name 'dlerror';
 function epoll_create1(flags: cint): cint; cdecl; external 'c' name 'epoll_create1';
 function epoll_ctl(epfd: cint; op: cint; fd: cint; event: pepoll_event): cint; cdecl; external 'c' name 'epoll_ctl';
 function epoll_wait(epfd: cint; events: pepoll_event; maxevents: cint; timeout: cint): cint; cdecl; external 'c' name 'epoll_wait';
-function epoll_pwait(epfd: cint; events: pepoll_event; maxevents: cint; timeout: cint; sigmask: psigset_t): cint; cdecl; external 'c' name 'epoll_pwait';
+function epoll_pwait(epfd: cint; events: pepoll_event; maxevents: cint; timeout: cint; sigmask: Pointer): cint; cdecl; external 'c' name 'epoll_pwait';
 function eventfd(initval: cuint; flags: cint): cint; cdecl; external 'c' name 'eventfd';
 function timerfd_create(clockid: cint; flags: cint): cint; cdecl; external 'c' name 'timerfd_create';
 function timerfd_settime(fd: cint; flags: cint; new_value: Pointer; old_value: Pointer): cint; cdecl; external 'c' name 'timerfd_settime';
 function timerfd_gettime(fd: cint; curr_value: Pointer): cint; cdecl; external 'c' name 'timerfd_gettime';
-function signalfd(fd: cint; mask: psigset_t; flags: cint): cint; cdecl; external 'c' name 'signalfd';
+function signalfd(fd: cint; mask: Pointer; flags: cint): cint; cdecl; external 'c' name 'signalfd';
 function inotify_init1(flags: cint): cint; cdecl; external 'c' name 'inotify_init1';
 function inotify_add_watch(fd: cint; pathname: PAnsiChar; mask: cuint32): cint; cdecl; external 'c' name 'inotify_add_watch';
 function inotify_rm_watch(fd: cint; wd: cint): cint; cdecl; external 'c' name 'inotify_rm_watch';
@@ -56,6 +56,10 @@ function uname(buf: PUtsName): cint; cdecl; external 'c' name 'uname';
 function sigaction(sig: cint; act: Pointer; oact: Pointer): cint; cdecl; external 'c' name 'sigaction';
 function sigprocmask(how: cint; nset: Pointer; oset: Pointer): cint; cdecl; external 'c' name 'sigprocmask';
 function raise_signal(sig: cint): cint; cdecl; external 'c' name 'raise';
+function sendfile(out_fd: cint; in_fd: cint; offset: Pointer; count: size_t): ssize_t; cdecl; external 'c' name 'sendfile';
+function splice(fd_in: cint; off_in: Pointer; fd_out: cint; off_out: Pointer; len: size_t; flags: cuint): ssize_t; cdecl; external 'c' name 'splice';
+function copy_file_range(fd_in: cint; off_in: Pointer; fd_out: cint; off_out: Pointer; len: size_t; flags: cuint): ssize_t; cdecl; external 'c' name 'copy_file_range';
+function prctl(option: cint; arg2: culong; arg3: culong; arg4: culong; arg5: culong): cint; cdecl; external 'c' name 'prctl';
 
 implementation
 
