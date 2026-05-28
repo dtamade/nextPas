@@ -97,6 +97,8 @@
   - Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
 - Added `MakeMultiMap<K,V>` and `MakeMultiSet<T>` to facade with contract probes in `test_facade`.
 - Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
+- Removed Unchecked methods from `IList<T>` (6 methods) and `IForwardList<T>` (5 methods). Concrete classes retain them; interfaces now only expose safe APIs, consistent with IVec/IDeque/IQueue/IStack.
+- Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
 
 ## Next
 

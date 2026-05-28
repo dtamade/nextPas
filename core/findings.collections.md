@@ -243,3 +243,11 @@
   - Deleted `rbset`, `rbset.intf`, `orderedset.rb`, `orderedset.rb.intf`, `orderedset`, `orderedset.intf` (6 files removed).
   - Added `MakeLinkedHashSet<T>` to facade.
   - `ITreeSet<T>` continues to inherit `IGenericCollection<T>` because traversal, ToArray, ForEach are core sorted-set use cases.
+
+## 2026-05-28: Unchecked methods on linked-list interfaces
+
+- `IList<T>` and `IForwardList<T>` exposed Unchecked variants of push/pop/clear on the public interface.
+- Linked-list push/pop "checks" are just an empty-test (O(1) comparison), unlike array bounds checks which have real cost in hot loops. Skipping them provides negligible performance gain.
+- Removed from interfaces; concrete `TList<T>` and `TForwardList<T>` retain the methods for extreme cases.
+- This aligns with `IVec`, `IDeque`, `IQueue`, `IStack` which already do not expose Unchecked on their interfaces.
+- `IArray<T>` Unchecked methods are kept — array indexed access and bulk operations have real bounds-check cost that justifies the dual-tier API.
