@@ -10,6 +10,10 @@
 
 ## Research Findings
 
+- Batch 214-216 闭合结论：installed-source unit body inherited implicit-self function-result
+  系列最后 3 个 guards（arity / no-match / ambiguous）一次性完成，矩阵完整闭合。
+- 全部 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖所有场景。
+- Codex 审查建议：矩阵闭合后转向新语义能力（default parameters → visibility → implicit conversion）。
 - Batch 213 re-rank 结论：Batch 188 已打开 imported `project-source` unit method body inherited
   implicit-self function-result type-mismatch；补同形 installed-source deferred guard。
 - Batch 213 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。

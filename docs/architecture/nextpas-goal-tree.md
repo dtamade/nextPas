@@ -317,6 +317,9 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   继续 deferred，不提前发 `sema.ambiguous-overload`。
 - imported `installed-source` unit method body 的 inherited implicit-self function-result
   type-mismatch 继续 deferred，不提前发 `sema.type-mismatch`。
+- imported `installed-source` unit method body 的 inherited implicit-self function-result
+  wrong-argument-count / no-matching-overload / ambiguous-overload 继续 deferred。
+- installed-source unit body implicit-self / inherited implicit-self deferred guard 矩阵已完整闭合。
 - `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self same-unit function-result ambiguity。
 - `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare

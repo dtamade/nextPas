@@ -12066,6 +12066,302 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultWrongArgumentCountStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-wrong-argument-count-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCount;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'function Count: Integer;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch(Count, Count);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCount',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-inherited-function-result-arity-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-inherited-function-result-arity-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-inherited-function-result-arity-model-status:' + Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-inherited-function-result-arity-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultNoMatchingOverloadStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-no-matching-overload-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverload;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch(Value: Integer);' + LineEnding +
+    '    procedure Touch(Value: AnsiString);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: AnsiString);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'function Flag: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch(Flag);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverload',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-inherited-function-result-no-match-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-inherited-function-result-no-match-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-inherited-function-result-no-match-model-status:' + Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-inherited-function-result-no-match-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-ambiguous-overload-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverload;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch(Value: Integer);' + LineEnding +
+    '    procedure Touch(Value: LongInt);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: LongInt);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'function Count: Integer;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch(Count);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledSourceUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverload',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-inherited-function-result-ambiguous-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-inherited-function-result-ambiguous-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-inherited-function-result-ambiguous-model-status:' + Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-inherited-function-result-ambiguous-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -13869,6 +14165,9 @@ begin
     CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodNoMatchingOverloadStaysDeferred;
     CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodAmbiguousOverloadStaysDeferred;
     CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultTypeMismatchStaysDeferred;
+    CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultWrongArgumentCountStaysDeferred;
+    CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultNoMatchingOverloadStaysDeferred;
+    CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodAmbiguousOverloadDiagnostic;
