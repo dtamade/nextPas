@@ -950,7 +950,8 @@ project-source known field/property member call、imported project-source inheri
 inherited known field/property member call 断言
 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
 和 class method body 内 bare implicit-self unknown member（含 inherited class context 与 imported
-`project-source` unit method body）断言
+`project-source` unit method body，以及 imported `project-source` unit method body 沿 parent
+chain 的 inherited context）断言
 `semantic-analysis-failed` + `sema.unknown-member`，再对 imported `project-source` unit method body
 bare implicit-self wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`

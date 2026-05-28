@@ -10,6 +10,25 @@
 
 ## Research Findings
 
+- Batch 193 继续 imported unit method body inherited implicit-self evidence 面：root `uses Worker;`，
+  imported `Worker.pas` 中 `TBaseWorker.Touch`、`TWorker = class(TBaseWorker)` 与
+  `procedure TWorker.Run; begin Missing; end;` 位于 `project-source` imported unit implementation
+  body，必须失败为 `sema.unknown-member`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+- Batch 193 加速策略是“矩阵波前推进，不换赛道”：优先补 Batch 175/176/181-184/188-192
+  已证明路径的 source-owned 相邻格，focused semantic 先判真相；GREEN 直接升 dedicated
+  fixture / `verify_local.sh` official gate / docs，RED 才最小修 analyzer。本批不碰 `core/`。
+- Batch 193 focused semantic probe 直接 GREEN，证明 imported unit body owner-aware traversal 与
+  inherited implicit-self parent-chain unknown-member lookup 已自然组合；本批不需要修改 analyzer。
+- Batch 193 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_unknown_member` 与
+  `imported-unit-body-inherited-implicit-self-unknown-member-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass`。
+- Batch 193 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - Batch 192 继续 imported unit method body inherited implicit-self same-unit function-result evidence
   面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)`、
   `TWorker = class(TBaseWorker)` 与 `function Count: Integer;` 同属 `project-source` owner unit，

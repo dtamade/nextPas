@@ -8714,6 +8714,107 @@ begin
   end;
 end;
 
+procedure CheckImportedUnitBodyInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-imported-unit-body-inherited-implicit-self-unknown-member-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program ImportedUnitBodyInheritedImplicitSelfUnknownMember;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBaseWorker.Touch;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Missing;' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'ImportedUnitBodyInheritedImplicitSelfUnknownMember',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('missing-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic');
+    if not SameText(Diagnostics.LastDiagnosticCode, 'sema.unknown-member') then
+      Fail('unexpected-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-code:' +
+        Diagnostics.LastDiagnosticCode);
+    if not SameText(Diagnostics.LastDiagnosticPhase, 'sema') then
+      Fail('unexpected-imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-phase:' +
+        Diagnostics.LastDiagnosticPhase);
+    if Pos('Missing', Diagnostics.LastDiagnosticMessage) <= 0 then
+      Fail('imported-unit-body-inherited-implicit-self-unknown-member-diagnostic-missing-name');
+    if Model = nil then
+      Fail('missing-imported-unit-body-inherited-implicit-self-unknown-member-model');
+    if not SameText(Model.Status, 'failure') then
+      Fail('unexpected-imported-unit-body-inherited-implicit-self-unknown-member-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-imported-unit-body-inherited-implicit-self-unknown-member-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnitBodyImplicitSelfBareMethodWrongArgumentCountDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -11824,6 +11925,7 @@ begin
     CheckImplicitSelfBareMethodUnknownMemberDiagnostic;
     CheckInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodUnknownMemberDiagnostic;
+    CheckImportedUnitBodyInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodWrongArgumentCountDiagnostic;
     CheckImportedUnitBodyInheritedImplicitSelfBareMethodWrongArgumentCountDiagnostic;
     CheckImportedUnitBodyInheritedImplicitSelfBareMethodTypeMismatchDiagnostic;

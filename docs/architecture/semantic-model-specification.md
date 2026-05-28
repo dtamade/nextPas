@@ -160,7 +160,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
 - imported `project-source` unit 的 class-qualified method body 也会进入 owner-aware
   call-binding traversal；因此 imported unit 内 `procedure TWorker.Run; begin Missing; end;`
   的 bare implicit-self member miss 会按 `Worker` owner 解析 `Self`
-  并输出 `sema.unknown-member`；同一路径中的 bare implicit-self arity miss（例如
+  并输出 `sema.unknown-member`，且该 member miss 会沿 imported owner class parent chain
+  检查 inherited methods；同一路径中的 bare implicit-self arity miss（例如
   `procedure TWorker.Run; begin Pick; end;` 调 `Pick(Value: Integer)`）会输出
   `sema.wrong-argument-count`；同一路径沿 imported owner class parent chain 找到 inherited
   method target 时也会输出同类 arity diagnostic（例如 `TWorker = class(TBaseWorker)` 中
@@ -493,7 +494,8 @@ candidate collection
     没有同名 method 的场景；例如 `procedure TWorker.Run; begin Missing; end;`，以及
     `TWorker = class(TBaseWorker)` 时沿 parent chain 也找不到 `Missing`
   - 也用于 imported `project-source` unit 的 class-qualified method body 中同形状 bare
-    implicit-self name miss；`Self` 的类型按 imported owner unit 解析，避免误用 root owner
+    implicit-self name miss；`Self` 的类型按 imported owner unit 解析，避免误用 root owner，
+    且会沿 imported owner class parent chain 检查 inherited methods
   - implicit runtime 已能读取 source-backed nextPas `System` / `TObject` truth；普通 `class`
     会隐式继承 `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入
     `member-call` binding；缺少 source-backed System truth 的路径仍保持 deferred，避免把 System
