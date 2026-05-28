@@ -55,6 +55,25 @@ begin
   Check(SizeOf(pollfd) = 8, 'pollfd = 8');
 end;
 
+procedure TestPthreadTypes;
+begin
+  Check(SizeOf(pthread_mutex_t) = 40, 'pthread_mutex_t = 40');
+  Check(SizeOf(pthread_rwlock_t) = 56, 'pthread_rwlock_t = 56');
+  Check(SizeOf(pthread_cond_t) = 48, 'pthread_cond_t = 48');
+  Check(SizeOf(pthread_t) = 8, 'pthread_t = 8');
+  Check(SizeOf(pthread_key_t) = 4, 'pthread_key_t = 4');
+end;
+
+procedure TestFLock;
+begin
+  Check(SizeOf(FLock) = 32, 'FLock = 32');
+end;
+
+procedure TestMsghdr;
+begin
+  Check(SizeOf(msghdr) = 56, 'msghdr = 56');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.struct_sizes');
   T.Run('TPlatformLinuxStat = 144', @TestLinuxStat);
@@ -66,5 +85,8 @@ begin
   T.Run('TAddrInfo = 48', @TestAddrInfo);
   T.Run('iovec = 16', @TestIovec);
   T.Run('pollfd = 8', @TestPollfd);
+  T.Run('pthread types', @TestPthreadTypes);
+  T.Run('FLock = 32', @TestFLock);
+  T.Run('msghdr = 56', @TestMsghdr);
   T.Summary;
 end.
