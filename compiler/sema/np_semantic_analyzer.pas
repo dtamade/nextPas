@@ -1687,10 +1687,16 @@ function TSemanticAnalyzer.TypeIdHasKnownClassLayout(
 var
   ConstValue: Int64;
   TypeSymbol: TSemanticSymbol;
+  Meta: TTypeMetadata;
 begin
   Result := False;
   if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
     Exit;
+  if FModel.GetTypeMeta(ATypeId, Meta) then
+  begin
+    Result := (not Meta.IsRecord) and (Meta.Size > 0);
+    Exit;
+  end;
   if not TypeSymbolForTypeId(ATypeId, TypeSymbol) then
     Exit;
   Result := FModel.LookupConstValue(TypeSymbol.Name + '$vmt_count', ConstValue);
@@ -1708,6 +1714,7 @@ var
   TypeName: string;
   TypeInfo: TSemanticType;
   Dummy: Int64;
+  Meta: TTypeMetadata;
 begin
   Result := '';
   if (ATypeId <= 0) or (ATypeId > FModel.TypeCount) then
@@ -1723,6 +1730,12 @@ begin
     Exit('s');
   if SameText(TypeName, 'Boolean') then
     Exit('b');
+  if FModel.GetTypeMeta(ATypeId, Meta) then
+  begin
+    if Meta.IsRecord then
+      Exit('r');
+    Exit('p');
+  end;
   if FModel.LookupConstValue(TypeName + '$record', Dummy) then
     Exit('r');
   if FModel.LookupConstValue(TypeName + '$size', Dummy) then
