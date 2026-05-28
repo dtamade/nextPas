@@ -170,6 +170,35 @@ begin
   Check(BufEq(@Buf[0], 'tab'), 'trim tab result');
 end;
 
+procedure TestStrEqualNocase;
+begin
+  Check(platform_str_equal_nocase('Hello', 5, 'hello', 5), 'hello eq');
+  Check(platform_str_equal_nocase('ABC', 3, 'abc', 3), 'abc eq');
+  Check(platform_str_equal_nocase('TObject', 7, 'tobject', 7), 'TObject eq');
+  Check(not platform_str_equal_nocase('foo', 3, 'bar', 3), 'foo <> bar');
+  Check(not platform_str_equal_nocase('ab', 2, 'abc', 3), 'diff len');
+  Check(platform_str_equal_nocase('', 0, '', 0), 'empty eq');
+end;
+
+procedure TestStrFind;
+begin
+  Check(platform_str_find('hello world', 11, 'world', 5) = 6, 'find world');
+  Check(platform_str_find('hello world', 11, 'hello', 5) = 0, 'find hello');
+  Check(platform_str_find('hello world', 11, 'xyz', 3) = -1, 'not found');
+  Check(platform_str_find('aaa', 3, 'aa', 2) = 0, 'overlapping');
+  Check(platform_str_find('test', 4, '', 0) = 0, 'empty needle');
+end;
+
+procedure TestStrStartsEnds;
+begin
+  Check(platform_str_starts_with('/usr/bin', 8, '/usr', 4), 'starts /usr');
+  Check(not platform_str_starts_with('/usr/bin', 8, '/opt', 4), 'not starts /opt');
+  Check(platform_str_ends_with('file.pas', 8, '.pas', 4), 'ends .pas');
+  Check(not platform_str_ends_with('file.pas', 8, '.lpr', 4), 'not ends .lpr');
+  Check(platform_str_starts_with('x', 1, '', 0), 'empty prefix');
+  Check(platform_str_ends_with('x', 1, '', 0), 'empty suffix');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fmt');
   T.Run('int positive', @TestIntPositive);
@@ -188,5 +217,8 @@ begin
   T.Run('parse errors', @TestParseErrors);
   T.Run('str_lower', @TestStrLower);
   T.Run('str_trim', @TestStrTrim);
+  T.Run('str_equal_nocase', @TestStrEqualNocase);
+  T.Run('str_find', @TestStrFind);
+  T.Run('str_starts_ends', @TestStrStartsEnds);
   T.Summary;
 end.

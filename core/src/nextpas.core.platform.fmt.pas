@@ -18,6 +18,14 @@ function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
 function platform_str_trim(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
+function platform_str_equal_nocase(const A: PAnsiChar; ALen: Int32;
+  const B: PAnsiChar; BLen: Int32): Boolean;
+function platform_str_find(const AHaystack: PAnsiChar; AHLen: Int32;
+  const ANeedle: PAnsiChar; ANLen: Int32): Int32;
+function platform_str_starts_with(const AStr: PAnsiChar; ALen: Int32;
+  const APrefix: PAnsiChar; APLen: Int32): Boolean;
+function platform_str_ends_with(const AStr: PAnsiChar; ALen: Int32;
+  const ASuffix: PAnsiChar; ASLen: Int32): Boolean;
 
 implementation
 
@@ -404,6 +412,73 @@ begin
     Move(ASrc[LStart], ADst[0], LLen);
   ADst[LLen] := #0;
   Result := LLen;
+end;
+
+function platform_str_equal_nocase(const A: PAnsiChar; ALen: Int32;
+  const B: PAnsiChar; BLen: Int32): Boolean;
+var
+  I: Int32;
+  CA, CB: AnsiChar;
+begin
+  if ALen <> BLen then Exit(False);
+  if ALen = 0 then Exit(True);
+  if (A = nil) or (B = nil) then Exit(A = B);
+  for I := 0 to ALen - 1 do
+  begin
+    CA := A[I];
+    CB := B[I];
+    if (CA >= 'A') and (CA <= 'Z') then CA := AnsiChar(Ord(CA) + 32);
+    if (CB >= 'A') and (CB <= 'Z') then CB := AnsiChar(Ord(CB) + 32);
+    if CA <> CB then Exit(False);
+  end;
+  Result := True;
+end;
+
+function platform_str_find(const AHaystack: PAnsiChar; AHLen: Int32;
+  const ANeedle: PAnsiChar; ANLen: Int32): Int32;
+var
+  I, J: Int32;
+  LMatch: Boolean;
+begin
+  if (ANLen <= 0) or (ANeedle = nil) then Exit(0);
+  if (AHLen < ANLen) or (AHaystack = nil) then Exit(-1);
+  for I := 0 to AHLen - ANLen do
+  begin
+    LMatch := True;
+    for J := 0 to ANLen - 1 do
+      if AHaystack[I + J] <> ANeedle[J] then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    if LMatch then Exit(I);
+  end;
+  Result := -1;
+end;
+
+function platform_str_starts_with(const AStr: PAnsiChar; ALen: Int32;
+  const APrefix: PAnsiChar; APLen: Int32): Boolean;
+var
+  I: Int32;
+begin
+  if APLen <= 0 then Exit(True);
+  if (ALen < APLen) or (AStr = nil) or (APrefix = nil) then Exit(False);
+  for I := 0 to APLen - 1 do
+    if AStr[I] <> APrefix[I] then Exit(False);
+  Result := True;
+end;
+
+function platform_str_ends_with(const AStr: PAnsiChar; ALen: Int32;
+  const ASuffix: PAnsiChar; ASLen: Int32): Boolean;
+var
+  I, LOffset: Int32;
+begin
+  if ASLen <= 0 then Exit(True);
+  if (ALen < ASLen) or (AStr = nil) or (ASuffix = nil) then Exit(False);
+  LOffset := ALen - ASLen;
+  for I := 0 to ASLen - 1 do
+    if AStr[LOffset + I] <> ASuffix[I] then Exit(False);
+  Result := True;
 end;
 
 end.
