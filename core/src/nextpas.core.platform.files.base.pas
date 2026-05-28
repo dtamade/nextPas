@@ -66,6 +66,26 @@ type
     fsoEnd
   );
 
+  TPlatformDirEntry = record
+    Name: array[0..255] of AnsiChar;
+    NameLen: Int32;
+    FileType: TPlatformFileType;
+    Ino: UInt64;
+  end;
+
+  TPlatformDirHandle = record
+  {$IFDEF NEXTPAS_WINDOWS}
+    FindHandle: HANDLE;
+    First: Boolean;
+    Finished: Boolean;
+  {$ELSE}
+    Fd: cint;
+    Buf: array[0..4095] of Byte;
+    Pos: Int32;
+    Len: Int32;
+  {$ENDIF}
+  end;
+
 const
   PLATFORM_FILE_INVALID_HANDLE: TPlatformFileHandle = (
   {$IFDEF NEXTPAS_WINDOWS}

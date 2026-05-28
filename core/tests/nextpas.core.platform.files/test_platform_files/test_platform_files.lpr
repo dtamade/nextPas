@@ -133,6 +133,52 @@ begin
   Check(platform_file_chdir(@LOrig) = 0, 'restore cwd');
 end;
 
+procedure TestDirEnumeration;
+const
+  DIR_PATH = '/tmp/nextpas_test_dir_enum';
+  FILE_A = '/tmp/nextpas_test_dir_enum/aaa.txt';
+  FILE_B = '/tmp/nextpas_test_dir_enum/bbb.txt';
+  FILE_C = '/tmp/nextpas_test_dir_enum/ccc.txt';
+var
+  H: TPlatformFileHandle;
+  DH: TPlatformDirHandle;
+  Entry: TPlatformDirEntry;
+  LWritten: PtrUInt;
+  LCount: Int32;
+  LRc: Int32;
+begin
+  platform_file_rmdir(DIR_PATH);
+  platform_file_unlink(FILE_A);
+  platform_file_unlink(FILE_B);
+  platform_file_unlink(FILE_C);
+  Check(platform_file_mkdir(DIR_PATH, 493) = 0, 'mkdir');
+  Check(platform_file_open(FILE_A, fomWriteOnly, fcmCreateAlways, H) = 0, 'create a');
+  platform_file_write(H, @TEST_DATA[1], 1, LWritten);
+  platform_file_close(H);
+  Check(platform_file_open(FILE_B, fomWriteOnly, fcmCreateAlways, H) = 0, 'create b');
+  platform_file_write(H, @TEST_DATA[1], 1, LWritten);
+  platform_file_close(H);
+  Check(platform_file_open(FILE_C, fomWriteOnly, fcmCreateAlways, H) = 0, 'create c');
+  platform_file_write(H, @TEST_DATA[1], 1, LWritten);
+  platform_file_close(H);
+
+  Check(platform_dir_open(DIR_PATH, DH) = 0, 'dir_open');
+  LCount := 0;
+  repeat
+    LRc := platform_dir_read(DH, Entry);
+    if LRc = 0 then
+      Inc(LCount);
+  until LRc <> 0;
+  Check(LRc = 1, 'dir_read returns 1 at end');
+  CheckEqual(Int64(3), Int64(LCount), 'found 3 entries');
+  Check(platform_dir_close(DH) = 0, 'dir_close');
+
+  platform_file_unlink(FILE_A);
+  platform_file_unlink(FILE_B);
+  platform_file_unlink(FILE_C);
+  platform_file_rmdir(DIR_PATH);
+end;
+
 procedure Cleanup;
 begin
   DeleteFile(TEST_PATH);
@@ -150,5 +196,6 @@ begin
   T.Run('stat directory', @TestStatDirectory);
   T.Run('rename/unlink', @TestRenameUnlink);
   T.Run('getcwd/chdir', @TestGetcwdChdir);
+  T.Run('dir enumeration', @TestDirEnumeration);
   T.Summary;
 end.

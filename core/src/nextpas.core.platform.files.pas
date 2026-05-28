@@ -25,6 +25,9 @@ function platform_file_unlink(const APath: PAnsiChar): Int32;
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
 function platform_file_chdir(const APath: PAnsiChar): Int32;
+function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 
 implementation
 
@@ -237,6 +240,101 @@ begin
   else
     Result := -1;
 end;
+
+function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+begin
+  FillChar(AHandle, SizeOf(AHandle), 0);
+{$IFDEF NEXTPAS_LINUX}
+  AHandle.Fd := open(APath, O_RDONLY or O_DIRECTORY, 0);
+{$ELSE}
+  AHandle.Fd := open(APath, 0 {O_RDONLY}, 0);
+{$ENDIF}
+  if AHandle.Fd < 0 then
+    Result := -1
+  else
+    Result := 0;
+end;
+
+function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+{$IFDEF NEXTPAS_LINUX}
+type
+  PDirent64 = ^TDirent64;
+  TDirent64 = packed record
+    d_ino: UInt64;
+    d_off: Int64;
+    d_reclen: UInt16;
+    d_type: Byte;
+    d_name: array[0..0] of AnsiChar;
+  end;
+var
+  LDent: PDirent64;
+  LNameLen: Int32;
+  LNamePtr: PAnsiChar;
+{$ENDIF}
+begin
+  FillChar(AEntry, SizeOf(AEntry), 0);
+{$IFDEF NEXTPAS_LINUX}
+  while True do
+  begin
+    if AHandle.Pos >= AHandle.Len then
+    begin
+      AHandle.Len := Int32(getdents64(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf)));
+      if AHandle.Len <= 0 then
+      begin
+        if AHandle.Len = 0 then
+          Result := 1
+        else
+          Result := -1;
+        Exit;
+      end;
+      AHandle.Pos := 0;
+    end;
+    LDent := PDirent64(@AHandle.Buf[AHandle.Pos]);
+    Inc(AHandle.Pos, LDent^.d_reclen);
+    LNamePtr := @LDent^.d_name[0];
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
+      Continue;
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = '.') and (LNamePtr[2] = #0) then
+      Continue;
+    LNameLen := 0;
+    while (LNameLen < 255) and (LNamePtr[LNameLen] <> #0) do
+    begin
+      AEntry.Name[LNameLen] := LNamePtr[LNameLen];
+      Inc(LNameLen);
+    end;
+    AEntry.Name[LNameLen] := #0;
+    AEntry.NameLen := LNameLen;
+    AEntry.Ino := LDent^.d_ino;
+    case LDent^.d_type of
+      8:  AEntry.FileType := ftRegular;
+      4:  AEntry.FileType := ftDirectory;
+      10: AEntry.FileType := ftSymlink;
+      2:  AEntry.FileType := ftCharDevice;
+      6:  AEntry.FileType := ftBlockDevice;
+      1:  AEntry.FileType := ftFifo;
+      12: AEntry.FileType := ftSocket;
+    else
+      AEntry.FileType := ftUnknown;
+    end;
+    Result := 0;
+    Exit;
+  end;
+{$ELSE}
+  Result := 1;
+{$ENDIF}
+end;
+
+function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
+begin
+  if AHandle.Fd >= 0 then
+  begin
+    close(AHandle.Fd);
+    AHandle.Fd := -1;
+    Result := 0;
+  end
+  else
+    Result := -1;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -415,6 +513,36 @@ begin
   else
     Result := -1;
 end;
+
+function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+begin
+  FillChar(AHandle, SizeOf(AHandle), 0);
+  AHandle.FindHandle := HANDLE(PtrInt(-1));
+  AHandle.First := True;
+  AHandle.Finished := False;
+  Result := 0;
+end;
+
+function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+begin
+  FillChar(AEntry, SizeOf(AEntry), 0);
+  if AHandle.Finished then
+  begin
+    Result := 1;
+    Exit;
+  end;
+  Result := 1;
+end;
+
+function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
+begin
+  if AHandle.FindHandle <> HANDLE(PtrInt(-1)) then
+  begin
+    FindClose(AHandle.FindHandle);
+    AHandle.FindHandle := HANDLE(PtrInt(-1));
+  end;
+  Result := 0;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -432,6 +560,9 @@ function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := -1
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; begin Result := -1; end;
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar; begin Result := nil; end;
 function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := -1; end;
+function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
+function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := -1; end;
 {$ENDIF}
 
 end.
