@@ -151,6 +151,9 @@ const
 { signal constants - full table }
 {$I nextpas.core.platform.darwin.base.signal.inc}
 
+{ kqueue types and constants }
+{$I nextpas.core.platform.darwin.base.kqueue.inc}
+
 implementation
 
 end.

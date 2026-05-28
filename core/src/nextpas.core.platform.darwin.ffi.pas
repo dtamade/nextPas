@@ -38,6 +38,8 @@ function dlopen(Name: PAnsiChar; Flags: Int32): Pointer; cdecl; external 'c' nam
 function dlsym(Lib: Pointer; Name: PAnsiChar): Pointer; cdecl; external 'c' name 'dlsym';
 function dlclose(Lib: Pointer): Int32; cdecl; external 'c' name 'dlclose';
 function dlerror: PAnsiChar; cdecl; external 'c' name 'dlerror';
+function kqueue: Int32; cdecl; external 'c' name 'kqueue';
+function kevent(kq: Int32; changelist: PKEvent; nchanges: Int32; eventlist: PKEvent; nevents: Int32; timeout: Pointer): Int32; cdecl; external 'c' name 'kevent';
 
 implementation
 
