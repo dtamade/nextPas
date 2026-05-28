@@ -2473,6 +2473,421 @@ begin
   end;
 end;
 
+procedure CheckDelphiStyleGenericMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program DelphiGenericVar;' + LineEnding +
+    '{$mode delphi}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  Box: TBox<Integer>;' + LineEnding +
+    'begin' + LineEnding +
+    '  Box.Put(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('delphi-generic-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('delphi-generic-missing-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('delphi-generic-model-status:' + Model.Status);
+    if Model.BindingCount < 1 then
+      Fail('delphi-generic-binding-count:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericTypeMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericTypeMismatch;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntBox = specialize TBox<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  Box: TIntBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  Box.Put(' + #39 + 'hello' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-type-mismatch-expected-diagnostic');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericMultiParamBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericMultiParam;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TDict<K, V> = class' + LineEnding +
+    '    procedure Add(const Key: K; const Value: V);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TDict.Add(const Key: K; const Value: V);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TStrIntDict = specialize TDict<String, Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  Dict: TStrIntDict;' + LineEnding +
+    'begin' + LineEnding +
+    '  Dict.Add(' + #39 + 'key' + #39 + ', 42);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-multi-param-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-multi-param-missing-model');
+    if Model.BindingCount < 1 then
+      Fail('generic-multi-param-binding-count:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericMultiParamTypeMismatch;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericMultiParamMismatch;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TDict<K, V> = class' + LineEnding +
+    '    procedure Add(const Key: K; const Value: V);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TDict.Add(const Key: K; const Value: V);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TStrIntDict = specialize TDict<String, Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  Dict: TStrIntDict;' + LineEnding +
+    'begin' + LineEnding +
+    '  Dict.Add(42, ' + #39 + 'value' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-multi-param-mismatch-expected-diagnostic');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericMultipleMethodsBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericMultipleMethods;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TContainer<T> = class' + LineEnding +
+    '    procedure Add(const Item: T);' + LineEnding +
+    '    function Count: Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TContainer.Add(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'function TContainer.Count: Integer;' + LineEnding +
+    'begin' + LineEnding +
+    '  Result := 0;' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntContainer = specialize TContainer<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  C: TIntContainer;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.Add(1);' + LineEnding +
+    '  C.Count;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-multi-methods-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-multi-methods-missing-model');
+    if Model.BindingCount < 2 then
+      Fail('generic-multi-methods-binding-count:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericDefaultParamInteraction;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericDefaultParam;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TStore<T> = class' + LineEnding +
+    '    procedure Save(const Value: T; Flag: Boolean = True);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TStore.Save(const Value: T; Flag: Boolean = True);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntStore = specialize TStore<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  S: TIntStore;' + LineEnding +
+    'begin' + LineEnding +
+    '  S.Save(42);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-default-param-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-default-param-missing-model');
+    if Model.BindingCount < 1 then
+      Fail('generic-default-param-binding-count:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericInheritedMethodBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericInherited;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBase<T> = class' + LineEnding +
+    '    procedure DoBase(const X: T);' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TChild<T> = class(TBase)' + LineEnding +
+    '    procedure DoChild(const Y: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.DoBase(const X: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TChild.DoChild(const Y: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TMyChild = specialize TChild<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  C: TMyChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.DoChild(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-inherited-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-inherited-missing-model');
+    if Model.BindingCount < 1 then
+      Fail('generic-inherited-binding-count:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -14800,6 +15215,13 @@ begin
     CheckProtectedSubclassSelfAccessAllowed;
     CheckProtectedExternalAccessDiagnostic;
     CheckRealFPCPatternStringListBinding;
+    CheckDelphiStyleGenericMemberCallBinding;
+    CheckGenericTypeMismatchDiagnostic;
+    CheckGenericMultiParamBinding;
+    CheckGenericMultiParamTypeMismatch;
+    CheckGenericMultipleMethodsBinding;
+    CheckGenericDefaultParamInteraction;
+    CheckGenericInheritedMethodBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

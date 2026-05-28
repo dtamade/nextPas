@@ -1383,6 +1383,23 @@ begin
           Exit;
         end;
 
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+        begin
+          SpecArgs := '<';
+          Inc(ACursor);
+          while (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+            (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          begin
+            SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
+            Inc(ACursor);
+          end;
+          SpecArgs := SpecArgs + '>';
+          MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
+          NameNode.FText := NameNode.FText + SpecArgs;
+        end;
+
         Result := NameNode;
       end;
     tkStringKeyword, tkFileKeyword:

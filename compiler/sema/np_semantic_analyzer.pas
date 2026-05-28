@@ -109,6 +109,8 @@ type
     function DeclParamSignatureMatchesArgs(const ADecl: TGreenNode;
       const AArgSignature: string; const AArgCount: LongInt): Boolean;
     function GetParamSignature(const ADecl: TGreenNode): string;
+    function GetSubstitutedParamSignature(const ADecl: TGreenNode;
+      const AParamNames, AArgTypes: array of string): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
     function MangledNameSig(const AName: string; const ASig: string): string;
     function HasOverload(const AName: string): Boolean;
@@ -267,6 +269,8 @@ type
       const AOwnerUnitId: string);
     procedure InstantiateGenericType(const AInstanceTypeId: LongInt;
       const ASpecText: string; const AOwnerUnitId: string);
+    function ResolveOrInstantiateInlineGeneric(const ASpecText: string;
+      const AOwnerUnitId: string): LongInt;
     procedure ProcessEnumType(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure ProcessRecordFields(const ANode: TGreenNode;
@@ -845,6 +849,74 @@ begin
           Result := Result + 'p'
         else
           Result := Result + 'i';
+      end;
+      Exit;
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.GetSubstitutedParamSignature(
+  const ADecl: TGreenNode;
+  const AParamNames, AArgTypes: array of string): string;
+var
+  J, K, P: LongInt;
+  Child, ParamChild, TypeChild: TGreenNode;
+  TypeName, SubstType: string;
+  Dummy: Int64;
+  Found: Boolean;
+begin
+  Result := '';
+  if ADecl = nil then Exit;
+  for J := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(J);
+    if (Child <> nil) and (Child.NodeKind = gnkParameterList) then
+    begin
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ParamChild := Child.ChildAt(K);
+        if (ParamChild = nil) or (ParamChild.NodeKind <> gnkParameterDecl) then
+          Continue;
+        TypeName := '';
+        TypeChild := nil;
+        if ParamChild.ChildCount > 0 then
+        begin
+          TypeChild := ParamChild.ChildAt(0);
+          if TypeChild <> nil then
+            TypeName := TypeChild.Text;
+        end;
+        Found := False;
+        for P := 0 to High(AParamNames) do
+        begin
+          if SameText(TypeName, AParamNames[P]) then
+          begin
+            SubstType := LowerCase(AArgTypes[P]);
+            if (SubstType = 'string') or (SubstType = 'ansistring') then
+              Result := Result + 's'
+            else if (SubstType = 'boolean') or (SubstType = 'bool') then
+              Result := Result + 'b'
+            else
+              Result := Result + 'i';
+            Found := True;
+            Break;
+          end;
+        end;
+        if not Found then
+        begin
+          TypeName := LowerCase(TypeName);
+          if (TypeName = 'string') or (TypeName = 'ansistring') then
+            Result := Result + 's'
+          else if (TypeName = 'boolean') or (TypeName = 'bool') then
+            Result := Result + 'b'
+          else if (TypeChild <> nil) and
+            FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
+            Result := Result + 'r'
+          else if (TypeChild <> nil) and
+            FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
+            Result := Result + 'p'
+          else
+            Result := Result + 'i';
+        end;
       end;
       Exit;
     end;
@@ -3737,6 +3809,8 @@ begin
       if (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) then
       begin
         TypeId := ResolveTypeIdForOwner(TypeChild.Text, AOwnerUnitId);
+        if (TypeId = 0) and (Pos('<', TypeChild.Text) > 0) then
+          TypeId := ResolveOrInstantiateInlineGeneric(TypeChild.Text, AOwnerUnitId);
         Break;
       end;
     end;
@@ -4264,16 +4338,127 @@ procedure TSemanticAnalyzer.InstantiateGenericType(
   const AOwnerUnitId: string);
 var
   GenericName: string;
-  LtPos: LongInt;
+  LtPos, GtPos: LongInt;
   GenericTypeId: LongInt;
   GenericType: TSemanticType;
   InstanceName: string;
-  I: LongInt;
+  I, J, BodyIdx: LongInt;
   SizeVal: Int64;
   Symbol: TSemanticSymbol;
   NewSymbolId: LongInt;
   QualPrefix: string;
+  ArgStr, ParamStr: string;
+  ArgTypes: array of string;
+  ParamNames: array of string;
+  MethodShortName: string;
+  SubstSig: string;
+  Decl: TGreenNode;
 begin
+  LtPos := Pos('<', ASpecText);
+  if LtPos <= 0 then
+    Exit;
+  GenericName := Copy(ASpecText, 1, LtPos - 1);
+  GtPos := Pos('>', ASpecText);
+  if GtPos <= LtPos then
+    GtPos := Length(ASpecText) + 1;
+  ArgStr := Copy(ASpecText, LtPos + 1, GtPos - LtPos - 1);
+
+  GenericTypeId := 0;
+  for I := 0 to FModel.TypeCount - 1 do
+  begin
+    GenericType := FModel.TypeAt(I);
+    if SameText(GenericType.Name, GenericName) and
+      (GenericType.TypeParams <> '') then
+    begin
+      GenericTypeId := GenericType.TypeId;
+      ParamStr := GenericType.TypeParams;
+      Break;
+    end;
+  end;
+  if GenericTypeId <= 0 then
+    Exit;
+  if AInstanceTypeId <= 0 then
+    Exit;
+  FModel.SetTypeInstantiatedFrom(AInstanceTypeId, GenericTypeId);
+
+  SetLength(ArgTypes, 0);
+  I := 1;
+  while I <= Length(ArgStr) do
+  begin
+    J := I;
+    while (J <= Length(ArgStr)) and (ArgStr[J] <> ',') do
+      Inc(J);
+    SetLength(ArgTypes, Length(ArgTypes) + 1);
+    ArgTypes[High(ArgTypes)] := Trim(Copy(ArgStr, I, J - I));
+    I := J + 1;
+  end;
+
+  SetLength(ParamNames, 0);
+  I := 1;
+  while I <= Length(ParamStr) do
+  begin
+    J := I;
+    while (J <= Length(ParamStr)) and (ParamStr[J] <> ',') do
+      Inc(J);
+    SetLength(ParamNames, Length(ParamNames) + 1);
+    ParamNames[High(ParamNames)] := Trim(Copy(ParamStr, I, J - I));
+    I := J + 1;
+  end;
+
+  InstanceName := FModel.TypeAt(AInstanceTypeId - 1).Name;
+  QualPrefix := GenericName + '.';
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(I);
+    if (Pos(QualPrefix, Symbol.Name) = 1) and
+      SameText(Symbol.Kind, 'method') then
+    begin
+      MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
+      NewSymbolId := FModel.AddSymbol(
+        InstanceName + '.' + MethodShortName,
+        'method', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
+      FModel.SetSymbolParamCount(NewSymbolId, Symbol.ParamCount);
+      FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
+
+      SubstSig := '';
+      if (Length(ParamNames) > 0) and (Length(ArgTypes) >= Length(ParamNames)) then
+      begin
+        Decl := nil;
+        for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+        begin
+          if SameText(FProcedureBodies[BodyIdx].Name, GenericName + '.' + MethodShortName) then
+          begin
+            Decl := FProcedureBodies[BodyIdx].Decl;
+            Break;
+          end;
+        end;
+        if Decl <> nil then
+          SubstSig := GetSubstitutedParamSignature(Decl, ParamNames, ArgTypes);
+      end;
+      FModel.SetSymbolParamSignature(NewSymbolId, SubstSig);
+    end;
+  end;
+  FModel.SetTypeParent(AInstanceTypeId,
+    FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
+  if FModel.LookupConstValue(GenericName + '$size', SizeVal) then
+    FModel.AddConstValue(InstanceName + '$size', SizeVal);
+  if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
+    FModel.AddConstValue(InstanceName + '$vmt_count', 0);
+  FModel.AddStringConstValue(InstanceName + '$parent_class',
+    FModel.TypeAt(GenericTypeId - 1).Name);
+end;
+
+function TSemanticAnalyzer.ResolveOrInstantiateInlineGeneric(
+  const ASpecText: string; const AOwnerUnitId: string): LongInt;
+var
+  GenericName: string;
+  LtPos: LongInt;
+  I: LongInt;
+  GenericType: TSemanticType;
+  GenericTypeId: LongInt;
+  NewTypeId: LongInt;
+begin
+  Result := 0;
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
     Exit;
@@ -4291,32 +4476,10 @@ begin
   end;
   if GenericTypeId <= 0 then
     Exit;
-  if AInstanceTypeId <= 0 then
-    Exit;
-  InstanceName := FModel.TypeAt(AInstanceTypeId - 1).Name;
-  QualPrefix := GenericName + '.';
-  for I := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(I);
-    if (Pos(QualPrefix, Symbol.Name) = 1) and
-      SameText(Symbol.Kind, 'method') then
-    begin
-      NewSymbolId := FModel.AddSymbol(
-        InstanceName + '.' + Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt),
-        'method', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
-      FModel.SetSymbolParamCount(NewSymbolId, Symbol.ParamCount);
-      FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
-      FModel.SetSymbolParamSignature(NewSymbolId, '');
-    end;
-  end;
-  FModel.SetTypeParent(AInstanceTypeId,
-    FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
-  if FModel.LookupConstValue(GenericName + '$size', SizeVal) then
-    FModel.AddConstValue(InstanceName + '$size', SizeVal);
-  if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
-    FModel.AddConstValue(InstanceName + '$vmt_count', 0);
-  FModel.AddStringConstValue(InstanceName + '$parent_class',
-    FModel.TypeAt(GenericTypeId - 1).Name);
+  NewTypeId := FModel.AddType(ASpecText, 'declared');
+  FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, NewTypeId, 0);
+  InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
+  Result := NewTypeId;
 end;
 
 procedure TSemanticAnalyzer.WalkDeclarations(const ANode: TGreenNode;

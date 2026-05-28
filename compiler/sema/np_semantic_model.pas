@@ -130,6 +130,7 @@ type
     function AddType(const AName: string; const AKind: string): LongInt;
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
     procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
+    procedure SetTypeInstantiatedFrom(const ATypeId: LongInt; const AFromTypeId: LongInt);
     function IsTypeDescendantOf(const ATypeId: LongInt;
       const AAncestorTypeId: LongInt): Boolean;
     function AddScope(const AKind: TScopeKind; const AName: string;
@@ -307,6 +308,16 @@ begin
     end;
   end;
   FTypes[Idx].TypeParams := Params;
+end;
+
+procedure TSemanticModel.SetTypeInstantiatedFrom(const ATypeId: LongInt;
+  const AFromTypeId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx >= 0) and (Idx < Length(FTypes)) then
+    FTypes[Idx].InstantiatedFrom := AFromTypeId;
 end;
 
 function TSemanticModel.IsTypeDescendantOf(const ATypeId: LongInt;
