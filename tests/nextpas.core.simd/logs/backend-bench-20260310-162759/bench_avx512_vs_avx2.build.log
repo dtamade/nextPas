@@ -1,0 +1,205 @@
+Free Pascal Compiler version 3.2.2+dfsg-32 [2024/01/05] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling bench_avx512_vs_avx2.lpr
+Compiling /workspace/src/fafafa.core.simd.pas
+Compiling /workspace/src/fafafa.core.simd.base.pas
+Compiling /workspace/src/fafafa.core.simd.dispatch.pas
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.pas
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.base.pas
+Compiling /workspace/src/fafafa.core.atomic.pas
+fafafa.core.atomic.pas(1164,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1197,20) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1440,85) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1448,13) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1453,21) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1458,21) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1546,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1553,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1561,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1568,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1576,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1582,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:QWord;var aExpected:QWord;aDesired:QWord;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1589,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1594,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1601,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1608,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1613,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1622,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1628,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1634,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1639,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1644,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1651,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1658,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1663,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1670,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1677,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(1686,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1693,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(1700,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(2043,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(2056,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(2070,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(2077,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(2083,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2090,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2102,58) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2114,23) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2124,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2131,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2139,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2146,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2158,58) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2167,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2176,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2183,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2191,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2198,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2208,86) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2216,21) Note: Call to subroutine "function atomic_fetch_add(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2228,23) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2236,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2241,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2247,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2254,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2264,74) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2272,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2279,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2286,13) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2293,20) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2302,13) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2309,20) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2319,74) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2325,21) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2333,13) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2340,20) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2347,13) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2354,20) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2364,73) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2370,21) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2378,13) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2385,20) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2392,13) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2399,20) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+fafafa.core.atomic.pas(2409,74) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2415,21) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2470,82) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2478,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2549,82) Note: Call to subroutine "function atomic_fetch_sub_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2557,21) Note: Call to subroutine "function atomic_fetch_sub_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2631,82) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2637,21) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2738,81) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2744,21) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2845,82) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(2851,21) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(3369,3) Note: Local variable "LExpected32" not used
+fafafa.core.atomic.pas(3395,3) Note: Local variable "LExpected32" not used
+fafafa.core.atomic.pas(3415,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(3423,17) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3424,17) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3425,17) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3426,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3427,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3437,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3438,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3439,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3440,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3441,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+fafafa.core.atomic.pas(3470,14) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(3472,8) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.atomic.pas(3485,19) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):Int64;" marked as inline is not inlined
+fafafa.core.atomic.pas(3488,8) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.unix.pas
+Compiling /workspace/src/fafafa.core.simd.backend.priority.pas
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.x86.pas
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.x86.base.pas
+Compiling /workspace/src/fafafa.core.simd.cpuinfo.x86.x86_64.pas
+fafafa.core.simd.cpuinfo.pas(477,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+fafafa.core.simd.cpuinfo.pas(493,10) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+Compiling /workspace/src/fafafa.core.simd.scalar.pas
+fafafa.core.simd.dispatch.pas(917,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(983,21) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(995,14) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1010,5) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1021,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1054,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1093,12) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1103,5) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1131,5) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1171,5) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1196,3) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1198,3) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1211,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1220,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1240,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(1254,3) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.dispatch.pas(879,3) Note: Local variable "g_DispatchInitialized" is assigned but never used
+Compiling /workspace/src/fafafa.core.simd.utils.pas
+Compiling /workspace/src/fafafa.core.simd.sse2.pas
+fafafa.core.simd.sse2.pas(4038,5) Note: Call to subroutine "procedure WriteBarrier;" marked as inline is not inlined
+fafafa.core.simd.sse2.pas(4046,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+Compiling /workspace/src/fafafa.core.simd.sse3.pas
+Compiling /workspace/src/fafafa.core.simd.ssse3.pas
+Compiling /workspace/src/fafafa.core.simd.sse41.pas
+Compiling /workspace/src/fafafa.core.simd.sse42.pas
+Compiling /workspace/src/fafafa.core.simd.avx2.pas
+Compiling /workspace/src/fafafa.core.simd.memutils.pas
+fafafa.core.simd.memutils.pas(151,17) Note: Call to subroutine "function AlignUp(ptr:Pointer;alignment:NativeUInt):^untyped;" marked as inline is not inlined
+fafafa.core.simd.pas(7242,13) Note: Call to subroutine "function VecF32x4Shuffle(const a:TVecF32x4;imm8:Byte):<record type>;" marked as inline is not inlined
+fafafa.core.simd.pas(7247,13) Note: Call to subroutine "function VecI32x4Shuffle(const a:TVecI32x4;imm8:Byte):<record type>;" marked as inline is not inlined
+Compiling /workspace/src/fafafa.core.simd.avx512.pas
+fafafa.core.simd.avx512.facade.inc(25,3) Error: Unrecognized opcode VMOVDQU64
+fafafa.core.simd.avx512.facade.inc(25,13) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(26,14) Error: Unknown identifier "K1"
+fafafa.core.simd.avx512.facade.inc(26,14) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(26,20) Error: Unknown identifier "ZMM0"
+fafafa.core.simd.avx512.facade.inc(26,20) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(26,32) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(26,32) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(26,32) Error: No size specified and unable to determine the size of the operands
+fafafa.core.simd.avx512.facade.inc(27,3) Error: Unrecognized opcode KORTESTQ
+fafafa.core.simd.avx512.facade.inc(27,12) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(95,20) Error: Unknown identifier "ZMM1"
+fafafa.core.simd.avx512.facade.inc(95,20) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(95,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(103,3) Error: Unrecognized opcode VMOVDQU64
+fafafa.core.simd.avx512.facade.inc(103,13) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(104,14) Error: Unknown identifier "K1"
+fafafa.core.simd.avx512.facade.inc(104,14) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(104,20) Error: Unknown identifier "ZMM0"
+fafafa.core.simd.avx512.facade.inc(104,20) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(104,22) Error: Unknown identifier "ZMM1"
+fafafa.core.simd.avx512.facade.inc(104,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(104,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(104,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(105,3) Error: Unrecognized opcode KMOVQ
+fafafa.core.simd.avx512.facade.inc(105,9) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(184,3) Error: Unrecognized opcode VPXORQ
+fafafa.core.simd.avx512.facade.inc(184,10) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(185,3) Error: Unrecognized opcode VPXORQ
+fafafa.core.simd.avx512.facade.inc(185,10) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(192,3) Error: Unrecognized opcode VMOVDQU64
+fafafa.core.simd.avx512.facade.inc(192,13) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(193,15) Error: Unknown identifier "ZMM0"
+fafafa.core.simd.avx512.facade.inc(193,15) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(193,21) Error: Unknown identifier "ZMM0"
+fafafa.core.simd.avx512.facade.inc(193,21) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(193,23) Error: Unknown identifier "ZMM3"
+fafafa.core.simd.avx512.facade.inc(193,23) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(193,23) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(193,23) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(194,14) Error: Unknown identifier "ZMM2"
+fafafa.core.simd.avx512.facade.inc(194,14) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(194,20) Error: Unknown identifier "ZMM2"
+fafafa.core.simd.avx512.facade.inc(194,20) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(194,22) Error: Unknown identifier "ZMM0"
+fafafa.core.simd.avx512.facade.inc(194,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(194,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(194,22) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(221,3) Error: Unrecognized opcode VEXTRACTI64X4
+fafafa.core.simd.avx512.facade.inc(221,17) Error: Assembler syntax error
+fafafa.core.simd.avx512.facade.inc(221,17) Fatal: There were 50 errors compiling module, stopping
+Fatal: Compilation aborted
+Error: /usr/bin/ppcx64 returned an error exitcode

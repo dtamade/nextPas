@@ -47,10 +47,10 @@ type
   TSlabPoolStats = nextpas.core.mem.pool.slab.TSlabPoolStats;
 
 // 快照函数（零副作用）
-function GetMemPoolStats(const aPool: TMemPool): TMemPoolStats; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-function GetStackPoolStats(const aPool: TStackPool): TStackPoolStats; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-function GetBlockPoolStats(const aPool: IBlockPool): TBlockPoolStats; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-function GetSlabPoolStats(const aPool: TSlabPool): TSlabPoolStats; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
+function GetMemPoolStats(const aPool: TMemPool): TMemPoolStats; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+function GetStackPoolStats(const aPool: TStackPool): TStackPoolStats; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+function GetBlockPoolStats(const aPool: IBlockPool): TBlockPoolStats; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+function GetSlabPoolStats(const aPool: TSlabPool): TSlabPoolStats; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
 
 implementation
 

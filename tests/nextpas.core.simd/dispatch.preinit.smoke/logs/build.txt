@@ -1,0 +1,149 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.dispatch_preinit_smoke.pas
+Compiling ./src/nextpas.core.simd.avx2.pas
+Compiling ./src/nextpas.core.simd.backend.priority.pas
+Compiling ./src/nextpas.core.simd.base.pas
+Compiling ./src/nextpas.core.simd.dispatch.pas
+Compiling ./src/nextpas.core.simd.sse42.pas
+Compiling ./src/nextpas.core.simd.sse41.pas
+Compiling ./src/nextpas.core.simd.ssse3.pas
+Compiling ./src/nextpas.core.simd.sse3.pas
+Compiling ./src/nextpas.core.simd.sse2.pas
+Compiling ./src/nextpas.core.simd.scalar.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.unix.pas
+Compiling ./src/nextpas.core.atomic.pas
+Compiling ./src/nextpas.core.atomic.core.pas
+nextpas.core.atomic.pas(1304,85) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1312,13) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1317,21) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1322,21) Note: Call to subroutine "function atomic_exchange_64(var aObj:Int64;aDesired:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1410,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1417,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1425,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1432,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1440,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1446,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:QWord;var aExpected:QWord;aDesired:QWord;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1453,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1458,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1458,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1465,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1472,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1472,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1477,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1486,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1492,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1492,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1498,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1498,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1503,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1503,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1510,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1517,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1517,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1522,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1529,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1529,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1536,13) Note: Call to subroutine "function atomic_compare_exchange_strong_64(var aObj:Int64;var aExpected:Int64;aDesired:Int64;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1545,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1552,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1559,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1559,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):System.Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1942,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(1949,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(1961,58) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1973,23) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1983,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1990,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(1998,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2005,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2017,58) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2026,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2042,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2050,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2057,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2067,86) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2075,21) Note: Call to subroutine "function atomic_fetch_add(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2087,23) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2095,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2100,20) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2106,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2113,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2123,74) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2131,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2138,13) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2145,13) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2152,20) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2161,13) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2168,20) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2178,74) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2184,21) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2192,13) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2199,20) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2206,13) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2213,20) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2223,73) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2229,21) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2237,13) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2244,20) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2251,13) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2258,20) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):System.LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2268,74) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2274,21) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2329,82) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2337,21) Note: Call to subroutine "function atomic_fetch_add_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2408,82) Note: Call to subroutine "function atomic_fetch_sub_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2416,21) Note: Call to subroutine "function atomic_fetch_sub_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2490,82) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2496,21) Note: Call to subroutine "function atomic_fetch_and_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2597,81) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2603,21) Note: Call to subroutine "function atomic_fetch_or_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2704,82) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+nextpas.core.atomic.pas(2710,21) Note: Call to subroutine "function atomic_fetch_xor_64(var aObj:Int64;aArg:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+Compiling ./src/nextpas.core.simd.cpuinfo.base.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.x86.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.x86.base.pas
+nextpas.core.simd.cpuinfo.x86.base.pas(58,3) Note: Local variable "LLeaf0" is assigned but never used
+nextpas.core.simd.cpuinfo.x86.base.pas(73,3) Note: Local variable "LLeaf2" is assigned but never used
+nextpas.core.simd.cpuinfo.x86.base.pas(74,3) Note: Local variable "LLeaf3" is assigned but never used
+nextpas.core.simd.cpuinfo.x86.base.pas(75,3) Note: Local variable "LLeaf4" is assigned but never used
+Compiling ./src/nextpas.core.simd.cpuinfo.x86.x86_64.pas
+nextpas.core.simd.avx2.pas(416,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.avx2.pas(444,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.dispatch.pas(903,3) Note: Local variable "g_CurrentDispatch" is assigned but never used
+nextpas.core.simd.dispatch.pas(915,3) Note: Local variable "g_DispatchInitialized" is assigned but never used
+nextpas.core.simd.scalar.pas(768,3) Note: Local variable "LInput" is assigned but never used
+nextpas.core.simd.scalar.pas(784,3) Note: Local variable "LInput" is assigned but never used
+nextpas.core.simd.sse42.pas(162,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse41.pas(718,4) Note: "assembler" not yet supported inside inline procedure/function
+Compiling ./src/nextpas.core.simd.intrinsics.x86.sse2.pas
+Compiling ./src/nextpas.core.simd.intrinsics.base.pas
+nextpas.core.simd.intrinsics.x86.sse2.pas(1640,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(1679,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(1769,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(1796,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(1888,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(1902,3) Note: Local variable "LResult" is assigned but never used
+nextpas.core.simd.intrinsics.x86.sse2.pas(3167,3) Note: Local variable "LSingle" is assigned but never used
+nextpas.core.simd.sse3.pas(329,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse3.pas(357,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(425,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(443,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(461,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(477,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(495,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(516,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(533,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(550,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(567,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(584,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(601,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(618,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(635,4) Note: "assembler" not yet supported inside inline procedure/function
+nextpas.core.simd.sse2.pas(4742,3) Note: Local variable "LInput" is assigned but never used
+Linking /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/dispatch.preinit.smoke/bin/nextpas.core.simd.dispatch_preinit_smoke
+52953 lines compiled, 1.3 sec, 734688 bytes code, 361408 bytes data
+122 note(s) issued

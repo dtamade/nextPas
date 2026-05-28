@@ -1,0 +1,5 @@
+[DARWIN-PUBLICABI-CONTRACT] Darwin publicabi loader/export contract
+  - checks:  11
+  - issues:  0
+[DARWIN-PUBLICABI-CONTRACT] OK
+DARWIN_PUBLICABI_CONTRACT checks=11 issues=0 status=ok

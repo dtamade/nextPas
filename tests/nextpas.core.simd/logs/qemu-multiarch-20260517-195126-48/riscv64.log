@@ -1,0 +1,3 @@
+[BUILD] fafafa-core-simd-test:riscv64 (linux/riscv64)
+ERROR: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+[ERROR] build linux/riscv64 failed after 1 attempt(s), rc=1

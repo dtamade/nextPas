@@ -1,0 +1,85 @@
+SuiteList Time:00.291 N:21 E:0 F:0 I:10
+  TTestCase_PlatformSpecific Time:00.291 N:21 E:0 F:0 I:10
+    00.001  Test_X86Features
+    00.000  Test_IntrinsicsAVXAvailability_Semantics
+    00.000  Test_IntrinsicsFacade_FullConsistency
+    00.000  Test_BackendFeatureBidirectionalConsistency
+    00.000  Test_AVXUsable_XCR0Semantics
+    00.000  Test_AVX512Usable_XCR0Semantics
+    00.290  Test_DiagnosticReport_UsableViewConsistency
+    00.000  Test_ARMFeatures
+    00.000  Test_ARMFeatureParserSamples  Ignored test: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMHWCAPMergeSamples  Ignored test: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMVendorModelParserSamples  Ignored test: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMProcessorInfoBasic  Ignored test: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMProcessorInfoParserSamples  Ignored test: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_CacheSizeParserSamples
+    00.000  Test_NonX86CacheInfoOnLinux
+    00.000  Test_RISCVISAParserSamples  Ignored test: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVISASelectionSamples  Ignored test: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVHWCAPMergeSamples  Ignored test: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVVendorModelParserSamples  Ignored test: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVProcessorInfoBasic  Ignored test: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_FeatureHierarchy
+
+Number of run tests: 21
+Number of errors:    0
+Number of failures:  0
+
+List of ignored tests:
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMFeatureParserSamples: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMHWCAPMergeSamples: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMVendorModelParserSamples: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMProcessorInfoBasic: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMProcessorInfoParserSamples: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVISAParserSamples: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVISASelectionSamples: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVHWCAPMergeSamples: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVVendorModelParserSamples: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVProcessorInfoBasic: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+
+
+
+x86 Features:
+  SSE: TRUE
+  SSE2: TRUE
+  SSE3: TRUE
+  SSSE3: TRUE
+  SSE4.1: TRUE
+  SSE4.2: TRUE
+  AVX: TRUE
+  AVX2: TRUE
+  FMA: TRUE
+  AVX512F: FALSE
+ARM features not available in this build
+

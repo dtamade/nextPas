@@ -1,0 +1,8 @@
+[GATE-SUMMARY] /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/rehearsal/gate_summary.sample.fail.md (tail=80)
+[GATE-SUMMARY] thresholds: warn_ms=20000, fail_ms=120000
+[GATE-SUMMARY] filter=FAIL, max_detail=260
+| Time | Step | Status | DurationMs | Event | Detail | Artifacts |
+|---|---|---|---|---|---|---|
+[GATE-SUMMARY] matched_rows=2
+| 2026-02-10 00:00:03 | cpuinfo-x86 | FAIL | 1333 | FAILED | rc=1; cpuinfo x86 suite failed; cmd=gate_step_cpuinfo_x86 /mock/tests | tests/fafafa.core.simd.cpuinfo.x86/logs/test.txt |
+| 2026-02-10 00:00:04 | gate | FAIL | 9800 | FAILED | failed-step=cpuinfo-x86 | - |

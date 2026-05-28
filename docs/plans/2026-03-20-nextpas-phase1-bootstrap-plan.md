@@ -494,10 +494,10 @@
   **并行信息：** 可并行：是 | 波次 2 | 会阻塞：[8,12] | 受阻于：[3,5,6]
 
   **参考资料（执行者没有访谈上下文，务必完整）：**
-  - 参考：`/home/dtamade/projects/fafafa.core/docs/TESTING.md`，用于借鉴仓库级 regression 编排。
-  - 参考：`/home/dtamade/projects/fafafa.core/tests/fafafa.core.test/BuildOrTest.sh`，用于借鉴分模块 build/test driver 形态。
-  - 参考：`/home/dtamade/projects/fafafa.core/src/fafafa.core.test.runner.pas`，用于借鉴统一 Pascal test runner 行为。
-  - 参考：`/home/dtamade/projects/fafafa.core/src/fafafa.core.test.snapshot.pas`，用于借鉴 snapshot/diff 支持。
+  - 参考：`/home/dtamade/projects/nextpas.core/docs/TESTING.md`，用于借鉴仓库级 regression 编排。
+  - 参考：`/home/dtamade/projects/nextpas.core/tests/nextpas.core.test/BuildOrTest.sh`，用于借鉴分模块 build/test driver 形态。
+  - 参考：`/home/dtamade/projects/nextpas.core/src/nextpas.core.test.runner.pas`，用于借鉴统一 Pascal test runner 行为。
+  - 参考：`/home/dtamade/projects/nextpas.core/src/nextpas.core.test.snapshot.pas`，用于借鉴 snapshot/diff 支持。
   - 参考：`docs/architecture/compatibility-matrix.md`，用于确认必须暴露的 test group 类别。
   - 参考：`docs/architecture/bootstrap-roadmap.md`，用于确认 `stage0` 工具假设。
   - 参考：`docs/architecture/test-harness-specification.md`，用于对齐分组名、公开行为与失败语义。
@@ -544,7 +544,7 @@
   - 参考：`/home/dtamade/projects/castle-engine/tests/code/testcases/testcompiler.pas`，用于借鉴 compiler 兼容性 fixture 设计。
   - 参考：`/home/dtamade/projects/castle-engine/tests/code/testcases/testsysutils.pas`，用于借鉴 RTL 行为样例设计。
   - 参考：`/home/dtamade/projects/castle-engine/tests/code/testcases/testoldfpcbugs.pas`，用于借鉴 regression bucket 组织方式。
-  - 参考：`/home/dtamade/projects/fafafa.core/tests/fafafa.core.test/Test_core_help_snapshots.pas`，用于借鉴带 snapshot 的输出测试。
+  - 参考：`/home/dtamade/projects/nextpas.core/tests/nextpas.core.test/Test_core_help_snapshots.pas`，用于借鉴带 snapshot 的输出测试。
   - 参考：`tests/harness/README.md`，用于对齐 任务 7 中已声明的 harness 约定。
 
   **验收标准（仅限代理可执行）：**

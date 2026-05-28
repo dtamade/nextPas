@@ -44,7 +44,7 @@ uses
  *   EOutOfRange If `aSize1` or `aSize2` is too large, causing address calculation to overflow.
  *               当 `aSize1` 或 `aSize2` 太大(恶意巨数)导致指针加法溢出时抛出。
  *}
-function IsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function IsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * IsOverlapUnChecked
@@ -78,7 +78,7 @@ function IsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: Siz
  *   use this function for maximum performance.
  *   当你确定指针有效,并且aSize有效以及不会造成溢出时, 使用此函数以获得最大性能.
  *}
-function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * IsOverlap
@@ -103,7 +103,7 @@ function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aS
  *   EOutOfRange If `aSize` is too large, causing address calculation to overflow.
  *               当 `aSize` 太大(恶意巨数)导致指针加法溢出时抛出。
  *}
-function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * IsOverlapUnChecked
@@ -124,7 +124,7 @@ function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {
  * @return `True` if the blocks overlap, `False` otherwise.
  *          如果内存块重叠则返回 `True`, 否则返回 `False`.
  *}
-function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -153,7 +153,7 @@ function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; ov
  *   EOutOfRange  If `aSize` is too large, causing address calculation to overflow.
  *                当 `aSize` 太大(恶意巨数)导致指针加法溢出时抛出。
  *}
-procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * CopyUnChecked
@@ -180,7 +180,7 @@ procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE
  *   Use this for maximum performance when you are certain that pointers are valid.
  *   当你确定指针有效时, 使用此函数以获得最大性能.
  *}
-procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * CopyNonOverlap
@@ -208,7 +208,7 @@ procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CO
  *   EOutOfRange  If `aSize` is too large, causing address calculation to overflow.
  *                当 `aSize` 太大(恶意巨数)导致指针加法溢出时抛出。
  *}
-procedure CopyNonOverlap(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure CopyNonOverlap(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * CopyNonOverlapUnChecked
@@ -235,7 +235,7 @@ procedure CopyNonOverlap(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_C
  *   Use this for maximum performance when you are certain that pointers are valid.
  *   当你确定指针有效时, 使用此函数以获得最大性能.
  *}
-procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -258,7 +258,7 @@ procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill
@@ -280,7 +280,7 @@ procedure Fill(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFDE
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill8
@@ -302,7 +302,7 @@ procedure Fill(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDEF
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill8(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill8(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill8
@@ -324,7 +324,7 @@ procedure Fill8(aDst: Pointer; aCount: SizeUInt; aValue: UInt8); overload; {$IFD
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill8(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill8(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill16
@@ -346,7 +346,7 @@ procedure Fill8(aDst: Pointer; aCount: SizeInt; aValue: UInt8); overload; {$IFDE
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill16(aDst: Pointer; aCount: SizeUInt; aValue: UInt16); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill16(aDst: Pointer; aCount: SizeUInt; aValue: UInt16); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill16
@@ -368,7 +368,7 @@ procedure Fill16(aDst: Pointer; aCount: SizeUInt; aValue: UInt16); overload; {$I
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill16(aDst: Pointer; aCount: SizeInt; aValue: UInt16); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill16(aDst: Pointer; aCount: SizeInt; aValue: UInt16); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill32
@@ -390,7 +390,7 @@ procedure Fill16(aDst: Pointer; aCount: SizeInt; aValue: UInt16); overload; {$IF
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill32(aDst: Pointer; aCount: SizeUInt; aValue: UInt32); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill32(aDst: Pointer; aCount: SizeUInt; aValue: UInt32); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill32
@@ -412,7 +412,7 @@ procedure Fill32(aDst: Pointer; aCount: SizeUInt; aValue: UInt32); overload; {$I
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill32(aDst: Pointer; aCount: SizeInt; aValue: UInt32); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill32(aDst: Pointer; aCount: SizeInt; aValue: UInt32); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill64
@@ -434,7 +434,7 @@ procedure Fill32(aDst: Pointer; aCount: SizeInt; aValue: UInt32); overload; {$IF
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill64(aDst: Pointer; aCount: SizeUInt; const aValue: UInt64); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill64(aDst: Pointer; aCount: SizeUInt; const aValue: UInt64); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Fill64
@@ -456,7 +456,7 @@ procedure Fill64(aDst: Pointer; aCount: SizeUInt; const aValue: UInt64); overloa
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Fill64(aDst: Pointer; aCount: SizeInt; const aValue: UInt64); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Fill64(aDst: Pointer; aCount: SizeInt; const aValue: UInt64); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -476,7 +476,7 @@ procedure Fill64(aDst: Pointer; aCount: SizeInt; const aValue: UInt64); overload
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Zero(aDst: Pointer; aSize: SizeUInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Zero(aDst: Pointer; aSize: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Zero
@@ -495,7 +495,7 @@ procedure Zero(aDst: Pointer; aSize: SizeUInt); overload; {$IFDEF FAFAFA_CORE_IN
  *   EArgumentNil If `aDst` is `nil`.
  *                当 `aDst` 为 `nil` 时抛出。
  *}
-procedure Zero(aDst: Pointer; aSize: SizeInt); overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+procedure Zero(aDst: Pointer; aSize: SizeInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -517,7 +517,7 @@ procedure Zero(aDst: Pointer; aSize: SizeInt); overload; {$IFDEF FAFAFA_CORE_INL
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare
@@ -538,7 +538,7 @@ function Compare(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare8
@@ -559,7 +559,7 @@ function Compare(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$I
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare8
@@ -580,7 +580,7 @@ function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare16
@@ -601,7 +601,7 @@ function Compare8(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare16
@@ -622,7 +622,7 @@ function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; 
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare32
@@ -643,7 +643,7 @@ function Compare16(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Compare32
@@ -664,7 +664,7 @@ function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeUInt): Integer; overload; 
  * @return < 0 if aPtr1 < aPtr2, 0 if aPtr1 = aPtr2, > 0 if aPtr1 > aPtr2.
  *         如果 aPtr1 < aPtr2 返回 < 0, aPtr1 = aPtr2 返回 0, aPtr1 > aPtr2 返回 > 0.
  *}
-function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -686,7 +686,7 @@ function Compare32(aPtr1, aPtr2: Pointer; aCount: SizeInt): Integer; overload; {
  * @return `True` if the blocks are equal, `False` otherwise.
  *         如果内存块相等则返回 `True`, 否则返回 `False`.
  *}
-function Equal(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Equal(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * Equal
@@ -707,7 +707,7 @@ function Equal(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFD
  * @return `True` if the blocks are equal, `False` otherwise.
  *         如果内存块相等则返回 `True`, 否则返回 `False`.
  *}
-function Equal(aPtr1, aPtr2: Pointer; aSize: SizeInt): Boolean; overload; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function Equal(aPtr1, aPtr2: Pointer; aSize: SizeInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 
@@ -728,14 +728,14 @@ function Equal(aPtr1, aPtr2: Pointer; aSize: SizeInt): Boolean; overload; {$IFDE
  * @return `True` if the pointer is aligned, `False` otherwise.
  *         如果指针已对齐则返回 `True`, 否则返回 `False`.
  *}
-function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   {**
    * IsPowerOfTwo
    *
    * @desc Checks if a value is a power of two (and > 0).
    *}
-  function IsPowerOfTwo(N: SizeUInt): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+  function IsPowerOfTwo(N: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   {**
    * AlignDown
@@ -745,14 +745,14 @@ function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boole
    * @exceptions
    *   EArgumentNil / EInvalidArgument 同 AlignUp
    *}
-  function AlignDown(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+  function AlignDown(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   {**
    * AlignDownUnChecked
    *
    * @desc Unchecked version of AlignDown (no safety checks).
    *}
-  function AlignDownUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+  function AlignDownUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -778,7 +778,7 @@ function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boole
  *   EInvalidArgument If `aAlignment` is not a power of two.
  *                    当 `aAlignment` 不是2的幂时抛出。
  *}
-function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * AlignUpUnChecked
@@ -796,15 +796,15 @@ function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFD
  * @return The aligned pointer.
  *         对齐后的指针.
  *}
-function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 implementation
 
-{$IFDEF FAFAFA_CORE_CRT_MEMCPY}
+{$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
 function memcpy(aDst, aSrc : pointer; aSize : SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'libc'{$ENDIF} name 'memcpy';
 {$ENDIF}
 
-{$IFDEF FAFAFA_CORE_CRT_MEMMOVE}
+{$IFDEF NEXTPAS_CORE_CRT_MEMMOVE}
 function memmove(aDst, aSrc : pointer; aSize : SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'libc'{$ENDIF} name 'memmove';
 {$ENDIF}
 
@@ -864,7 +864,7 @@ begin
   if aDst = nil then
     raise EArgumentNil.Create('nextpas.core.mem.utils.Copy: aDst is nil.');
 
-  {$IFNDEF FAFAFA_CORE_CRT_MEMMOVE}
+  {$IFNDEF NEXTPAS_CORE_CRT_MEMMOVE}
   // 当使用 `System.Move` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `System.Move` 兼容
   if aSize > MAX_SIZE_INT then
     raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.Copy: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
@@ -875,7 +875,7 @@ end;
 
 procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt);
 begin
-  {$IFDEF FAFAFA_CORE_CRT_MEMMOVE}
+  {$IFDEF NEXTPAS_CORE_CRT_MEMMOVE}
     memmove(aDst, aSrc, aSize);
   {$ELSE}
     System.Move(aSrc^, aDst^, SizeInt(aSize));
@@ -893,7 +893,7 @@ begin
   if aDst = nil then
     raise EArgumentNil.Create('nextpas.core.mem.utils.CopyNonOverlap: aDst is nil.');
 
-  {$IFNDEF FAFAFA_CORE_CRT_MEMCPY}
+  {$IFNDEF NEXTPAS_CORE_CRT_MEMCPY}
   // 当使用 `System.Move` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `System.Move` 兼容
   if aSize > MAX_SIZE_INT then
     raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.CopyNonOverlap: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
@@ -904,7 +904,7 @@ end;
 
 procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt);
 begin
-  {$IFDEF FAFAFA_CORE_CRT_MEMCPY}
+  {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
     memcpy(aDst, aSrc, aSize);
   {$ELSE}
     System.Move(aSrc^, aDst^, SizeInt(aSize));

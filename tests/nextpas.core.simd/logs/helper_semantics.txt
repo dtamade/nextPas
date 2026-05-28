@@ -1,0 +1,1 @@
+NONX86_HELPER_SEMANTICS_SUMMARY checks=777 status=ok

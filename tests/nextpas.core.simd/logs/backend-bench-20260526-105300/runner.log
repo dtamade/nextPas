@@ -1,0 +1,4 @@
+[BENCH] >>> AVX2_vs_Scalar
+[BENCH] PASS AVX2_vs_Scalar
+[BENCH] >>> AVX512_vs_AVX2
+[BENCH] SKIP AVX512_vs_AVX2

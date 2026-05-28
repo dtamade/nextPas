@@ -1,0 +1,3 @@
+[IMPL-MATRIX] file=/home/dtamade/projects/nextpas.core/docs/nextpas.core.simd.implementation-matrix.md
+[IMPL-MATRIX] OK nonx86_slots=22 x86_rows=10
+IMPLEMENTATION_MATRIX_SYNC nonx86_slots=22 x86_rows=10 issues=0 status=ok

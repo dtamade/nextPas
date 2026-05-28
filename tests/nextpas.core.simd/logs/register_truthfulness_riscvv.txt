@@ -1,0 +1,21 @@
+[REG-TRUTH] backend=riscvv
+  - register file:       /home/dtamade/projects/nextpas.core/src/nextpas.core.simd.riscvv.register.inc
+  - source files:        5
+  - assignments:         432
+  - asm exact:           312
+  - asm suffix only:     117
+  - backend composed:    3
+  - wrapper only:        0
+  - scalar passthrough:  0
+  - no definition:       0
+  - miswired:            0
+  - always composed ok:  0
+  - asm-only composed ok:3
+  - no-asm composed ok:  0
+  - always wrapper ok:   0
+  - asm-only wrapper ok: 0
+  - no-asm wrapper ok:   0
+  - unused allowlist:    0
+  - conflicting assign:  0
+[REG-TRUTH] OK
+NONX86_REGISTER_TRUTHFULNESS_SUMMARY backend=riscvv assignments=432 asm_exact=312 asm_suffix_only=117 backend_composed=3 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1

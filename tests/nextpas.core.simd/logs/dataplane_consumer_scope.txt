@@ -1,0 +1,3 @@
+[DATAPLANE-SCOPE] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/dataplane_consumer_scope.json
+[DATAPLANE-SCOPE] OK
+DATAPLANE_CONSUMER_SCOPE scanned_files=150 symbols=3 allowed_hits=17 forbidden_hits=0

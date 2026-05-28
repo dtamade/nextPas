@@ -1,0 +1,9 @@
+AVX-512 vs AVX2 Performance Benchmark
+======================================
+
+=== AVX-512 vs AVX2 Performance Benchmark ===
+
+Running AVX2 backend tests...
+Running AVX-512 backend tests...
+[SKIP] AVX-512 backend is not available on this CPU
+[SKIP] No AVX-512 benchmark results produced on this host.

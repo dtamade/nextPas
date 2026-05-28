@@ -2,7 +2,7 @@ unit nextpas.core.mem.pool.fixed_slab;
 
 {$GOTO ON}  // nginx 移植代码使用 goto 控制流
 {$I nextpas.core.settings.inc}
-{.$define FAFAFA_SLAB_TESTGUARD} // enable when diagnosing
+{.$define NEXTPAS_SLAB_TESTGUARD} // enable when diagnosing
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in slab internals
@@ -15,7 +15,7 @@ uses
   nextpas.core.mem.allocator.base;
 
 type
-  {$IFDEF FAFAFA_CORE_SLAB_STATS}
+  {$IFDEF NEXTPAS_CORE_SLAB_STATS}
   TFixedSlabSlotStat = record
     total: SizeUInt;
     used: SizeUInt;
@@ -34,7 +34,7 @@ type
 
     function GetCapacity: SizeUInt;
     function GetUsed: SizeUInt;
-    {$IFDEF FAFAFA_CORE_SLAB_STATS}
+    {$IFDEF NEXTPAS_CORE_SLAB_STATS}
     function GetStats: TFixedSlabStats;
     function GetSlotStat(Index: SizeUInt): TFixedSlabSlotStat;
     {$ENDIF}
@@ -55,7 +55,7 @@ type
     FCore: Pointer;       // 指向 pool header（等于 FBase）
 
     // Private helpers
-    {$IFDEF FAFAFA_CORE_SLAB_STATS}
+    {$IFDEF NEXTPAS_CORE_SLAB_STATS}
     function GetStats: TFixedSlabStats; inline;
     function GetSlotStat(Index: SizeUInt): TFixedSlabSlotStat; inline;
     function BuildStats: TFixedSlabStats;
@@ -139,7 +139,7 @@ const
   NGX_SLAB_BUSY        = PtrUInt($FFFFFFFFFFFFFFFF);
 {$endif}
 
-{$IFDEF FAFAFA_SLAB_TESTGUARD}
+{$IFDEF NEXTPAS_SLAB_TESTGUARD}
 procedure SlabDbg(const s: AnsiString);
 var f: Text;
 begin
@@ -770,7 +770,7 @@ begin
   slab := page^.slab;
   page_type := ngx_slab_page_type(page);
 
-  {$IFDEF FAFAFA_SLAB_TESTGUARD}
+  {$IFDEF NEXTPAS_SLAB_TESTGUARD}
   WriteLn('[Free] p=', PtrUInt(p):16, ', n=', n, ', page_type=', page_type, ', slab=', slab:16);
   {$ENDIF}
 
@@ -1116,7 +1116,7 @@ begin
   end;
 end;
 
-{$IFDEF FAFAFA_CORE_SLAB_STATS}
+{$IFDEF NEXTPAS_CORE_SLAB_STATS}
 function TFixedSlabPool.GetStats: TFixedSlabStats;
 begin
   Result := BuildStats;
@@ -1293,7 +1293,7 @@ begin
       copySize := pageRemain;
   end;
 
-  {$IFDEF FAFAFA_SLAB_TESTGUARD}
+  {$IFDEF NEXTPAS_SLAB_TESTGUARD}
   WriteLn('[Realloc] aDst=', PtrUInt(aDst):16, ', aSize=', aSize, ', oldSize=', oldSize, ', copySize=', copySize, ', pageRemain=', pageRemain);
   {$ENDIF}
 

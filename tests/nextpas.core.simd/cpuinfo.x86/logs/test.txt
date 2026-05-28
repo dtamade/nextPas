@@ -1,0 +1,22 @@
+SuiteList Time:00.001 N:11 E:0 F:0 I:0
+  TTestCase_Global Time:00.001 N:11 E:0 F:0 I:0
+    00.000  Test_HasCPUID
+    00.000  Test_CPUID
+    00.000  Test_CPUIDEX
+    00.000  Test_HasSSE
+    00.000  Test_HasSSE2
+    00.000  Test_HasAVX
+    00.000  Test_HasAVX2
+    00.000  Test_XCR0HasAVX_BitMask
+    00.000  Test_XCR0HasAVX512_BitMask
+    00.000  Test_GetVendorString
+    00.001  Test_GetBrandString
+
+Number of run tests: 11
+Number of errors:    0
+Number of failures:  0
+
+
+Vendor: "GenuineIntel"
+Brand: "Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz"
+

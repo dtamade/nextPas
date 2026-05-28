@@ -1,0 +1,43 @@
+RISCVV vs Scalar Performance Benchmark
+======================================
+
+=== RISCVV vs Scalar Performance Benchmark ===
+
+Running Scalar backend tests...
+Running RISCVV backend tests...
+
+=== RISCVV vs Scalar Performance Comparison ===
+
+Operation        Size     Scalar ops/s   RISCVV ops/s   Speedup
+------------------------------------------------------------------
+MemEqual         4096 B      504.12 K      522.77 K    1.04x
+MemFindByte      4096 B      964.76 K        1.23 M    1.28x
+SumBytes         4096 B      300.86 K      344.28 K    1.14x
+CountByte        4096 B       93.39 K      108.28 K    1.16x
+BitsetPopCount   4096 B       85.55 K       85.49 K    1.00x
+VecF32x4Add           -        5.38 M        5.47 M    1.02x
+VecF32x4AddRaw        -        7.07 M        7.39 M    1.04x
+VecF32x4Mul           -        3.28 M        2.86 M    0.87x
+VecF32x4Div           -        3.24 M        3.06 M    0.94x
+VecI32x4Add           -        3.51 M        3.26 M    0.93x
+VecI16x32Add          -        3.86 M        3.33 M    0.86x
+VecI16x32AddRaw       -        3.76 M        4.55 M    1.21x
+VecF32x4Dot           -        2.98 M        3.02 M    1.01x
+VecI8x16AndNot        -       10.71 K        6.49 K    0.61x
+VecU16x8AndNot        -       13.76 K        9.00 K    0.65x
+VecU8x16AndNot        -       13.34 K        7.06 K    0.53x
+VecU32x16Mul          -        3.01 M        4.23 M    1.40x
+VecU32x16MulRaw       -        3.91 M        6.68 M    1.71x
+VecU64x8Add           -        3.64 M        6.04 M    1.66x
+VecU64x8AddRaw        -        5.67 M        8.75 M    1.54x
+VecU8x64Max           -        1.71 M        1.95 M    1.14x
+VecU8x64MaxRaw        -        2.00 M        2.26 M    1.13x
+HotMemEqPubCache    32 B        3.61 M        4.32 M    1.20x
+HotMemEqPubGet     32 B        2.50 M        2.82 M    1.13x
+HotMemEqDispGet    32 B        3.76 M        4.34 M    1.15x
+HotSumPubCache     32 B        4.12 M        4.04 M    0.98x
+HotSumPubGet       32 B        3.07 M        3.02 M    0.98x
+HotSumDispGet      32 B        5.90 M        5.71 M    0.97x
+------------------------------------------------------------------
+[BENCH] Markdown report generated: RISCVV_vs_Scalar_Benchmark_Report.md
+[BENCH] Benchmark completed successfully.

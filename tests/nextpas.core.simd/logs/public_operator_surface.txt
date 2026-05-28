@@ -1,0 +1,13 @@
+[PUBLIC-OPERATOR-SURFACE] simd public unsigned operator surface
+  - targets:                  58
+  - generated_backed_targets: 58
+  - operator_declarations:    58
+  - operator_implementations: 58
+  - missing_public_functions: 0
+  - missing_vec_impls:        0
+  - missing_operator_decls:   0
+  - missing_operator_impls:   0
+  - bad_operator_bodies:      0
+  - extra_unsigned_operators: 0
+[PUBLIC-OPERATOR-SURFACE] OK
+PUBLIC_OPERATOR_SURFACE_SUMMARY targets=58 generated_backed=58 decls=58 impls=58 missing_public=0 missing_vec_impl=0 missing_decl=0 missing_impl=0 bad_body=0 extra=0 status=ok

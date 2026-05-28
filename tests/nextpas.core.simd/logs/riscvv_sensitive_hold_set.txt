@@ -1,0 +1,5 @@
+[RISCVV-HOLD] file=/home/dtamade/projects/nextpas.core/src/nextpas.core.simd.riscvv.facade.inc
+[RISCVV-HOLD] expected=RISCVVClampF64x4,RISCVVClampF64x8,RISCVVRcpF64x4,RISCVVReduceAddF64x4,RISCVVReduceAddF64x8,RISCVVReduceMulF64x4,RISCVVReduceMulF64x8
+[RISCVV-HOLD] actual=RISCVVClampF64x4,RISCVVClampF64x8,RISCVVRcpF64x4,RISCVVReduceAddF64x4,RISCVVReduceAddF64x8,RISCVVReduceMulF64x4,RISCVVReduceMulF64x8
+[RISCVV-HOLD] OK
+RISCVV_SENSITIVE_HOLD_SET_SUMMARY routines=7 issues=0 status=ok

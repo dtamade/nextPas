@@ -1,0 +1,3 @@
+[DIRECT-SCOPE] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/direct_dispatch_scope.json
+[DIRECT-SCOPE] OK
+DIRECT_DISPATCH_SCOPE symbol=GetDirectDispatchTable scanned_files=150 allowed_files=5 allowed_hits=124 forbidden_hits=0

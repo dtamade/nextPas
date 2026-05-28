@@ -1,0 +1,639 @@
+{
+  "repo_root": "/home/dtamade/projects/nextpas.core",
+  "symbol": "GetDirectDispatchTable",
+  "scan_globs": [
+    "src/nextpas.core.simd*.pas",
+    "src/nextpas.core.simd*.inc"
+  ],
+  "allowed_files": [
+    "src/nextpas.core.simd.algorithms.pas",
+    "src/nextpas.core.simd.api.pas",
+    "src/nextpas.core.simd.arrays.pas",
+    "src/nextpas.core.simd.direct.pas",
+    "src/nextpas.core.simd.ops.pas"
+  ],
+  "scanned_files": 150,
+  "allowed_hits": [
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 47,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 75,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 83,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 91,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 99,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 107,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 115,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 123,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.algorithms.pas",
+      "line": 131,
+      "text": "LD := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.api.pas",
+      "line": 78,
+      "text": "Result := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 315,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 359,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 415,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 460,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 509,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 575,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 666,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 722,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 766,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 822,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 867,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 916,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 982,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1071,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1131,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1167,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1200,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1236,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1275,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1311,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1344,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.arrays.pas",
+      "line": 1380,
+      "text": "LDispatch := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.direct.pas",
+      "line": 25,
+      "text": "function GetDirectDispatchTable: PSimdDispatchTable; inline;"
+    },
+    {
+      "path": "src/nextpas.core.simd.direct.pas",
+      "line": 34,
+      "text": "function GetDirectDispatchTable: PSimdDispatchTable; inline;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 159,
+      "text": "Result := GetDirectDispatchTable^.AddI64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 164,
+      "text": "Result := GetDirectDispatchTable^.SubI64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 203,
+      "text": "Result := GetDirectDispatchTable^.AddU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 208,
+      "text": "Result := GetDirectDispatchTable^.SubU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 213,
+      "text": "Result := GetDirectDispatchTable^.MulU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 218,
+      "text": "Result := GetDirectDispatchTable^.AndU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 223,
+      "text": "Result := GetDirectDispatchTable^.OrU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 228,
+      "text": "Result := GetDirectDispatchTable^.XorU32x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 233,
+      "text": "Result := GetDirectDispatchTable^.NotU32x4(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 238,
+      "text": "Result := GetDirectDispatchTable^.AddU64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 243,
+      "text": "Result := GetDirectDispatchTable^.SubU64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 248,
+      "text": "Result := GetDirectDispatchTable^.AndU64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 253,
+      "text": "Result := GetDirectDispatchTable^.OrU64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 258,
+      "text": "Result := GetDirectDispatchTable^.XorU64x2(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 263,
+      "text": "Result := GetDirectDispatchTable^.NotU64x2(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 268,
+      "text": "Result := GetDirectDispatchTable^.AddU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 273,
+      "text": "Result := GetDirectDispatchTable^.SubU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 278,
+      "text": "Result := GetDirectDispatchTable^.MulU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 283,
+      "text": "Result := GetDirectDispatchTable^.AndU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 288,
+      "text": "Result := GetDirectDispatchTable^.OrU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 293,
+      "text": "Result := GetDirectDispatchTable^.XorU16x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 298,
+      "text": "Result := GetDirectDispatchTable^.NotU16x8(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 303,
+      "text": "Result := GetDirectDispatchTable^.AddU8x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 308,
+      "text": "Result := GetDirectDispatchTable^.SubU8x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 313,
+      "text": "Result := GetDirectDispatchTable^.AndU8x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 318,
+      "text": "Result := GetDirectDispatchTable^.OrU8x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 323,
+      "text": "Result := GetDirectDispatchTable^.XorU8x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 328,
+      "text": "Result := GetDirectDispatchTable^.NotU8x16(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 338,
+      "text": "Result := GetDirectDispatchTable^.AddF32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 343,
+      "text": "Result := GetDirectDispatchTable^.SubF32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 348,
+      "text": "Result := GetDirectDispatchTable^.MulF32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 353,
+      "text": "Result := GetDirectDispatchTable^.DivF32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 369,
+      "text": "Result := GetDirectDispatchTable^.AddF64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 374,
+      "text": "Result := GetDirectDispatchTable^.SubF64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 379,
+      "text": "Result := GetDirectDispatchTable^.MulF64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 384,
+      "text": "Result := GetDirectDispatchTable^.DivF64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 399,
+      "text": "Result := GetDirectDispatchTable^.AddI32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 404,
+      "text": "Result := GetDirectDispatchTable^.SubI32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 419,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 434,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 448,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 462,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 476,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 491,
+      "text": "Result := GetDirectDispatchTable^.AddU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 496,
+      "text": "Result := GetDirectDispatchTable^.SubU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 501,
+      "text": "Result := GetDirectDispatchTable^.MulU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 506,
+      "text": "Result := GetDirectDispatchTable^.AndU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 511,
+      "text": "Result := GetDirectDispatchTable^.OrU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 516,
+      "text": "Result := GetDirectDispatchTable^.XorU32x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 521,
+      "text": "Result := GetDirectDispatchTable^.NotU32x8(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 526,
+      "text": "Result := GetDirectDispatchTable^.AddU64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 531,
+      "text": "Result := GetDirectDispatchTable^.SubU64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 536,
+      "text": "Result := GetDirectDispatchTable^.AndU64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 541,
+      "text": "Result := GetDirectDispatchTable^.OrU64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 546,
+      "text": "Result := GetDirectDispatchTable^.XorU64x4(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 551,
+      "text": "Result := GetDirectDispatchTable^.NotU64x4(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 563,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 577,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 591,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 605,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 629,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 643,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 657,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 671,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 695,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 709,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 731,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 746,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 760,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 774,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 788,
+      "text": "dt := GetDirectDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 803,
+      "text": "Result := GetDirectDispatchTable^.AddU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 808,
+      "text": "Result := GetDirectDispatchTable^.SubU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 813,
+      "text": "Result := GetDirectDispatchTable^.MulU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 818,
+      "text": "Result := GetDirectDispatchTable^.AndU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 823,
+      "text": "Result := GetDirectDispatchTable^.OrU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 828,
+      "text": "Result := GetDirectDispatchTable^.XorU32x16(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 833,
+      "text": "Result := GetDirectDispatchTable^.NotU32x16(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 838,
+      "text": "Result := GetDirectDispatchTable^.AddU64x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 843,
+      "text": "Result := GetDirectDispatchTable^.SubU64x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 848,
+      "text": "Result := GetDirectDispatchTable^.AndU64x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 853,
+      "text": "Result := GetDirectDispatchTable^.OrU64x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 858,
+      "text": "Result := GetDirectDispatchTable^.XorU64x8(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 863,
+      "text": "Result := GetDirectDispatchTable^.NotU64x8(a);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 868,
+      "text": "Result := GetDirectDispatchTable^.AddU8x64(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 873,
+      "text": "Result := GetDirectDispatchTable^.SubU8x64(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 878,
+      "text": "Result := GetDirectDispatchTable^.AndU8x64(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 883,
+      "text": "Result := GetDirectDispatchTable^.OrU8x64(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 888,
+      "text": "Result := GetDirectDispatchTable^.XorU8x64(a, b);"
+    },
+    {
+      "path": "src/nextpas.core.simd.ops.pas",
+      "line": 893,
+      "text": "Result := GetDirectDispatchTable^.NotU8x64(a);"
+    }
+  ],
+  "forbidden_hits": []
+}

@@ -1,0 +1,10 @@
+[SOURCE-REACHABILITY] SIMD source include reachability
+  - tracked include files:      87
+  - reachable include files:    86
+  - allowed unreachable files:  1
+  - unexpected unreachable:     0
+  - missing include refs:       0
+[SOURCE-REACHABILITY] Allowed audit-only unreachable include files:
+  - nextpas.core.simd.neon.scalar.wide_memory.inc: audit-only checker fixture retained for non-x86 helper semantics
+[SOURCE-REACHABILITY] OK (no unexpected unreachable include files)
+SIMD_SOURCE_REACHABILITY_SUMMARY tracked_includes=87 reachable_includes=86 allowed_unreachable=1 unexpected_unreachable=0 missing_include_refs=0

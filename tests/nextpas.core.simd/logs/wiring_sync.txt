@@ -1,0 +1,10 @@
+[WIRING-SYNC] non-x86 wiring consistency
+  - helper slots:  60
+  - legacy slots:  60
+  - grouped slots: 60
+  - shared helper in legacy:  True
+  - shared helper in grouped: True
+  - missing in grouped: 0
+  - extra in grouped:   0
+[WIRING-SYNC] OK
+WIRING_SYNC_SUMMARY legacy=60 grouped=60 helper=60 missing=0 extra=0 markers_missing=0 strict_extra=0 shared_legacy=1 shared_grouped=1

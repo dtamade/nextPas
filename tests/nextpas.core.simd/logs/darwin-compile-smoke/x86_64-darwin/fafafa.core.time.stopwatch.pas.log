@@ -1,0 +1,59 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.stopwatch.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.duration.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.arrays.pas
+Assembling (pipe) /tmp/fafafa-core-darwclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+in-smoke/x86_64-darwin/simd-units/fafafa.core.math.arrays.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.dispatch.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.arrays.pas
+Assembling (pipe) /tmp/fafafa-core-darwiclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+n-smoke/x86_64-darwin/simd-units/fafafa.core.simd.arrays.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.internal.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.internal.s
+Assembling (pipe)clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.dispatch.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.intutil.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.intuclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+til.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.safeint.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.base.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.base.s
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.safeint.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.math.float.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+core.math.float.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.math.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.duration.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ke/x86_64-darwin/simd-units/fafafa.core.time.stopwatch.s
+15060 lines compiled, 1.1 sec

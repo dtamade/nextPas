@@ -1954,7 +1954,7 @@ platform/core 工作流保留下来的已完成记录。
   - Full:
     - fresh `make -C core test` 输出 `All tests passed.`
 - Review:
-  - 这批没有简化 fafafa.core 的容器实现；只是把接口 ownership 切回 nextpas.core 的模块范式。
+  - 这批没有简化 nextpas.core 的容器实现；只是把接口 ownership 切回 nextpas.core 的模块范式。
   - 下一步要处理的是 class skeleton ownership：先把 public interface contract 中对 `TCollection`
     class 的耦合设计出兼容过渡，再把 `TCollection` / `TGenericCollection<T>` 物理移向
     `collections.abstract`。

@@ -163,7 +163,7 @@ type
      * @return 是否成功 Success flag
      *}
     function Flush(aOffset: UInt64 = 0; aSize: UInt64 = 0): Boolean;
-    function FlushRange(aOffset: UInt64; aSize: UInt64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function FlushRange(aOffset: UInt64; aSize: UInt64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     {**
      * Resize
@@ -225,8 +225,8 @@ type
     property IsAnonymous: Boolean read FIsAnonymous;
 
     // 状态查询 Status queries
-    function IsValid: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetPointer(aOffset: UInt64 = 0): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function IsValid: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetPointer(aOffset: UInt64 = 0): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   end;
 
   {**
@@ -298,21 +298,21 @@ type
     procedure Close;
 
     // 状态查询 Status queries
-    function IsValid: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetPointer(aOffset: UInt64 = 0): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetBaseAddress: Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function IsValid: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetPointer(aOffset: UInt64 = 0): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetBaseAddress: Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // 便捷 LPBytes 读写
-    function WriteLPBytes(aOffset: UInt64; const aBuf: RawByteString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function ReadLPBytes(aOffset: UInt64; out aBuf: RawByteString): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function WriteLPBytes(aOffset: UInt64; const aBuf: RawByteString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function ReadLPBytes(aOffset: UInt64; out aBuf: RawByteString): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // UTF-8 字符串便捷方法（基于 LPBytes）
     function WriteLPUTF8(aOffset: UInt64; const S: UnicodeString): Boolean;
     function ReadLPUTF8(aOffset: UInt64; out S: UTF8String): Boolean;
 
     // 刷新便捷方法（转发到内部 MemoryMap）
-    function Flush(aOffset: UInt64 = 0; aSize: UInt64 = 0): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function FlushRange(aOffset: UInt64; aSize: UInt64): Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function Flush(aOffset: UInt64 = 0; aSize: UInt64 = 0): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FlushRange(aOffset: UInt64; aSize: UInt64): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     // 属性 Properties
     property Name: string read FName;
@@ -345,7 +345,7 @@ var
   LDir: string;
   LBase: string;
 begin
-  LDir := GetEnvironmentVariable('FAFAFA_SHM_DIR');
+  LDir := GetEnvironmentVariable('NEXTPAS_SHM_DIR');
   if LDir = '' then
     LDir := GetTempDir;
   if LDir = '' then

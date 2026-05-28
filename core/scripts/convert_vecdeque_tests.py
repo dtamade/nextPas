@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert fafafa.core FPCUnit VecDeque tests to nextpas.core TTestRunner format.
+Convert nextpas.core FPCUnit VecDeque tests to nextpas.core TTestRunner format.
 V2: Better handling of test structure, API name mapping, var blocks.
 """
 
@@ -94,10 +94,10 @@ def convert_asserts(line: str) -> str:
 
 def convert_symbols(line: str) -> str:
     """Replace fafafa symbols with nextpas."""
-    line = line.replace('fafafa.core.', 'nextpas.core.')
+    line = line.replace('nextpas.core.', 'nextpas.core.')
     line = line.replace('FAFAFA_CORE_', 'NEXTPAS_CORE_')
     line = line.replace('FAFAFA_COLLECTIONS_', 'NEXTPAS_COLLECTIONS_')
-    line = line.replace('{$I fafafa.core.settings.inc}', '{$I nextpas.core.settings.inc}')
+    line = line.replace('{$I nextpas.core.settings.inc}', '{$I nextpas.core.settings.inc}')
     return line
 
 

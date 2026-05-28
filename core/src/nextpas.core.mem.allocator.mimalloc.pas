@@ -7,7 +7,7 @@ interface
 uses
   SysUtils,
   nextpas.core.mem.allocator.base
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,dynlibs
   {$ENDIF}
   ;
@@ -32,7 +32,7 @@ function GetMimallocAllocator: IAllocator;
 
 implementation
 
-{$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+{$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}
   {$IFDEF UNIX}
     {$LINKLIB c}
@@ -79,9 +79,9 @@ implementation
 
     // 1. 环境变量优先（用户可完全控制）
     {$IFDEF MSWINDOWS}
-    EnvPath := GetEnvironmentVariable('FAFAFA_MIMALLOC_DLL');
+    EnvPath := GetEnvironmentVariable('NEXTPAS_MIMALLOC_DLL');
     {$ELSE}
-    EnvPath := GetEnvironmentVariable('FAFAFA_MIMALLOC_SO');
+    EnvPath := GetEnvironmentVariable('NEXTPAS_MIMALLOC_SO');
     {$ENDIF}
     if (EnvPath <> '') then
     begin
@@ -220,18 +220,18 @@ begin
 end;
 
 initialization
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   InitCriticalSection(GLoadLock);
   {$ENDIF}
   InitCriticalSection(GAllocatorLock);
 finalization
   DoneCriticalSection(GAllocatorLock);
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   DoneCriticalSection(GLoadLock);
   {$ENDIF}
   _MimallocAllocatorIntf := nil;
   _MimallocAllocatorObj := nil;
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if _miLib <> 0 then
     FreeLibrary(_miLib);
   _miLib := 0;

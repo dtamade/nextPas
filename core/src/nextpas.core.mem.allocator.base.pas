@@ -8,7 +8,7 @@ uses
   SysUtils,
   nextpas.core.mem.intf,
   nextpas.core.contracts
-  {$IFDEF FAFAFA_CORE_STRICT_NULL_FREE}
+  {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
   , nextpas.core.base
   {$ENDIF}
   ;
@@ -138,13 +138,13 @@ type
     function DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; virtual; abstract;
     procedure DoFreeMem(aDst: Pointer); virtual; abstract;
   public
-    function  Allocate(const ASize: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    function  Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    procedure Deallocate(const APtr: Pointer); {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    function  GetMem(aSize: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    function  AllocMem(aSize: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    function  ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
-    procedure FreeMem(aDst: Pointer); {$IFDEF FAFAFA_CORE_INLINE}inline;{$ENDIF}
+    function  Allocate(const ASize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    procedure Deallocate(const APtr: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  GetMem(aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  AllocMem(aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    function  ReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
+    procedure FreeMem(aDst: Pointer); {$IFDEF NEXTPAS_CORE_INLINE}inline;{$ENDIF}
     // 对齐分配（默认回退实现，子类可覆盖为原生对齐）
     function  AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
     procedure FreeAligned(aPtr: Pointer);
@@ -230,7 +230,7 @@ procedure TAllocator.FreeMem(aDst: Pointer);
 begin
   if aDst = nil then
   begin
-    {$IFDEF FAFAFA_CORE_STRICT_NULL_FREE}
+    {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}
     raise EArgumentNil.Create('TAllocator.FreeMem: aDst cannot be nil.');
     {$ELSE}
     Exit;

@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "file": "/home/dtamade/projects/nextpas.core/src/nextpas.core.simd.riscvv.facade.inc",
+  "issues": [],
+  "actual_sensitive_routines": [
+    "RISCVVClampF64x4",
+    "RISCVVClampF64x8",
+    "RISCVVRcpF64x4",
+    "RISCVVReduceAddF64x4",
+    "RISCVVReduceAddF64x8",
+    "RISCVVReduceMulF64x4",
+    "RISCVVReduceMulF64x8"
+  ],
+  "expected_sensitive_routines": [
+    "RISCVVClampF64x4",
+    "RISCVVClampF64x8",
+    "RISCVVRcpF64x4",
+    "RISCVVReduceAddF64x4",
+    "RISCVVReduceAddF64x8",
+    "RISCVVReduceMulF64x4",
+    "RISCVVReduceMulF64x8"
+  ]
+}

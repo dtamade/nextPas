@@ -1,0 +1,216 @@
+{
+  "mode": "cross-platform",
+  "linux_only": false,
+  "ready": true,
+  "freeze_ready": true,
+  "mainline_ready": true,
+  "cross_ready": true,
+  "require_qemu_cpuinfo_nonx86_full_evidence": true,
+  "require_qemu_cpuinfo_nonx86_full_repeat": true,
+  "require_cpuinfo_lazy_repeat": true,
+  "root": "/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd",
+  "fresh_hours": 72.0,
+  "required_gate_steps": [
+    "build-check",
+    "interface-completeness",
+    "public-api-coverage",
+    "cross-backend-parity",
+    "wiring-sync",
+    "coverage",
+    "simd-list-suites",
+    "simd-avx2-fallback",
+    "cpuinfo-portable",
+    "cpuinfo-x86",
+    "run-all-chain",
+    "evidence-verify",
+    "qemu-cpuinfo-nonx86-evidence",
+    "qemu-cpuinfo-nonx86-full-evidence",
+    "qemu-cpuinfo-nonx86-full-repeat",
+    "cpuinfo-lazy-repeat"
+  ],
+  "required_gate_steps_mainline": [
+    "build-check",
+    "interface-completeness",
+    "public-api-coverage",
+    "cross-backend-parity",
+    "wiring-sync",
+    "coverage",
+    "simd-list-suites",
+    "simd-avx2-fallback",
+    "cpuinfo-portable",
+    "cpuinfo-x86",
+    "run-all-chain",
+    "qemu-cpuinfo-nonx86-evidence",
+    "qemu-cpuinfo-nonx86-full-evidence",
+    "qemu-cpuinfo-nonx86-full-repeat",
+    "cpuinfo-lazy-repeat"
+  ],
+  "required_gate_steps_cross": [
+    "build-check",
+    "interface-completeness",
+    "public-api-coverage",
+    "cross-backend-parity",
+    "wiring-sync",
+    "coverage",
+    "simd-list-suites",
+    "simd-avx2-fallback",
+    "cpuinfo-portable",
+    "cpuinfo-x86",
+    "run-all-chain",
+    "evidence-verify",
+    "qemu-cpuinfo-nonx86-evidence",
+    "qemu-cpuinfo-nonx86-full-evidence",
+    "qemu-cpuinfo-nonx86-full-repeat",
+    "cpuinfo-lazy-repeat"
+  ],
+  "gate_summary_file": "/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/gate_summary.md",
+  "gate_summary_fallback_used": false,
+  "latest_gate_summary_file": "/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/gate_summary.md",
+  "checks": [
+    {
+      "name": "linux_gate_summary",
+      "required": true,
+      "status": "PASS",
+      "detail": "gate PASS at 2026-05-23 20:09:56, event=SLOW_CRIT, duration_ms=1686579; summary=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/gate_summary.md"
+    },
+    {
+      "name": "linux_gate_required_steps_mainline",
+      "required": true,
+      "status": "PASS",
+      "detail": "all required gate steps are PASS (no SKIP/FAIL)"
+    },
+    {
+      "name": "cross_gate_required_steps",
+      "required": true,
+      "status": "PASS",
+      "detail": "all required gate steps are PASS (no SKIP/FAIL)"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_evidence",
+      "required": true,
+      "status": "PASS",
+      "detail": "step PASS at 2026-05-23 19:50:43, event=SLOW_CRIT, duration_ms=329242"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_evidence_platforms",
+      "required": true,
+      "status": "PASS",
+      "detail": "summary=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-20260523-194514-2302208/summary.md, required platforms PASS: linux/arm/v7, linux/arm64, linux/riscv64"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_full_evidence",
+      "required": true,
+      "status": "PASS",
+      "detail": "step PASS at 2026-05-23 19:55:41, event=SLOW_CRIT, duration_ms=297667"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_full_evidence_platforms",
+      "required": true,
+      "status": "PASS",
+      "detail": "summary=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-20260523-195043-2310772/summary.md, required platforms PASS: linux/arm/v7, linux/arm64, linux/riscv64"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_full_repeat",
+      "required": true,
+      "status": "PASS",
+      "detail": "step PASS at 2026-05-23 20:09:56, event=SLOW_CRIT, duration_ms=854433"
+    },
+    {
+      "name": "linux_qemu_cpuinfo_nonx86_full_repeat_platforms",
+      "required": true,
+      "status": "PASS",
+      "detail": "summary=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-20260523-195541-2317478/summary.md, required platforms PASS: linux/arm/v7, linux/arm64, linux/riscv64"
+    },
+    {
+      "name": "linux_cpuinfo_lazy_repeat",
+      "required": true,
+      "status": "PASS",
+      "detail": "step PASS at 2026-05-23 19:43:31, event=NORMAL, duration_ms=2462"
+    },
+    {
+      "name": "linux_gate_summary_freshness",
+      "required": true,
+      "status": "PASS",
+      "detail": "mtime=2026-05-23 20:09:56, age_hours=0.00, threshold_hours=72.00"
+    },
+    {
+      "name": "linux_sources_not_newer_than_gate",
+      "required": true,
+      "status": "PASS",
+      "detail": "artifact mtime=2026-05-23 20:09:56, latest_source=/home/dtamade/projects/nextpas.core/src/nextpas.core.simd.avx2.batch.inc (2026-05-23 18:51:11)"
+    },
+    {
+      "name": "windows_evidence_log",
+      "required": true,
+      "status": "PASS",
+      "detail": "found /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/windows_b07_gate.log"
+    },
+    {
+      "name": "windows_evidence_freshness",
+      "required": true,
+      "status": "PASS",
+      "detail": "mtime=2026-05-23 19:05:16, age_hours=1.08, threshold_hours=72.00"
+    },
+    {
+      "name": "windows_evidence_inputs_not_newer_than_log",
+      "required": true,
+      "status": "PASS",
+      "detail": "artifact mtime=2026-05-23 19:05:16, latest_candidate=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/buildOrTest.bat (2026-05-21 20:07:55)"
+    },
+    {
+      "name": "windows_sources_not_newer_than_evidence",
+      "required": true,
+      "status": "PASS",
+      "detail": "artifact mtime=2026-05-23 19:05:16, latest_source=/home/dtamade/projects/nextpas.core/src/nextpas.core.simd.avx2.batch.inc (2026-05-23 18:51:11)"
+    },
+    {
+      "name": "windows_preflight_latest",
+      "required": false,
+      "status": "PASS",
+      "detail": "status=PASS, code=OK, age_hours=1.18, report=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/win_preflight_latest.json, message=workflow=simd-windows-b07-evidence.yml, repo=dtamade/nextpas.core, scanned_failed_runs=2"
+    },
+    {
+      "name": "windows_evidence_verify",
+      "required": true,
+      "status": "PASS",
+      "detail": "verify_windows_b07_evidence.sh passed"
+    },
+    {
+      "name": "windows_closeout_summary_not_older_than_log",
+      "required": true,
+      "status": "PASS",
+      "detail": "artifact mtime=2026-05-23 20:10:05, reference=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/windows_b07_gate.log (2026-05-23 19:05:16)"
+    },
+    {
+      "name": "windows_closeout_summary",
+      "required": true,
+      "status": "PASS",
+      "detail": "summary matches verifier PASS: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/windows_b07_closeout_summary.md"
+    },
+    {
+      "name": "windows_closeout_freshness",
+      "required": true,
+      "status": "PASS",
+      "detail": "mtime=2026-05-23 20:10:05, age_hours=0.00, threshold_hours=72.00"
+    },
+    {
+      "name": "roadmap_windows_closed",
+      "required": false,
+      "status": "PASS",
+      "detail": "roadmap historical Windows archive marker is [x] (not a current readiness signal)"
+    },
+    {
+      "name": "rc_windows_closed",
+      "required": false,
+      "status": "PASS",
+      "detail": "RC checklist historical Windows archive row is [x] (not a current readiness signal)"
+    },
+    {
+      "name": "matrix_windows_closed",
+      "required": false,
+      "status": "PASS",
+      "detail": "completeness matrix contains historical Windows archive marker (not a current readiness signal)"
+    }
+  ],
+  "next_actions": []
+}

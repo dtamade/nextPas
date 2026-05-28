@@ -9,14 +9,14 @@ procedure ContractsRequireAssigned(aCondition: Boolean; const aName: string); in
 
 implementation
 
-{$IFDEF FAFAFA_CORE_CONTRACTS}
+{$IFDEF NEXTPAS_CORE_CONTRACTS}
 uses
   nextpas.core.base;
 {$ENDIF}
 
 procedure ContractsRequire(aCondition: Boolean; const aMessage: string); inline;
 begin
-  {$IFDEF FAFAFA_CORE_CONTRACTS}
+  {$IFDEF NEXTPAS_CORE_CONTRACTS}
   if not aCondition then
     raise EInvalidArgument.Create(aMessage);
   {$ELSE}
@@ -26,7 +26,7 @@ end;
 
 procedure ContractsRequireAssigned(aCondition: Boolean; const aName: string); inline;
 begin
-  {$IFDEF FAFAFA_CORE_CONTRACTS}
+  {$IFDEF NEXTPAS_CORE_CONTRACTS}
   if not aCondition then
     raise EArgumentNil.Create(aName + ' is nil');
   {$ELSE}

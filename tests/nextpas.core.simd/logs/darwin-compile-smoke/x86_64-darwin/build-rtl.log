@@ -1,0 +1,1646 @@
+make: Entering directory '/tmp/fafafa-core-darwin-smoke/x86_64-darwin/rtl/darwin'
+/usr/bin/mkdir -p ../../rtl/units/x86_64-darwin
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  -Us -Sg ../bsd/system.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../bsd/system.pp
+x86_64.inc(54,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(482,51) Warning: @GOTPCREL is useless and potentially dangerous for local symbols
+x86_64.inc(1844,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(1849,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(1854,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(1859,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(1894,4) Note: "assembler" not yet supported inside inline procedure/function
+x86_64.inc(1905,4) Note: "assembler" not yet supported inside inline procedure/function
+generic.inc(757,4) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+generic.inc(776,12) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+math.inc(267,35) Warning: Exported/global symbols should be accessed via the GOT
+math.inc(270,35) Warning: Exported/global symbols should be accessed via the GOT
+math.inc(290,35) Warning: Exported/global symbols should be accessed via the GOT
+math.inc(296,34) Warning: Exported/global symbols should be accessed via the GOT
+math.inc(299,33) Warning: Exported/global symbols should be accessed via the GOT
+math.inc(312,10) Note: "assembler" not yet supported inside inline procedure/function
+math.inc(352,10) Note: "assembler" not yet supported inside inline procedure/function
+astrings.inc(129,5) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+astrings.inc(171,5) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+astrings.inc(241,17) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(252,17) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(343,21) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(352,21) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(693,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(700,11) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(763,11) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(810,42) Warning: Function result variable of a managed type does not seem to be initialized
+astrings.inc(813,21) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(820,21) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+astrings.inc(1227,7) Note: Call to subroutine "procedure fpc_pchar_ansistr_intern_charmove(const src:PAnsiChar;const srcindex:Int64;var dst:RawByteString;const dstindex:Int64;const len:Int64);" marked as inline is not inlined
+ustrings.inc(201,5) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+ustrings.inc(423,17) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(434,17) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(481,17) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(490,17) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(537,73) Warning: Function result variable of a managed type does not seem to be initialized
+ustrings.inc(595,66) Warning: Function result variable of a managed type does not seem to be initialized
+ustrings.inc(708,100) Warning: Function result variable of a managed type does not seem to be initialized
+ustrings.inc(918,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(925,11) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(1111,12) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(1135,42) Warning: Function result variable of a managed type does not seem to be initialized
+ustrings.inc(1138,21) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(1145,21) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+ustrings.inc(1954,22) Note: Call to subroutine "function Utf8ToUnicode(Dest:PUnicodeChar;MaxDestChars:QWord;Source:PAnsiChar;SourceBytes:QWord):QWord;" marked as inline is not inlined
+ustrings.inc(2193,66) Warning: Function result variable of a managed type does not seem to be initialized
+ustrings.inc(2203,56) Warning: Function result variable of a managed type does not seem to be initialized
+dynarr.inc(94,9) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+dynarr.inc(168,22) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(193,22) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(264,39) Warning: Function result variable of a managed type does not seem to be initialized
+dynarr.inc(347,17) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(377,17) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(424,15) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(457,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(539,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(548,15) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(625,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(650,15) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+dynarr.inc(698,21) Warning: Function result variable of a managed type does not seem to be initialized
+objpas.inc(275,9) Note: Local variable "errObj" not used
+objpas.inc(575,12) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+except.inc(126,11) Note: Call to subroutine "procedure get_caller_stackinfo(var framebp:Pointer;var addr:Pointer);" marked as inline is not inlined
+except.inc(133,15) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+except.inc(235,10) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+except.inc(270,9) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+objpas.inc(1602,19) Note: Call to subroutine "function ReAllocMem(var p:Pointer;Size:QWord):Pointer;" marked as inline is not inlined
+objpas.inc(1607,3) Note: Call to subroutine "function Freemem(p:Pointer):QWord;" marked as inline is not inlined
+objpas.inc(1854,19) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+objpas.inc(1885,19) Note: Call to subroutine "function Getmem(size:QWord):Pointer;" marked as inline is not inlined
+variant.inc(110,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(117,42) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(123,36) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(129,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(135,36) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(141,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(161,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(167,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(173,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(179,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(185,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(191,33) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(197,36) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(203,35) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(223,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(229,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(235,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(243,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(252,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(259,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(265,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(271,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(277,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(283,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(299,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(307,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(315,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(323,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(331,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(339,36) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(346,41) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(353,35) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(476,32) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(482,32) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(573,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(831,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(837,34) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(921,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(927,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(933,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(939,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(945,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(951,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(957,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(963,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(969,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(975,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(981,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(988,39) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(994,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1001,39) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1007,39) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1013,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1029,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1037,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1045,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1053,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1061,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1069,53) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1076,58) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1083,38) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1089,31) Warning: Function result variable of a managed type does not seem to be initialized
+variant.inc(1096,33) Warning: Function result variable of a managed type does not seem to be initialized
+rtti.inc(119,3) Note: Local variable "ri" not used
+rtti.inc(161,3) Warning: Case statement does not handle all possible cases
+rtti.inc(207,3) Warning: Case statement does not handle all possible cases
+rtti.inc(260,3) Warning: Case statement does not handle all possible cases
+text.inc(138,41) Warning: Implicit string type conversion from "RawByteString" to "UnicodeString"
+file.inc(73,41) Warning: Implicit string type conversion from "RawByteString" to "UnicodeString"
+math.inc(47,3) Note: Local variable "FPC_LOG2E" not used
+math.inc(49,3) Note: Local variable "FPC_INFINITY_DOUBLE" not used
+math.inc(50,3) Note: Local variable "FPC_MAXLOG_DOUBLE" not used
+math.inc(51,3) Note: Local variable "FPC_MINLOG_DOUBLE" not used
+genmath.inc(77,7) Note: Local variable "one" not used
+genmath.inc(78,7) Note: Local variable "zero" not used
+Assembling (pipe) ../../rtl/units/x86_64-darwin/system.sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+
+44830 lines compiled, 0.8 sec
+83 warning(s) issued
+62 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd sysinit.pas
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling sysinit.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sysinit.s
+76 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/uuchar.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/uuchar.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/uuchar.s
+57 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/unixtype.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/unixtype.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/unixtype.s
+341 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/ctypes.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/ctypes.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/ctypes.s
+387 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  -Fi../objpas ../objpas/objpas.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/objpas.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/objpas.s
+529 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/sysconst.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/sysconst.pp
+Writing Resource String Table file: sysconst.rsj
+Assembliclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ng (pipe) ../../rtl/units/x86_64-darwin/sysconst.s
+275 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../bsd/sysctl.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../bsd/sysctl.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sysctl.s
+704 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/baseunix.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/baseunix.pp
+bunxovl.inc(58,73) Warning: Comment level 2 found
+bunxovl.iclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+nc(58,95) Warning: Comment level 2 found
+bunxovl.inc(210,2) Warning: Comment level 2 found
+Assembling (pipe) ../../rtl/units/x86_64-darwin/baseunix.s
+3350 lines compiled, 0.1 sec
+3 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/strings.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/strings.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/strings.s
+765 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/unixutil.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/unixutil.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/unixutil.s
+144 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/unix.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/unix.pp
+unxdeclh.inc(21,6) Warning: Illegal compiler directive "$DEFINED"
+unix.pp(442,16) Warning: Symbol "fpgetenv" is deprecated
+timezone.inc(248,16) Warning: Symbol "fpgetenv" is deprecated
+timezone.inc(298,14) Warning: Arithmetic "-" on untyped pointer is unportable to {$T+}, suggest typecast
+timezone.inc(500,7) Warning: Symbol "fpgetenv" is deprecated
+unix.pp(1461,12) Warning: Implicit string type conversion from "RawByteString" to "UnicodeString"
+unix.pp(1466,12) Warning: Implicit string type conversion from "RawByteString" to "UnicodeString"
+Assembling (pipe) ../../rtl/clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+units/x86_64-darwin/unix.s
+2464 lines compiled, 0.1 sec
+7 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/errors.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/errors.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/errors.s
+176 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Fi../objpas/sysutils ../unix/sysutils.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/sysutils.pp
+Compiling ../unix/initc.pp
+Assembling (pipe) ../../rtl/unitclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+s/x86_64-darwin/initc.s
+sysansi.inc(19,13) Note: Call to subroutine "function AnsiCompareStr(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysansi.inc(21,13) Note: Call to subroutine "function AnsiCompareText(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysansi.inc(33,11) Note: Call to subroutine "function AnsiLowerCase(const s:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysansi.inc(39,11) Note: Call to subroutine "function AnsiUpperCase(const s:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysansi.inc(94,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysansi.inc(101,19) Warning: Function result variable of a managed type does not seem to be initialized
+fina.inc(334,72) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+fina.inc(334,45) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+fina.inc(334,10) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+fina.inc(334,10) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+filutil.inc(113,13) Warning: Symbol "faSymLink" is not portable
+filutil.inc(117,45) Warning: Symbol "TRawbyteSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(133,13) Warning: Symbol "faSymLink" is not portable
+filutil.inc(137,49) Warning: Symbol "TRawbyteSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(697,36) Warning: Symbol "TDateTimeInfoRec.data" is not portable
+filutil.inc(714,36) Warning: Symbol "TDateTimeInfoRec.data" is not portable
+filutil.inc(731,36) Warning: Symbol "TDateTimeInfoRec.data" is not portable
+filutil.inc(747,34) Warning: Symbol "TUnicodeSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(755,35) Warning: Symbol "TUnicodeSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(775,34) Warning: Symbol "TRawbyteSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(783,35) Warning: Symbol "TRawbyteSearchRec.Time" is deprecated: "use TimeStamp instead"
+filutil.inc(868,19) Warning: Function result variable of a managed type does not seem to be initialized
+filutil.inc(895,55) Note: Call to subroutine "function TEncoding.GetUnicode:TEncoding; Static;" marked as inline is not inlined
+syshelp.inc(78,19) Warning: Function result variable of a managed type does not seem to be initialized
+syshelps.inc(269,51) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(270,53) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(271,28) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(256,23) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(267,23) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(268,23) Note: Call to subroutine "function IntToStr(Value:QWord):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(345,11) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(351,11) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(505,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(519,13) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(998,11) Note: Call to subroutine "function TAnsiStringHelper.PadLeft(ATotalWidth:Int64;PaddingChar:AnsiChar):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1016,11) Note: Call to subroutine "function TAnsiStringHelper.PadRight(ATotalWidth:Int64;PaddingChar:AnsiChar):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1036,11) Note: Call to subroutine "function QuotedStr(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1048,11) Note: Call to subroutine "function TAnsiStringHelper.Remove(StartIndex:Int64;ACount:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1360,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(1435,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysutilh.inc(17,9) Note: Call to subroutine "function Trim(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimLeft(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimRight(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(165,30) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(165,28) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(202,145) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(202,136) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(215,29) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+sysutilh.inc(17,9) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(256,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(257,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(258,24) Warning: Implicit string type conversion from "AnsiChar" to "WideString"
+syshelps.inc(261,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(263,42) Warning: Implicit string type conversion from "ShortString" to "WideString"
+syshelps.inc(264,24) Warning: Implicit string type conversion from "ShortString" to "WideString"
+syshelps.inc(265,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(267,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(268,23) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(272,28) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(256,23) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(267,23) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(268,23) Note: Call to subroutine "function IntToStr(Value:QWord):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(333,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(339,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(345,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(345,11) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(351,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(351,11) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(357,22) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(363,23) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(369,23) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(375,23) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(381,21) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(387,23) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(484,30) Warning: Arithmetic "-" on untyped pointer is unportable to {$T+}, suggest typecast
+syshelps.inc(505,57) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(505,50) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(505,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(519,33) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(519,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(519,13) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(867,42) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(867,37) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(879,40) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(879,35) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(998,11) Note: Call to subroutine "function TWideStringHelper.PadLeft(ATotalWidth:Int64;PaddingChar:WideChar):System.WideString;" marked as inline is not inlined
+syshelps.inc(1016,11) Note: Call to subroutine "function TWideStringHelper.PadRight(ATotalWidth:Int64;PaddingChar:WideChar):System.WideString;" marked as inline is not inlined
+syshelps.inc(1036,25) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1036,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(1036,11) Note: Call to subroutine "function QuotedStr(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1042,29) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1042,11) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+syshelps.inc(1048,11) Note: Call to subroutine "function TWideStringHelper.Remove(StartIndex:Int64;ACount:Int64):System.WideString;" marked as inline is not inlined
+syshelps.inc(1360,52) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1360,45) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1360,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(1387,25) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1393,24) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1399,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1405,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1411,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1417,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "AnsiString"
+syshelps.inc(1435,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysutilh.inc(17,9) Note: Call to subroutine "function Trim(const S:WideString):System.WideString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimLeft(const S:WideString):System.WideString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimRight(const S:WideString):System.WideString;" marked as inline is not inlined
+syshelps.inc(165,30) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(165,28) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(202,145) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(202,136) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(215,29) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+sysutilh.inc(17,9) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(256,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(257,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(258,24) Warning: Implicit string type conversion from "AnsiChar" to "UnicodeString"
+syshelps.inc(261,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(263,42) Warning: Implicit string type conversion from "ShortString" to "UnicodeString"
+syshelps.inc(264,24) Warning: Implicit string type conversion from "ShortString" to "UnicodeString"
+syshelps.inc(265,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(267,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(268,23) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(272,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(256,23) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(267,23) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(268,23) Note: Call to subroutine "function IntToStr(Value:QWord):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(333,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(339,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(345,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(345,11) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(351,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(351,11) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(357,22) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(363,23) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(369,23) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(375,23) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(381,21) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(387,23) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(484,30) Warning: Arithmetic "-" on untyped pointer is unportable to {$T+}, suggest typecast
+syshelps.inc(505,57) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(505,50) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(505,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(519,33) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(519,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(519,13) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(867,42) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(867,37) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(879,40) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(879,35) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(998,11) Note: Call to subroutine "function TUnicodeStringHelper.PadLeft(ATotalWidth:Int64;PaddingChar:WideChar):System.UnicodeString;" marked as inline is not inlined
+syshelps.inc(1016,11) Note: Call to subroutine "function TUnicodeStringHelper.PadRight(ATotalWidth:Int64;PaddingChar:WideChar):System.UnicodeString;" marked as inline is not inlined
+syshelps.inc(1036,25) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1036,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(1036,11) Note: Call to subroutine "function QuotedStr(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1042,29) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1042,11) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syshelps.inc(1048,11) Note: Call to subroutine "function TUnicodeStringHelper.Remove(StartIndex:Int64;ACount:Int64):System.UnicodeString;" marked as inline is not inlined
+syshelps.inc(1360,52) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1360,45) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1360,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(1387,25) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1393,24) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1399,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1405,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1411,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1417,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syshelps.inc(1435,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysutilh.inc(17,9) Note: Call to subroutine "function Trim(const S:WideString):System.WideString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimLeft(const S:WideString):System.WideString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimRight(const S:WideString):System.WideString;" marked as inline is not inlined
+syshelps.inc(269,25) Warning: Implicit string type conversion with potential data loss from "WideString" to "ShortString"
+syshelps.inc(270,26) Warning: Implicit string type conversion with potential data loss from "WideString" to "ShortString"
+syshelps.inc(271,26) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "ShortString"
+syshelps.inc(256,23) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(267,23) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(268,23) Note: Call to subroutine "function IntToStr(Value:QWord):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(345,11) Note: Call to subroutine "function IntToStr(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(351,11) Note: Call to subroutine "function IntToStr(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(505,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(519,13) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(998,11) Note: Call to subroutine "function TShortStringHelper.PadLeft(ATotalWidth:Int64;PaddingChar:AnsiChar):System.ShortString;" marked as inline is not inlined
+syshelps.inc(1016,11) Note: Call to subroutine "function TShortStringHelper.PadRight(ATotalWidth:Int64;PaddingChar:AnsiChar):System.ShortString;" marked as inline is not inlined
+syshelps.inc(1036,11) Note: Call to subroutine "function QuotedStr(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelps.inc(1048,11) Note: Call to subroutine "function TShortStringHelper.Remove(StartIndex:Int64;ACount:Int64):System.ShortString;" marked as inline is not inlined
+syshelps.inc(1360,15) Note: Call to subroutine "function SameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+syshelps.inc(1435,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysutilh.inc(17,9) Note: Call to subroutine "function Trim(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimLeft(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysutilh.inc(17,9) Note: Call to subroutine "function TrimRight(const S:AnsiString):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:Byte):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:ShortInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:SmallInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:Word):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(63,11) Note: Call to subroutine "function IntToHex(Value:QWord;Digits:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:LongWord):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(63,11) Note: Call to subroutine "function IntToHex(Value:QWord;Digits:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:QWord):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:Int64):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(63,11) Note: Call to subroutine "function IntToHex(Value:QWord;Digits:LongInt):System.AnsiString;" marked as inline is not inlined
+syshelpo.inc(69,11) Note: Call to subroutine "function IntToHex(Value:QWord):System.AnsiString;" marked as inline is not inlined
+sysmarshal.inc(311,14) Note: Call to subroutine "function TUnicodeStringBuilder.GetLength:System.LongInt;" marked as inline is not inlined
+sysstr.inc(134,29) Note: Call to subroutine "function AnsiUpperCase(const s:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysstr.inc(150,29) Note: Call to subroutine "function AnsiLowerCase(const s:AnsiString):System.AnsiString;" marked as inline is not inlined
+sysstr.inc(155,10) Warning: Function result does not seem to be set
+sysstr.inc(197,13) Note: Call to subroutine "function CompareMemRange(P1:Pointer;P2:Pointer;Length:QWord):System.LongInt;" marked as inline is not inlined
+sysstr.inc(207,27) Note: Call to subroutine "function AnsiCompareStr(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysstr.inc(288,27) Note: Call to subroutine "function AnsiCompareText(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysstr.inc(303,27) Note: Call to subroutine "function AnsiSameText(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+sysstr.inc(318,27) Note: Call to subroutine "function AnsiSameStr(const s1:AnsiString;const s2:AnsiString):System.Boolean;" marked as inline is not inlined
+sysstr.inc(532,16) Note: Call to subroutine "function AnsiCompareText(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysstr.inc(538,16) Note: Call to subroutine "function AnsiCompareStr(const S1:AnsiString;const S2:AnsiString):System.LongInt;" marked as inline is not inlined
+sysstr.inc(1867,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(1883,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(1899,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(1922,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(1944,10) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+sysstr.inc(1994,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(2011,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(2028,3) Note: Local variable "e" is assigned but never used
+sysstr.inc(2047,3) Note: Local variable "e" is assigned but never used
+fmtflt.inc(304,13) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+fmtflt.inc(305,13) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+sysstr.inc(2305,3) Note: Local variable "Error" is assigned but never used
+syssb.inc(59,42) Note: Call to subroutine "function TAnsiStringBuilder.GetLength:System.LongInt;" marked as inline is not inlined
+syssb.inc(76,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckNegative(const AValue:LongInt;const AName:AnsiString);" marked as inline is not inlined
+syssb.inc(77,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(83,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckNegative(const AValue:LongInt;const AName:AnsiString);" marked as inline is not inlined
+syssb.inc(84,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(91,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckNegative(const AValue:LongInt;const AName:AnsiString);" marked as inline is not inlined
+syssb.inc(92,3) Note: Call to subroutine "procedure TAnsiStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(712,19) Warning: Function result variable of a managed type does not seem to be initialized
+syssb.inc(59,42) Note: Call to subroutine "function TUnicodeStringBuilder.GetLength:System.LongInt;" marked as inline is not inlined
+syssb.inc(76,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckNegative(const AValue:LongInt;const AName:UnicodeString);" marked as inline is not inlined
+syssb.inc(77,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(83,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckNegative(const AValue:LongInt;const AName:UnicodeString);" marked as inline is not inlined
+syssb.inc(84,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(91,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckNegative(const AValue:LongInt;const AName:UnicodeString);" marked as inline is not inlined
+syssb.inc(92,3) Note: Call to subroutine "procedure TUnicodeStringBuilder.CheckRange(Idx:LongInt;Count:LongInt;MaxLen:LongInt);" marked as inline is not inlined
+syssb.inc(184,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(207,30) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(219,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(233,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(268,29) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(274,35) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(280,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(286,30) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(292,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(298,27) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(304,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(310,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(331,30) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(356,22) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syssb.inc(356,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(363,22) Warning: Implicit string type conversion with potential data loss from "UnicodeString" to "AnsiString"
+syssb.inc(363,28) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(375,18) Warning: Implicit string type conversion from "RawByteString" to "UnicodeString"
+syssb.inc(433,35) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(440,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(447,36) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(462,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(469,35) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(477,35) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(491,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(498,36) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(505,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(512,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(519,40) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(550,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(557,34) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+syssb.inc(712,19) Warning: Function result variable of a managed type does not seem to be initialized
+dati.inc(637,29) Note: Local variable "Err" is assigned but never used
+dati.inc(1536,14) Note: Call to subroutine "function StrToDateDef(const S:ShortString;const Defvalue:TDateTime;separator:AnsiChar):System.TDateTime;" marked as inline is not inlined
+dati.inc(1541,14) Note: Call to subroutine "function StrToTimeDef(const S:ShortString;const Defvalue:TDateTime;separator:AnsiChar):System.TDateTime;" marked as inline is not inlined
+dati.inc(1546,11) Note: Call to subroutine "function StrToDateTimeDef(const S:AnsiString;const Defvalue:TDateTime;const FormatSettings:TFormatSettings):System.TDateTime;" marked as inline is not inlined
+dati.inc(1569,14) Note: Call to subroutine "function StrToDateDef(const S:AnsiString;const Defvalue:TDateTime;separator:AnsiChar):System.TDateTime;" marked as inline is not inlined
+dati.inc(1574,14) Note: Call to subroutine "function StrToTimeDef(const S:AnsiString;const Defvalue:TDateTime;separator:AnsiChar):System.TDateTime;" marked as inline is not inlined
+sysformt.inc(268,24) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+sysformt.inc(270,24) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+sysformt.inc(272,24) Warning: Implicit string type conversion from "AnsiString" to "WideString"
+sysformt.inc(268,24) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+sysformt.inc(270,24) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+sysformt.inc(272,24) Warning: Implicit string type conversion from "AnsiString" to "UnicodeString"
+sysuni.inc(532,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(306,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(318,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(341,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(381,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(390,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(539,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(566,23) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(636,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(701,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(709,83) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(724,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysencoding.inc(807,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysuthrd.inc(313,6) Warning: Conversion between ordinals and pointers is not portable
+sysutils.inc(698,53) Warning: Local variable "aName" of a managed type does not seem to be initialized
+sysutils.inc(778,18) Warning: Function result variable of a managed type does not seem to be initialized
+sysutils.inc(964,19) Warning: Function result variable of a managed type does not seem to be initialized
+sysutils.pp(455,9) Note: Call to subroutine "function FpOpen(path:PAnsiChar;flags:LongInt):System.LongInt;" marked as inline is not inlined
+sysutils.pp(490,17) Note: Call to subroutine "function FpOpen(path:PAnsiChar;flags:LongInt):System.LongInt;" marked as inline is not inlined
+sysutils.pp(587,5) Warning: Unreachable code
+sysutils.pp(653,14) Warning: Symbol "TDateTimeInfoRec.data" is not portable
+sysutils.pp(673,23) Warning: Symbol "faHidden" is not portable
+sysutils.pp(677,24) Warning: Symbol "faSysFile" is not portable
+sysutils.pp(680,25) Warning: Symbol "faSymLink" is not portable
+sysutils.pp(762,18) Note: Call to subroutine "function fpLstat(path:PAnsiChar;var Info:stat):System.LongInt;" marked as inline is not inlined
+sysutils.pp(777,23) Note: Call to subroutine "function fpLstat(path:PAnsiChar;var Info:stat):System.LongInt;" marked as inline is not inlined
+sysutils.pp(1042,84) Warning: Symbol "faSymLink" is not portable
+sysutils.pp(1043,27) Note: Call to subroutine "function fpLstat(path:PAnsiChar;var Info:stat):System.LongInt;" marked as inline is not inlined
+sysutils.pp(1167,3) Note: Local variable "Char0" not used
+sysutils.pp(1211,8) Note: Call to subroutine "function fpLstat(path:PAnsiChar;var Info:stat):System.LongInt;" marked as inline is not inlined
+sysstr.inc(2815,4) Note: Local variable "CPISO88591UCT" is assigned but never used
+sysstr.inc(2826,4) Note: Local variable "CPISO88591LCT" is assigned but never uclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+sed
+sysuthrd.inc(62,3) Note: Local variable "cNewReader" not used
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sysutils.s
+34795 lines compiled, 1.2 sec
+187 warning(s) issued
+130 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/math.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/math.pp
+Compiling ../objpas/types.pp
+mathu.inc(81,23) Warning: Check size of memory operand "[movsd xmmreg0,mem]: memory-operand-size is 64 bits, but expected [128 bits]"
+math.pp(2288,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2309,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2320,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2352,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2381,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2406,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2423,5) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2443,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2478,5) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2498,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2533,5) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2553,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2597,34) Note: Call to subroutine "function Min(a:LongInt;b:LongInt):System.LongInt;" marked as inline is not inlined
+math.pp(2603,34) Note: Call to subroutine "function Min(a:Int64;b:Int64):System.Int64;" marked as inline is not inlined
+math.pp(2633,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2644,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2662,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2675,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2686,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2697,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2709,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2775,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2810,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2822,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2840,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2854,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2866,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2878,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2890,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2954,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2988,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(2999,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3017,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3031,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3043,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3054,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3066,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3129,6) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3160,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3174,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3191,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3208,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3226,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3243,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3261,4) Note: "open array" not yet supported inside inline procedure/function
+math.pp(3278,4) Note: "open array" not yet supportclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ed inside inline procedure/function
+Writing Resource String Table file: math.rsj
+Assembling (pipe) ../../rtl/units/x86_64-darwin/math.s
+typshrd.inc(300,14) Note: Call to subroutine "function TRect.getWidth:System.LongInt;" marked as inline is not inlined
+types.pp(673,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(674,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(675,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(676,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(861,15) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(873,15) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1718,13) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1719,13) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1726,12) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1727,12) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,7) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,18) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,31) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1763,41) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1771,28) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1773,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1779,27) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1781,20) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1804,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1804,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1805,22) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1805,22) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1809,5) Note: Call to subroutine "procedure TRectF.Offset(const dx:Single;const dy:Single);" marked as inline is not inlined
+types.pp(1848,14) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" markedclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ as inline is not inlined
+types.pp(2026,3) Note: Local variable "P" not used
+Assembling (pipe) ../../rtl/units/x86_64-darwin/types.s
+7085 lines compiled, 0.3 sec
+1 warning(s) issued
+72 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/types.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/types.pp
+typshrd.inc(300,14) Note: Call to subroutine "function TRect.getWidth:System.LongInt;" marked as inline is not inlined
+types.pp(673,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(674,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(675,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(676,28) Note: Call to subroutine "function PointF(x:Single;y:Single):TPointF;" marked as inline is not inlined
+types.pp(861,15) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(873,15) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1718,13) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1719,13) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1726,12) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1727,12) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,7) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,18) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1763,31) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1763,41) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1771,28) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1773,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1779,27) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1781,20) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1804,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1804,20) Note: Call to subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(1805,22) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1805,22) Note: Call to subroutine "function TRectF.GetHeight:System.Single;" marked as inline is not inlined
+types.pp(1809,5) Note: Call to subroutine "procedure TRectF.Offset(const dx:Single;const dy:Single);" marked as inline is not inlined
+types.pp(1848,14) Note: Call toclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ subroutine "function TRectF.GetWidth:System.Single;" marked as inline is not inlined
+types.pp(2026,3) Note: Local variable "P" not used
+Assembling (pipe) ../../rtl/units/x86_64-darwin/types.s
+2745 lines compiled, 0.2 sec
+26 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/macpas.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/macpas.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/macpas.s
+405 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/iso7185.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/iso7185.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/iso7185.s
+462 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/dos.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/dos.pp
+fexpand.inc(135,18) Note: Local variable "TmpS" not used
+dos.pp(178,9) Warning: Symbol "weekday" is not portable
+dos.pp(540,6) Warning: Symbol "UnixDateToDt" is not portable
+dos.pp(779,4) Warning: Symbol "UnixDateToDt" is not portable
+dos.pp(798,16) Warning: Symbol "DTToUnixDate" is not portable
+dos.pp(28,9) Warning: Sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ymbol "fpgetenv" is deprecated
+Assembling (pipe) ../../rtl/units/x86_64-darwin/dos.s
+2038 lines compiled, 0.1 sec
+5 warning(s) issued
+1 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/extpas.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/extpas.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/extpas.s
+71 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/cmem.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/cmem.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cmem.s
+192 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/rtlconsts.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/rtlconsts.pp
+Writing Resource String Table file: rtlconsts.rsj
+Assembclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ling (pipe) ../../rtl/units/x86_64-darwin/rtlconsts.s
+598 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/dl.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/dl.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/dl.s
+169 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Fi../unix ../inc/dynlibs.pas
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/dynlibs.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/dynlibs.s
+202 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../x86_64/cpu.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../x86_64/cpu.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cpu.s
+589 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../x86_64/intrinsics.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../x86_64/intrinsics.pp
+594 lines compiled, 0.0 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/blockrtl.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/blockrtl.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/blockrtl.s
+134 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Sg  ../objpas/typinfo.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/typinfo.pp
+typinfo.pp(1549,41) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1570,29) Note: Call to subroutine "function TTypeData.GetCompType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1590,43) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1627,40) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1637,40) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1661,41) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1679,6) Note: Local variable "ElOfs" not used
+typinfo.pp(1679,13) Note: Local variable "BitOfs" not used
+typinfo.pp(1685,11) Note: Call to subroutine "function TTypeData.GetCompType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1712,33) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1718,40) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1759,32) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1928,19) Note: Call to subroutine "function TTypeData.GetParentInfo:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(1939,31) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2045,15) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(2099,3) Note: Local variable "Offset" not used
+typinfo.pp(2181,35) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2255,3) Note: Local variable "FieldEntryD" is assigned but never used
+typinfo.pp(2361,14) Warning: Variable "FieldList" does not seem to be initialized
+typinfo.pp(2502,26) Note: Call to subroutine "function TVmtMethodExEntry.GetName:System.ShortString;" marked as inline is not inlined
+typinfo.pp(2502,39) Note: Call to subroutine "function TVmtMethodExEntry.GetName:System.ShortString;" marked as inline is not inlined
+typinfo.pp(2563,26) Note: Call to subroutine "function TRecMethodExEntry.GetName:System.ShortString;" marked as inline is not inlined
+typinfo.pp(2563,39) Note: Call to subroutine "function TRecMethodExEntry.GetName:System.ShortString;" marked as inline is not inlined
+typinfo.pp(2757,17) Note: Call to subroutine "function TTypeData.GetParentInfo:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2810,34) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2874,23) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2877,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(2895,9) Warning: Case statement does not handle all possible cases
+typinfo.pp(2977,24) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2989,28) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(2992,7) Warning: Case statement does not handle all possible cases
+typinfo.pp(2992,42) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3056,41) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3078,42) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3097,23) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3174,44) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3205,36) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3271,74) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3277,72) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3338,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3338,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3418,24) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3459,24) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3463,99) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3508,56) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3530,55) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3499,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3499,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3573,46) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3595,45) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3564,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3564,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3649,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3649,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3687,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3687,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3742,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3742,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3783,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3783,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3835,55) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3824,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3824,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3882,45) Warning: Conversion between ordinals and pointers is not portable
+typinfo.pp(3871,3) Warning: Case statement does not handle all possible cases
+typinfo.pp(3871,26) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3936,42) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(3956,9) Warning: Case statement does not handle all possible cases
+typinfo.pp(3956,44) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(4003,42) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(4028,9) Warning: Case statement does not handle all possible cases
+typinfo.pp(4028,44) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(4262,52) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(4267,50) Note: Call to subroutine "function TPropInfo.GetPropType:PTypeInfo;" marked as inline is not inlined
+typinfo.pp(4280,3) Note: Local variable "Arr" not used
+typinfo.pp(4292,25) Note: Call to subroutine "function TVmtMethodExEntry.GetNext:PVmtMethodExEntry;" marked as inline is not inlined
+typinfo.pp(4310,25) Note: Call to subroutine "function TRecMethodExEntry.GetNext:PRecMethodExEntry;" marked as inline is not inlined
+typinfo.pp(4329,27) Note: Call to subroutine "function TRecMethodExEntry.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4353,43) Warning: Arithmetic "+" on untyped pointer is unportable to {$T+}, suggest typecast
+typinfo.pp(4359,24) Warning: Arithmetic "+" on untyped pointer is unportable to {$T+}, suggest typecast
+typinfo.pp(4630,3) Note: Local variable "I" not used
+typinfo.pp(4729,21) Note: Call to subroutine "function TVmtFieldEntry.GetNext:PVmtFieldEntry;" marked as inline is not inlined
+typinfo.pp(4748,30) Note: Call to subroutine "function TVmtFieldEntry.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4755,13) Note: Call to subroutine "function TVmtFieldEntry.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4784,43) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4784,43) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4810,43) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4810,43) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4860,34) Note: Call to subroutine "function TClassData.GetPropertyTable:PPropData;" marked as inline is not inlined
+typinfo.pp(4860,50) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4860,50) Note: Call to subroutine "function TPropData.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4860,34) Note: Call to subroutine "function TClassData.GetPropertyTable:PPropData;" marked as inline is not inlined
+typinfo.pp(4954,44) Note: Call to subroutine "function TPropInfo.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4954,44) Note: Call to subroutine "function TPropInfo.GetTail:System.Pointer;" marked as inline is not inlined
+typinfo.pp(4965,34) Note: Call to subroutine "function TPropInfo.GetTail:System.Pointer;" marked as inline is not inlined
+Writing Resource String Tablclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+e file: typinfo.rsj
+Assembling (pipe) ../../rtl/units/x86_64-darwin/typinfo.s
+5175 lines compiled, 0.2 sec
+26 warning(s) issued
+69 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/sortbase.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/sortbase.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sortbase.s
+385 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/fgl.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/fgl.pp
+fgl.pp(504,3) Note: Call to subroutine "procedure TFPSList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+fgl.pp(511,3) Note: Call to subroutine "procedure TFPSList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+User defined: TODO: fix inlining to work! InternalItems[Result]^
+fgl.pp(1451,7clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+) Warning: Case statement does not handle all possible cases
+Assembling (pipe) ../../rtl/units/x86_64-darwin/fgl.s
+2114 lines compiled, 0.1 sec
+1 warning(s) issued
+2 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Fi../objpas/classes  ../unix/classes.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/classes.pp
+classesh.inc(1569,15) Warning: An inherited method is hidden by "WriteUnicodeString(const UnicodeString);"
+classesh.inc(1795,14) Note: Virtual method "CurrentValue:TValueType;" has a lower visibility (protected) than parent class TAbstractObjectReader (public)
+streams.inc(1737,10) Note: Local variable "SLen" not used
+parser.inc(409,5) Note: Local variable "outbuf" is assigned but never used
+stringl.inc(220,3) Note: Local variable "Pend" is assigned but never used
+stringl.inc(1869,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(1894,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(1905,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(1916,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(2004,7) Warning: Case statement does not handle all possible cases
+stringl.inc(2021,11) Warning: Case statement does not handle all possible cases
+stringl.inc(2027,11) Warning: Case statement does not handle all possible cases
+stringl.inc(2042,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(2060,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+stringl.inc(2061,3) Note: Call to subroutine "procedure TStringList.CheckIndex(AIndex:LongInt);" marked as inline is not inlined
+observer.inc(543,31) Warning: Function result does not seem to be set
+tthread.inc(196,19) Warning: Symbol "TThread.Resume" is deprecated
+tthread.inc(213,5) Warning: Symbol "TThread.Suspend" is deprecated
+tthread.inc(214,13) Warning: Symbol "TThread.Resume" is deprecated
+classes.inc(307,9) Warning: Symbol "TThread.Resume" is deprecated
+classes.inc(337,11) Warning: Symbol "TThread.Resume" is deprecated
+classes.inc(727,3) Note: Call to subroutine "procedure TThread.ForceQueue(aThread:TThread;aMethod:TThreadMethod;aDelay:LongInt=`0`); Static;" marked as inline is not inlined
+classes.inc(963,52) Warning: Symbol "GetTickCount" is deprecated: "Use GetTickCount64 instead"
+intf.inc(179,24) Note: Call to subroutine "function TList.IndexOf(Item:Pointer):System.LongInt;" marked as inline is not inlined
+intf.inc(220,24) Note: Call to subroutine "function TList.IndexOf(Item:Pointer):System.LongInt;" marked as inline is not inlined
+classes.inc(2046,5) Warning: Case statement does not handle all possible cases
+classes.inc(2362,3) Note: Local variable "StartPos" is assigned but never used
+classes.inc(2760,3) Note: Local variable "signature" not used
+reader.inc(320,3) Warning: Case statement does not handle all possible cases
+reader.inc(513,3) Warning: Case statement does not handle all possible cases
+reader.inc(1828,3) Warning: Case statement does not handle all possible cases
+writer.inc(134,3) Note: Local variable "Prefix" is assigned but never used
+writer.inc(231,3) Note: Local variable "s" is assigned but never used
+writer.inc(260,3) Note: Local variable "s" is assigned but never used
+writer.inc(316,3) Note: Local variable "b" is assigned but never used
+writer.inc(461,3) Note: Local variable "b" is assigned but never used
+writer.inc(470,3) Note: Local variable "b" is assigned but never used
+writer.inc(908,3) Warning: Case statement does not handle all possible cases
+writer.inc(920,11) Warning: Case statement does not handle all possible cases
+classes.inc(98,3) Note: Local variable "SpinWaitDummy" not used
+Assemblclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ing (pipe) ../../rtl/units/x86_64-darwin/classes.s
+20549 lines compiled, 0.9 sec
+17 warning(s) issued
+23 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/charset.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/charset.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/charset.s
+779 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  -Fu../inc -Fi../charmaps ../charmaps/cpall.pas
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../charmaps/cpall.pas
+Compiling ../charmaps/cp8859_16.pas
+Assembling (pipe) ../clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+../rtl/units/x86_64-darwin/cp8859_16.s
+Compiling ../charmaps/cp8859_15.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_15.s
+Compiling ../charmaps/cp8859_14.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_14.s
+Compiling ../charmaps/cp8clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+859_13.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_13.s
+Compiling ../charmaps/cp8859_11.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_11.s
+Compiling ../charmaps/cp8859_10.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp885clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+9_10.s
+Compiling ../charmaps/cp8859_9.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_9.s
+Compiling ../charmaps/cp8859_8.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_8.s
+Compiling ../charmaps/cp8859_6.pas
+Assembling (pipe) ../../rtclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+l/units/x86_64-darwin/cp8859_6.s
+Compiling ../charmaps/cp8859_4.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_4.s
+Compiling ../charmaps/cp8859_3.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_3.s
+Compiling ../charmaps/cp8859_2.pas
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_2.s
+Compiling ../charmaps/cp852.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp852.s
+Compiling ../charmaps/cp1258.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1258.s
+Compiling ../charmaclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ps/cp1257.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1257.s
+Compiling ../charmaps/cp1256.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1256.s
+Compiling ../charmaps/cp1255.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1255.s
+Compiclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ling ../charmaps/cp1254.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1254.s
+Compiling ../charmaps/cp1250.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1250.s
+Compiling ../charmaps/cp865.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+p865.s
+Compiling ../charmaps/cp864.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp864.s
+Compiling ../charmaps/cp863.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp863.s
+Compiling ../charmaps/cp862.pas
+Assembling (pipe) ../../rtl/units/x86_64-clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+darwin/cp862.s
+Compiling ../charmaps/cp861.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp861.s
+Compiling ../charmaps/cp860.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp860.s
+Compiling ../charmaps/cp857.pas
+Assembling (pipe) ../../rtl/unitsclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+/x86_64-darwin/cp857.s
+Compiling ../charmaps/cp856.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp856.s
+Compiling ../charmaps/cp874.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp874.s
+Compiling ../charmaps/cp775.pas
+Assembling (pipe) ../../rclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+tl/units/x86_64-darwin/cp775.s
+Compiling ../charmaps/cp646.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp646.s
+Compiling ../charmaps/cp1252.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1252.s
+Compiling ../charmaps/cp437.pas
+Assembling (pipclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+e) ../../rtl/units/x86_64-darwin/cp437.s
+Compiling ../charmaps/cp850.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp850.s
+Compiling ../charmaps/cp8859_1.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_1.s
+Compiling ../charmaps/cp8859_7.paclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+s
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_7.s
+Compiling ../charmaps/cp869.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp869.s
+Compiling ../charmaps/cp737.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp737.s
+Compiling ../charmaclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ps/cp1253.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1253.s
+Compiling ../charmaps/cpkoi8_u.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cpkoi8_u.s
+Compiling ../charmaps/cpkoi8_r.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cpkoi8_rclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+.s
+Compiling ../charmaps/cp3021.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp3021.s
+Compiling ../charmaps/cp8859_5.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp8859_5.s
+Compiling ../charmaps/cp866.pas
+Assembling (pipe) ../../rtl/units/x86clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+_64-darwin/cp866.s
+Compiling ../charmaps/cp855.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp855.s
+Compiling ../charmaps/cp1251.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cp1251.s
+24251 lines compiled, 3.2 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Fi../objpas  ../objpas/unicodedata.pas
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/unicodedata.pas
+unicodedata.pas(1711,28) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(1777,28) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(1983,27) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(2001,29) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(2019,17) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(2062,28) Note: Call to subroutine "function TUC_Prop.GetCategory:System.Byte;" marked as inline is not inlined
+unicodedata.pas(2075,12) Note: Call to subroutine "function TUC_Prop.GetHangulSyllable:System.Boolean;" marked as inline is not inlined
+unicodedata.pas(2285,6) Note: Call to subroutine "function TUCA_PropItemRec.HasCodePoint:System.Boolean;" marked as inline is not inlined
+unicodedata.pas(2286,8) Note: Call to subroutine "function TUCA_PropItemRec.GetContextual:System.Boolean;" marked as inline is not inlined
+unicodedata.pas(2289,42) Note: Call to subroutine "function TUCA_PropItemRec.GetSelfOnlySize:System.LongWord;" marked as inline is not inlined
+unicodedata.pas(2295,48) Note: Call to subroutine "function TUCA_PropItemRec.GetSelfOnlySize:System.LongWord;" marked as inline is not inlined
+unicodedata.pas(2362,6) Note: Call to subroutine "function TUCA_PropItemRec.GetContextual:System.Boolean;" marked as inline is nclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ot inlined
+unicodedata.pas(3578,10) Warning: Unreachable code
+Writing Resource String Table file: unicodedata.rsj
+Assembling (pipe) ../../rtl/units/x86_64-darwin/unicodedata.s
+8093 lines compiled, 0.5 sec
+1 warning(s) issued
+12 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/character.pas
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/character.pas
+character.pas(426,21) Note: Call to subroutine "function TCharacter.IsDefined(aChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(432,21) Note: Call to subroutine "function TCharacter.IsDefined(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(438,22) Note: Call to subroutine "function TCharacter.IsDefined(const S:UnicodeString;Index:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(474,21) Note: Call to subroutine "function TCharacter.GetNumericValue(aChar:UCS4Char):System.Double; Static;" marked as inline is not inlined
+character.pas(479,23) Note: Call to subroutine "function TCharacter.GetUnicodeCategory(AChar:WideChar):TUnicodeCategory; Static;" marked as inline is not inlined
+character.pas(490,21) Note: Call to subroutine "function TCharacter.GetUnicodeCategory(aChar:UCS4Char):TUnicodeCategory; Static;" marked as inline is not inlined
+character.pas(495,23) Note: Call to subroutine "function TCharacter.IsControl(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(500,23) Note: Call to subroutine "function TCharacter.IsControl(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(505,23) Note: Call to subroutine "function TCharacter.IsControl(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(510,23) Note: Call to subroutine "function TCharacter.IsDigit(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(515,23) Note: Call to subroutine "function TCharacter.IsDigit(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(520,23) Note: Call to subroutine "function TCharacter.IsDigit(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(525,23) Note: Call to subroutine "function TCharacter.IsSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(535,23) Note: Call to subroutine "function TCharacter.IsSurrogate(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(540,23) Note: Call to subroutine "function TCharacter.IsHighSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(550,23) Note: Call to subroutine "function TCharacter.IsHighSurrogate(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(555,23) Note: Call to subroutine "function TCharacter.IsLowSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(565,23) Note: Call to subroutine "function TCharacter.IsLowSurrogate(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(570,23) Note: Call to subroutine "function TCharacter.IsSurrogatePair(const AHighSurrogate:WideChar;const ALowSurrogate:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(580,23) Note: Call to subroutine "function TCharacter.IsLetter(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(585,23) Note: Call to subroutine "function TCharacter.IsLetter(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(590,23) Note: Call to subroutine "function TCharacter.IsLetter(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(595,23) Note: Call to subroutine "function TCharacter.IsLetterOrDigit(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(600,23) Note: Call to subroutine "function TCharacter.IsLetterOrDigit(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(605,23) Note: Call to subroutine "function TCharacter.IsLetterOrDigit(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(610,23) Note: Call to subroutine "function TCharacter.IsLower(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(615,23) Note: Call to subroutine "function TCharacter.IsLower(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(620,23) Note: Call to subroutine "function TCharacter.IsLower(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(625,23) Note: Call to subroutine "function TCharacter.IsNumber(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(635,23) Note: Call to subroutine "function TCharacter.IsNumber(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(640,23) Note: Call to subroutine "function TCharacter.IsPunctuation(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(645,23) Note: Call to subroutine "function TCharacter.IsPunctuation(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(650,23) Note: Call to subroutine "function TCharacter.IsPunctuation(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(655,23) Note: Call to subroutine "function TCharacter.IsSeparator(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(660,23) Note: Call to subroutine "function TCharacter.IsSeparator(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(665,23) Note: Call to subroutine "function TCharacter.IsSeparator(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(670,23) Note: Call to subroutine "function TCharacter.IsSymbol(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(675,23) Note: Call to subroutine "function TCharacter.IsSymbol(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(680,23) Note: Call to subroutine "function TCharacter.IsSymbol(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(685,23) Note: Call to subroutine "function TCharacter.IsUpper(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(690,23) Note: Call to subroutine "function TCharacter.IsUpper(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(695,23) Note: Call to subroutine "function TCharacter.IsUpper(const AString:UnicodeString;AIndex:LongInt):System.Boolean; Static;" marked as inline is not inlined
+character.pas(700,23) Note: Call to subroutine "function TCharacter.IsWhiteSpace(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(710,23) Note: Call to subroutine "function TCharacter.IsWhiteSpace(aChar:UCS4Char):System.Boolean; Static;" marked as inline is not inlined
+character.pas(720,23) Note: Call to subroutine "function TCharacter.ToLower(const AString:UnicodeString):System.UnicodeString; Static;" marked as inline is not inlined
+character.pas(725,23) Note: Call to subroutine "function TCharacter.ToLower(aChar:UCS4Char):System.UCS4Char; Static;" marked as inline is not inlined
+character.pas(735,23) Note: Call to subroutine "function TCharacter.ToUpper(const AString:UnicodeString):System.UnicodeString; Static;" marked as inline is not inlined
+character.pas(740,23) Note: Call to subroutine "function TCharacter.ToUpper(aChar:UCS4Char):System.UCS4Char; Static;" marked as inline is not inlined
+character.pas(801,14) Warning: Comparison might be always false due to range of constant and expression
+character.pas(802,7) Warning: Unreachable code
+character.pas(795,8) Note: Call to subroutine "function TCharacter.IsSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(815,6) Note: Call to subroutine "function TCharacter.IsHighSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(828,6) Note: Call to subroutine "function TCharacter.IsHighSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(841,10) Note: Call to subroutine "function TCharacter.IsHighSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(843,10) Note: Call to subroutine "function TCclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+haracter.IsLowSurrogate(AChar:WideChar):System.Boolean; Static;" marked as inline is not inlined
+character.pas(1465,4) Note: "open array" not yet supported inside inline procedure/function
+Assembling (pipe) ../../rtl/units/x86_64-darwin/character.s
+1677 lines compiled, 0.2 sec
+2 warning(s) issued
+54 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/getopts.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/getopts.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/getopts.s
+531 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/heaptrc.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/heaptrc.pp
+heaptrc.pp(1151,4) Warning: User defined: No checkpointer supclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+port yet for Darwin
+Assembling (pipe) ../../rtl/units/x86_64-darwin/heaptrc.s
+1787 lines compiled, 0.1 sec
+1 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/exeinfo.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/exeinfo.pp
+exeinfo.pp(1321,10) Warning: Function result does not seem toclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ be set
+exeinfo.pp(1354,3) Note: Local variable "foundpagezero" is assigned but never used
+Assembling (pipe) ../../rtl/units/x86_64-darwin/exeinfo.s
+1768 lines compiled, 0.1 sec
+1 warning(s) issued
+1 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/lineinfo.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/lineinfo.pp
+lineinfo.pp(80,2) Warning: User defined: This code is not thclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+read-safe, and needs improvement 
+Assembling (pipe) ../../rtl/units/x86_64-darwin/lineinfo.s
+365 lines compiled, 0.1 sec
+1 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/lnfodwrf.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/lnfodwrf.pp
+lnfodwrf.pp(82,2) Warning: User defined: This code is not thclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+read-safe, and needs improvement
+Assembling (pipe) ../../rtl/units/x86_64-darwin/lnfodwrf.s
+1434 lines compiled, 0.1 sec
+1 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/lnfogdb.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/lnfogdb.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/lnfogdb.s
+183 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  termio.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling termio.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/termio.s
+926 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/cthreads.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/cthreads.pp
+cthreads.pp(526,34) Warning: Conversion between ordinals anclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+d pointers is not portable
+cthreads.pp(531,8) Warning: User defined: ThreadSetPriority needs to be implemented
+cthreads.pp(538,8) Warning: User defined: ThreadGetPriority needs to be implemented
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cthreads.s
+1210 lines compiled, 0.1 sec
+3 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/unixcp.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/unixcp.pp
+unixcp.pp(728,9) Warning: Symbol "fpgetenv" is deprecated
+uniclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+xcp.pp(730,11) Warning: Symbol "fpgetenv" is deprecated
+unixcp.pp(732,11) Warning: Symbol "fpgetenv" is deprecated
+Assembling (pipe) ../../rtl/units/x86_64-darwin/unixcp.s
+748 lines compiled, 0.1 sec
+3 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../unix/cwstring.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../unix/cwstring.pp
+cwstring.pp(490,5) Note: Local variable "iconvindex" not usclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ed
+cwstring.pp(799,21) Warning: Function result variable of a managed type does not seem to be initialized
+Assembling (pipe) ../../rtl/units/x86_64-darwin/cwstring.s
+1247 lines compiled, 0.1 sec
+1 warning(s) issued
+1 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../bsd/bsd.pas
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../bsd/bsd.pas
+Assembling (pipe) ../../rtl/units/x86_64-darwin/bsd.s
+158 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../objpas/fpwidestring.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../objpas/fpwidestring.pp
+fpwidestring.pp(466,7) Note: Call to subroutine "function CompareUnicodeString(p1:PUnicodeChar;p2:PUnicodeChar;l1:Int64;l2:Int64):System.Int64;" marked as inline is not inlined
+fpwidestring.pp(451,15) Note: Call to subroutine "function CompareUnicodeString(p1:PUnicodeChar;p2:PUnicodeChar;l1:Int64;l2:Int64):System.Int64;" marked as inline is not inlined
+fpwidestring.pp(502,7) Note: Call to subroutine "function CompareUnicodeString(p1:PUnicodeChar;p2:PUnicodeChar;l1:Int64;l2:Int64):System.Int64;" marked as inline is not inlined
+fpwidestring.pp(487,15) Note: Calclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+l to subroutine "function CompareUnicodeString(p1:PUnicodeChar;p2:PUnicodeChar;l1:Int64;l2:Int64):System.Int64;" marked as inline is not inlined
+Assembling (pipe) ../../rtl/units/x86_64-darwin/fpwidestring.s
+919 lines compiled, 0.1 sec
+4 note(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/fpintres.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/fpintres.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/fpintres.s
+438 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Sg  ../inc/fpextres.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/fpextres.pp
+extres_multiarch.inc(245,6) Warning: Converting pointers to signed integers may result in wrong comparison results and range errors, use an unsigned type instead.
+extres_multiarch.inc(485,43) Warning: Conversion between ordinals and pointers is not portable
+extres_multiarch.inc(486,36) Warning: Conversion between ordinals and pointers is not portable
+extres_multiarch.inc(532,43) Warning: Conversion between ordinals and pointers is not portable
+extres_multiarch.inc(533,49) Warning: Conversion between ordinals and pointers is not portable
+extres_multiarch.inc(566,43) clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Warning: Conversion between ordinals and pointers is not portable
+Assembling (pipe) ../../rtl/units/x86_64-darwin/fpextres.s
+741 lines compiled, 0.1 sec
+6 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/objc.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/objc.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/objc.s
+316 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/objcbase.pp
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/objcbase.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/objcbase.s
+265 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Sg  ../inc/softfpu.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/softfpu.pp
+softfpu.pp(3519,9) Warning: Case statement does not handle alclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+l possible cases
+softfpu.pp(4804,13) Warning: Case statement does not handle all possible cases
+Assembling (pipe) ../../rtl/units/x86_64-darwin/softfpu.s
+9363 lines compiled, 0.1 sec
+2 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Sg  ../inc/sfpux80.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/sfpux80.pp
+softfpu.pp(3519,9) Warning: Case statement does not handle alclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+l possible cases
+softfpu.pp(4804,13) Warning: Case statement does not handle all possible cases
+softfpu.pp(6910,9) Warning: Case statement does not handle all possible cases
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sfpux80.s
+18753 lines compiled, 0.2 sec
+3 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/ufloatx80.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/ufloatx80.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/ufloatx80.sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+
+98 lines compiled, 0.1 sec
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd -Sg  ../inc/sfpu128.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/sfpu128.pp
+softfpu.pp(3519,9) Warning: Case statement does not handle alclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+l possible cases
+softfpu.pp(4804,13) Warning: Case statement does not handle all possible cases
+softfpu.pp(8402,13) Warning: Case statement does not handle all possible cases
+Assembling (pipe) ../../rtl/units/x86_64-darwin/sfpu128.s
+18753 lines compiled, 0.2 sec
+3 warning(s) issued
+/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 -dFPC_USE_LIBC -Tdarwin -XPx86_64-darwin- -Fi../inc -Fi../x86_64 -Fi../unix -Fi../bsd -Fi../bsd/x86_64 -Fi../darwin/x86_64 -FE. -FU../../rtl/units/x86_64-darwin -dx86_64 -XR/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk -Xd  ../inc/ufloat128.pp
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling ../inc/ufloat128.pp
+Assembling (pipe) ../../rtl/units/x86_64-darwin/ufloat128.sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+
+98 lines compiled, 0.0 sec
+make: Leaving directory '/tmp/fafafa-core-darwin-smoke/x86_64-darwin/rtl/darwin'

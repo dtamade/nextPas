@@ -92,7 +92,7 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 
 ### Goal
 
-Stabilize the `collections` module copied from `fafafa.core`, then refactor it into the `nextpas.core` facade/base/intf/implementation architecture without simplifying behavior.
+Stabilize the `collections` module copied from `nextpas.core`, then refactor it into the `nextpas.core` facade/base/intf/implementation architecture without simplifying behavior.
 
 ## Active Scope
 

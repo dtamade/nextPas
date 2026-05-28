@@ -1,0 +1,22 @@
+=== TSimdBackendOps Interface Test ===
+
+[PASS] FillScalarOps sets Backend = sbScalar
+[PASS] FillScalarOps sets Name = Scalar
+[PASS] FillScalarOps sets Available = True
+[PASS] ArithmeticF32x4.Add is assigned
+[PASS] ArithmeticF32x4.Sub is assigned
+[PASS] ArithmeticF32x4.Mul is assigned
+[PASS] ArithmeticF32x4.OpDiv is assigned
+[PASS] Add: 1.0 + 0.5 = 1.5
+[PASS] Add: 2.0 + 1.0 = 3.0
+[PASS] Mul: 2.0 * 1.0 = 2.0
+[PASS] Mul: 3.0 * 1.5 = 4.5
+[PASS] Facade.MemEqual is assigned
+[PASS] Facade.SumBytes is assigned
+[PASS] Facade.CountByte is assigned
+[PASS] RegisterBackendOps succeeds
+
+=== Summary ===
+Passed: 15
+Failed: 0
+All tests PASSED!

@@ -1,0 +1,11 @@
+[ADAPTER-SYNC] backend.iface <-> backend.adapter.csv/.inc
+  - expected_ops_paths: 131
+  - spec_paths: 131
+  - mapped_forward: 131
+  - mapped_backward: 131
+  - dispatch_slots_total: 566
+  - mapped_slots_unique: 131
+  - fill_base_assigned_slots: 566
+  - issues: missing_spec=0, extra_spec=0, generated_include_drift=0, spec_forward_drift=0, spec_backward_drift=0, missing_forward=0, missing_backward=0, extra_forward=0, extra_backward=0, mismatched=0, dup_path=0, dup_slot=0, unconditional_forward=0, missing_dispatch_slot_defs=0, missing_fill_base_assignments=0
+[ADAPTER-SYNC] OK
+ADAPTER_SYNC_SUMMARY expected=131 spec=131 missing_spec=0 extra_spec=0 generated_include_drift=0 spec_forward_drift=0 spec_backward_drift=0 forward=131 backward=131 missing_forward=0 missing_backward=0 extra_forward=0 extra_backward=0 mismatched=0 dup_path=0 dup_slot=0 unconditional_forward=0 dispatch_slots_total=566 mapped_slots_unique=131 fill_base_assigned=566 missing_dispatch_slot_defs=0 missing_fill_base_assignments=0

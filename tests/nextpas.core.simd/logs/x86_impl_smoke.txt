@@ -1,0 +1,102 @@
+[X86-IMPL-SMOKE] log=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/x86_impl_smoke.txt
+[X86-IMPL-SMOKE] targeted_output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd
+[X86-IMPL-SMOKE] >>> sse2-structure-contracts
+[SSE2-IMPL-SMOKE] log=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/sse2_impl_smoke.txt
+[SSE2-IMPL-SMOKE] targeted_output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd
+[SSE2-IMPL-SMOKE] >>> sse2-structure
+[SSE2-STRUCTURE] Running: python3 /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/check_sse2_structure.py --summary-line
+[SSE2-STRUCTURE] SSE2 register/include structural contract
+  - register_include_exists:        True
+  - root_include_count:             1
+  - root_wide_include_count:        1
+  - root_select_include_count:      1
+  - root_header_count:              1
+  - register_header_count:          1
+  - select_include_exists:          True
+  - wide_self_include_count:        0
+  - duplicate_leaf_names:           0
+  - root_uses_hits:                 0
+  - raw_leaf_forbidden_hits:        0
+  - constref_aligned_load_violations:0
+  - forbidden_raw_float_opcode_hits:0
+  - missing_required_side_effect_opcodes:0
+  - backend_truth_rows_count:       10
+  - intrinsics_disposition_rows:    21
+  - repo_intrinsics_units_count:    21
+  - migration_missing_sections:     0
+  - migration_missing_tokens:       0
+  - root_symbol_counts:
+    - MemDiffRange_SSE2: 1
+    - SSE2AddF32x16: 1
+    - SSE2AddF64x8: 1
+    - SSE2AddI32x16: 1
+    - SSE2AddI64x4: 1
+    - SSE2AddI64x8: 1
+    - SSE2AddU32x8: 1
+    - SSE2AddU64x4: 1
+    - Utf8Validate_SSE2: 1
+  - wide_symbol_counts:
+    - MemDiffRange_SSE2: 1
+    - SSE2AddF32x16: 1
+    - SSE2AddF64x8: 1
+    - SSE2AddI32x16: 1
+    - SSE2AddI64x4: 1
+    - SSE2AddI64x8: 1
+    - SSE2AddU32x8: 1
+    - SSE2AddU64x4: 1
+    - Utf8Validate_SSE2: 1
+  - select_symbol_counts:
+    - SSE2SelectF64x2: 1
+  - wide_section_counts:
+    - // === F32x16 操作 (16×Float32) - 使用 2×F32x8 ===: 1
+    - // === F64x8 操作 (8×Float64) - 使用 2×F64x4 ===: 1
+    - // === I32x16 操作 (16×Int32) - 使用 2×I32x8 ===: 1
+    - // === SSE2 Arithmetic Operations ===: 0
+    - // === SSE2 Comparison Operations ===: 0
+    - // === SSE2 Math Functions ===: 0
+    - // === SSE2 Memory Operations ===: 0
+    - // === SSE2 Reduction Operations ===: 0
+    - // === SSE2 Utility Operations ===: 0
+SSE2_STRUCTURE_SUMMARY register_include_exists=1 root_include_count=1 root_wide_include_count=1 root_select_include_count=1 root_header_count=1 register_header_count=1 select_include_exists=1 wide_self_include_count=0 duplicate_leaf_names=0 root_uses_hits=0 raw_leaf_forbidden_hits=0 constref_aligned_load_violations=0 forbidden_raw_float_opcode_hits=0 missing_required_side_effect_opcodes=0 backend_truth_rows=10 intrinsics_disposition_rows=21 migration_missing_sections=0 migration_missing_tokens=0 failure_count=0 status=ok
+[SSE2-STRUCTURE] OK
+[SSE2-STRUCTURE] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/sse2_structure.json
+[SSE2-STRUCTURE] Summary: register_include_exists=1 root_include_count=1 root_wide_include_count=1 root_select_include_count=1 root_header_count=1 register_header_count=1 select_include_exists=1 wide_self_include_count=0 duplicate_leaf_names=0 root_uses_hits=0 raw_leaf_forbidden_hits=0 constref_aligned_load_violations=0 forbidden_raw_float_opcode_hits=0 missing_required_side_effect_opcodes=0 backend_truth_rows=10 intrinsics_disposition_rows=21 migration_missing_sections=0 migration_missing_tokens=0 failure_count=0 status=ok
+[SSE2-IMPL-SMOKE] <<< sse2-structure: ok
+[SSE2-IMPL-SMOKE] >>> sse2-contracts
+[BUILD] Project: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd)
+[BUILD] OK
+[TEST] Running: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/bin2/nextpas.core.simd.test --suite=TTestCase_SSE2Contracts
+[TEST] OK
+[LEAK] OK
+[SSE2-IMPL-SMOKE] <<< sse2-contracts: ok
+[SSE2-IMPL-SMOKE] >>> backend-smoke
+[BUILD] Project: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd)
+[BUILD] OK
+[TEST] Running: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/bin2/nextpas.core.simd.test --suite=TTestCase_BackendSmoke
+[TEST] OK
+[LEAK] OK
+[SSE2-IMPL-SMOKE] <<< backend-smoke: ok
+[SSE2-IMPL-SMOKE] >>> runtime-api
+[BUILD] Project: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd)
+[BUILD] OK
+[TEST] Running: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/bin2/nextpas.core.simd.test --suite=TTestCase_RuntimeAPI
+[TEST] OK
+[LEAK] OK
+[SSE2-IMPL-SMOKE] <<< runtime-api: ok
+[SSE2-IMPL-SMOKE] >>> data-plane
+[BUILD] Project: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd)
+[BUILD] OK
+[TEST] Running: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/bin2/nextpas.core.simd.test --suite=TTestCase_DataPlane
+[TEST] OK
+[LEAK] OK
+[SSE2-IMPL-SMOKE] <<< data-plane: ok
+SSE2_IMPL_SMOKE_SUMMARY steps=5 targeted_output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd status=ok
+[X86-IMPL-SMOKE] <<< sse2-structure-contracts: ok
+[X86-IMPL-SMOKE] >>> dispatchapi-bounded-frontier
+[BUILD] Project: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/nextpas.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd)
+[BUILD] OK
+[TEST] Running: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/bin2/nextpas.core.simd.test --suite=TTestCase_DispatchAPI
+[TEST] OK
+[LEAK] OK
+[X86-IMPL-SMOKE] <<< dispatchapi-bounded-frontier: ok
+X86_IMPL_SMOKE_SUMMARY steps=2 targeted_output_root=/home/dtamade/projects/nextpas.core/tests/nextpas.core.simd status=ok

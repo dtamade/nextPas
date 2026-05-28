@@ -1,0 +1,9 @@
+[GATE-SUMMARY] /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/rehearsal/gate_summary.sample.slow.md (tail=80)
+[GATE-SUMMARY] thresholds: warn_ms=10000, fail_ms=15000
+[GATE-SUMMARY] filter=SLOW, max_detail=260
+| Time | Step | Status | DurationMs | Event | Detail | Artifacts |
+|---|---|---|---|---|---|---|
+[GATE-SUMMARY] matched_rows=2
+| 2026-02-10 00:00:03 | run-all-chain | PASS | 14500 | SLOW_WARN | filtered run_all passed; logs=tests/_run_all_logs_sh; summary=tests/run_all_tests_summary_sh.txt | tests/_run_all_logs_sh; tests/run_all_tests_summary_sh.txt |
+| 2026-02-10 00:00:04 | gate | PASS | 20000 | SLOW_CRIT | all steps passed | - |
+[GATE-SUMMARY] json=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/rehearsal/gate_summary.sample.slow.json

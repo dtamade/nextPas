@@ -8,7 +8,7 @@ unit nextpas.core.mem.allocator.instrumentation;
  * - Safe-by-default: macro-controlled and no-op when disabled
  * - Backward compatible: does not modify IAllocator
  *
- * Enable by defining FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION in settings
+ * Enable by defining NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION in settings
  *}
 
 interface
@@ -42,7 +42,7 @@ function  AllocatorFaults_ShouldFailNow: Boolean; inline;
 
 implementation
 
-{$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+{$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
 var
   GStats: TAllocatorStats;
   GFaultsEnabled: Boolean = False;
@@ -52,7 +52,7 @@ var
 
 procedure AllocatorStats_Reset; inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   FillChar(GStats, SizeOf(GStats), 0);
   {$ELSE}
   // no-op
@@ -61,7 +61,7 @@ end;
 
 procedure AllocatorStats_Snapshot(out S: TAllocatorStats); inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   S := GStats;
   {$ELSE}
   FillChar(S, SizeOf(TAllocatorStats), 0);
@@ -70,7 +70,7 @@ end;
 
 procedure AllocatorFaults_Enable(AEnable: Boolean); inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   GFaultsEnabled := AEnable;
   {$ELSE}
   // no-op
@@ -79,7 +79,7 @@ end;
 
 procedure AllocatorFaults_SetFailEvery(AN: Cardinal); inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   GFailEvery := AN;
   GOpCounter := 0;
   {$ELSE}
@@ -89,7 +89,7 @@ end;
 
 function AllocatorFaults_IsEnabled: Boolean; inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   Result := GFaultsEnabled and (GFailEvery <> 0);
   {$ELSE}
   Result := False;
@@ -98,7 +98,7 @@ end;
 
 procedure AllocatorStats_OnAlloc(ABytes: SizeUInt); inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   Inc(GStats.AllocCount);
   Inc(GStats.AllocBytes, ABytes);
   {$ELSE}
@@ -108,7 +108,7 @@ end;
 
 procedure AllocatorStats_OnRealloc(ABytes: SizeUInt); inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   Inc(GStats.ReallocCount);
   Inc(GStats.ReallocBytes, ABytes);
   {$ELSE}
@@ -118,7 +118,7 @@ end;
 
 procedure AllocatorStats_OnFree; inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   Inc(GStats.FreeCount);
   {$ELSE}
   // no-op
@@ -127,7 +127,7 @@ end;
 
 function AllocatorFaults_ShouldFailNow: Boolean; inline;
 begin
-  {$IFDEF FAFAFA_CORE_ALLOCATOR_INSTRUMENTATION}
+  {$IFDEF NEXTPAS_CORE_ALLOCATOR_INSTRUMENTATION}
   if not AllocatorFaults_IsEnabled then Exit(False);
   Inc(GOpCounter);
   if (GFailEvery > 0) and (GOpCounter mod GFailEvery = 0) then Exit(True);
