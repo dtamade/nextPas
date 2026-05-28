@@ -12110,6 +12110,26 @@ Completed
 - Fresh `bash build/verify_local.sh`。
 - Git commit。
 
+## Addendum: 2026-05-28 Batch 218 Default Parameter Extended Coverage
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+
+### Goal
+
+加固 default parameter 语义能力，覆盖更多真实场景：
+1. 多个 default params：`Pick(A: Integer; B: Integer = 0; C: Integer = 0)` 调用 `Pick(1)` / `Pick(1,2)` / `Pick(1,2,3)`
+2. Inherited method with default params：`TBase.Touch(V: Integer; Extra: Integer = 0)` 被子类调用
+3. Implicit-self with default params：class body 内 `Pick(1)` 面对 `Pick(A: Integer; B: Integer = 0)`
+4. Default param + overload 交互：确认不误报 ambiguous
+
+### 不做
+
+- 不碰 `core/`
+- 不实现 default value codegen
+- 不实现 default value type checking diagnostics
+
 ## Addendum: 2026-05-28 Batch 217 Default Parameter Member Method Call Binding
 
 ### Goal Nodes

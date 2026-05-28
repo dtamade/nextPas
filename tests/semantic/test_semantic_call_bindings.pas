@@ -14039,6 +14039,184 @@ begin
   end;
 end;
 
+procedure CheckDefaultParameterMultipleDefaultsBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program MultiDefaultParams;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(A: Integer; B: Integer = 0; C: Integer = 0);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(A: Integer; B: Integer = 0; C: Integer = 0);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  W: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  W.Pick(1);' + LineEnding +
+    '  W.Pick(1, 2);' + LineEnding +
+    '  W.Pick(1, 2, 3);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-multi-default-param-diagnostic:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-multi-default-param-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-multi-default-param-model-status:' + Model.Status);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckDefaultParameterInheritedMethodBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InheritedDefaultParams;' + LineEnding +
+    'type' + LineEnding +
+    '  TBase = class' + LineEnding +
+    '    procedure Touch(Value: Integer; Level: Integer = 1);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TChild = class(TBase)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.Touch(Value: Integer; Level: Integer = 1);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TChild.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Self.Touch(42);' + LineEnding +
+    '  Self.Touch(42, 5);' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  C: TChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.Touch(10);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-default-param-diagnostic:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-inherited-default-param-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-inherited-default-param-model-status:' + Model.Status);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckDefaultParameterImplicitSelfBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program ImplicitSelfDefaultParams;' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '    procedure Pick(A: Integer; B: Integer = 0);' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TWorker.Pick(A: Integer; B: Integer = 0);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Pick(1);' + LineEnding +
+    '  Pick(1, 2);' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-implicit-self-default-param-diagnostic:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-implicit-self-default-param-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-implicit-self-default-param-model-status:' + Model.Status);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -14248,6 +14426,9 @@ begin
     CheckInheritedImplicitSelfBareMethodFunctionResultTypeMismatchDiagnostic;
     CheckClassMemberCallBinding;
     CheckDefaultParameterMemberCallBinding;
+    CheckDefaultParameterMultipleDefaultsBinding;
+    CheckDefaultParameterInheritedMethodBinding;
+    CheckDefaultParameterImplicitSelfBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
