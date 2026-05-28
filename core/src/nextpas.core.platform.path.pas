@@ -20,8 +20,12 @@ function platform_path_dirname(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_basename(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_basename_ptr(const APath: PAnsiChar;
+  out AStart: PAnsiChar; out ALen: Int32): Int32;
 function platform_path_extension(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_extension_ptr(const APath: PAnsiChar;
+  out AStart: PAnsiChar; out ALen: Int32): Int32;
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
@@ -165,6 +169,27 @@ begin
   Result := CopyToBuf(@APath[I], LLen - I, ABuf, ABufLen);
 end;
 
+function platform_path_basename_ptr(const APath: PAnsiChar;
+  out AStart: PAnsiChar; out ALen: Int32): Int32;
+var
+  LLen, I: Int32;
+begin
+  AStart := nil;
+  ALen := 0;
+  LLen := StrLen(APath);
+  if LLen = 0 then
+    Exit(0);
+  I := LLen - 1;
+  while (I > 0) and IsSep(APath[I]) do
+    Dec(I);
+  LLen := I + 1;
+  while (I > 0) and not IsSep(APath[I - 1]) do
+    Dec(I);
+  AStart := @APath[I];
+  ALen := LLen - I;
+  Result := ALen;
+end;
+
 function platform_path_extension(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
@@ -179,6 +204,28 @@ begin
     Dec(I);
   end;
   Result := CopyToBuf(PAnsiChar(''), 0, ABuf, ABufLen);
+end;
+
+function platform_path_extension_ptr(const APath: PAnsiChar;
+  out AStart: PAnsiChar; out ALen: Int32): Int32;
+var
+  LLen, I: Int32;
+begin
+  AStart := nil;
+  ALen := 0;
+  LLen := StrLen(APath);
+  I := LLen - 1;
+  while (I >= 0) and not IsSep(APath[I]) do
+  begin
+    if APath[I] = PLATFORM_EXT_SEP then
+    begin
+      AStart := @APath[I];
+      ALen := LLen - I;
+      Exit(ALen);
+    end;
+    Dec(I);
+  end;
+  Result := 0;
 end;
 
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;

@@ -103,6 +103,31 @@ begin
   Check(BufEq(@Buf[0], '/a/c'), 'normalize /a/b/../c');
 end;
 
+procedure TestBasenamePtr;
+var
+  P: PAnsiChar;
+  L: Int32;
+begin
+  platform_path_basename_ptr('/home/user/file.pas', P, L);
+  Check(L = 8, 'basename_ptr len = 8');
+  Check(P[0] = 'f', 'basename_ptr[0] = f');
+  Check(P[7] = 's', 'basename_ptr[7] = s');
+end;
+
+procedure TestExtensionPtr;
+var
+  P: PAnsiChar;
+  L: Int32;
+begin
+  platform_path_extension_ptr('file.pas', P, L);
+  Check(L = 4, 'ext_ptr len = 4');
+  Check(P[0] = '.', 'ext_ptr[0] = .');
+  Check(P[1] = 'p', 'ext_ptr[1] = p');
+  platform_path_extension_ptr('Makefile', P, L);
+  Check(L = 0, 'no ext ptr len = 0');
+  Check(P = nil, 'no ext ptr = nil');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.path');
   T.Run('join basic', @TestJoinBasic);
@@ -115,5 +140,7 @@ begin
   T.Run('change ext', @TestChangeExt);
   T.Run('is_absolute', @TestIsAbsolute);
   T.Run('normalize', @TestNormalize);
+  T.Run('basename_ptr zero-copy', @TestBasenamePtr);
+  T.Run('extension_ptr zero-copy', @TestExtensionPtr);
   T.Summary;
 end.
