@@ -55,13 +55,14 @@ begin
     LMin := A.Len
   else
     LMin := B.Len;
-  for LI := 0 to LMin - 1 do
-  begin
-    if A.Data[LI] < B.Data[LI] then
-      Exit(-1);
-    if A.Data[LI] > B.Data[LI] then
-      Exit(1);
-  end;
+  if LMin > 0 then
+    for LI := 0 to LMin - 1 do
+    begin
+      if A.Data[LI] < B.Data[LI] then
+        Exit(-1);
+      if A.Data[LI] > B.Data[LI] then
+        Exit(1);
+    end;
   if A.Len < B.Len then
     Result := -1
   else if A.Len > B.Len then
@@ -74,9 +75,10 @@ function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
 var
   LI: SizeUInt;
 begin
-  for LI := 0 to AHaystack.Len - 1 do
-    if AHaystack.Data[LI] = ANeedle then
-      Exit(SizeInt(LI));
+  if AHaystack.Len > 0 then
+    for LI := 0 to AHaystack.Len - 1 do
+      if AHaystack.Data[LI] = ANeedle then
+        Exit(SizeInt(LI));
   Result := -1;
 end;
 
