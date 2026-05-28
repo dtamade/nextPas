@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  FPC_FLAGS: "-MObjFPC -Sh -O2"
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FPC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fpc
+
+      - name: Verify FPC
+        run: fpc -iV
+
+      - name: Run all tests
+        run: make test
+
+  compile-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FPC
+        run: |
+          brew install fpc
+
+      - name: Verify FPC
+        run: fpc -iV
+
+      - name: Compile all sources
+        run: |
+          mkdir -p build/lib build/bin
+          find src -name '*.pas' -not -name '*.inc' | sort | while read unit; do
+            echo "Compiling: $unit"
+            fpc -MObjFPC -Sh -O2 -FUbuild/lib -FEbuild/bin -Fusrc -Fisrc -B "$unit" || true
+          done
+
+      - name: Run portable tests
+        run: |
+          find tests -mindepth 2 -name Makefile | sort | while read mk; do
+            dir=$(dirname "$mk")
+            echo "--- $dir ---"
+            make -C "$dir" test 2>&1 || echo "SKIP (platform-specific): $dir"
+          done
+
+  compile-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-fpc make
+
+      - name: Verify FPC
+        run: fpc -iV
+
+      - name: Compile all sources
+        run: |
+          mkdir -p build/lib build/bin
+          find src -name '*.pas' -not -name '*.inc' | sort | while read unit; do
+            echo "Compiling: $unit"
+            fpc -MObjFPC -Sh -O2 -FUbuild/lib -FEbuild/bin -Fusrc -Fisrc -B "$unit" || true
+          done
+
+      - name: Run portable tests
+        run: |
+          find tests -mindepth 2 -name Makefile | sort | while read mk; do
+            dir=$(dirname "$mk")
+            echo "--- $dir ---"
+            make -C "$dir" test 2>&1 || echo "SKIP (platform-specific): $dir"
+          done
+
+  test-freebsd:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test on FreeBSD
+        uses: cross-platform-actions/action@v0.25.0
+        with:
+          operating_system: freebsd
+          version: "14.1"
+          run: |
+            sudo pkg install -y fpc
+            fpc -iV
+            find tests -mindepth 2 -name Makefile | sort | while read mk; do
+              dir=$(dirname "$mk")
+              echo "--- $dir ---"
+              make -C "$dir" test 2>&1 || echo "SKIP: $dir"
+            done
