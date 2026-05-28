@@ -659,9 +659,8 @@ type
      *
      * @remark
      *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 DeleteSwap
-     *   如果删除失败会抛出异常
-     *   如果删除的元素数量大于容器数量会抛出异常
-     *   如果删除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果
+     *   如果 aIndex 越界或 aCount 超出可删除范围会抛出异常
      *}
     procedure Delete(aIndex, aCount: SizeUInt); overload;
 
@@ -693,9 +692,8 @@ type
      *
      * @remark
      *   此函数是一种高效的删除操作,可以避免元素的移动但会破坏元素的顺序适合不敏感的场合
-     *   如果删除失败会抛出异常
-     *   如果删除的元素数量大于容器数量会抛出异常
-     *   如果删除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果
+     *   如果 aIndex 越界或 aCount 超出可删除范围会抛出异常
      *}
     procedure DeleteSwap(aIndex, aCount: SizeUInt); overload;
 
@@ -732,9 +730,8 @@ type
      * @remark
      *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 SwapRemoveCopyAt
      *   请确保aDst指向的内存空间足够容纳aCount个元素
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果，且不访问 aDst
+     *   如果 aCount > 0 且 aDst 为 nil，或 aIndex/aCount 超出可移除范围会抛出异常
      *}
     procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
 
@@ -750,9 +747,7 @@ type
      * @remark
      *   如果指定位置后有元素,则这些元素会向前移动,在大量数据下非常低效,如果不介意元素顺序,请使用 SwapRemoveCopyAt
      *   请确保aDst指向的内存空间足够容纳1个元素
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aDst 为 nil 或 aIndex 越界会抛出异常
      *}
     procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
 
@@ -768,9 +763,8 @@ type
      *
      * @remark
      *   aElements指向的数组数量会被自动调整
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果，且不调整 aElements
+     *   如果 aIndex/aCount 超出可移除范围会抛出异常
      *}
     procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
@@ -784,9 +778,7 @@ type
      *   aElement 保存元素的元素变量
      *
      * @remark
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aIndex 越界会抛出异常
      *}
     procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload;
 
@@ -801,9 +793,7 @@ type
      * @return 返回移除的元素
      *
      * @remark
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aIndex 越界会抛出异常
      *}
     function RemoveAt(aIndex: SizeUInt): T; overload;
 
@@ -838,9 +828,8 @@ type
      *
      * @remark
      *   请确保aDst指向的内存空间足够容纳aCount个元素
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果，且不访问 aDst
+     *   如果 aCount > 0 且 aDst 为 nil，或 aIndex/aCount 超出可移除范围会抛出异常
      *}
     procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
 
@@ -855,9 +844,7 @@ type
      *
      * @remark
      *   请确保aDst指向的内存空间足够容纳1个元素
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aDst 为 nil 或 aIndex 越界会抛出异常
      *}
     procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
 
@@ -874,9 +861,8 @@ type
      *
      * @remark
      *   aElements指向的数组数量会被自动调整
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aCount = 0，此操作不产生任何效果，且不调整 aElements
+     *   如果 aIndex/aCount 超出可移除范围会抛出异常
      *}
     procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
@@ -890,9 +876,7 @@ type
      *   aElement 保存元素的元素变量
      *
      * @remark
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aIndex 越界会抛出异常
      *}
     procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload;
 
@@ -907,9 +891,7 @@ type
      * @return 返回移除的元素
      *
      * @remark
-     *   如果移除失败会抛出异常
-     *   如果移除的元素数量大于容器数量会抛出异常
-     *   如果移除的元素数量小于0会抛出异常
+     *   如果 aIndex 越界会抛出异常
      *}
     function SwapRemoveAt(aIndex: SizeUInt): T; overload;
 

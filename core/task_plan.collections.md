@@ -12,7 +12,14 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec TryPop Pointer Zero Count
+### Current Micro Batch: Vec Remove Helper Contract Docs
+
+- [x] Confirm `RemoveCopyAt` / `RemoveArrayAt` / `SwapRemoveCopyAt` / `SwapRemoveArrayAt` already treat `aCount = 0` as no-op.
+- [x] Remove stale `SizeUInt` "count < 0" warnings from `IVec<T>` delete/remove docs.
+- [x] Document zero-count no-op and nil-destination behavior for pointer remove helpers.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec TryPop Pointer Zero Count
 
 - [x] Make `TVec.TryPop(Pointer, 0)` a successful no-op.
 - [x] Keep `TVec.TryPop(nil, Count > 0)` returning `False`.
