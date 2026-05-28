@@ -32,8 +32,8 @@ jobs:
           make all FPCDIR=$(pwd) PP=$(which ppcx64) OPT="-O2"
           mkdir -p ~/fpc-trunk/bin ~/fpc-trunk/lib
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppcx64 PREFIX=~/fpc-trunk
-          ls ~/fpc-trunk/bin/ || true
-          find ~/fpc-trunk -name ppcx64 -o -name fpc | head -5
+          # Generate fpc.cfg
+          ~/fpc-trunk/bin/fpcmkcfg -d basepath=~/fpc-trunk/lib/fpc/\$fpcversion -o ~/fpc-trunk/bin/fpc.cfg
 
       - name: Setup PATH
         run: |
@@ -80,6 +80,7 @@ jobs:
           make all FPCDIR=$(pwd) PP="$PP" OPT="-O2"
           mkdir -p ~/fpc-trunk
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppca64 PREFIX=~/fpc-trunk
+          ~/fpc-trunk/bin/fpcmkcfg -d basepath=~/fpc-trunk/lib/fpc/\$fpcversion -o ~/fpc-trunk/bin/fpc.cfg
 
       - name: Setup PATH
         run: |
