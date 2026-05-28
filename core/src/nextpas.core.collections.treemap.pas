@@ -249,8 +249,11 @@ type
     function Ceiling(const aKey: K; out aValue: V): Boolean;
     function Floor(const aKey: K; out aValue: V): Boolean;
 
-    function Get(const aKey: K; out aValue: V): Boolean;
-    function Put(const aKey: K; const aValue: V): Boolean;
+    function TryGetValue(const aKey: K; out aValue: V): Boolean;
+    function Get(const aKey: K): V;
+    function Add(const aKey: K; const aValue: V): Boolean;
+    function AddOrAssign(const aKey: K; const aValue: V): Boolean;
+    procedure Put(const aKey: K; const aValue: V);
     function Remove(const aKey: K): Boolean;
     function ContainsKey(const aKey: K): Boolean;
     function GetKeyCount: SizeUInt;
@@ -729,7 +732,7 @@ var
   LNode: PNode;
 begin
   LNode := InsertNode(aKey, aValue, LExisted);
-  Result := LExisted;
+  Result := not LExisted;
 end;
 
 function TRedBlackTree.Remove(const aKey: K): Boolean;
@@ -1107,14 +1110,32 @@ begin
   Result := FTree.Floor(aKey, aValue);
 end;
 
-function TTreeMap.Get(const aKey: K; out aValue: V): Boolean;
+function TTreeMap.TryGetValue(const aKey: K; out aValue: V): Boolean;
 begin
   Result := FTree.Get(aKey, aValue);
 end;
 
-function TTreeMap.Put(const aKey: K; const aValue: V): Boolean;
+function TTreeMap.Get(const aKey: K): V;
+begin
+  if not TryGetValue(aKey, Result) then
+    raise EInvalidOperation.Create('TTreeMap.Get: key not found');
+end;
+
+function TTreeMap.Add(const aKey: K; const aValue: V): Boolean;
+begin
+  if ContainsKey(aKey) then
+    Exit(False);
+  Result := FTree.Put(aKey, aValue);
+end;
+
+function TTreeMap.AddOrAssign(const aKey: K; const aValue: V): Boolean;
 begin
   Result := FTree.Put(aKey, aValue);
+end;
+
+procedure TTreeMap.Put(const aKey: K; const aValue: V);
+begin
+  AddOrAssign(aKey, aValue);
 end;
 
 function TTreeMap.Remove(const aKey: K): Boolean;

@@ -118,6 +118,15 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Apply the same `IHashMap` contract to `TLinkedHashMap<T>`.
 - [x] Leave `TreeMap` for a separate batch because its internal `Put` return flag needs a focused semantic correction.
 
+### Completed Micro Batch: TreeMap Get/Put Semantics
+
+- [x] Add `TryGetValue(Key, out Value)` to `ITreeMap<T>` / `TTreeMap<T>`.
+- [x] Change public `Get(Key)` to checked lookup returning the value.
+- [x] Add `Add(Key, Value): Boolean` and `AddOrAssign(Key, Value): Boolean`.
+- [x] Change public `Put(Key, Value)` to write without reporting insert/update.
+- [x] Fix `TRedBlackTree.Put` to return True for newly inserted keys and False for updates.
+- [x] Keep range/floor/ceiling APIs unchanged.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -163,6 +172,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - `Vec` exposes `TryRemoveAt` and `TrySwapRemoveAt` because indexed extraction is a core contiguous-vector operation. `Deque` / `VecDeque` should not receive a symmetric `TrySwapRemoveAt` in this batch: their ring-buffer indexing semantics are weaker, and adding the API would imply a stronger Vec-like positional contract than we currently want.
 - Queue-like containers use `Push` / `Pop` / `Peek` as the default entry/exit vocabulary. `Enqueue` / `Dequeue` are duplicate aliases and should not be kept in concrete classes unless a future compatibility policy explicitly requires them.
 - HashMap-family `Get(Key)` is checked lookup and returns `Value`; absence is exceptional. `TryGetValue(Key, out Value)` remains the non-throwing lookup. `Put(Key, Value)` writes without reporting insert/update; `AddOrAssign(Key, Value): Boolean` remains the API that reports whether the key was newly inserted.
+- TreeMap follows the same map vocabulary as HashMap: `TryGetValue` is non-throwing lookup, `Get` is checked lookup, `Put` writes without a status result, `Add` inserts only when absent, and `AddOrAssign` reports `True` for inserted and `False` for updated. Ordered range/floor/ceiling APIs keep their existing Boolean found/not-found shape because they are search queries, not key-required map indexing.
 
 ## Verification Commands
 

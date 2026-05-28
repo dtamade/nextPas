@@ -185,3 +185,12 @@
 - `IHashMap<K,V>.AddOrAssign(Key, Value): Boolean` remains the insert/update reporting API: `True` means newly inserted, `False` means updated.
 - `TLinkedHashMap<K,V>` inherits `IHashMap<K,V>`, so it was aligned in the same batch.
 - `TreeMap` still has copied `Get(Key, out Value)` / `Put(...): Boolean` shape. Its `TRedBlackTree.Put` currently returns the internal `Existed` flag, which appears opposite to the interface comment, so TreeMap should be handled as its own focused semantic batch rather than hidden inside the HashMap change.
+
+## 2026-05-28: TreeMap Get/Put semantic alignment
+
+- `ITreeMap<K,V>` now follows the same key/value map vocabulary as `IHashMap<K,V>` for normal key lookup and writes.
+- `TryGetValue(Key, out Value)` is the safe non-throwing lookup. Public `Get(Key)` is checked lookup and raises on an absent key.
+- Public `Put(Key, Value)` writes and does not report whether it inserted or updated. `AddOrAssign(Key, Value): Boolean` carries that reporting contract.
+- `Add(Key, Value): Boolean` inserts only when the key is absent and leaves existing values unchanged.
+- `TRedBlackTree.Put` now returns `True` for newly inserted keys and `False` for updates, matching `AddOrAssign`.
+- Ordered search APIs such as `GetLowerBound`, `GetUpperBound`, `Ceiling`, and `Floor` keep their existing Boolean found/not-found shape because missing search results are normal range-query outcomes.

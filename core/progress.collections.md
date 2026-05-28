@@ -71,11 +71,12 @@
 - Verified the PriorityQueue push/pop naming batch with `git diff --check`, focused `test_facade` / `test_queue`, and full `make test`; all completed with zero failures.
 - Removed concrete `TVecDeque<T>.Enqueue` / `Dequeue` aliases. The real public interface contracts already use `Push` / `Pop` / `Peek` / `TryPeek`, and explicit deque direction remains available through `PushFront` / `PushBack` / `PopFront` / `PopBack`.
 - Started the HashMap-family map semantics batch. `IHashMap.Get(Key)` now returns the value as a checked lookup, `IHashMap.Put(Key, Value)` no longer reports insert/update, and `TryGetValue` / `AddOrAssign` keep the non-throwing/reporting roles. `TLinkedHashMap` was updated with the inherited `IHashMap` contract. TreeMap was deliberately left to a separate focused batch because its internal `Put` return flag needs semantic correction.
+- Aligned TreeMap with the HashMap map vocabulary: `TryGetValue` is non-throwing lookup, public `Get(Key)` is checked lookup, public `Put` writes without returning status, and `Add` / `AddOrAssign` carry absent-only and inserted-vs-updated semantics. Also fixed `TRedBlackTree.Put` to return True for new inserts instead of returning the internal existed flag.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: align TreeMap with the same map `Get` / `Put` / `TryGetValue` / `AddOrAssign` contract and fix its `Put` return semantics, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
+- Next likely interface-tuning batch: review SkipList / Trie map-like APIs for the same vocabulary, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

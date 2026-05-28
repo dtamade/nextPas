@@ -121,9 +121,9 @@ type
     function Floor(const aKey: K; out aValue: V): Boolean;
 
     {**
-     * Get
+     * TryGetValue
      *
-     * @desc 根据键获取值
+     * @desc 尝试根据键获取值
      *
      * @params
      *   aKey    要查找的键
@@ -132,14 +132,45 @@ type
      * @return 键存在返回 True，否则返回 False
      *
      * @complexity O(log n)
-     * @see Put, ContainsKey
+     * @see Get, ContainsKey
      *}
-    function Get(const aKey: K; out aValue: V): Boolean;
+    function TryGetValue(const aKey: K; out aValue: V): Boolean;
 
     {**
-     * Put
+     * Get
      *
-     * @desc 插入或更新键值对
+     * @desc 根据键获取值，键不存在时抛出异常
+     *
+     * @params
+     *   aKey  要查找的键
+     *
+     * @return V 键对应的值
+     *
+     * @complexity O(log n)
+     * @see TryGetValue, ContainsKey
+     *}
+    function Get(const aKey: K): V;
+
+    {**
+     * Add
+     *
+     * @desc 仅当键不存在时插入键值对
+     *
+     * @params
+     *   aKey    键
+     *   aValue  值
+     *
+     * @return 新插入返回 True，键已存在返回 False
+     *
+     * @postcondition 若返回 True，则 Count 增加 1
+     * @complexity O(log n)
+     *}
+    function Add(const aKey: K; const aValue: V): Boolean;
+
+    {**
+     * AddOrAssign
+     *
+     * @desc 插入或更新键值对，并报告新增或更新
      *
      * @params
      *   aKey    键
@@ -149,11 +180,25 @@ type
      *
      * @postcondition ContainsKey(aKey) = True
      * @complexity O(log n)
+     *}
+    function AddOrAssign(const aKey: K; const aValue: V): Boolean;
+
+    {**
+     * Put
+     *
+     * @desc 写入键值对，不报告新增或更新
+     *
+     * @params
+     *   aKey    键
+     *   aValue  值
+     *
+     * @postcondition ContainsKey(aKey) = True
+     * @complexity O(log n)
      *
      * @exceptions
      *   EOutOfMemory  内存分配失败
      *}
-    function Put(const aKey: K; const aValue: V): Boolean;
+    procedure Put(const aKey: K; const aValue: V);
 
     {**
      * Remove
