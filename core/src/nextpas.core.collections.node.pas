@@ -348,6 +348,14 @@ type
   private
     FAllocator: IAllocator;
     FElementManager: TElementManager;
+    FSinglePoolBlocks: PPointer;
+    FSinglePoolBlockCount: SizeUInt;
+    FSinglePoolNext: Pointer;
+    FSinglePoolEnd: Pointer;
+    FDoublePoolBlocks: PPointer;
+    FDoublePoolBlockCount: SizeUInt;
+    FDoublePoolNext: Pointer;
+    FDoublePoolEnd: Pointer;
 
   public
     constructor Create(aAllocator: IAllocator);
@@ -777,28 +785,101 @@ begin
   inherited Create;
   if aAllocator = nil then
     raise EArgumentNil.Create('TNodeManager.Create: aAllocator cannot be nil');
-
   FAllocator := aAllocator;
   FElementManager := TElementManager.Create(aAllocator);
+  FSinglePoolBlocks := nil;
+  FSinglePoolBlockCount := 0;
+  FSinglePoolNext := nil;
+  FSinglePoolEnd := nil;
+  FDoublePoolBlocks := nil;
+  FDoublePoolBlockCount := 0;
+  FDoublePoolNext := nil;
+  FDoublePoolEnd := nil;
 end;
 
 destructor TNodeManager.Destroy;
+var
+  i: SizeUInt;
+  LP: PPointer;
 begin
+  LP := FSinglePoolBlocks;
+  if LP <> nil then
+  begin
+    for i := 0 to FSinglePoolBlockCount - 1 do
+      FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
+    FreeMem(LP);
+  end;
+  LP := FDoublePoolBlocks;
+  if LP <> nil then
+  begin
+    for i := 0 to FDoublePoolBlockCount - 1 do
+      FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
+    FreeMem(LP);
+  end;
   FElementManager.Free;
   inherited Destroy;
 end;
 
 function TNodeManager.AllocateSingleNode: PSingleNode;
+const
+  BLOCK_SIZE = 256;
+var
+  LBlock: Pointer;
+  LNew: PPointer;
 begin
-  Result := PSingleNode(FAllocator.GetMem(SizeOf(TSingleNode)));
-  if Result = nil then
-    raise EOutOfMemory.Create('TNodeManager.AllocateSingleNode: 内存分配失败');
+  if PtrUInt(FSinglePoolNext) >= PtrUInt(FSinglePoolEnd) then
+  begin
+    GetMem(LBlock, BLOCK_SIZE * SizeOf(TSingleNode));
+    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TSingleNode), 0);
+    Inc(FSinglePoolBlockCount);
+    GetMem(LNew, FSinglePoolBlockCount * SizeOf(Pointer));
+    if FSinglePoolBlocks <> nil then
+    begin
+      Move(FSinglePoolBlocks^, LNew^, (FSinglePoolBlockCount - 1) * SizeOf(Pointer));
+      FreeMem(FSinglePoolBlocks);
+    end;
+    FSinglePoolBlocks := LNew;
+    PPointer(PtrUInt(LNew) + (FSinglePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
+    FSinglePoolNext := LBlock;
+    FSinglePoolEnd := LBlock + BLOCK_SIZE * SizeOf(TSingleNode);
+  end;
+  Result := PSingleNode(FSinglePoolNext);
+  FSinglePoolNext := FSinglePoolNext + SizeOf(TSingleNode);
 end;
 
 procedure TNodeManager.DeallocateSingleNode(aNode: PSingleNode);
 begin
-  if aNode <> nil then
-    FAllocator.FreeMem(aNode);
+end;
+
+function TNodeManager.AllocateDoubleNode: PDoubleNode;
+const
+  BLOCK_SIZE = 256;
+var
+  LBlock: Pointer;
+  LNew: PPointer;
+begin
+  if PtrUInt(FDoublePoolNext) >= PtrUInt(FDoublePoolEnd) then
+  begin
+    GetMem(LBlock, BLOCK_SIZE * SizeOf(TDoubleNode));
+    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TDoubleNode), 0);
+    Inc(FDoublePoolBlockCount);
+    GetMem(LNew, FDoublePoolBlockCount * SizeOf(Pointer));
+    if FDoublePoolBlocks <> nil then
+    begin
+      Move(FDoublePoolBlocks^, LNew^, (FDoublePoolBlockCount - 1) * SizeOf(Pointer));
+      FreeMem(FDoublePoolBlocks);
+    end;
+    FDoublePoolBlocks := LNew;
+    PPointer(PtrUInt(LNew) + (FDoublePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
+    FDoublePoolNext := LBlock;
+    FDoublePoolEnd := LBlock + BLOCK_SIZE * SizeOf(TDoubleNode);
+  end;
+  Result := PDoubleNode(FDoublePoolNext);
+  FDoublePoolNext := FDoublePoolNext + SizeOf(TDoubleNode);
+end;
+
+procedure TNodeManager.DeallocateDoubleNode(aNode: PDoubleNode);
+begin
 end;
 
 function TNodeManager.CreateSingleNode(const aData: T; aNext: PSingleNode): PSingleNode;
@@ -838,18 +919,6 @@ begin
   DeallocateSingleNode(aNode);
 end;
 
-function TNodeManager.AllocateDoubleNode: PDoubleNode;
-begin
-  Result := PDoubleNode(FAllocator.GetMem(SizeOf(TDoubleNode)));
-  if Result = nil then
-    raise EOutOfMemory.Create('TNodeManager.AllocateDoubleNode: 内存分配失败');
-end;
-
-procedure TNodeManager.DeallocateDoubleNode(aNode: PDoubleNode);
-begin
-  if aNode <> nil then
-    FAllocator.FreeMem(aNode);
-end;
 
 function TNodeManager.CreateDoubleNode(const aData: T; aPrev: PDoubleNode; aNext: PDoubleNode): PDoubleNode;
 var

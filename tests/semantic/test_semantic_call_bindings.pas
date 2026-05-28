@@ -3867,6 +3867,55 @@ begin
   end;
 end;
 
+procedure CheckInterfaceMethodTypeMismatch;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InterfaceTypeMismatch;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  ICalculator = interface' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Calc: ICalculator;' + LineEnding +
+    'begin' + LineEnding +
+    '  Calc.Add(' + #39 + 'x' + #39 + ', ' + #39 + 'y' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('interface-type-mismatch-expected-diagnostic');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -16216,6 +16265,7 @@ begin
     CheckInterfaceMethodCallBinding;
     CheckInterfaceMissingMethodDiagnostic;
     CheckInterfaceInheritanceBinding;
+    CheckInterfaceMethodTypeMismatch;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
