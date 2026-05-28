@@ -4030,12 +4030,25 @@ var
   J: LongInt;
   FieldIndex: LongInt;
   RecName: string;
+  Meta: TTypeMetadata;
 begin
   if ANode = nil then
     Exit;
   RecName := FModel.TypeAt(ATypeId - 1).Name;
   RecordScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
   FieldIndex := 0;
+  Meta.TypeId := ATypeId;
+  Meta.IsRecord := True;
+  Meta.VmtCount := 0;
+  Meta.ParentClassId := 0;
+  Meta.ParentClassName := '';
+  Meta.Interfaces := '';
+  Meta.ArrElemSize := 0;
+  Meta.ArrElemType := '';
+  SetLength(Meta.Fields, 0);
+  SetLength(Meta.VmtSlots, 0);
+  SetLength(Meta.RetPtrMethods, 0);
+  SetLength(Meta.Properties, 0);
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -4055,10 +4068,18 @@ begin
       Child.ByteOffset);
     FModel.SetSymbolScope(FModel.SymbolCount, RecordScopeId);
     FModel.AddConstValue(RecName + '.' + Child.Text + '$idx', FieldIndex);
+    SetLength(Meta.Fields, Length(Meta.Fields) + 1);
+    Meta.Fields[High(Meta.Fields)].Name := Child.Text;
+    Meta.Fields[High(Meta.Fields)].Index := FieldIndex;
+    Meta.Fields[High(Meta.Fields)].IsString := False;
+    Meta.Fields[High(Meta.Fields)].IsPointer := False;
+    Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
     Inc(FieldIndex);
   end;
   FModel.AddConstValue(RecName + '$size', FieldIndex * 8);
   FModel.AddConstValue(RecName + '$record', 1);
+  Meta.Size := FieldIndex * 8;
+  FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
 procedure TSemanticAnalyzer.AppendWhereConstraint(const ATypeId: LongInt;
