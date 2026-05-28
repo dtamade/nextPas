@@ -77,13 +77,15 @@ jobs:
           cd fpc-src
           PP=$(find /usr/local/lib/fpc /opt/homebrew/lib/fpc -name 'ppca64' -o -name 'ppcaarch64' 2>/dev/null | head -1)
           if [ -z "$PP" ]; then PP=$(which ppca64 2>/dev/null || which ppcaarch64 2>/dev/null); fi
-          make all FPCDIR=$(pwd) PP="$PP" OPT="-O2"
+          SDK_PATH=$(xcrun --show-sdk-path)
+          make all FPCDIR=$(pwd) PP="$PP" OPT="-O2 -XR$SDK_PATH"
           mkdir -p ~/fpc-trunk
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppca64 PREFIX=~/fpc-trunk
 
       - name: Setup FPC config and PATH
         run: |
           $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
+          echo "-XR$(xcrun --show-sdk-path)" >> $HOME/fpc-trunk/bin/fpc.cfg
           echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
           FPC_LIB=$(find $HOME/fpc-trunk/lib/fpc -maxdepth 1 -type d -name '3.*' | head -1)
           if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
