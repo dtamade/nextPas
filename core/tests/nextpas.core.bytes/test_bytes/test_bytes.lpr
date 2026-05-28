@@ -9,7 +9,8 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
-  nextpas.core.bytes.builder;
+  nextpas.core.bytes.builder,
+  nextpas.core.mem;
 
 var
   T: TTestRunner;
@@ -327,6 +328,166 @@ begin
   CheckEqual(0, System.Length(LResult), 'empty builder');
 end;
 
+{ Additional coverage: ops }
+
+procedure TestSpanContains;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+begin
+  LD := TBytes.Create(1, 2, 3);
+  LS := TByteSpan.FromBytes(LD);
+  Check(SpanContains(LS, 2), 'contains 2');
+  Check(not SpanContains(LS, 99), 'not contains 99');
+  Check(not SpanContains(TByteSpan.Empty, 1), 'empty span');
+end;
+
+procedure TestSpanCopySlice;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+  LResult: TBytes;
+begin
+  LD := TBytes.Create(10, 20, 30, 40, 50);
+  LS := TByteSpan.FromBytes(LD);
+  LResult := SpanCopySlice(LS, 1, 3);
+  CheckEqual(3, System.Length(LResult), 'len');
+  CheckEqual(Byte(20), LResult[0]);
+  CheckEqual(Byte(40), LResult[2]);
+end;
+
+procedure TestSpanClone;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+  LResult: TBytes;
+begin
+  LD := TBytes.Create(5, 6, 7);
+  LS := TByteSpan.FromBytes(LD);
+  LResult := SpanClone(LS);
+  CheckEqual(3, System.Length(LResult));
+  CheckEqual(Byte(5), LResult[0]);
+  CheckEqual(Byte(7), LResult[2]);
+  LResult := SpanClone(TByteSpan.Empty);
+  CheckEqual(0, System.Length(LResult), 'empty clone');
+end;
+
+{ Additional coverage: binary }
+
+procedure TestToFromEndian;
+var
+  LV16: UInt16;
+  LV32: UInt32;
+  LV64: UInt64;
+begin
+  LV16 := $1234;
+  CheckEqual(LV16, ToEndian16(LV16, endLittle), 'LE no-op on LE host');
+  CheckEqual(SwapUInt16(LV16), ToEndian16(LV16, endBig), 'BE swaps on LE host');
+  CheckEqual(LV16, FromEndian16(ToEndian16(LV16, endBig), endBig), 'roundtrip 16');
+
+  LV32 := $DEADBEEF;
+  CheckEqual(LV32, ToEndian32(LV32, endLittle), 'LE32 no-op');
+  CheckEqual(LV32, FromEndian32(ToEndian32(LV32, endBig), endBig), 'roundtrip 32');
+
+  LV64 := $0102030405060708;
+  CheckEqual(LV64, ToEndian64(LV64, endLittle), 'LE64 no-op');
+  CheckEqual(LV64, FromEndian64(ToEndian64(LV64, endBig), endBig), 'roundtrip 64');
+end;
+
+procedure TestTryReadUInt8;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+  LV: Byte;
+begin
+  LD := TBytes.Create($AB, $CD);
+  LS := TByteSpan.FromBytes(LD);
+  Check(TryReadUInt8(LS, LV), 'read ok');
+  CheckEqual(Byte($AB), LV);
+  CheckEqual(SizeUInt(1), LS.Len, 'advanced');
+  Check(TryReadUInt8(LS, LV), 'read 2nd');
+  CheckEqual(Byte($CD), LV);
+  Check(not TryReadUInt8(LS, LV), 'empty fail');
+end;
+
+procedure TestTryWriteUInt8;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+begin
+  SetLength(LD, 2);
+  LS := TByteSpan.FromBytes(LD);
+  Check(TryWriteUInt8(LS, $AA), 'write ok');
+  Check(TryWriteUInt8(LS, $BB), 'write 2nd');
+  CheckEqual(Byte($AA), LD[0]);
+  CheckEqual(Byte($BB), LD[1]);
+  Check(not TryWriteUInt8(LS, $CC), 'full fail');
+end;
+
+procedure TestTryReadBE;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+  LV16: UInt16;
+  LV32: UInt32;
+  LV64: UInt64;
+begin
+  LD := TBytes.Create($01, $02, $03, $04, $05, $06, $07, $08, $09, $0A);
+  LS := TByteSpan.FromBytes(LD);
+  Check(TryReadUInt16BE(LS, LV16), 'read16BE');
+  CheckEqual(UInt16($0102), LV16);
+  Check(TryReadUInt32BE(LS, LV32), 'read32BE');
+  CheckEqual(UInt32($03040506), LV32);
+  Check(not TryReadUInt64BE(LS, LV64), 'read64BE fail (only 4 left)');
+  CheckEqual(SizeUInt(4), LS.Len, 'unchanged on fail');
+end;
+
+procedure TestTryWriteAllVariants;
+var
+  LD: TBytes;
+  LS: TByteSpan;
+begin
+  SetLength(LD, 14);
+  LS := TByteSpan.FromBytes(LD);
+  Check(TryWriteUInt16LE(LS, $1234), 'w16LE');
+  Check(TryWriteUInt32LE(LS, $AABBCCDD), 'w32LE');
+  Check(TryWriteUInt64LE(LS, $0102030405060708), 'w64LE');
+  CheckEqual(SizeUInt(0), LS.Len, 'all consumed');
+  CheckEqual(Byte($34), LD[0], 'LE16 low');
+  CheckEqual(Byte($12), LD[1], 'LE16 high');
+  CheckEqual(Byte($DD), LD[2], 'LE32 byte0');
+  CheckEqual(Byte($08), LD[6], 'LE64 byte0');
+  CheckEqual(Byte($01), LD[13], 'LE64 byte7');
+end;
+
+{ Additional coverage: builder }
+
+procedure TestBuilderUInt64;
+var
+  LB: IBytesBuilder;
+  LResult: TBytes;
+begin
+  LB := CreateBytesBuilder(16);
+  LB.AppendUInt64LE($0102030405060708);
+  LB.AppendUInt64BE($0102030405060708);
+  LResult := LB.ToBytes;
+  CheckEqual(16, System.Length(LResult), 'len');
+  CheckEqual(Byte($08), LResult[0], 'LE byte0');
+  CheckEqual(Byte($01), LResult[7], 'LE byte7');
+  CheckEqual(Byte($01), LResult[8], 'BE byte0');
+  CheckEqual(Byte($08), LResult[15], 'BE byte7');
+end;
+
+procedure TestBuilderWithAllocator;
+var
+  LB: IBytesBuilder;
+begin
+  LB := CreateBytesBuilderWith(nextpas.core.mem.DefaultAllocator, 32);
+  LB.AppendFill($EE, 100);
+  CheckEqual(SizeUInt(100), LB.Length);
+  CheckEqual(Byte($EE), LB.Data[99]);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.bytes');
 
@@ -355,6 +516,18 @@ begin
   T.Run('builder: Truncate', @TestBuilderTruncate);
   T.Run('builder: WrittenSpan', @TestBuilderWrittenSpan);
   T.Run('builder: AutoFree', @TestBuilderAutoFree);
+  T.Run('builder: UInt64', @TestBuilderUInt64);
+  T.Run('builder: WithAllocator', @TestBuilderWithAllocator);
+
+  T.Run('ops: SpanContains', @TestSpanContains);
+  T.Run('ops: SpanCopySlice', @TestSpanCopySlice);
+  T.Run('ops: SpanClone', @TestSpanClone);
+
+  T.Run('binary: ToEndian/FromEndian', @TestToFromEndian);
+  T.Run('binary: TryReadUInt8', @TestTryReadUInt8);
+  T.Run('binary: TryWriteUInt8', @TestTryWriteUInt8);
+  T.Run('binary: TryRead BE variants', @TestTryReadBE);
+  T.Run('binary: TryWrite all variants', @TestTryWriteAllVariants);
 
   T.Summary;
 end.
