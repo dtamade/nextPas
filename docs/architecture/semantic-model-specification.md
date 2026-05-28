@@ -170,13 +170,19 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `sema.type-mismatch`；同一路径沿 imported owner class parent chain 找到 inherited
   method target 后，也会输出 stable literal mismatch diagnostic（例如
   `TWorker = class(TBaseWorker)` 中 `procedure TWorker.Run; begin Touch(True); end;`
-  面对 `TBaseWorker.Touch(Value: Integer)`）；同一路径中的 stable literal no-match（例如
+  面对 `TBaseWorker.Touch(Value: Integer)`）；同一 inherited target path 也接受同一
+  project-source owner unit 中零参内建标量/字符串 function result 作为 stable mismatch
+  evidence（例如 `Touch(Flag);` 面对 inherited `Touch(Value: Integer)` 且 `Flag` 返回
+  `Boolean`）；同一路径中的 stable literal no-match（例如
   `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
   `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径沿 imported owner
   class parent chain 找到 inherited method overload set 后，也会输出 stable literal no-match
   diagnostic（例如 `TWorker = class(TBaseWorker)` 中
   `procedure TWorker.Run; begin Touch(True); end;` 同时面对
-  `TBaseWorker.Touch(Integer)` 与 `TBaseWorker.Touch(AnsiString)`）；同一路径中的 stable literal
+  `TBaseWorker.Touch(Integer)` 与 `TBaseWorker.Touch(AnsiString)`），并接受同一
+  project-source owner unit 中零参内建标量/字符串 function result 作为 stable no-match
+  evidence（例如 `Touch(Flag);` 同时面对 inherited `Touch(Integer)` 与
+  `Touch(AnsiString)` 且 `Flag` 返回 `Boolean`）；同一路径中的 stable literal
   ambiguity（例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
   `Pick(Integer)` 与 `Pick(LongInt)`）会输出 `sema.ambiguous-overload`；同一路径沿 imported
   owner class parent chain 找到 inherited method overload set 后，也会输出 stable literal
@@ -425,9 +431,11 @@ candidate collection
     `member-call` binding
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
     imported owner class parent chain 找到 inherited 同名同 arity多候选，但 stable argument
-    signature 与全部 target param signature 都不兼容的场景；例如
-    `procedure TWorker.Run; begin Touch(True); end;` 同时面对 inherited `Touch(Integer)` 与
-    `Touch(AnsiString)`，该路径不会注册失败 `member-call` binding
+    signature 与全部 target param signature 都不兼容的场景；stable evidence 包含
+    literal/纯表达式，以及同一 project-source owner unit 中零参内建标量/字符串 function
+    result；例如 `procedure TWorker.Run; begin Touch(True); end;` 或 `Touch(Flag);`
+    同时面对 inherited `Touch(Integer)` 与 `Touch(AnsiString)`，该路径不会注册失败
+    `member-call` binding
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
@@ -461,8 +469,9 @@ candidate collection
 - `sema.no-matching-overload`
   - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
     argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
-  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
-    内建标量/字符串 function result 可作为稳定 evidence 且所有 target signature 都不匹配的场景
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned
+    或 same-owner `project-source` unit-owned 零参内建标量/字符串 function result 可作为
+    稳定 evidence 且所有 target signature 都不匹配的场景
   - imported `installed-source` bare callable / direct or inherited member-call overload set 继续 deferred，即使同形状
     argument evidence 已可推断，也不提前发 ordinary no-match diagnostic；这类 provenance guard 用
     `semantic-call-bindings-check` 的 focused harness 固定
