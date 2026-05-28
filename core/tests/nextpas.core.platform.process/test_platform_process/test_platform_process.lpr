@@ -84,6 +84,41 @@ begin
   platform_process_wait(P, R);
 end;
 
+procedure TestSpawnNonExistent;
+var
+  P: TPlatformProcess;
+  R: TPlatformProcessResult;
+  LArgv: array[0..1] of PAnsiChar;
+  LRet: Int32;
+begin
+  LArgv[0] := '/nonexistent_binary_xyz';
+  LArgv[1] := nil;
+  LRet := platform_process_spawn('/nonexistent_binary_xyz', @LArgv[0], nil, P);
+  if LRet = 0 then
+  begin
+    platform_process_wait(P, R);
+    Check(R.ExitCode <> 0, 'non-existent exits with error');
+  end
+  else
+    Check(LRet <> 0, 'spawn non-existent returns error');
+end;
+
+procedure TestSpawnWithArgs;
+var
+  P: TPlatformProcess;
+  R: TPlatformProcessResult;
+  LArgv: array[0..3] of PAnsiChar;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'exit 42';
+  LArgv[3] := nil;
+  Check(platform_process_spawn('/bin/sh', @LArgv[0], nil, P) = 0, 'spawn sh');
+  Check(platform_process_wait(P, R) = 0, 'wait');
+  Check(R.Status = psExited, 'exited');
+  Check(R.ExitCode = 42, 'exit code 42');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.process');
   T.Run('spawn /bin/true', @TestSpawnTrue);
@@ -91,5 +126,7 @@ begin
   T.Run('pid accessor', @TestPid);
   T.Run('kill', @TestKill);
   T.Run('try_wait non-blocking', @TestTryWait);
+  T.Run('spawn non-existent', @TestSpawnNonExistent);
+  T.Run('spawn with args', @TestSpawnWithArgs);
   T.Summary;
 end.

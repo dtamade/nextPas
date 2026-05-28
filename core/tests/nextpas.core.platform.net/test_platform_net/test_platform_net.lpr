@@ -116,6 +116,60 @@ begin
   platform_socket_close(LServer);
 end;
 
+procedure TestUDPSendRecv;
+var
+  LSender, LRecver: TPlatformSocket;
+  LAddr, LRecvAddr: TPlatformSockAddr;
+  LBuf: array[0..31] of AnsiChar;
+  LSent, LRecvd: PtrUInt;
+  LAddrLen: Int32;
+begin
+  Check(platform_socket_create(afInet4, stDgram, spUDP, LRecver) = 0, 'create recver');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'addr');
+  Check(platform_socket_bind(LRecver, LAddr) = 0, 'bind');
+
+  LAddrLen := SizeOf(LRecvAddr.Storage);
+  FillChar(LRecvAddr, SizeOf(LRecvAddr), 0);
+  getsockname(LRecver.Value, @LRecvAddr.Storage, @LAddrLen);
+  LRecvAddr.Len := LAddrLen;
+
+  Check(platform_socket_create(afInet4, stDgram, spUDP, LSender) = 0, 'create sender');
+  LBuf := 'udp test';
+  Check(platform_socket_connect(LSender, LRecvAddr) = 0, 'connect udp');
+  Check(platform_socket_send(LSender, @LBuf[0], 8, LSent) = 0, 'send');
+  Check(LSent = 8, 'sent 8');
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_socket_recv(LRecver, @LBuf[0], 32, LRecvd) = 0, 'recv');
+  Check(LRecvd = 8, 'recv 8');
+  Check(LBuf[0] = 'u', 'data[0]');
+
+  platform_socket_close(LSender);
+  platform_socket_close(LRecver);
+end;
+
+procedure TestDoubleClose;
+var
+  S: TPlatformSocket;
+begin
+  Check(platform_socket_create(afInet4, stStream, spTCP, S) = 0, 'create');
+  Check(platform_socket_close(S) = 0, 'close first');
+  Check(platform_socket_close(S) <> 0, 'close second error');
+end;
+
+procedure TestConnectRefused;
+var
+  S: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  R: Int32;
+begin
+  Check(platform_socket_create(afInet4, stStream, spTCP, S) = 0, 'create');
+  Check(platform_sockaddr_loopback4(1, LAddr) = 0, 'addr port 1');
+  R := platform_socket_connect(S, LAddr);
+  Check(R <> 0, 'connect to port 1 fails');
+  platform_socket_close(S);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.net');
   T.Run('create/close TCP', @TestCreateClose);
@@ -123,5 +177,8 @@ begin
   T.Run('bind/listen', @TestBindListen);
   T.Run('connect/accept/send/recv', @TestConnectAcceptSendRecv);
   T.Run('shutdown', @TestShutdown);
+  T.Run('UDP send/recv', @TestUDPSendRecv);
+  T.Run('double close', @TestDoubleClose);
+  T.Run('connect refused', @TestConnectRefused);
   T.Summary;
 end.

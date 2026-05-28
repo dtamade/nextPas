@@ -113,7 +113,7 @@ end;
 function platform_socket_close(var ASock: TPlatformSocket): Int32;
 begin
   if ASock.Value < 0 then
-    Exit(platform_get_errno);
+    Exit(9); // EBADF
   if close(ASock.Value) = 0 then
     Result := 0
   else
