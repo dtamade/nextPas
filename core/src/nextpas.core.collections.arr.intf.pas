@@ -295,6 +295,23 @@ type
      *   详见 docs/Unchecked_Methods_Summary.md。
      *   传递无效索引将导致未定义行为.
      *}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+
+    {**
+     * OverwriteUnchecked
+     *
+     * @desc 在容器内指定位置覆写另一个集合的部分内容 (不安全快速版本).
+     *
+     * @params
+     *   aIndex  容器内开始覆写的目标索引 (0-based).
+     *   aSrc    提供源数据的容器.
+     *   aCount  要从 `aSrc` 复制并覆写的元素数量.
+     *
+     * @remark
+     *   **Unchecked 统一约定：** 不进行参数/边界/空指针检查；调用方需保证前置条件。
+     *   详见 docs/Unchecked_Methods_Summary.md。
+     *   传递无效索引将导致未定义行为.
+     *}
     procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
     {**
