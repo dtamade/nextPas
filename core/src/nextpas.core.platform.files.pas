@@ -39,6 +39,12 @@ uses
   , nextpas.core.platform.linux.base
   , nextpas.core.platform.linux.ffi
 {$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+{$ENDIF}
   ;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
@@ -54,16 +60,16 @@ var
   LFlags: Int32;
 begin
   case AMode of
-    fomReadOnly:  LFlags := 0;
-    fomWriteOnly: LFlags := 1;
-    fomReadWrite: LFlags := 2;
+    fomReadOnly:  LFlags := O_RDONLY;
+    fomWriteOnly: LFlags := O_WRONLY;
+    fomReadWrite: LFlags := O_RDWR;
   end;
   case ACreate of
     fcmOpenExisting:    ;
-    fcmCreateAlways:    LFlags := LFlags or $40 or $200;
-    fcmCreateNew:       LFlags := LFlags or $40 or $80;
-    fcmOpenOrCreate:    LFlags := LFlags or $40;
-    fcmTruncateExisting: LFlags := LFlags or $200;
+    fcmCreateAlways:    LFlags := LFlags or O_CREAT or O_TRUNC;
+    fcmCreateNew:       LFlags := LFlags or O_CREAT or O_EXCL;
+    fcmOpenOrCreate:    LFlags := LFlags or O_CREAT;
+    fcmTruncateExisting: LFlags := LFlags or O_TRUNC;
   end;
   AHandle.Value := open(APath, LFlags, 438);
   if AHandle.Value < 0 then
@@ -164,6 +170,12 @@ var
 {$IFDEF NEXTPAS_LINUX}
   LStat: TPlatformLinuxStat;
 {$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  LStat: TDarwinStat;
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  LStat: TFreeBSDStat;
+{$ENDIF}
 begin
   FillChar(AStat, SizeOf(AStat), 0);
 {$IFDEF NEXTPAS_LINUX}
@@ -179,7 +191,36 @@ begin
   AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
   AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
   AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
-  case LStat.st_mode and S_IFMT of
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  if fpstat(APath, @LStat) <> 0 then
+    Exit(platform_get_errno);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := UInt32(LStat.st_mode);
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := UInt64(LStat.st_dev);
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
+  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
+  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  if fpstat(APath, @LStat) <> 0 then
+    Exit(platform_get_errno);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := UInt32(LStat.st_mode);
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
+  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
+  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
+{$ENDIF}
+  case AStat.Mode and S_IFMT of
     S_IFREG:  AStat.FileType := ftRegular;
     S_IFDIR:  AStat.FileType := ftDirectory;
     S_IFLNK:  AStat.FileType := ftSymlink;
@@ -191,9 +232,6 @@ begin
     AStat.FileType := ftUnknown;
   end;
   Result := 0;
-{$ELSE}
-  Result := platform_get_errno;
-{$ENDIF}
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -244,11 +282,7 @@ end;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 begin
   FillChar(AHandle, SizeOf(AHandle), 0);
-{$IFDEF NEXTPAS_LINUX}
   AHandle.Fd := open(APath, O_RDONLY or O_DIRECTORY, 0);
-{$ELSE}
-  AHandle.Fd := open(APath, 0 {O_RDONLY}, 0);
-{$ENDIF}
   if AHandle.Fd < 0 then
     Result := platform_get_errno
   else

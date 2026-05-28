@@ -157,6 +157,45 @@ const
 { socket constants - Darwin-specific values }
 {$I nextpas.core.platform.darwin.base.socket.inc}
 
+{ stat structure - Darwin 64-bit (new iostructs layout) }
+const
+  S_IFMT  = $F000;
+  S_IFREG = $8000;
+  S_IFDIR = $4000;
+  S_IFLNK = $A000;
+  S_IFCHR = $2000;
+  S_IFBLK = $6000;
+  S_IFIFO = $1000;
+  S_IFSOCK = $C000;
+
+type
+{$packrecords c}
+  TDarwinStat = record
+    st_dev: Int32;
+    st_mode: UInt16;
+    st_nlink: UInt16;
+    st_ino: UInt64;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    st_rdev: Int32;
+    st_atime: Int64;
+    st_atimensec: Int64;
+    st_mtime: Int64;
+    st_mtimensec: Int64;
+    st_ctime: Int64;
+    st_ctimensec: Int64;
+    st_birthtime: Int64;
+    st_birthtimensec: Int64;
+    st_size: Int64;
+    st_blocks: Int64;
+    st_blksize: Int32;
+    st_flags: UInt32;
+    st_gen: UInt32;
+    st_lspare: Int32;
+    st_qspare: array[0..1] of Int64;
+  end;
+{$packrecords default}
+
 implementation
 
 end.

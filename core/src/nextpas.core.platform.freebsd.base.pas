@@ -152,6 +152,46 @@ const
 { socket constants }
 {$I nextpas.core.platform.freebsd.base.socket.inc}
 
+{ stat structure - FreeBSD 12+ }
+const
+  S_IFMT  = $F000;
+  S_IFREG = $8000;
+  S_IFDIR = $4000;
+  S_IFLNK = $A000;
+  S_IFCHR = $2000;
+  S_IFBLK = $6000;
+  S_IFIFO = $1000;
+  S_IFSOCK = $C000;
+
+type
+{$packrecords c}
+  TFreeBSDStat = record
+    st_dev: UInt64;
+    st_ino: UInt64;
+    st_nlink: UInt64;
+    st_mode: UInt16;
+    st_padding0: Int16;
+    st_uid: UInt32;
+    st_gid: UInt32;
+    st_padding1: Int32;
+    st_rdev: UInt64;
+    st_atime: Int64;
+    st_atimensec: Int64;
+    st_mtime: Int64;
+    st_mtimensec: Int64;
+    st_ctime: Int64;
+    st_ctimensec: Int64;
+    st_birthtime: Int64;
+    st_birthtimensec: Int64;
+    st_size: Int64;
+    st_blocks: Int64;
+    st_blksize: Int32;
+    st_flags: UInt32;
+    st_gen: UInt64;
+    st_spare: array[0..9] of UInt64;
+  end;
+{$packrecords default}
+
 implementation
 
 end.
