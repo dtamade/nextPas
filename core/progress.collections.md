@@ -102,11 +102,19 @@
 
 ## Next
 
-- Collections module correctness fixes complete. All known bugs fixed.
-- heaptrc verification: all 10 suites zero leaks.
-- Next immediate work:
-  1. Write comprehensive VecDeque tests (Insert/RemoveAt/SwapRemoveAt/PushFront/Sort/Rotate paths)
-  2. Write tests for zero-coverage containers (LruCache, BitSet, List, ForwardList, LinkedHashMap)
-  3. Integrate heaptrc into Makefiles as standard `-gh` flag
-  4. Then Phase 3 performance optimization (introsort, partition fix, load factor, rotate O(1))
-- fafafa.core has 52000+ lines of collections tests but they're FPCUnit format + old API names (Remove→RemoveAt, RemoveSwap→SwapRemoveAt). Conversion script created at scripts/convert_vecdeque_tests.py but manual adaptation still needed for API name changes and structural differences.
+- Phase 2 test coverage significantly improved: 21 suites, 271 tests, 0 failures.
+- All containers have dedicated test suites with core API coverage.
+- Bugs found and fixed during test writing:
+  - TVecDeque FTail desync (4 locations)
+  - TVecDeque MakeContiguous full-buffer condition
+  - TVecDeque PushFront(Pointer) order reversal
+  - TVecDeque RemoveAt/SwapRemoveAt managed-type leak
+  - TRBTreeCore.Clear use-after-free
+  - TVecDeque WriteExact(Collection, StartIndex) ignoring offset
+  - TVecDeque.Create(0, alloc, nil) capacity-1 + nil strategy grow corruption
+- Remaining test coverage work:
+  - Vec still has ~50 untested methods (Filter, Retain, Any, All, Dedup, Splice, etc.)
+  - Deque/List/ForwardList have moderate gaps
+  - HashMap missing Retain test
+- Next phase: Phase 3 performance optimization (introsort, partition, load factor, rotate)
+- Benchmark suite needed before optimization to measure before/after
