@@ -67,7 +67,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-macos-aarch64-v5
+          key: fpc-trunk-macos-aarch64-v6
 
       - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
@@ -86,6 +86,12 @@ jobs:
         run: |
           $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
           echo "-XR$(xcrun --show-sdk-path)" >> $HOME/fpc-trunk/bin/fpc.cfg
+          # Ensure units are findable
+          UNITS_DIR=$(find $HOME/fpc-trunk/lib/fpc -type d -name "rtl" -path "*/units/*" | head -1)
+          if [ -n "$UNITS_DIR" ]; then
+            UNITS_BASE=$(dirname "$UNITS_DIR")
+            echo "-Fu$UNITS_BASE/*" >> $HOME/fpc-trunk/bin/fpc.cfg
+          fi
           echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
           FPC_LIB=$(find $HOME/fpc-trunk/lib/fpc -maxdepth 1 -type d -name '3.*' | head -1)
           if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
