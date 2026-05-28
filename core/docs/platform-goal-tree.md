@@ -15,11 +15,11 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 
 ### Tier 1（首批全量支持，完整 platform + 100% 接口测试覆盖）
 
-| OS      | CPU              | 状态   |
-|---------|------------------|--------|
-| Linux   | x86_64, aarch64  | 进行中 |
-| macOS   | x86_64, aarch64  | 待启动 |
-| Windows | x86_64           | 待启动 |
+| OS      | CPU              | 状态                    |
+|---------|------------------|-------------------------|
+| Linux   | x86_64, aarch64  | ✅ 完成 (CI 全绿)        |
+| macOS   | x86_64, aarch64  | 代码完成, CI 待修复 (FPC trunk linker issue) |
+| Windows | x86_64           | 代码完成, 无 CI          |
 
 ### Tier 2（第二批，platform 定义齐全，交叉编译验证）
 
@@ -132,7 +132,8 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.signal (信号处理: sigaction/SetConsoleCtrlHandler, 6 tests)
 - [x] platform.console (终端检测: isatty/GetConsoleMode, ANSI 启用, 5 tests)
 - [x] platform.error (错误码转字符串: strerror/FormatMessage, 5 tests)
-- [x] 每个模块无内存泄漏验证 (heaptrc: 15 modules, 0 leaks)
+- [x] platform.path (路径操作: join/dirname/basename/ext/normalize, 10 tests)
+- [x] 每个模块无内存泄漏验证 (heaptrc: 16 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持
@@ -145,12 +146,17 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 
 ## 执行顺序
 
-1. **当前**: G2 (Linux host 全量，含 riscv64/arm32 syscall 搬运) — 编译器自身运行在 Linux 上
-2. **其次**: G5 (Windows) + G6 (POSIX 共享层) 并行 — Windows 高优先级
-3. **然后**: G3 (Darwin) — macOS 支持
-4. **之后**: G7 (统一抽象层) — 在 host 层齐全后构建
-5. **之后**: G4 (FreeBSD) + G8 (Tier 2 剩余: Windows aarch64 等)
-6. **远期**: G9 (WASM / LoongArch / powerpc64le) — 低优先级，按需
+G1-G7 全部完成。当前状态：
+
+1. ✅ G1 (类型基础) — 完成
+2. ✅ G2 (Linux host 全量) — 完成
+3. ✅ G3 (Darwin host 全量) — 完成
+4. ✅ G4 (FreeBSD host 全量) — 完成
+5. ✅ G5 (Windows host 全量) — 完成
+6. ✅ G6 (POSIX 共享层) — 完成
+7. ✅ G7 (统一抽象层: 16 modules) — 完成
+8. **待推进**: G8 (Tier 2 扩展: Windows aarch64, 交叉编译验证)
+9. **远期**: G9 (WASM / LoongArch / powerpc64le)
 
 ## 质量门禁
 
