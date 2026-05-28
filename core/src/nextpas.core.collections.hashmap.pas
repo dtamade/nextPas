@@ -326,7 +326,7 @@ begin
   FUsed := 0;
   SetLength(FBuckets, 0);
   if aCapacity > 0 then
-    InitCapacity(aCapacity);
+    InitCapacity(SizeUInt(Trunc(aCapacity / DEFAULT_MAX_LOAD_FACTOR)) + 1);
 end;
 
 function THashMap.NextPow2(x: SizeUInt): SizeUInt;
