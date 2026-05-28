@@ -2372,6 +2372,13 @@ begin
             MemberFailureOffset
           )
         else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'invalid-call-shape') then
+          EmitSemaError(
+            'sema.invalid-call-shape',
+            'member "' + MemberFailureName + '" is not callable',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
           SameText(ResolutionFailureKind, 'unknown-callable') and
           (MethodClass = '') then
           EmitSemaError(

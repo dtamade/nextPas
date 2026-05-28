@@ -271,7 +271,9 @@ method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑�
 method），还覆盖 imported `project-source` direct known field/property 被当作 call 使用时的
 `sema.invalid-call-shape` gate、imported `project-source` inherited known field 被当作 call 使用时的
 `sema.invalid-call-shape` gate、imported `project-source` inherited known property 被当作 call 使用时的
-`sema.invalid-call-shape` gate，以及 `TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
+`sema.invalid-call-shape` gate、imported `project-source` unit method body bare implicit-self
+known field 被当作 call 使用时的 `sema.invalid-call-shape` gate，以及 `TWorker.Create(42)`
+这类已声明 class type-name receiver 的 constructor-like member call；
 same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
 单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
 `Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`、imported
@@ -985,6 +987,8 @@ unit method body bare implicit-self no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
 unit method body bare implicit-self ambiguous overload 断言
 `semantic-analysis-failed` + `sema.ambiguous-overload`，再对
+imported `project-source` unit method body bare implicit-self known field invalid call shape 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、

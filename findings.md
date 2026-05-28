@@ -10,6 +10,32 @@
 
 ## Research Findings
 
+- Batch 194 re-rank 结论：imported unit method body 面已覆盖 implicit/inherited 的 unknown-member、
+  wrong-argument-count、type-mismatch、no-matching-overload、ambiguous-overload 与 same-unit
+  function-result ladder；下一条最高性价比缺口是 known non-callable field 被 imported unit
+  implementation body 内 bare implicit-self 调用成 `Value(1);` 时的 `sema.invalid-call-shape`。
+- Batch 194 加速策略固定为“矩阵波前 + promotion-first”：先写 focused semantic regression 判真相；
+  如果现有 owner-aware imported method body traversal 已能复用 Batch 119/167 的 known field
+  invalid-call-shape guard，就直接 promotion 到 stage0 fixture / `verify_local.sh` official gate /
+  docs；只有 RED 才最小修 analyzer。本批不碰 `core/`，不扩 installed-source provenance。
+- Batch 194 focused semantic 先 RED 于
+  `semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic`：
+  bare implicit-self error emission 已处理 ambiguity / arity / type / no-match / unknown-member，
+  但缺少 `invalid-call-shape` emission branch。
+- Batch 194 最小 analyzer 修复只在 `SeedCallBindingsInNode(...)` 的 bare implicit-self failure
+  emission 增加 `sema.invalid-call-shape` 分支；known non-method member truth 与
+  project-source provenance guard 仍由既有 `MethodSymbolIdForClassTypeMember(...)` 负责。
+- Batch 194 focused semantic GREEN 后新增
+  `tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape` 与
+  `imported-unit-body-implicit-self-known-field-invalid-call-shape-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`。
+- Batch 194 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 194 下一步建议继续 G1.5/G1.6 source-owned diagnostics 矩阵 re-rank，优先看 imported
+  unit method body inherited implicit-self known field invalid-call-shape 或相邻 known property 边界。
 - Batch 193 继续 imported unit method body inherited implicit-self evidence 面：root `uses Worker;`，
   imported `Worker.pas` 中 `TBaseWorker.Touch`、`TWorker = class(TBaseWorker)` 与
   `procedure TWorker.Run; begin Missing; end;` 位于 `project-source` imported unit implementation

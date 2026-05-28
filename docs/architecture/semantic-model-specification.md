@@ -194,7 +194,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited `Touch(Integer)` 与
   `Touch(LongInt)`），并接受同一 project-source owner unit 中零参内建标量/字符串
   function result 作为 stable ambiguity evidence（例如 `Touch(Count);` 同时面对
-  inherited `Touch(Integer)` 与 `Touch(LongInt)` 且 `Count` 返回 `Integer`）
+  inherited `Touch(Integer)` 与 `Touch(LongInt)` 且 `Count` 返回 `Integer`）；同一路径中的
+  known non-callable field（例如 `procedure TWorker.Run; begin Value(1); end;` 中
+  `Value: Integer`）会输出 `sema.invalid-call-shape`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -511,6 +513,10 @@ candidate collection
   - 同一条 direct field 边界也适用于 receiver type 与 field truth 来自 imported `project-source`
     unit 的场景；例如 imported `TWorker.Value: Integer` 被 root source 写成 `Worker.Value(1)`
     时同样失败为 `sema.invalid-call-shape`
+  - 同一条 known field 边界也适用于 imported `project-source` unit method body 的 bare
+    implicit-self fallback；例如 imported `TWorker.Value: Integer` 在
+    `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
+    `sema.invalid-call-shape`
   - receiver type 与 field truth 来自 imported `installed-source` unit 时继续保守 deferred，不把
     incomplete helper/RTL class layout truth 提前投影成 ordinary `sema.invalid-call-shape`；这条
     guard 用 `semantic-call-bindings-check` 的 focused harness 固定
