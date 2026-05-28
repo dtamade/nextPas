@@ -1465,8 +1465,11 @@ var
   LCapacity: SizeUInt;
 begin
   inherited Create(aAllocator, aData);
-  FGrowStrategy := aGrowStrategy;
-  LCapacity := NextPowerOfTwo(Max(aCapacity, SizeUInt(1)));
+  if aGrowStrategy <> nil then
+    FGrowStrategy := aGrowStrategy
+  else
+    FGrowStrategy := GetDefaultGrowStrategy;
+  LCapacity := NextPowerOfTwo(Max(aCapacity, VECDEQUE_DEFAULT_CAPACITY));
   FBuffer := TInternalArray.Create(LCapacity, aAllocator);
   FHead := 0;
   FTail := 0;
