@@ -1,0 +1,33 @@
+{ Windows winsock2 FFI declarations - ported from FPC packages/rtl-extra/src/win/winsock2.pp }
+
+function WSAStartup(wVersionRequired: WORD; lpWSAData: PWSAData): LongInt; stdcall; external 'ws2_32' name 'WSAStartup';
+function WSACleanup: LongInt; stdcall; external 'ws2_32' name 'WSACleanup';
+function WSAGetLastError: LongInt; stdcall; external 'ws2_32' name 'WSAGetLastError';
+procedure WSASetLastError(iError: LongInt); stdcall; external 'ws2_32' name 'WSASetLastError';
+function winsock_socket(af: LongInt; socket_type: LongInt; protocol: LongInt): TSocket; stdcall; external 'ws2_32' name 'socket';
+function winsock_bind(s: TSocket; name: Pointer; namelen: LongInt): LongInt; stdcall; external 'ws2_32' name 'bind';
+function winsock_listen(s: TSocket; backlog: LongInt): LongInt; stdcall; external 'ws2_32' name 'listen';
+function winsock_accept(s: TSocket; addr: Pointer; addrlen: Pointer): TSocket; stdcall; external 'ws2_32' name 'accept';
+function winsock_connect(s: TSocket; name: Pointer; namelen: LongInt): LongInt; stdcall; external 'ws2_32' name 'connect';
+function winsock_send(s: TSocket; buf: Pointer; len: LongInt; flags: LongInt): LongInt; stdcall; external 'ws2_32' name 'send';
+function winsock_recv(s: TSocket; buf: Pointer; len: LongInt; flags: LongInt): LongInt; stdcall; external 'ws2_32' name 'recv';
+function winsock_sendto(s: TSocket; buf: Pointer; len: LongInt; flags: LongInt; addrto: Pointer; tolen: LongInt): LongInt; stdcall; external 'ws2_32' name 'sendto';
+function winsock_recvfrom(s: TSocket; buf: Pointer; len: LongInt; flags: LongInt; from: Pointer; fromlen: Pointer): LongInt; stdcall; external 'ws2_32' name 'recvfrom';
+function closesocket(s: TSocket): LongInt; stdcall; external 'ws2_32' name 'closesocket';
+function winsock_shutdown(s: TSocket; how: LongInt): LongInt; stdcall; external 'ws2_32' name 'shutdown';
+function winsock_select(nfds: LongInt; readfds: PWinSockFDSet; writefds: PWinSockFDSet; exceptfds: PWinSockFDSet; timeout: Pointer): LongInt; stdcall; external 'ws2_32' name 'select';
+function ioctlsocket(s: TSocket; cmd: DWORD; argp: Pointer): LongInt; stdcall; external 'ws2_32' name 'ioctlsocket';
+function winsock_setsockopt(s: TSocket; level: LongInt; optname: LongInt; optval: Pointer; optlen: LongInt): LongInt; stdcall; external 'ws2_32' name 'setsockopt';
+function winsock_getsockopt(s: TSocket; level: LongInt; optname: LongInt; optval: Pointer; optlen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getsockopt';
+function winsock_getsockname(s: TSocket; name: Pointer; namelen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getsockname';
+function winsock_getpeername(s: TSocket; name: Pointer; namelen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getpeername';
+function winsock_getaddrinfo(nodename: PAnsiChar; servname: PAnsiChar; hints: Pointer; res: Pointer): LongInt; stdcall; external 'ws2_32' name 'getaddrinfo';
+procedure winsock_freeaddrinfo(ai: Pointer); stdcall; external 'ws2_32' name 'freeaddrinfo';
+function winsock_getnameinfo(sa: Pointer; salen: LongInt; host: PAnsiChar; hostlen: DWORD; serv: PAnsiChar; servlen: DWORD; flags: LongInt): LongInt; stdcall; external 'ws2_32' name 'getnameinfo';
+function WSARecv(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesRecvd: LPDWORD; lpFlags: LPDWORD; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSARecv';
+function WSASend(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesSent: LPDWORD; dwFlags: DWORD; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSASend';
+function WSASocketW(af: LongInt; socket_type: LongInt; protocol: LongInt; lpProtocolInfo: Pointer; g: DWORD; dwFlags: DWORD): TSocket; stdcall; external 'ws2_32' name 'WSASocketW';
+function htons(hostshort: WORD): WORD; stdcall; external 'ws2_32' name 'htons';
+function ntohs(netshort: WORD): WORD; stdcall; external 'ws2_32' name 'ntohs';
+function htonl(hostlong: DWORD): DWORD; stdcall; external 'ws2_32' name 'htonl';
+function ntohl(netlong: DWORD): DWORD; stdcall; external 'ws2_32' name 'ntohl';

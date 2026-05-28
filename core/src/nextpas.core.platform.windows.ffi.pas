@@ -95,6 +95,28 @@ function TerminateProcess(hProcess: HANDLE; uExitCode: UINT): WINBOOL; stdcall; 
 function GetExitCodeProcess(hProcess: HANDLE; lpExitCode: LPDWORD): WINBOOL; stdcall; external 'kernel32' name 'GetExitCodeProcess';
 procedure ExitProcess(uExitCode: UINT); stdcall; external 'kernel32' name 'ExitProcess';
 
+function CreateIoCompletionPort(FileHandle: HANDLE; ExistingCompletionPort: HANDLE; CompletionKey: ULONG_PTR; NumberOfConcurrentThreads: DWORD): HANDLE; stdcall; external 'kernel32' name 'CreateIoCompletionPort';
+function GetQueuedCompletionStatus(CompletionPort: HANDLE; lpNumberOfBytesTransferred: LPDWORD; lpCompletionKey: Pointer; lpOverlapped: Pointer; dwMilliseconds: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GetQueuedCompletionStatus';
+function PostQueuedCompletionStatus(CompletionPort: HANDLE; dwNumberOfBytesTransferred: DWORD; dwCompletionKey: ULONG_PTR; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'PostQueuedCompletionStatus';
+function FindFirstFileW(lpFileName: LPCWSTR; lpFindFileData: LPWIN32_FIND_DATAW): HANDLE; stdcall; external 'kernel32' name 'FindFirstFileW';
+function FindNextFileW(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAW): WINBOOL; stdcall; external 'kernel32' name 'FindNextFileW';
+function FindClose(hFindFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'FindClose';
+procedure GetSystemTime(lpSystemTime: LPSYSTEMTIME); stdcall; external 'kernel32' name 'GetSystemTime';
+procedure GetLocalTime(lpSystemTime: LPSYSTEMTIME); stdcall; external 'kernel32' name 'GetLocalTime';
+function SystemTimeToFileTime(lpSystemTime: LPSYSTEMTIME; lpFileTime: Pointer): WINBOOL; stdcall; external 'kernel32' name 'SystemTimeToFileTime';
+function FileTimeToSystemTime(lpFileTime: Pointer; lpSystemTime: LPSYSTEMTIME): WINBOOL; stdcall; external 'kernel32' name 'FileTimeToSystemTime';
+function InitializeCriticalSectionAndSpinCount(lpCriticalSection: LPCRITICAL_SECTION; dwSpinCount: DWORD): WINBOOL; stdcall; external 'kernel32' name 'InitializeCriticalSectionAndSpinCount';
+procedure DeleteCriticalSection(lpCriticalSection: LPCRITICAL_SECTION); stdcall; external 'kernel32' name 'DeleteCriticalSection';
+procedure EnterCriticalSection(lpCriticalSection: LPCRITICAL_SECTION); stdcall; external 'kernel32' name 'EnterCriticalSection';
+procedure LeaveCriticalSection(lpCriticalSection: LPCRITICAL_SECTION); stdcall; external 'kernel32' name 'LeaveCriticalSection';
+function TryEnterCriticalSection(lpCriticalSection: LPCRITICAL_SECTION): WINBOOL; stdcall; external 'kernel32' name 'TryEnterCriticalSection';
+function GetOverlappedResult(hFile: HANDLE; lpOverlapped: LPOVERLAPPED; lpNumberOfBytesTransferred: LPDWORD; bWait: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'GetOverlappedResult';
+function CancelIo(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'CancelIo';
+function CancelIoEx(hFile: HANDLE; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'CancelIoEx';
+
+{ winsock2 FFI }
+{$I nextpas.core.platform.windows.ffi.winsock2.inc}
+
 implementation
 
 end.
