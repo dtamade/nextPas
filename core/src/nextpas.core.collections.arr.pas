@@ -595,6 +595,10 @@ type
 
 implementation
 
+uses
+  TypInfo,
+  nextpas.core.collections.arr.sort;
+
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
 begin
   CopyUnChecked(aSrc, aDst, aSize);
@@ -1096,29 +1100,39 @@ var
   LDepthLimit: Integer;
   LN: SizeUInt;
   LP: PElement;
-  i: SizeUInt;
-  LReversed: Boolean;
+  i, LEnd: SizeUInt;
+  LCmp: Integer;
 begin
   if aCount < 2 then
     Exit;
 
-  if DoIsSorted(aCompareProxy, aStartIndex, aCount, aComparer, aData) then
-    Exit;
-
   LP := PElement(FMemory);
-  LReversed := True;
-  for i := aStartIndex to aStartIndex + aCount - 2 do
+  LEnd := aStartIndex + aCount - 2;
+
+  i := aStartIndex;
+  while (i <= LEnd) and (aCompareProxy(aComparer, LP[i], LP[i + 1], aData) = 0) do
+    Inc(i);
+
+  if i > LEnd then Exit;
+
+  LCmp := aCompareProxy(aComparer, LP[i], LP[i + 1], aData);
+  Inc(i);
+
+  if LCmp < 0 then
   begin
-    if aCompareProxy(aComparer, LP[i], LP[i + 1], aData) < 0 then
+    while (i <= LEnd) and (aCompareProxy(aComparer, LP[i], LP[i + 1], aData) <= 0) do
+      Inc(i);
+    if i > LEnd then Exit;
+  end
+  else
+  begin
+    while (i <= LEnd) and (aCompareProxy(aComparer, LP[i], LP[i + 1], aData) >= 0) do
+      Inc(i);
+    if i > LEnd then
     begin
-      LReversed := False;
-      Break;
+      DoReverse(aStartIndex, aCount);
+      Exit;
     end;
-  end;
-  if LReversed then
-  begin
-    DoReverse(aStartIndex, aCount);
-    Exit;
   end;
 
   LDepthLimit := 0;
@@ -3834,6 +3848,13 @@ end;
 
 procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt);
 begin
+  if (aStartIndex = 0) and (not GetIsManagedType) then
+  begin
+    if TypeInfo(T) = TypeInfo(Int32) then begin SortI32(PInt32(FMemory), aCount); Exit; end;
+    if TypeInfo(T) = TypeInfo(Int64) then begin SortI64(PInt64(FMemory), aCount); Exit; end;
+    if TypeInfo(T) = TypeInfo(UInt32) then begin SortU32(PUInt32(FMemory), aCount); Exit; end;
+    if TypeInfo(T) = TypeInfo(UInt64) then begin SortU64(PUInt64(FMemory), aCount); Exit; end;
+  end;
   DoSort(@DoCompareDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
 
