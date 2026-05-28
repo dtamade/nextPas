@@ -10,6 +10,20 @@
 
 ## Research Findings
 
+- Batch 200 re-rank 结论：Batch 195 已打开 imported `project-source` unit method body inherited
+  bare implicit-self known field invalid-call-shape；按“矩阵双拍”，当前最高价值是补同形
+  installed-source inherited known field deferred guard，避免 parent-chain incomplete installed/helper/RTL
+  class layout truth 被提前误报成 ordinary `sema.invalid-call-shape`。
+- Batch 200 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  inherited known non-method provenance guard 已覆盖 imported `installed-source` unit method body 内
+  inherited bare implicit-self known field 被当作 callable 使用的场景。本批不修改 analyzer。
+- Batch 200 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeStaysDeferred`；不新增
+  stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造 installed-source
+  provenance。
+- Batch 200 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
 - Batch 199 re-rank 结论：Batch 194 已打开 imported `project-source` unit method body bare
   implicit-self known field invalid-call-shape；Batch 198 刚补 installed-source unit method body
   known property deferred guard。按“双拍加速”，当前最高价值是补同形 installed-source known

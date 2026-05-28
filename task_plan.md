@@ -15,7 +15,11 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新索引补充：Batch 199 Installed-source Unit Method Body Implicit-self Known Field
+当前最新索引补充：Batch 200 Installed-source Unit Method Body Inherited Implicit-self Known Field
+Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 199 Installed-source Unit Method Body Implicit-self Known Field
 Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
@@ -79,6 +83,68 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Batch 200 Installed-source Unit Method Body Inherited Implicit-self Known Field Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 195 的 imported `project-source` unit method body inherited known field
+`invalid-call-shape` 补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TBaseWorker = class Value: Integer; end` 与
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.invalid-call-shape`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍”：每个 imported `project-source` 正向 diagnostic official gate 后，补同形
+  imported `installed-source` deferred guard；这样能持续防止 incomplete helper/RTL truth 被提前误报。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不适合伪造 installed-source truth。
+- 本轮不碰 `core`，不修改 analyzer，除非 focused probe 证明当前 inherited provenance guard 漏了；
+  不实现 visibility、implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body inherited implicit-self known field deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source inherited guard-first：新增 semantic harness deferred guard 与
+  spec/records/goal-tree 说明；没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 visibility、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core`
 
 ## Addendum: 2026-05-28 Batch 199 Installed-source Unit Method Body Implicit-self Known Field Invalid Call Shape Deferred Guard
 
