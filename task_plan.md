@@ -15,7 +15,11 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新索引补充：Batch 194 Imported Unit Method Body Implicit-self Known Field Invalid Call
+当前最新索引补充：Batch 195 Imported Unit Method Body Inherited Implicit-self Known Field
+Invalid Call Shape Diagnostics 正在本轮推进；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 194 Imported Unit Method Body Implicit-self Known Field Invalid Call
 Shape Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
@@ -59,6 +63,75 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Batch 195 Imported Unit Method Body Inherited Implicit-self Known Field Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿总地图继续 imported unit method body implicit-self diagnostics 面，把 inherited known
+non-callable field 被 bare implicit-self 当 callable 使用的场景推进到 official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class Value: Integer; end` 与
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.invalid-call-shape`，message 为
+  `member "Value" is not callable`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，先 focused probe，
+  GREEN 直接 official gate，RED 才最小修 analyzer。
+- 复用 Batch 171 的 imported inherited known field invalid-call-shape、Batch 176/181-193 的
+  imported unit body inherited implicit-self owner-aware traversal，以及 Batch 194 的 bare
+  implicit-self `invalid-call-shape` emission。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 property accessor lowering、
+  implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic、stage0 focused probe 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self known field invalid-call-shape focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`.
+- Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused evidence 证明本轮是 promotion-only：不需要修改 analyzer，不触碰 `core/`，不扩大
+  installed-source provenance。
+- 简短 review：新增 fixture 与 `verify_local.sh` gate 只固定 imported `project-source` unit method
+  body inherited bare implicit-self known field invalid-call-shape；diagnostic code/message 与既有 direct
+  known field 边界一致，final envelope 已同步。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
 
 ## Addendum: 2026-05-28 Batch 194 Imported Unit Method Body Implicit-self Known Field Invalid Call Shape Diagnostics
 

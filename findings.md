@@ -10,6 +10,30 @@
 
 ## Research Findings
 
+- Batch 195 re-rank 结论：下一条最高性价比缺口是 imported unit method body inherited
+  implicit-self known field invalid-call-shape。已有 Batch 171 证明 imported inherited known
+  field direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body
+  bare implicit-self `invalid-call-shape` emission 已可输出，因此本批优先 focused probe，GREEN
+  直接 promotion。
+- Batch 195 加速策略继续“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，
+  focused RED/GREEN 判真相；不碰 `core/`，不扩大 installed-source provenance，不顺手实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+- Batch 195 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；这证明
+  Batch 171 的 imported inherited known field truth、Batch 176/181-193 的 imported unit body
+  inherited implicit-self traversal 与 Batch 194 的 bare implicit-self `invalid-call-shape` emission
+  已自然组合，本批不需要修改 analyzer。
+- Batch 195 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape` 与
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`。
+- Batch 195 stage0 focused probe 已输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Batch 195 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 194 re-rank 结论：imported unit method body 面已覆盖 implicit/inherited 的 unknown-member、
   wrong-argument-count、type-mismatch、no-matching-overload、ambiguous-overload 与 same-unit
   function-result ladder；下一条最高性价比缺口是 known non-callable field 被 imported unit

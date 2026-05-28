@@ -517,6 +517,10 @@ candidate collection
     implicit-self fallback；例如 imported `TWorker.Value: Integer` 在
     `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
     `sema.invalid-call-shape`
+  - imported `project-source` unit method body 中沿 parent chain 命中的 inherited known field
+    也走同一条边界；例如 imported `TBaseWorker.Value: Integer` 被
+    `TWorker = class(TBaseWorker)` 的 `procedure TWorker.Run; begin Value(1); end;`
+    当作 bare implicit-self callable 使用时，同样失败为 `sema.invalid-call-shape`
   - receiver type 与 field truth 来自 imported `installed-source` unit 时继续保守 deferred，不把
     incomplete helper/RTL class layout truth 提前投影成 ordinary `sema.invalid-call-shape`；这条
     guard 用 `semantic-call-bindings-check` 的 focused harness 固定
