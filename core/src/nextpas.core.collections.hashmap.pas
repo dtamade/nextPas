@@ -396,29 +396,19 @@ var
 begin
   if Assigned(FHash) then Exit(FHash(AKey));
 
-  // Auto-detect string types and use content-based hash
   ti := TypeInfo(K);
-  if ti <> nil then
-  begin
-    case ti^.Kind of
-      tkAString, tkLString:
-        Exit(HashOfAnsiString(AnsiString((@AKey)^)));
-      tkUString, tkWString:
-        Exit(HashOfUnicodeString(UnicodeString((@AKey)^)));
-    else
-      ; // fallthrough to default hashing
-    end;
-  end;
+  if (ti <> nil) and (ti^.Kind in [tkAString, tkLString]) then
+    Exit(HashOfAnsiString(AnsiString((@AKey)^)));
+  if (ti <> nil) and (ti^.Kind in [tkUString, tkWString]) then
+    Exit(HashOfUnicodeString(UnicodeString((@AKey)^)));
 
-  // 默认分派：指针/整数/枚举 -> 混洗
   p := @AKey;
   case SizeOf(K) of
-    1: Exit(HashOfUInt32(PByte(p)^));
-    2: Exit(HashOfUInt32(PWord(p)^));
-    4: Exit(HashOfUInt32(PUInt32(p)^));
-    8: Exit(HashOfUInt64(PQWord(p)^));
+    1: Result := HashOfUInt32(PByte(p)^);
+    2: Result := HashOfUInt32(PWord(p)^);
+    4: Result := HashOfUInt32(PUInt32(p)^);
+    8: Result := HashOfUInt64(PQWord(p)^);
   else
-    // 复杂类型，需要自定义哈希
     raise ENotSupported.Create('THashMap.KeyHash: please provide custom hasher for this key type');
   end;
 end;

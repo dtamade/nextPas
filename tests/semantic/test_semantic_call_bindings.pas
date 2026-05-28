@@ -3600,6 +3600,82 @@ begin
   end;
 end;
 
+procedure CheckGenericFixedTypeParentChain;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  I: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  ParentTypeId: LongInt;
+  ParentName: string;
+begin
+  SourceText :=
+    'program GenericFixedParent;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBase<T> = class' + LineEnding +
+    '    procedure DoBase(const X: T);' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TChild<U> = class(TBase<Integer>)' + LineEnding +
+    '    procedure DoChild(const Y: U);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.DoBase(const X: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TChild.DoChild(const Y: U);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TMyChild = specialize TChild<String>;' + LineEnding +
+    'var' + LineEnding +
+    '  C: TMyChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.DoChild(' + #39 + 'hi' + #39 + ');' + LineEnding +
+    '  C.DoBase(' + #39 + 'wrong' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-fixed-parent-expected-type-mismatch');
+    ParentTypeId := 0;
+    for I := 0 to Model.TypeCount - 1 do
+      if SameText(Model.TypeAt(I).Name, 'TMyChild') then
+      begin
+        ParentTypeId := Model.TypeAt(I).ParentTypeId;
+        Break;
+      end;
+    if ParentTypeId <= 0 then
+      Fail('generic-fixed-parent-no-parent');
+    ParentName := Model.TypeAt(ParentTypeId - 1).Name;
+    if not SameText(ParentName, 'TBase<Integer>') then
+      Fail('generic-fixed-parent-wrong:' + ParentName);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15945,6 +16021,7 @@ begin
     CheckNestedGenericInstantiation;
     CheckGenericParentChainInstantiation;
     CheckGenericSpecializeBeforeBody;
+    CheckGenericFixedTypeParentChain;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

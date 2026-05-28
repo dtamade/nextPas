@@ -4182,11 +4182,20 @@ begin
   ParentTypeId := 0;
   for I := 0 to FModel.TypeCount - 1 do
     if SameText(FModel.TypeAt(I).Name, ParentName) and
-      (FModel.TypeAt(I).TypeParams <> '') then
+      (FModel.TypeAt(I).TypeParams <> '') and
+      SameText(FModel.TypeAt(I).OwnerUnitId, AOwnerUnitId) then
     begin
       ParentTypeId := FModel.TypeAt(I).TypeId;
       Break;
     end;
+  if ParentTypeId <= 0 then
+    for I := 0 to FModel.TypeCount - 1 do
+      if SameText(FModel.TypeAt(I).Name, ParentName) and
+        (FModel.TypeAt(I).TypeParams <> '') then
+      begin
+        ParentTypeId := FModel.TypeAt(I).TypeId;
+        Break;
+      end;
   if ParentTypeId <= 0 then
     Exit;
 
@@ -4833,23 +4842,34 @@ begin
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
   if GenericType.GenericParent.TemplateTypeId > 0 then
   begin
-    SubstSig := FModel.TypeAt(GenericType.GenericParent.TemplateTypeId - 1).Name + '<';
+    GtPos := 0;
     for I := 0 to High(GenericType.GenericParent.ArgIndices) do
+      if GenericType.GenericParent.ArgIndices[I] < 0 then
+      begin
+        GtPos := -1;
+        Break;
+      end;
+    if GtPos = 0 then
     begin
-      if I > 0 then
-        SubstSig := SubstSig + ',';
-      J := GenericType.GenericParent.ArgIndices[I];
-      if (J >= 0) and (J <= High(ArgTypes)) then
-        SubstSig := SubstSig + ArgTypes[J]
-      else
-        SubstSig := SubstSig + '?';
+      SubstSig := FModel.TypeAt(GenericType.GenericParent.TemplateTypeId - 1).Name + '<';
+      for I := 0 to High(GenericType.GenericParent.ArgIndices) do
+      begin
+        if I > 0 then
+          SubstSig := SubstSig + ',';
+        J := GenericType.GenericParent.ArgIndices[I];
+        if (J >= 0) and (J <= High(ArgTypes)) then
+          SubstSig := SubstSig + ArgTypes[J]
+        else
+          SubstSig := SubstSig + '?';
+      end;
+      SubstSig := SubstSig + '>';
+      GtPos := ResolveOrInstantiateInlineGeneric(SubstSig, AOwnerUnitId);
+      if GtPos > 0 then
+        FModel.SetTypeParent(AInstanceTypeId, GtPos);
     end;
-    SubstSig := SubstSig + '>';
-    GtPos := ResolveOrInstantiateInlineGeneric(SubstSig, AOwnerUnitId);
-    if GtPos > 0 then
-      FModel.SetTypeParent(AInstanceTypeId, GtPos);
-  end
-  else if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
+  end;
+  if (GenericType.GenericParent.TemplateTypeId <= 0) or (GtPos < 0) then
+  if FModel.LookupStringConstValue(GenericType.OwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
     for I := 0 to High(ParamNames) do
     begin
