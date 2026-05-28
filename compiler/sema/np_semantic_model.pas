@@ -26,6 +26,7 @@ type
     TypeId: LongInt;
     Name: string;
     Kind: string;
+    OwnerUnitId: string;
     ParentTypeId: LongInt;
     TypeParams: string;
     TypeConstraints: string;
@@ -129,6 +130,7 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
+    procedure SetTypeOwner(const ATypeId: LongInt; const AOwnerUnitId: string);
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
     procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
     procedure SetTypeInstantiatedFrom(const ATypeId: LongInt; const AFromTypeId: LongInt);
@@ -276,6 +278,16 @@ begin
   FTypes[NextIndex].Kind := AKind;
   FTypes[NextIndex].ParentTypeId := 0;
   Result := FTypes[NextIndex].TypeId;
+end;
+
+procedure TSemanticModel.SetTypeOwner(const ATypeId: LongInt;
+  const AOwnerUnitId: string);
+var
+  Idx: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx >= 0) and (Idx < Length(FTypes)) then
+    FTypes[Idx].OwnerUnitId := AOwnerUnitId;
 end;
 
 procedure TSemanticModel.SetTypeParent(const ATypeId: LongInt;
