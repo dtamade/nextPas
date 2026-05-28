@@ -1358,6 +1358,7 @@ var
   Token: TToken;
   NameNode, ArgNode: TGreenNode;
   SpecArgs: string;
+  Depth: LongInt;
 begin
   if ACursor >= ALexer.TokenCount then
     Exit(nil);
@@ -1388,10 +1389,18 @@ begin
         begin
           SpecArgs := '<';
           Inc(ACursor);
-          while (ACursor < ALexer.TokenCount) and
-            (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+          Depth := 1;
+          while (ACursor < ALexer.TokenCount) and (Depth > 0) and
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
           begin
+            if CurrentToken(ALexer, ACursor).Kind = tkLessThan then
+              Inc(Depth)
+            else if CurrentToken(ALexer, ACursor).Kind = tkGreaterThan then
+            begin
+              Dec(Depth);
+              if Depth = 0 then
+                Break;
+            end;
             SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
             Inc(ACursor);
           end;
@@ -1462,10 +1471,18 @@ begin
         begin
           SpecArgs := '<';
           Inc(ACursor);
-          while (ACursor < ALexer.TokenCount) and
-            (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+          Depth := 1;
+          while (ACursor < ALexer.TokenCount) and (Depth > 0) and
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
           begin
+            if CurrentToken(ALexer, ACursor).Kind = tkLessThan then
+              Inc(Depth)
+            else if CurrentToken(ALexer, ACursor).Kind = tkGreaterThan then
+            begin
+              Dec(Depth);
+              if Depth = 0 then
+                Break;
+            end;
             SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
             Inc(ACursor);
           end;

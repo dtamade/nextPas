@@ -2856,6 +2856,7 @@ begin
     '  C: TMyChild;' + LineEnding +
     'begin' + LineEnding +
     '  C.DoChild(1);' + LineEnding +
+    '  C.DoBase(2);' + LineEnding +
     'end.' + LineEnding;
 
   Diagnostics := TDiagnosticsSink.CreateDefault;
@@ -2875,7 +2876,7 @@ begin
         Diagnostics.LastDiagnosticCode);
     if Model = nil then
       Fail('generic-inherited-missing-model');
-    if Model.BindingCount < 1 then
+    if Model.BindingCount < 2 then
       Fail('generic-inherited-binding-count:' + IntToStr(Model.BindingCount));
   finally
     Model.Free;

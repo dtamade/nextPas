@@ -4358,7 +4358,22 @@ begin
   if LtPos <= 0 then
     Exit;
   GenericName := Copy(ASpecText, 1, LtPos - 1);
-  GtPos := Pos('>', ASpecText);
+  GtPos := 0;
+  J := 1;
+  for I := LtPos + 1 to Length(ASpecText) do
+  begin
+    if ASpecText[I] = '<' then
+      Inc(J)
+    else if ASpecText[I] = '>' then
+    begin
+      Dec(J);
+      if J = 0 then
+      begin
+        GtPos := I;
+        Break;
+      end;
+    end;
+  end;
   if GtPos <= LtPos then
     GtPos := Length(ASpecText) + 1;
   ArgStr := Copy(ASpecText, LtPos + 1, GtPos - LtPos - 1);
@@ -4386,8 +4401,17 @@ begin
   while I <= Length(ArgStr) do
   begin
     J := I;
-    while (J <= Length(ArgStr)) and (ArgStr[J] <> ',') do
+    GtPos := 0;
+    while J <= Length(ArgStr) do
+    begin
+      if ArgStr[J] = '<' then
+        Inc(GtPos)
+      else if ArgStr[J] = '>' then
+        Dec(GtPos)
+      else if (ArgStr[J] = ',') and (GtPos = 0) then
+        Break;
       Inc(J);
+    end;
     SetLength(ArgTypes, Length(ArgTypes) + 1);
     ArgTypes[High(ArgTypes)] := Trim(Copy(ArgStr, I, J - I));
     I := J + 1;
