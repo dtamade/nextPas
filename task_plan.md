@@ -12130,6 +12130,46 @@ Completed
 - 不实现 default value codegen
 - 不实现 default value type checking diagnostics
 
+## Addendum: 2026-05-28 Batch 221 Protected Visibility + Same-Unit Private Access
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+补齐 visibility 语义的两个关键规则：
+1. `protected` member 允许子类通过 implicit-self 访问（class body 内）
+2. 同一 compilation unit（program/unit）内的代码可以访问任何 class 的 `private` member（FPC 语义）
+
+### 设计决策
+
+FPC 的 visibility 规则：
+- `private`：同一 unit 内可见（不同于 Delphi 的 strict private）
+- `protected`：同一 unit + 子类可见
+- `public`：任何地方可见
+- `published`：同 public + RTTI
+
+当前 Batch 220 的实现过于严格：它只允许同一 class 内部访问 private。需要放宽为"同一 unit 内可访问"。
+
+对于 root source（program），所有 type 声明都在同一 compilation unit 中，所以 private 应该总是可访问的。只有 imported unit 的 private member 才应该被拒绝。
+
+### 实现计划
+
+1. **TDD：写测试**
+   - same-unit private access 应该允许（当前会误报）
+   - imported unit private access 应该拒绝
+   - protected member 子类 implicit-self 访问应该允许
+   - protected member 外部非子类访问应该拒绝
+
+2. **修改 visibility check 逻辑**
+   - 如果 caller 和 target 在同一 unit（同一 OwnerUnitId），private/protected 都允许
+   - 如果 caller 是 target class 的子类，protected 允许
+   - 否则 private/protected 拒绝
+
+3. **验证**
+
 ## Addendum: 2026-05-28 Batch 217 Default Parameter Member Method Call Binding
 
 ### Goal Nodes

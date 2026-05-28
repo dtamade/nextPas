@@ -1978,7 +1978,16 @@ begin
     (not SameText(ACurrentMethodClass,
       FModel.TypeAt(ReceiverTypeId - 1).Name)) then
   begin
-    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'private') then
+    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'private') and
+      (not SameText(FModel.SymbolAt(TargetSymbolId - 1).OwnerUnitId,
+        ACurrentOwnerUnitId)) then
+    begin
+      AResolutionFailureKind := 'inaccessible-member';
+      Exit;
+    end;
+    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'protected') and
+      (not SameText(FModel.SymbolAt(TargetSymbolId - 1).OwnerUnitId,
+        ACurrentOwnerUnitId)) then
     begin
       AResolutionFailureKind := 'inaccessible-member';
       Exit;

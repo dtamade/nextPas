@@ -14224,12 +14224,28 @@ var
   Diagnostics: TDiagnosticsSink;
   Lexer: TLexerResult;
   Model: TSemanticModel;
-  SourceText: string;
+  ProjectRoot: string;
+  RootSourceText: string;
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
+  UnitPath: string;
 begin
-  SourceText :=
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-private-member-access-' + IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
     'program PrivateMemberAccess;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'var' + LineEnding +
+    '  W: TWorker;' + LineEnding +
+    'begin' + LineEnding +
+    '  W.Secret(1);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
     'type' + LineEnding +
     '  TWorker = class' + LineEnding +
     '  private' + LineEnding +
@@ -14237,20 +14253,20 @@ begin
     '  public' + LineEnding +
     '    procedure Run;' + LineEnding +
     '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
     'procedure TWorker.Secret(Value: Integer);' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
     'procedure TWorker.Run;' + LineEnding +
     'begin' + LineEnding +
     'end;' + LineEnding +
-    'var' + LineEnding +
-    '  W: TWorker;' + LineEnding +
-    'begin' + LineEnding +
-    '  W.Secret(1);' + LineEnding +
-    'end.' + LineEnding;
+    LineEnding +
+    'end.' + LineEnding
+  );
 
   Diagnostics := TDiagnosticsSink.CreateDefault;
-  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
   Tree := ParseGreenTree(Lexer, Diagnostics, 1);
   Ast := TAstFacade.Create(Tree);
   UnitGraph := TUnitGraph.Create;
@@ -14258,6 +14274,12 @@ begin
   Model := nil;
   try
     UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('PrivateMemberAccess', '', ruoRootSource, '', 'program', 1)
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoProjectSource, '', 'unit', 2)
+    );
     Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
@@ -14293,7 +14315,7 @@ var
   UnitGraph: TUnitGraph;
 begin
   SourceText :=
-    'program PublicMemberAccess;' + LineEnding +
+    'program SameUnitPrivateAccess;' + LineEnding +
     'type' + LineEnding +
     '  TWorker = class' + LineEnding +
     '  private' + LineEnding +
@@ -14310,6 +14332,7 @@ begin
     'var' + LineEnding +
     '  W: TWorker;' + LineEnding +
     'begin' + LineEnding +
+    '  W.Secret(1);' + LineEnding +
     '  W.Run;' + LineEnding +
     'end.' + LineEnding;
 
