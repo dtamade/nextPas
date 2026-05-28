@@ -12,25 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache FPC trunk
-        id: cache-fpc
-        uses: actions/cache@v4
+      - name: Setup FPC trunk
+        uses: ollydev/setup-lazarus-fpcup@v1
         with:
-          path: |
-            ~/fpcupdeluxe
-          key: fpc-trunk-linux-x86_64-v2
-
-      - name: Install FPC trunk via fpcupdeluxe
-        if: steps.cache-fpc.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/fpcupdeluxe
-          wget -q "https://github.com/LongDirtyAnimAlf/Reinern/releases/latest/download/fpcupdeluxe-x86_64-linux" -O ~/fpcupdeluxe/fpcupdeluxe
-          chmod +x ~/fpcupdeluxe/fpcupdeluxe
-          ~/fpcupdeluxe/fpcupdeluxe --installdir=~/fpcupdeluxe --fpcURL=trunk --only=FPC --noconfirm
-
-      - name: Setup PATH
-        run: |
-          echo "$HOME/fpcupdeluxe/fpc/bin/x86_64-linux" >> $GITHUB_PATH
+          laz: "stable"
+          fpc: "main"
 
       - name: Verify FPC
         run: fpc -iV
@@ -43,33 +29,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache FPC trunk
-        id: cache-fpc
-        uses: actions/cache@v4
+      - name: Setup FPC trunk
+        uses: ollydev/setup-lazarus-fpcup@v1
         with:
-          path: |
-            ~/fpcupdeluxe
-          key: fpc-trunk-macos-aarch64-v2
-
-      - name: Install FPC trunk via fpcupdeluxe
-        if: steps.cache-fpc.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/fpcupdeluxe
-          wget -q "https://github.com/LongDirtyAnimAlf/Reinern/releases/latest/download/fpcupdeluxe-aarch64-darwin" -O ~/fpcupdeluxe/fpcupdeluxe
-          chmod +x ~/fpcupdeluxe/fpcupdeluxe
-          ~/fpcupdeluxe/fpcupdeluxe --installdir=~/fpcupdeluxe --fpcURL=trunk --only=FPC --noconfirm
-
-      - name: Setup PATH
-        run: |
-          FPC_BIN=$(find ~/fpcupdeluxe/fpc/bin -name fpc -type f | head -1)
-          echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
+          laz: "stable"
+          fpc: "main"
 
       - name: Verify FPC
         run: fpc -iV
 
       - name: Run tests (best-effort)
         run: |
-          TOTAL=0; PASSED=0; FAILED=0
+          TOTAL=0; PASSED=0; SKIPPED=0
           while IFS= read -r mk; do
             dir=$(dirname "$mk")
             TOTAL=$((TOTAL + 1))
@@ -77,48 +48,32 @@ jobs:
               PASSED=$((PASSED + 1))
               echo "PASS: $dir"
             else
-              FAILED=$((FAILED + 1))
+              SKIPPED=$((SKIPPED + 1))
               echo "SKIP: $dir"
             fi
           done < <(find tests -mindepth 2 -name Makefile | sort)
           echo ""
-          echo "=== macOS summary: $PASSED passed, $FAILED skipped, $TOTAL total ==="
+          echo "=== macOS: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
+          if [ $PASSED -eq 0 ]; then exit 1; fi
 
   test-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache FPC trunk
-        id: cache-fpc
-        uses: actions/cache@v4
+      - name: Setup FPC trunk
+        uses: ollydev/setup-lazarus-fpcup@v1
         with:
-          path: |
-            C:\fpcupdeluxe
-          key: fpc-trunk-windows-x86_64-v2
-
-      - name: Install FPC trunk via fpcupdeluxe
-        if: steps.cache-fpc.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path C:\fpcupdeluxe
-          Invoke-WebRequest -Uri "https://github.com/LongDirtyAnimAlf/Reinern/releases/latest/download/fpcupdeluxe-x86_64-win64.exe" -OutFile "C:\fpcupdeluxe\fpcupdeluxe.exe"
-          & C:\fpcupdeluxe\fpcupdeluxe.exe --installdir=C:\fpcupdeluxe --fpcURL=trunk --only=FPC --noconfirm
-
-      - name: Setup PATH
-        run: |
-          echo "C:/fpcupdeluxe/fpc/bin/x86_64-win64" >> $GITHUB_PATH
-          echo "C:/fpcupdeluxe/fpc/bin/i386-win32" >> $GITHUB_PATH
+          laz: "stable"
+          fpc: "main"
 
       - name: Verify FPC
         run: fpc -iV
 
       - name: Run tests (best-effort)
+        shell: bash
         run: |
-          TOTAL=0; PASSED=0; FAILED=0
+          TOTAL=0; PASSED=0; SKIPPED=0
           while IFS= read -r mk; do
             dir=$(dirname "$mk")
             TOTAL=$((TOTAL + 1))
@@ -126,12 +81,13 @@ jobs:
               PASSED=$((PASSED + 1))
               echo "PASS: $dir"
             else
-              FAILED=$((FAILED + 1))
+              SKIPPED=$((SKIPPED + 1))
               echo "SKIP: $dir"
             fi
           done < <(find tests -mindepth 2 -name Makefile | sort)
           echo ""
-          echo "=== Windows summary: $PASSED passed, $FAILED skipped, $TOTAL total ==="
+          echo "=== Windows: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
+          if [ $PASSED -eq 0 ]; then exit 1; fi
 
   test-freebsd:
     runs-on: ubuntu-latest
@@ -147,7 +103,7 @@ jobs:
           run: |
             sudo pkg install -y fpc
             fpc -iV
-            TOTAL=0; PASSED=0; FAILED=0
+            TOTAL=0; PASSED=0; SKIPPED=0
             for mk in $(find tests -mindepth 2 -name Makefile | sort); do
               dir=$(dirname "$mk")
               TOTAL=$((TOTAL + 1))
@@ -155,9 +111,9 @@ jobs:
                 PASSED=$((PASSED + 1))
                 echo "PASS: $dir"
               else
-                FAILED=$((FAILED + 1))
+                SKIPPED=$((SKIPPED + 1))
                 echo "SKIP: $dir"
               fi
             done
             echo ""
-            echo "=== FreeBSD summary: $PASSED passed, $FAILED skipped, $TOTAL total ==="
+            echo "=== FreeBSD: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
