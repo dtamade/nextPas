@@ -87,6 +87,50 @@ begin
   platform_env_unset('NEXTPAS_TEST_LEN');
 end;
 
+procedure TestLongValue;
+var
+  LVal: array[0..1023] of AnsiChar;
+  LBuf: array[0..1023] of AnsiChar;
+  Len, I: Int32;
+begin
+  for I := 0 to 999 do
+    LVal[I] := AnsiChar(Ord('A') + (I mod 26));
+  LVal[1000] := #0;
+  Check(platform_env_set('NEXTPAS_TEST_LONG1K', @LVal[0]) = 0, 'set 1000 chars');
+  Check(platform_env_get('NEXTPAS_TEST_LONG1K', @LBuf[0], 1024, Len) = 0, 'get');
+  Check(Len = 1000, 'len = 1000');
+  Check(LBuf[0] = 'A', 'first char');
+  Check(LBuf[25] = 'Z', 'char 25');
+  Check(LBuf[999] = AnsiChar(Ord('A') + (999 mod 26)), 'last char');
+  platform_env_unset('NEXTPAS_TEST_LONG1K');
+end;
+
+procedure TestSpecialChars;
+var
+  Buf: array[0..255] of AnsiChar;
+  Len: Int32;
+begin
+  Check(platform_env_set('NEXTPAS_TEST_SPECIAL', 'hello world!@#$%^&*()') = 0, 'set special');
+  Check(platform_env_get('NEXTPAS_TEST_SPECIAL', @Buf[0], 256, Len) = 0, 'get special');
+  Check(Len = 21, 'len = 21');
+  Check(Buf[5] = ' ', 'space preserved');
+  Check(Buf[12] = '@', '@ preserved');
+  platform_env_unset('NEXTPAS_TEST_SPECIAL');
+end;
+
+procedure TestOverwrite;
+var
+  Buf: array[0..63] of AnsiChar;
+  Len: Int32;
+begin
+  platform_env_set('NEXTPAS_TEST_OW', 'first');
+  platform_env_set('NEXTPAS_TEST_OW', 'second');
+  Check(platform_env_get('NEXTPAS_TEST_OW', @Buf[0], 64, Len) = 0, 'get');
+  Check(Len = 6, 'len = 6 (second)');
+  Check(Buf[0] = 's', 'overwritten value');
+  platform_env_unset('NEXTPAS_TEST_OW');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.env');
   T.Run('get PATH', @TestGetPath);
@@ -97,5 +141,8 @@ begin
   T.Run('buffer too small', @TestBufferTooSmall);
   T.Run('exists false', @TestExistsFalse);
   T.Run('get length only (nil buf)', @TestGetLengthOnly);
+  T.Run('long value (1000 chars)', @TestLongValue);
+  T.Run('special characters', @TestSpecialChars);
+  T.Run('overwrite existing', @TestOverwrite);
   T.Summary;
 end.

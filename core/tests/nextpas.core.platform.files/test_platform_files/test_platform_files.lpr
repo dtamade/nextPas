@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.testing;
 
 var
@@ -184,6 +185,47 @@ begin
   DeleteFile(TEST_PATH);
 end;
 
+procedure TestSymlink;
+var
+  H: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
+  LWritten: PtrUInt;
+begin
+  platform_file_open('/tmp/nextpas_test_symlink_target.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('sym'), 3, LWritten);
+  platform_file_close(H);
+  // Create symlink via posix.ffi
+  nextpas.core.platform.posix.ffi.symlink('/tmp/nextpas_test_symlink_target.txt',
+    '/tmp/nextpas_test_symlink_link.txt');
+  Check(platform_file_stat('/tmp/nextpas_test_symlink_link.txt', LStat) = 0, 'stat symlink');
+  Check(LStat.Size = 3, 'size through symlink = 3');
+  platform_file_unlink('/tmp/nextpas_test_symlink_link.txt');
+  platform_file_unlink('/tmp/nextpas_test_symlink_target.txt');
+end;
+
+procedure TestPermissionError;
+var
+  H: TPlatformFileHandle;
+  R: Int32;
+begin
+  R := platform_file_open('/root/.bashrc_nonexistent_xyz', fomReadOnly, fcmOpenExisting, H);
+  Check(R <> 0, 'open in /root fails');
+end;
+
+procedure TestCreateExclusive;
+var
+  H1, H2: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  platform_file_open('/tmp/nextpas_test_excl.txt', fomWriteOnly, fcmCreateAlways, H1);
+  platform_file_write(H1, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H1);
+  R := platform_file_open('/tmp/nextpas_test_excl.txt', fomWriteOnly, fcmCreateNew, H2);
+  Check(R <> 0, 'create exclusive on existing file fails');
+  platform_file_unlink('/tmp/nextpas_test_excl.txt');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -197,5 +239,8 @@ begin
   T.Run('rename/unlink', @TestRenameUnlink);
   T.Run('getcwd/chdir', @TestGetcwdChdir);
   T.Run('dir enumeration', @TestDirEnumeration);
+  T.Run('symlink stat', @TestSymlink);
+  T.Run('permission error', @TestPermissionError);
+  T.Run('create exclusive', @TestCreateExclusive);
   T.Summary;
 end.
