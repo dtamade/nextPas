@@ -3245,6 +3245,124 @@ begin
   end;
 end;
 
+procedure CheckGenericArityMismatchDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericArityMismatch;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TDict<K, V> = class' + LineEnding +
+    '    procedure Add(const Key: K; const Value: V);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TDict.Add(const Key: K; const Value: V);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TBadDict = specialize TDict<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  D: TBadDict;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-arity-mismatch-expected-diagnostic');
+    if Diagnostics.LastDiagnosticCode <> 'sema.generic-arity-mismatch' then
+      Fail('generic-arity-mismatch-wrong-code:' + Diagnostics.LastDiagnosticCode);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericConstructorBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericConstructor;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    constructor Create(const Value: T);' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'constructor TBox.Create(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntBox = specialize TBox<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  B: TIntBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  B := TIntBox.Create(42);' + LineEnding +
+    '  B.Put(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-constructor-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-constructor-missing-model');
+    if Model.BindingCount < 1 then
+      Fail('generic-constructor-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15585,6 +15703,8 @@ begin
     CheckGenericInterfaceConstraintSatisfied;
     CheckGenericInterfaceConstraintViolation;
     CheckGenericWhereClauseConstraint;
+    CheckGenericArityMismatchDiagnostic;
+    CheckGenericConstructorBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

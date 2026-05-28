@@ -4486,6 +4486,15 @@ begin
     I := J + 1;
   end;
 
+  if (Length(ParamNames) > 0) and (Length(ArgTypes) <> Length(ParamNames)) then
+  begin
+    FDiagnostics.EmitError('sema.generic-arity-mismatch', 'sema',
+      FRootFileId, 0,
+      'generic type ' + GenericName + ' expects ' + IntToStr(Length(ParamNames)) +
+      ' type argument(s), but ' + IntToStr(Length(ArgTypes)) + ' provided');
+    Exit;
+  end;
+
   for I := 0 to High(Constraints) do
   begin
     if (Constraints[I] = '') or (I > High(ArgTypes)) then
@@ -4529,12 +4538,14 @@ begin
   begin
     Symbol := FModel.SymbolAt(I);
     if (Pos(QualPrefix, Symbol.Name) = 1) and
-      SameText(Symbol.Kind, 'method') then
+      (SameText(Symbol.Kind, 'method') or
+       SameText(Symbol.Kind, 'constructor') or
+       SameText(Symbol.Kind, 'destructor')) then
     begin
       MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
       NewSymbolId := FModel.AddSymbol(
         InstanceName + '.' + MethodShortName,
-        'method', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
+        Symbol.Kind, AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
       FModel.SetSymbolParamCount(NewSymbolId, Symbol.ParamCount);
       FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
 
@@ -4556,11 +4567,26 @@ begin
       FModel.SetSymbolParamSignature(NewSymbolId, SubstSig);
     end;
   end;
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(I);
+    if (Pos(QualPrefix, Symbol.Name) = 1) and
+      SameText(Symbol.Kind, 'field') then
+    begin
+      MethodShortName := Copy(Symbol.Name, Length(QualPrefix) + 1, MaxInt);
+      FModel.AddSymbol(InstanceName + '.' + MethodShortName,
+        'field', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
+    end;
+  end;
   FModel.SetTypeParent(AInstanceTypeId,
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
   if FModel.LookupConstValue(GenericName + '$size', SizeVal) then
-    FModel.AddConstValue(InstanceName + '$size', SizeVal);
-  if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
+    FModel.AddConstValue(InstanceName + '$size', SizeVal)
+  else
+    FModel.AddConstValue(InstanceName + '$size', 8);
+  if FModel.LookupConstValue(GenericName + '$vmt_count', SizeVal) then
+    FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal)
+  else if not FModel.LookupConstValue(InstanceName + '$vmt_count', SizeVal) then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
   FModel.AddStringConstValue(InstanceName + '$parent_class',
     FModel.TypeAt(GenericTypeId - 1).Name);
