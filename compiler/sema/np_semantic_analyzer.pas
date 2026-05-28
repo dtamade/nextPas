@@ -156,6 +156,15 @@ type
     ): Boolean;
     function TypeIdHasKnownClassLayout(const ATypeId: LongInt): Boolean;
     function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
+    function TypeMetaSize(const ATypeName: string): Int64;
+    function TypeMetaIsRecord(const ATypeName: string): Boolean;
+    function TypeMetaIsClass(const ATypeName: string): Boolean;
+    function TypeMetaFieldIndex(const ATypeName, AFieldName: string): Int64;
+    function TypeMetaFieldIsStr(const ATypeName, AFieldName: string): Boolean;
+    function TypeMetaFieldIsPtr(const ATypeName, AFieldName: string): Boolean;
+    function TypeMetaVmtSlot(const ATypeName, AMethodName: string): Int64;
+    function TypeMetaRetPtr(const ATypeName, AMethodName: string): Boolean;
+    function TypeMetaParentClass(const ATypeName: string): string;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
     function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
     function CallArgumentSignature(
@@ -1713,6 +1722,94 @@ function TSemanticAnalyzer.IsDeferredSystemObjectMember(
 ): Boolean;
 begin
   Result := SameText(AMemberName, 'Free');
+end;
+
+function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
+var Meta: TTypeMetadata; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.Size);
+  if FModel.LookupConstValue(ATypeName + '$size', V) then Exit(V);
+  Result := -1;
+end;
+
+function TSemanticAnalyzer.TypeMetaIsRecord(const ATypeName: string): Boolean;
+var Meta: TTypeMetadata; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.IsRecord);
+  Result := FModel.LookupConstValue(ATypeName + '$record', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaIsClass(const ATypeName: string): Boolean;
+var Meta: TTypeMetadata; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    Exit((not Meta.IsRecord) and (Meta.Size > 0));
+  Result := (not FModel.LookupConstValue(ATypeName + '$record', V)) and
+    FModel.LookupConstValue(ATypeName + '$size', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaFieldIndex(
+  const ATypeName, AFieldName: string): Int64;
+var Meta: TTypeMetadata; FM: TFieldMeta; I: LongInt; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    for I := 0 to High(Meta.Fields) do
+      if SameText(Meta.Fields[I].Name, AFieldName) then
+        Exit(Meta.Fields[I].Index);
+  if FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$idx', V) then
+    Exit(V);
+  Result := -1;
+end;
+
+function TSemanticAnalyzer.TypeMetaFieldIsStr(
+  const ATypeName, AFieldName: string): Boolean;
+var Meta: TTypeMetadata; I: LongInt; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    for I := 0 to High(Meta.Fields) do
+      if SameText(Meta.Fields[I].Name, AFieldName) then
+        Exit(Meta.Fields[I].IsString);
+  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$str', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaFieldIsPtr(
+  const ATypeName, AFieldName: string): Boolean;
+var Meta: TTypeMetadata; I: LongInt; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    for I := 0 to High(Meta.Fields) do
+      if SameText(Meta.Fields[I].Name, AFieldName) then
+        Exit(Meta.Fields[I].IsPointer);
+  Result := FModel.LookupConstValue(ATypeName + '.' + AFieldName + '$ptr', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaVmtSlot(
+  const ATypeName, AMethodName: string): Int64;
+var Meta: TTypeMetadata; I: LongInt; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then
+    for I := 0 to High(Meta.VmtSlots) do
+      if SameText(Meta.VmtSlots[I].MethodName, AMethodName) then
+        Exit(Meta.VmtSlots[I].SlotIndex);
+  if FModel.LookupConstValue(ATypeName + '$vmt_slot_' + AMethodName, V) then
+    Exit(V);
+  Result := -1;
+end;
+
+function TSemanticAnalyzer.TypeMetaRetPtr(
+  const ATypeName, AMethodName: string): Boolean;
+var V: Int64;
+begin
+  Result := FModel.LookupConstValue(ATypeName + '$ret_ptr_' + AMethodName, V);
+end;
+
+function TSemanticAnalyzer.TypeMetaParentClass(const ATypeName: string): string;
+var Meta: TTypeMetadata;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.ParentClassName <> '') then
+    Exit(Meta.ParentClassName);
+  if not FModel.LookupStringConstValue(ATypeName + '$parent_class', Result) then
+    Result := '';
 end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
