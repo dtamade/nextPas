@@ -136,6 +136,32 @@ begin
   Check(P = nil, 'no ext ptr = nil');
 end;
 
+procedure TestJoinAbsoluteChild;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_join('/home/user', '/etc/passwd', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/etc/passwd'), 'absolute child replaces base');
+end;
+
+procedure TestNormalizeRelativeDotDot;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_normalize('../../file.pas', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '../../file.pas'), 'relative .. preserved');
+  platform_path_normalize('.', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '.'), 'single dot = .');
+end;
+
+procedure TestDirnameRoot;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_dirname('/', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/'), 'dirname / = /');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.path');
   T.Run('join basic', @TestJoinBasic);
@@ -150,5 +176,8 @@ begin
   T.Run('normalize', @TestNormalize);
   T.Run('basename_ptr zero-copy', @TestBasenamePtr);
   T.Run('extension_ptr zero-copy', @TestExtensionPtr);
+  T.Run('join absolute child', @TestJoinAbsoluteChild);
+  T.Run('normalize relative ..', @TestNormalizeRelativeDotDot);
+  T.Run('dirname root', @TestDirnameRoot);
   T.Summary;
 end.
