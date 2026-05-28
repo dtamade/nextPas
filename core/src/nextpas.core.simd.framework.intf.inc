@@ -15,7 +15,7 @@ function GetSupportedBackendList: TSimdBackendArray; inline;
 function GetBestSupportedBackend: TSimdBackend; inline;
 
 // Canonical runtime registration / dispatchability view.
-function IsBackendRegisteredInBinary(aBackend: TSimdBackend): Boolean; inline;
+function IsBackendRegisteredInBinary(ABackend: TSimdBackend): Boolean; inline;
 function GetRegisteredBackendList: TSimdBackendArray; inline;
 function GetDispatchableBackendList: TSimdBackendArray; inline;
 function GetBestDispatchableBackend: TSimdBackend; inline;
@@ -25,14 +25,14 @@ function GetBestDispatchableBackend: TSimdBackend; inline;
 function GetAvailableBackendList: TSimdBackendArray; inline;
 
 // Canonical runtime control-plane mutators.
-function TrySetCurrentBackend(aBackend: TSimdBackend): Boolean; inline;
-procedure SetCurrentBackend(aBackend: TSimdBackend); inline;
+function TrySetCurrentBackend(ABackend: TSimdBackend): Boolean; inline;
+procedure SetCurrentBackend(ABackend: TSimdBackend); inline;
 procedure ResetCurrentBackendSelection; inline;
 
 // Legacy façade aliases kept for compatibility only; new code and docs should
 // use the canonical runtime control-plane names above.
-function TryForceBackend(aBackend: TSimdBackend): Boolean; inline;
-procedure ForceBackend(aBackend: TSimdBackend); inline;
+function TryForceBackend(ABackend: TSimdBackend): Boolean; inline;
+procedure ForceBackend(ABackend: TSimdBackend); inline;
 procedure ResetBackendSelection; inline;
 
 // Memory helpers.

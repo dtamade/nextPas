@@ -15,6 +15,11 @@ const
   GEMM_KC = 512;
   GEMM_NC = 4096;
 
+  GEMM_MR_F64 = 4;
+  GEMM_NR_F64 = 8;
+  GEMM_MC_F64 = 64;
+  GEMM_KC_F64 = 256;
+
 procedure GemmMicro6x16F32(AA, AB, AC: PSingle;
   AK, AAStride, ACStride: SizeUInt);
 
@@ -32,6 +37,10 @@ procedure GemmBlockedF32(AA, AB, AC: PSingle;
 
 // C[M,N] = A[M,K] * B^T[N,K] — B stored as [N, K] row-major
 procedure GemmBlockedTransBF32(AA, AB, AC: PSingle;
+  AM, AN, AK, ALdA, ALdB, ALdC: SizeUInt);
+
+// F64 GEMM: C[M,N] = A[M,K] * B[K,N]
+procedure GemmBlockedF64(AA, AB, AC: PDouble;
   AM, AN, AK, ALdA, ALdB, ALdC: SizeUInt);
 
 implementation
@@ -692,6 +701,285 @@ begin
           begin
             LSum := ReduceDotF32(@AA[(LCurM + LMi) * ALdA + LCurK],
                          @AB[(LCurN + LNj) * ALdB + LCurK], LBlockK);
+            if LCurK = 0 then
+              AC[(LCurM + LMi) * ALdC + LCurN + LNj] := LSum
+            else
+              AC[(LCurM + LMi) * ALdC + LCurN + LNj] :=
+                AC[(LCurM + LMi) * ALdC + LCurN + LNj] + LSum;
+            Inc(LNj);
+          end;
+          Inc(LMi);
+        end;
+
+        Inc(LCurM, LBlockM);
+      end;
+      Inc(LCurN, LBlockN);
+    end;
+    Inc(LCurK, LBlockK);
+  end;
+
+  SimdFree(LPackedB);
+  SimdFree(LPackedA);
+end;
+
+// === F64 GEMM ===
+
+// 4x8 AVX2 microkernel for F64: C[4,8] += A[4,K] * B_packed[K,8]
+procedure GemmMicro4x8F64_Zero(AA, AB, AC: PDouble;
+  AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
+asm
+  // RDI=A, RSI=B_packed, RDX=C, RCX=K, R8=A_stride(bytes), R9=C_stride(bytes)
+  vxorpd ymm0, ymm0, ymm0
+  vxorpd ymm1, ymm1, ymm1
+  vxorpd ymm2, ymm2, ymm2
+  vxorpd ymm3, ymm3, ymm3
+  vxorpd ymm4, ymm4, ymm4
+  vxorpd ymm5, ymm5, ymm5
+  vxorpd ymm6, ymm6, ymm6
+  vxorpd ymm7, ymm7, ymm7
+
+  mov rax, rdi
+  lea r10, [rdi + r8]
+  lea r11, [r10 + r8]
+  push rbx
+  lea rbx, [r11 + r8]
+
+  test rcx, rcx
+  jz @store_f64
+
+@k_loop_f64:
+  vmovupd ymm8, [rsi]
+  vmovupd ymm9, [rsi + 32]
+
+  vbroadcastsd ymm10, qword [rax]
+  vfmadd231pd ymm0, ymm10, ymm8
+  vfmadd231pd ymm1, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [r10]
+  vfmadd231pd ymm2, ymm10, ymm8
+  vfmadd231pd ymm3, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [r11]
+  vfmadd231pd ymm4, ymm10, ymm8
+  vfmadd231pd ymm5, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [rbx]
+  vfmadd231pd ymm6, ymm10, ymm8
+  vfmadd231pd ymm7, ymm10, ymm9
+
+  add rax, 8
+  add r10, 8
+  add r11, 8
+  add rbx, 8
+  add rsi, 64
+
+  dec rcx
+  jnz @k_loop_f64
+
+@store_f64:
+  vmovupd [rdx], ymm0
+  vmovupd [rdx + 32], ymm1
+  add rdx, r9
+  vmovupd [rdx], ymm2
+  vmovupd [rdx + 32], ymm3
+  add rdx, r9
+  vmovupd [rdx], ymm4
+  vmovupd [rdx + 32], ymm5
+  add rdx, r9
+  vmovupd [rdx], ymm6
+  vmovupd [rdx + 32], ymm7
+
+  pop rbx
+  vzeroupper
+end;
+
+procedure GemmMicro4x8F64_Acc(AA, AB, AC: PDouble;
+  AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
+asm
+  mov rax, rdx
+  vmovupd ymm0, [rdx]
+  vmovupd ymm1, [rdx + 32]
+  add rdx, r9
+  vmovupd ymm2, [rdx]
+  vmovupd ymm3, [rdx + 32]
+  add rdx, r9
+  vmovupd ymm4, [rdx]
+  vmovupd ymm5, [rdx + 32]
+  add rdx, r9
+  vmovupd ymm6, [rdx]
+  vmovupd ymm7, [rdx + 32]
+  mov rdx, rax
+
+  mov rax, rdi
+  lea r10, [rdi + r8]
+  lea r11, [r10 + r8]
+  push rbx
+  lea rbx, [r11 + r8]
+
+  test rcx, rcx
+  jz @store_f64a
+
+@k_loop_f64a:
+  vmovupd ymm8, [rsi]
+  vmovupd ymm9, [rsi + 32]
+
+  vbroadcastsd ymm10, qword [rax]
+  vfmadd231pd ymm0, ymm10, ymm8
+  vfmadd231pd ymm1, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [r10]
+  vfmadd231pd ymm2, ymm10, ymm8
+  vfmadd231pd ymm3, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [r11]
+  vfmadd231pd ymm4, ymm10, ymm8
+  vfmadd231pd ymm5, ymm10, ymm9
+
+  vbroadcastsd ymm10, qword [rbx]
+  vfmadd231pd ymm6, ymm10, ymm8
+  vfmadd231pd ymm7, ymm10, ymm9
+
+  add rax, 8
+  add r10, 8
+  add r11, 8
+  add rbx, 8
+  add rsi, 64
+
+  dec rcx
+  jnz @k_loop_f64a
+
+@store_f64a:
+  vmovupd [rdx], ymm0
+  vmovupd [rdx + 32], ymm1
+  add rdx, r9
+  vmovupd [rdx], ymm2
+  vmovupd [rdx + 32], ymm3
+  add rdx, r9
+  vmovupd [rdx], ymm4
+  vmovupd [rdx + 32], ymm5
+  add rdx, r9
+  vmovupd [rdx], ymm6
+  vmovupd [rdx + 32], ymm7
+
+  pop rbx
+  vzeroupper
+end;
+
+procedure GemmBlockedF64(AA, AB, AC: PDouble;
+  AM, AN, AK, ALdA, ALdB, ALdC: SizeUInt);
+var
+  LPackedA: PDouble;
+  LPackedB: PDouble;
+  LCurM, LCurN, LCurK: SizeUInt;
+  LBlockM, LBlockN, LBlockK: SizeUInt;
+  LMi, LNj, LNj2, LR, LP: SizeUInt;
+  LMicroC: PDouble;
+  LAStride, LCStride: SizeUInt;
+  LBPanelIdx: SizeUInt;
+  LSum: Double;
+  LCol, LK: SizeUInt;
+  LSrc: PDouble;
+begin
+  if (AM = 0) or (AN = 0) or (AK = 0) then Exit;
+
+  LPackedA := PDouble(SimdAlloc(GEMM_MC_F64 * GEMM_KC_F64 * SizeOf(Double)));
+  LPackedB := PDouble(SimdAlloc(GEMM_KC_F64 * GEMM_NC * SizeOf(Double)));
+
+  LCStride := ALdC * SizeOf(Double);
+
+  LCurK := 0;
+  while LCurK < AK do
+  begin
+    LBlockK := AK - LCurK;
+    if LBlockK > GEMM_KC_F64 then LBlockK := GEMM_KC_F64;
+
+    LAStride := LBlockK * SizeOf(Double);
+
+    LCurN := 0;
+    while LCurN < AN do
+    begin
+      LBlockN := AN - LCurN;
+      if LBlockN > GEMM_NC then LBlockN := GEMM_NC;
+
+      // PackB: B[K,N] row-major → [K, NR_F64] panels
+      LCol := 0;
+      while LCol + GEMM_NR_F64 <= LBlockN do
+      begin
+        for LK := 0 to LBlockK - 1 do
+        begin
+          LSrc := @AA[0]; // dummy, use AB below
+          Move(AB[(LCurK + LK) * ALdB + LCurN + LCol],
+               LPackedB[(LCol div GEMM_NR_F64) * LBlockK * GEMM_NR_F64 + LK * GEMM_NR_F64],
+               GEMM_NR_F64 * SizeOf(Double));
+        end;
+        Inc(LCol, GEMM_NR_F64);
+      end;
+
+      LCurM := 0;
+      while LCurM < AM do
+      begin
+        LBlockM := AM - LCurM;
+        if LBlockM > GEMM_MC_F64 then LBlockM := GEMM_MC_F64;
+
+        // PackA: MR_F64 rows of K contiguous
+        LMi := 0;
+        while LMi + GEMM_MR_F64 <= LBlockM do
+        begin
+          for LR := 0 to GEMM_MR_F64 - 1 do
+            Move(AA[(LCurM + LMi + LR) * ALdA + LCurK],
+                 LPackedA[(LMi div GEMM_MR_F64) * GEMM_MR_F64 * LBlockK + LR * LBlockK],
+                 LBlockK * SizeOf(Double));
+          Inc(LMi, GEMM_MR_F64);
+        end;
+
+        // Microkernel calls
+        LMi := 0;
+        while LMi + GEMM_MR_F64 <= LBlockM do
+        begin
+          LNj := 0;
+          LBPanelIdx := 0;
+          while LNj + GEMM_NR_F64 <= LBlockN do
+          begin
+            LMicroC := @AC[(LCurM + LMi) * ALdC + LCurN + LNj];
+            if LCurK = 0 then
+              GemmMicro4x8F64_Zero(
+                @LPackedA[(LMi div GEMM_MR_F64) * GEMM_MR_F64 * LBlockK],
+                @LPackedB[LBPanelIdx],
+                LMicroC, LBlockK, LAStride, LCStride)
+            else
+              GemmMicro4x8F64_Acc(
+                @LPackedA[(LMi div GEMM_MR_F64) * GEMM_MR_F64 * LBlockK],
+                @LPackedB[LBPanelIdx],
+                LMicroC, LBlockK, LAStride, LCStride);
+            Inc(LNj, GEMM_NR_F64);
+            Inc(LBPanelIdx, LBlockK * GEMM_NR_F64);
+          end;
+          // N remainder
+          while LNj < LBlockN do
+          begin
+            LSum := 0;
+            for LP := 0 to LBlockK - 1 do
+              LSum := LSum + AA[(LCurM + LMi) * ALdA + LCurK + LP] *
+                             AB[(LCurK + LP) * ALdB + LCurN + LNj];
+            if LCurK = 0 then
+              AC[(LCurM + LMi) * ALdC + LCurN + LNj] := LSum
+            else
+              AC[(LCurM + LMi) * ALdC + LCurN + LNj] :=
+                AC[(LCurM + LMi) * ALdC + LCurN + LNj] + LSum;
+            Inc(LNj);
+          end;
+          Inc(LMi, GEMM_MR_F64);
+        end;
+        // M remainder
+        while LMi < LBlockM do
+        begin
+          LNj := 0;
+          while LNj < LBlockN do
+          begin
+            LSum := 0;
+            for LP := 0 to LBlockK - 1 do
+              LSum := LSum + AA[(LCurM + LMi) * ALdA + LCurK + LP] *
+                             AB[(LCurK + LP) * ALdB + LCurN + LNj];
             if LCurK = 0 then
               AC[(LCurM + LMi) * ALdC + LCurN + LNj] := LSum
             else

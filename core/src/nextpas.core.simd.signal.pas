@@ -29,6 +29,7 @@ type
     class function Create(ACount: SizeUInt): TSimdFftPlanF32; static;
     procedure Free;
     procedure Execute(AData: PSimdComplexF32; ADirection: TSimdFftDirection);
+    procedure ExecuteBatch(AData: PSimdComplexF32; ABatchCount: SizeUInt; ADirection: TSimdFftDirection);
     property Count: SizeUInt read FCount;
   end;
 
@@ -754,6 +755,14 @@ begin
 
   if ADirection = sfdInverse then
     ArrayMulScalarF32(PSingle(AData), PSingle(AData), FCount * 2, 1.0 / FCount);
+end;
+
+procedure TSimdFftPlanF32.ExecuteBatch(AData: PSimdComplexF32; ABatchCount: SizeUInt; ADirection: TSimdFftDirection);
+var
+  LI: SizeUInt;
+begin
+  for LI := 0 to ABatchCount - 1 do
+    Execute(@AData[LI * FCount], ADirection);
 end;
 
 procedure Convolve1DF32(aSignal: PSingle; aSignalCount: SizeUInt;

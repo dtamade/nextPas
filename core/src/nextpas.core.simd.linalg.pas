@@ -680,6 +680,17 @@ var
 begin
   Result := TSimdF64Matrix.Zeros(aA.Rows, aB.Cols);
   if (aA.Rows = 0) or (aA.Cols = 0) or (aB.Cols = 0) then Exit;
+
+  if (aA.Rows >= GEMM_MR_F64) and (aB.Cols >= GEMM_NR_F64) and (aA.Cols >= 4) and
+     (SizeUInt(aA.RowStride) = aA.Cols) and
+     (SizeUInt(aB.RowStride) = aB.Cols) and
+     (SizeUInt(Result.RowStride) = Result.Cols) then
+  begin
+    GemmBlockedF64(aA.Data, aB.Data, Result.Data,
+      aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, Result.Cols);
+    Exit;
+  end;
+
   LBt := aB.Transpose;
   for r := 0 to aA.Rows - 1 do
     for c := 0 to aB.Cols - 1 do

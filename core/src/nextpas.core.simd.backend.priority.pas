@@ -26,14 +26,14 @@ const
     sbScalar
   );
 
-function GetSimdBackendPriorityValue(aBackend: TSimdBackend): Integer;
+function GetSimdBackendPriorityValue(ABackend: TSimdBackend): Integer;
 
 implementation
 
-function GetSimdBackendPriorityValue(aBackend: TSimdBackend): Integer;
+function GetSimdBackendPriorityValue(ABackend: TSimdBackend): Integer;
 begin
   Result := 0;
-  case aBackend of
+  case ABackend of
     sbScalar: Result := 0;
     sbRISCVV: Result := 10;
     sbNEON: Result := 20;
