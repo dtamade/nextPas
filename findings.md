@@ -10,6 +10,32 @@
 
 ## Research Findings
 
+- Batch 197 re-rank 结论：下一条最高性价比缺口是 imported unit method body non-inherited
+  implicit-self known property invalid-call-shape。已有 Batch 169 证明 imported known property
+  direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body bare
+  implicit-self known field `invalid-call-shape` emission 已可输出，Batch 196 证明 imported unit
+  body property 形状和 inherited traversal 可组合；因此本批优先 focused probe，GREEN 直接
+  promotion。
+- Batch 197 加速策略继续“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，
+  focused RED/GREEN 判真相；不碰 `core`，不扩大 installed-source provenance，不顺手实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+- Batch 197 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；这证明
+  Batch 169 的 imported known property truth、Batch 194 的 imported unit body bare implicit-self
+  `invalid-call-shape` emission 与 Batch 176-193 的 owner-aware imported unit body traversal
+  已自然组合，本批不需要修改 analyzer。
+- Batch 197 新增
+  `tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape` 与
+  `imported-unit-body-implicit-self-known-property-invalid-call-shape-check`，final envelope
+  新增 `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`。
+- Batch 197 stage0 focused probe 已输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。首次手写 focused 命令误用了 zsh 只读变量 `status`，
+  随后改用 `rc` 重新运行并得到真实 stage0 证据。
+- Batch 197 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-known-property-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
 - Batch 196 re-rank 结论：下一条最高性价比缺口是 imported unit method body inherited
   implicit-self known property invalid-call-shape。已有 Batch 173 证明 imported inherited known
   property direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body

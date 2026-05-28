@@ -517,6 +517,10 @@ candidate collection
     implicit-self fallback；例如 imported `TWorker.Value: Integer` 在
     `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
     `sema.invalid-call-shape`
+  - 同一条 known property 边界也适用于 imported `project-source` unit method body 的 bare
+    implicit-self fallback；例如 imported `TWorker.Value` property 在
+    `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
+    `sema.invalid-call-shape`
   - imported `project-source` unit method body 中沿 parent chain 命中的 inherited known field
     也走同一条边界；例如 imported `TBaseWorker.Value: Integer` 被
     `TWorker = class(TBaseWorker)` 的 `procedure TWorker.Run; begin Value(1); end;`

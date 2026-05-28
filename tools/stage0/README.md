@@ -273,6 +273,8 @@ method），还覆盖 imported `project-source` direct known field/property 被�
 `sema.invalid-call-shape` gate、imported `project-source` inherited known property 被当作 call 使用时的
 `sema.invalid-call-shape` gate、imported `project-source` unit method body bare implicit-self
 known field 被当作 call 使用时的 `sema.invalid-call-shape` gate、imported `project-source`
+unit method body bare implicit-self known property 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source`
 unit method body inherited bare implicit-self known field 被当作 call 使用时的
 `sema.invalid-call-shape` gate、imported `project-source` unit method body inherited bare
 implicit-self known property 被当作 call 使用时的 `sema.invalid-call-shape` gate，以及 `TWorker.Create(42)`
@@ -991,6 +993,8 @@ unit method body bare implicit-self no matching overload 断言
 unit method body bare implicit-self ambiguous overload 断言
 `semantic-analysis-failed` + `sema.ambiguous-overload`，再对
 imported `project-source` unit method body bare implicit-self known field invalid call shape 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对
+imported `project-source` unit method body bare implicit-self known property invalid call shape 断言
 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对
 imported `project-source` unit method body inherited bare implicit-self known field invalid call shape
 断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对

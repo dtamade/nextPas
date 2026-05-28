@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
-当前最新索引补充：Batch 196 imported unit body inherited implicit self known property invalid-call-shape
+当前最新索引补充：Batch 197 imported unit body implicit self known property invalid-call-shape
 diagnostics 已完成并通过 fresh local verification；
 旧长索引行保留历史上下文。
 
@@ -20,6 +20,54 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-28 (Batch 197 imported unit body implicit self known property invalid-call-shape diagnostics)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Acceleration strategy:
+  - 固定“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，focused probe 判真相。
+  - 本轮选择 Batch 194 known field、Batch 169 known property 与 Batch 196 inherited property 之间的
+    non-inherited imported unit body known property 空格，避免切换赛道。
+- Objective:
+  - root source `uses Worker;`，imported `Worker.pas` 中 `TWorker.Value` 是 known property，
+    `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body，
+    必须失败为 `sema.invalid-call-shape`，message 为 `member "Value" is not callable`，
+    semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Actions taken:
+  - 在 `task_plan.md` 固定 Batch 197 `/plan`，明确本轮加速策略、不碰 `core`、不扩大
+    installed-source provenance。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckImportedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeDiagnostic`。
+  - Focused semantic probe 直接 GREEN：现有 imported unit body owner-aware traversal 与 known
+    property invalid-call-shape emission 已自然组合，本批不修改 analyzer。
+  - 新增
+    `tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape`，并把
+    `imported-unit-body-implicit-self-known-property-invalid-call-shape-check` 纳入
+    `build/verify_local.sh` 与 final envelope。
+  - 同步 `docs/architecture/semantic-model-specification.md`、`tools/stage0/README.md`、
+    `docs/architecture/nextpas-goal-tree.md` 与 `findings.md`。
+- Verification:
+  - Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+    `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable`
+    与 `human-summary=semantic-analysis-failed`。
+  - Fresh local：`bash build/verify_local.sh` 输出
+    `imported-unit-body-implicit-self-known-property-invalid-call-shape-check=pass`、
+    `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、
+    `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+    与 `human-summary=local verification passed`。
+- Errors:
+  - 首次手写 stage0 focused 命令使用 `status=$?`，在 zsh 中触发 `read-only variable: status`；
+    已改用 `rc=$?` 重跑并得到真实 stage0 证据。
+- Review:
+  - 当前 evidence 表明本轮为 promotion-only，不需要修改 analyzer；范围保持在 source-owned
+    imported unit body non-inherited implicit-self known property invalid-call-shape，不碰 `core`。
+  - 简短 review：新增 focused regression 验证 model failure 且没有失败 `member-call` binding；
+    stage0 official gate 固定 CLI line 与 JSON envelope；文档/总地图已同步到已验证事实。
 
 ## Session: 2026-05-28 (Batch 196 imported unit body inherited implicit self known property invalid-call-shape diagnostics)
 
