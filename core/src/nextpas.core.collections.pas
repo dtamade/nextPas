@@ -29,12 +29,10 @@ uses
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.linkedhashmap.base,
   nextpas.core.collections.linkedhashmap.intf,
+  nextpas.core.collections.linkedhashset.intf,
   nextpas.core.collections.multimap.intf,
   nextpas.core.collections.multiset.base,
   nextpas.core.collections.multiset.intf,
-  nextpas.core.collections.orderedset.intf,
-  nextpas.core.collections.rbset.intf,
-  nextpas.core.collections.orderedset.rb.intf,
   nextpas.core.collections.orderedmap.rb.base,
   nextpas.core.collections.orderedmap.rb.intf,
   nextpas.core.collections.treemap.base,
@@ -78,13 +76,11 @@ uses
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashset,
   nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.linkedhashset,
   nextpas.core.collections.multimap,
   nextpas.core.collections.multiset,
   // Ordered containers (RB)
   nextpas.core.collections.tree.rb,
-  nextpas.core.collections.rbset,
-  nextpas.core.collections.orderedset,
-  nextpas.core.collections.orderedset.rb,
   nextpas.core.collections.orderedmap.rb,
   // 新增：有序容器和缓存
   nextpas.core.collections.treemap,
@@ -227,6 +223,7 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: IAllocator = nil): specialize ITreeMap<K,V>;
 // 注意：MakeTreeSet 移除了 aCapacity 和 aCompare 参数，因为 TTreeSet 当前不支持这些参数
 generic function MakeTreeSet<T>(aAllocator: IAllocator = nil): specialize ITreeSet<T>;
+generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
 generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: IAllocator = nil): specialize IRBTreeMap<K,V>;
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
 generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
@@ -809,6 +806,11 @@ begin
     Result := specialize TTreeSet<T>.Create(aAllocator)
   else
     Result := specialize TTreeSet<T>.Create;
+end;
+
+generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
+begin
+  Result := specialize TLinkedHashSet<T>.Create;
 end;
 
 generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: IAllocator = nil): specialize IRBTreeMap<K,V>;

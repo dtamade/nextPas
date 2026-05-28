@@ -166,6 +166,17 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Add dedicated `test_stack` suite (6 tests: LIFO, from-array, peek, try-pop-empty, pop-raises, clear).
 - [x] Verify all focused collections tests (9 suites, 70 tests, 0 failures).
 
+### Completed Micro Batch: Set Family Identity Consolidation
+
+- [x] Audit set family: identified 4 overlapping containers (rbset, orderedset.rb, tree_set, orderedset) with naming confusion and class name collisions.
+- [x] Rewrite `ITreeSet<T>` to include LowerBound/UpperBound/Min/Max + Union/Intersect/Difference.
+- [x] Rewrite `TTreeSet<T>` with `TRBTreeCore` backend (replacing wrapper over `rbset.TRBTreeSet`).
+- [x] Create `ILinkedHashSet<T>` + `TLinkedHashSet<T>` for insertion-order set (renamed from misleading `orderedset`).
+- [x] Add `MakeLinkedHashSet<T>` to facade.
+- [x] Delete 6 obsolete files: `rbset`, `rbset.intf`, `orderedset.rb`, `orderedset.rb.intf`, `orderedset`, `orderedset.intf`.
+- [x] Add `test_treeset` suite (9 tests: TreeSet basic/remove/min-max/bounds/union/intersect/difference + LinkedHashSet basic/remove).
+- [x] Verify all focused collections tests (10 suites, 79 tests, 0 failures).
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -216,6 +227,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - RBTreeMap is an ordered key/value map adapter and should use the same normal map vocabulary. Its `TryUpdate` method may remain because "update only if present" is a distinct operation rather than a duplicate of `Put` or `AddOrAssign`.
 - Facade public-surface hardening should prioritize unambiguous working implementations first. `CircularBuffer` and `PriorityQueue` are clean additions to the `MakeXxx` facade family.
 - `stack.pas` now exposes a single `TStack<T>` backed by `TVec<T>`. The previous `TArrayStack` / `TLinkedStack` split was a naming fiction (both used `TVecDeque`). The facade exposes `MakeStack<T>` as the only public stack factory. If a linked-list stack is ever needed, it can be added as a separate container with a distinct name and a real linked backend.
+- The set family is now two distinct containers: `TTreeSet<T>` (sorted, RB-tree backed, with full range query + set algebra) and `TLinkedHashSet<T>` (insertion-order, LinkedHashMap-backed). The old `rbset`, `orderedset.rb`, and `orderedset` units are deleted. `ITreeSet<T>` inherits `IGenericCollection<T>` because traversal is a core sorted-set capability.
 
 ## Verification Commands
 

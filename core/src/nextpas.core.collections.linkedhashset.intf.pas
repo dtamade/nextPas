@@ -1,4 +1,4 @@
-unit nextpas.core.collections.orderedset.intf;
+unit nextpas.core.collections.linkedhashset.intf;
 
 {$I nextpas.core.settings.inc}
 
@@ -9,12 +9,7 @@ uses
 
 type
 
-  {**
-   * IOrderedSet<T> - 有序集合接口（保持插入顺序）
-   *
-   * @desc 集合接口，元素不重复，保持插入顺序
-   *}
-  generic IOrderedSet<T> = interface
+  generic ILinkedHashSet<T> = interface
     ['{D4E5F6A7-B8C9-0123-DEF0-456789ABCDEF}']
     function Add(const aElement: T): Boolean;
     function Remove(const aElement: T): Boolean;

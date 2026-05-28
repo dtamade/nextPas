@@ -229,3 +229,17 @@
 - Merged into a single `TStack<T>` backed by `TVec<T>`. Rationale: a stack only needs tail push/pop, so `TVec` is the natural fit (no ring-buffer overhead from `TVecDeque`).
 - Removed `MakeArrayStack` and `MakeLinkedStack` from the child unit. The facade's `MakeStack<T>` is the only public stack factory.
 - If a real linked-list stack is ever needed (e.g., for very large non-copyable elements), it should be introduced as a separate container with a distinct name and a genuine singly-linked-list backend, not as a naming alias over the same array storage.
+
+## 2026-05-28: set family identity consolidation
+
+- The set family had 4 containers with overlapping responsibilities and naming confusion:
+  - `rbset.TRBTreeSet<T>` — sorted set with hand-written RB-tree (sentinel mode)
+  - `orderedset.rb.TRBTreeSet<T>` — sorted set with `TRBTreeCore` (same class name, different unit!)
+  - `tree_set.TTreeSet<T>` — sorted set wrapping `rbset.TRBTreeSet`, adding Union/Intersect/Difference
+  - `orderedset.TOrderedSet<T>` — insertion-order set (LinkedHashMap-backed), misleadingly named "ordered"
+- Resolution:
+  - Unified sorted set into `TTreeSet<T>` backed directly by `TRBTreeCore`, with full capabilities: Add/Remove/Contains + LowerBound/UpperBound + Min/Max + Union/Intersect/Difference.
+  - Renamed insertion-order set to `TLinkedHashSet<T>` with `ILinkedHashSet<T>` interface, matching the existing `TLinkedHashMap` naming family.
+  - Deleted `rbset`, `rbset.intf`, `orderedset.rb`, `orderedset.rb.intf`, `orderedset`, `orderedset.intf` (6 files removed).
+  - Added `MakeLinkedHashSet<T>` to facade.
+  - `ITreeSet<T>` continues to inherit `IGenericCollection<T>` because traversal, ToArray, ForEach are core sorted-set use cases.

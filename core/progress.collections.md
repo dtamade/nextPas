@@ -88,6 +88,13 @@
 - Removed `MakeArrayStack` / `MakeLinkedStack` from child unit; facade `MakeStack<T>` now uses `TStack<T>` directly.
 - Added dedicated `test_stack` suite with 6 tests covering LIFO semantics, array construction, peek, try-pop-empty, pop-raises, and clear.
 - Verified all focused collections tests: 9 suites, 70 tests, 0 failures.
+- Completed set family identity consolidation:
+  - Rewrote `ITreeSet<T>` with full sorted-set capabilities (LowerBound/UpperBound/Min/Max + Union/Intersect/Difference).
+  - Rewrote `TTreeSet<T>` to use `TRBTreeCore` directly instead of wrapping `rbset.TRBTreeSet`.
+  - Created `ILinkedHashSet<T>` + `TLinkedHashSet<T>` + `MakeLinkedHashSet<T>` for insertion-order set (renamed from misleading `orderedset`).
+  - Deleted 6 obsolete files: `rbset.pas`, `rbset.intf.pas`, `orderedset.rb.pas`, `orderedset.rb.intf.pas`, `orderedset.pas`, `orderedset.intf.pas`.
+  - Added `test_treeset` suite with 9 tests covering both TreeSet and LinkedHashSet.
+  - Verified all focused collections tests: 10 suites, 79 tests, 0 failures.
 
 ## Next
 

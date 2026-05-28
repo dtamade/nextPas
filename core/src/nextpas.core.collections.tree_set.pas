@@ -1,485 +1,298 @@
 unit nextpas.core.collections.tree_set;
 
 {$I nextpas.core.settings.inc}
+{$WARN 5024 OFF}
 
 interface
 
 uses
   SysUtils,
-  TypInfo,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.tree_set.intf,
-  nextpas.core.collections.element_manager.intf,
-  nextpas.core.collections.rbset,
+  nextpas.core.collections.tree.rb,
   nextpas.core.mem.allocator;
 
 type
-  // TreeSet 实现 - 封装 TRBTreeSet
-  generic TTreeSet<T> = class(TInterfacedObject, specialize ITreeSet<T>)
+  generic TTreeSet<T> = class(specialize TGenericCollection<T>, specialize ITreeSet<T>)
   private
     type
-      TRBTreeSet = specialize TRBTreeSet<T>;
-    var
-      FImpl: TRBTreeSet;
+      TRBCore = specialize TRBTreeCore<T>;
+      TRBNode = TRBCore.PNode;
+  private
+    FTree: TRBCore;
+
+    function IterGetCurrent(aIter: PPtrIter): Pointer;
+    function IterMoveNext(aIter: PPtrIter): Boolean;
+    function IterMovePrev(aIter: PPtrIter): Boolean;
+
+    function CompareAdapter(const L, R: T; aData: Pointer): SizeInt;
+    procedure FinalizeAdapter(var V: T);
+  protected
+    function PtrIter: TPtrIter; override;
+    function GetCount: SizeUInt; override;
+    procedure Clear; override;
+    procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
+    procedure DoReverse; override;
+    function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
+    procedure DoZero; override;
   public
-    constructor Create; overload;
-    constructor Create(aAllocator: IAllocator); overload;
+    constructor Create; reintroduce; overload;
+    constructor Create(aAllocator: IAllocator); reintroduce; overload;
+    constructor Create(aAllocator: IAllocator; aData: Pointer); override;
     destructor Destroy; override;
 
-    // ITreeSet<T> specific methods
     function Add(const AValue: T): Boolean;
     function Remove(const AValue: T): Boolean;
+    function Contains(const AValue: T): Boolean; overload;
 
-    // Set operations
+    function LowerBound(const AValue: T; out OutValue: T): Boolean;
+    function UpperBound(const AValue: T; out OutValue: T): Boolean;
+    function Min(out OutValue: T): Boolean;
+    function Max(out OutValue: T): Boolean;
+
     function Union(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
     function Intersect(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
     function Difference(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
-
-    // IGenericCollection<T> interface methods (delegated to FImpl)
-    function GetElementTypeInfo: PTypeInfo;
-    function GetEnumerator: specialize TIter<T>;
-    function Iter: specialize TIter<T>;
-    function GetElementSize: SizeUInt;
-    function GetIsManagedType: Boolean;
-    function GetElementManager: specialize IElementManager<T>;
-    procedure LoadFrom(const aSrc: array of T); overload;
-    procedure Append(const aSrc: array of T); overload;
-    function ToArray: specialize TGenericArray<T>;
-    function ForEach(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
-    function ForEach(aForEach: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
-    {$ENDIF}
-    function Contains(const aElement: T): Boolean; overload;
-    function Contains(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
-    function Contains(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
-    {$ENDIF}
-    function CountOf(const aElement: T): SizeUInt; overload;
-    function CountOf(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountOf(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
-    {$ENDIF}
-    function CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
-    function CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
-    {$ENDIF}
-    procedure Fill(const aElement: T);
-    procedure Zero();
-    procedure Replace(const aElement, aNewElement: T);
-    procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload;
-    procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>); overload;
-    {$ENDIF}
-    procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
-    procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>); overload;
-    {$ENDIF}
-    procedure Reverse;
-
-    // ICollection methods (delegated to FImpl)
-    function PtrIter: TPtrIter;
-    function GetCount: SizeUInt;
-    function IsEmpty: Boolean;
-    procedure Clear;
-    function GetAllocator: IAllocator;
-    procedure SetData(aData: Pointer);
-    function GetData: Pointer;
-    procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
-    function Clone: TCollection;
-    function IsCompatible(aDst: TCollection): Boolean;
-    procedure LoadFrom(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure Append(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    procedure LoadFrom(const aSrc: TCollection); overload;
-    procedure LoadFromUnchecked(const aSrc: TCollection); overload;
-    procedure SaveTo(aDst: TCollection); overload;
-    procedure SaveToUnchecked(aDst: TCollection);
-    procedure Append(const aSrc: TCollection); overload;
-    procedure AppendUnchecked(const aSrc: TCollection); overload;
-    procedure AppendTo(const aDst: TCollection); overload;
-    procedure AppendToUnchecked(const aDst: TCollection); overload;
   end;
 
 implementation
 
 { TTreeSet<T> }
 
-constructor TTreeSet.Create;
+function TTreeSet.IterGetCurrent(aIter: PPtrIter): Pointer;
+var
+  N: TRBNode;
 begin
-  inherited Create;
-  FImpl := TRBTreeSet.Create;
+  N := TRBNode(aIter^.Data);
+  if N = nil then Exit(nil);
+  Result := @N^.Data;
 end;
 
-constructor TTreeSet.Create(aAllocator: IAllocator);
+function TTreeSet.IterMoveNext(aIter: PPtrIter): Boolean;
+var
+  N: TRBNode;
 begin
-  inherited Create;
-  FImpl := TRBTreeSet.Create(aAllocator);
+  if not aIter^.Started then
+  begin
+    aIter^.Started := True;
+    N := FTree.FirstNode;
+    aIter^.Data := N;
+    Exit(N <> nil);
+  end;
+  N := TRBNode(aIter^.Data);
+  if N = nil then Exit(False);
+  N := FTree.Successor(N);
+  aIter^.Data := N;
+  Result := N <> nil;
 end;
 
-destructor TTreeSet.Destroy;
+function TTreeSet.IterMovePrev(aIter: PPtrIter): Boolean;
+var
+  N: TRBNode;
 begin
-  FImpl.Free;
-  inherited Destroy;
+  if not aIter^.Started then
+  begin
+    aIter^.Started := True;
+    N := FTree.LastNode;
+    aIter^.Data := N;
+    Exit(N <> nil);
+  end;
+  N := TRBNode(aIter^.Data);
+  if N = nil then Exit(False);
+  N := FTree.Predecessor(N);
+  aIter^.Data := N;
+  Result := N <> nil;
 end;
 
-function TTreeSet.Add(const AValue: T): Boolean;
+function TTreeSet.CompareAdapter(const L, R: T; aData: Pointer): SizeInt;
 begin
-  Result := FImpl.Insert(AValue);
+  Result := FInternalComparer(L, R);
+  if Result < 0 then Exit(-1)
+  else if Result > 0 then Exit(1)
+  else Exit(0);
 end;
 
-function TTreeSet.Remove(const AValue: T): Boolean;
+procedure TTreeSet.FinalizeAdapter(var V: T);
 begin
-  Result := FImpl.Delete(AValue);
+  GetElementManager.FinalizeManagedElementsUnchecked(@V, 1);
 end;
 
-// IGenericCollection<T> interface delegation
-
-function TTreeSet.GetElementTypeInfo: PTypeInfo;
-begin
-  Result := FImpl.GetElementTypeInfo;
-end;
-
-function TTreeSet.GetEnumerator: specialize TIter<T>;
-begin
-  Result := FImpl.GetEnumerator;
-end;
-
-function TTreeSet.Iter: specialize TIter<T>;
-begin
-  Result := FImpl.Iter;
-end;
-
-function TTreeSet.GetElementSize: SizeUInt;
-begin
-  Result := FImpl.GetElementSize;
-end;
-
-function TTreeSet.GetIsManagedType: Boolean;
-begin
-  Result := FImpl.GetIsManagedType;
-end;
-
-function TTreeSet.GetElementManager: specialize IElementManager<T>;
-begin
-  Result := FImpl.GetElementManager;
-end;
-
-procedure TTreeSet.LoadFrom(const aSrc: array of T);
-begin
-  FImpl.LoadFrom(aSrc);
-end;
-
-procedure TTreeSet.Append(const aSrc: array of T);
-begin
-  FImpl.Append(aSrc);
-end;
-
-function TTreeSet.ToArray: specialize TGenericArray<T>;
-begin
-  Result := FImpl.ToArray;
-end;
-
-function TTreeSet.ForEach(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean;
-begin
-  Result := FImpl.ForEach(aPredicate, aData);
-end;
-
-function TTreeSet.ForEach(aForEach: specialize TPredicateMethod<T>; aData: Pointer): Boolean;
-begin
-  Result := FImpl.ForEach(aForEach, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-function TTreeSet.ForEach(aPredicate: specialize TPredicateRefFunc<T>): Boolean;
-begin
-  Result := FImpl.ForEach(aPredicate);
-end;
-{$ENDIF}
-
-function TTreeSet.Contains(const aElement: T): Boolean;
-begin
-  Result := FImpl.ContainsKey(aElement);
-end;
-
-function TTreeSet.Contains(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
-begin
-  Result := FImpl.Contains(aElement, aEquals, aData);
-end;
-
-function TTreeSet.Contains(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
-begin
-  Result := FImpl.Contains(aElement, aEquals, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-function TTreeSet.Contains(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): Boolean;
-begin
-  Result := FImpl.Contains(aElement, aEquals);
-end;
-{$ENDIF}
-
-function TTreeSet.CountOf(const aElement: T): SizeUInt;
-begin
-  Result := FImpl.CountOf(aElement);
-end;
-
-function TTreeSet.CountOf(const aElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FImpl.CountOf(aElement, aEquals, aData);
-end;
-
-function TTreeSet.CountOf(const aElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FImpl.CountOf(aElement, aEquals, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-function TTreeSet.CountOf(const aElement: T; aEquals: specialize TEqualsRefFunc<T>): SizeUInt;
-begin
-  Result := FImpl.CountOf(aElement, aEquals);
-end;
-{$ENDIF}
-
-function TTreeSet.CountIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FImpl.CountIf(aPredicate, aData);
-end;
-
-function TTreeSet.CountIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt;
-begin
-  Result := FImpl.CountIf(aPredicate, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-function TTreeSet.CountIf(aPredicate: specialize TPredicateRefFunc<T>): SizeUInt;
-begin
-  Result := FImpl.CountIf(aPredicate);
-end;
-{$ENDIF}
-
-procedure TTreeSet.Fill(const aElement: T);
-begin
-  FImpl.Fill(aElement);
-end;
-
-procedure TTreeSet.Zero();
-begin
-  FImpl.Zero();
-end;
-
-procedure TTreeSet.Replace(const aElement, aNewElement: T);
-begin
-  FImpl.Replace(aElement, aNewElement);
-end;
-
-procedure TTreeSet.Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer);
-begin
-  FImpl.Replace(aElement, aNewElement, aEquals, aData);
-end;
-
-procedure TTreeSet.Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer);
-begin
-  FImpl.Replace(aElement, aNewElement, aEquals, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-procedure TTreeSet.Replace(const aElement, aNewElement: T; aEquals: specialize TEqualsRefFunc<T>);
-begin
-  FImpl.Replace(aElement, aNewElement, aEquals);
-end;
-{$ENDIF}
-
-procedure TTreeSet.ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateFunc<T>; aData: Pointer);
-begin
-  FImpl.ReplaceIf(aNewElement, aPredicate, aData);
-end;
-
-procedure TTreeSet.ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateMethod<T>; aData: Pointer);
-begin
-  FImpl.ReplaceIf(aNewElement, aPredicate, aData);
-end;
-
-{$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-procedure TTreeSet.ReplaceIf(const aNewElement: T; aPredicate: specialize TPredicateRefFunc<T>);
-begin
-  FImpl.ReplaceIf(aNewElement, aPredicate);
-end;
-{$ENDIF}
-
-procedure TTreeSet.Reverse;
-begin
-  FImpl.Reverse;
-end;
-
-// ICollection methods
+{ TGenericCollection overrides }
 
 function TTreeSet.PtrIter: TPtrIter;
 begin
-  Result := FImpl.PtrIter;
+  Result.Init(Self, @IterGetCurrent, @IterMoveNext, @IterMovePrev, nil);
 end;
 
 function TTreeSet.GetCount: SizeUInt;
 begin
-  Result := FImpl.GetCount;
-end;
-
-function TTreeSet.IsEmpty: Boolean;
-begin
-  Result := FImpl.IsEmpty;
+  Result := FTree.GetCount;
 end;
 
 procedure TTreeSet.Clear;
 begin
-  FImpl.Clear;
-end;
-
-function TTreeSet.GetAllocator: IAllocator;
-begin
-  Result := FImpl.GetAllocator;
-end;
-
-procedure TTreeSet.SetData(aData: Pointer);
-begin
-  FImpl.SetData(aData);
-end;
-
-function TTreeSet.GetData: Pointer;
-begin
-  Result := FImpl.GetData;
+  FTree.Clear;
 end;
 
 procedure TTreeSet.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
+var
+  LIter: TPtrIter;
+  PE, P: ^T;
 begin
-  FImpl.SerializeToArrayBuffer(aDst, aCount);
-end;
-
-function TTreeSet.Clone: TCollection;
-begin
-  Result := FImpl.Clone;
-end;
-
-function TTreeSet.IsCompatible(aDst: TCollection): Boolean;
-begin
-  Result := FImpl.IsCompatible(aDst);
-end;
-
-procedure TTreeSet.LoadFrom(const aSrc: Pointer; aElementCount: SizeUInt);
-begin
-  FImpl.LoadFrom(aSrc, aElementCount);
-end;
-
-procedure TTreeSet.LoadFromUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
-begin
-  FImpl.LoadFromUnchecked(aSrc, aElementCount);
-end;
-
-procedure TTreeSet.Append(const aSrc: Pointer; aElementCount: SizeUInt);
-begin
-  FImpl.Append(aSrc, aElementCount);
+  PE := aDst;
+  if PE = nil then Exit;
+  LIter := PtrIter;
+  while LIter.MoveNext do
+  begin
+    P := LIter.GetCurrent;
+    PE^ := P^;
+    Inc(PE);
+  end;
 end;
 
 procedure TTreeSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
+var
+  LIdx: SizeUInt;
+  P: ^T;
 begin
-  FImpl.AppendUnchecked(aSrc, aElementCount);
-end;
-
-procedure TTreeSet.LoadFrom(const aSrc: TCollection);
-begin
-  FImpl.LoadFrom(aSrc);
-end;
-
-procedure TTreeSet.LoadFromUnchecked(const aSrc: TCollection);
-begin
-  FImpl.LoadFromUnchecked(aSrc);
-end;
-
-procedure TTreeSet.SaveTo(aDst: TCollection);
-begin
-  FImpl.SaveTo(aDst);
-end;
-
-procedure TTreeSet.SaveToUnchecked(aDst: TCollection);
-begin
-  FImpl.SaveToUnchecked(aDst);
-end;
-
-procedure TTreeSet.Append(const aSrc: TCollection);
-begin
-  FImpl.Append(aSrc);
-end;
-
-procedure TTreeSet.AppendUnchecked(const aSrc: TCollection);
-begin
-  FImpl.AppendUnchecked(aSrc);
-end;
-
-procedure TTreeSet.AppendTo(const aDst: TCollection);
-begin
-  FImpl.AppendTo(aDst);
+  if (aSrc = nil) or (aElementCount = 0) then Exit;
+  P := aSrc;
+  for LIdx := 1 to aElementCount do
+  begin
+    FTree.InsertUnique(P^);
+    Inc(P);
+  end;
 end;
 
 procedure TTreeSet.AppendToUnchecked(const aDst: TCollection);
+var
+  LIter: TPtrIter;
+  PElem: ^T;
 begin
-  FImpl.AppendToUnchecked(aDst);
+  if FTree.GetCount = 0 then Exit;
+  LIter := PtrIter;
+  while LIter.MoveNext do
+  begin
+    PElem := LIter.GetCurrent;
+    aDst.AppendUnchecked(PElem, 1);
+  end;
 end;
 
-// Set operations
+function TTreeSet.IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TTreeSet.DoZero;
+begin
+  Clear;
+end;
+
+procedure TTreeSet.DoReverse;
+begin
+  // no-op: iteration order is determined by comparator
+end;
+
+{ Constructors / Destructor }
+
+constructor TTreeSet.Create;
+begin
+  Create(GetRtlAllocator(), nil);
+end;
+
+constructor TTreeSet.Create(aAllocator: IAllocator);
+begin
+  Create(aAllocator, nil);
+end;
+
+constructor TTreeSet.Create(aAllocator: IAllocator; aData: Pointer);
+begin
+  inherited Create(aAllocator, aData);
+  FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);
+end;
+
+destructor TTreeSet.Destroy;
+begin
+  FTree.Free;
+  inherited Destroy;
+end;
+
+{ ITreeSet<T> }
+
+function TTreeSet.Add(const AValue: T): Boolean;
+begin
+  Result := FTree.InsertUnique(AValue);
+end;
+
+function TTreeSet.Remove(const AValue: T): Boolean;
+begin
+  Result := FTree.Remove(AValue);
+end;
+
+function TTreeSet.Contains(const AValue: T): Boolean;
+begin
+  Result := FTree.Contains(AValue);
+end;
+
+function TTreeSet.LowerBound(const AValue: T; out OutValue: T): Boolean;
+begin
+  Result := FTree.LowerBound(AValue, OutValue);
+end;
+
+function TTreeSet.UpperBound(const AValue: T; out OutValue: T): Boolean;
+begin
+  Result := FTree.UpperBound(AValue, OutValue);
+end;
+
+function TTreeSet.Min(out OutValue: T): Boolean;
+begin
+  Result := FTree.Min(OutValue);
+end;
+
+function TTreeSet.Max(out OutValue: T): Boolean;
+begin
+  Result := FTree.Max(OutValue);
+end;
 
 function TTreeSet.Union(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
 var
-  ResultSet: specialize TTreeSet<T>;
-  Element: T;
+  LResult: specialize TTreeSet<T>;
+  LElement: T;
 begin
-  ResultSet := specialize TTreeSet<T>.Create;
-
-  // Add all elements from current set
-  for Element in Self do
-    ResultSet.Add(Element);
-
-  // Add all elements from other set
-  for Element in Other do
-    ResultSet.Add(Element);
-
-  Result := ResultSet;
+  LResult := specialize TTreeSet<T>.Create;
+  for LElement in Self do
+    LResult.Add(LElement);
+  for LElement in Other do
+    LResult.Add(LElement);
+  Result := LResult;
 end;
 
 function TTreeSet.Intersect(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
 var
-  ResultSet: specialize TTreeSet<T>;
-  Element: T;
+  LResult: specialize TTreeSet<T>;
+  LElement: T;
 begin
-  ResultSet := specialize TTreeSet<T>.Create;
-
-  // Add only elements that exist in both sets
-  for Element in Self do
-    if Other.Contains(Element) then
-      ResultSet.Add(Element);
-
-  Result := ResultSet;
+  LResult := specialize TTreeSet<T>.Create;
+  for LElement in Self do
+    if Other.Contains(LElement) then
+      LResult.Add(LElement);
+  Result := LResult;
 end;
 
 function TTreeSet.Difference(const Other: specialize ITreeSet<T>): specialize ITreeSet<T>;
 var
-  ResultSet: specialize TTreeSet<T>;
-  Element: T;
+  LResult: specialize TTreeSet<T>;
+  LElement: T;
 begin
-  ResultSet := specialize TTreeSet<T>.Create;
-
-  // Add only elements that exist in Self but not in Other
-  for Element in Self do
-    if not Other.Contains(Element) then
-      ResultSet.Add(Element);
-
-  Result := ResultSet;
+  LResult := specialize TTreeSet<T>.Create;
+  for LElement in Self do
+    if not Other.Contains(LElement) then
+      LResult.Add(LElement);
+  Result := LResult;
 end;
 
 end.
