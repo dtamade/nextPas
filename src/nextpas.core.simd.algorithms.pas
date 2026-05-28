@@ -1,4 +1,5 @@
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 // Convenience layer — functionality overlaps with nextpas.core.simd.arrays.
 // Retained for benchmark compatibility; prefer arrays.pas for new code.
 

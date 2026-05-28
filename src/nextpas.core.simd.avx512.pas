@@ -2,6 +2,7 @@ unit nextpas.core.simd.avx512;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 {$asmmode intel}
 
 interface

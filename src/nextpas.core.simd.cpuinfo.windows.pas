@@ -1,6 +1,7 @@
 unit nextpas.core.simd.cpuinfo.windows;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

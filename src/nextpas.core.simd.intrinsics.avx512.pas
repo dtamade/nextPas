@@ -3,6 +3,7 @@ unit nextpas.core.simd.intrinsics.avx512;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.avx512 ===

@@ -3,6 +3,7 @@ unit nextpas.core.simd.pipeline;
 
 {$modeswitch advancedrecords}
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

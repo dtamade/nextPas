@@ -2,6 +2,7 @@ unit nextpas.core.simd.backend.priority;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

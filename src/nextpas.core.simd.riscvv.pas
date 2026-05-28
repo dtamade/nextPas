@@ -2,6 +2,7 @@ unit nextpas.core.simd.riscvv;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 // =============================================================
 //  ⚠️  EXPERIMENTAL - 实验性后端  ⚠️

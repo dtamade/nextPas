@@ -2,6 +2,7 @@
 unit nextpas.core.simd.builder;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 {$CODEPAGE UTF8}
 
 {

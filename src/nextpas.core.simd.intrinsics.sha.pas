@@ -3,6 +3,7 @@ unit nextpas.core.simd.intrinsics.sha;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

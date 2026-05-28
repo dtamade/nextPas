@@ -2,6 +2,7 @@ unit nextpas.core.simd.static.avx2;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 {$asmmode intel}
 
 {$IFNDEF CPUX86_64}

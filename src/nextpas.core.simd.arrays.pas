@@ -29,6 +29,7 @@ Copyright: (c) 2025 fafafaStudio. All rights reserved.
 unit nextpas.core.simd.arrays;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

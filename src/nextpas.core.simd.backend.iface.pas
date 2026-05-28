@@ -1,6 +1,7 @@
 unit nextpas.core.simd.backend.iface;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

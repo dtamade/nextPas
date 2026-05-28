@@ -2,6 +2,7 @@ unit nextpas.core.simd.intrinsics.base;
 // Disposition: STABLE — foundational intrinsics
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 interface
 

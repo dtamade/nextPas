@@ -4,6 +4,7 @@ unit nextpas.core.simd.intrinsics;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics ===

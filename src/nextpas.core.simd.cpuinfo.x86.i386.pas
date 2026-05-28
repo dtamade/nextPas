@@ -1,6 +1,7 @@
 unit nextpas.core.simd.cpuinfo.x86.i386;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 {$ASMMODE INTEL}
 
 interface

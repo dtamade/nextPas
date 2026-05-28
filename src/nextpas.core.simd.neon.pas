@@ -2,6 +2,7 @@ unit nextpas.core.simd.neon;
 
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.neon ===

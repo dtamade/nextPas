@@ -1,6 +1,7 @@
 unit nextpas.core.simd.cpuinfo.diagnostic;
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {$IFDEF WINDOWS}
   {$CODEPAGE UTF8}

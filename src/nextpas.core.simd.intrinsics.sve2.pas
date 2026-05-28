@@ -2,6 +2,7 @@ unit nextpas.core.simd.intrinsics.sve2;
 // Disposition: STABLE — low-level intrinsics for non-x86 backends
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.sve2 ===

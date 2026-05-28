@@ -2,6 +2,7 @@ unit nextpas.core.simd.intrinsics.sse42;
 // Disposition: STABLE — low-level intrinsics, used by dispatch backends
 
 {$I nextpas.core.settings.inc}
+{$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.sse42 ===
