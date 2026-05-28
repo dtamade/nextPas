@@ -28,7 +28,6 @@ Copyright: (c) 2025 fafafaStudio. All rights reserved.
 
 unit nextpas.core.simd.arrays;
 
-{$MODE OBJFPC}{$H+}
 {$I nextpas.core.settings.inc}
 
 interface

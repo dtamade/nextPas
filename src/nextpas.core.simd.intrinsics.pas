@@ -2,7 +2,7 @@
 // Use specific intrinsics units (e.g. intrinsics.x86.sse2) directly.
 unit nextpas.core.simd.intrinsics;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 {

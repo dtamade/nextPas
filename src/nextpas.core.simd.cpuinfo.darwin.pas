@@ -1,6 +1,6 @@
 unit nextpas.core.simd.cpuinfo.darwin;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

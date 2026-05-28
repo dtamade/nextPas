@@ -1,6 +1,6 @@
 unit nextpas.core.simd.image;
 
-{$mode objfpc}{$H+}
+
 {$modeswitch advancedrecords}
 {$I nextpas.core.settings.inc}
 

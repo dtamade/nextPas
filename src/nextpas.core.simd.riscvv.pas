@@ -1,6 +1,6 @@
 unit nextpas.core.simd.riscvv;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 // =============================================================

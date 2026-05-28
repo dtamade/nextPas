@@ -1,7 +1,7 @@
 // Experimental: not part of stable surface.
 unit nextpas.core.simd.imageproc;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

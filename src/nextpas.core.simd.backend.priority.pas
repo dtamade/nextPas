@@ -1,6 +1,6 @@
 unit nextpas.core.simd.backend.priority;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

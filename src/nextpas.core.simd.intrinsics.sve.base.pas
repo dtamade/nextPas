@@ -1,6 +1,6 @@
 unit nextpas.core.simd.intrinsics.sve.base;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

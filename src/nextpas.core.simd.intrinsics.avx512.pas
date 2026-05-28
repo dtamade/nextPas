@@ -1,7 +1,7 @@
 unit nextpas.core.simd.intrinsics.avx512;
 // Disposition: STABLE — low-level intrinsics, used by dispatch backends
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 {

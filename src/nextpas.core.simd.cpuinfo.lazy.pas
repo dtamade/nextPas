@@ -1,6 +1,5 @@
 unit nextpas.core.simd.cpuinfo.lazy;
 
-{$mode objfpc}
 {$I nextpas.core.settings.inc}
 interface
 

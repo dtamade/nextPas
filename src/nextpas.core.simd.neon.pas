@@ -1,6 +1,6 @@
 unit nextpas.core.simd.neon;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 {

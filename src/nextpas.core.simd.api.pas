@@ -1,7 +1,6 @@
 // Legacy compatibility layer — prefer nextpas.core.simd.api.v2 for new code.
 unit nextpas.core.simd.api;
 
-{$mode objfpc}
 {$I nextpas.core.settings.inc}
 
 interface

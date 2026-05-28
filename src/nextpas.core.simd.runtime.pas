@@ -1,6 +1,6 @@
 unit nextpas.core.simd.runtime;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

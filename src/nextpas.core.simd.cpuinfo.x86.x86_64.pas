@@ -1,6 +1,6 @@
 unit nextpas.core.simd.cpuinfo.x86.x86_64;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 {$ASMMODE INTEL}
 

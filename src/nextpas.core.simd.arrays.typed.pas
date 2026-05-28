@@ -1,6 +1,6 @@
 unit nextpas.core.simd.arrays.typed;
 
-{$mode objfpc}{$H+}
+
 {$modeswitch advancedrecords}
 {$I nextpas.core.settings.inc}
 

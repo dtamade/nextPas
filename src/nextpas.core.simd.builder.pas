@@ -1,7 +1,6 @@
 // Experimental: not part of stable surface.
 unit nextpas.core.simd.builder;
 
-{$mode objfpc}
 {$I nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

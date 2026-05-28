@@ -1,6 +1,6 @@
 unit nextpas.core.simd.sse2.i386;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 {$ASMMODE INTEL}
 

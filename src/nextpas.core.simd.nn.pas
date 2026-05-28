@@ -1,6 +1,6 @@
 unit nextpas.core.simd.nn;
 
-{$mode objfpc}{$H+}
+
 {$I nextpas.core.settings.inc}
 
 interface

@@ -1,7 +1,7 @@
 unit nextpas.core.simd.intrinsics.sha;
 // Disposition: STABLE — foundational intrinsics
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 
 interface

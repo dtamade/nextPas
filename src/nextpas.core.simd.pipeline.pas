@@ -1,6 +1,6 @@
 unit nextpas.core.simd.pipeline;
 
-{$mode objfpc}{$H+}
+
 {$modeswitch advancedrecords}
 {$I nextpas.core.settings.inc}
 

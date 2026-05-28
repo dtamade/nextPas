@@ -1,6 +1,6 @@
 unit nextpas.core.simd.sse41;
 
-{$mode objfpc}
+
 {$I nextpas.core.settings.inc}
 {$asmmode intel}
 
