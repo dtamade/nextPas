@@ -4116,15 +4116,48 @@ end;
 procedure TSemanticAnalyzer.ProcessInterfaceMethods(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
-  I: LongInt;
+  I, J: LongInt;
   Child, NameNode: TGreenNode;
-  IntfName: string;
+  IntfName, ParentIntfName, MethShort: string;
   SymbolId: LongInt;
   Meta: TTypeMetadata;
+  ParentIntfTypeId: LongInt;
+  Symbol: TSemanticSymbol;
 begin
   if ANode = nil then
     Exit;
   IntfName := FModel.TypeAt(ATypeId - 1).Name;
+  if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    ParentIntfName := ANode.ChildAt(0).Text;
+    ParentIntfTypeId := 0;
+    for I := 0 to FModel.TypeCount - 1 do
+      if SameText(FModel.TypeAt(I).Name, ParentIntfName) then
+      begin
+        ParentIntfTypeId := FModel.TypeAt(I).TypeId;
+        Break;
+      end;
+    if ParentIntfTypeId > 0 then
+    begin
+      FModel.SetTypeParent(ATypeId, ParentIntfTypeId);
+      for I := 0 to FModel.SymbolCount - 1 do
+      begin
+        Symbol := FModel.SymbolAt(I);
+        if (Symbol.TypeId = ParentIntfTypeId) and
+          SameText(Symbol.Kind, 'method') and
+          (Pos(ParentIntfName + '.', Symbol.Name) = 1) then
+        begin
+          MethShort := Copy(Symbol.Name, Length(ParentIntfName) + 2, MaxInt);
+          SymbolId := FModel.AddSymbol(IntfName + '.' + MethShort,
+            'method', AOwnerUnitId, ATypeId, Symbol.ByteOffset);
+          FModel.SetSymbolParamCount(SymbolId, Symbol.ParamCount);
+          FModel.SetSymbolMinParamCount(SymbolId, Symbol.MinParamCount);
+          FModel.SetSymbolParamSignature(SymbolId, Symbol.ParamSignature);
+        end;
+      end;
+    end;
+  end;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
