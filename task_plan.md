@@ -20,8 +20,12 @@ Wrong Argument Count Deferred Guard 已完成并通过 focused semantic / heaptr
 下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-当前最新索引补充：Batch 203 Installed-source Unit Method Body Implicit-self Function Result
-No Matching Overload Deferred Guard 将按同形矩阵双拍推进；下一行旧长索引保留历史上下文，当前
+当前最新索引补充：Batch 204 Installed-source Unit Method Body Implicit-self Function Result
+Ambiguous Overload Deferred Guard 将按同形矩阵双拍推进；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 203 Installed-source Unit Method Body Implicit-self Function Result
+No Matching Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
 reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
 当前上一批为 Batch 201 Installed-source Unit Method Body Inherited Implicit-self Known Property
@@ -12034,3 +12038,34 @@ Completed
 - 当前仍未完成的更大项不是这轮收口内容：
   完整 multi-root workspace model、更丰富的 package/workspace provenance 与
   nextPas 完整脱离宿主 FPC 的最终 codegen
+
+## Addendum: 2026-05-28 Batch 204 Installed-source Unit Method Body Implicit-self Function Result Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 187 的 imported `project-source` unit method body implicit-self same-unit function-result
+`ambiguous-overload` 补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker.Pick(Value: Integer)`、`TWorker.Pick(Value: LongInt)`、
+  `TWorker.Run`，并在同一 imported unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.ambiguous-overload`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 不新增 stage0 fixture、不碰 `core/`。
+- 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred`。
+- 注册到 harness main body。
+- Focused semantic probe → 预期直接 GREEN（现有 installed-source provenance guard 已覆盖）。
+- 同步 spec / records / goal tree。
+- Fresh `bash build/verify_local.sh`。
+- Git commit。

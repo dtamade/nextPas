@@ -10,6 +10,17 @@
 
 ## Research Findings
 
+- Batch 204 re-rank 结论：Batch 187 已打开 imported `project-source` unit method body bare
+  implicit-self same-unit function-result ambiguous-overload；按"矩阵双拍"，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.ambiguous-overload`。
+- Batch 204 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self same-unit function-result ambiguity。本批不修改 analyzer。
+- Batch 204 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
 - Batch 203 re-rank 结论：Batch 186 已打开 imported `project-source` unit method body bare
   implicit-self same-unit function-result no-matching-overload；按“矩阵双拍”，当前最高价值是补同形
   installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成

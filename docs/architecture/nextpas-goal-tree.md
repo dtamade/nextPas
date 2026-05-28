@@ -297,6 +297,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   implicit-self same-unit function-result no-match。
 - imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
   no-match 继续 deferred，不提前发 `sema.no-matching-overload`。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  ambiguity 继续 deferred，不提前发 `sema.ambiguous-overload`。
 - `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self same-unit function-result ambiguity。
 - `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
