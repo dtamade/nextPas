@@ -2459,7 +2459,7 @@ begin
     if not SameText(Model.Status, 'ready') then
       Fail('unexpected-specialized-generic-member-call-model-status:' +
         Model.Status);
-    if Model.BindingCount <> 0 then
+    if Model.BindingCount < 1 then
       Fail('unexpected-specialized-generic-member-call-binding-count:' +
         IntToStr(Model.BindingCount));
   finally

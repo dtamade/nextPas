@@ -1842,11 +1842,7 @@ begin
     end;
 
   if BodyCandidateCount = 0 then
-  begin
-    if AArgCount = 0 then
-      Exit(SymbolId);
-    Exit;
-  end;
+    Exit(SymbolId);
   if BodyMatchCount > 1 then
   begin
     AResolutionFailureKind := 'ambiguous-overload';
