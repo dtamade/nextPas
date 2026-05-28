@@ -127,8 +127,10 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.pipe (管道+dup2 统一抽象, 5 tests)
 - [x] platform.mmap (内存映射文件: mmap/CreateFileMapping, 5 tests)
 - [x] platform.dl (动态库加载: dlopen/LoadLibrary, 8 tests)
-- [x] platform.env (环境变量: getenv/GetEnvironmentVariable, 7 tests)
-- [x] 每个模块无内存泄漏验证 (heaptrc: 11 modules, 0 leaks)
+- [x] platform.env (环境变量: getenv/GetEnvironmentVariable, 8 tests)
+- [x] platform.random (系统熵源: getrandom/arc4random_buf/RtlGenRandom, 5 tests)
+- [x] platform.signal (信号处理: sigaction/SetConsoleCtrlHandler, 6 tests)
+- [x] 每个模块无内存泄漏验证 (heaptrc: 13 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持

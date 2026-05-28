@@ -121,6 +121,9 @@ function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: L
 function SetHandleInformation(hObject: HANDLE; dwMask: DWORD; dwFlags: DWORD): WINBOOL; stdcall; external 'kernel32' name 'SetHandleInformation';
 function DuplicateHandle(hSourceProcessHandle: HANDLE; hSourceHandle: HANDLE; hTargetProcessHandle: HANDLE; lpTargetHandle: PHANDLE; dwDesiredAccess: DWORD; bInheritHandle: WINBOOL; dwOptions: DWORD): WINBOOL; stdcall; external 'kernel32' name 'DuplicateHandle';
 function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurrentProcess';
+function SetConsoleCtrlHandler(HandlerRoutine: Pointer; Add: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleCtrlHandler';
+function GetStdHandle(nStdHandle: DWORD): HANDLE; stdcall; external 'kernel32' name 'GetStdHandle';
+function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
 
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}

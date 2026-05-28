@@ -53,6 +53,9 @@ function prlimit64(pid: pid_t; resource: cint; new_limit: PRLimit; old_limit: PR
 function getrandom(buf: Pointer; buflen: size_t; flags: cuint): ssize_t; cdecl; external 'c' name 'getrandom';
 function sysinfo(info: PSysInfo): cint; cdecl; external 'c' name 'sysinfo';
 function uname(buf: PUtsName): cint; cdecl; external 'c' name 'uname';
+function sigaction(sig: cint; act: Pointer; oact: Pointer): cint; cdecl; external 'c' name 'sigaction';
+function sigprocmask(how: cint; nset: Pointer; oset: Pointer): cint; cdecl; external 'c' name 'sigprocmask';
+function raise_signal(sig: cint): cint; cdecl; external 'c' name 'raise';
 
 implementation
 
