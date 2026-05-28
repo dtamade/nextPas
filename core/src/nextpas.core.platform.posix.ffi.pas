@@ -139,6 +139,18 @@ function tcsendbreak(fd: cint; duration: cint): cint; cdecl; external 'c' name '
 function isatty(fd: cint): cint; cdecl; external 'c' name 'isatty';
 function ioctl(fd: cint; request: culong; args: Pointer): cint; cdecl; varargs; external 'c' name 'ioctl';
 
+{$IFDEF NEXTPAS_LINUX}
+function __errno_location: PInt32; cdecl; external 'c' name '__errno_location';
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+function __error: PInt32; cdecl; external 'c' name '__error';
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+function __error: PInt32; cdecl; external 'c' name '__error';
+{$ENDIF}
+
 implementation
+
+end.
 
 end.

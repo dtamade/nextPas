@@ -67,7 +67,7 @@ begin
   end;
   AHandle.Value := open(APath, LFlags, 438);
   if AHandle.Value < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -75,11 +75,11 @@ end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 begin
   if AHandle.Value < 0 then
-    Exit(-1);
+    Exit(9);
   if close(AHandle.Value) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
   AHandle.Value := -1;
 end;
 
@@ -92,7 +92,7 @@ begin
   if LResult < 0 then
   begin
     ABytesRead := 0;
-    Result := -1;
+    Result := platform_get_errno;
   end
   else
   begin
@@ -110,7 +110,7 @@ begin
   if LResult < 0 then
   begin
     ABytesWritten := 0;
-    Result := -1;
+    Result := platform_get_errno;
   end
   else
   begin
@@ -134,7 +134,7 @@ begin
   if LResult < 0 then
   begin
     ANewPos := -1;
-    Result := -1;
+    Result := platform_get_errno;
   end
   else
   begin
@@ -148,7 +148,7 @@ begin
   if fsync(AHandle.Value) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
@@ -156,7 +156,7 @@ begin
   if ftruncate(AHandle.Value, ASize) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
@@ -168,7 +168,7 @@ begin
   FillChar(AStat, SizeOf(AStat), 0);
 {$IFDEF NEXTPAS_LINUX}
   if __xstat(_STAT_VER_LINUX, APath, LStat) <> 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   AStat.Size := LStat.st_size;
   AStat.Mode := LStat.st_mode;
   AStat.Uid := LStat.st_uid;
@@ -192,7 +192,7 @@ begin
   end;
   Result := 0;
 {$ELSE}
-  Result := -1;
+  Result := platform_get_errno;
 {$ENDIF}
 end;
 
@@ -201,7 +201,7 @@ begin
   if mkdir(APath, AMode) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
@@ -209,7 +209,7 @@ begin
   if rmdir(APath) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_unlink(const APath: PAnsiChar): Int32;
@@ -217,7 +217,7 @@ begin
   if unlink(APath) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
@@ -225,7 +225,7 @@ begin
   if rename(AOldPath, ANewPath) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
@@ -238,7 +238,7 @@ begin
   if chdir(APath) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
@@ -250,7 +250,7 @@ begin
   AHandle.Fd := open(APath, 0 {O_RDONLY}, 0);
 {$ENDIF}
   if AHandle.Fd < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -284,7 +284,7 @@ begin
         if AHandle.Len = 0 then
           Result := 1
         else
-          Result := -1;
+          Result := platform_get_errno;
         Exit;
       end;
       AHandle.Pos := 0;
@@ -333,7 +333,7 @@ begin
     Result := 0;
   end
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 {$ENDIF}
 

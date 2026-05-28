@@ -274,6 +274,22 @@ type
 { POSIX socket types - shared struct shapes }
 {$I nextpas.core.platform.posix.base.socket.inc}
 
+function platform_get_errno: Int32; inline;
+
 implementation
+
+uses
+  nextpas.core.platform.posix.ffi;
+
+function platform_get_errno: Int32; inline;
+begin
+{$IFDEF NEXTPAS_LINUX}
+  Result := __errno_location^;
+{$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Result := __error^;
+{$ELSE}
+  Result := 0;
+{$ENDIF}
+end;
 
 end.
