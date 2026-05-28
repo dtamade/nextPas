@@ -102,8 +102,9 @@
 
 ## Next
 
-- Continue container-family interface review one batch at a time.
-- Next likely batch: audit remaining `.base/.intf/.pas` structural relationships across containers.
-- Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
-- Build a full facade public-surface map before deciding how to handle open generic interface visibility.
-- Keep implementation tuning until after interface and architecture review are agreed.
+- Phase 3 interface shape review is complete. All container interfaces are consistent and clean.
+- Remaining work is Phase 3's final item: implementation tuning (shared algorithm cores, performance).
+- Potential next batches:
+  - `FAFAFA_*` macro cleanup in non-collections modules (currently out of scope per thread rules)
+  - Implementation tuning: identify duplicated algorithm bodies across containers and extract shared cores
+  - Performance: benchmark hot paths and optimize where measurements justify it

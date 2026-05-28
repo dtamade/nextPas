@@ -183,6 +183,18 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Add facade contract probes for both new factories.
 - [x] Verify all focused collections tests (10 suites, 79 tests, 0 failures).
 
+### Completed Micro Batch: IList / IForwardList Interface Cleanup
+
+- [x] Remove Unchecked methods from `IList<T>` (6 methods) and `IForwardList<T>` (5 methods).
+- [x] Concrete classes retain Unchecked methods for extreme cases.
+- [x] Verify all focused collections tests (10 suites, 79 tests, 0 failures).
+
+### Completed: Phase 3 Interface Shape Review
+
+- [x] Reviewed all container interfaces for consistency.
+- [x] Confirmed IQueue/IStack/IDeque/IVecDeque/IList/IForwardList/IHashSet/ITreeSet/ILinkedHashSet/IMultiMap/IMultiSet/ICircularBuffer/ILruCache/IArray/IVec are all in good shape.
+- [x] Key findings: IArray Unchecked is justified (real bounds-check cost); linked-list Unchecked was not (removed). All containers inherit proper state methods from IGenericCollection where applicable.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -198,8 +210,8 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ### Phase 3: Architecture Review Before Deeper Refactor
 
-- [ ] Review interface shape container by container.
-- [ ] Propose interface improvements before implementation tuning.
+- [x] Review interface shape container by container.
+- [x] Propose interface improvements before implementation tuning.
 - [ ] Only then tune implementation details and performance.
 
 ## Decisions
