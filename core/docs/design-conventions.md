@@ -531,6 +531,16 @@ examples/nextpas.core.time/    ← 模块示例目录
 - 后期随框架成熟，逐步依赖框架内部模块构建更完善的测试框架和基准框架
 - benchmarks 同 tests 结构，按模块分子目录，独立 .lpr 项目
 
+### 基准测试要求
+
+每个模块完成后必须提供基准测试，覆盖核心热路径操作：
+
+- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据
+- 基准项目放在 `benchmarks/nextpas.core.<module>/bench_<name>/bench_<name>.lpr`
+- 每个基准输出：操作名、迭代次数、总耗时、单次耗时（ns/op）、吞吐量（MB/s，如适用）
+- 基准必须在优化编译（`-O2`）下运行，禁止 debug 模式
+- 关键指标：不低于 FPC RTL 同等操作的性能；目标是接近或超越 Go/Rust 同等实现
+
 ---
 
 ## 13. 代码风格
