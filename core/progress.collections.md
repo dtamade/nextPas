@@ -45,6 +45,8 @@
 - Reviewed the next Vec/Array family interface-tuning candidates. `Ensure` was rejected as a mechanical rename because current implementations resize logical `Count`; the safer batch is exposing the already implemented checked partial collection `Overwrite` overload on `IArray<T>`.
 - Exposed `IArray<T>.Overwrite(Index, Collection, Count)` as a checked partial collection overwrite overload and split the stale checked/unchecked doc block. No implementation behavior changed because `TArray<T>` and `TVec<T>` already had matching methods.
 - Verified this batch with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the next micro batch as an interface-doc cleanup only: removed stale `Unchecked` warning text from the checked partial collection `Overwrite` doc block in `IArray<T>`, keeping method declarations and implementations unchanged.
+- Verified the doc-boundary cleanup with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

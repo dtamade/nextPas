@@ -143,3 +143,4 @@
 - `IArray<T>` documented partial collection overwrite but exposed only `OverwriteUnchecked(Index, Collection, Count)`.
 - `TArray<T>` and `TVec<T>` already implement the checked `Overwrite(Index, Collection, Count)` overload, so the interface should expose it instead of forcing callers to use the unchecked form for partial collection overwrite.
 - `Ensure` must not be mechanically renamed to `EnsureCapacity` yet. Current `TArray.Ensure` and `TVec.Ensure` call `Resize` and change logical `Count`, while `TVec.EnsureCapacity` only guarantees backing capacity. The final name and ownership require a separate interface decision.
+- The checked partial collection `Overwrite` doc block must not include the `Unchecked` convention text. Checked/unchecked overload pairs should keep their public docs visibly separated so the safe API contract is not weakened by copied warning text.

@@ -12,7 +12,13 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: IArray Checked Partial Overwrite Exposure
+### Current Micro Batch: IArray Checked/Unchecked Doc Boundary Cleanup
+
+- [x] Remove stale `Unchecked` warning text from checked `IArray<T>.Overwrite(Index, Collection, Count)` docs.
+- [x] Keep method declarations and implementations unchanged.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: IArray Checked Partial Overwrite Exposure
 
 - [x] Add the missing checked `Overwrite(Index, Collection, Count)` overload to `IArray<T>`.
 - [x] Reuse existing `TArray<T>` / `TVec<T>` implementations; do not change behavior.
