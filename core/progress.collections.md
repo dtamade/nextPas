@@ -102,9 +102,11 @@
 
 ## Next
 
-- Phase 3 interface shape review is complete. All container interfaces are consistent and clean.
-- Remaining work is Phase 3's final item: implementation tuning (shared algorithm cores, performance).
-- Potential next batches:
-  - `FAFAFA_*` macro cleanup in non-collections modules (currently out of scope per thread rules)
-  - Implementation tuning: identify duplicated algorithm bodies across containers and extract shared cores
-  - Performance: benchmark hot paths and optimize where measurements justify it
+- Collections module is stable. Architecture review, interface cleanup, and identity consolidation are complete.
+- Implementation tuning audit found no actionable duplicated algorithm bodies:
+  - TVec delegates to internal TArray (already shared)
+  - TVecDeque has structurally independent algorithms (ring-buffer index translation)
+  - Tree containers use TRBTreeCore (already shared)
+- Remaining potential work:
+  - Performance benchmarking of hot paths (needs measurement-driven decisions)
+  - `FAFAFA_*` macro cleanup in non-collections modules (out of scope for this thread)
