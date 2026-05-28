@@ -6640,7 +6640,7 @@ begin
         InhParentName := Arg.ChildAt(0).ChildAt(0).Text;
         StringValue := InhParentName + '.' +
           Arg.ChildAt(0).ChildAt(1).Text;
-        if FModel.LookupConstValue(InhParentName + '$size', Value) then
+        if TypeMetaSize(InhParentName) > 0 then
         begin
           if FModel.FindSymbolByName(StringValue) = 0 then
           begin
@@ -6946,7 +6946,8 @@ begin
           IsRecordVar(Arg.Text) then
         begin
           StringValue := LookupRecordVar(Decoded);
-          if FModel.LookupConstValue(StringValue + '$size', Value) then
+          Value := TypeMetaSize(StringValue);
+          if Value > 0 then
             FModel.AddTypedHirNode(
               'record-copy-runtime', Decoded, 0, 0,
               Decoded + #9 + Arg.Text + #9 + IntToStr(Value div 8)
@@ -8003,10 +8004,11 @@ begin
           RegisterRuntimeArrVar(Decl.Text);
           if (NextSibling <> nil) and (NextSibling.NodeKind = gnkArrayType) and
             (NextSibling.ChildCount > 0) and (NextSibling.ChildAt(0) <> nil) and
-            FModel.LookupConstValue(NextSibling.ChildAt(0).Text + '$record', Folded) and
-            FModel.LookupConstValue(NextSibling.ChildAt(0).Text + '$size', Folded) then
+            TypeMetaIsRecord(NextSibling.ChildAt(0).Text) and
+            (TypeMetaSize(NextSibling.ChildAt(0).Text) > 0) then
           begin
-            FModel.AddConstValue(Decl.Text + '$arr_elem_size', Folded);
+            FModel.AddConstValue(Decl.Text + '$arr_elem_size',
+              TypeMetaSize(NextSibling.ChildAt(0).Text));
             FModel.AddStringConstValue(Decl.Text + '$arr_elem_type', NextSibling.ChildAt(0).Text);
           end;
           FModel.AddTypedHirNode(
@@ -8014,9 +8016,9 @@ begin
           );
         end
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
-          FModel.LookupConstValue(Decl.ChildAt(0).Text + '$size', Folded) then
+          (TypeMetaSize(Decl.ChildAt(0).Text) > 0) then
         begin
-          if FModel.LookupConstValue(Decl.ChildAt(0).Text + '$record', Value) then
+          if TypeMetaIsRecord(Decl.ChildAt(0).Text) then
           begin
             RegisterRecordVar(Decl.Text, Decl.ChildAt(0).Text);
             FModel.AddTypedHirNode(
@@ -8109,10 +8111,10 @@ begin
       end;
       if (Child.NodeKind = gnkIdentifier) and
         (Child.NodeKind <> gnkBeginBlock) and
-        FModel.LookupConstValue(Child.Text + '$size', Folded) and
+        (TypeMetaSize(Child.Text) > 0) and
         (Pos('.', Entry.Name) = 0) then
       begin
-        if not FModel.LookupConstValue(Child.Text + '$record', Folded) then
+        if not TypeMetaIsRecord(Child.Text) then
           RegisterPtrReturnFunc(Entry.Name, Child.Text);
         Break;
       end;
@@ -8183,9 +8185,9 @@ begin
                   RegisterRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
-                  FModel.LookupConstValue(TypeChild.Text + '$size', Folded) then
+                  (TypeMetaSize(TypeChild.Text) > 0) then
                 begin
-                  if FModel.LookupConstValue(TypeChild.Text + '$record', Value) then
+                  if TypeMetaIsRecord(TypeChild.Text) then
                     RegisterRecordVar(RetVarName, TypeChild.Text)
                   else
                     RegisterClassVar(RetVarName, TypeChild.Text);
@@ -8221,16 +8223,14 @@ begin
           IsStrReturn := True
         else if (Child.NodeKind = gnkIdentifier) and
           (Child.NodeKind <> gnkBeginBlock) and
-          FModel.LookupConstValue(Child.Text + '$size', Folded) and
-          (not FModel.LookupConstValue(Child.Text + '$record', Value)) then
+          TypeMetaIsClass(Child.Text) then
         begin
           IsPtrReturn := True;
           PtrReturnClass := Child.Text;
         end
         else if (Child.NodeKind = gnkIdentifier) and
           (Child.NodeKind <> gnkBeginBlock) and
-          FModel.LookupConstValue(Child.Text + '$size', Folded) and
-          FModel.LookupConstValue(Child.Text + '$record', Value) then
+          TypeMetaIsRecord(Child.Text) then
         begin
           IsRecReturn := True;
           PtrReturnClass := Child.Text;
@@ -8261,7 +8261,8 @@ begin
         IntToStr(ParamCount) + ':' + ParamTypes + ':p')
     else if IsRecReturn then
     begin
-      if FModel.LookupConstValue(PtrReturnClass + '$size', Folded) then
+      Folded := TypeMetaSize(PtrReturnClass);
+      if Folded > 0 then
         FModel.AddTypedHirNode('function-body-begin', EffName, 0, 0,
           IntToStr(ParamCount) + ':' + ParamTypes + ':r' + IntToStr(Folded div 8))
       else
