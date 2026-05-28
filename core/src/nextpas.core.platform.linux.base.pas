@@ -289,6 +289,9 @@ const
 { sysinfo, clone, extended futex ops, splice, statx extensions }
 {$I nextpas.core.platform.linux.base.sysinfo.inc}
 
+{ socket constants - AF_*, SOL_*, SO_*, IPPROTO_*, TCP_*, MSG_*, etc. }
+{$I nextpas.core.platform.linux.base.socket.inc}
+
 implementation
 
 end.

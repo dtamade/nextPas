@@ -261,6 +261,17 @@ const
   PLATFORM_WAIT_CORE_FLAG = Int32($80);
   PLATFORM_FILE_MODE_DEFAULT = TPlatformFileModeArg(438);
 
+type
+  iovec = record
+    iov_base: Pointer;
+    iov_len: size_t;
+  end;
+  tiovec = iovec;
+  piovec = ^tiovec;
+
+{ POSIX socket types - shared struct shapes }
+{$I nextpas.core.platform.posix.base.socket.inc}
+
 implementation
 
 end.

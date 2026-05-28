@@ -46,13 +46,6 @@ type
   tpollfd = pollfd;
   ppollfd = ^pollfd;
 
-  iovec = record
-    iov_base: Pointer;
-    iov_len: size_t;
-  end;
-  tiovec = iovec;
-  piovec = ^tiovec;
-
   Dirent = record
     d_ino: ino64_t;
     d_off: off_t;
