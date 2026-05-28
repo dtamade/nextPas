@@ -163,17 +163,6 @@ const
   WNOHANG   = cint(1);
   WUNTRACED = cint(2);
 
-  SIGHUP    = cint(1);
-  SIGINT    = cint(2);
-  SIGKILL   = cint(9);
-  SIGTERM   = cint(15);
-  SIGCHLD   = cint(17);
-  SA_SIGINFO  = cint(4);
-  SA_RESTART  = cint($10000000);
-  SIG_BLOCK   = cint(0);
-  SIG_UNBLOCK = cint(1);
-  SIG_SETMASK = cint(2);
-
   FUTEX_WAIT         = 0;
   FUTEX_WAKE         = 1;
   FUTEX_FD           = 2;
@@ -287,6 +276,18 @@ const
 
 { core OS types - pollfd, iovec, dirent, statfs, rlimit, flock, tms, utsname, fdset, cpu_set }
 {$I nextpas.core.platform.linux.base.ostypes.inc}
+
+{ signal constants and types - full signal table, sigaction, sigset }
+{$I nextpas.core.platform.linux.base.signal.inc}
+
+{ epoll types and constants }
+{$I nextpas.core.platform.linux.base.epoll.inc}
+
+{ inotify types and constants }
+{$I nextpas.core.platform.linux.base.inotify.inc}
+
+{ sysinfo, clone, extended futex ops, splice, statx extensions }
+{$I nextpas.core.platform.linux.base.sysinfo.inc}
 
 implementation
 
