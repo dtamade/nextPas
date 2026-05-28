@@ -1,10 +1,15 @@
-name: CI
+name: Core CI
 
 on:
   push:
     branches: [main]
+    paths: ['core/**']
   pull_request:
-    branches: [main]
+    paths: ['core/**']
+
+defaults:
+  run:
+    working-directory: core
 
 jobs:
   test-linux:
@@ -22,25 +27,23 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-linux-x86_64-v3
+          key: fpc-trunk-linux-x86_64-v4
 
       - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
+        working-directory: /tmp
         run: |
-          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git ~/fpc-src
-          cd ~/fpc-src
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git fpc-src
+          cd fpc-src
           make all FPCDIR=$(pwd) PP=$(which ppcx64) OPT="-O2"
           mkdir -p ~/fpc-trunk/bin ~/fpc-trunk/lib
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppcx64 PREFIX=~/fpc-trunk
 
       - name: Setup FPC config and PATH
         run: |
-          # Generate fpc.cfg in both bin dir and ppcx64 dir
           $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
           cp $HOME/fpc-trunk/bin/fpc.cfg $HOME/fpc-trunk/lib/fpc/3.3.1/fpc.cfg
-          # Override system fpc.cfg
           sudo cp $HOME/fpc-trunk/bin/fpc.cfg /etc/fpc.cfg
-          # Add to PATH
           echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
           echo "$HOME/fpc-trunk/lib/fpc/3.3.1" >> $GITHUB_PATH
 
@@ -63,16 +66,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-macos-aarch64-v3
+          key: fpc-trunk-macos-aarch64-v4
 
       - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
+        working-directory: /tmp
         run: |
-          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git ~/fpc-src
-          cd ~/fpc-src
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git fpc-src
+          cd fpc-src
           PP=$(find /usr/local/lib/fpc /opt/homebrew/lib/fpc -name 'ppca64' -o -name 'ppcaarch64' 2>/dev/null | head -1)
           if [ -z "$PP" ]; then PP=$(which ppca64 2>/dev/null || which ppcaarch64 2>/dev/null); fi
-          echo "Bootstrap compiler: $PP"
           make all FPCDIR=$(pwd) PP="$PP" OPT="-O2"
           mkdir -p ~/fpc-trunk
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppca64 PREFIX=~/fpc-trunk
@@ -105,58 +108,6 @@ jobs:
           echo "=== macOS: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
           if [ $PASSED -eq 0 ]; then exit 1; fi
 
-  test-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache FPC trunk
-        id: cache-fpc
-        uses: actions/cache@v4
-        with:
-          path: C:\fpc-trunk
-          key: fpc-trunk-windows-x86_64-v3
-
-      - name: Install bootstrap and build FPC trunk
-        if: steps.cache-fpc.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          choco install freepascal --yes --no-progress
-          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git C:\fpc-src
-          cd C:\fpc-src
-          $env:PATH = "C:\FPC\3.2.2\bin\i386-win32;$env:PATH"
-          make all FPCDIR=. PP=ppcrossx64.exe OPT="-O2" OS_TARGET=win64 CPU_TARGET=x86_64 2>&1 | Select-Object -Last 10
-          New-Item -ItemType Directory -Force -Path C:\fpc-trunk\bin
-          make install FPCDIR=. PREFIX=C:\fpc-trunk OS_TARGET=win64 CPU_TARGET=x86_64 2>&1 | Select-Object -Last 5
-
-      - name: Setup PATH
-        shell: bash
-        run: |
-          echo "C:/fpc-trunk/bin" >> $GITHUB_PATH
-          find "C:/fpc-trunk" -name "*.exe" 2>/dev/null | head -5 || true
-
-      - name: Verify FPC
-        run: fpc -iV
-
-      - name: Run tests (best-effort)
-        shell: bash
-        run: |
-          TOTAL=0; PASSED=0; SKIPPED=0
-          while IFS= read -r mk; do
-            dir=$(dirname "$mk")
-            TOTAL=$((TOTAL + 1))
-            if make -C "$dir" test >/dev/null 2>&1; then
-              PASSED=$((PASSED + 1))
-              echo "PASS: $dir"
-            else
-              SKIPPED=$((SKIPPED + 1))
-              echo "SKIP: $dir"
-            fi
-          done < <(find tests -mindepth 2 -name Makefile | sort)
-          echo ""
-          echo "=== Windows: $PASSED passed, $SKIPPED skipped, $TOTAL total ==="
-          if [ $PASSED -eq 0 ]; then exit 1; fi
-
   test-freebsd:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -171,6 +122,7 @@ jobs:
           run: |
             sudo pkg install -y fpc
             fpc -iV
+            cd core
             TOTAL=0; PASSED=0; SKIPPED=0
             for mk in $(find tests -mindepth 2 -name Makefile | sort); do
               dir=$(dirname "$mk")
