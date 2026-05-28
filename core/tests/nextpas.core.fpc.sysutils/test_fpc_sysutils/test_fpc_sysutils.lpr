@@ -116,6 +116,47 @@ begin
   Check(S[Length(S)] = '/', 'tempdir trailing /');
 end;
 
+procedure TestFormat;
+begin
+  Check(Format('hello %s', ['world']) = 'hello world', 'string');
+  Check(Format('line %d col %d', [42, 7]) = 'line 42 col 7', 'ints');
+  Check(Format('%x', [255]) = 'FF', 'hex');
+  Check(Format('empty', []) = 'empty', 'no args');
+end;
+
+procedure TestStringReplace;
+begin
+  Check(StringReplace('hello world', 'world', 'pascal', []) = 'hello pascal', 'basic');
+  Check(StringReplace('aaa', 'a', 'bb', [rfReplaceAll]) = 'bbbbbb', 'replace all');
+  Check(StringReplace('Hello', 'hello', 'HI', [rfIgnoreCase]) = 'HI', 'ignore case');
+  Check(StringReplace('abc', 'x', 'y', []) = 'abc', 'no match');
+end;
+
+procedure TestBoolToStr;
+begin
+  Check(BoolToStr(True, True) = 'True', 'true');
+  Check(BoolToStr(False, True) = 'False', 'false');
+  Check(BoolToStr(True) = '-1', 'true numeric');
+  Check(BoolToStr(False) = '0', 'false numeric');
+end;
+
+procedure TestIsValidIdent;
+begin
+  Check(IsValidIdent('MyVar'), 'MyVar');
+  Check(IsValidIdent('_private'), '_private');
+  Check(not IsValidIdent('123abc'), 'starts with digit');
+  Check(not IsValidIdent(''), 'empty');
+  Check(IsValidIdent('unit.name', True), 'dotted');
+  Check(not IsValidIdent('unit.name', False), 'no dots');
+end;
+
+procedure TestQuotedStr;
+begin
+  Check(QuotedStr('hello') = '''hello''', 'basic');
+  Check(QuotedStr('it''s') = '''it''''s''', 'escape');
+  Check(QuotedStr('') = '''''', 'empty');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.fpc.sysutils');
   T.Run('IntToStr', @TestIntToStr);
@@ -132,5 +173,10 @@ begin
   T.Run('ConcatPaths', @TestConcatPaths);
   T.Run('FileOps', @TestFileOps);
   T.Run('Env+Temp', @TestEnvAndTemp);
+  T.Run('Format', @TestFormat);
+  T.Run('StringReplace', @TestStringReplace);
+  T.Run('BoolToStr', @TestBoolToStr);
+  T.Run('IsValidIdent', @TestIsValidIdent);
+  T.Run('QuotedStr', @TestQuotedStr);
   T.Summary;
 end.

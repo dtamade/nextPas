@@ -86,6 +86,20 @@ function GetEnvironmentVariable(const EnvVar: string): string;
 procedure Sleep(Milliseconds: Cardinal);
 function GetTempDir: string;
 
+{ --- Format and String Operations (P1) --- }
+
+function Format(const Fmt: string; const Args: array of const): string;
+function BoolToStr(B: Boolean; UseBoolStrs: Boolean = False): string;
+function StringReplace(const S, OldPattern, NewPattern: string;
+  Flags: TReplaceFlags): string;
+function IsValidIdent(const Ident: string; AllowDots: Boolean = False;
+  StrictDots: Boolean = False): Boolean;
+function QuotedStr(const S: string): string;
+function AnsiCompareText(const S1, S2: string): Integer;
+function AnsiCompareStr(const S1, S2: string): Integer;
+function AnsiSameText(const S1, S2: string): Boolean;
+function GetLastOSError: Integer;
+
 implementation
 
 uses
@@ -95,6 +109,7 @@ uses
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
   nextpas.core.platform.env,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.thread;
 
 { --- String Functions --- }
@@ -408,6 +423,134 @@ begin
     Result := IncludeTrailingPathDelimiter(Buf)
   else
     Result := '/tmp/';
+end;
+
+{ --- Format and String Operations (P1) --- }
+
+function Format(const Fmt: string; const Args: array of const): string;
+var
+  Buf: array[0..4095] of AnsiChar;
+  LLen: Int32;
+begin
+  LLen := platform_fmt_buf(PAnsiChar(Fmt), Args, @Buf[0], 4096);
+  if LLen >= 0 then
+    SetString(Result, @Buf[0], LLen)
+  else
+    Result := '';
+end;
+
+function BoolToStr(B: Boolean; UseBoolStrs: Boolean = False): string;
+begin
+  if UseBoolStrs then
+  begin
+    if B then Result := 'True' else Result := 'False';
+  end
+  else
+  begin
+    if B then Result := '-1' else Result := '0';
+  end;
+end;
+
+function StringReplace(const S, OldPattern, NewPattern: string;
+  Flags: TReplaceFlags): string;
+var
+  LPos, LStart, LOldLen, LNewLen, LSLen: Integer;
+  LIgnoreCase: Boolean;
+  LSearchStr, LSearchPat: string;
+begin
+  if OldPattern = '' then begin Result := S; Exit; end;
+  LOldLen := Length(OldPattern);
+  LNewLen := Length(NewPattern);
+  LSLen := Length(S);
+  LIgnoreCase := rfIgnoreCase in Flags;
+  if LIgnoreCase then
+  begin
+    LSearchStr := LowerCase(S);
+    LSearchPat := LowerCase(OldPattern);
+  end
+  else
+  begin
+    LSearchStr := S;
+    LSearchPat := OldPattern;
+  end;
+  Result := '';
+  LStart := 1;
+  repeat
+    LPos := Pos(LSearchPat, Copy(LSearchStr, LStart, LSLen - LStart + 1));
+    if LPos = 0 then
+    begin
+      Result := Result + Copy(S, LStart, LSLen - LStart + 1);
+      Break;
+    end;
+    Result := Result + Copy(S, LStart, LPos - 1) + NewPattern;
+    LStart := LStart + LPos - 1 + LOldLen;
+    if not (rfReplaceAll in Flags) then
+    begin
+      Result := Result + Copy(S, LStart, LSLen - LStart + 1);
+      Break;
+    end;
+  until LStart > LSLen;
+end;
+
+function IsValidIdent(const Ident: string; AllowDots: Boolean = False;
+  StrictDots: Boolean = False): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if Length(Ident) = 0 then Exit;
+  if not (Ident[1] in ['A'..'Z', 'a'..'z', '_']) then Exit;
+  for I := 2 to Length(Ident) do
+  begin
+    if Ident[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_'] then
+      Continue;
+    if AllowDots and (Ident[I] = '.') then
+    begin
+      if StrictDots and (I = Length(Ident)) then Exit;
+      if StrictDots and (Ident[I-1] = '.') then Exit;
+      Continue;
+    end;
+    Exit;
+  end;
+  Result := True;
+end;
+
+function QuotedStr(const S: string): string;
+var
+  I: Integer;
+begin
+  Result := '''';
+  for I := 1 to Length(S) do
+  begin
+    Result := Result + S[I];
+    if S[I] = '''' then
+      Result := Result + '''';
+  end;
+  Result := Result + '''';
+end;
+
+function AnsiCompareText(const S1, S2: string): Integer;
+begin
+  Result := CompareText(S1, S2);
+end;
+
+function AnsiCompareStr(const S1, S2: string): Integer;
+begin
+  Result := CompareStr(S1, S2);
+end;
+
+function AnsiSameText(const S1, S2: string): Boolean;
+begin
+  Result := SameText(S1, S2);
+end;
+
+function GetLastOSError: Integer;
+begin
+{$IFDEF NEXTPAS_UNIX}
+  Result := nextpas.core.platform.posix.base.platform_get_errno;
+{$ELSE}
+  Result := 0;
+{$ENDIF}
 end;
 
 end.
