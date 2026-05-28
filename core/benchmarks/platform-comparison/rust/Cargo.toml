@@ -1,0 +1,12 @@
+[package]
+name = "bench_compare"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+memmap2 = "0.9"
+getrandom = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
