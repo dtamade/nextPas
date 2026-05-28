@@ -18,13 +18,25 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
+function platform_file_rmdir(const APath: PAnsiChar): Int32;
+function platform_file_unlink(const APath: PAnsiChar): Int32;
+function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
+function platform_file_chdir(const APath: PAnsiChar): Int32;
 
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi
+{$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  , nextpas.core.platform.linux.ffi
+{$ENDIF}
+  ;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
 uses
@@ -143,6 +155,88 @@ begin
   else
     Result := -1;
 end;
+
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+var
+{$IFDEF NEXTPAS_LINUX}
+  LStat: TPlatformLinuxStat;
+{$ENDIF}
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+{$IFDEF NEXTPAS_LINUX}
+  if __xstat(_STAT_VER_LINUX, APath, LStat) <> 0 then
+    Exit(-1);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := LStat.st_mode;
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
+  AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
+  AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
+  case LStat.st_mode and S_IFMT of
+    S_IFREG:  AStat.FileType := ftRegular;
+    S_IFDIR:  AStat.FileType := ftDirectory;
+    S_IFLNK:  AStat.FileType := ftSymlink;
+    S_IFCHR:  AStat.FileType := ftCharDevice;
+    S_IFBLK:  AStat.FileType := ftBlockDevice;
+    S_IFIFO:  AStat.FileType := ftFifo;
+    S_IFSOCK: AStat.FileType := ftSocket;
+  else
+    AStat.FileType := ftUnknown;
+  end;
+  Result := 0;
+{$ELSE}
+  Result := -1;
+{$ENDIF}
+end;
+
+function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  if mkdir(APath, AMode) = 0 then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_rmdir(const APath: PAnsiChar): Int32;
+begin
+  if rmdir(APath) = 0 then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_unlink(const APath: PAnsiChar): Int32;
+begin
+  if unlink(APath) = 0 then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+begin
+  if rename(AOldPath, ANewPath) = 0 then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
+begin
+  Result := getcwd(ABuf, ASize);
+end;
+
+function platform_file_chdir(const APath: PAnsiChar): Int32;
+begin
+  if chdir(APath) = 0 then
+    Result := 0
+  else
+    Result := -1;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -255,6 +349,72 @@ begin
   else
     Result := -1;
 end;
+
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+var
+  LData: WIN32_FILE_ATTRIBUTE_DATA;
+  LSize: UInt64;
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  if not GetFileAttributesExA(APath, GetFileExInfoStandard, @LData) then
+    Exit(-1);
+  LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
+  AStat.Size := Int64(LSize);
+  AStat.Mode := LData.dwFileAttributes;
+  if (LData.dwFileAttributes and $10) <> 0 then
+    AStat.FileType := ftDirectory
+  else
+    AStat.FileType := ftRegular;
+  Result := 0;
+end;
+
+function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  if CreateDirectoryA(APath, nil) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_rmdir(const APath: PAnsiChar): Int32;
+begin
+  if RemoveDirectoryA(APath) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_unlink(const APath: PAnsiChar): Int32;
+begin
+  if DeleteFileA(APath) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+begin
+  if MoveFileA(AOldPath, ANewPath) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
+begin
+  if GetCurrentDirectoryA(DWORD(ASize), ABuf) > 0 then
+    Result := ABuf
+  else
+    Result := nil;
+end;
+
+function platform_file_chdir(const APath: PAnsiChar): Int32;
+begin
+  if SetCurrentDirectoryA(APath) then
+    Result := 0
+  else
+    Result := -1;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -265,6 +425,13 @@ function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; 
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := -1; end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := -1; end;
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
+function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := -1; end;
+function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar; begin Result := nil; end;
+function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
 {$ENDIF}
 
 end.

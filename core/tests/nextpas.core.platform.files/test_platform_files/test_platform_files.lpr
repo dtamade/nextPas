@@ -76,6 +76,63 @@ begin
   Check(platform_file_open('/tmp/nextpas_nonexistent_xyz_abc', fomReadOnly, fcmOpenExisting, H) <> 0, 'open non-existent returns error');
 end;
 
+procedure TestMkdirRmdir;
+const
+  DIR_PATH = '/tmp/nextpas_test_dir_xyz';
+begin
+  platform_file_rmdir(DIR_PATH);
+  Check(platform_file_mkdir(DIR_PATH, 493) = 0, 'mkdir');
+  Check(platform_file_rmdir(DIR_PATH) = 0, 'rmdir');
+end;
+
+procedure TestStat;
+var
+  H: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
+  LWritten: PtrUInt;
+begin
+  Check(platform_file_open(TEST_PATH, fomReadWrite, fcmCreateAlways, H) = 0, 'create file');
+  Check(platform_file_write(H, @TEST_DATA[1], Length(TEST_DATA), LWritten) = 0, 'write');
+  Check(platform_file_close(H) = 0, 'close');
+  Check(platform_file_stat(TEST_PATH, LStat) = 0, 'stat');
+  CheckEqual(Int64(Length(TEST_DATA)), LStat.Size, 'stat size');
+  Check(LStat.FileType = ftRegular, 'stat file type = regular');
+end;
+
+procedure TestStatDirectory;
+var
+  LStat: TPlatformFileStat;
+begin
+  Check(platform_file_stat('/tmp', LStat) = 0, 'stat /tmp');
+  Check(LStat.FileType = ftDirectory, 'stat /tmp is directory');
+end;
+
+procedure TestRenameUnlink;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+const
+  RENAMED_PATH = '/tmp/nextpas_test_renamed.tmp';
+begin
+  Check(platform_file_open(TEST_PATH, fomReadWrite, fcmCreateAlways, H) = 0, 'create');
+  Check(platform_file_write(H, @TEST_DATA[1], 5, LWritten) = 0, 'write');
+  Check(platform_file_close(H) = 0, 'close');
+  Check(platform_file_rename(TEST_PATH, RENAMED_PATH) = 0, 'rename');
+  Check(platform_file_open(TEST_PATH, fomReadOnly, fcmOpenExisting, H) <> 0, 'old path gone');
+  Check(platform_file_unlink(RENAMED_PATH) = 0, 'unlink renamed');
+end;
+
+procedure TestGetcwdChdir;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LOrig: array[0..4095] of AnsiChar;
+begin
+  Check(platform_file_getcwd(@LOrig, SizeOf(LOrig)) <> nil, 'getcwd');
+  Check(platform_file_chdir('/tmp') = 0, 'chdir /tmp');
+  Check(platform_file_getcwd(@LBuf, SizeOf(LBuf)) <> nil, 'getcwd after chdir');
+  Check(platform_file_chdir(@LOrig) = 0, 'restore cwd');
+end;
+
 procedure Cleanup;
 begin
   DeleteFile(TEST_PATH);
@@ -88,5 +145,10 @@ begin
   T.Run('truncate', @TestTruncate);
   T.Run('sync', @TestSync);
   T.Run('open non-existent', @TestOpenNonExistent);
+  T.Run('mkdir/rmdir', @TestMkdirRmdir);
+  T.Run('stat file', @TestStat);
+  T.Run('stat directory', @TestStatDirectory);
+  T.Run('rename/unlink', @TestRenameUnlink);
+  T.Run('getcwd/chdir', @TestGetcwdChdir);
   T.Summary;
 end.
