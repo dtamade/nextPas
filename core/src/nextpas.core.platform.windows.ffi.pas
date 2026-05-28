@@ -130,6 +130,8 @@ function LocalFree(hMem: Pointer): Pointer; stdcall; external 'kernel32' name 'L
 function GetModuleFileNameA(hModule: HMODULE; lpFilename: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetModuleFileNameA';
 function GetTempPathA(nBufferLength: DWORD; lpBuffer: LPSTR): DWORD; stdcall; external 'kernel32' name 'GetTempPathA';
 function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
+function LockFileEx(hFile: HANDLE; dwFlags: DWORD; dwReserved: DWORD; nNumberOfBytesToLockLow: DWORD; nNumberOfBytesToLockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'LockFileEx';
+function UnlockFileEx(hFile: HANDLE; dwReserved: DWORD; nNumberOfBytesToUnlockLow: DWORD; nNumberOfBytesToUnlockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'UnlockFileEx';
 
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}

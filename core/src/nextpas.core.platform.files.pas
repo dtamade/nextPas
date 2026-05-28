@@ -25,6 +25,9 @@ function platform_file_unlink(const APath: PAnsiChar): Int32;
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
 function platform_file_chdir(const APath: PAnsiChar): Int32;
+function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
@@ -276,6 +279,42 @@ end;
 function platform_file_chdir(const APath: PAnsiChar): Int32;
 begin
   if chdir(APath) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+var
+  LFlags: Int32;
+begin
+  if AExclusive then
+    LFlags := LOCK_EX
+  else
+    LFlags := LOCK_SH;
+  if nextpas.core.platform.posix.ffi.flock(AHandle.Value, LFlags) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+var
+  LFlags: Int32;
+begin
+  if AExclusive then
+    LFlags := LOCK_EX or LOCK_NB
+  else
+    LFlags := LOCK_SH or LOCK_NB;
+  if nextpas.core.platform.posix.ffi.flock(AHandle.Value, LFlags) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
+begin
+  if nextpas.core.platform.posix.ffi.flock(AHandle.Value, LOCK_UN) = 0 then
     Result := 0
   else
     Result := platform_get_errno;
@@ -674,6 +713,47 @@ begin
     Result := Int32(GetLastError);
 end;
 
+function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+var
+  LFlags: DWORD;
+  LOvl: OVERLAPPED;
+begin
+  FillChar(LOvl, SizeOf(LOvl), 0);
+  LFlags := 0;
+  if AExclusive then
+    LFlags := LOCKFILE_EXCLUSIVE_LOCK;
+  if LockFileEx(AHandle.Value, LFlags, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
+    Result := 0
+  else
+    Result := Int32(GetLastError);
+end;
+
+function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
+var
+  LFlags: DWORD;
+  LOvl: OVERLAPPED;
+begin
+  FillChar(LOvl, SizeOf(LOvl), 0);
+  LFlags := LOCKFILE_FAIL_IMMEDIATELY;
+  if AExclusive then
+    LFlags := LFlags or LOCKFILE_EXCLUSIVE_LOCK;
+  if LockFileEx(AHandle.Value, LFlags, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
+    Result := 0
+  else
+    Result := Int32(GetLastError);
+end;
+
+function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
+var
+  LOvl: OVERLAPPED;
+begin
+  FillChar(LOvl, SizeOf(LOvl), 0);
+  if UnlockFileEx(AHandle.Value, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
+    Result := 0
+  else
+    Result := Int32(GetLastError);
+end;
+
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 begin
   FillChar(AHandle, SizeOf(AHandle), 0);
@@ -720,6 +800,9 @@ function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := -1
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; begin Result := -1; end;
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar; begin Result := nil; end;
 function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
+function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
+function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := -1; end;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := -1; end;
