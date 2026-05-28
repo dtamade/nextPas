@@ -89,6 +89,48 @@ begin
   CheckEqual(Int64(0), Int64(LStack.Count), 'count 0 after clear');
 end;
 
+procedure TestStackPushArray;
+var
+  LStack: IIntStack;
+begin
+  LStack := specialize MakeStack<Integer>;
+  LStack.Push([10, 20, 30]);
+  CheckEqual(Int64(3), Int64(LStack.Count), 'count after array push');
+  CheckEqual(Int64(30), Int64(LStack.Pop), 'LIFO: last pushed first');
+  CheckEqual(Int64(20), Int64(LStack.Pop), 'second');
+  CheckEqual(Int64(10), Int64(LStack.Pop), 'third');
+end;
+
+procedure TestStackPushPointer;
+var
+  LStack: IIntStack;
+  LSrc: array[0..2] of Integer;
+begin
+  LSrc[0] := 100;
+  LSrc[1] := 200;
+  LSrc[2] := 300;
+  LStack := specialize MakeStack<Integer>;
+  LStack.Push(@LSrc[0], 3);
+  CheckEqual(Int64(3), Int64(LStack.Count), 'count after pointer push');
+  CheckEqual(Int64(300), Int64(LStack.Pop), 'LIFO: last');
+  CheckEqual(Int64(200), Int64(LStack.Pop), 'second');
+  CheckEqual(Int64(100), Int64(LStack.Pop), 'first');
+end;
+
+procedure TestStackCount;
+var
+  LStack: IIntStack;
+begin
+  LStack := specialize MakeStack<Integer>;
+  CheckEqual(Int64(0), Int64(LStack.Count), 'empty count');
+  LStack.Push(1);
+  CheckEqual(Int64(1), Int64(LStack.Count), 'count 1');
+  LStack.Push(2);
+  CheckEqual(Int64(2), Int64(LStack.Count), 'count 2');
+  LStack.Pop;
+  CheckEqual(Int64(1), Int64(LStack.Count), 'count after pop');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.stack');
   T.Run('MakeStack basic LIFO', @TestMakeStackBasicLIFO);
@@ -97,5 +139,8 @@ begin
   T.Run('Stack TryPop empty', @TestStackTryPopEmpty);
   T.Run('Stack Pop empty raises', @TestStackPopEmptyRaises);
   T.Run('Stack Clear', @TestStackClear);
+  T.Run('Push(array)', @TestStackPushArray);
+  T.Run('Push(Pointer)', @TestStackPushPointer);
+  T.Run('Count tracking', @TestStackCount);
   T.Summary;
 end.

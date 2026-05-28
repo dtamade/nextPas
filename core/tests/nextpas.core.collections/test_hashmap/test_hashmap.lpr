@@ -225,6 +225,59 @@ begin
   Check(True);
 end;
 
+procedure TestReserve;
+var
+  LMap: IIntIntMap;
+begin
+  LMap := TIntIntMap.Create;
+  LMap.Reserve(100);
+  Check(LMap.GetCapacity >= 100, 'capacity after reserve');
+  LMap.Put(1, 10);
+  CheckEqual(Int64(10), Int64(LMap.Get(1)), 'put/get after reserve');
+end;
+
+function SupplyDefault999: Integer;
+begin
+  Result := 999;
+end;
+
+procedure IncrementValue(var V: Integer);
+begin
+  Inc(V);
+end;
+
+procedure TestGetOrInsertWith;
+var
+  LMap: TIntIntMap;
+begin
+  LMap := TIntIntMap.Create;
+  try
+    LMap.Put(1, 100);
+    CheckEqual(Int64(100), Int64(LMap.GetOrInsertWith(1, @SupplyDefault999)), 'existing key');
+    CheckEqual(Int64(999), Int64(LMap.GetOrInsertWith(2, @SupplyDefault999)), 'new key uses supplier');
+    CheckEqual(Int64(999), Int64(LMap.Get(2)), 'supplier value persisted');
+  finally
+    LMap.Free;
+  end;
+end;
+
+procedure TestModifyOrInsert;
+var
+  LMap: TIntIntMap;
+begin
+  LMap := TIntIntMap.Create;
+  try
+    LMap.ModifyOrInsert(1, @IncrementValue, 10);
+    CheckEqual(Int64(10), Int64(LMap.Get(1)), 'first call inserts default');
+    LMap.ModifyOrInsert(1, @IncrementValue, 10);
+    CheckEqual(Int64(11), Int64(LMap.Get(1)), 'second call modifies');
+    LMap.ModifyOrInsert(1, @IncrementValue, 10);
+    CheckEqual(Int64(12), Int64(LMap.Get(1)), 'third call modifies again');
+  finally
+    LMap.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -242,5 +295,8 @@ begin
   T.Run('LoadFactor', @TestLoadFactor);
   T.Run('Tombstone rehash', @TestTombstoneRehash);
   T.Run('Auto free (interface)', @TestAutoFree);
+  T.Run('Reserve', @TestReserve);
+  T.Run('GetOrInsertWith', @TestGetOrInsertWith);
+  T.Run('ModifyOrInsert', @TestModifyOrInsert);
   T.Summary;
 end.
