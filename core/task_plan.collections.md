@@ -1,6 +1,85 @@
-# nextpas.core collections refactor plan
+# nextpas.core.collections — 目标树与总控地图
 
-## Goal
+## 定位
+
+nextpas.core.collections 是 nextPas 框架的 L1 基础设施层容器库。
+目标：打造 FreePascal 领域最优秀的集合框架之一。
+
+## 线程隔离
+
+- 本线程只碰 `src/nextpas.core.collections*` 和 `tests/nextpas.core.collections/`
+- Platform 线程在 worktree 里跑（Wave 16+），不冲突
+- Compiler 线程在 compiler/ 目录，不冲突
+
+## 目标树
+
+```
+G-COLLECTIONS: 打造 best-in-class 集合框架
+│
+├── G-ARCH [完成]: 架构审查与接口规整
+│   ├── [完成] Stack 身份合并 (TStack<T> + TVec)
+│   ├── [完成] Set 家族统一 (TreeSet + LinkedHashSet)
+│   ├── [完成] Facade 工厂完整覆盖 (23 个 MakeXxx)
+│   ├── [完成] IList/IForwardList Unchecked 清理
+│   └── [完成] Phase 3 接口形状审查
+│
+├── G-CORRECT [完成]: 所有容器实现正确无 bug
+│   ├── [完成] TVecDeque FTail desync (4 处)
+│   ├── [完成] TVecDeque MakeContiguous 满缓冲区
+│   ├── [完成] TVecDeque PushFront(Pointer) 顺序反转
+│   ├── [完成] TVecDeque RemoveAt managed-type 泄漏
+│   ├── [完成] TRBTreeCore.Clear use-after-free
+│   ├── [完成] TVecDeque WriteExact(Collection, StartIndex) 偏移
+│   └── [完成] TVecDeque.Create(0, nil, nil) 容量 1 + nil strategy
+│
+├── G-TESTED [进行中]: 100% API 测试覆盖 + 零内存泄漏
+│   ├── [完成] heaptrc 验证全部零泄漏
+│   ├── [完成] 所有容器有专项测试套件 (21 suites)
+│   ├── [进行中] 每个接口方法至少一个测试
+│   │   ├── Vec: 31/48 方法已测试 (65%)
+│   │   ├── VecDeque: 72 tests from fafafa.core
+│   │   ├── HashMap: 18/14 (超额)
+│   │   ├── 其他容器: 核心 API 已覆盖
+│   │   └── [待做] Vec 剩余 17 方法 + 其他容器缺口
+│   └── [待做] 错误路径测试 (越界、空容器、nil 参数)
+│
+├── G-PERF [待做]: 性能达到或超越同类框架
+│   ├── [待做] TArray introsort 防退化
+│   ├── [待做] TVecDeque partition 三路分区
+│   ├── [待做] HashMap 负载因子 0.86 → 0.75
+│   ├── [待做] TVecDeque.Rotate O(1)
+│   └── [待做] wyhash 替换 FNV-1a (benchmark-driven)
+│
+└── G-BENCH [待做]: 基准对比 FPC RTL / Rust / Go
+    ├── [待做] 建立 benchmark 框架
+    └── [待做] 跨语言对比报告
+```
+
+## 当前状态
+
+- 21 套件，279 测试，0 失败
+- heaptrc 全部零泄漏
+- 7 个严重 bug 已修复
+
+## 执行顺序
+
+```
+G-TESTED (接口 100% 覆盖) → G-PERF (性能优化) → G-BENCH (基准测试)
+```
+
+## 质量门禁
+
+- 每个公共 API 方法必须有测试
+- heaptrc 零泄漏
+- 性能优化必须有 before/after benchmark 数据
+- 每轮改动后跑全部 collections 测试
+- 每轮结束: 复盘 + 报告 + commit
+
+---
+
+## 历史记录（已完成的 Micro Batches）
+
+### Goal
 
 Stabilize the `collections` module copied from `fafafa.core`, then refactor it into the `nextpas.core` facade/base/intf/implementation architecture without simplifying behavior.
 
