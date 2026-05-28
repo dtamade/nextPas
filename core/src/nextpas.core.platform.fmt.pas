@@ -14,6 +14,11 @@ function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int6
 function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
 function platform_parse_hex(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
 
+function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
+function platform_str_trim(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
+
 implementation
 
 function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
@@ -335,6 +340,70 @@ begin
     AValue := (AValue shl 4) or LDigit;
   end;
   Result := 0;
+end;
+
+function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
+var
+  I, LLen: Int32;
+  C: AnsiChar;
+begin
+  if (ADst = nil) or (ADstLen <= 0) then
+    Exit(-1);
+  if ASrc = nil then
+  begin
+    ADst[0] := #0;
+    Exit(0);
+  end;
+  if ALen < 0 then
+  begin
+    ALen := 0;
+    while ASrc[ALen] <> #0 do Inc(ALen);
+  end;
+  LLen := ALen;
+  if LLen >= ADstLen then
+    LLen := ADstLen - 1;
+  for I := 0 to LLen - 1 do
+  begin
+    C := ASrc[I];
+    if (C >= 'A') and (C <= 'Z') then
+      C := AnsiChar(Ord(C) + 32);
+    ADst[I] := C;
+  end;
+  ADst[LLen] := #0;
+  Result := LLen;
+end;
+
+function platform_str_trim(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
+var
+  LStart, LEnd, LLen: Int32;
+begin
+  if (ADst = nil) or (ADstLen <= 0) then
+    Exit(-1);
+  if ASrc = nil then
+  begin
+    ADst[0] := #0;
+    Exit(0);
+  end;
+  if ALen < 0 then
+  begin
+    ALen := 0;
+    while ASrc[ALen] <> #0 do Inc(ALen);
+  end;
+  LStart := 0;
+  while (LStart < ALen) and (ASrc[LStart] <= ' ') do
+    Inc(LStart);
+  LEnd := ALen;
+  while (LEnd > LStart) and (ASrc[LEnd - 1] <= ' ') do
+    Dec(LEnd);
+  LLen := LEnd - LStart;
+  if LLen >= ADstLen then
+    LLen := ADstLen - 1;
+  if LLen > 0 then
+    Move(ASrc[LStart], ADst[0], LLen);
+  ADst[LLen] := #0;
+  Result := LLen;
 end;
 
 end.

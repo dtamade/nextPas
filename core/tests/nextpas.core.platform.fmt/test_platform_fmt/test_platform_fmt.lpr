@@ -147,6 +147,29 @@ begin
   Check(platform_parse_hex('GG', 2, Vu) <> 0, 'invalid hex fails');
 end;
 
+procedure TestStrLower;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_str_lower('Hello World', 11, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'hello world'), 'lower basic');
+  platform_str_lower('ABC123', 6, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'abc123'), 'lower mixed');
+  Check(platform_str_lower('X', 1, @Buf[0], 64) = 1, 'returns length');
+end;
+
+procedure TestStrTrim;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_str_trim('  hello  ', 9, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'hello'), 'trim both');
+  platform_str_trim('no_space', 8, @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'no_space'), 'trim none');
+  platform_str_trim('   ', 3, @Buf[0], 64);
+  Check(BufEq(@Buf[0], ''), 'trim all whitespace');
+  Check(platform_str_trim(#9'tab'#10, 5, @Buf[0], 64) = 3, 'trim tab/newline');
+  Check(BufEq(@Buf[0], 'tab'), 'trim tab result');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fmt');
   T.Run('int positive', @TestIntPositive);
@@ -163,5 +186,7 @@ begin
   T.Run('parse int', @TestParseInt);
   T.Run('parse hex', @TestParseHex);
   T.Run('parse errors', @TestParseErrors);
+  T.Run('str_lower', @TestStrLower);
+  T.Run('str_trim', @TestStrTrim);
   T.Summary;
 end.
