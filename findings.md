@@ -10,6 +10,25 @@
 
 ## Research Findings
 
+- Batch 190 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)` /
+  `TBaseWorker.Touch(Value: LongInt)`、`TWorker = class(TBaseWorker)` 与
+  `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Count); end;` 必须失败为 `sema.ambiguous-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 190 focused semantic probe 直接 GREEN，证明 Batch 184 的 inherited implicit-self stable
+  literal ambiguity、Batch 187 的 same-owner function-result ambiguity 与 Batch 188/189 的 inherited
+  function-result target path 已自然组合；本批不需要修改 analyzer。
+- Batch 190 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload` 与
+  `imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`。
+- Batch 190 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改
+  `core/`。
 - Batch 189 继续 imported unit method body inherited implicit-self same-unit function-result evidence
   面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)` /
   `TBaseWorker.Touch(Value: AnsiString)`、`TWorker = class(TBaseWorker)` 与

@@ -188,7 +188,9 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   owner class parent chain 找到 inherited method overload set 后，也会输出 stable literal
   ambiguity diagnostic（例如 `TWorker = class(TBaseWorker)` 中
   `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited `Touch(Integer)` 与
-  `Touch(LongInt)`）
+  `Touch(LongInt)`），并接受同一 project-source owner unit 中零参内建标量/字符串
+  function result 作为 stable ambiguity evidence（例如 `Touch(Count);` 同时面对
+  inherited `Touch(Integer)` 与 `Touch(LongInt)` 且 `Count` 返回 `Integer`）
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -451,12 +453,13 @@ candidate collection
     `Pick(Integer)` 与 `Pick(LongInt)`，该路径不会注册失败 `member-call` binding
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
     imported owner class parent chain 找到 inherited 同名同 arity多候选，但 compact signature
-    collision 后无法唯一选择 target method 的场景；例如
-    `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited `Touch(Integer)` 与
-    `Touch(LongInt)`，该路径不会注册失败 `member-call` binding
-  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned 零参
-    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
-    target method 的场景
+    collision 后无法唯一选择 target method 的场景；stable evidence 包含 literal/纯表达式，
+    以及同一 project-source owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Touch(1); end;` 或 `Touch(Count);` 同时面对 inherited
+    `Touch(Integer)` 与 `Touch(LongInt)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned
+    或 same-owner `project-source` unit-owned 零参内建标量/字符串 function result 可作为
+    稳定 evidence，且 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 imported `project-source` direct member-call overload set 中，root-owned 零参
     内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
     target method 的场景

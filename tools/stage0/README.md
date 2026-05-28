@@ -297,7 +297,10 @@ function result），
 会失败为 `sema.ambiguous-overload`（例如当前 class 的 `Pick(1);` 同时面对
 `Pick(Integer)` / `Pick(LongInt)`，或 inherited `Touch(1);` 同时面对
 `Touch(Integer)` / `Touch(LongInt)`，或 imported `project-source` unit method body 中
-`TWorker.Run` 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`），
+`TWorker.Run` 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
+或同一路径沿 parent chain 的 `Touch(Count);` 同时面对 inherited `Touch(Integer)` /
+`Touch(LongInt)` 且 `Count` 是 same-owner `project-source` unit-owned 零参 Integer
+function result），
 同样不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
@@ -956,6 +959,8 @@ unit method body inherited bare implicit-self same-unit function-result type mis
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
 unit method body inherited bare implicit-self same-unit function-result no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body inherited bare implicit-self same-unit function-result ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 imported `project-source`
 unit method body inherited bare implicit-self no matching overload 断言
 `semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
 unit method body inherited bare implicit-self ambiguous overload 断言
