@@ -123,6 +123,32 @@ begin
   platform_poller_close(P);
 end;
 
+procedure TestMultipleFds;
+var
+  P: TPlatformPoller;
+  LPipe1, LPipe2: array[0..1] of Int32;
+  LEntries: array[0..7] of TPlatformPollEntry;
+  LCount: Int32;
+  LBuf: Byte;
+begin
+  Check(pipe(@LPipe1[0]) = 0, 'pipe1');
+  Check(pipe(@LPipe2[0]) = 0, 'pipe2');
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_add(P, LPipe1[0], [peReadable], Pointer(PtrUInt(1))) = 0, 'add pipe1');
+  Check(platform_poller_add(P, LPipe2[0], [peReadable], Pointer(PtrUInt(2))) = 0, 'add pipe2');
+
+  LBuf := 1;
+  write(LPipe1[1], @LBuf, 1);
+  write(LPipe2[1], @LBuf, 1);
+
+  Check(platform_poller_wait(P, @LEntries[0], 8, 1000, LCount) = 0, 'wait');
+  Check(LCount = 2, 'got 2 events');
+
+  close(LPipe1[0]); close(LPipe1[1]);
+  close(LPipe2[0]); close(LPipe2[1]);
+  platform_poller_close(P);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.io');
   T.Run('create/close', @TestCreateClose);
@@ -131,5 +157,6 @@ begin
   T.Run('timeout zero', @TestTimeoutZero);
   T.Run('remove stops events', @TestRemove);
   T.Run('userdata preserved', @TestUserData);
+  T.Run('multiple fds', @TestMultipleFds);
   T.Summary;
 end.

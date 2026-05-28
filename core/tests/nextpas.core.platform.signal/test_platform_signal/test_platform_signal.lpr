@@ -69,6 +69,28 @@ begin
   Check(platform_signal_reset(PLATFORM_SIGUSR1) = 0, 'reset');
 end;
 
+procedure TestMultipleSignals;
+begin
+  GHandlerCalled := 0;
+  platform_signal_set(PLATFORM_SIGUSR1, @MyHandler);
+  platform_signal_set(PLATFORM_SIGUSR2, @MyHandler);
+  kill(getpid, PLATFORM_SIGUSR1);
+  kill(getpid, PLATFORM_SIGUSR2);
+  Check(GHandlerCalled = 2, 'handler called twice for 2 signals');
+  platform_signal_reset(PLATFORM_SIGUSR1);
+  platform_signal_reset(PLATFORM_SIGUSR2);
+end;
+
+procedure TestHandlerSignalArg;
+begin
+  GHandlerCalled := 0;
+  GLastSignal := 0;
+  platform_signal_set(PLATFORM_SIGUSR2, @MyHandler);
+  kill(getpid, PLATFORM_SIGUSR2);
+  Check(GLastSignal = PLATFORM_SIGUSR2, 'handler got SIGUSR2');
+  platform_signal_reset(PLATFORM_SIGUSR2);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.signal');
   T.Run('set handler + deliver', @TestSetHandler);
@@ -77,5 +99,7 @@ begin
   T.Run('block + unblock delivery', @TestBlockUnblock);
   T.Run('invalid signal', @TestInvalidSignal);
   T.Run('reset handler', @TestResetHandler);
+  T.Run('multiple signals', @TestMultipleSignals);
+  T.Run('handler receives correct signal', @TestHandlerSignalArg);
   T.Summary;
 end.

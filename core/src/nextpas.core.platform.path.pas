@@ -245,14 +245,21 @@ end;
 function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LLen, I, LExtPos, LNewExtLen, LTotal: Int32;
+  LLen, I, LExtPos, LNewExtLen, LTotal, LNameStart: Int32;
   LTmp: array[0..1023] of AnsiChar;
 begin
   LLen := StrLen(APath);
   LNewExtLen := StrLen(ANewExt);
   LExtPos := LLen;
+  LNameStart := 0;
+  for I := LLen - 1 downto 0 do
+    if IsSep(APath[I]) then
+    begin
+      LNameStart := I + 1;
+      Break;
+    end;
   I := LLen - 1;
-  while (I >= 0) and not IsSep(APath[I]) do
+  while I > LNameStart do
   begin
     if APath[I] = PLATFORM_EXT_SEP then
     begin

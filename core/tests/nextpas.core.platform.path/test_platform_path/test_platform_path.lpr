@@ -92,6 +92,12 @@ var
 begin
   platform_path_change_ext('file.pas', '.o', @Buf[0], 256);
   Check(BufEq(@Buf[0], 'file.o'), 'change ext .pas -> .o');
+  platform_path_change_ext('.gitignore', '.bak', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '.gitignore.bak'), '.gitignore -> .gitignore.bak');
+  platform_path_change_ext('.bashrc.bak', '.old', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '.bashrc.old'), '.bashrc.bak -> .bashrc.old');
+  platform_path_change_ext('noext', '.txt', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'noext.txt'), 'noext -> noext.txt');
 end;
 
 procedure TestIsAbsolute;
