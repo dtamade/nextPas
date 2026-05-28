@@ -32,21 +32,17 @@ jobs:
           make all FPCDIR=$(pwd) PP=$(which ppcx64) OPT="-O2"
           mkdir -p ~/fpc-trunk/bin ~/fpc-trunk/lib
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppcx64 PREFIX=~/fpc-trunk
-          # Generate fpc.cfg
-          ~/fpc-trunk/bin/fpcmkcfg -d basepath=~/fpc-trunk/lib/fpc/\$fpcversion -o ~/fpc-trunk/bin/fpc.cfg
 
-      - name: Setup PATH
+      - name: Setup FPC config and PATH
         run: |
-          FPC_BIN=$(find ~/fpc-trunk -name fpc -type f | head -1)
-          if [ -n "$FPC_BIN" ]; then
-            echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
-            PPCDIR=$(find ~/fpc-trunk -name ppcx64 -type f | head -1)
-            if [ -n "$PPCDIR" ]; then
-              echo "$(dirname $PPCDIR)" >> $GITHUB_PATH
-            fi
-          else
-            echo "FPC trunk build failed, using system FPC"
-          fi
+          # Generate fpc.cfg in both bin dir and ppcx64 dir
+          $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
+          cp $HOME/fpc-trunk/bin/fpc.cfg $HOME/fpc-trunk/lib/fpc/3.3.1/fpc.cfg
+          # Override system fpc.cfg
+          sudo cp $HOME/fpc-trunk/bin/fpc.cfg /etc/fpc.cfg
+          # Add to PATH
+          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
+          echo "$HOME/fpc-trunk/lib/fpc/3.3.1" >> $GITHUB_PATH
 
       - name: Verify FPC
         run: fpc -iV
@@ -80,18 +76,13 @@ jobs:
           make all FPCDIR=$(pwd) PP="$PP" OPT="-O2"
           mkdir -p ~/fpc-trunk
           make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppca64 PREFIX=~/fpc-trunk
-          ~/fpc-trunk/bin/fpcmkcfg -d basepath=~/fpc-trunk/lib/fpc/\$fpcversion -o ~/fpc-trunk/bin/fpc.cfg
 
-      - name: Setup PATH
+      - name: Setup FPC config and PATH
         run: |
-          FPC_BIN=$(find ~/fpc-trunk -name fpc -type f | head -1)
-          if [ -n "$FPC_BIN" ]; then
-            echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
-          fi
-          PPC_BIN=$(find ~/fpc-trunk -name 'ppca64' -o -name 'ppcaarch64' | head -1)
-          if [ -n "$PPC_BIN" ]; then
-            echo "$(dirname $PPC_BIN)" >> $GITHUB_PATH
-          fi
+          $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
+          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
+          FPC_LIB=$(find $HOME/fpc-trunk/lib/fpc -maxdepth 1 -type d -name '3.*' | head -1)
+          if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
 
       - name: Verify FPC
         run: fpc -iV
