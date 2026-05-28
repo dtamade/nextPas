@@ -248,12 +248,70 @@ bare call 的可接受 arity 扩展为必填参数数到总参数数，当前可
 会按已提供参数前缀选择唯一 `ParamSignature` target，并通过
 `queryDefinitions[].targetParamSignature` 暴露 compact target signature；root-owned 单一 target 的
 type-mismatch diagnostics 现在还接受 root-owned 零参内建标量/字符串 function result 作为稳定
-argument evidence；无法推断、imported/带参/member function result 或 signature 不唯一时仍保守不绑定。当前 name-only binding pass 会显式排除
+argument evidence；当 target 来自 imported `project-source` 单一 callable、direct member-call
+target 或 inherited direct member-call target 时，同一类 root-owned function-result evidence 也会投影为 `sema.type-mismatch`；
+当 target 来自 imported `installed-source` bare/direct-member/inherited single-target 时，同一类
+root-owned function-result evidence 仍保守 deferred，不投影为 ordinary `sema.type-mismatch`；
+当 imported `project-source` bare callable、direct member-call 或 inherited member-call overload set 的所有同 arity target 都不匹配时，
+同一类 root-owned function-result evidence 会投影为 `sema.no-matching-overload`；当同一
+imported `project-source` bare callable、direct member-call 或 inherited overload set 出现 compact signature collision 且无法唯一选择时，
+同一类 root-owned function-result evidence 会投影为 `sema.ambiguous-overload`；当 imported
+`project-source` bare callable、direct member-call 或 inherited member-call single target arity 不兼容时，同一类
+evidence 会投影为 `sema.wrong-argument-count`；无法推断、
+imported `installed-source` target 或 direct/inherited installed-source overload set、imported/带参/member function result
+或 source provenance 不可信的 signature 不唯一时仍保守不绑定；对应 installed-source bare/direct-member/inherited
+function-result type-mismatch、wrong-argument-count、no-match 与 ambiguity（包括 bare function-result arity miss），以及
+installed-source direct known field/property 与 inherited known field/property invalid-call-shape deferred guard，用 `semantic-call-bindings-check` 的 focused
+guard 固定，不用普通 stage0 fixture 伪造 provenance。当前 name-only binding pass 会显式排除
 `Holder.Help();` 这类 selector/member callee；当前 `member-call` 最小正向边界覆盖 direct
 class variable receiver 的 method statement call，包括 argument-count matched
 `Worker.SetValue(7);` 这类带参数调用，也覆盖 `Halt(Worker.Add(1, 2));` 这类表达式参数里的
-direct member function call、class method body 内的 `Self.SetValue(9)`，还覆盖
-`TWorker.Create(42)` 这类已声明 class type-name receiver 的 constructor-like member call；
+direct member function call、class method body 内的 `Self.SetValue(9)` 与 bare implicit-self
+method call（例如 `Touch;` / `Touch(7);`，包括沿 parent class lookup 绑定到 inherited
+method），还覆盖 imported `project-source` direct known field/property 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source` inherited known field 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source` inherited known property 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source` unit method body bare implicit-self
+known field 被当作 call 使用时的 `sema.invalid-call-shape` gate、imported `project-source`
+unit method body bare implicit-self known property 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source`
+unit method body inherited bare implicit-self known field 被当作 call 使用时的
+`sema.invalid-call-shape` gate、imported `project-source` unit method body inherited bare
+implicit-self known property 被当作 call 使用时的 `sema.invalid-call-shape` gate，以及 `TWorker.Create(42)`
+这类已声明 class type-name receiver 的 constructor-like member call；
+same path 的 bare implicit-self method call 若 stable argument signature 与 root-owned
+单一 target 不兼容，会失败为 `sema.type-mismatch`（例如 `Touch(True);` 调
+`Touch(Integer)`、当前 class 的 `Pick(True);` 调 `Pick(Integer)`、imported
+`project-source` unit method body 中 `TWorker.Run` 的 `Pick(True);` 调
+`Pick(Integer)`，imported `project-source` unit method body 沿 parent chain 的
+`Touch(True);` 调 inherited `Touch(Integer)`，或 `Pick(Flag);` 中 `Flag` 是 root-owned
+零参 Boolean function result），
+且不会注册错误 binding。
+若同一路径找到 method name 但 arity 不兼容，会失败为
+`sema.wrong-argument-count`（例如当前 class 的 `Pick;` 调 `Pick(Integer)`，或 inherited
+`Touch;` 调 `Touch(Integer)`，或 imported `project-source` unit method body 中
+`TWorker.Run` 的 `Pick;` 调 `Pick(Integer)`，或同一路径中的 `Pick(Count, Count);`
+调 `Pick(Integer)` 且 `Count` 是 same-owner `project-source` unit-owned 零参 Integer
+function result，或 imported `project-source` unit method body 沿 parent chain 的
+`Touch(Count, Count);` 调 inherited `Touch(Integer)`），同样不会注册错误 binding。
+若同一路径找到多个 method target 但 stable argument signature 全不匹配，会失败为
+`sema.no-matching-overload`（例如当前 class 的 `Pick(True);` 同时面对
+`Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
+`Touch(Integer)` / `Touch(AnsiString)`，或 imported `project-source` unit method body 中
+`TWorker.Run` 的 `Pick(True);` 同时面对 `Pick(Integer)` / `Pick(AnsiString)`，
+或同一路径沿 parent chain 的 `Touch(Flag);` 同时面对 inherited `Touch(Integer)` /
+`Touch(AnsiString)` 且 `Flag` 是 same-owner `project-source` unit-owned 零参 Boolean
+function result），
+同样不会注册错误 binding。
+若同一路径找到多个 method target，且 compact signature collision 后仍无法唯一选择，
+会失败为 `sema.ambiguous-overload`（例如当前 class 的 `Pick(1);` 同时面对
+`Pick(Integer)` / `Pick(LongInt)`，或 inherited `Touch(1);` 同时面对
+`Touch(Integer)` / `Touch(LongInt)`，或 imported `project-source` unit method body 中
+`TWorker.Run` 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
+或同一路径沿 parent chain 的 `Touch(Count);` 同时面对 inherited `Touch(Integer)` /
+`Touch(LongInt)` 且 `Count` 是 same-owner `project-source` unit-owned 零参 Integer
+function result），
+同样不会注册错误 binding。
 root source 中变量的 class type 也可以来自 imported project/source unit 的已 seed type symbol。
 当 root 与 imported unit 同时声明同名 class 时，receiver 会沿变量 `TypeId` 回到对应 type
 symbol owner，再在该 owner 下选择 method target，避免 query surface 暴露字符串误绑结果。
@@ -750,7 +808,7 @@ key/value 行反推结果对象。
 `object-file` artifact，为 future native link selection 提前冻结 object-level input truth。
 
 失败路径当前也会在 stderr 上补出最小失败投影，例如 `status=failure`、`result=failure`、
-`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.wrong-argument-count|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
+`failure-kind=...`、`diagnostic-code=parser.syntax-error|resolver.unit-not-found|resolver.ambiguous-unit-source|resolver.unit-cycle-detected|sema.duplicate-declaration|sema.ambiguous-overload|sema.no-matching-overload|sema.wrong-argument-count|sema.invalid-call-shape|sema.unknown-callable|sema.unknown-member|toolchain.host-compiler-exec-failed`、
 `diagnostic-phase=syntax|resolution|sema|toolchain`、`command-outcome=failure`、`command-envelope=<json>` 和
 `human-summary=<message>`，再附上原始失败消息。
 
@@ -879,12 +937,69 @@ verify 互相清理同一个 `.sisyphus/tmp/stage0-bootstrap`。随后执行
 failure 断言 `unit-resolution-failed` 基线，再对 duplicate import 语义失败断言
 `semantic-analysis-failed` + `sema.duplicate-declaration`，再对
 ambiguous imported callable overload 与 ambiguous member overload 断言
-`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 wrong argument count 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 imported direct member 与 inherited function-result
+ambiguous overload 与 current-class / inherited
+implicit-self bare method ambiguous overload 断言同一组 semantic failure / diagnostic projection，再对 root-owned no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported no matching overload 断言
+同一组 semantic failure / diagnostic projection，再对 direct member no matching overload 断言
+同一组 semantic failure / diagnostic projection，再对 imported direct member 与 imported inherited function-result no matching overload 断言
+同一组 semantic failure / diagnostic projection，再对 imported project-source bare single-target
+type mismatch 断言 `semantic-analysis-failed` + `sema.type-mismatch`，再对 root-owned 与
+imported project-source bare wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 member wrong argument count 断言
-同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数形态断言
+同一组 semantic failure / diagnostic projection，再对 imported bare function-result wrong argument count、
+imported direct member function-result wrong argument count
+与 imported inherited member function-result wrong argument count
+断言同一组 semantic failure / diagnostic projection，再对 bare/member type mismatch 及其内建标量变量/参数/函数结果形态断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 source-owned unknown bare callable 断言
-`semantic-analysis-failed` + `sema.unknown-callable`，再对 direct class unknown member 断言
-`semantic-analysis-failed` + `sema.unknown-member`，再对
+`semantic-analysis-failed` + `sema.unknown-callable`，再对 known field/property member call、imported
+project-source known field/property member call、imported project-source inherited known field member call 及
+inherited known field/property member call 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对 direct class unknown member
+和 class method body 内 bare implicit-self unknown member（含 inherited class context 与 imported
+`project-source` unit method body，以及 imported `project-source` unit method body 沿 parent
+chain 的 inherited context）断言
+`semantic-analysis-failed` + `sema.unknown-member`，再对 imported `project-source` unit method body
+bare implicit-self wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body inherited bare implicit-self wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body inherited bare implicit-self same-unit function-result wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body inherited bare implicit-self type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body inherited bare implicit-self same-unit function-result type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body inherited bare implicit-self same-unit function-result no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body inherited bare implicit-self same-unit function-result ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 imported `project-source`
+unit method body inherited bare implicit-self no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body inherited bare implicit-self ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 imported `project-source`
+unit method body bare implicit-self type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result type mismatch 断言
+`semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对 imported `project-source`
+unit method body bare implicit-self no matching overload 断言
+`semantic-analysis-failed` + `sema.no-matching-overload`，再对 imported `project-source`
+unit method body bare implicit-self ambiguous overload 断言
+`semantic-analysis-failed` + `sema.ambiguous-overload`，再对
+imported `project-source` unit method body bare implicit-self known field invalid call shape 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对
+imported `project-source` unit method body bare implicit-self known property invalid call shape 断言
+`semantic-analysis-failed` + `sema.invalid-call-shape`，再对
+imported `project-source` unit method body inherited bare implicit-self known field invalid call shape
+断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对
+imported `project-source` unit method body inherited bare implicit-self known property invalid call shape
+断言 `semantic-analysis-failed` + `sema.invalid-call-shape`，再对
 `tests/compiler/fail/missing_external_symbol_name_fail.pas` 断言
 `semantic-analysis-failed` + `sema.missing-external-symbol-name`，再通过 fake `fpc` 负路径断言
 `toolchain.host-compiler-exec-failed`、`diagnostic-binding-id`、`diagnostic-profile-id`、

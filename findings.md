@@ -109,6 +109,493 @@
 
 ## Research Findings
 
+- Batch 219-220 visibility 能力落地：parser 从跳过 visibility keywords 改为产出 gnkVisibilityLabel
+  nodes；analyzer 在 ProcessClassFields 中追踪 current visibility state 并存储到 symbol；
+  TryRegisterMemberCallBinding 在 resolution 成功后检查 target visibility，private member
+  从外部访问时返回 'inaccessible-member' failure kind，触发 sema.inaccessible-member 诊断。
+- 设计决策：class 内部（ACurrentMethodClass = owner type name）可以访问自身 private members，
+  这符合 Pascal 语义（同一 class 内部无 visibility 限制）。
+- 当前只检查 direct member call（W.Secret）；implicit-self 和 inherited 路径暂不检查
+  （class 内部调用自身 method 本来就应该允许）。
+- Batch 217-218 default parameter 能力落地：member method overload resolution 从 exact ParamCount
+  match 改为 MinParamCount..ParamCount 范围检查；signature 比较改为 prefix match。
+- 影响面：`TSemanticSymbol` 新增 `MinParamCount` 字段，`MethodSymbolIdForExactClassTypeMember`
+  和 body matching fallback 两处修改。free-standing function 已有正确逻辑无需改动。
+- 测试覆盖：direct member call / multiple defaults / inherited method / implicit-self 四种场景。
+- Codex 审查建议下一步：visibility (private/protected/public) → implicit conversion。
+- Batch 214-216 闭合结论：installed-source unit body inherited implicit-self function-result
+  系列最后 3 个 guards（arity / no-match / ambiguous）一次性完成，矩阵完整闭合。
+- 全部 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖所有场景。
+- Codex 审查建议：矩阵闭合后转向新语义能力（default parameters → visibility → implicit conversion）。
+- Batch 213 re-rank 结论：Batch 188 已打开 imported `project-source` unit method body inherited
+  implicit-self function-result type-mismatch；补同形 installed-source deferred guard。
+- Batch 213 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 213 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodFunctionResultTypeMismatchStaysDeferred`。
+- Batch 212 re-rank 结论：Batch 184 已打开 imported `project-source` unit method body inherited
+  implicit-self ambiguous-overload；补同形 installed-source deferred guard。
+- Batch 212 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 212 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodAmbiguousOverloadStaysDeferred`。
+- Batch 211 re-rank 结论：Batch 183 已打开 imported `project-source` unit method body inherited
+  implicit-self no-matching-overload；补同形 installed-source deferred guard。
+- Batch 211 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 211 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodNoMatchingOverloadStaysDeferred`。
+- Batch 210 re-rank 结论：Batch 182 已打开 imported `project-source` unit method body inherited
+  implicit-self type-mismatch；补同形 installed-source deferred guard。
+- Batch 210 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 210 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodTypeMismatchStaysDeferred`。
+- Batch 209 re-rank 结论：Batch 181 已打开 imported `project-source` unit method body inherited
+  implicit-self wrong-argument-count；补同形 installed-source deferred guard。
+- Batch 209 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 209 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodWrongArgumentCountStaysDeferred`。
+- Batch 208 re-rank 结论：Batch 177 已打开 imported `project-source` unit method body bare
+  implicit-self wrong-argument-count；补同形 installed-source deferred guard。
+- Batch 208 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 208 official proof：
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodWrongArgumentCountStaysDeferred`。
+- Batch 207 re-rank 结论：Batch 178 已打开 imported `project-source` unit method body bare
+  implicit-self stable literal type-mismatch；按"矩阵双拍"，补同形 installed-source deferred guard。
+- Batch 207 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 207 official proof：
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodTypeMismatchStaysDeferred`。
+- Batch 206 re-rank 结论：Batch 179 已打开 imported `project-source` unit method body bare
+  implicit-self stable literal no-matching-overload；按"矩阵双拍"，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.no-matching-overload`。
+- Batch 206 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self stable literal no-match。本批不修改 analyzer。
+- Batch 206 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodNoMatchingOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 205 re-rank 结论：Batch 180 已打开 imported `project-source` unit method body bare
+  implicit-self stable literal ambiguous-overload；按"矩阵双拍"，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.ambiguous-overload`。
+- Batch 205 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self stable literal ambiguity。本批不修改 analyzer。
+- Batch 205 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodAmbiguousOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 204 re-rank 结论：Batch 187 已打开 imported `project-source` unit method body bare
+  implicit-self same-unit function-result ambiguous-overload；按"矩阵双拍"，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.ambiguous-overload`。
+- Batch 204 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self same-unit function-result ambiguity。本批不修改 analyzer。
+- Batch 204 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 203 re-rank 结论：Batch 186 已打开 imported `project-source` unit method body bare
+  implicit-self same-unit function-result no-matching-overload；按“矩阵双拍”，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body overload truth 被提前误报成
+  ordinary `sema.no-matching-overload`。
+- Batch 203 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self same-unit function-result no-match。本批不修改 analyzer。
+- Batch 203 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 202 re-rank 结论：Batch 191 已打开 imported `project-source` unit method body bare
+  implicit-self same-unit function-result wrong-argument-count；按“矩阵双拍”，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body truth 被提前误报成
+  ordinary `sema.wrong-argument-count`。
+- Batch 202 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self same-unit function-result arity miss。本批不修改 analyzer。
+- Batch 202 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultWrongArgumentCountStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 202 focused heaptrc 复检后确认：`SeedImportedUnitBodies` 解析出来的 imported unit parse tree
+  需要由 `TSemanticAnalyzer` 统一 owning；把 `TGreenTree` 纳入 analyzer 生命周期后，
+  `test_semantic_call_bindings` 的 `-gl -gh` 运行不再保留新的 imported-unit body tree leak。
+- 用户新增质量门槛已同步到目标树口径：public API / interface work 没有单元测试、接口覆盖与
+  内存泄漏验证时不得宣布完成；本批不新增 public API，只新增 semantic guard。
+- Batch 201 re-rank 结论：Batch 196 已打开 imported `project-source` unit method body inherited
+  bare implicit-self known property invalid-call-shape；按“矩阵双拍”，当前最高价值是补同形
+  installed-source inherited known property deferred guard，闭合 inherited field/property 的
+  installed-source unit-body 防误报面。
+- Batch 201 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  inherited known non-method provenance guard 已覆盖 imported `installed-source` unit method body 内
+  inherited bare implicit-self known property 被当作 callable 使用的场景。本批不修改 analyzer。
+- Batch 201 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeStaysDeferred`；不新增
+  stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造 installed-source
+  provenance。
+- Batch 201 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
+- Batch 200 re-rank 结论：Batch 195 已打开 imported `project-source` unit method body inherited
+  bare implicit-self known field invalid-call-shape；按“矩阵双拍”，当前最高价值是补同形
+  installed-source inherited known field deferred guard，避免 parent-chain incomplete installed/helper/RTL
+  class layout truth 被提前误报成 ordinary `sema.invalid-call-shape`。
+- Batch 200 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  inherited known non-method provenance guard 已覆盖 imported `installed-source` unit method body 内
+  inherited bare implicit-self known field 被当作 callable 使用的场景。本批不修改 analyzer。
+- Batch 200 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeStaysDeferred`；不新增
+  stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造 installed-source
+  provenance。
+- Batch 200 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
+- Batch 199 re-rank 结论：Batch 194 已打开 imported `project-source` unit method body bare
+  implicit-self known field invalid-call-shape；Batch 198 刚补 installed-source unit method body
+  known property deferred guard。按“双拍加速”，当前最高价值是补同形 installed-source known
+  field deferred guard，避免 incomplete installed/helper/RTL truth 被提前误报成 ordinary
+  `sema.invalid-call-shape`。
+- Batch 199 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  known non-method provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self known field 被当作 callable 使用的场景。本批不修改 analyzer。
+- Batch 199 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfKnownFieldInvalidCallShapeStaysDeferred`；不新增 stage0
+  fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造 installed-source
+  provenance。
+- Batch 199 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
+- Batch 198 re-rank 结论：Batch 197 已打开 imported `project-source` unit method body bare
+  implicit-self known property invalid-call-shape；按“双拍加速”，下一条最高价值是同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL truth 被提前误报成
+  ordinary `sema.invalid-call-shape`。
+- Batch 198 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  known non-method provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self known property 被当作 callable 使用的场景。本批不修改 analyzer。
+- Batch 198 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfKnownPropertyInvalidCallShapeStaysDeferred`；不新增
+  stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造 installed-source
+  provenance。
+- Batch 198 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
+- Batch 197 re-rank 结论：下一条最高性价比缺口是 imported unit method body non-inherited
+  implicit-self known property invalid-call-shape。已有 Batch 169 证明 imported known property
+  direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body bare
+  implicit-self known field `invalid-call-shape` emission 已可输出，Batch 196 证明 imported unit
+  body property 形状和 inherited traversal 可组合；因此本批优先 focused probe，GREEN 直接
+  promotion。
+- Batch 197 加速策略继续“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，
+  focused RED/GREEN 判真相；不碰 `core`，不扩大 installed-source provenance，不顺手实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+- Batch 197 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；这证明
+  Batch 169 的 imported known property truth、Batch 194 的 imported unit body bare implicit-self
+  `invalid-call-shape` emission 与 Batch 176-193 的 owner-aware imported unit body traversal
+  已自然组合，本批不需要修改 analyzer。
+- Batch 197 新增
+  `tests/fixtures/imported_unit_body_implicit_self_known_property_invalid_call_shape` 与
+  `imported-unit-body-implicit-self-known-property-invalid-call-shape-check`，final envelope
+  新增 `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`。
+- Batch 197 stage0 focused probe 已输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。首次手写 focused 命令误用了 zsh 只读变量 `status`，
+  随后改用 `rc` 重新运行并得到真实 stage0 证据。
+- Batch 197 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-known-property-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core`。
+- Batch 196 re-rank 结论：下一条最高性价比缺口是 imported unit method body inherited
+  implicit-self known property invalid-call-shape。已有 Batch 173 证明 imported inherited known
+  property direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body
+  bare implicit-self `invalid-call-shape` emission 已可输出，Batch 195 刚证明同形状 inherited
+  known field 可 promotion；因此本批优先 focused probe，GREEN 直接 promotion。
+- Batch 196 加速策略继续“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，
+  focused RED/GREEN 判真相；不碰 `core/`，不扩大 installed-source provenance，不顺手实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+- Batch 196 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；这证明
+  Batch 173 的 imported inherited known property truth、Batch 176/181-193 的 imported unit body
+  inherited implicit-self traversal 与 Batch 194 的 bare implicit-self `invalid-call-shape` emission
+  已自然组合，本批不需要修改 analyzer。
+- Batch 196 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_known_property_invalid_call_shape` 与
+  `imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`。
+- Batch 196 stage0 focused probe 已输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Batch 196 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 195 re-rank 结论：下一条最高性价比缺口是 imported unit method body inherited
+  implicit-self known field invalid-call-shape。已有 Batch 171 证明 imported inherited known
+  field direct member-call 会走 `sema.invalid-call-shape`，Batch 194 证明 imported unit body
+  bare implicit-self `invalid-call-shape` emission 已可输出，因此本批优先 focused probe，GREEN
+  直接 promotion。
+- Batch 195 加速策略继续“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，
+  focused RED/GREEN 判真相；不碰 `core/`，不扩大 installed-source provenance，不顺手实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+- Batch 195 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；这证明
+  Batch 171 的 imported inherited known field truth、Batch 176/181-193 的 imported unit body
+  inherited implicit-self traversal 与 Batch 194 的 bare implicit-self `invalid-call-shape` emission
+  已自然组合，本批不需要修改 analyzer。
+- Batch 195 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_known_field_invalid_call_shape` 与
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`。
+- Batch 195 stage0 focused probe 已输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Batch 195 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 194 re-rank 结论：imported unit method body 面已覆盖 implicit/inherited 的 unknown-member、
+  wrong-argument-count、type-mismatch、no-matching-overload、ambiguous-overload 与 same-unit
+  function-result ladder；下一条最高性价比缺口是 known non-callable field 被 imported unit
+  implementation body 内 bare implicit-self 调用成 `Value(1);` 时的 `sema.invalid-call-shape`。
+- Batch 194 加速策略固定为“矩阵波前 + promotion-first”：先写 focused semantic regression 判真相；
+  如果现有 owner-aware imported method body traversal 已能复用 Batch 119/167 的 known field
+  invalid-call-shape guard，就直接 promotion 到 stage0 fixture / `verify_local.sh` official gate /
+  docs；只有 RED 才最小修 analyzer。本批不碰 `core/`，不扩 installed-source provenance。
+- Batch 194 focused semantic 先 RED 于
+  `semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic`：
+  bare implicit-self error emission 已处理 ambiguity / arity / type / no-match / unknown-member，
+  但缺少 `invalid-call-shape` emission branch。
+- Batch 194 最小 analyzer 修复只在 `SeedCallBindingsInNode(...)` 的 bare implicit-self failure
+  emission 增加 `sema.invalid-call-shape` 分支；known non-method member truth 与
+  project-source provenance guard 仍由既有 `MethodSymbolIdForClassTypeMember(...)` 负责。
+- Batch 194 focused semantic GREEN 后新增
+  `tests/fixtures/imported_unit_body_implicit_self_known_field_invalid_call_shape` 与
+  `imported-unit-body-implicit-self-known-field-invalid-call-shape-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`。
+- Batch 194 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 194 下一步建议继续 G1.5/G1.6 source-owned diagnostics 矩阵 re-rank，优先看 imported
+  unit method body inherited implicit-self known field invalid-call-shape 或相邻 known property 边界。
+- Batch 193 继续 imported unit method body inherited implicit-self evidence 面：root `uses Worker;`，
+  imported `Worker.pas` 中 `TBaseWorker.Touch`、`TWorker = class(TBaseWorker)` 与
+  `procedure TWorker.Run; begin Missing; end;` 位于 `project-source` imported unit implementation
+  body，必须失败为 `sema.unknown-member`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+- Batch 193 加速策略是“矩阵波前推进，不换赛道”：优先补 Batch 175/176/181-184/188-192
+  已证明路径的 source-owned 相邻格，focused semantic 先判真相；GREEN 直接升 dedicated
+  fixture / `verify_local.sh` official gate / docs，RED 才最小修 analyzer。本批不碰 `core/`。
+- Batch 193 focused semantic probe 直接 GREEN，证明 imported unit body owner-aware traversal 与
+  inherited implicit-self parent-chain unknown-member lookup 已自然组合；本批不需要修改 analyzer。
+- Batch 193 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_unknown_member` 与
+  `imported-unit-body-inherited-implicit-self-unknown-member-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass`。
+- Batch 193 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 192 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)`、
+  `TWorker = class(TBaseWorker)` 与 `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Count, Count); end;` 必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 192 加速策略是补齐 Batch 188-190 inherited function-result ladder 中缺失的 arity 格子：
+  focused semantic 先判真相；GREEN 直接升 dedicated fixture / `verify_local.sh` official gate / docs，
+  RED 才最小修 analyzer。本批不碰 `core/`。
+- Batch 192 focused semantic probe 直接 GREEN，证明 Batch 181 的 imported unit body inherited
+  implicit-self arity miss 与 Batch 188-190 的 inherited same-owner project-source function-result
+  stable evidence 已自然组合；本批不需要修改 analyzer。
+- Batch 192 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_wrong_argument_count` 与
+  `imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`。
+- Batch 192 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 191 继续 imported unit method body implicit-self same-unit function-result evidence 面：
+  root `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` 与
+  `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Pick(Count, Count); end;` 必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 191 focused semantic probe 直接 GREEN，证明 Batch 177 的 imported unit body bare
+  implicit-self arity miss 与 Batch 185-187 的 same-owner project-source function-result stable evidence
+  已自然组合；本批不需要修改 analyzer。
+- Batch 191 新增
+  `tests/fixtures/imported_unit_body_implicit_self_function_result_wrong_argument_count` 与
+  `imported-unit-body-implicit-self-function-result-wrong-argument-count-check`，final envelope
+  新增 `importedUnitBodyImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`。
+- Batch 191 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 190 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)` /
+  `TBaseWorker.Touch(Value: LongInt)`、`TWorker = class(TBaseWorker)` 与
+  `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Count); end;` 必须失败为 `sema.ambiguous-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 190 focused semantic probe 直接 GREEN，证明 Batch 184 的 inherited implicit-self stable
+  literal ambiguity、Batch 187 的 same-owner function-result ambiguity 与 Batch 188/189 的 inherited
+  function-result target path 已自然组合；本批不需要修改 analyzer。
+- Batch 190 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_ambiguous_overload` 与
+  `imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`。
+- Batch 190 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改
+  `core/`。
+- Batch 189 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)` /
+  `TBaseWorker.Touch(Value: AnsiString)`、`TWorker = class(TBaseWorker)` 与
+  `function Flag: Boolean;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Flag); end;` 必须失败为 `sema.no-matching-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 189 focused semantic probe 直接 GREEN，证明 Batch 181-184 的 inherited implicit-self
+  parent-chain lookup 与 Batch 185-188 的 same-owner project-source function-result stable evidence
+  已自然组合；本批不需要修改 analyzer。
+- Batch 189 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_no_matching_overload` 与
+  `imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-check`，final envelope
+  新增 `importedUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`。
+- Batch 189 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 188 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)`、
+  `TWorker = class(TBaseWorker)` 与 `function Flag: Boolean;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Flag); end;` 必须失败为 `sema.type-mismatch`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 188 focused semantic probe 直接 GREEN，证明 Batch 181-184 的 inherited implicit-self
+  parent-chain lookup 与 Batch 185-187 的 same-owner project-source function-result stable evidence
+  已自然组合；本批不需要修改 analyzer。
+- Batch 188 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_type_mismatch` 与
+  `imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass`。
+- Batch 188 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 187 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
+  `TWorker.Pick(Value: LongInt)` 与 `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Pick(Count); end;` 必须失败为 `sema.ambiguous-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 187 focused semantic probe 直接 GREEN，证明 Batch 185 的 same-owner project-source
+  function-result stable evidence 已自然覆盖 imported method body implicit-self overload-set ambiguity；本批不需要修改 analyzer。
+- Batch 187 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_ambiguous_overload` 与
+  `imported-unit-body-implicit-self-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`。
+- Batch 187 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 186 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
+  `TWorker.Pick(Value: AnsiString)` 与 `function Flag: Boolean;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Pick(Flag); end;` 必须失败为 `sema.no-matching-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 186 focused semantic probe 直接 GREEN，证明 Batch 185 的 same-owner project-source
+  function-result stable evidence 已自然覆盖 imported method body implicit-self overload-set no-match；本批不需要修改 analyzer。
+- Batch 186 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_no_matching_overload` 与
+  `imported-unit-body-implicit-self-function-result-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`。
+- Batch 186 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-function-result-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 185 收口 imported unit method body implicit-self same-unit function-result type-mismatch：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` 与
+  `function Flag: Boolean;` 同属 `project-source` owner unit，`procedure TWorker.Run; begin Pick(Flag); end;`
+  必须失败为 `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 185 RED focused 证明旧实现只接受 root-owned 零参 function result 作为 stable evidence；
+  imported method body same-owner `project-source` function result 会被 deferred，导致缺少
+  `sema.type-mismatch`。
+- Batch 185 将 stable function-result evidence 扩展为 root-owned 或 same-owner `project-source`
+  unit-owned 零参内建标量/字符串 function result；installed-source provenance 仍不作为 ordinary
+  type-mismatch evidence。
+- Batch 185 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_type_mismatch` 与
+  `imported-unit-body-implicit-self-function-result-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultTypeMismatchCheck":"pass`。
+- Batch 184 收口 imported unit method body inherited implicit-self ladder 的 ambiguity 格：root source
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，
+  `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited
+  `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: LongInt)` 时，必须失败为
+  `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 184 focused semantic probe 直接 GREEN，证明 Batch 181-183 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal ambiguity；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 184 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_ambiguous_overload` 与
+  `imported-unit-body-inherited-implicit-self-ambiguous-overload-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass`。
+- Batch 184 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 183 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
+  同时面对 inherited `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: AnsiString)` 时，
+  必须失败为 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+- Batch 183 focused semantic probe 直接 GREEN，证明 Batch 181-182 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal no-match；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 183 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_no_matching_overload` 与
+  `imported-unit-body-inherited-implicit-self-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass`。
+- Batch 183 fresh `bash build/verify_local.sh` 已输出
+  `importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 182 继续 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch(True); end;`
+  调 inherited `TBaseWorker.Touch(Value: Integer)` 时，必须失败为 `sema.type-mismatch`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 182 focused semantic probe 直接 GREEN，证明 Batch 181 的 owner-aware imported method
+  body parent-chain lookup 已自然覆盖 stable literal mismatch；本批不修改 analyzer，也不修改
+  `core/`。
+- Batch 182 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_type_mismatch` 与
+  `imported-unit-body-inherited-implicit-self-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass`。
+- Batch 182 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 181 开启 imported unit method body inherited implicit-self ladder：root source `uses Worker;`，
+  imported `Worker.pas` 中 `TWorker = class(TBaseWorker)`，`procedure TWorker.Run; begin Touch; end;`
+  调 inherited `TBaseWorker.Touch(Value: Integer)` 缺参时，必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 181 focused semantic probe 直接 GREEN，证明 Batch 176-180 的 owner-aware imported method
+  body traversal 已自然覆盖 parent-chain arity miss；本批不修改 analyzer，也不修改 `core/`。
+- Batch 181 新增 `tests/fixtures/imported_unit_body_inherited_implicit_self_wrong_argument_count` 与
+  `imported-unit-body-inherited-implicit-self-wrong-argument-count-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass`。
+- Batch 181 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
 - platform 是 L0 系统平台 API/ABI 适配层，负责 OS/CPU、thread、sync、time clock 等低层契约；
   `Stopwatch`、`Duration` 这类用户便利抽象属于 `nextpas.core.time` 或更高层模块，不能作为
   platform 模块成果混入。
@@ -448,6 +935,935 @@
   `sema.type-mismatch` projection 与 final envelope。
 - Batch 104 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
   `type-mismatch-function-result-call-check=pass`、`typeMismatchFunctionResultCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 131 证明同一条 root-owned 零参 function-result evidence 在 direct class member-call 中
+  也已天然成立：`Self.Pick(Flag);` 中 `Pick(Integer)` 与 root-owned `function Flag:
+  Boolean` 会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：member-call path 已经复用
+  `CallArgumentSignatureIsStable(...)` 与 `ExpressionTypeFactIsStable(...)`，因此本轮走
+  promotion-first，把 focused truth 提升为 dedicated fixture 和 official verify gate。
+- Batch 131 新增 `tests/fixtures/member_type_mismatch_function_result_call` 与
+  `member-type-mismatch-function-result-call-check`，final envelope 新增
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`。
+- Batch 131 fresh `bash build/verify_local.sh` 已输出
+  `member-type-mismatch-function-result-call-check=pass`、
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 132 证明同一条 root-owned 零参 function-result evidence 在 class method body 内的 bare
+  implicit-self method call 中也已天然成立：`procedure TWorker.Run; begin Pick(Flag); end;`
+  中，当前 class 的 `Pick(Integer)` 与 root-owned `function Flag: Boolean` 会失败为
+  `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：implicit-self bare method fallback
+  已经复用 `CallArgumentSignatureIsStable(...)` / `ExpressionTypeFactIsStable(...)` 与既有
+  failure propagation；本轮走 promotion-first，把 focused truth 提升为 dedicated fixture 和
+  official verify gate。
+- Batch 132 新增
+  `tests/fixtures/implicit_self_bare_method_function_result_type_mismatch` 与
+  `implicit-self-bare-method-function-result-type-mismatch-check`，final envelope 新增
+  `implicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`。
+- Batch 132 fresh `bash build/verify_local.sh` 已输出
+  `implicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 133 固定下一轮加速方法：沿 G1.5/G1.6 的同一路径矩阵补格，优先选相邻批次已经证明
+  failure propagation / stable evidence 成熟的缺口；先 focused probe，GREEN 就 promotion 到 official
+  gate，RED 才做最小 analyzer 修复。
+- Batch 133 证明 exact current-class bare implicit-self method call 的普通 literal mismatch 已天然成立：
+  `procedure TWorker.Run; begin Pick(True); end;` 中，当前 class 的 `Pick(Integer)` 与 Boolean literal
+  会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126 的 implicit-self failure
+  propagation 与 stable literal argument signature 已覆盖 current class exact method target。
+- Batch 133 新增 `tests/fixtures/implicit_self_bare_method_type_mismatch` 与
+  `implicit-self-bare-method-type-mismatch-check`，final envelope 新增
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`。
+- Batch 133 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-type-mismatch-check=pass`、
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 134 继续同路径诊断矩阵补格：exact current-class bare implicit-self method call
+  `procedure TWorker.Run; begin Pick; end;` 中，当前 class 的 `Pick(Integer)` 会失败为
+  `sema.wrong-argument-count`，且不注册失败 `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126/127 的 implicit-self
+  failure propagation 已覆盖 current class root-owned method target 的 arity miss。
+- Batch 134 新增 `tests/fixtures/implicit_self_bare_method_wrong_argument_count` 与
+  `implicit-self-bare-method-wrong-argument-count-check`，final envelope 新增
+  `implicitSelfBareMethodWrongArgumentCountCheck":"pass"`。
+- Batch 134 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-wrong-argument-count-check=pass`、
+  `implicitSelfBareMethodWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 135 继续同路径诊断矩阵补格：exact current-class bare implicit-self method call
+  `procedure TWorker.Run; begin Pick(True); end;` 中，当前 class 的 `Pick(Integer)` /
+  `Pick(AnsiString)` overload set 会失败为 `sema.no-matching-overload`，且不注册失败
+  `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126/128 的 implicit-self
+  failure propagation 已覆盖 current class root-owned overload set 的 stable signature no-match。
+- Batch 135 新增 `tests/fixtures/implicit_self_bare_method_no_matching_overload` 与
+  `implicit-self-bare-method-no-matching-overload-check`，final envelope 新增
+  `implicitSelfBareMethodNoMatchingOverloadCheck":"pass"`。
+- Batch 135 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-no-matching-overload-check=pass`、
+  `implicitSelfBareMethodNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 136 继续同路径诊断矩阵补格：exact current-class bare implicit-self method call
+  `procedure TWorker.Run; begin Pick(1); end;` 中，当前 class 的 `Pick(Integer)` /
+  `Pick(LongInt)` overload set 会失败为 `sema.ambiguous-overload`，且不注册失败
+  `member-call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：Batch 126/129 的 implicit-self
+  failure propagation 已覆盖 current class root-owned overload set 的 compact signature collision。
+- Batch 136 新增 `tests/fixtures/implicit_self_bare_method_ambiguous_overload` 与
+  `implicit-self-bare-method-ambiguous-overload-check`，final envelope 新增
+  `implicitSelfBareMethodAmbiguousOverloadCheck":"pass"`。
+- Batch 136 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-ambiguous-overload-check=pass`、
+  `implicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 137 继续补 imported bare callable 诊断矩阵：root source 没有同名 callable、imported
+  `project-source` unit 中存在单一 `procedure Pick(Value: Integer)`，但 root 调用 `Pick;`
+  时会失败为 `sema.wrong-argument-count`，且不注册失败 `call` binding。
+- 这条边界不需要修改 `compiler/sema/np_semantic_analyzer.pas`：既有 imported project-source
+  callable lookup 已能把 single-target arity miss 透传成 `wrong-argument-count`。
+- Batch 137 新增 `tests/fixtures/imported_wrong_argument_count` 与
+  `imported-wrong-argument-count-check`，final envelope 新增
+  `importedWrongArgumentCountCheck":"pass"`。
+- Batch 137 fresh `bash build/verify_local.sh` 已输出
+  `imported-wrong-argument-count-check=pass`、
+  `importedWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 138 把 Batch 137 的 installed-source 防误报护栏补齐：imported `installed-source`
+  single-target bare callable arity miss（例如 installed `Helper.Pick(Integer)` 面对 root `Pick;`）
+  必须保持 deferred，不发 `sema.wrong-argument-count`，也不注册错误 `call` binding。
+- RED focused 证明旧实现会误报
+  `sema.wrong-argument-count`；`LookupCallBindingDeclaration(...)` 现在只在 imported callable
+  owner 允许 project-source diagnostics 时，才把 imported arity miss 投影为
+  `wrong-argument-count`。
+- Batch 138 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 139 把 imported bare callable ambiguity 的 installed-source 防误报护栏补齐：两个
+  `installed-source` helper 同时提供 `Pick(Integer)` 且 root 调用 `Pick(1);` 时，必须保持保守
+  跳过，不发 `sema.ambiguous-overload`，也不注册错误 `call` binding。
+- RED focused 证明旧实现会误报
+  `sema.ambiguous-overload`；`LookupCallBindingDeclaration(...)` 现在只在 imported signature
+  match 候选中至少两个来自 project-source owner 时，才把 imported ambiguity 投影为
+  `ambiguous-overload`。
+- 无 signature 的 imported ambiguity 判定必须按同 arity match 的 project-source 候选数判断，
+  不能只按同名 project-source 候选数判断；否则 mixed installed/project-source overload set 可能
+  在缺少稳定 signature 时误报。
+- Batch 139 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 140 选定加速路线的下一格：project-source imported bare no-match 已有 official
+  `imported-no-matching-overload-check`，本轮补 installed-source deferred guard，避免两个
+  installed-source helper 的 incomplete overload set 被提前报成 `sema.no-matching-overload`。
+- RED focused 证明旧实现会误报 `sema.no-matching-overload`；`LookupCallBindingDeclaration(...)`
+  现在只在 imported same-arity candidate set 全部来自允许 project-source diagnostics 的 owner
+  时，才把 imported no-match 投影为 `no-matching-overload`。
+- Batch 140 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 141 选定同一路线下一格：source-owned bare `unknown-callable` 已有 official
+  `unknown-callable-check`，但 installed-source imports 表示当前 imported callable truth 可能不完整；
+  此时 root bare name miss 应保守 deferred，避免把 helper/RTL 缺口提前报成普通 unknown callable。
+- RED focused 证明旧实现会误报 `sema.unknown-callable`；`LookupCallBindingDeclaration(...)`
+  现在只在当前 unit graph 没有 installed-source imports 时，才把 bare name miss 投影为
+  `unknown-callable`。
+- Batch 141 focused semantic 已输出 `semantic-call-bindings-status=pass`；fresh local verification
+  已输出 `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 142 固定新的提速思路为“语义诊断矩阵单元流水线”：每轮先写 `/plan`，选同族相邻成熟格子，
+  focused probe 判真相；GREEN 就 promotion 到 official stage0 gate，RED 才改 analyzer。
+- Batch 142 选定 inherited implicit-self bare method + function-result type mismatch：`TWorker.Run`
+  中裸调用 parent `Touch(Flag)`，其中 `Touch(Integer)` 来自 `TBaseWorker`，`Flag` 是 root-owned
+  `Boolean` function result。
+- Focused probe 证明该能力已经由 Batch 126 的 inherited implicit-self failure propagation 与
+  Batch 132 的 function-result stable evidence 天然覆盖：输出 `semantic-call-bindings-status=pass`，
+  本批不修改 analyzer。
+- Batch 142 新增 dedicated fixture 与
+  `inherited-implicit-self-bare-method-function-result-type-mismatch-check`，final envelope 新增
+  `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`。
+- Batch 142 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-function-result-type-mismatch-check=pass`、
+  `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 143 把提速方法收紧为“组合成熟格单元流水线”：优先把两个已验证能力组合成一个新矩阵格，
+  focused probe 先判真相，GREEN 直接 promotion，RED 才改 analyzer。
+- Batch 143 组合 Batch 104 的 root-owned 零参 function-result stable evidence 与 Batch 108 的
+  imported `project-source` bare callable single-target mismatch：root `Flag: Boolean` 调 imported
+  `Helper.Pick(Integer)` 会失败为 `sema.type-mismatch`，且不注册失败 `call` binding。
+- Focused probe 证明该组合能力已经天然成立：`LookupCallBindingDeclaration(...)` 的 imported
+  `project-source` type-mismatch projection 已接收 `CallArgumentSignatureIsStable(...)` 给出的
+  root-owned function-result evidence；本批不修改 analyzer。
+- Batch 143 新增 `tests/fixtures/imported_function_result_type_mismatch_call` 与
+  `imported-function-result-type-mismatch-call-check`，final envelope 新增
+  `importedFunctionResultTypeMismatchCallCheck":"pass"`。
+- Batch 143 fresh `bash build/verify_local.sh` 已输出
+  `imported-function-result-type-mismatch-call-check=pass`、
+  `importedFunctionResultTypeMismatchCallCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 144 继续“组合成熟格单元流水线”：把 Batch 109 的 imported direct member single-target
+  mismatch 与 Batch 131 的 root-owned function-result member-call evidence 组合成新 gate。
+- Batch 144 证明 imported `project-source` direct member-call 也已天然接受 root-owned function-result
+  stable evidence：root `Flag: Boolean` 调 imported `Worker.Pick(Integer)` 会失败为
+  `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：direct member-call path 已经把 `CallArgumentSignatureIsStable(...)`
+  的 evidence 传给 `MethodSymbolIdForClassTypeMember(...)`，后者的 imported `project-source`
+  type-mismatch provenance gate 已覆盖该组合。
+- Batch 144 新增 `tests/fixtures/imported_member_function_result_type_mismatch_call` 与
+  `imported-member-function-result-type-mismatch-call-check`，final envelope 新增
+  `importedMemberFunctionResultTypeMismatchCallCheck":"pass"`。
+- Batch 144 fresh `bash build/verify_local.sh` 已输出
+  `imported-member-function-result-type-mismatch-call-check=pass`、
+  `importedMemberFunctionResultTypeMismatchCallCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 160 把 Batch 144 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member single-target mismatch 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.type-mismatch`，也不注册错误 `member-call` binding。
+- Batch 160 focused probe 直接 GREEN：direct member-call path 的 provenance gate 已经阻止
+  installed-source direct member function-result type-mismatch 被提前投影为 ordinary type mismatch；本批不修改 analyzer。
+- installed-source direct member function-result type-mismatch 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 145 继续“成熟格组合流水线”：把 Batch 117 的 imported inherited direct member
+  single-target mismatch 与 Batch 144 的 imported member root-owned function-result evidence 组合成新 gate。
+- Batch 145 focused probe 证明 imported `project-source` inherited direct member-call 也已天然接受
+  root-owned function-result stable evidence：root `Flag: Boolean` 调 imported parent
+  `TBase.Pick(Integer)` 会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：parent-chain member-call path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 evidence 传给 imported `project-source`
+  single-target type-mismatch provenance gate。
+- Batch 145 新增 `tests/fixtures/imported_inherited_member_function_result_type_mismatch_call` 与
+  `imported-inherited-member-function-result-type-mismatch-call-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultTypeMismatchCallCheck":"pass"`。
+- Batch 145 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-member-function-result-type-mismatch-call-check=pass`、
+  `importedInheritedMemberFunctionResultTypeMismatchCallCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 146 把 Batch 145 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  inherited member single-target mismatch 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.type-mismatch`，也不注册错误 `member-call` binding。
+- Focused semantic guard 使用 `TUnitGraph` 显式标记 `Worker` 为 `ruoInstalledSource`；普通 stage0 fixture
+  不能证明这条 owner provenance，因为 sibling unit 会按 workspace truth 进入 project-source。
+- Batch 146 focused probe 直接 GREEN：parent-chain member-call path 的 provenance gate 已经阻止
+  installed-source inherited member function-result mismatch 被提前投影为 ordinary type mismatch；本批不修改 analyzer。
+- Batch 146 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 147 继续“成熟格组合流水线”：把 Batch 114 的 imported inherited
+  `project-source` overload-set no-match 与 Batch 145 的 root-owned function-result stable evidence
+  组合成新 gate。
+- Batch 147 focused probe 已直接 GREEN：root `Flag: Boolean` 调 imported parent overload set
+  `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 会失败为 `sema.no-matching-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：parent-chain member-call path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 root-owned function-result evidence 传给 imported
+  `project-source` overload-set no-match projection。
+- Batch 147 新增 `tests/fixtures/imported_inherited_member_function_result_no_matching_overload` 与
+  `imported-inherited-member-function-result-no-matching-overload-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Batch 147 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-member-function-result-no-matching-overload-check=pass`、
+  `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 149 证明 root-owned 零参 builtin function-result evidence 也能穿过 imported
+  `project-source` inherited member-call ambiguity：`Worker.Pick(Count)` 面对 parent chain 中
+  `Pick(Integer)` / `Pick(LongInt)` 的 compact signature collision 会失败为
+  `sema.ambiguous-overload`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：parent-chain member-call path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 root-owned function-result evidence 传给 imported
+  `project-source` overload-set ambiguity projection。
+- Batch 149 新增
+  `tests/fixtures/imported_inherited_member_function_result_ambiguous_overload` 与
+  `imported-inherited-member-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultAmbiguousOverloadCheck":"pass"`。
+- Batch 150 把 Batch 149 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  inherited member overload-set ambiguity 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.ambiguous-overload`，也不注册错误 `member-call` binding。
+- Batch 150 focused probe 直接 GREEN：parent-chain member-call path 的 provenance gate 已经阻止
+  installed-source inherited member function-result ambiguity 被提前投影为 ordinary ambiguity；本批不修改 analyzer。
+- installed-source function-result ambiguity 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 151 把 Batch 143 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  bare callable single-target mismatch 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.type-mismatch`，也不注册错误 `call` binding。
+- Batch 151 focused probe 直接 GREEN：bare callable path 的 provenance gate 已经阻止 installed-source
+  bare function-result mismatch 被提前投影为 ordinary type mismatch；本批不修改 analyzer。
+- installed-source bare function-result mismatch 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 151 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 152 继续“同族成熟格交叉流水线”：把 Batch 140 的 imported bare callable overload-set
+  no-match 与 Batch 143/151 的 root-owned function-result stable evidence 组合成新 gate。
+- Batch 152 focused probe 已直接 GREEN：root `Flag: Boolean` 调 imported `project-source` overload set
+  `Pick(Integer)` / `Pick(AnsiString)` 会失败为 `sema.no-matching-overload`，semantic model
+  为 `failure`，且不注册失败 `call` binding。
+- 该能力不需要修改 analyzer：bare callable path 已经把
+  `CallArgumentSignatureIsStable(...)` 的 root-owned function-result evidence 传给 imported
+  `project-source` overload-set no-match projection。
+- Batch 152 新增 `tests/fixtures/imported_function_result_no_matching_overload` 与
+  `imported-function-result-no-matching-overload-check`，final envelope 新增
+  `importedFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Batch 152 fresh `bash build/verify_local.sh` 已输出
+  `imported-function-result-no-matching-overload-check=pass`、
+  `importedFunctionResultNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 153 把 Batch 152 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  bare callable overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.no-matching-overload`，也不注册错误 `call` binding。
+- Batch 153 focused probe 直接 GREEN：bare callable path 的 provenance gate 已经阻止 installed-source
+  bare function-result no-match 被提前投影为 ordinary no-match；本批不修改 analyzer。
+- installed-source bare function-result no-match 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 153 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 154 继续“同族成熟格交叉流水线”：把 Batch 139 的 imported bare callable ambiguity 与
+  Batch 143/152/153 的 root-owned function-result stable evidence 组合成新 gate。
+- Batch 154 focused probe 直接 GREEN：root `Count: Integer` 调 imported `project-source` overload set
+  `Pick(Integer)` / `Pick(LongInt)` 会失败为 `sema.ambiguous-overload`，semantic model 为
+  `failure`，且不注册失败 `call` binding。
+- 该能力不需要修改 analyzer：bare callable path 已经把 root-owned function-result evidence 传给 imported
+  `project-source` overload-set ambiguity projection。
+- Batch 154 新增 `tests/fixtures/imported_function_result_ambiguous_overload` 与
+  `imported-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedFunctionResultAmbiguousOverloadCheck":"pass"`。
+- Batch 154 fresh `bash build/verify_local.sh` 已输出
+  `imported-function-result-ambiguous-overload-check=pass`、
+  `importedFunctionResultAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 155 把 Batch 154 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  bare callable overload-set ambiguity 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.ambiguous-overload`，也不注册错误 `call` binding。
+- Batch 155 focused probe 直接 GREEN：bare callable path 的 provenance gate 已经阻止 installed-source
+  bare function-result ambiguity 被提前投影为 ordinary ambiguity；本批不修改 analyzer。
+- installed-source bare function-result ambiguity 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 155 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 156 继续“同族成熟格交叉流水线”：把 Batch 110 的 imported direct member
+  overload-set no-match 与 Batch 144 的 direct member root-owned function-result evidence 组合成新 gate。
+- Batch 156 focused probe 已直接 GREEN：root `Flag: Boolean` 调 imported `project-source`
+  direct member overload set `TWorker.Pick(Integer)` / `TWorker.Pick(AnsiString)` 会失败为
+  `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：direct member-call path 已经把 root-owned function-result evidence
+  传给 imported `project-source` overload-set no-match projection。
+- Batch 156 新增 `tests/fixtures/imported_member_function_result_no_matching_overload` 与
+  `imported-member-function-result-no-matching-overload-check`，final envelope 新增
+  `importedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Batch 157 继续同族矩阵连打：把 Batch 115/154 的 ambiguity projection 与 Batch 156
+  刚固定的 direct imported member function-result evidence 组合成 official gate。
+- Batch 157 focused probe 已直接 GREEN：root `Count: Integer` 调 imported `project-source`
+  direct member overload set `TWorker.Pick(Integer)` / `TWorker.Pick(LongInt)` 会失败为
+  `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- 该能力不需要修改 analyzer：direct member-call path 已经把 root-owned function-result evidence
+  传给 imported `project-source` overload-set ambiguity projection。
+- Batch 157 新增 `tests/fixtures/imported_member_function_result_ambiguous_overload` 与
+  `imported-member-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedMemberFunctionResultAmbiguousOverloadCheck":"pass"`。
+- Batch 158 把 Batch 157 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member overload-set ambiguity 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.ambiguous-overload`，也不注册错误 `member-call` binding。
+- Batch 158 focused probe 直接 GREEN：direct member-call path 的 provenance gate 已经阻止
+  installed-source direct member function-result ambiguity 被提前投影为 ordinary ambiguity；本批不修改 analyzer。
+- installed-source direct member function-result ambiguity 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 159 把 Batch 156 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
+- Batch 159 focused probe 直接 GREEN：direct member-call path 的 provenance gate 已经阻止
+  installed-source direct member function-result no-match 被提前投影为 ordinary no-match；本批不修改 analyzer。
+- installed-source direct member function-result no-match 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作 workspace
+  project-source，不能证明 installed-source provenance。
+- Batch 161 把 direct imported member function-result 家族扩到 arity miss：root `Flag: Boolean`
+  作为两个 arguments 调 imported `project-source` 单一 `TWorker.Pick(Integer)` 时，会失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 161 focused probe 与 stage0 probe 都直接 GREEN，证明 direct member-call path 已能把
+  root-owned function-result evidence 传给 imported `project-source` arity projection；本批不修改 analyzer。
+- Batch 161 新增 `tests/fixtures/imported_member_function_result_wrong_argument_count` 与
+  `imported-member-function-result-wrong-argument-count-check`，final envelope 新增
+  `importedMemberFunctionResultWrongArgumentCountCheck":"pass"`。
+- Batch 162 把 Batch 161 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct member single-target arity miss 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.wrong-argument-count`，也不注册错误 `member-call` binding。
+- Batch 162 focused probe 直接 GREEN：direct member-call path 的 provenance guard 已经阻止
+  installed-source direct member function-result arity miss 被提前投影为 ordinary wrong-argument-count；本批不修改 analyzer。
+- installed-source direct member function-result wrong-argument-count 的 official proof 只能放在
+  semantic harness 中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把
+  sibling unit 当作 workspace project-source，不能证明 installed-source provenance。
+- Batch 163 把 imported inherited member function-result 家族补齐 arity miss：root `Flag: Boolean`
+  作为两个 arguments 调 imported `project-source` inherited `TBase.Pick(Integer)` 时，会失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 163 focused probe 与 stage0 probe 都直接 GREEN，证明 parent-chain member-call path 已能把
+  root-owned function-result evidence 传给 imported `project-source` inherited arity projection；本批不修改 analyzer。
+- Batch 163 新增
+  `tests/fixtures/imported_inherited_member_function_result_wrong_argument_count` 与
+  `imported-inherited-member-function-result-wrong-argument-count-check`，final envelope 新增
+  `importedInheritedMemberFunctionResultWrongArgumentCountCheck":"pass"`。
+- Batch 164 把 Batch 163 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  inherited member single-target arity miss 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.wrong-argument-count`，也不注册错误 `member-call` binding。
+- Batch 164 focused probe 直接 GREEN：parent-chain member-call path 的 provenance guard 已经阻止
+  installed-source inherited member function-result arity miss 被提前投影为 ordinary wrong-argument-count；本批不修改 analyzer。
+- installed-source inherited member function-result wrong-argument-count 的 official proof 只能放在
+  semantic harness 中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把
+  sibling unit 当作 workspace project-source，不能证明 installed-source provenance。
+- Batch 165 把 imported bare function-result 家族补齐 arity miss：root `Flag: Boolean`
+  作为两个 arguments 调 imported `project-source` 单一 `Pick(Integer)` 时，会失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `call` binding。
+- Batch 165 focused probe 与 stage0 probe 都直接 GREEN，证明 bare callable lookup path 已能把
+  root-owned function-result evidence 传给 imported `project-source` arity projection；本批不修改 analyzer。
+- Batch 165 新增
+  `tests/fixtures/imported_function_result_wrong_argument_count` 与
+  `imported-function-result-wrong-argument-count-check`，final envelope 新增
+  `importedFunctionResultWrongArgumentCountCheck":"pass"`。
+- Batch 166 把 Batch 165 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  bare callable single-target arity miss 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.wrong-argument-count`，也不注册错误 `call` binding。
+- Batch 166 focused probe 直接 GREEN：bare callable lookup provenance guard 已经阻止 installed-source
+  bare function-result arity miss 被提前投影为 ordinary wrong-argument-count；本批不修改 analyzer。
+- installed-source bare function-result wrong-argument-count 的 official proof 只能放在 semantic harness
+  中用 `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作
+  workspace project-source，不能证明 installed-source provenance。
+- Batch 167 把 known non-callable invalid-call-shape 推进到 imported `project-source` direct field：
+  imported `TWorker.Value: Integer` 被 root source 调成 `Worker.Value(1)` 时，会失败为
+  `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 167 focused probe 直接 GREEN，证明 imported project-source class layout truth 已能喂给
+  direct member-call 的 known non-method guard；本批不修改 analyzer。
+- Batch 167 新增 `tests/fixtures/imported_known_field_member_call` 与
+  `imported-known-field-member-call-check`，final envelope 新增
+  `importedKnownFieldMemberCallCheck":"pass"`。
+- Batch 168 把 Batch 167 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct class field 即使在 class layout truth 中可见，也必须保持 deferred，不发
+  `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 168 focused RED 证明旧实现会误报
+  `sema.invalid-call-shape`；`MethodSymbolIdForClassTypeMember(...)` 现在只在当前 type owner 是
+  root source 或 imported `project-source` 时，才把 known non-method member 投影为
+  `invalid-call-shape`，`installed-source` 继续保守 deferred。
+- installed-source known field invalid-call-shape 的 official proof 只能放在 semantic harness 中用
+  `TUnitGraph` 显式标记 `ruoInstalledSource`；普通 stage0 fixture 会把 sibling unit 当作
+  workspace project-source，不能证明 installed-source provenance。
+- Batch 169 把 known non-callable invalid-call-shape 推进到 imported `project-source` direct property：
+  imported `TWorker.Value` property 被 root source 调成 `Worker.Value(1)` 时，会失败为
+  `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 169 focused probe 直接 GREEN，证明 imported project-source property truth 已经通过
+  `$read` / `$write` 进入 known non-method member guard；本批不修改 analyzer。
+- Batch 169 新增 `tests/fixtures/imported_known_property_member_call` 与
+  `imported-known-property-member-call-check`，final envelope 新增
+  `importedKnownPropertyMemberCallCheck":"pass"`。
+- Batch 169 fresh `bash build/verify_local.sh` 已输出
+  `imported-known-property-member-call-check=pass`、
+  `importedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 170 把 Batch 169 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  direct class property 即使通过 `$read` / `$write` truth 可见，也必须保持 deferred，不发
+  `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 170 focused probe 直接 GREEN，证明 Batch 168 的 known non-method member provenance guard
+  已覆盖 property `$read` / `$write` truth；本批不修改 analyzer，也不新增 stage0 fixture 伪造
+  installed-source provenance。
+- Batch 170 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 171 把 known non-callable invalid-call-shape 推进到 imported `project-source` inherited
+  field：imported `TBaseWorker.Value: Integer` 通过 `TWorker = class(TBaseWorker)` 被 root source
+  调成 `Worker.Value(1)` 时，会失败为 `sema.invalid-call-shape`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 171 focused semantic 与 stage0 focused probe 直接 GREEN，证明现有 parent-chain known
+  non-method member path 已覆盖 imported `project-source` inherited field；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 171 新增 `tests/fixtures/imported_inherited_known_field_member_call` 与
+  `imported-inherited-known-field-member-call-check`，final envelope 新增
+  `importedInheritedKnownFieldMemberCallCheck":"pass"`。
+- Batch 171 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-known-field-member-call-check=pass`、
+  `importedInheritedKnownFieldMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 172 把 Batch 171 的成对 installed-source 防误报护栏补齐：imported
+  `installed-source` inherited class field 即使通过 parent-chain class layout truth 可见，也必须保持
+  deferred，不发 `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 172 focused semantic 直接 GREEN，证明 Batch 168 的 known non-method member provenance
+  guard 已覆盖 inherited parent-chain field truth；本批不修改 analyzer，也不新增 stage0 fixture
+  伪造 installed-source provenance。
+- Batch 172 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 173 把 known non-callable invalid-call-shape 推进到 imported `project-source` inherited
+  property：imported `TBaseWorker.Value` property 通过 `TWorker = class(TBaseWorker)` 被 root
+  source 调成 `Worker.Value(1)` 时，会失败为 `sema.invalid-call-shape`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 173 focused semantic 与 stage0 focused probe 直接 GREEN，证明现有 parent-chain known
+  non-method member path 已覆盖 imported `project-source` inherited property；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 173 新增 `tests/fixtures/imported_inherited_known_property_member_call` 与
+  `imported-inherited-known-property-member-call-check`，final envelope 新增
+  `importedInheritedKnownPropertyMemberCallCheck":"pass"`。
+- Batch 173 fresh `bash build/verify_local.sh` 已输出
+  `imported-inherited-known-property-member-call-check=pass`、
+  `importedInheritedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 174 把 Batch 173 的成对 installed-source 防误报护栏补齐：imported
+  `installed-source` inherited class property 即使通过 parent-chain `$read` / `$write` truth 可见，
+  也必须保持 deferred，不发 `sema.invalid-call-shape`，也不注册错误 `member-call` binding。
+- Batch 174 focused semantic 直接 GREEN，证明 Batch 168/170 的 known non-method member
+  provenance guard 已覆盖 inherited parent-chain property truth；本批不修改 analyzer，也不新增
+  stage0 fixture 伪造 installed-source provenance。
+- Batch 174 fresh `bash build/verify_local.sh` 已输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 175 把 class method body 内 bare implicit-self unknown-member 矩阵从 exact current class
+  推进到 inherited class context：`TWorker = class(TBaseWorker)` 且 `TWorker.Run` 内 bare
+  `Missing;` 在当前 class 与 parent chain 都找不到同名 method 时，会失败为
+  `sema.unknown-member`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 175 focused semantic 与 stage0 focused probe 直接 GREEN，证明 Batch 130 的
+  implicit-self unknown-member emission 已覆盖 inherited class context；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 175 新增 `tests/fixtures/inherited_implicit_self_bare_method_unknown_member` 与
+  `inherited-implicit-self-bare-method-unknown-member-check`，final envelope 新增
+  `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`。
+- Batch 175 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-unknown-member-check=pass`、
+  `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 176 把 class method body 内 bare implicit-self unknown-member 矩阵推进到 imported
+  `project-source` unit method body：root source `uses Worker;`，imported `Worker.pas` 的
+  `procedure TWorker.Run; begin Missing; end;` 必须失败为 `sema.unknown-member`，semantic
+  model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 176 focused RED 暴露根因：`SeedImportedUnitBodies` 已登记 imported callable body，但
+  `SeedCallBindings` 只遍历 root AST，imported class method body 内 bare call 未进入
+  call-binding / diagnostic traversal。
+- Batch 176 的修复保持 narrow owner-aware：`SeedCallBindingsInNode`、member-call binding 与
+  implicit-self fallback 都携带 current owner unit；`Self` receiver 按当前 owner unit 解析 type；
+  imported `project-source` 的 class-qualified procedure body 额外进入 traversal，installed-source
+  body diagnostics 继续不扩张。
+- Batch 176 同步把 provenance guard 从 `ImportedUnitAllowsTypeMismatchDiagnostic` 重命名为
+  `OwnerUnitAllowsProjectSourceDiagnostic`，因为该 guard 已覆盖 wrong-argument-count /
+  type-mismatch / no-match / ambiguity / invalid-call-shape / unknown-member 等普通 source-owned
+  semantic diagnostics，而不再只是 type-mismatch。
+- Batch 176 新增 `tests/fixtures/imported_unit_body_implicit_self_unknown_member` 与
+  `imported-unit-body-implicit-self-unknown-member-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`。
+- Batch 176 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 177 沿 Batch 176 的 imported `project-source` unit method body traversal 继续补
+  bare implicit-self wrong-argument-count：root source `uses Worker;`，imported `Worker.pas`
+  的 `procedure TWorker.Run; begin Pick; end;` 面对 `Pick(Value: Integer)` 时，必须失败为
+  `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 177 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然覆盖 arity miss；本批不修改 analyzer，也不修改 `core/`。
+- Batch 177 新增 `tests/fixtures/imported_unit_body_implicit_self_wrong_argument_count` 与
+  `imported-unit-body-implicit-self-wrong-argument-count-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass"`。
+- Batch 177 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 178 沿同一 imported `project-source` unit method body surface 继续补
+  bare implicit-self type-mismatch：root source `uses Worker;`，imported `Worker.pas` 的
+  `procedure TWorker.Run; begin Pick(True); end;` 面对 `Pick(Value: Integer)` 时，必须失败为
+  `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 178 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然复用 stable literal mismatch evidence；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 178 新增 `tests/fixtures/imported_unit_body_implicit_self_type_mismatch` 与
+  `imported-unit-body-implicit-self-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfTypeMismatchCheck":"pass"`。
+- Batch 178 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-type-mismatch-check=pass`、
+  `importedUnitBodyImplicitSelfTypeMismatchCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 179 沿同一 imported `project-source` unit method body surface 继续补
+  bare implicit-self no-matching-overload：root source `uses Worker;`，imported `Worker.pas`
+  的 `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
+  `Pick(AnsiString)` 时，必须失败为 `sema.no-matching-overload`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 179 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然复用 stable literal no-match evidence；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 179 新增 `tests/fixtures/imported_unit_body_implicit_self_no_matching_overload` 与
+  `imported-unit-body-implicit-self-no-matching-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass"`。
+- Batch 179 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 180 沿同一 imported `project-source` unit method body surface 继续补
+  bare implicit-self ambiguous-overload：root source `uses Worker;`，imported `Worker.pas`
+  的 `procedure TWorker.Run; begin Pick(1); end;` 同时面对 `Pick(Integer)` 与
+  `Pick(LongInt)` 时，必须失败为 `sema.ambiguous-overload`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+- Batch 180 focused semantic 与 stage0 focused probe 直接 GREEN，证明 owner-aware imported
+  method body traversal 已自然复用 stable literal ambiguity evidence；本批不修改 analyzer，
+  也不修改 `core/`。
+- Batch 180 新增 `tests/fixtures/imported_unit_body_implicit_self_ambiguous_overload` 与
+  `imported-unit-body-implicit-self-ambiguous-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfAmbiguousOverloadCheck":"pass"`。
+- Batch 180 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-ambiguous-overload-check=pass`、
+  `importedUnitBodyImplicitSelfAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 148 把 Batch 147 的成对 installed-source 防误报护栏补齐：imported `installed-source`
+  inherited member overload-set no-match 即使面对 root-owned function-result evidence，也必须保持
+  deferred，不发 `sema.no-matching-overload`，也不注册错误 `member-call` binding。
+- Batch 148 focused probe 直接 GREEN：parent-chain member-call path 的 provenance gate 已经阻止
+  installed-source inherited member function-result no-match 被提前投影为 ordinary no-match；本批不修改 analyzer。
+- Batch 108 把 imported bare single-target signature mismatch 接进 structured diagnostics：
+  root source 没有同名 callable、imported `project-source` unit 中只有一个同 arity target，且稳定
+  argument signature 与 target param signature 明确不兼容时，`Pick(True)` 会失败为
+  `sema.type-mismatch`，且不注册失败 call binding。
+- Batch 108 同时固定 imported `installed-source` single-target mismatch 继续 deferred；它不会再错误
+  binding，也不会提前报 `sema.type-mismatch`。
+- Batch 108 新增 `imported-type-mismatch-call-check`，用 dedicated fixture 固定 stage0
+  `sema.type-mismatch` projection 与 final envelope `importedTypeMismatchCallCheck=pass`。
+- Batch 108 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 109 把 imported direct member-call single-target signature mismatch 接进 structured diagnostics：
+  receiver type 已知、imported `project-source` unit 的 exact class type 中只有一个同 arity
+  member target、且稳定 argument signature 与 target param signature 明确不兼容时，
+  `Worker.Pick(True)` 会失败为 `sema.type-mismatch`，且不注册失败 `member-call` binding。
+- Batch 109 同时固定 imported `installed-source` member single-target mismatch 继续 deferred；
+  它不会再错误 binding，也不会提前报 `sema.type-mismatch`。
+- Batch 109 新增 `imported-member-type-mismatch-call-check`，用 dedicated fixture 固定 stage0
+  `sema.type-mismatch` projection 与 final envelope `importedMemberTypeMismatchCallCheck=pass`。
+- Batch 109 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `imported-member-type-mismatch-call-check=pass`、
+  `importedMemberTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 110 把 imported direct member-call overload-set signature no-match 接进 structured diagnostics：
+  receiver type 已知、imported `project-source` unit 的 exact class type 中存在多个同 arity member
+  target、且稳定 argument signature 与所有 candidate signature 都不匹配时，`Worker.Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 110 同时固定 imported `installed-source` member overload-set no-match 继续 deferred；它不会错误
+  binding，也不会提前报 `sema.no-matching-overload`。
+- Batch 110 新增 `imported-member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `importedMemberNoMatchingOverloadCheck=pass`。
+- Batch 111 把 imported direct member-call 的 source-owned name miss 正式纳入 gate：receiver type 已知、
+  imported `project-source` unit 的 exact class / parent chain 不存在同名 method 时，
+  `Worker.Missing(1)` 会失败为 `sema.unknown-member`，且不注册失败 `member-call` binding。
+- Batch 111 同时把 imported `installed-source` member unknown-member 收回 deferred；它不会错误 binding，
+  也不会把 `System` / runtime baseline 或 helper surface 提前报成 ordinary unknown member。
+- Batch 111 新增 `imported-unknown-member-check`，用 dedicated fixture 固定 stage0
+  `sema.unknown-member` projection 与 final envelope `importedUnknownMemberCheck=pass`。
+- Batch 112 把 imported direct member-call 的 source-owned arity miss 正式纳入 gate：receiver type 已知、
+  imported `project-source` unit 的 exact class / parent chain 存在同名 method，但没有任何
+  visible member target 的参数个数与 call 匹配时，`Worker.Pick(1, 2)` 会失败为
+  `sema.wrong-argument-count`，且不注册失败 `member-call` binding。
+- Batch 112 同时把 imported `installed-source` member wrong-argument-count 收回 deferred；它不会错误
+  binding，也不会把 helper / runtime baseline 的 incomplete imported truth 提前报成 ordinary
+  arity error。
+- `MethodSymbolIdForExactClassTypeMember(...)` 的 `wrong-argument-count` 分支现在也受 owner provenance
+  guard 约束：只有 root source 或 imported `project-source` owner 才允许落诊断，`installed-source`
+  继续保守 deferred。
+- Batch 112 新增 `imported-member-wrong-argument-count-check`，用 dedicated fixture 固定 stage0
+  `sema.wrong-argument-count` projection 与 final envelope
+  `importedMemberWrongArgumentCountCheck=pass`。
+- Batch 113 把 root-owned inherited direct member-call 的 stable signature no-match 正式纳入 gate：
+  exact receiver type 自身没有同名 method、但 parent chain 上存在同名同 arity 的多个 member target，
+  且当前稳定 argument signature 与所有 inherited candidate 都不匹配时，`Worker.Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 113 只打开 root-owned inherited member no-match；imported inherited path 继续 deferred，
+  不会被这轮顺手放开。
+- `MethodSymbolIdForClassTypeMember(...)` 现在对 `no-matching-overload` 的 parent-chain gate 做了
+  root-owned 限定：exact receiver 仍可诊断；parent depth 只有 current type owner 属于 root source 时
+  才允许 inherited no-match 投影成 structured diagnostic。
+- Batch 113 新增 `inherited-member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope
+  `inheritedMemberNoMatchingOverloadCheck=pass`。
+- Batch 114 把 imported `project-source` inherited direct member-call 的 stable signature no-match 正式纳入 gate：
+  exact receiver type 自身没有同名 method、parent chain 上存在同名同 arity 的多个 inherited member target，
+  且当前稳定 argument signature 与所有 inherited candidate 都不匹配时，`Worker.Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 114 同时固定 imported `installed-source` inherited member no-match 继续 deferred；它不会错误
+  binding，也不会把 helper / runtime baseline 的 incomplete imported truth 提前报成 ordinary
+  overload failure。
+- `MethodSymbolIdForClassTypeMember(...)` 现在对 parent-chain `AAllowNoMatchingOverloadDiagnostic`
+  采用 root source + imported `project-source` provenance guard：exact receiver 仍可诊断；parent depth
+  只有 current type owner 属于 root source 或 imported `project-source` 时才允许 inherited no-match
+  投影成 structured diagnostic。
+- Batch 114 新增 `imported-inherited-member-no-matching-overload-check`，用 dedicated fixture 固定
+  stage0 `sema.no-matching-overload` projection 与 final envelope
+  `importedInheritedMemberNoMatchingOverloadCheck=pass`。
+- Batch 115 把 imported `project-source` inherited direct member-call 的 ambiguity 正式纳入 gate：
+  exact receiver type 自身没有同名 method、parent chain 上存在同名同 arity 的多个 inherited member target，
+  且当前稳定 argument signature 无法唯一选择候选时，`Worker.Pick(1)` 会失败为
+  `sema.ambiguous-overload`，且不注册失败 `member-call` binding。
+- Batch 115 同时固定 imported `installed-source` inherited ambiguity 继续 deferred；它不会错误 binding，
+  也不会把 helper / runtime baseline 的 incomplete imported truth 提前报成 ordinary ambiguity。
+- `MethodSymbolIdForExactClassTypeMember(...)` 的 ambiguity 分支现在受 owner provenance guard 约束：
+  只有 root source 或 imported `project-source` owner 才允许落 `ambiguous-overload`，其余 imported owner
+  继续保守 deferred。
+- Batch 115 新增 `imported-inherited-member-ambiguous-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.ambiguous-overload` projection 与 final envelope
+  `importedInheritedMemberAmbiguousOverloadCheck=pass`。
+- imported inherited `project-source` 的 wrong-argument-count 在当前实现里已经天然成立：对
+  `TWorker = class(TBase)` 且 `TBase.Pick(Integer)` 可见的场景，`Worker.Pick(1, 2)` 的 stage0 build
+  会直接输出 `sema.wrong-argument-count`，不需要再改 `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` wrong-argument-count 也继续保持 deferred：由于
+  `MethodSymbolIdForExactClassTypeMember(...)` 的 arity miss 分支仍受 owner provenance guard 约束，
+  installed-source parent owner 不会被提前投影成 ordinary arity diagnostic。
+- Batch 116 新增
+  `tests/fixtures/imported_inherited_member_wrong_argument_count` 与
+  `imported-inherited-member-wrong-argument-count-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedMemberWrongArgumentCountCheck=pass`。
+- imported inherited `project-source` 的 type-mismatch 在当前实现里也已经天然成立：对
+  `TWorker = class(TBase)` 且 `TBase.Pick(Integer)` 可见的场景，`Worker.Pick(True)` 的 stage0 build
+  会直接输出 `sema.type-mismatch`，不需要再改 `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` type-mismatch 继续保持 deferred；这和 imported exact member /
+  imported inherited wrong-argument-count 的 provenance 策略一致，避免把 incomplete imported truth
+  提前投影成 ordinary type mismatch。
+- Batch 117 新增
+  `tests/fixtures/imported_inherited_member_type_mismatch_call` 与
+  `imported-inherited-member-type-mismatch-call-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedMemberTypeMismatchCallCheck=pass`。
+- imported inherited `project-source` 的 unknown-member 在当前实现里也已经天然成立：对
+  `TWorker = class(TBase)` 且 parent chain 中不存在 `Missing` 的场景，`Worker.Missing(1)` 的
+  semantic regression 与 stage0 build 都会直接输出 `sema.unknown-member`，不需要再改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- imported inherited `installed-source` unknown-member 继续保持 deferred；focused semantic regression
+  证明 `ruoInstalledSource` parent owner 不会被提前投影成 ordinary unknown-member，也不会注册错误
+  `member-call` binding。
+- Batch 118 新增 `tests/fixtures/imported_inherited_unknown_member` 与
+  `imported-inherited-unknown-member-check`，把这条已存在行为正式纳入 final envelope
+  `importedInheritedUnknownMemberCheck=pass`。
+- 同一家族 sema diagnostics 的加速办法已经更具体了：对只差 provenance / inherited / imported 的相邻
+  边界，先做 probe；若能力天然成立，就直接 promotion 到 official gate；只有 probe 失败时才进入最小实现修复。
+- 为加快 nextPas 的 sema 热点开发，后续轮次固定采用 `/plan -> 单刀目标 -> RED -> 根因定位 ->
+  最小修复 -> focused GREEN -> fresh verify -> review -> commit` 的节奏，限制单轮只处理一个主目标和
+  一条热路径，避免并行猜修拖慢收口。
+- Batch 119 把 known non-callable member-call 的第一条 direct class field/property 边界接进结构化
+  diagnostics：当 receiver type 已知、class layout truth 已知，且同名 field/property 已知存在但被当成
+  call 使用时，`Worker.Value(1)` 会失败为 `sema.invalid-call-shape`，且不注册失败 `member-call`
+  binding。
+- 这次实现直接复用了现有 `ClassTypeHasKnownNonMethodMember(...)` guard：它不再 silent deferred，而是对
+  已知 non-callable member 带出 `invalid-call-shape` failure kind，避免把这类边界误报成
+  `sema.unknown-member`。
+- Batch 119 新增 `tests/fixtures/known_field_member_call` 与 `known-field-member-call-check`，把这条新
+  diagnostics 正式纳入 final envelope `knownFieldMemberCallCheck=pass`。
+- `System.Free` 与 specialized generic member-call 继续 deferred；这一批只收 known field/property
+  member call 的最小稳定边界，不冒进到更复杂 receiver 或完整 member access 语义。
+- Batch 120 证明同一条 known non-callable diagnostics 在 direct class property 上也已天然成立：
+  当 `TWorker.Value` 是已知 class property 而不是 callable 时，`Worker.Value(1)` 会失败为
+  `sema.invalid-call-shape`，且不注册失败 `member-call` binding。
+- property 这条边界不需要再改 `compiler/sema/np_semantic_analyzer.pas`：现有
+  `ClassTypeHasKnownNonMethodMember(...)` 已经通过 `$read` / `$write` truth 覆盖 property，因此本轮是
+  纯 promotion。
+- Batch 120 新增 `tests/fixtures/known_property_member_call` 与 `known-property-member-call-check`，把
+  direct class property non-callable 也正式纳入 final envelope
+  `knownPropertyMemberCallCheck=pass`。
+- Batch 121 证明同一条 known non-callable diagnostics 在 inherited class field 上也已天然成立：
+  当 `TWorker = class(TBaseWorker)` 且 `TBaseWorker.Value: Integer` 已知存在但不是 callable 时，
+  `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`，且不注册失败 `member-call` binding。
+- 这条 inherited known field 边界同样不需要再改 `compiler/sema/np_semantic_analyzer.pas`：现有
+  `MethodSymbolIdForClassTypeMember(...)` 已沿 `ParentTypeId` 逐层调用
+  `ClassTypeHasKnownNonMethodMember(...)`，因此本轮仍是纯 promotion。
+- Batch 121 新增 `tests/fixtures/inherited_known_field_member_call` 与
+  `inherited-known-field-member-call-check`，把 inherited known field non-callable 也正式纳入
+  final envelope `inheritedKnownFieldMemberCallCheck=pass`。
+- Batch 122 证明同一条 known non-callable diagnostics 在 inherited class property 上也已天然成立：
+  当 `TWorker = class(TBaseWorker)` 且 `TBaseWorker.Value` 是已知 class property 而不是 callable 时，
+  `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`，且不注册失败 `member-call` binding。
+- 这条 inherited known property 边界同样不需要再改 `compiler/sema/np_semantic_analyzer.pas`：
+  现有 `MethodSymbolIdForClassTypeMember(...)` 已沿 `ParentTypeId` 逐层调用
+  `ClassTypeHasKnownNonMethodMember(...)`，而后者已经通过 `$read` / `$write` truth 覆盖 property，因此本轮仍是纯 promotion。
+- Batch 122 新增 `tests/fixtures/inherited_known_property_member_call` 与
+  `inherited-known-property-member-call-check`，把 inherited known property non-callable 也正式纳入
+  final envelope `inheritedKnownPropertyMemberCallCheck=pass`。
+- Batch 123 把 class method body 内的 bare implicit-self method call 推进到真实 binding truth：
+  `procedure TWorker.Run; begin Touch; end;` 中的 `Touch;` 现在会注册为唯一 `member-call` binding，
+  target 指向 `TWorker.Touch`，且不报 diagnostic。
+- 这次修复不是扩大完整 bare/member resolver，而是最小补齐两个局部缺口：
+  `BareCallCalleeName(...)` 在 bare `gnkProcedureCallStatement` 没有 child node 时回退到
+  `ACallNode.Text`；`TryRegisterImplicitSelfBareMethodCallBinding(...)` 只在当前 method class 已知、
+  bare call 常规 lookup 失败且 failure kind 仍为空或 `unknown-callable` 时，尝试把 bare name 回绑到
+  当前 class method symbol。
+- fresh stage0 query probe 证明 query/session projection 也已经天然成立，不需要继续改 query path：
+  `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols ...member_call_bindings.pas` 已输出
+  `query-bindings` 中 `byteOffset=519` 的 `Touch` `member-call`，target 为 `TWorker.Touch`；同一条
+  `query-definitions` 也同步投影 `targetName="TWorker.Touch"`。
+- 因此 Batch 123 的正确提速方式是 promotion-first：先用 fresh binary 复核 query 真相，再补
+  `stage0-query-member-call-bindings-check` 官方 gate，而不是在 query 已经成立时继续猜修 session / projection。
+- Batch 123 第一次 full verify 失败点是 official gate 的 byte offset 期望漂移：脚本算到了语句行首，
+  而 query truth 的 binding offset 是 callee `Touch` 起点 `519`。修正
+  `MEMBER_IMPLICIT_TOUCH_OFFSET` 之后，fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 124 证明 class method body 内 bare implicit-self method call 也能沿 parent chain 绑定到
+  inherited method：当 `TWorker = class(TBaseWorker)` 且 `TWorker.Run` 内写 `Touch;` 时，
+  `Touch;` 会注册为唯一 `member-call` binding，target 指向 `TBaseWorker.Touch`，且不报
+  diagnostic。
+- 这条 inherited implicit-self bare call 边界不需要修改
+  `compiler/sema/np_semantic_analyzer.pas`：Batch 123 的 implicit-self fallback 已复用
+  `MethodSymbolIdForClassTypeMember(...)`，后者现有 `ParentTypeId` lookup 已能找到 parent method。
+- Batch 124 新增 `TChildWorker.Run` 内 bare `Touch;` 的 query gate；fresh stage0 query probe
+  已输出 `query-bindings` 中 `byteOffset=935` 的 `Touch` `member-call`，target 为
+  `TBaseWorker.Touch`，同一条 `query-definitions` 也同步投影
+  `targetName="TBaseWorker.Touch"`。
+- Batch 124 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 semantic analyzer，
+  也没有修改 `core/`。
+- Batch 125 证明 inherited implicit-self bare method call with argument 也能消费现有
+  argument-count/signature truth：当 parent class 声明 `TBaseWorker.Touch(Value: Integer)`，
+  child class method body 内写 `Touch(7);` 时，`Touch` 会注册为唯一 `member-call`
+  binding，target 指向 param signature 为 `i` 的 `TBaseWorker.Touch`，且不报 diagnostic。
+- 这条带参数 inherited implicit-self bare call 边界不需要修改
+  `compiler/sema/np_semantic_analyzer.pas`：Batch 123 的 implicit-self fallback 已传入
+  `CallArgumentCount(...)` 与 compact argument signature，现有
+  `MethodSymbolIdForClassTypeMember(...)` 会沿 parent chain 选择同 arity/signature target。
+- Batch 125 新增 `TChildWorker.Run` 内 bare `Touch(7);` 的 query gate；fresh stage0 query probe
+  已输出 `query-bindings` 中 `byteOffset=1038` 的 `Touch` `member-call`，target 为带
+  `targetParamCount=1` / `targetParamSignature="i"` 的 `TBaseWorker.Touch`。
+- Batch 125 fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 semantic analyzer，
+  也没有修改 `core/`。
+- Batch 126 证明 inherited implicit-self bare method call 的失败路径需要显式透传 lookup
+  failure kind：`TBaseWorker.Touch(Value: Integer)` 可见、`TWorker.Run` 内写 `Touch(True);`
+  时，旧实现会 silent deferred，因为 implicit-self fallback 只返回 Boolean。
+- `TryRegisterImplicitSelfBareMethodCallBinding(...)` 现在返回 failure kind、callee name 与 callee
+  offset；当 parent-chain lookup 证明单一 target 的 stable signature 不兼容时，
+  `SeedCallBindingsInNode(...)` 会发 `sema.type-mismatch`，且不会注册失败 `member-call` binding。
+- Batch 126 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_type_mismatch` 与
+  `inherited-implicit-self-bare-method-type-mismatch-check`，stage0 probe 已输出
+  `diagnostic-code=sema.type-mismatch` 与
+  `diagnostic-message=argument type mismatch for "Touch"`。
+- Batch 126 fresh `bash build/verify_local.sh` 已输出
+  `inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass"`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 `core/`。
+- Batch 127 采用“失败矩阵补齐”加速策略：沿 Batch 126 的 inherited implicit-self bare method
+  failure-kind propagation 继续补 `wrong-argument-count`，避免每轮重新发散找新主题。
+- focused semantic 证明 `Touch;` 调 inherited `Touch(Value: Integer)` 已天然失败为
+  `sema.wrong-argument-count`，且不注册错误 `member-call` binding；本批不需要修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- Batch 127 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_wrong_argument_count` 与
+  `inherited-implicit-self-bare-method-wrong-argument-count-check`，把该能力提升到 official
+  verify gate 与 final envelope。
+- Batch 127 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-wrong-argument-count-check=pass`、
+  `inheritedImplicitSelfBareMethodWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
+- Batch 128 继续“失败矩阵补齐”加速策略：沿 inherited implicit-self bare method failure-kind
+  propagation 补 `no-matching-overload`，与 Batch 126/127 形成同一路径的三格 failure coverage。
+- focused semantic 证明 parent class 上 `Touch(Integer)` 与 `Touch(AnsiString)` 同时可见、
+  child method body 内写 `Touch(True);` 时，已经天然失败为 `sema.no-matching-overload`，
+  且不注册错误 `member-call` binding；本批不需要修改 analyzer。
+- Batch 128 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_no_matching_overload` 与
+  `inherited-implicit-self-bare-method-no-matching-overload-check`，把该能力提升到 official
+  verify gate 与 final envelope。
+- Batch 128 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-no-matching-overload-check=pass`、
+  `inheritedImplicitSelfBareMethodNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 129 把加速打法明确为“同一路径失败矩阵推进”：沿 inherited implicit-self bare
+  method failure-kind propagation 连续补格，避免每轮重新发散找新主题。
+- focused semantic 证明 parent class 上 `Touch(Integer)` 与 `Touch(LongInt)` 同时可见、
+  child method body 内写 `Touch(1);` 时，已经天然失败为 `sema.ambiguous-overload`，
+  且不注册错误 `member-call` binding；本批不需要修改 analyzer。
+- Batch 129 新增 dedicated fixture
+  `tests/fixtures/inherited_implicit_self_bare_method_ambiguous_overload` 与
+  `inherited-implicit-self-bare-method-ambiguous-overload-check`，把该能力提升到 official
+  verify gate 与 final envelope。
+- Batch 129 fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-ambiguous-overload-check=pass`、
+  `inheritedImplicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`；本批没有修改 analyzer，
+  也没有修改 `core/`。
+- Batch 130 暴露出 inherited implicit-self failure matrix 之外的相邻缺口：class method body 内
+  bare `Missing;` 处于已知 `Self` class context，旧实现既没有把它作为 ordinary
+  `sema.unknown-callable` 发出，也没有发 `sema.unknown-member`，而是 silent deferred。
+- 修复点很窄：`TryRegisterImplicitSelfBareMethodCallBinding(...)` 已能从
+  `MethodSymbolIdForClassTypeMember(...)` 拿到 `unknown-member` failure kind；缺的是
+  `SeedCallBindingsInNode(...)` bare-call emission 分支对该 failure kind 的输出。
+- Batch 130 新增 dedicated fixture
+  `tests/fixtures/implicit_self_bare_method_unknown_member` 与
+  `implicit-self-bare-method-unknown-member-check`，把 class method body 内 bare implicit-self
+  name miss 固定为 `sema.unknown-member`，且不注册失败 `member-call` binding。
+- Batch 130 fresh `bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-unknown-member-check=pass`、
+  `implicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批修复仅触达 `compiler/sema` 的 narrow
+  diagnostic emission 与对应 tests/docs/records，没有修改 `core/`。
+- Batch 105 把 root-owned bare overload signature no-match 接进 structured diagnostics：
+  root source 中存在同名同 arity 多个候选、argument signature 来自稳定 evidence、但没有任何
+  candidate signature 匹配时，`Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败
+  call binding。
+- `sema.no-matching-overload` 与 `sema.type-mismatch` 分工明确：单一 target 不兼容继续报
+  `type-mismatch`；多候选集合全不匹配报 `no-matching-overload`。
+- Batch 105 新增 `no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `noMatchingOverloadCheck=pass`。
+- Batch 105 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `no-matching-overload-check=pass`、`noMatchingOverloadCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+- Batch 106 把 imported bare overload signature no-match 接进 structured diagnostics：
+  root source 中没有同名 callable，imported units 中存在同名同 arity 多个候选、argument signature
+  来自稳定 evidence、但没有任何 imported candidate signature 匹配时，`Pick(True)` 会失败为
+  `sema.no-matching-overload`，且不注册失败 call binding。
+- Batch 106 只改变 imported 多候选全不匹配的安全分支：root callable 仍优先，single imported
+  target type mismatch、member no-match、implicit conversion、default parameter ranking、var/out
+  compatibility 和 visibility checking 继续 deferred。
+- Batch 106 新增 `imported-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `importedNoMatchingOverloadCheck=pass`。
+- Batch 106 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `imported-no-matching-overload-check=pass`、`importedNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Batch 107 把 direct class member-call overload signature no-match 接进 structured diagnostics：
+  root-owned exact class type 中存在同 owner / 同 qualified name / 同 arity 多个 method candidates、
+  argument signature 来自稳定 evidence、但没有任何 candidate signature 匹配时，
+  `Worker.Pick(True)` 会失败为 `sema.no-matching-overload`，且不注册失败 `member-call` binding。
+- Batch 107 只改变 direct class variable receiver + root-owned exact class type 的安全分支：
+  imported/inherited member no-match、record/property/array/deref receiver、implicit conversion、
+  default parameter ranking、var/out compatibility 和 visibility checking 继续 deferred。
+- Batch 107 收口 review 增加了 inherited member no-match guard：parent-chain lookup 可继续绑定
+  inherited positive method target，但 inherited overload 全不匹配不能在本批次提前报
+  `sema.no-matching-overload`。
+- Batch 107 新增 `member-no-matching-overload-check`，用 dedicated fixture 固定 stage0
+  `sema.no-matching-overload` projection 与 final envelope `memberNoMatchingOverloadCheck=pass`。
+- Batch 107 fresh verification 已闭环：fresh `bash build/verify_local.sh` 输出
+  `member-no-matching-overload-check=pass`、`memberNoMatchingOverloadCheck":"pass"`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
 - Batch 102 已把 platform.time focused tests 迁入 `core/tests/nextpas.core.platform.time/`，
   并让 official gates 指向 platform 命名空间；`nextpas.core.time/test_time` 继续只覆盖 L1

@@ -4,6 +4,7 @@ type
   TWorker = class
     constructor Create(Value: Integer);
     procedure Run;
+    procedure Touch;
     procedure SetValue(Value: Integer);
     function Add(A, B: Integer): Integer;
     procedure Pick;
@@ -12,8 +13,10 @@ type
   end;
   TBaseWorker = class
     procedure Touch;
+    procedure Touch(Value: Integer);
   end;
   TChildWorker = class(TBaseWorker)
+    procedure Run;
   end;
 
 constructor TWorker.Create(Value: Integer);
@@ -23,6 +26,11 @@ end;
 procedure TWorker.Run;
 begin
   Self.SetValue(9);
+  Touch;
+end;
+
+procedure TWorker.Touch;
+begin
 end;
 
 procedure TWorker.SetValue(Value: Integer);
@@ -48,6 +56,16 @@ end;
 
 procedure TBaseWorker.Touch;
 begin
+end;
+
+procedure TBaseWorker.Touch(Value: Integer);
+begin
+end;
+
+procedure TChildWorker.Run;
+begin
+  Touch;
+  Touch(7);
 end;
 
 var

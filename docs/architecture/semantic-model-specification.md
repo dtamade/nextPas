@@ -87,14 +87,52 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `requiredParamCount..ParamCount` 的可接受 arity 区间，并只用当前已提供参数的 compact
   argument signature 前缀选择唯一 target；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、
   已声明内建标量/字符串变量/参数，或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
-  `sema.type-mismatch`，imported target、class/record/alias 变量/参数、imported/带参/member
-  function result 相关 no-match、无法推断或 signature 不唯一时仍保守不绑定。带 selector/member 的
+  `sema.type-mismatch`；root source 没有同名 callable、imported `project-source` 单一 target
+  但调用 arity 不在 target 可接受区间内时发 `sema.wrong-argument-count`，并且该 path 接受
+  root-owned 零参内建标量/字符串 function result 作为 argument evidence，同时不注册失败
+  `call` binding；arity 已匹配但稳定
+  argument signature 明确不兼容时同样发 `sema.type-mismatch`；imported `project-source`
+  overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定 no-match evidence。
+  imported `installed-source`
+  single-target arity miss 继续 deferred，不发 `sema.wrong-argument-count`；imported 同名同 arity 多候选、稳定
+  argument signature 全不匹配时发 `sema.no-matching-overload`；root-owned exact class
+  member-call 中同 owner / 同 qualified name / 同 arity 多候选且稳定 argument signature 全不匹配时，
+  同样发 `sema.no-matching-overload`；imported `project-source` direct member-call 与 inherited
+  member-call overload set 也接受 root-owned 零参内建标量/字符串 function result 作为稳定
+  no-match evidence；imported `project-source` direct member-call 与 inherited member-call overload
+  set 还接受同类 evidence 作为 ambiguity evidence；imported `project-source` direct member-call 与
+  inherited member-call single target 面对同类 evidence 但 arity 不兼容时会发
+  `sema.wrong-argument-count`。
+  imported `installed-source` single-target
+  type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
+  single-target arity miss（包括 direct/inherited member-call root-owned function-result arity miss，以及
+  imported unit method body bare implicit-self same-unit function-result arity miss）、bare callable ambiguity、
+  bare callable no-match（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
+  imported unit method body bare implicit-self same-unit function-result no-match、
+  imported unit method body bare implicit-self same-unit function-result ambiguous-overload、
+  imported unit method body bare implicit-self stable literal ambiguous-overload、
+  imported unit method body bare implicit-self stable literal no-match、
+  imported unit method body bare implicit-self stable literal type-mismatch、
+  imported unit method body bare implicit-self wrong-argument-count、
+  imported unit method body inherited implicit-self wrong-argument-count、
+  imported unit method body inherited implicit-self type-mismatch、
+  imported unit method body inherited implicit-self no-matching-overload、
+  imported unit method body inherited implicit-self ambiguous-overload、
+  imported unit method body inherited implicit-self function-result type-mismatch、
+  imported unit method body inherited implicit-self function-result wrong-argument-count、
+  imported unit method body inherited implicit-self function-result no-matching-overload、
+  imported unit method body inherited implicit-self function-result ambiguous-overload、
+  direct/inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned
+  零参内建标量/字符串 function result）、
+  class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、
+  无法推断或 source provenance 不可信的 signature 不唯一时仍保守不绑定。带 selector/member 的
   qualified callee（例如 `Holder.Help();`）不会再被
   name-only binding pass 误绑定到 imported bare callable；当前正向 selector/member
   contract 覆盖 root source 中直接变量 receiver 的 class method statement call（例如
   `Worker.Run;` / `Worker.Run();` / `Worker.SetValue(7);`）、表达式参数里的 direct
   member function call（例如 `Halt(Worker.Add(1, 2));`）、class method body 内的
-  `Self.SetValue(9)`，以及已声明 class type-name receiver 的 constructor-like member call
+  `Self.SetValue(9)` 与 bare implicit-self method call（例如 `Touch;` / `Touch(7);`，
+  包括回绑到 parent class method 的 inherited case），以及已声明 class type-name receiver 的 constructor-like member call
   （例如 `TWorker.Create(42)`），以 `member-call` binding 指向已声明的 `TClass.Method`
   method symbol。root source 变量的 type id 也可以来自 imported project/source unit 中已 seed
   的 class type，因此 `uses Worker; var Worker: TWorker;` 后的 direct member call 可绑定到
@@ -103,16 +141,77 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   owner unit 限定 `TClass.Method`，避免继续靠第一个同名 class/method 字符串匹配。若 receiver
   exact class type 未声明同名 method，member lookup 会沿 `ParentTypeId` 链查 parent class
   method，并继续使用 parent type symbol owner 限定 target；exact type 已声明同名 method 但
-  没有任何同 arity target 时会发出 `sema.wrong-argument-count`，body 不匹配或不唯一时仍会保守停止。
+  没有任何同 arity target 时会发出 `sema.wrong-argument-count`，同一条 arity failure 也会从
+  class method body 的 bare implicit-self fallback 透传出来，例如当前 class 的 `Pick;`
+  调 `Pick(Value: Integer)`、inherited `Touch;` 调 `Touch(Value: Integer)`，或 imported
+  `project-source` unit method body 中 `TWorker.Run` 的 `Pick;` 调 `Pick(Value: Integer)`；
+  body 不匹配或不唯一时仍会保守停止。
   class method declaration 的 parameter list 会进入
   green tree，`method` symbol 会记录 `ParamCount` 与 compact `ParamSignature`；带参数 method
   call 先使用 call argument count 选择同 owner、同 qualified name、同 `ParamCount` 的 target
-  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式或已声明内建标量/字符串变量/参数等稳定事实并可证明不兼容时发
-  `sema.type-mismatch`，若同 arity 有多个候选，则用当前可推断的 argument signature 做唯一匹配，并用同名
+  set；root-owned 单一 target 且当前参数签名来自 literal/纯表达式、已声明内建标量/字符串变量/参数、
+  或 root-owned 零参内建标量/字符串 function result 等稳定事实并可证明不兼容时发
+  `sema.type-mismatch`，同一条 failure kind 也会从 class method body 的 bare implicit-self
+  fallback 透传出来，例如当前 class 的 `Pick(True);`、inherited `Touch(True);`，以及
+  `Pick(Flag);` 中 `Flag` 是 root-owned 零参 Boolean function result 的当前 class method 场景；
+  receiver exact type 或 class method body bare
+  implicit-self fallback 中，root-owned 多候选同 arity 但稳定 argument signature 全不匹配时发
+  `sema.no-matching-overload`，例如当前 class 的 `Pick(True);` 同时面对
+  `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
+  `Touch(Integer)` / `Touch(AnsiString)`；imported `project-source` bare callable、direct member-call 或
+  inherited member-call overload set 同样可用 root-owned 零参内建标量/字符串 function result
+  作为 stable no-match evidence，例如 `Pick(Flag);` 或 `Worker.Pick(Flag);` 面对
+  `Pick(Integer)` / `Pick(AnsiString)` 而 `Flag` 返回 `Boolean`；若同 arity 有多个候选，则用当前可推断的
+  argument signature 做唯一匹配；若 signature collision 仍无法唯一选择，则发
+  `sema.ambiguous-overload`，同一 ambiguity 也会从 bare implicit-self fallback
+  透传出来，例如当前 class 的 `Pick(1);` 同时面对 `Pick(Integer)` / `Pick(LongInt)`，
+  inherited `Touch(1);` 同时面对 `Touch(Integer)` 与 `Touch(LongInt)`，或 imported
+  `project-source` bare `Pick(Count);` / direct or inherited `Worker.Pick(Count);` 同时面对
+  `Pick(Integer)` 与 `Pick(LongInt)` 且 root-owned `Count` 返回 `Integer`。随后再用同名
   `TClass.Method` body declaration 的 argument count / signature 做二次确认。完整 overload
   ranking、implicit conversion、default parameter lowering / ranking、member resolver、visibility checking、property
   accessor、record method、array/deref receiver、runtime constructor allocation/lowering 与
   virtual/override dispatch 仍未完成
+- imported `project-source` unit 的 class-qualified method body 也会进入 owner-aware
+  call-binding traversal；因此 imported unit 内 `procedure TWorker.Run; begin Missing; end;`
+  的 bare implicit-self member miss 会按 `Worker` owner 解析 `Self`
+  并输出 `sema.unknown-member`，且该 member miss 会沿 imported owner class parent chain
+  检查 inherited methods；同一路径中的 bare implicit-self arity miss（例如
+  `procedure TWorker.Run; begin Pick; end;` 调 `Pick(Value: Integer)`）会输出
+  `sema.wrong-argument-count`；同一路径沿 imported owner class parent chain 找到 inherited
+  method target 时也会输出同类 arity diagnostic（例如 `TWorker = class(TBaseWorker)` 中
+  `procedure TWorker.Run; begin Touch; end;` 面对 `TBaseWorker.Touch(Value: Integer)`）；
+  同一路径接受同一 project-source owner unit 中零参内建标量/字符串 function result 作为
+  arity evidence（例如 `Pick(Count, Count);` 面对 `Pick(Value: Integer)` 且 `Count`
+  返回 `Integer`，或 `Touch(Count, Count);` 面对 inherited `Touch(Value: Integer)`）；
+  同一路径中的 stable literal mismatch（例如
+  `procedure TWorker.Run; begin Pick(True); end;` 调 `Pick(Value: Integer)`）会输出
+  `sema.type-mismatch`；同一路径沿 imported owner class parent chain 找到 inherited
+  method target 后，也会输出 stable literal mismatch diagnostic（例如
+  `TWorker = class(TBaseWorker)` 中 `procedure TWorker.Run; begin Touch(True); end;`
+  面对 `TBaseWorker.Touch(Value: Integer)`）；同一 inherited target path 也接受同一
+  project-source owner unit 中零参内建标量/字符串 function result 作为 stable mismatch
+  evidence（例如 `Touch(Flag);` 面对 inherited `Touch(Value: Integer)` 且 `Flag` 返回
+  `Boolean`）；同一路径中的 stable literal no-match（例如
+  `procedure TWorker.Run; begin Pick(True); end;` 同时面对 `Pick(Integer)` 与
+  `Pick(AnsiString)`）会输出 `sema.no-matching-overload`；同一路径沿 imported owner
+  class parent chain 找到 inherited method overload set 后，也会输出 stable literal no-match
+  diagnostic（例如 `TWorker = class(TBaseWorker)` 中
+  `procedure TWorker.Run; begin Touch(True); end;` 同时面对
+  `TBaseWorker.Touch(Integer)` 与 `TBaseWorker.Touch(AnsiString)`），并接受同一
+  project-source owner unit 中零参内建标量/字符串 function result 作为 stable no-match
+  evidence（例如 `Touch(Flag);` 同时面对 inherited `Touch(Integer)` 与
+  `Touch(AnsiString)` 且 `Flag` 返回 `Boolean`）；同一路径中的 stable literal
+  ambiguity（例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
+  `Pick(Integer)` 与 `Pick(LongInt)`）会输出 `sema.ambiguous-overload`；同一路径沿 imported
+  owner class parent chain 找到 inherited method overload set 后，也会输出 stable literal
+  ambiguity diagnostic（例如 `TWorker = class(TBaseWorker)` 中
+  `procedure TWorker.Run; begin Touch(1); end;` 同时面对 inherited `Touch(Integer)` 与
+  `Touch(LongInt)`），并接受同一 project-source owner unit 中零参内建标量/字符串
+  function result 作为 stable ambiguity evidence（例如 `Touch(Count);` 同时面对
+  inherited `Touch(Integer)` 与 `Touch(LongInt)` 且 `Count` 返回 `Integer`）；同一路径中的
+  known non-callable field（例如 `procedure TWorker.Run; begin Value(1); end;` 中
+  `Value: Integer`）会输出 `sema.invalid-call-shape`
 - type graph 先只表达 builtin canonical types：`Boolean`、`Integer`、`AnsiString`
 - `Typed HIR` 先只表达 compilation root、resolved unit refs 与 runtime contract refs
 
@@ -291,17 +390,134 @@ candidate collection
   - 先用于 duplicate unit import，证明 semantic failure 已进入 diagnostics sink 和 command result bridge
 - `sema.wrong-argument-count`
   - 先用于 bare procedure/function call 中 callable name 已知、但没有任何同优先级 arity match 的场景
+  - 也用于 bare procedure/function call 中 root source 没有同名 callable、但 imported
+    `project-source` 单一 target 已知且调用 arity 不匹配的场景；该路径接受 root-owned
+    零参内建标量/字符串 function result 作为 argument evidence，并且不会注册失败
+    `call` binding
+  - 也用于 imported `project-source` direct member-call 或 inherited member-call 单一 target 已知且调用
+    arity 不匹配的场景；该路径接受 root-owned 零参内建标量/字符串 function result 作为 argument
+    evidence，并且不会注册失败 `member-call` binding
+  - 同形状 imported `installed-source` bare/direct/inherited single-target arity miss 继续 deferred，
+    即使 argument evidence 是 root-owned 零参内建标量/字符串 function result，也不提前发
+    ordinary `sema.wrong-argument-count`；这类 provenance guard 用
+    `semantic-call-bindings-check` 的 focused harness 固定
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    method name，但没有任何 arity-compatible target 的场景
+  - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
+    method name，但没有任何 arity-compatible target 的场景
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的 method name，但没有任何 arity-compatible target 的场景；该路径不会注册失败
+    `member-call` binding，且接受同一 project-source owner unit 中零参内建标量/字符串
+    function result 作为 argument evidence
+  - 同形状 imported `installed-source` unit method body 内 bare implicit-self method call，
+    即使 argument evidence 是同一 installed-source owner unit 中零参内建标量/字符串
+    function result，也继续保守 deferred，不提前发 ordinary `sema.wrong-argument-count`；这条
+    guard 只用 `semantic-call-bindings-check` 的 focused harness 固定，不用普通 sibling
+    stage0 fixture 伪造 provenance
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 parent
+    chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；该路径同样不会注册失败
+    `member-call` binding，且接受同一 project-source owner unit 中零参内建标量/字符串
+    function result 作为 argument evidence
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 imported
+    owner class parent chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；
+    该路径不会注册失败 `member-call` binding
 - `sema.type-mismatch`
   - 先用于 bare procedure/function call 与 direct member-call 中，root-owned 单一 target 的 arity
     已匹配、当前 argument signature 来自稳定 literal/纯表达式、已声明内建标量/字符串变量/参数事实，
     或 root-owned 零参内建标量/字符串 function result 且与 target param signature 明确不兼容的场景
+  - 也用于 bare procedure/function call、direct member-call 以及 inherited direct member-call 中 imported
+    `project-source` 单一 target 的 arity 已匹配、当前 argument signature 来自稳定事实且与 target
+    param signature 明确不兼容的场景；该 stable evidence 包含 root-owned 零参内建标量/字符串 function result
+  - 同形状 imported `installed-source` bare/direct/inherited single-target mismatch 继续 deferred，
+    即使 argument evidence 是 root-owned 零参内建标量/字符串 function result，也不提前投影为 ordinary
+    `sema.type-mismatch`；这类 provenance guard 用 `semantic-call-bindings-check` 的 focused harness 固定
+  - 也用于 class method body 内 bare implicit-self method call 找到 root-owned 单一 target，
+    但 stable argument signature 与 target param signature 明确不兼容的场景；该 stable evidence
+    包含 builtin literal/纯表达式与 root-owned 零参内建标量/字符串 function result，并覆盖
+    current class 与 inherited parent method target
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的单一 target，arity 已匹配、stable argument signature 与 target param
+    signature 明确不兼容的场景；stable evidence 包含 literal/纯表达式，以及同一
+    project-source owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Pick(True); end;` 或 `Pick(Flag);` 面对
+    `Pick(Value: Integer)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
+    imported owner class parent chain 找到 inherited 单一 target，arity 已匹配、stable
+    argument signature 与 target param signature 明确不兼容的场景；stable evidence 包含
+    literal/纯表达式，以及同一 project-source owner unit 中零参内建标量/字符串 function
+    result；例如 `procedure TWorker.Run; begin Touch(True); end;` 或 `Touch(Flag);` 面对
+    inherited `Touch(Value: Integer)`，该路径不会注册失败 `member-call` binding
+- `sema.no-matching-overload`
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
+  - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
+    同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的同名同 arity多候选，但 stable argument signature 与全部 target param
+    signature 都不兼容的场景；stable evidence 包含 literal/纯表达式，以及同一
+    project-source owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Pick(True); end;` 或 `Pick(Flag);` 面对
+    `Pick(Value: Integer)` / `Pick(Value: AnsiString)`，该路径不会注册失败
+    `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
+    imported owner class parent chain 找到 inherited 同名同 arity多候选，但 stable argument
+    signature 与全部 target param signature 都不兼容的场景；stable evidence 包含
+    literal/纯表达式，以及同一 project-source owner unit 中零参内建标量/字符串 function
+    result；例如 `procedure TWorker.Run; begin Touch(True); end;` 或 `Touch(Flag);`
+    同时面对 inherited `Touch(Integer)` 与 `Touch(AnsiString)`，该路径不会注册失败
+    `member-call` binding
 - `sema.ambiguous-overload`
   - 先用于 bare procedure/function call binding 中同名同 arity imported callable 多候选且无法唯一选择的场景
   - 也用于 direct member-call binding 中 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
+    同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 class method body 内 bare implicit-self method call 沿 parent chain 找到 root-owned
+    同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
+    imported owner class 的同名同 arity多候选，但 compact signature collision 后无法唯一选择
+    target method 的场景；stable evidence 包含 literal/纯表达式，以及同一 project-source
+    owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Pick(1); end;` 或 `Pick(Count);` 同时面对
+    `Pick(Integer)` 与 `Pick(LongInt)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
+    imported owner class parent chain 找到 inherited 同名同 arity多候选，但 compact signature
+    collision 后无法唯一选择 target method 的场景；stable evidence 包含 literal/纯表达式，
+    以及同一 project-source owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Touch(1); end;` 或 `Touch(Count);` 同时面对 inherited
+    `Touch(Integer)` 与 `Touch(LongInt)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned
+    或 same-owner `project-source` unit-owned 零参内建标量/字符串 function result 可作为
+    稳定 evidence，且 compact signature collision 后无法唯一选择 target method 的场景
+  - 也用于 imported `project-source` direct member-call overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
+    target method 的场景
+  - 也用于 imported `project-source` bare procedure/function overload set 中，root-owned 零参
+    内建标量/字符串 function result 可作为稳定 evidence，且 compact signature collision 后无法唯一选择
+    target callable 的场景
+  - imported `installed-source` bare callable / direct or inherited member-call overload set 继续 deferred，即使同形状
+    function-result argument evidence 已可推断，也不提前发 ordinary ambiguity diagnostic；这类
+    provenance guard 用 `semantic-call-bindings-check` 的 focused harness 固定
+- `sema.no-matching-overload`
+  - 先用于 root-owned 或 imported bare procedure/function call binding 中，同名同 arity 多候选存在、
+    argument signature 来自稳定 evidence、但没有任何同优先级 candidate signature 匹配的场景
+  - 也用于 imported `project-source` inherited member-call overload set 中，root-owned
+    或 same-owner `project-source` unit-owned 零参内建标量/字符串 function result 可作为
+    稳定 evidence 且所有 target signature 都不匹配的场景
+  - imported `installed-source` bare callable / direct or inherited member-call overload set 继续 deferred，即使同形状
+    argument evidence 已可推断，也不提前发 ordinary no-match diagnostic；这类 provenance guard 用
+    `semantic-call-bindings-check` 的 focused harness 固定
 - `sema.unknown-callable`
   - 先用于 root source bare callable name miss，且不会把已知 symbol/type/builtin callable 误归类
+  - 当当前 unit graph 含有 `installed-source` import 时，bare callable name miss 继续保守不绑定，
+    避免把 incomplete helper/RTL callable truth 提前报成普通 unknown callable
 - `sema.unknown-member`
   - 先用于 direct class member-call 中 receiver type 已知、class/parent chain 没有同名 method，且同名 field/property 不应被误报的场景
+  - 也用于 class method body 内 bare implicit-self method call 中，当前 `Self` class/parent chain
+    没有同名 method 的场景；例如 `procedure TWorker.Run; begin Missing; end;`，以及
+    `TWorker = class(TBaseWorker)` 时沿 parent chain 也找不到 `Missing`
+  - 也用于 imported `project-source` unit 的 class-qualified method body 中同形状 bare
+    implicit-self name miss；`Self` 的类型按 imported owner unit 解析，避免误用 root owner，
+    且会沿 imported owner class parent chain 检查 inherited methods
   - implicit runtime 已能读取 source-backed nextPas `System` / `TObject` truth；普通 `class`
     会隐式继承 `System.TObject`，`Obj.Free` 通过真实 `TObject.Free` method symbol 进入
     `member-call` binding；缺少 source-backed System truth 的路径仍保持 deferred，避免把 System
@@ -311,6 +527,67 @@ candidate collection
     `TObject.Destroy` 的普通 class 会落到 `TObject.Destroy`，而不是不存在的子类 destructor
   - `Obj.Free` 同时会生成 `object-free-runtime` typed HIR node，DisplayName 为
     `np.system.object_free`，Operand 记录 receiver、effective `Destroy`、nil guard 和 heap release
+- `sema.invalid-call-shape`
+  - 先用于 direct class member-call 中 receiver 类型已知、class layout truth 已知，且同名 field/property
+    已知存在但不是 callable 的场景；例如 `Worker.Value(1)` 会失败为 `sema.invalid-call-shape`
+  - 同一条 direct field 边界也适用于 receiver type 与 field truth 来自 imported `project-source`
+    unit 的场景；例如 imported `TWorker.Value: Integer` 被 root source 写成 `Worker.Value(1)`
+    时同样失败为 `sema.invalid-call-shape`
+  - 同一条 known field 边界也适用于 imported `project-source` unit method body 的 bare
+    implicit-self fallback；例如 imported `TWorker.Value: Integer` 在
+    `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
+    `sema.invalid-call-shape`
+  - 同一条 known property 边界也适用于 imported `project-source` unit method body 的 bare
+    implicit-self fallback；例如 imported `TWorker.Value` property 在
+    `procedure TWorker.Run; begin Value(1); end;` 中被当作 callable 使用时同样失败为
+    `sema.invalid-call-shape`
+  - imported `project-source` unit method body 中沿 parent chain 命中的 inherited known field
+    也走同一条边界；例如 imported `TBaseWorker.Value: Integer` 被
+    `TWorker = class(TBaseWorker)` 的 `procedure TWorker.Run; begin Value(1); end;`
+    当作 bare implicit-self callable 使用时，同样失败为 `sema.invalid-call-shape`
+  - imported `installed-source` unit method body 中沿 parent chain 命中的 inherited known field
+    继续保守 deferred；这条 guard 只用 `semantic-call-bindings-check` 的 focused harness 固定，
+    不用普通 sibling stage0 fixture 伪造 provenance
+  - receiver type 与 field truth 来自 imported `installed-source` unit 时继续保守 deferred，不把
+    incomplete helper/RTL class layout truth 提前投影成 ordinary `sema.invalid-call-shape`；这条
+    guard 用 `semantic-call-bindings-check` 的 focused harness 固定
+  - imported `installed-source` unit method body 中 bare implicit-self 命中的 known field
+    也继续保守 deferred；这条 guard 同样只用 `semantic-call-bindings-check` 的 focused harness 固定，
+    不用普通 sibling stage0 fixture 伪造 provenance
+  - 同一条边界同样适用于已知 class property 被当成 call 使用的场景；例如
+    `Worker.Value(1)` 在 `Value` 是 property 时也会失败为 `sema.invalid-call-shape`
+  - direct property 边界也适用于 receiver type 与 property truth 来自 imported `project-source`
+    unit 的场景；例如 imported `TWorker.Value` property 被 root source 写成
+    `Worker.Value(1)` 时同样失败为 `sema.invalid-call-shape`
+  - receiver type 与 property truth 来自 imported `installed-source` unit 时也继续保守 deferred；
+    这条 guard 与 installed-source field guard 一样，只用 `semantic-call-bindings-check` 的 focused
+    harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
+  - imported `installed-source` unit method body 中 bare implicit-self 命中的 known property
+    也继续保守 deferred；这条 guard 同样只用 `semantic-call-bindings-check` 的 focused harness 固定，
+    不用普通 sibling stage0 fixture 伪造 provenance
+  - imported `project-source` unit method body 中沿 parent chain 命中的 inherited known property
+    也走同一条边界；例如 imported `TBaseWorker.Value` property 被
+    `TWorker = class(TBaseWorker)` 的 `procedure TWorker.Run; begin Value(1); end;`
+    当作 bare implicit-self callable 使用时，同样失败为 `sema.invalid-call-shape`
+  - imported `installed-source` unit method body 中沿 parent chain 命中的 inherited known property
+    继续保守 deferred；这条 guard 只用 `semantic-call-bindings-check` 的 focused harness 固定，
+    不用普通 sibling stage0 fixture 伪造 provenance
+  - 当 member lookup 沿 `ParentTypeId` 在 root/source-backed class truth 中命中 inherited
+    field/property，且该 member 不是 callable 时，同样失败为 `sema.invalid-call-shape`
+  - 同一条 inherited field 边界也适用于 receiver type 与 parent field truth 来自 imported
+    `project-source` unit 的场景；例如 imported `TBaseWorker.Value: Integer` 被 root source
+    通过 `TWorker = class(TBaseWorker)` 写成 `Worker.Value(1)` 时同样失败为
+    `sema.invalid-call-shape`
+  - inherited field truth 来自 imported `installed-source` unit 时继续保守 deferred；这条 guard
+    与 installed-source direct field guard 一样，只用 `semantic-call-bindings-check` 的 focused
+    harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
+  - inherited property truth 来自 imported `project-source` unit 时同样适用；例如 imported
+    `TBaseWorker.Value` property 被 root source 通过 `TWorker = class(TBaseWorker)` 写成
+    `Worker.Value(1)` 时也失败为 `sema.invalid-call-shape`
+  - inherited property truth 来自 imported `installed-source` unit 时继续保守 deferred；这条
+    guard 与 installed-source inherited field guard 一样，只用 `semantic-call-bindings-check` 的
+    focused harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
+  - specialized generic receiver、record/property/array/deref receiver 与更完整 member access 仍继续 deferred
     intent；`THIRBuilder` 会把它投影成 HIR `np.system.object_free` intrinsic marker，保留
     receiver pointer operand 与 effective `Destroy` target，并把紧随其后的匹配 `Destroy`
     lowering 标记成 `np.system.object_free.destroy` owned marker；`heap-release true` 会在

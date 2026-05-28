@@ -15,76 +15,125 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-## Master Addendum: FPC Platform ABI Full Inventory
+当前最新索引补充：Batch 202 Installed-source Unit Method Body Implicit-self Function Result
+Wrong Argument Count Deferred Guard 已完成并通过 focused semantic / heaptrc / fresh local verification；
+下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-### Goal
+当前最新索引补充：Batch 214-216 Installed-source Unit Method Body Inherited Implicit-self
+Function Result (Arity / No-match / Ambiguous) Deferred Guards 将一次性闭合矩阵；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-最终目标是把 FPC 各平台可取证的系统 API、常量、结构体、opaque carrier、调用约定和 ABI
-差异，系统性搬运到 nextPas-owned `platform.<host>.base/ffi` inventory 中，作为未来 nextPas
-标准库、编译器和跨平台 runtime 的底座。
+当前上一批为 Batch 213 Installed-source Unit Method Body Inherited Implicit-self Function
+Result Type Mismatch Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-### Non-negotiable Rules
+当前上一批为 Batch 212 Installed-source Unit Method Body Inherited Implicit-self
+Ambiguous Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-- `*.base` 只放 ABI 常量、结构体、record layout、opaque size/alignment、type alias 和 capability token。
-- `*.ffi` 只放 raw external declaration、syscall declaration、FFI symbol binding，以及极薄的 ABI
-  级错误/返回值投影；不得把跨平台 public contract、策略、业务语义或便利 API 放进 FFI。
-- FPC source 是 reference authority，不是 production dependency；production platform code 不
-  `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` / `Windows` / `Syscall` 等 FPC RTL 单元。
-- FPC 已有的平台 API、常量、结构和 ABI alias 视为正确来源；nextPas 不为这些 raw 定义额外写
-  “证明 FPC 正确”的测试。验证只覆盖 nextPas 自己的集成边界：owner、命名、无 FPC RTL 依赖、
-  编译连通、文档/路线可恢复。
-- `platform.time` / `platform.sync` / `platform.thread` / future `platform.process` 是统一抽象层；
-  它们消费 host `base/ffi`，但 raw ABI 不按 feature 建 `platform.<feature>.ffi`。
-- 全量搬运必须按平台和 API family 分批落地：FPC source authority、owner decision、
-  compile/coherence gate、docs/gap matrix、verify route 同步。不能把不属于 FPC 或未找到来源的 ABI
-  伪装成已搬运。
+当前上一批为 Batch 211 Installed-source Unit Method Body Inherited Implicit-self No
+Matching Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-### Work Breakdown
+当前上一批为 Batch 210 Installed-source Unit Method Body Inherited Implicit-self Type
+Mismatch Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-- Phase A: 固化 import workflow 和命名边界，先修正当前 Wave 6 中 raw FFI 与 helper/API 混淆。
-- Phase B: 建平台清单：Linux / Android / Darwin / FreeBSD / generic Unix / Windows 分别列出 FPC
-  source families、已搬运 API、未搬运 API、ABI 风险。
-- Phase C: 按 API family 分波导入：process、file/path/stat、memory/mmap/virtual memory、
-  dynamic loader、time/clock、thread/TLS、sync/wait、errno/last-error、socket/network、
-  environment、filesystem metadata、terminal/console、signal/exception 等。
-- Phase D: 对每个平台补 compile-only 或 simulated-host gate；真实 runtime 只测 nextPas unified
-  public contract，不直接 runtime 单测 raw OS API。
+当前上一批为 Batch 209 Installed-source Unit Method Body Inherited Implicit-self Wrong
+Argument Count Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-当前最新本轮为 Platform Host ABI Completeness Wave 6；上一轮包括
-Platform Host ABI Completeness Wave 5；
-Platform Host ABI Completeness Wave 4；
-Platform Host ABI Completeness Wave 3；
-Platform Host ABI Completeness Wave 2；
-Platform Host ABI Completeness Wave 1；
-Platform FFI Import Workflow；
-Platform FFI Source Evidence Index；
-Platform Host Gap Route Guard；
-Platform Host FFI Gap Matrix Guard；
-Platform Facade Info Boundary；
-Platform Sync Base Extraction；
-Platform Thread Base Extraction、
-Platform Sync Windows Wait-Address Public Result Boundary、
-Platform Sync POSIX Wait-Bucket Policy Ownership、
-Platform Sync POSIX Error Result Host Ownership、
-Platform ABI Owner Audit And Gap Matrix、
-Platform Behavior Tests Abstract API Boundary；
-Platform Time Facade/Base/Host Shape Normalization；
-Platform Sync Windows Busy-result Helper Ownership；
-Platform Sync Windows Destroy Helper Ownership；
-Platform Time Host-FFI Facade Collapse；
-Platform POSIX Timeout Deadline Helper Ownership、
-Collections Interface Ownership Normalization、
-Platform POSIX Pthread Attr-init Shared Helper Ownership；
-Platform POSIX Errno/Mutex Projection Shared Helper Ownership；
-Platform POSIX Clock/Sync Shared Helper Ownership；
-Platform Thread Shared POSIX Helper Ownership；
-Platform Time Windows Math Helper Boundary；
-Platform Sync Windows Timeout Result FFI Ownership、
-Platform Sync POSIX Helper FFI Ownership、Platform Simulated Host Compile Matrix、Platform Windows ABI Type Leakage Ownership、Platform ABI Alignment Carrier Ownership、Platform Windows Timeout Conversion FFI Ownership、Platform Time Windows FILETIME Host FFI Ownership、Platform Thread Sleep EINTR FFI Ownership、Platform Sync Pthread Capability FFI Ownership、Platform Sync Host FFI Surface Guard、Platform Time Host FFI Surface Guard、Platform Thread Native Thread ID Host FFI Hardening、
-Platform FFI Owner Boundary Guard、Platform Host-owned FFI Partitioning、Platform Sync FFI-owned Opaque Size Derivation、Platform POSIX FFI Target Matrix Hardening、Platform Sync POSIX Fallback Runtime Coverage、
-Platform Sync FFI Surface Parity、Platform Thread L0 Surface Coverage、
-Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release
-Invalid Trap Policy、Batch 102 Object Release Invalid Boundary、
+当前上一批为 Batch 208 Installed-source Unit Method Body Implicit-self Wrong Argument
+Count Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 207 Installed-source Unit Method Body Implicit-self Type Mismatch
+Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 206 Installed-source Unit Method Body Implicit-self No Matching
+Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 205 Installed-source Unit Method Body Implicit-self Ambiguous
+Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 204 Installed-source Unit Method Body Implicit-self Function Result
+Ambiguous Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 203 Installed-source Unit Method Body Implicit-self Function Result
+No Matching Overload Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 201 Installed-source Unit Method Body Inherited Implicit-self Known Property
+Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 200 Installed-source Unit Method Body Inherited Implicit-self Known Field
+Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 199 Installed-source Unit Method Body Implicit-self Known Field
+Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 198 Installed-source Unit Method Body Implicit-self Known Property
+Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 197 Imported Unit Method Body Implicit-self Known Property
+Invalid Call Shape Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 196 Imported Unit Method Body Inherited Implicit-self Known Property
+Invalid Call Shape Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 195 Imported Unit Method Body Inherited Implicit-self Known Field
+Invalid Call Shape Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 194 Imported Unit Method Body Implicit-self Known Field Invalid Call
+Shape Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
+最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 193 Imported Unit Method Body Inherited Implicit-self Unknown Member
+Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 192 Imported Unit Method Body Inherited Implicit-self Function Result
+Wrong Argument Count Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 191 Imported Unit Method Body Implicit-self Function Result Wrong
+Argument Count Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 190 Imported Unit Method Body Inherited Implicit-self Function Result
+Ambiguous Overload Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 189 Imported Unit Method Body Inherited Implicit-self Function Result No
+Matching Overload Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 188 Imported Unit Method Body Inherited Implicit-self Function Result Type
+Mismatch Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 187 Imported Unit Method Body Implicit-self Function Result Ambiguous
+Overload Diagnostics，已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前最新本轮为 Batch 185 Imported Unit Method Body Implicit-self Function Result Type Mismatch Diagnostics；Batch 184 Imported Unit Method Body Inherited Implicit-self Ambiguous Overload Diagnostics；Batch 183 Imported Unit Method Body Inherited Implicit-self No Matching Overload Diagnostics；Batch 182 Imported Unit Method Body Inherited Implicit-self Type Mismatch Diagnostics；Batch 181 Imported Unit Method Body Inherited Implicit-self Wrong Argument Count Diagnostics；Batch 180 Imported Unit Method Body Implicit-self Ambiguous Overload Diagnostics；Batch 179 Imported Unit Method Body Implicit-self No Matching Overload Diagnostics；Batch 178 Imported Unit Method Body Implicit-self Type Mismatch Diagnostics；Batch 177 Imported Unit Method Body Implicit-self Wrong Argument Count Diagnostics；Batch 176 Imported Unit Method Body Implicit-self Unknown Member Diagnostics；Batch 175 Inherited Implicit-self Bare Method Unknown Member Diagnostics；Batch 174 Installed-source Inherited Known Property Invalid Call Shape Deferred Guard；Batch 173 Imported Inherited Known Property Invalid Call Shape Diagnostics；Batch 172 Installed-source Inherited Known Field Invalid Call Shape Deferred Guard；Batch 171 Imported Inherited Known Field Invalid Call Shape Diagnostics；Batch 170 Installed-source Known Property Invalid Call Shape Deferred Guard；Batch 169 Imported Known Property Invalid Call Shape Diagnostics；Batch 168 Installed-source Known Field Invalid Call Shape Deferred Guard；Batch 167 Imported Known Field Invalid Call Shape Diagnostics；Batch 166 Installed-source Function Result Wrong Argument Count Deferred Guard；Batch 165 Imported Function Result Wrong Argument Count Diagnostics；Batch 164 Installed-source Inherited Member Function Result Wrong Argument Count Deferred Guard；Batch 163 Imported Inherited Member Function Result Wrong Argument Count Diagnostics；Batch 162 Installed-source Member Function Result Wrong Argument Count Deferred Guard；Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics；Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard；Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard；Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard；Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics；Batch 156 Imported Member Function Result No Matching Overload Diagnostics；Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard；Batch 154 Imported Function Result Ambiguous Overload Diagnostics；Batch 153 Installed-source Function Result No Matching Overload Deferred Guard；Batch 152 Imported Function Result No Matching Overload Diagnostics；Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard；Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard；Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics；Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard；Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics；Batch 146 Installed-source Inherited Member Function Result Deferred Guard；Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics；Batch 144 Imported Member Function Result Type Mismatch Diagnostics；Batch 143 Imported Function Result Type Mismatch Diagnostics；Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 141 Installed-source Bare Unknown Callable Deferred Guard；Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard；Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard；Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard；Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics；Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics；Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics；Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics；Batch 131 Member Function Result Type Mismatch Diagnostics；Batch 130 Implicit Self Bare Method Unknown Member Diagnostics；Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics；Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics；Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics；Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics；Batch 125 Inherited Implicit Self Bare Method Call Argument Binding；Batch 124 Inherited Implicit Self Bare Method Call Binding；Batch 123 Implicit Self Bare Method Call Binding；Batch 122 Inherited Known Property Member Invalid Call Shape；Batch 121 Inherited Known Field Member Invalid Call Shape；Batch 120 Known Property Member Invalid Call Shape；Batch 119 Known Field Member Invalid Call Shape；Batch 118 Imported Inherited Unknown Member Diagnostics；Batch 117 Imported Inherited Member Type Mismatch Diagnostics；Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics；Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics；Batch 114 Imported Inherited Member No Matching Overload Diagnostics；Batch 113 Inherited Member No Matching Overload Diagnostics；Batch 112 Imported Member
+Wrong Argument Count Diagnostics；Batch 111 Imported Member Unknown Member Diagnostics、Batch 110 Imported
+Member No Matching Overload Diagnostics、Batch 109 Imported Member Single-target Type Mismatch Diagnostics；
+并行收口包含
+Platform Time L0 Surface Coverage 与 Platform API Boundary Cleanup；Batch 103 Object Release Invalid Trap Policy、
+Batch 102 Object Release Invalid Boundary、
 Batch 101 Object Release Poison Contract、Batch 100 Object Release Valid Boundary、
 Batch 99 Object Header Magic Validation、
 Batch 98 Platform Time FFI Boundary、
@@ -92,3276 +141,6548 @@ Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
 
-## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 6
+## Addendum: 2026-05-28 Batch 202 Installed-source Unit Method Body Implicit-self Function Result Wrong Argument Count Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-目标节点：`G3: RTL、core 和 framework` / `G7: FreePascal compatibility 和生态迁移`。
+给 Batch 191 的 imported `project-source` unit method body implicit-self same-unit function-result
+`wrong-argument-count` 补同形 installed-source deferred guard：
 
-继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
-process control raw ABI：POSIX `fork` / `execve` / `waitpid` / `_exit` / `kill`，
-以及 Windows `PROCESS_INFORMATION`、`STARTUPINFOA/W`、`SECURITY_ATTRIBUTES`、creation flags / priority class
-tokens、`CreateProcessA/W`、`GetStartupInfoA/W`、`TerminateProcess`、
-`GetExitCodeProcess` 与 `ExitProcess`。
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker.Pick(Value: Integer)`、`TWorker.Run`，并在同一
+  imported unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count, Count); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.wrong-argument-count`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
 
-本轮明确不创建 public `platform.process` contract，不新增 `platform.process.ffi`，
-也不把 raw OS process-control API 作为 runtime unit test 目标。未来统一进程 API 应另起
-public contract 设计，处理参数/环境编码、句柄生命周期、wait/kill 语义、错误模型和跨平台能力差异。
+### Acceleration Plan
 
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC
-  platform/RTL units。
-- 本轮不得再新增 host-specific `.ffi` 的 generic `platform_*` helper。`platform_*` 命名保留给统一
-  public contract（如 `platform.time` / `platform.sync` / `platform.thread`）或明确的 shared
-  POSIX owner（如 `platform_posix_*`）。Linux / Android / Darwin / FreeBSD / generic Unix
-  既有 `platform_pthread_*` / `platform_process_id` 属于历史命名债；后续应单开 host FFI hygiene
-  wave 迁到 `host_*` 或具体 host 前缀，不能在 Wave 6 里顺手大面积改名。
-- Shared POSIX process-control raw externals 放在
-  `nextpas.core.platform.posix.ffi`；Linux / Android / Darwin / FreeBSD / generic Unix
-  `.ffi` 本轮不再暴露 `platform_process_*` selector helper，避免把 raw ABI inventory 伪装成
-  unified public `platform.process` contract。
-- Windows process-control record layout、flag/priority tokens、pointer aliases 归
-  `nextpas.core.platform.windows.base`；kernel32 raw entrypoints 归
-  `nextpas.core.platform.windows.ffi`。
-- raw OS ABI 不做 runtime unit test，也不为 FPC 定义写正确性证明；本轮只做 FPC source authority
-  记录、owner/命名边界、compile coherence 与 official verify route。
+- 固定“矩阵双拍”：已有 imported `project-source` 正向 diagnostic official gate 后，补同形
+  imported `installed-source` deferred guard，防止 incomplete installed/helper/RTL unit-body truth 被提前误报。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不能证明 `ruoInstalledSource`。
+- 本轮不碰 `core`；除非 focused probe 证明 analyzer 过宽，否则不改 analyzer。
+- 不扩大到 installed-source diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking。
 
 ### Status
 
-Pre-merge verified in isolated worktree; feature branch is ready to commit and
-then needs integration into the latest safe `main` window.
-
-- Worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave6-process`
-- Branch: `codex/platform-host-abi-wave6-process`
-- Base: `main@b14bd5a`
-- Started: 2026-05-28 CST
-- Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
-  wave must not touch them.
+Completed; focused semantic, heaptrc, and fresh local verification passed
 
 ### Planned Steps
 
-- [x] 从最新 `main@b14bd5a` 创建 `codex/platform-host-abi-wave6-process` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、Wave 5 test pattern 与现有 host
-  base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows process-control ABI
-- [x] RED：新增 Wave 6 integration guard，要求 source-authority docs、owner/命名边界和 verify route
-- [x] GREEN：更新 source-authority index、gap matrix、host ffi/base raw declarations
-- [x] GREEN：修正 Wave 6 host-specific `.ffi` 中新增 generic `platform_process_*` helper 污染，新增/更新边界 gate
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [ ] commit feature branch and rebase latest `main`
-- [ ] merge, post-merge verification, cleanup
-
-### Audit Checklist
-
-- [x] 不新增 `platform.process` public API，也不新增 feature-specific `platform.process.ffi`
-- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw process-control ABI
-- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
-- [x] raw OS API 接受 FPC source authority，不写 runtime unit test；nextPas 只守 integration/compile gate
-- [x] POSIX 与 Windows process-control family 分别归 host owner，不混成伪 POSIX
-- [x] POSIX host `.ffi` 本轮不新增 `platform_process_*` unified-looking helper
-
-### Baseline Evidence
-
-- Worktree and `main` were clean before this wave resumed.
-- `git worktree list --porcelain` confirmed only this worktree plus parallel
-  `collections-refactor` and `sema-no-matching-overload`.
-- Baseline focused gates passed before mutation:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
-    `2 total, 2 passed, 0 failed`.
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
-    `4 total, 4 passed, 0 failed`.
-- FPC source evidence found before implementation:
-  - POSIX: `rtl/unix/oscdeclh.inc` declares `FpFork`, `FpExecve`, `FpWaitpid`,
-    `FpExit`, and `FpKill` as libc `fork`, `execve`, `waitpid`, `_exit`, and
-    `kill`; Linux/BSD syscall wrapper families also carry process-control
-    wrappers.
-  - Windows: `rtl/win/wininc/ascfun.inc` / `unifun.inc` declare
-    `CreateProcessA/W` and `GetStartupInfoA/W`; `rtl/win/wininc/func.inc`
-    declares `ExitProcess`, `TerminateProcess`, `GetExitCodeProcess`, and
-    `WaitForSingleObject`; `rtl/win/wininc/struct.inc` carries
-    `PROCESS_INFORMATION` and `STARTUPINFOA/W`; `rtl/win/wininc/defines.inc`
-    carries process creation and priority constants.
-
-### Verification
-
-- Focused Wave 6 integration guard:
-  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process clean test`
-  -> `5 total, 5 passed, 0 failed`.
-- Adjacent platform integration guards:
-  `test_platform_ffi_import_workflow` -> `2 total, 2 passed, 0 failed`;
-  `test_platform_ffi_source_evidence_index` -> `2 total, 2 passed, 0 failed`;
-  `test_platform_host_gap_matrix` -> `4 total, 4 passed, 0 failed`;
-  simulated host compile matrix -> Darwin / Android / FreeBSD / generic Unix
-  `status=pass`.
-- Full branch verification:
-  `make -C core test` -> `All tests passed.`;
-  `make -C core examples` -> `All examples compiled.`;
-  `make -C core benchmarks` -> `All benchmarks passed.`;
-  `bash build/verify_local.sh` -> `verify-local=pass`,
-  `human-summary=local verification passed`, final envelope includes
-  `corePlatformHostAbiWave6ProcessCheck":"pass"`;
-  `sh -n build/verify_local.sh` and `git diff --check` passed.
-
-## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 5
-
-### Goal
-
-目标节点：`G3: RTL、core 和 framework` / `G7: FreePascal compatibility 和生态迁移`。
-
-继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
-环境变量 ABI：POSIX `getenv` / `setenv` / `unsetenv` / `putenv`，以及 Windows
-`GetEnvironmentVariableA/W`、`SetEnvironmentVariableA/W`、`GetEnvironmentStringsA/W`、
-`FreeEnvironmentStringsA/W`、`ExpandEnvironmentStringsA/W`。
-
-本轮明确不创建 public `platform.env` / `platform.process` contract，不新增
-`platform.env.ffi` 或 `platform.process.ffi`，也不把 raw OS environment API 作为 runtime unit
-test 目标。后续统一环境变量 API 应另起 public contract 设计。
-
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC
-  platform/RTL units。
-- Shared POSIX environment external 与 thin helper 放在
-  `nextpas.core.platform.posix.ffi`；Linux / Android / Darwin / FreeBSD / generic Unix
-  `.ffi` 只暴露 host owner helper 并委托 shared POSIX helper。
-- Windows environment entrypoints 归 `nextpas.core.platform.windows.ffi`；既有
-  `LPSTR` / `LPWSTR` / `LPCSTR` / `LPCWSTR` / `BOOL` / `DWORD` ABI aliases 继续由
-  `windows.base` 承载。
-- raw OS ABI 不做 runtime unit test；本轮用 FPC source evidence、source-surface guard、
-  simulated host compile matrix、Win64 compile-only gate 与 official verify route 证明。
-
-### Status
-
-Completed; merged to `main`, post-merge verified, and temporary worktree/branch cleaned up.
-
-- Worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
-- Branch: `codex/platform-host-abi-wave5-env`
-- Base: `main@46acefb`; rebased over latest `main@af4b8fb`; merged as
-  `main@7c4db4a`
-- Started: 2026-05-28 02:28:43 CST
-- Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
-  wave does not touch them.
-
-### Planned Steps
-
-- [x] 从最新 `main@46acefb` 创建 `codex/platform-host-abi-wave5-env` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、Wave 4 test pattern 与现有 host
-  base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows environment ABI
-- [x] RED：新增 Wave 5 source-surface gate，要求 evidence、host owner tokens 和 verify route
-- [x] GREEN：更新 evidence index、gap matrix、host ffi declarations/helpers
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [x] commit feature branch and rebase latest `main`
-- [x] merge, post-merge verification, cleanup
-
-### Audit Checklist
-
-- [x] 不新增 `platform.env` / `platform.process` public API，也不新增 feature-specific
-  `platform.env.ffi` / `platform.process.ffi`
-- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw environment ABI
-- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
-- [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
-- [x] POSIX 与 Windows environment family 分别归 host owner，不混成伪 POSIX
-
-### Baseline Evidence
-
-- `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`:
-  `2 total, 2 passed, 0 failed`.
-- `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
-  `4 total, 4 passed, 0 failed`.
-- RED:
-  `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`
-  compiled and failed as expected: `posix.ffi` lacks `getenv`, `windows.ffi`
-  lacks `GetEnvironmentVariableA`, docs lack Wave 5 evidence, and
-  `build/verify_local.sh` lacks the Wave 5 route.
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`:
-    `5 total, 5 passed, 0 failed`.
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
-    Darwin / Android / FreeBSD / generic Unix simulated host compile matrix all `status=pass`.
-  - Adjacent gates passed: `test_platform_ffi_partition_surface`,
-    `test_platform_posix_ffi_surface`, and `test_platform_ffi_source_evidence_index`.
-  - Win64 compile-only smoke passed for `nextpas.core.time`, `platform.thread`, and
-    `platform.sync`.
-- Full verification:
-  - `make -C core test`: `All tests passed`.
-  - `make -C core examples`: `All examples compiled`.
-  - `make -C core benchmarks`: `All benchmarks passed`.
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope contains
-    `corePlatformHostAbiWave5EnvCheck":"pass"`.
-  - `git diff --check` and `sh -n build/verify_local.sh`: no output.
-- Post-merge main verification:
-  - Fast-forward merged `codex/platform-host-abi-wave5-env` into `main@7c4db4a`.
-  - `git diff --check`: no output.
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env clean test`:
-    `5 total, 5 passed, 0 failed`.
-  - `make -C core build`: nothing to compile yet; units compile on demand.
-  - `make -C core test`: `All tests passed`.
-  - `make -C core examples`: `All examples compiled`.
-  - `make -C core benchmarks`: `All benchmarks passed`.
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope contains
-    `corePlatformHostAbiWave5EnvCheck":"pass"`.
-  - Temporary worktree
-    `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave5-env`
-    and branch `codex/platform-host-abi-wave5-env` were removed; `git worktree prune`
-    was run.
-
-### Recovery Entry
-
-This wave is closed. If work continues, resume from latest `main` and start the next host
-ABI wave from the workflow and gap matrix:
-
-```bash
-cd /home/dtamade/projects/nextPas
-git status --short --branch
-sed -n '1,190p' task_plan.md
-sed -n '1,170p' progress.md
-sed -n '1,80p' findings.md
-```
-
-## Addendum: 2026-05-28 Platform Host ABI Completeness Wave 4
-
-### Goal
-
-继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
-目录与路径基础 ABI：POSIX `mkdir` / `rmdir` / `unlink` / `rename` / `access` /
-`getcwd` / `chdir`，以及 Windows `CreateDirectoryA/W`、`RemoveDirectoryA/W`、
-`DeleteFileA/W`、`MoveFileA/W`、`GetCurrentDirectoryA/W`、`SetCurrentDirectoryA/W`、
-`GetFullPathNameA/W`。
-
-本轮明确不创建 `platform.file` public contract，不新增 `platform.file.ffi`，也不把 raw
-OS API 作为 runtime unit test 目标。后续统一文件/路径 API 应另起 public contract 设计。
-
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC
-  platform/RTL units。
-- 共享 POSIX external 与 thin helper 放在 `nextpas.core.platform.posix.ffi`；host `.ffi`
-  只暴露 host owner helper 并委托 shared POSIX helper。
-- POSIX access mode token `F_OK` / `X_OK` / `W_OK` / `R_OK` 是 host base 事实，放入各
-  POSIX host `.base`，不藏在 feature 子模块。
-- Windows path/directory entrypoints、string pointer aliases 与 helper 归
-  `nextpas.core.platform.windows.base` / `nextpas.core.platform.windows.ffi`。
-- raw OS ABI 不做 runtime unit test；本轮用 FPC source evidence、source-surface guard、
-  simulated host compile matrix、Win64 compile-only gate 与 official verify route 证明。
-
-### Status
-
-Completed and merged.
-
-- Worktree:
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths`
-- Branch: `codex/platform-host-abi-wave4-paths`
-- Base: `main@27d57f2`
-- Parallel worktrees remain `collections-refactor` and `sema-no-matching-overload`; this
-  wave does not touch them.
-
-### Planned Steps
-
-- [x] 从最新 `main@27d57f2` 创建 `codex/platform-host-abi-wave4-paths` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、Wave 2/3 tests 与现有 host
-  base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows 目录路径 ABI
-- [x] RED：新增 Wave 4 source-surface gate，要求 evidence、host owner tokens 和 verify route
-- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [x] commit feature branch and rebase latest `main`
-- [x] merge, post-merge verification, cleanup
-
-### Audit Checklist
-
-- [x] 不新增 `platform.file` public API，也不新增 `platform.file.ffi`
-- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw path ABI
-- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
-- [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
-- [x] POSIX 与 Windows path/directory family 分别归 host owner，不混成伪 POSIX
-
-### Verification Evidence
-
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths clean test`:
-  `5 total, 5 passed, 0 failed`.
-- `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
-  Darwin / Android / FreeBSD / generic Unix simulated host compile matrix all `status=pass`.
-- Regression surface checks passed:
-  `test_platform_ffi_partition_surface`, `test_platform_posix_ffi_surface`,
-  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
-  `test_platform_ffi_owner_boundary`.
-- Win64 compile-only smoke passed for platform thread, platform sync, and `nextpas.core.time`.
-- Full checks passed: `make -C core test`, `make -C core examples`,
-  `make -C core benchmarks`.
-- Fresh `bash build/verify_local.sh` passed with `verify-local=pass`,
-  `human-summary=local verification passed`, and final envelope token
-  `corePlatformHostAbiWave4PathsCheck":"pass"`.
-- After local `main` advanced through collections work to `main@ff141a2`, rebasing
-  Wave 4 again completed without conflicts. Fresh `git diff --check main..HEAD`,
-  focused Wave 4 gate, and `bash build/verify_local.sh` passed again; the official
-  envelope still contains `corePlatformHostAbiWave4PathsCheck":"pass"`.
-- Wave 4 fast-forward merged as `71c7a62 platform: add host path ABI wave 4`.
-  Post-merge verification ran from a clean detached worktree at that commit:
-  `git diff --check`, focused Wave 4 gate, and `bash build/verify_local.sh` all
-  passed; final envelope still contains `corePlatformHostAbiWave4PathsCheck":"pass"`.
-- After post-merge verification, main advanced further to `main@0768e2b` through an
-  unrelated collections commit; `71c7a62` remains an ancestor of current `main`.
-
-### Retrospective
-
-本轮方向正确：raw directory/path API 已进入 host-owned `base/ffi`，没有偷渡成 public
-`platform.file` / `platform.path` contract，也没有让 `platform.time` / `platform.sync` /
-`platform.thread` 消费这组 ABI。一次风险点是 `build/verify_local.sh` 曾被机械插入扩大成大 diff；
-已收敛回最小 route-truth diff，并用 `sh -n build/verify_local.sh` 与 fresh full verification 证明。
-集成窗口内主线前进过 collections commits；本轮通过重复 rebase 保持在最新 main 之上，并最终
-fast-forward 合并。为避免主 checkout 的并行 collections 工作污染验证，post-merge official
-verification 在干净 detached worktree 上执行。Wave 4 临时 worktree 与 post-merge verify
-worktree 均已删除，`codex/platform-host-abi-wave4-paths` 分支已删除。
-
-### Recovery Entry
-
-If this session is interrupted, resume here:
-
-```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths
-git status --short --branch
-sed -n '1,170p' task_plan.md
-sed -n '1,120p' progress.md
-tail -n 120 findings.md
-```
-
-## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 3
-
-### Goal
-
-继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
-文件状态 ABI 取证：POSIX `stat` / `fstat` / `lstat` family 与 Windows 文件属性/文件信息
-family。目标是把能够可靠取证、能够被 host owner 承载的低层声明先落进
-`platform.<host>.base` / `platform.<host>.ffi`，并把 layout、large-file suffix 或语义映射仍不稳的
-部分诚实写进 gap matrix。
-
-本轮明确不创建 `platform.file` public contract，不新增 `platform.file.ffi`，也不把 raw
-`stat` / `GetFileAttributesEx*` / `GetFileInformationByHandle` 作为 runtime unit test 目标。
-
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
-- POSIX shared scalar/record 只有在 Linux / Android / Darwin / FreeBSD / generic Unix ABI shape
-  确认一致时才放入 `nextpas.core.platform.posix.base`；否则放入具体 host `.base` 或继续延期。
-- `stat` record layout、`stat64` suffix、time fields 与 device/inode width 是本轮最高风险点；
-  如果无法在当前证据内形成跨宿主安全形状，只导入函数 family 的 source evidence 和 gap matrix，
-  不硬造不可信 record。
-- Windows `WIN32_FILE_ATTRIBUTE_DATA`、`BY_HANDLE_FILE_INFORMATION`、文件属性常量和
-  `GetFileAttributesExA/W` / `GetFileInformationByHandle` 归 Windows base/ffi owner。
-- raw OS ABI 不做 runtime unit test；本轮用 FPC source evidence、source-surface guard、
-  simulated host compile matrix、Win64 compile-only gate 与 official verify route 证明。
-
-### Status
-
-Implementation, focused verification, full verification, rebase over latest local
-`main@c09bc58`, final pre-merge verification, fast-forward merge, post-merge
-verification, and cleanup are complete. The accepted platform Wave 3 commits are
-on `main` as `f43cfbd`, `2e6b181`, and `ed25455`; `main` later advanced to
-`d2e5b52` with unrelated collections docs.
-
-### Planned Steps
-
-- [x] 从最新 `main@846b9d1` 创建 `codex/platform-host-abi-wave3-stat` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、Wave 1/2 tests 与现有 host base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 3 最小可审查 ABI 子集
-- [x] RED：新增 source-surface gate，要求 Wave 3 evidence、host owner tokens 和 verify route
-- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [x] commit feature branch and rebase latest `main`
-- [x] investigate rebase full-test hang and fix high-level condvar lost-wake regression
-- [x] rerun full verification after condvar fix
-- [x] sync `build/verify_local.sh` forced POSIX fallback summary to the new
-  11-test `nextpas.core.sync` contract
-- [x] commit final feature branch and rebase over latest local `main@c09bc58`
-- [x] merge, post-merge verification, cleanup
-
-### Audit Checklist
-
-- [x] 不新增 `platform.file` public API，也不新增 `platform.file.ffi`
-- [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw file status ABI
-- [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` / `Windows`
-- [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
-- [x] Windows 与 POSIX 文件状态 family 分别归 host owner，不混成伪 POSIX
-
-### Focused Verification Snapshot
-
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
-  `5 total, 5 passed, 0 failed`.
-- Adjacent source-surface gates passed:
-  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
-  and `test_platform_simulated_host_compile_matrix`.
-- Forced Windows compile-only checks passed for `test_platform_thread` and
-  `test_platform_sync` after creating their temporary output directories.
-- Full verification passed:
-  - `make -C core test`: `All tests passed.`
-  - `make -C core examples`: `All examples compiled.`
-  - `make -C core benchmarks`: `All benchmarks passed.`
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope includes
-    `corePlatformHostAbiWave3StatCheck":"pass"`.
-- Rebase over `main@12f5640` completed without conflicts. During rebase
-  verification, `make -C core test` exposed a real flaky hang in
-  `tests/nextpas.core.thread/test_thread`: `TestPoolSubmitAll` blocked in
-  `TThreadPool.Shutdown` because a worker missed the high-level condvar
-  broadcast. This is not caused by Wave 3 file-status ABI, but it made full
-  verification unreliable.
-- The condvar root cause was fixed in `nextpas.core.sync.condvar`: the high-level
-  `TCondVar` no longer bridges an external `IMutex` through an unrelated
-  internal mutex, which could lose a signal between `AMutex.Release` and
-  `pthread_cond_wait`. It now uses a monotonic sequence plus
-  `platform_wait_address32` / wake helpers, keeping the wait on nextPas platform
-  abstractions and avoiding direct FPC platform units.
-- Regression added to `core/tests/nextpas.core.sync/test_sync`: a test mutex
-  signals during `Release`, and `WaitTimeout` must observe that signal. The
-  test failed against the old implementation and passes after the fix.
-- First fresh `bash build/verify_local.sh` after the condvar regression failed
-  at `missing-core-sync-posix-fallback-pass-summary`: the forced POSIX fallback
-  route correctly ran 11 sync tests, but the official route still expected the
-  old `10 total, 10 passed, 0 failed` summary. The route expectation is now
-  updated to `11 total, 11 passed, 0 failed`.
-- Final pre-merge verification in the isolated worktree passed before the latest
-  local rebase:
-  - `git diff --check`
-  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
-    `11 total, 11 passed, 0 failed`
-  - `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test`:
-    `11 total, 11 passed, 0 failed`
-  - `make -C core/tests/nextpas.core.thread/test_thread clean test`:
-    `6 total, 6 passed, 0 failed`
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
-    `5 total, 5 passed, 0 failed`
-  - `make -C core test`: `All tests passed.`
-  - `make -C core examples`: `All examples compiled.`
-  - `make -C core benchmarks`: `All benchmarks passed.`
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope includes
-    `corePlatformHostAbiWave3StatCheck":"pass"` and
-    `coreSyncPosixFallbackCheck":"pass"`.
-- Rebase over latest local `main@c09bc58` completed without conflicts. Fresh
-  focused checks after that rebase passed:
-  - `git diff --check`
-  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
-    `11 total, 11 passed, 0 failed`
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
-    `5 total, 5 passed, 0 failed`
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope includes
-    `corePlatformHostAbiWave3StatCheck":"pass"` and
-    `coreSyncPosixFallbackCheck":"pass"`.
-- Fast-forward merge landed on `main` at `ed25455`. Post-merge verification
-  passed:
-  - `git diff --check`
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat clean test`:
-    `5 total, 5 passed, 0 failed`
-  - `make -C core/tests/nextpas.core.sync/test_sync clean test`:
-    `11 total, 11 passed, 0 failed`
-  - `bash build/verify_local.sh`: `verify-local=pass`,
-    `human-summary=local verification passed`, final envelope includes
-    `corePlatformHostAbiWave3StatCheck":"pass"` and
-    `coreSyncPosixFallbackCheck":"pass"`.
-- Cleanup completed: removed worktree
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat`,
-  deleted branch `codex/platform-host-abi-wave3-stat`, and ran
-  `git worktree prune`. Remaining worktrees are `collections-refactor` and
-  `sema-no-matching-overload`.
-
-### Recovery Entry
-
-If this session is interrupted, resume here:
-
-```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave3-stat
-git status --short --branch
-sed -n '1,190p' task_plan.md
-sed -n '1,200p' progress.md
-sed -n '1,170p' findings.md
-```
-
-This Wave 3 addendum is closed. Continue from latest `main` for the next
-platform host ABI import wave. Do not add runtime tests for raw OS APIs and do
-not introduce `platform.file` public API without a separate public contract
-design.
-
-## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 2
-
-### Goal
-
-继续按 `core/docs/platform-ffi-import-workflow.md` 扩充 host-owned raw ABI inventory。本轮聚焦
-文件相关的低层 ABI 取证和最小可审查声明，不创建 `platform.file` public contract，也不把 raw
-OS API 加入 runtime unit tests。
-
-本轮候选范围：
-
-- POSIX/Linux/Android/Darwin/FreeBSD/generic Unix：`open`、`close`、`fcntl`、基础 file descriptor
-  scalar alias、open/access mode flags、fcntl command tokens。
-- `stat` / `fstat` / `lstat` 只在 record layout、large-file suffix 和 32/64-bit policy 取证清楚后
-  落地；如果跨 host 风险过大，本轮继续显式延期并写入 gap matrix。
-- Windows：kernel32 file handle entrypoints 与基础 file access/share/creation/attribute tokens 的
-  source evidence inventory；是否落 `CreateFileA/CloseHandle` thin helper 取决于和已有 `HANDLE`
-  owner 的冲突检查。
-
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
-- constants、record layouts、scalar aliases、capability tokens 放入
-  `nextpas.core.platform.<host>.base`。
-- external declarations 与 thin host helpers 放入 `nextpas.core.platform.<host>.ffi`。
-- shared POSIX declaration 只有在 ABI shape 真正跨 Linux/Android/Darwin/FreeBSD/generic Unix 一致时
-  才放入 `nextpas.core.platform.posix.base/ffi`。
-- raw file ABI 不做 runtime unit test；本轮用 source evidence、source-surface guard、
-  simulated host compile matrix 和 official verify route 证明。
-
-### Status
-
-Implementation, rebase, and pre-merge verification completed on isolated worktree
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files`
-from `main@4643daa`, then rebased to latest `main@5c0f03d`. Merge,
-post-merge verification, and cleanup are still pending.
-
-### Planned Steps
-
-- [x] 从最新 `main@4643daa` 创建 `codex/platform-host-abi-wave2-files` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、Wave 1 收口记录与现有 host base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 2 最小可审查 ABI 子集
-- [x] RED：新增 source-surface gate，要求 Wave 2 evidence、host owner tokens 和 verify route
-- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [x] commit feature work and rebase to latest `main@5c0f03d`
-- [x] rebase 后 focused verification、full verification
-- [ ] merge、post-merge verification、cleanup
-
-### Verification Snapshot
-
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
-  `4 total, 4 passed, 0 failed`.
-- Adjacent focused gates passed:
-  `test_platform_ffi_source_evidence_index`, `test_platform_host_gap_matrix`,
-  `test_platform_posix_ffi_surface`, `test_platform_ffi_partition_surface`,
-  `test_platform_ffi_owner_boundary`, `test_platform_simulated_host_compile_matrix`,
-  and `test_platform_host_abi_wave1`.
-- Win64 compile checks passed for `test_platform_thread`, `test_platform_sync`, and
-  `test_time`.
-- `git diff --check`: pass.
-- `make -C core test`: `All tests passed.`
-- `make -C core examples`: `All examples compiled.`
-- `make -C core benchmarks`: `All benchmarks passed.`
-- `bash build/verify_local.sh`: `verify-local=pass`,
-  `human-summary=local verification passed`, final envelope includes
-  `corePlatformHostAbiWave2FilesCheck":"pass"`.
-
-Rebase verification on `codex/platform-host-abi-wave2-files@1536335` over
-`main@5c0f03d`:
-
-- `git diff --check`: pass.
-- `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files clean test`:
-  `4 total, 4 passed, 0 failed`.
-- `make -C core test`: `All tests passed.`
-- `make -C core examples`: `All examples compiled.`
-- `make -C core benchmarks`: `All benchmarks passed.`
-- `bash build/verify_local.sh`: `verify-local=pass`,
-  `human-summary=local verification passed`, final envelope includes
-  `corePlatformHostAbiWave2FilesCheck":"pass"`.
-
-### Recovery Entry
-
-If this session is interrupted, resume here:
-
-```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave2-files
-git status --short --branch
-sed -n '1,170p' task_plan.md
-sed -n '1,180p' progress.md
-sed -n '1,130p' findings.md
-```
-
-Then continue from the first unchecked item in this Wave 2 addendum. Do not add
-runtime tests for raw OS APIs and do not introduce `platform.file` public API in this wave.
-
-## Addendum: 2026-05-27 Platform Host ABI Completeness Wave 1
-
-### Goal
-
-按刚合入的 `docs/platform-ffi-import-workflow.md` 开始第一批 host ABI completeness 工作。目标不是扩
-`platform.time` / `platform.sync` / `platform.thread` public contract，而是从 FPC source evidence
-补齐低风险、后续会被多个 platform 子模块消费的 host-owned raw ABI inventory。
-
-本轮候选范围先限定为 source-surface 可审查的一小波：
-
-- POSIX/Linux/Android/Darwin/FreeBSD/generic Unix：process id、`timeval`、file/stat/open/fcntl、
-  mmap、dynamic loader family。
-- Windows：process/thread/file/memory/dynamic library 对应的 kernel32 基础 ABI token 与 entrypoint
-  inventory。
-
-如果取证显示范围过大，本轮只落第一个可审查子集，并把剩余内容明确写入下一波。
-
-### Architecture Decision
-
-- FPC source 是 reference authority；production platform code 继续禁止 `uses` FPC platform/RTL units。
-- constants、record layouts、opaque carriers、scalar aliases、syscall/open/mmap/error tokens 放入
-  `nextpas.core.platform.<host>.base`。
-- external declarations 与 thin host helpers 放入 `nextpas.core.platform.<host>.ffi`。
-- raw OS API 不做 runtime unit test；本轮用 source evidence、source-surface guard、compile-only gate
-  和 review 证明。
-- 不新增 `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi`，也不扩这些统一 public
-  contract。
-
-### Status
-
-Fast-forward merged to `main@54b19bd`, post-merge verified, and the temporary
-worktree/branch has been cleaned up.
-
-### Planned Steps
-
-- [x] 从最新 `main@8a12bf9` 创建 `codex/platform-host-abi-wave1` isolated worktree
-- [x] 读取 workflow、host gap matrix、source evidence index、现有 host base/ffi owner
-- [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 1 最小可审查 ABI 子集：
-  process id、`timeval`、mmap、dynamic loader；`stat/open/fcntl` 延后
-- [x] RED：新增 source-surface gate，要求 Wave 1 evidence、host owner tokens 和 verify route
-- [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
-- [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
-- [x] focused verification、full verification
-- [x] feature commit and rebase over latest `main@52c2e2d`
-- [x] pre-merge focused/full verification after rebase
-- [x] fast-forward merge to `main@54b19bd`
-- [x] post-merge focused gate and `bash build/verify_local.sh`
-- [x] cleanup temporary worktree / branch
-
-### Recovery Entry
-
-If this session is interrupted, resume here:
-
-```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave1
-git status --short --branch
-sed -n '1,180p' task_plan.md
-sed -n '1,180p' progress.md
-sed -n '1,130p' findings.md
-```
-
-This wave is closed. Continue with the next platform host ABI wave from latest
-`main`, and do not add runtime tests for raw OS APIs.
-
-## Addendum: 2026-05-27 Platform FFI Import Workflow
-
-### Goal
-
-把“尽可能完整地从 FPC 源码补充各平台 API 到 nextPas platform 模块”的方法固定成可恢复、可验证、
-可分批执行的工程工作流：
-
-- 新增 `core/docs/platform-ffi-import-workflow.md`，明确从 FPC source evidence 到
-  nextPas host `base/ffi` owner、source-surface gate、compile/runtime evidence、commit/merge/cleanup
-  的完整流水线。
-- 新增 `test_platform_ffi_import_workflow` source-surface gate，检查 workflow 文档、design conventions、
-  evidence index、gap matrix 与 `build/verify_local.sh` 的 route truth 保持同步。
-- 接入 `build/verify_local.sh` required path、focused route 与 final envelope：
-  `core-platform-ffi-import-workflow-check` /
-  `corePlatformFfiImportWorkflowCheck`。
-- 这轮只固定工作流，不批量新增 raw OS API 声明；后续每个 API wave 必须按这个流程执行。
-
-### Architecture Decision
-
-- FPC 源码是 ABI reference authority；nextPas 生产代码继续禁止依赖 FPC 平台/RTL 单元。
-- API import 先建立证据和 owner，再写声明；host `base/ffi` 可以做厚，但 public contract 必须由
-  `platform.time`、`platform.sync`、`platform.thread` 以及后续统一 platform 子模块整理。
-- raw OS API 不做 nextPas runtime 单测；raw ABI 的正确性靠 source evidence、source-surface gate、
-  compile-only gate 和人工 review。runtime tests 只覆盖统一 public contract。
-- 每批 import 都必须可恢复：`task_plan.md` 记录当前状态、`progress.md` 记录 RED/GREEN/验证证据、
-  `findings.md` 记录取证和决策，worktree 分支名和下一步命令必须明确。
-
-### Status
-
-Completed and fast-forward merged to `main@e71e5d4`; cleanup pending.
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-import-workflow`
-from `main@02d42d5`, rebased over `main@e01d069`, and merged as `e71e5d4`.
-
-### Planned Steps
-
-- [x] 从最新 `main@02d42d5` 创建 `codex/platform-ffi-import-workflow` isolated worktree
-- [x] 研究现有 platform owner rules、evidence index、gap matrix、source-surface gate 和 FPC source tree
-- [x] 更新 `task_plan.md` / `progress.md` / `findings.md`，写清恢复入口和本轮目标
-- [x] RED：新增 `test_platform_ffi_import_workflow`，要求 workflow doc 与 official route token
-- [x] GREEN：新增 workflow 文档，更新 `design-conventions.md`、evidence index 与 gap matrix 交叉入口
-- [x] GREEN：接入 `build/verify_local.sh` required path、focused gate、final envelope
-- [x] focused verification：
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_import_workflow clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-- [x] full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit 并整合最新 main：
-  - initial commit before rebase: `c1f3680`
-  - final feature commit after rebase/amend on `main@e01d069`: `e71e5d4`
-- [x] 择优合并回 main、post-merge verification
-- [ ] 清理 worktree/branch
-
-### Full Verification Evidence
-
-- `make -C core test`: `All tests passed.`
-- `make -C core examples`: `All examples compiled.`
-- `make -C core benchmarks`: `All benchmarks passed.`
-- `bash build/verify_local.sh`: `verify-local=pass` and
-  `human-summary=local verification passed`; final envelope includes
-  `corePlatformFfiImportWorkflowCheck":"pass"`.
-- `git diff --check`: pass.
-- Rebase focused verification on `e71e5d4`:
-  - `test_platform_ffi_import_workflow`: `2 total, 2 passed, 0 failed`
-  - `test_platform_ffi_source_evidence_index`: `2 total, 2 passed, 0 failed`
-  - `test_platform_host_gap_matrix`: `4 total, 4 passed, 0 failed`
-  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`
-- Post-merge focused verification on main:
-  - `test_platform_ffi_import_workflow`: `2 total, 2 passed, 0 failed`
-  - `test_platform_ffi_source_evidence_index`: `2 total, 2 passed, 0 failed`
-  - `test_platform_host_gap_matrix`: `4 total, 4 passed, 0 failed`
-
-### Recovery Entry
-
-If this session is interrupted, resume here:
-
-```bash
-cd /home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-import-workflow
-git status --short --branch
-sed -n '1,140p' task_plan.md
-sed -n '1,140p' progress.md
-sed -n '1,110p' findings.md
-```
-
-Then continue from the first unchecked item in this addendum. Do not start API import waves until
-`core/docs/platform-ffi-import-workflow.md` and `test_platform_ffi_import_workflow` are in the official
-`verify_local` envelope.
-
-### Audit Checklist
-
-- [x] workflow 明确 FPC source 是参考依据而非 production dependency
-- [x] workflow 明确 host `base/ffi` owner 与禁止 feature-specific ffi 的默认规则
-- [x] workflow 明确 raw OS API 不做 runtime 单测，统一 public contract 才做 runtime test
-- [x] workflow 明确 evidence index、gap matrix、source-surface gate、compile gate、full verification 的顺序
-- [x] workflow 明确每批 worktree/commit/merge/cleanup 和可恢复记录要求
-
-## Addendum: 2026-05-27 Platform FFI Source Evidence Index
-
-### Goal
-
-把 platform host `base/ffi` 声明的“依据来自哪里”做成可审计、可验证、可追溯的 evidence index：
-
-- 新增 `core/docs/platform-ffi-source-evidence-index.md`，记录 Linux、Android、Darwin、FreeBSD、
-  generic Unix 与 Windows 当前 ABI 声明的 FPC source evidence family 与证据边界。
-- 新增 `test_platform_ffi_source_evidence_index` source-surface gate，检查 evidence index 覆盖
-  clock/time、errno、pthread/thread/TLS、CPU count、Linux futex 与 Windows kernel32/SRW/QPC/FILETIME。
-- 接入 `build/verify_local.sh` required path、focused route 与 final envelope：
-  `core-platform-ffi-source-evidence-index-check` /
-  `corePlatformFfiSourceEvidenceIndexCheck`。
-- 不测试 raw OS API，不扩 `platform.time` / `platform.sync` / `platform.thread` public API。
-
-### Architecture Decision
-
-- FPC source/platform units 是 reference authority，不是 production dependency。nextPas-owned
-  `platform.<host>.base` / `platform.<host>.ffi` 承载 ABI truth，production platform 代码继续禁止
-  `uses Linux`、`UnixType`、`BaseUnix`、`PThreads`、`Syscall`、`Windows` 等 FPC 平台单元。
-- Evidence index 是 host ABI 声明的审计入口；host gap matrix 是覆盖/缺口事实源；
-  `design-conventions.md` 是规则入口；`build/verify_local.sh` 是 official local route。
-- raw 系统 API 的 runtime 正确性不由 nextPas 单元测试证明；统一 public contract 的 runtime 测试继续
-  只覆盖 `platform.time` / `platform.sync` / `platform.thread` 抽象层。
-
-### Status
-
-Completed, fast-forward merged to `main@def99d2`, and worktree/branch cleanup
-done. The work started from `main@2217d7a`, was rebased over latest
-`main@c6a6ed7`, and did not touch unrelated collections work.
-
-### Planned Steps
-
-- [x] 刷新 main/worktree 状态并确认 unrelated collections WIP 不纳入本轮
-- [x] 从 `main@2217d7a` 创建 `codex/platform-ffi-source-evidence-index` isolated worktree
-- [x] 查证本机 FPC source 位置与可引用 source family，不写死不可验证的空目录
-- [x] RED：新增 `test_platform_ffi_source_evidence_index`，要求 evidence index doc 与 official route token
-- [x] GREEN：新增 evidence index 文档，更新 `design-conventions.md` 与 `platform-host-ffi-gap-matrix.md` 交叉入口
-- [x] GREEN：接入 `build/verify_local.sh` required path、focused gate、final envelope
-- [x] focused verification：
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-- [x] full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit、整合最新 main、择优合并回 main、post-merge verification、清理 worktree/branch
-
-### Audit Checklist
-
-- [x] evidence index 明确 FPC source 是参考依据而非 production dependency
-- [x] Linux / Android / Darwin / FreeBSD / generic Unix / Windows 都有 host evidence entries
-- [x] clock/time、errno、pthread/thread/TLS、CPU count、Linux futex、Windows kernel32/SRW/QPC/FILETIME 都有覆盖
-- [x] design conventions 索引 evidence index 与 official route token
-- [x] verify_local final envelope 包含 `corePlatformFfiSourceEvidenceIndexCheck`
-- [x] 不新增 `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`
-
-## Addendum: 2026-05-27 Platform Host Gap Route Guard
-
-### Goal
-
-把 host gap matrix 从“有文档、有 focused gate”继续收紧成“设计规范、文档事实源和 official
-verification route 互相索引”的闭环：
-
-- `core/docs/design-conventions.md` 必须明确指出 host gap matrix 由
-  `corePlatformHostGapMatrixCheck` / `core-platform-host-gap-matrix-check` 进入
-  `build/verify_local.sh` official envelope。
-- `test_platform_host_gap_matrix` 必须检查 design conventions、gap matrix 文档和
-  `build/verify_local.sh` 之间的 route truth 一致性。
-- 修正上一轮记录中 “cleanup pending” 的过期状态，记录实际 worktree/branch 已清理。
-- 不扩 `platform.time` / `platform.sync` / `platform.thread` public API，不测试 raw OS API。
-
-### Architecture Decision
-
-- `docs/design-conventions.md` 是平台分层规则入口；`docs/platform-host-ffi-gap-matrix.md` 是 host
-  ABI 覆盖和缺口事实源；`build/verify_local.sh` 是 official local verification route。
-- 三者必须互相可追踪：规则入口必须说明矩阵的 gate 名称，gate 必须检查规则入口仍指向矩阵，
-  final envelope 必须保留 `corePlatformHostGapMatrixCheck`。
-- 这轮只强化 route-truth，不改变 ABI 声明和 runtime behavior。
-
-### Status
-
-Completed, committed as `4fe1391`, fast-forward merged to `main@4fe1391`, and
-worktree/branch cleanup done.
-
-### Planned Steps
-
-- [x] 刷新 main/worktree 状态：主 checkout 有 unrelated collections WIP，本轮在隔离 worktree 执行
-- [x] focused baseline：
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-- [x] RED：扩 `test_platform_host_gap_matrix`，要求 design conventions 记录 official route token
-- [x] GREEN：更新 `core/docs/design-conventions.md` 与 `build/verify_local.sh` summary expectation
-- [x] 更新 `task_plan.md`、`progress.md`、`findings.md`
-- [x] focused verification：
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-- [x] full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit、合并回 main、post-merge focused verification、清理 worktree/branch
-
-### Audit Checklist
-
-- [x] design conventions 明确索引 `docs/platform-host-ffi-gap-matrix.md`
-- [x] design conventions 明确 official line token `core-platform-host-gap-matrix-check`
-- [x] design conventions 明确 final envelope token `corePlatformHostGapMatrixCheck`
-- [x] host gap matrix test 检查 `build/verify_local.sh` 的 required path、line token、summary 与 envelope
-- [x] 上一轮 cleanup 记录不再误导后续会话
-
-## Addendum: 2026-05-27 Platform Host FFI Gap Matrix Guard
-
-### Goal
-
-把 platform host ABI owner 的覆盖面、已知缺口与证据边界固化成一条可回归 gate：
-
-- 新增 `core/docs/platform-host-ffi-gap-matrix.md`，按 Linux、Android、Darwin、FreeBSD、
-  generic Unix、Windows 记录 host `base/ffi` 当前覆盖域和已知缺口。
-- 新增 `test_platform_host_gap_matrix` source-surface gate，检查文档、host base/ffi token、
-  known-gap token 与 feature-specific FFI 禁止规则保持一致。
-- 接入 `build/verify_local.sh` required path、focused check 与 final command envelope。
-- 不扩 `platform.time` / `platform.sync` / `platform.thread` public API，不把 raw OS API 加入
-  runtime 单元测试。
-
-### Architecture Decision
-
-- platform 是 L0 系统 API/ABI 适配层；raw ABI truth 归
-  `nextpas.core.platform.<host>.base` / `nextpas.core.platform.<host>.ffi`。
-- `platform.time`、`platform.sync`、`platform.thread` 是跨宿主统一 API contract，消费 host
-  base/ffi，默认不创建 `platform.<feature>.ffi`。
-- host gap matrix 是 source-surface / docs gate，不等价于 macOS、Android、FreeBSD、Windows 的
-  runtime proof；当前真实 runtime proof 仍以 Linux 为主，Win64 与 simulated hosts 是 compile-only。
-- raw `clock_gettime`、`pthread_*`、`futex`、`WaitOnAddress`、QPC/FILETIME 等系统 API 不作为
-  nextPas runtime 单测目标；raw ABI 正确性靠 FPC 源码取证、source-surface guard 与 compile gate。
-
-### Status
-
-Completed, committed, fast-forward merged to `main@253a3fa`, follow-up docs commit
-`main@c9948d5` recorded the merge, and worktree/branch cleanup is done.
-
-### Planned Steps
-
-- [x] 恢复当前 worktree / main 状态；实时主 checkout 为 `main@d987e80` 且干净
-- [x] 跑上一轮总结指定 focused baseline：
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] RED：新增 `test_platform_host_gap_matrix`，先要求不存在的
-  `core/docs/platform-host-ffi-gap-matrix.md`，确认失败边界正确
-- [x] GREEN：补 `core/docs/platform-host-ffi-gap-matrix.md`，记录 host/domain/gap matrix 与证据边界
-- [x] GREEN：扩 source-surface 检查，校验 host rows、domain tokens、known gaps、no feature ffi
-- [x] 接入 `build/verify_local.sh` 的 mktemp/build dir/cleanup/required path/focused gate/final envelope
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit、整合最新 `main@d987e80`、择优合并回 main
-- [x] post-merge focused verification
-- [x] 清理 worktree / branch
-
-### Audit Checklist
-
-- [x] 文档明确 host base/ffi 是 raw ABI owner，feature modules 是统一 contract
-- [x] Linux/Android/Darwin/FreeBSD/generic Unix/Windows 都有矩阵行
-- [x] known gaps 写清楚：Darwin condattr setclock unsupported、Darwin mutex timedlock unsupported、
-  generic Unix native thread id fallback、generic Unix `_SC_NPROCESSORS_ONLN = -1`、
-  generic Unix mutex timedlock unsupported、Windows 是 kernel32/SRW/QPC/FILETIME 路径
-- [x] gate 检查 host base/ffi 中对应 token 仍存在
-- [x] gate 禁止 `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi` 回归
-- [x] final envelope 出现 `corePlatformHostGapMatrixCheck`
-
-### Implementation Notes
-
-- Baseline focused gates from this worktree are green:
-  `test_platform_ffi_partition_surface`、`test_platform_posix_ffi_surface`、
-  `test_platform_ffi_owner_boundary` 与 `test_platform_simulated_host_compile_matrix` 均已通过。
-- RED proof:
-  - `test_platform_host_gap_matrix` 初始失败：
-    `platform host ffi gap matrix doc must exist: ../../../docs/platform-host-ffi-gap-matrix.md`。
-- GREEN focused:
-  - `test_platform_host_gap_matrix`: `3 total, 3 passed, 0 failed`。
-  - `test_platform_ffi_partition_surface`: `1 total, 1 passed, 0 failed`。
-  - `test_platform_posix_ffi_surface`: `1 total, 1 passed, 0 failed`。
-  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
-  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
-  - `bash -n build/verify_local.sh`: pass。
-- Full verification:
-  - `make -C core test`: `All tests passed.`。
-  - `make -C core examples`: `All examples compiled.`。
-  - `make -C core benchmarks`: `All benchmarks passed.`。
-  - `bash build/verify_local.sh`: `verify-local=pass`、`human-summary=local verification passed`，
-    final envelope 包含 `corePlatformHostGapMatrixCheck":"pass"`。
-  - `git diff --check`: pass。
-- `main` 当前已到 `d987e80`，本 worktree 起点是 `cda52dd`；合并前必须先整合最新 main 并重跑
-  post-integration focused verification。
-- Integration:
-  - 本分支 rebase 到 `main@d987e80` 后无冲突，提交变为 `253a3fa`。
-  - `codex/platform-host-gap-matrix` 已 fast-forward 合并到 `main@253a3fa`。
-  - post-merge focused verification passed:
-    `test_platform_host_gap_matrix` 3/3 pass，
-    `test_platform_ffi_partition_surface` 1/1 pass，
-    `test_platform_posix_ffi_surface` 1/1 pass，
-    `test_platform_ffi_owner_boundary` 2/2 pass，
-    `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
-  - 主 checkout 仍有 unrelated collections WIP：
-    `core/src/nextpas.core.collections.hashset.base.pas`、
-    `core/src/nextpas.core.collections.hashset.intf.pas`；本轮未提交这些文件。
-
-## Addendum: 2026-05-27 Platform Sync Base Extraction
-
-### Goal
-
-把 `platform.sync` 的 public carrier type、opaque storage size、mutex kind 与 public error
-constant 从行为实现单元中抽到 `platform.sync.base`，让 sync 子模块和 `platform.time` /
-`platform.thread` 一样遵循 facade/base/implementation 结构：
-
-- `nextpas.core.platform.sync.base` 拥有 `TPlatformMutexAlign`、`TPlatformRwLockAlign`、
-  `TPlatformCondVarAlign`、`TPlatformMutex`、`TPlatformRwLock`、`TPlatformCondVar`。
-- `nextpas.core.platform.sync.base` 拥有 `PLATFORM_MUTEX_SIZE`、`PLATFORM_RWLOCK_SIZE`、
-  `PLATFORM_CONDVAR_SIZE`、`PLATFORM_MUTEX_*` 和 `PLATFORM_ERR_*`。
-- `nextpas.core.platform.sync` 只 re-export public types/constants，并保留 mutex/rwlock/condvar/
-  wait-address 统一 API 实现。
-- 不新增 `platform.sync.ffi` 或 `platform.sync.intf`；host ABI truth 仍归
-  `platform.<host>.base` / `platform.<host>.ffi`。
-
-### Architecture Decision
-
-- `platform.sync.base` 是 public contract carrier owner，不是 host ABI owner，也不包含逻辑或
-  `external` declaration。
-- `platform.sync` 的 public API 名称保持不变；调用方仍可只 `uses nextpas.core.platform.sync`。
-- 这轮只做结构收口，不改变 Linux/Windows/POSIX 运行时语义，不测试 raw OS API。
-- regression gate 通过 source-surface、owner-boundary、no-FPC 与 L0-boundary 四条线固定：
-  base 必须存在、实现单元必须 re-export、base 也不得引用 FPC 平台单元或 L1 sync 抽象。
-
-### Status
-
-Completed, committed, merged to `main@9312764`, and worktree/branch cleanup done.
-
-### Planned Steps
-
-- [x] 从最新 `main@56b4729` 开 `codex/platform-sync-base` isolated worktree
-- [x] 跑 focused baseline：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `platform.sync.base` 存在并拥有
-  public carrier types/constants，且 `platform.sync` re-export 而不是直接声明 raw shapes
-- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.sync.base.pas` 纳入
-  platform source owner audit
-- [x] RED：扩 `test_platform_sync_no_fpc_units` 与 `test_platform_sync_l0_boundary`，把
-  `platform.sync.base` 纳入 hard boundary
-- [x] GREEN：新增 `core/src/nextpas.core.platform.sync.base.pas`，并让
-  `platform.sync` re-export base types/constants
-- [x] 更新 `build/verify_local.sh` required path 与 focused gate summary expectation
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit、择优合并回 `main`
-- [x] 清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] `platform.sync.base` 只承载 public carrier type/constants，不含逻辑和 FFI
-- [x] `platform.sync` 保持调用方兼容的 public type/constant re-export
-- [x] 不新增 `platform.sync.ffi` 或 `platform.sync.intf`
-- [x] `platform.sync.base` 进入 no-FPC / L0-boundary / owner-boundary gate
-- [x] simulated host compile matrix 覆盖新 base 单元在 Darwin/Android/FreeBSD/generic Unix 分支下可编译
-
-### Implementation Notes
-
-- Baseline:
-  - `test_platform_sync_host_ffi_surface` 1/1 pass。
-  - `test_platform_sync_no_fpc_units` 1/1 pass。
-  - `test_platform_sync_l0_boundary` 3/3 pass。
-  - `test_platform_ffi_owner_boundary` 2/2 pass。
-- RED proof:
-  - `test_platform_sync_host_ffi_surface` 初始失败：缺
-    `core/src/nextpas.core.platform.sync.base.pas`。
-  - `test_platform_ffi_owner_boundary` 初始失败：non-ffi owner count 不含 sync feature base。
-  - `test_platform_sync_no_fpc_units` 初始失败：
-    `platform.sync.base source must exist for no-FPC guard`。
-  - `test_platform_sync_l0_boundary` 初始失败：
-    `platform.sync.base source stays L0 - File not found`。
-- Focused GREEN:
-  - `test_platform_sync_host_ffi_surface`: `1 total, 1 passed, 0 failed`。
-  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
-  - `test_platform_sync_no_fpc_units`: `2 total, 2 passed, 0 failed`。
-  - `test_platform_sync_l0_boundary`: `4 total, 4 passed, 0 failed`。
-  - `test_platform_sync`: `14 total, 14 passed, 0 failed`。
-  - `test_platform_sync_sizes`: `5 total, 5 passed, 0 failed`。
-  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
-  - `test_platform_sync_posix_surface`: `1 total, 1 passed, 0 failed`。
-  - `test_platform_sync_posix_fallback`: `14 total, 14 passed, 0 failed`。
-  - `test_platform_ffi_partition_surface`、`test_platform_posix_ffi_surface` pass。
-  - `platform_sync_basics` example 输出 `platform-sync-basics-status=pass`。
-  - `bench_platform_sync` benchmark 输出 `platform-sync-bench-status=pass`。
-- Full verification:
-  - `make -C core test`: `All tests passed.`。
-  - `make -C core examples`: `All examples compiled.`。
-  - `make -C core benchmarks`: `All benchmarks passed.`。
-  - `bash build/verify_local.sh`: `verify-local=pass`、
-    `human-summary=local verification passed`。
-  - `git diff --check`: pass。
-- Note:
-  - 曾误跑不存在的
-    `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_win64 clean test`；
-    这不是代码失败，实际 Win64 compile-only coverage 由 `build/verify_local.sh` 的
-    `corePlatformSyncWin64Check=pass` 覆盖。
-
-## Addendum: 2026-05-27 Platform Facade Info Boundary
-
-### Goal
-
-把顶层 `nextpas.core.platform` 中的 OS/CPU/endian 查询与名字映射逻辑收口到
-`nextpas.core.platform.info`，让顶层 platform facade 更接近模块结构范式：
-
-- `nextpas.core.platform.base` 继续只拥有 `TOSKind`、`TCPUArch`、`TEndianness` 与
-  `CURRENT_*` 常量。
-- `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
-  `OSName`、`CPUName` 的纯 Pascal 实现。
-- `nextpas.core.platform` 只 re-export public types，并 inline 转发到 `platform.info` 与
-  `platform.time`。
-- 不新增 `platform.info.base`、`platform.info.intf` 或 `platform.info.ffi`；`info` 不拥有
-  foreign ABI，也没有 Pascal interface contract。
-
-### Architecture Decision
-
-- 顶层 OS/CPU/endian inquiry 是 platform L0 public contract，但不是 host raw ABI；它依赖
-  `platform.base` 的 compile-time truth，不应散在 facade 中。
-- `platform.info` 不依赖 FPC 平台/RTL 绑定单元，不含 `external` declaration，不引用
-  `platform.<host>.ffi`。
-- `platform.pas` 可以保留 inline 转发函数，因为 FPC 不支持自动 re-export；但不能保留
-  `case CurrentOS` / `case CurrentCPU` 这类业务逻辑。
-- 这轮不改变 public API 名称和返回值，不引入 stopwatch/duration 等 L1 抽象，不测试 raw OS API。
-
-### Status
-
-Completed, committed, merged to `main@2417233`, and worktree/branch cleanup done.
-
-### Planned Steps
-
-- [x] 从 `main@9312764` 开 isolated worktree：
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info`
-- [x] 校准当前主 checkout：存在 unrelated collections WIP，本轮不触碰
-- [x] 更新本文件中上一轮 sync-base 的 merged/cleanup 状态，消除滞后计划记录
-- [x] RED：新增 `test_platform_facade_surface`，要求 `platform.info` 存在并拥有 info API 逻辑，
-  `platform.pas` 只转发，不再包含 OS/CPU name `case` 逻辑
-- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.info.pas` 纳入
-  non-ffi owner audit
-- [x] GREEN：新增 `core/src/nextpas.core.platform.info.pas`，并修改
-  `core/src/nextpas.core.platform.pas` 只 re-export/forward
-- [x] 扩 `test_platform_simulated_host_compile_matrix`，让顶层 platform facade/info 也进入
-  simulated host compile proof
-- [x] 更新 `build/verify_local.sh` required path、focused gate 与 final envelope
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform/test_platform_facade_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] rebase 到最新 `main@db454df` 并跑 post-rebase focused gates
-- [x] commit、择优合并回 `main`
-- [x] 清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] `platform.info` 只依赖 `platform.base`
-- [x] `platform.info` 不含 `external`、host FFI import 或 FPC 平台单元 import
-- [x] `platform.pas` 不再包含 `case CurrentOS` / `case CurrentCPU` 逻辑
-- [x] `platform.pas` 继续兼容 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、`OSName`、`CPUName`
-  与 time public API
-- [x] 顶层 facade/info 进入 owner-boundary、facade-surface、simulated-host compile 与 official
-  local verification
-
-### Implementation Notes
-
-- RED proof:
-  - `test_platform_facade_surface` 初始失败：
-    `platform.info source must exist` 与 `platform facade must re-export platform.info`。
-  - `test_platform_ffi_owner_boundary` 初始失败：
-    `platform source audit must see the core non-ffi units...`。
-- GREEN focused:
-  - `test_platform_facade_surface`: `3 total, 3 passed, 0 failed`。
-  - `test_platform_ffi_owner_boundary`: `2 total, 2 passed, 0 failed`。
-  - `test_platform`: output includes `PASS: all platform tests passed`。
-  - `test_platform_simulated_host_compile_matrix`: `simulated-host-compile-matrix-status=pass`。
-- Full verification:
-  - `make -C core test`: `All tests passed.`。
-  - `make -C core examples`: `All examples compiled.`。
-  - `make -C core benchmarks`: `All benchmarks passed.`。
-  - `bash build/verify_local.sh`: `verify-local=pass`、
-    `human-summary=local verification passed`，final envelope includes
-    `corePlatformFacadeSurfaceCheck":"pass"`。
-  - `git diff --check`: pass。
-- Pre-merge review:
-  - 合并前重新检查 `platform.info`、顶层 facade、facade surface test、owner-boundary test、
-    simulated-host compile matrix、`build/verify_local.sh` 与设计文档 diff；未发现需要阻断合并的问题。
-  - 多代理 code-review 工具虽可发现，但当前工具规则要求只有用户明确授权代理/分派时才能 spawn；
-    因此本轮采用本地合并前 review，不启动子代理。
-- Post-rebase focused verification on `main@db454df`:
-  - `make -C core/tests/nextpas.core.platform/test_platform_facade_surface clean test`:
-    `3 total, 3 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
-    `2 total, 2 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
-    `simulated-host-compile-matrix-status=pass`。
-  - `make -C core/tests/nextpas.core.platform/test_platform clean test`:
-    output includes `PASS: all platform tests passed`。
-  - `git diff --check`: pass。
-- Merge / post-merge:
-  - `codex/platform-facade-info` commit `2417233` 已 fast-forward 合并进 `main@2417233`。
-  - post-merge focused verification on main passed:
-    `test_platform_facade_surface` 3/3，
-    `test_platform_ffi_owner_boundary` 2/2，
-    `test_platform_simulated_host_compile_matrix` pass，
-    `test_platform` 输出 `PASS: all platform tests passed`，
-    `git diff --check` pass。
-  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info` worktree 已删除，
-    `codex/platform-facade-info` 分支已删除。
-- Note:
-  - 扩 matrix 时暴露 enum constructor 不会随 type alias 变成真正“开箱即用” re-export；本轮只把
-    facade/info 纳入 compile proof，未改变 enum constructor public usage contract。
-
-## Addendum: 2026-05-27 Platform Thread Base Extraction
-
-### Goal
-
-把 `platform.thread` 的 public carrier type 从行为实现单元中抽到 `platform.thread.base`，让
-platform 子模块继续符合“facade/base/implementation”结构范式：
-
-- `nextpas.core.platform.thread.base` 拥有 `TPlatformThreadHandle`、
-  `TPlatformThreadToken`、`TPlatformThreadProc`、`TPlatformTLSKey`。
-- `nextpas.core.platform.thread` 只 re-export public carrier types，并保留线程生命周期、TLS、
-  sleep/yield、CPU count 等统一 API 实现。
-- 不新增 `platform.thread.ffi`，不移动 host ABI truth；host raw API 仍归
-  `platform.<host>.base` / `platform.<host>.ffi`。
-- 不引入 `*.intf.pas`，因为 `platform.thread` 当前没有 Pascal interface contract。
-
-### Architecture Decision
-
-- `platform.thread.base` 是 public type/alias owner，不是 host ABI owner，也不包含逻辑。
-- `platform.thread` 的 public API 名称保持不变；调用方仍可只 `uses nextpas.core.platform.thread`。
-- 这轮是结构收口，不改变 Linux/Windows/POSIX 运行时语义，不测试 raw OS API。
-- regression gate 通过 source-surface、owner-boundary、no-FPC 与 L0-boundary 四条线固定：
-  base 必须存在、实现单元必须 re-export、base 也不得引用 FPC 平台单元或 L1 thread 抽象。
-
-### Status
-
-Completed; merged to `main@de7efaa`, cleanup done.
-
-### Planned Steps
-
-- [x] 从最新 `main@c40ea69` 更新 `codex/platform-thread-base` isolated worktree
-- [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 `platform.thread.base` 存在并拥有
-  public carrier types，且 `platform.thread` re-export 而不是直接声明 raw shapes
-- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.thread.base.pas` 纳入
-  platform source owner audit
-- [x] RED：扩 `test_platform_thread_no_fpc_units` 与 `test_platform_thread_l0_boundary`，把
-  `platform.thread.base` 纳入 hard boundary
-- [x] GREEN：新增 `core/src/nextpas.core.platform.thread.base.pas`，并让
-  `platform.thread` re-export base types
-- [x] 更新 `build/verify_local.sh` required path 与 focused gate summary expectation
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-  - `git diff --check`
-- [x] commit、择优合并回 `main`
-- [x] 清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] `platform.thread.base` 只承载 public carrier type，不含逻辑和 FFI
-- [x] `platform.thread` 保持调用方兼容的 public type re-export
-- [x] 不新增 `platform.thread.ffi` 或 `platform.thread.intf`
-- [x] `platform.thread.base` 进入 no-FPC / L0-boundary / owner-boundary gate
-- [x] simulated host compile matrix 覆盖新 base 单元在 Darwin/Android/FreeBSD/generic Unix 分支下可编译
-
-### Implementation Notes
-
-- RED:
-  - `test_platform_thread_host_ffi_surface` 初始失败在
-    `platform.thread must have a base unit for public carrier types`。
-  - `test_platform_ffi_owner_boundary` 初始失败在 non-ffi owner count 不包含 feature base unit。
-  - `test_platform_thread_no_fpc_units` 初始失败在
-    `platform.thread.base source must exist for no-FPC guard`。
-  - `test_platform_thread_l0_boundary` 初始失败在 `platform.thread.base source stays L0 - File not found`。
-- Focused GREEN so far:
-  - `test_platform_thread_host_ffi_surface` 输出 `1 total, 1 passed, 0 failed`。
-  - `test_platform_ffi_owner_boundary` 输出 `2 total, 2 passed, 0 failed`。
-  - `test_platform_thread_no_fpc_units` 输出 `2 total, 2 passed, 0 failed`。
-  - `test_platform_thread_l0_boundary` 输出 `4 total, 4 passed, 0 failed`。
-  - `test_platform_thread` 输出 `8 total, 8 passed, 0 failed`。
-  - `test_platform_simulated_host_compile_matrix` 输出 `simulated-host-compile-matrix-status=pass`。
-- Final branch verification:
-  - `make -C core test` 输出 `All tests passed.`。
-  - `make -C core examples` 输出 `All examples compiled.`。
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
-  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`。
-  - official envelope 包含 `corePlatformThreadCheck=pass`、
-    `corePlatformThreadNoFpcCheck=pass`、`corePlatformThreadL0BoundaryCheck=pass`、
-    `corePlatformThreadHostFfiSurfaceCheck=pass`、`corePlatformThreadWin64Check=pass`、
-    `corePlatformThreadExampleCheck=pass`、`corePlatformThreadBenchCheck=pass` 与
-    `corePlatformSimulatedHostCompileMatrixCheck=pass`。
-  - `git diff --check` clean。
-- Merge / post-merge:
-  - `de7efaa platform: move thread carrier types to base` 已 fast-forward 合并进 main。
-  - post-merge focused gates 通过：
-    `test_platform_thread_host_ffi_surface` 1/1，
-    `test_platform_thread_no_fpc_units` 2/2，
-    `test_platform_thread_l0_boundary` 4/4，
-    `test_platform_thread` 8/8，
-    `test_platform_ffi_owner_boundary` 2/2，
-    `test_platform_simulated_host_compile_matrix` pass。
-  - 主 checkout 存在 unrelated `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`
-    WIP，本轮不纳入提交。
-  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-thread-base` worktree 已删除，
-    `codex/platform-thread-base` 分支已删除。
-
-## Addendum: 2026-05-27 Platform Sync Windows Wait-Address Public Result Boundary
-
-### Goal
-
-把 Windows `WaitOnAddress` helper 的 host-owned result projection 与 `platform_wait_address32`
-的 public contract 对齐，防止 Windows 路径把“当前值已经不等于 expected”的立即返回误报成成功：
-
-- `platform.sync` 继续拥有 public address-wait contract：nil -> `PLATFORM_ERR_INVALID`，
-  value mismatch -> `PLATFORM_ERR_AGAIN`，匹配但超时 -> `PLATFORM_ERR_TIMEOUT`，被唤醒 -> `0`。
-- `windows.ffi` 继续拥有 raw `WaitOnAddress`、`GetLastError`、timeout ms conversion 与
-  caller-supplied timeout-result helper。
-- 不把 `PLATFORM_ERR_AGAIN` public policy 下沉到 `windows.ffi`，也不新增 `platform.sync.ffi`。
-- Linux/POSIX/Windows wait path 都应在进入 host wait helper 前完成 public nil/mismatch validation。
-
-### Architecture Decision
-
-- 新增或收紧 `platform.sync` 内部 wait-address public precheck helper，让所有 wait path 复用同一条
-  nil/mismatch 判定。
-- wake-one/wake-all 仍只需要 nil address validation；它们不检查 expected value。
-- 测试边界仍遵守既定规则：Linux runtime 行为测试覆盖抽象 API，Windows 路径通过 source-surface
-  gate 和 Win64 compile-only gate 固化，不能把 raw WinAPI 当成 Linux 主机上的 runtime oracle。
-
-### Status
-
-Completed; merged to `main@1c18f86` and cleanup done.
-
-### Planned Steps
-
-- [x] 从最新 `main@6818cd9` 开 `codex/platform-sync-windows-wait-result` isolated worktree
-- [x] 跑 focused baseline：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 Windows wait-address branch 先消费
-  `platform_sync_validate_wait_address` 再调用 `windows_wait_address_i32_timeout_result`
-- [x] GREEN：在 `platform.sync` 提取 wait-address nil/mismatch public precheck，并让 Linux、
-  POSIX fallback 与 Windows wait path 统一消费
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-- [x] commit、择优合并回 `main`、清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] Windows `platform_wait_address32` mismatch 不再可能绕过 public `PLATFORM_ERR_AGAIN`
-- [x] Linux futex path 不再依赖 host syscall 才得到 mismatch result
-- [x] POSIX fallback 继续保持同一 public mismatch behavior
-- [x] host `.ffi` 不硬编码 nextPas public `PLATFORM_ERR_AGAIN`
-- [x] 不新增 raw OS API runtime 单测
-
-### Implementation Notes
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `platform.sync must own public wait-address nil/mismatch validation before host wait helpers:
-    platform_sync_validate_wait_address`。
-- GREEN:
-  - `platform.sync` 新增 `platform_sync_validate_wait_address`，复用
-    `platform_sync_validate_address`，再统一处理 `AAddr^ <> AExpected` -> `PLATFORM_ERR_AGAIN`。
-  - Linux futex path、POSIX fallback path、Windows wait-address path 都在进入 host wait helper 前消费
-    `platform_sync_validate_wait_address`。
-  - `windows.ffi` 未新增 public result 常量或 feature-specific FFI 单元。
-- Focused GREEN so far:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-- Final branch verification:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    输出 `2 total, 2 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出 `simulated-host-compile-matrix-status=pass`。
-  - `make -C core test` 输出 `All tests passed.`。
-  - `make -C core examples` 输出 `All examples compiled.`。
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
-  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`。
-- Post-merge verification on `main@1c18f86`:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出 `simulated-host-compile-matrix-status=pass`。
-  - `git diff --check` clean。
-  - `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-sync-windows-wait-result`
-    worktree 已移除，`codex/platform-sync-windows-wait-result` 分支已删除。
-
-## Addendum: 2026-05-27 Platform Sync POSIX Wait-Bucket Policy Ownership
-
-### Goal
-
-把 `platform.sync` 的 address-wait fallback 策略从“代码里刚好存在”提升成明确、可验证的
-owner boundary：
-
-- `platform.sync` 是统一跨平台 wait/wake public contract owner。
-- Linux futex、Windows WaitOnAddress、pthread condvar/raw errno/clock 继续归各 host `.ffi` owner。
-- POSIX wait-bucket fallback 是 nextPas 的跨平台策略，不是 raw OS ABI，因此继续归
-  `platform.sync`，不下沉到 `platform.<host>.ffi`。
-- runtime behavior tests 只覆盖 `platform_wait_address32` / `platform_wake_address_*` public API，
-  不直接测试 raw futex/pthread/WaitOnAddress。
-
-### Architecture Decision
-
-- 不新增 `platform.sync.ffi`，也不新增 `platform.sync.posix.ffi`。
-- 不把 wait-bucket bucket count、waiter/generation policy、forced fallback selector 复制到 host ffi。
-- 可以对 `platform.sync` 内部 fallback 策略做小的自解释 helper 提取，但 host `.ffi` 仍只提供
-  raw ABI 和 caller-supplied result/helper。
-- Linux 默认继续走 futex；`NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` 只作为 verification
-  selector，用 Linux 宿主验证 generic POSIX fallback public behavior。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 从最新 `main@8936833` 开 `codex/platform-sync-wait-policy` isolated worktree
-- [x] 跑 focused baseline：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-- [x] RED：扩 `test_platform_sync_posix_surface`，冻结 wait-bucket policy owner 留在 `platform.sync`
-  而不是 host ffi
-- [x] RED：扩 `test_platform_sync`，补 address-wait nil address public API 覆盖
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 public wait/wake 入口统一地址校验
-- [x] GREEN：在 `platform.sync` 内提取 wait-bucket release predicate helper，并保持 public API 语义不变
-- [x] GREEN：在 `platform.sync` 增加 `platform_sync_validate_address`，让 Linux/fallback/Windows wait/wake
-  都先处理 nil address
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-- [ ] commit、择优合并回 `main`、清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] `platform.sync` 保留 `TPosixWaitBucket` / bucket count / generation / waiter policy
-- [x] host `.ffi` 不新增 wait-bucket policy token 或 feature-specific sync fallback ffi
-- [x] address-wait nil / mismatch / zero-timeout / timeout / wake-one / wake-all public behavior 有覆盖
-- [x] forced fallback gate 覆盖 Linux 宿主上的 generic POSIX fallback behavior
-- [x] 不新增 raw OS API runtime 单测
-
-### Implementation Notes
-
-- Baseline:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-    第一版测试先失败在路径解析，修正 sibling path 后有效失败在
-    `platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi:
-    platform_posix_wait_address_released`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `platform.sync must validate public wait-address pointers before host wait/wake helpers:
-    platform_sync_validate_address`。
-- GREEN so far:
-  - `platform_posix_wait_address_released` 提取 generation/value mismatch release predicate。
-  - `platform_sync_validate_address` 统一 Linux futex、POSIX fallback、Windows wait/wake public nil guard。
-  - `test_platform_sync` 的 `Address wait` 用例现在覆盖 nil wait/wake public API。
-- Focused GREEN so far:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-- Focused full gate:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    输出 `2 total, 2 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出 `simulated-host-compile-matrix-status=pass`。
-- Full GREEN:
-  - `make -C core test` 输出 `All tests passed.`。
-  - `make -C core examples` 输出 `All examples compiled.`。
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
-  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`。
-
-### Non-goals
-
-- 不改变 `platform_wait_address32` / `platform_wake_address_*` public API 名称。
-- 不新增真实 macOS / FreeBSD / Android runtime evidence。
-- 不把 wait-bucket fallback 算法整体搬进 host ffi。
-- 不扩大到 L1 `nextpas.core.sync` 抽象设计。
-
-## Addendum: 2026-05-27 Platform Behavior Tests Abstract API Boundary
-
-### Goal
-
-把用户刚定下来的测试边界落到规则和代码里：
-
-- FPC 源码和平台单元是 ABI 依据，不是 platform 生产代码依赖。
-- raw 系统 API / FFI 声明不做 nextPas runtime 单元测试目标。
-- `platform.time`、`platform.sync`、`platform.thread` 的行为测试只覆盖统一抽象 public API。
-- source-surface / compile-only gate 只用于冻结 owner boundary 和编译一致性，不包装成系统 API
-  语义测试。
-
-### Architecture Decision
-
-- 行为测试不能为了方便绕过抽象层去 import `nextpas.core.platform.<host>.ffi`。
-- 并发测试需要 worker 时，应通过 `platform.thread` 创建和 join，而不是直接调用 `pthread_create` /
-  `pthread_join`。
-- `platform.thread_id` 的 native-id 取证继续由 source-surface guard 和 FPC 源码依据承担；runtime
-  behavior test 只验证 nextPas public contract（非零、稳定等）。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_ffi_owner_boundary`，禁止 platform behavior tests import host FFI 或直接调
-  raw pthread/gettid
-- [x] `test_platform_sync` 改为用 `platform.thread` 创建/join worker
-- [x] `test_platform_thread` 移除 Linux FFI oracle 和 raw `gettid` 断言
-- [x] 更新 `docs/design-conventions.md`、`findings.md`、`progress.md`
-- [x] focused：`test_platform_ffi_owner_boundary` / `test_platform_sync` / `test_platform_thread`
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-- [x] commit
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    初始失败在
-    `platform.sync behavior test must not import shared POSIX ffi`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-- Full:
-  - `make -C core test` 输出 `All tests passed.`
-  - `make -C core examples` 输出 `All examples compiled.`
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 不删除 source-surface guard；它们不是系统 API runtime 单元测试，而是 owner boundary 冻结。
-- 不宣称新增 Windows/Darwin/FreeBSD/Android runtime evidence。
-- 不降低 `platform.time` / `platform.sync` / `platform.thread` public API 行为覆盖率。
-
-## Addendum: 2026-05-27 Platform Time Facade/Base/Host Shape Normalization
-
-### Goal
-
-把 `platform.time` 收回刚固化的 platform host-owner 模型：
-
-- `platform.time` 是跨平台统一 API contract，不是 Pascal interface contract。
-- 删除错误的 `nextpas.core.platform.time.intf.pas`。
-- 保留 `nextpas.core.platform.time.base.pas` 承载 public carrier types。
-- 保留 `nextpas.core.platform.time.host.pas` 承载 host FFI delegation implementation。
-- facade 只 re-export `base` 类型并 inline 转发到 `host`。
-
-### Architecture Decision
-
-- `*.intf.pas` 只给真实 Pascal `interface` contract。`platform.time` 当前只有统一的过程/函数 API，
-  不应为了模块形态强行暴露 `IPlatformTimeSource`。
-- `platform.time`、`platform.sync`、`platform.thread` 不按 feature 重复创建自己的 `*.ffi.pas`，
-  而是直接消费 `platform.<host>.base` / `platform.<host>.ffi`。
-- 这批先收正 `platform.time` 的 feature shape；后续再把宿主常量/结构继续从各 host ffi 拆进
-  `platform.<host>.base`。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 文档已固化 host base/ffi owner 规则
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 facade 不再使用 `platform.time.intf`
-- [x] 删除 `platform.time.intf`，从 facade 移除 `IPlatformTimeSource`
-- [x] 保留 `platform.time.base` 的 public carrier types
-- [x] 更新 `test_platform_time_l0_boundary` / `test_platform_ffi_owner_boundary` /
-  `build/verify_local.sh`
-- [x] focused：`test_platform_time_host_ffi_surface` / `test_platform_time_l0_boundary` /
-  `test_platform_time_no_fpc_units` / `test_platform_time_helpers` /
-  `test_platform_ffi_owner_boundary` / `test_platform` / `nextpas.core.time/test_time` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-- [x] commit
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在
-    `platform.time has no Pascal interface contract, so facade must not use platform.time.intf`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform clean test`
-  - `make -C core/tests/nextpas.core.time/test_time clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `verify-local=pass` 与 `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不新增 `platform.<host>.base` 文件
-- 这批不改 public function 名称
-- 这批不改变 host ffi helper ownership
-
-## Addendum: 2026-05-27 Platform Sync Windows Busy-result Helper Ownership
-
-### Goal
-
-继续把 Windows trylock 的 busy classifier 从 `platform.sync` consumer 收回 `windows.ffi` owner：
-
-- `platform.sync` 不再自己写三处 `if windows_*trylock(...) then ... else ...`
-- `windows.ffi` 显式拥有
-  `windows_mutex_trylock_busy_result`、
-  `windows_rwlock_tryrdlock_busy_result`、
-  `windows_rwlock_trywrlock_busy_result`
-- caller 仍保留 nextPas public busy result 常量的最终选择权
-
-### Architecture Decision
-
-- Windows `TryAcquireSRWLock*` 返回 `BOOL` 且失败语义在这里就是 busy；这层 classifier 更接近宿主 helper
-  组合，而不是 generic platform policy。
-- 为了不把 `PLATFORM_ERR_BUSY` 硬编码进 ffi owner，这批继续采用 caller-supplied busy result 形态；
-  `platform.sync` 只把 public busy contract 作为参数传给 `windows.ffi`。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 trylock busy-result helper，
-  且 `platform.sync` 消费这些 helper
-- [x] RED：禁止 `platform.sync` 继续保留三处本地 Windows trylock busy mapping
-- [x] 在 `windows.ffi` 增加 busy-result helper
-- [x] 让 `platform.sync` Windows trylock 分支改为 delegation
-- [x] 更新 design/tracking 文档
-- [x] focused：`test_platform_sync_host_ffi_surface` / `test_platform_sync` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must expose Windows mutex trylock helper that maps busy semantics for sync: windows_mutex_trylock_busy_result`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 这批不移走 POSIX errno 到 `PLATFORM_ERR_*` 的映射
-- 这批不改变 Windows public opaque storage contract
-- 这批不把 timeout-result helper 重新改回 consumer 逻辑
-
-## Addendum: 2026-05-27 Platform Sync Windows Destroy Helper Ownership
-
-### Goal
-
-把 Windows sync 三个“宿主无需 destroy”的 helper family 也收回 `windows.ffi` owner：
-
-- `platform.sync` 不再在 Windows consumer 里直接保留 mutex/rwlock/condvar destroy no-op
-- `windows.ffi` 显式拥有 `windows_mutex_destroy` / `windows_rwlock_destroy` /
-  `windows_condvar_destroy`
-- `platform.sync` 的 Windows helper family 继续更完整地落在 host ffi owner 上
-
-### Architecture Decision
-
-- Windows `SRWLOCK` / `CONDITION_VARIABLE` 的“无需销毁”也是宿主语义的一部分，虽然实现是 no-op，
-  但 owner 仍应归 `nextpas.core.platform.windows.ffi`。
-- `platform.sync` 继续保留 public opaque storage contract、busy/timeout error mapping 与跨平台
-  wait policy；但 destroy family 不再停留在 consumer。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 destroy helper，且
-  `platform.sync` Windows 分支消费这些 helper
-- [x] 在 `windows.ffi` 增加 mutex/rwlock/condvar destroy helper
-- [x] 让 `platform.sync` Windows destroy 分支改为 delegation
-- [x] 更新 design/tracking 文档
-- [x] focused：`test_platform_sync_host_ffi_surface` / `test_platform_sync` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must expose Windows mutex destroy helper: windows_mutex_destroy`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 这批不把 Windows trylock busy-result 映射移出 `platform.sync`
-- 这批不把 POSIX errno 到 `PLATFORM_ERR_*` 的映射移出 `platform.sync`
-- 这批不改变 Windows public opaque storage contract
-
-## Addendum: 2026-05-27 Platform Time Host-FFI Facade Collapse
-
-### Goal
-
-继续把 `platform.time` consumer 收窄成真正的薄 host-ffi façade：
-
-- 不再按 POSIX / Darwin / Windows 逐段复制三组完全同构的 wrapper body
-- `platform_monotonic_ns` / `platform_realtime_ns` /
-  `platform_monotonic_resolution_ns` 各只保留一个实现体
-- compile-time gate 只反映真实已支持宿主：`NEXTPAS_UNIX` 或 `NEXTPAS_WINDOWS`
-- 保持 `platform.time` 仍是 L0 平台时钟 façade，而不是重新混入宿主拼装细节
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 继续拥有统一命名的
-  `platform_clock_*_ns_u64` helper，仍是时钟结果的单一事实源。
-- `platform.time` 只保留 public clock contract 与单层 delegation，不再为不同 target 保留多份相同
-  wrapper body。
-- `nextpas.core.platform.windows.math` 继续作为纯 helper sibling 保留；它不是 raw ABI owner，
-  不应为了“platform.time 更薄”而伪装成 `*.ffi.pas`。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求三组 public façade body 各只出现一次
-- [x] 折叠 `platform.time` 中按 target 复制的三组 wrapper body
-- [x] 用统一 `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate 表达受支持宿主
-- [x] 保持 public API 与 `windows.math` 边界不变
-- [x] focused：`test_platform_time_host_ffi_surface` /
-  `test_platform_time_helpers` /
-  `test_platform_simulated_host_compile_matrix` / Win64 compile-only 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在新增的 single host-ffi façade body 计数断言。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/build/review-win64-time -FE/home/dtamade/projects/nextPas/build/review-win64-time -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 这批不改 `platform.time` public API 名称
-- 这批不把 `windows.math` 并进 `windows.ffi`
-- 这批不把 simulated host compile-only 包装成真实 Darwin/Android/FreeBSD runtime 证据
-
-## Addendum: 2026-05-27 Platform POSIX Timeout Deadline Helper Ownership
-
-### Goal
-
-把 pthread timeout deadline/remaining 语义从 `platform.sync` 继续收回到 host ffi / shared
-`posix.ffi` owner：
-
-- `posix.ffi` 统一拥有 “clock now + add ns -> absolute deadline” helper
-- `posix.ffi` 统一拥有 “deadline vs now -> remaining ns” helper
-- host ffi 继续只暴露 `platform_pthread_timeout_deadline_after_ns` /
-  `platform_pthread_timeout_remaining_ns_u64` 给 `platform.sync` 消费
-- `platform.sync` 不再直接调用 pthread timeout-clock read helper，也不再在 consumer 里直接拼
-  shared POSIX `timespec` deadline arithmetic
-
-### Architecture Decision
-
-- `platform_posix_timespec_add_ns` 与 `platform_posix_timespec_remaining_ns_u64` 仍留在
-  shared owner，但 consumer 不再直接用它们拼 timeout policy。
-- 新增更高一层 shared helper：
-  `platform_posix_clock_deadline_after_ns` /
-  `platform_posix_clock_deadline_remaining_ns_u64`。
-- host ffi 通过 `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 薄委托到上述 shared helper，`platform.sync`
-  只消费 host-owned pthread timeout helper。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，冻结 shared timeout deadline helper surface
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，冻结 host pthread timeout helper / consumer boundary
-- [x] 在 `posix.ffi` 增加 shared deadline / remaining helper
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 暴露 host-owned pthread timeout deadline / remaining helper
-- [x] 让 `platform.sync` 改为消费 host-owned pthread timeout deadline / remaining helper
-- [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在
-    `posix.ffi must expose shared POSIX clock deadline helper for host ffi owners`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must expose pthread timeout deadline helper for sync`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 本轮不改 `platform.sync` / `platform.posix.ffi` public API 名称。
-- 本轮不把 wait-bucket policy 从 `platform.sync` consumer 移到 ffi owner。
-- 本轮不扩到 `platform.thread` 或 `platform.time` 的额外 timeout policy。
-
-## Addendum: 2026-05-27 Platform POSIX Errno/Mutex Projection Shared Helper Ownership
-
-### Goal
-
-继续把 POSIX host ffi 中还剩的一层重复 skeleton 收回 shared owner：
-
-- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制 `errno-location^` 的 value load body
-- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制 public mutex kind
-  `(normal/errorcheck/recursive)` 到宿主 pthread kind 的 `case` 投影样板
-- host ffi 继续只保留真正的宿主 truth：`platform_errno_location` binding 与
-  `PLATFORM_PTHREAD_MUTEX_*_KIND` 常量
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 本轮新增：
-  - `platform_posix_errno_value_from_location`
-  - `platform_posix_pthread_mutex_init_public_kind`
-- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
-  `platform.thread` / `platform.sync` 消费，但：
-  - `platform_posix_errno_value` 改为委托 shared
-    `platform_posix_errno_value_from_location`
-  - `platform_pthread_mutex_init_platform_kind` 改为委托 shared
-    `platform_posix_pthread_mutex_init_public_kind`
-- host ffi 继续保留：
-  - `platform_errno_location` 的宿主符号绑定
-  - `PLATFORM_PTHREAD_MUTEX_NORMAL_KIND` /
-    `PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND` /
-    `PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND`
-- 这批不改变 `platform.thread` / `platform.sync` public API，也不改变宿主 truth 的 owner。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared errno/mutex projection helper
-- [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 POSIX host ffi 委托 shared errno value load helper
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared errno/mutex projection helper
-- [x] 在 `posix.ffi` 实现 shared errno/mutex projection helper
-- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared projection helper
-- [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_thread` /
-  `test_platform_sync` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在
-    `posix.ffi must expose shared POSIX errno-value load helper for host ffi owners`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate errno-value load to shared posix.ffi`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate errno-value load to shared posix.ffi`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 这批不把 `platform_errno_location` binding 从 host ffi owner 移出
-- 这批不把 `PLATFORM_PTHREAD_MUTEX_*_KIND` 的宿主 truth 移出 host ffi owner
-- 这批不把 host clock id、timeout clock id、condattr capability 重新收窄进 shared owner
-
-## Addendum: 2026-05-27 Collections Interface Ownership Normalization
-
-### Goal
-
-继续把从 `fafafa.core` 搬入的 collections 按 nextpas.core 三件套范式规整：
-
-- `ICollection` 与 `IGenericCollection<T>` 的真实接口定义进入 `collections.intf`
-- `collections.base` 不再拥有这些 interface definition
-- 现有 `TCollection` / `TGenericCollection<T>` 代码先保持在 base 内可编译，避免在当前
-  `TCollection` class-signature API 尚未改造前引入 `intf <-> abstract` 循环
-
-### Architecture Decision
-
-- 本轮先切接口 ownership，不强行物理搬迁 class skeleton。
-- 原因：当前接口契约大量返回/接收 `TCollection`；若直接把 class 搬入 `collections.abstract`，
-  `collections.intf` 必须反向引用 `abstract` 才能使用 `TCollection`，而 `abstract` 又必须引用
-  `intf` 来实现接口，形成不符合 `base <- intf <- implementation` 的循环。
-- 因此本轮让 concrete containers 显式依赖 `collections.intf`，并由具体容器类声明自己的 public
-  interface（如 `IVec<T>` / `IHashMap<K,V>` / `IBitSet`），继承自 `TCollection` 的方法继续满足接口。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_abstract`，要求 `ICollection` / `IGenericCollection<T>` 定义位于
-  `collections.intf` 且不在 `collections.base`
-- [x] 把 `ICollection` / `IGenericCollection<T>` 从 `base` 迁入 `intf`
-- [x] `TCollection` / `TGenericCollection<T>` 暂时取消直接 `implements` 迁出的接口，保持 base 无
-  `intf` 依赖
-- [x] 为 `bitset`、`circularbuffer`、`forward_list`、`list`、`priorityqueue`、`stack`、
-  `tree_set`、`treemap` 补显式 `collections.intf` 依赖
-- [x] focused collections tests 通过
-- [x] fresh `make -C core test`
-
-### Verification
-
-- RED:
-  - `make -C tests/nextpas.core.collections/test_abstract clean test`
-    初始失败在 `ICollection interface definition should live in collections.intf`。
-- Focused GREEN:
-  - `make -C tests/nextpas.core.collections/test_abstract clean test`
-  - `make -C tests/nextpas.core.collections/test_facade clean test`
-  - `make -C tests/nextpas.core.collections/test_vec clean test`
-  - `make -C tests/nextpas.core.collections/test_deque clean test`
-  - `make -C tests/nextpas.core.collections/test_hashmap clean test`
-  - `make -C tests/nextpas.core.collections/test_hashset clean test`
-- Full:
-  - fresh `make -C core test` 输出 `All tests passed.`
-
-### Non-goals
-
-- 本轮不重写 `TCollection` class API 中仍使用 `TCollection` 的参数/返回类型。
-- 本轮不把 `TCollection` / `TGenericCollection<T>` 强搬进 `collections.abstract`；下一步应先设计并
-  测试 class API 与 interface API 的过渡边界，再做物理迁移。
-
-## Addendum: 2026-05-27 Platform POSIX Pthread Attr-init Shared Helper Ownership
-
-### Goal
-
-继续把 POSIX host ffi 中仍然重复的 pthread attr-init glue 收回 shared owner：
-
-- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制
-  `pthread_mutexattr_init/settype/destroy + pthread_mutex_init`
-- `linux/android/darwin/freebsd/unix.ffi` 不再各自复制
-  `pthread_condattr_init/destroy + pthread_cond_init` 与 optional
-  `pthread_condattr_setclock` 外壳
-- host ffi 继续只保留宿主 truth：public kind 到宿主 kind 的映射、timeout clock id、
-  condattr setclock binding/capability
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 本轮新增：
-  - `TPThreadCondAttrSetClockProc`
-  - `platform_posix_pthread_mutex_init_kind`
-  - `platform_posix_pthread_condvar_init_with_clock`
-- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
-  `platform.sync` 消费，但：
-  - `platform_pthread_mutex_init` 改为委托 shared
-    `platform_posix_pthread_mutex_init_kind`
-  - `platform_pthread_condvar_init` 改为委托 shared
-    `platform_posix_pthread_condvar_init_with_clock`
-- host ffi 继续保留：
-  - `platform_pthread_mutex_init_platform_kind` 中的宿主 kind truth
-  - `platform_pthread_condattr_setclock` 绑定与
-    `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` /
-    `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`
-- 这批不改变 `platform.sync` public API，也不新增新的平台 ABI declaration family。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared pthread attr-init helper
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared pthread attr-init helper
-- [x] 在 `posix.ffi` 实现 shared pthread attr-init helper
-- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared attr-init helper
-- [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在
-    `posix.ffi must expose shared pthread mutex init-with-kind helper for host ffi owners`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate pthread mutex attr-init glue to shared posix.ffi`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
-    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
-    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
-    `corePlatformSyncCheck":"pass"`、
-    `verify-local=pass` 与 `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不改变 `platform.sync` public contract
-- 这批不把 `platform_pthread_mutex_init_platform_kind` 的宿主 kind truth 移出 host ffi owner
-- 这批不把 Darwin / Android / FreeBSD / generic Unix 的 compile-only proof 包装成新的 runtime evidence
-
-## Addendum: 2026-05-27 Platform POSIX Clock/Sync Shared Helper Ownership
-
-### Goal
-
-继续把 POSIX host ffi 中仍然重复的 clock / sync 薄转发收回 shared owner：
-
-- `linux/android/darwin/freebsd/unix.ffi` 不再各自重复 `clock_gettime` / `clock_getres`
-  包装和 `timespec -> ns` 投影
-- `pthread_mutex_*`、`pthread_rwlock_*`、`pthread_cond_*` 的 host-independent forwarder
-  不再在 5 个 host ffi 里各写一份
-- host ffi 继续只保留 clock id、timeout clock id、errno binding、mutex/condattr capability
-  这类宿主 truth
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 本轮新增 truly shared helper：
-  - `platform_posix_clock_now`
-  - `platform_posix_clock_getres`
-  - `platform_posix_clock_ns_u64`
-  - `platform_posix_clock_resolution_ns_u64`
-  - `platform_posix_pthread_mutex_destroy/lock/trylock/unlock`
-  - `platform_posix_pthread_rwlock_init/destroy/rdlock/tryrdlock/wrlock/trywrlock/unlock`
-  - `platform_posix_pthread_condvar_destroy/wait/timedwait_abs/signal/broadcast`
-- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给
-  `platform.time` / `platform.sync` 消费，但实现改为委托 shared `posix.ffi` helper。
-- Darwin 的 `darwin_mach_monotonic_ns` /
-  `darwin_mach_monotonic_resolution_ns` 继续留在 host owner，不向 shared helper 收窄。
-- 旧 `codex/platform-time-integration` 继续只作为历史参考；这批直接在当前 `main` 上收口。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared clock/sync helper
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 POSIX host ffi 委托 shared clock helper
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 委托 shared sync helper
-- [x] 在 `posix.ffi` 实现 shared clock/sync helper
-- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
-- [x] focused：`test_platform_posix_ffi_surface` / `test_platform_time_host_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` / `test_platform_time_helpers` /
-  `test_platform_sync` / `test_platform_thread_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在
-    `posix.ffi must expose shared POSIX clock read helper for host ffi owners`。
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate raw POSIX clock reads to shared posix.ffi`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate timeout clock reads to shared posix.ffi`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
-    `corePlatformTimeHostFfiSurfaceCheck":"pass"`、
-    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
-    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、
-    `verify-local=pass` 与 `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不改 `platform.time` / `platform.sync` public API
-- 这批不把 Darwin mach monotonic truth 收窄到 shared owner
-- 这批不把 source-surface / compile-only 证据包装成新的 Darwin / Android / FreeBSD runtime truth
-
-## Addendum: 2026-05-27 Platform Thread Shared POSIX Helper Ownership
-
-### Goal
-
-继续把 `platform.thread` 相关的 shared POSIX glue 从各 host ffi 内部复制收回到 shared owner：
-
-- `pthread_self` token 投影、`pthread_create/join/detach`、`sched_yield`、TLS key 读写、
-  `sysconf` 正数投影不再在 `linux/android/darwin/freebsd/unix.ffi` 各写一份
-- `nanosleep` 的 request 组装与 retry loop 继续留在 FFI 层，但 shared 逻辑下沉到 `posix.ffi`
-- host ffi 继续保留 errno binding、`EINTR`、`_SC_NPROCESSORS_ONLN` 与 native thread id ABI
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 本轮新增 shared thread helper：
-  `platform_posix_thread_self_token_u64`、
-  `platform_posix_sysconf_positive_i32`、
-  `platform_posix_pthread_create_handle`、
-  `platform_posix_pthread_join_handle`、
-  `platform_posix_pthread_detach_handle`、
-  `platform_posix_pthread_yield`、
-  `platform_posix_pthread_sleep_ns`、
-  `platform_posix_pthread_tls_create/destroy/set/get`。
-- `linux/android/darwin/freebsd/unix.ffi` 继续暴露既有 public helper 名给 `platform.thread`
-  消费，但其实现改为委托 shared `posix.ffi` helper。
-- `platform.thread` public API、宿主选择方式与 native thread id contract 不变；这批只收口
-  shared-vs-host ownership。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 `posix.ffi` 暴露 shared pthread/thread helper
-- [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 POSIX host ffi 委托 shared `posix.ffi`
-- [x] 在 `posix.ffi` 实现 shared pthread/thread helper
-- [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
-- [x] focused：`test_platform_posix_ffi_surface` / `test_platform_thread_host_ffi_surface` /
-  `test_platform_thread` / `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` / `test_platform_simulated_host_compile_matrix` 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在
-    `posix.ffi must expose shared pthread self-token projection for platform.thread host owners`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must delegate pthread self-token projection to shared posix.ffi`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - fresh `make -C core test`
-  - fresh `make -C core examples`
-  - fresh `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
-    `corePlatformThreadHostFfiSurfaceCheck":"pass"`、
-    `corePlatformThreadCheck":"pass"`、
-    `corePlatformSimulatedHostCompileMatrixCheck":"pass"` 与
-    `verify-local=pass` / `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不改 `platform.thread` public API
-- 这批不把 `platform.time` / `platform.sync` 的 shared POSIX wrapper 一次性全部收口
-- 这批不把 compile-only 证据包装成 Darwin / Android / FreeBSD 的 runtime truth
-
-## Addendum: 2026-05-27 Platform Time Windows Math Helper Boundary
-
-### Goal
-
-把 `platform.time` 里纯 QPC 换算逻辑继续从 consumer 收回 owner-side helper，同时避免非 Windows
-宿主为了复用纯数学换算而被 `windows.ffi` 污染链接：
-
-- Linux/macOS/Unix 链接路径不能因为 `platform_qpc_to_ns` / `platform_resolution_from_frequency_ns`
-  去拉 `kernel32`
-- `windows.ffi` 继续拥有真正的 Windows ABI 与 host-owned clock helper
-- 纯 QPC 数学换算放进同 host family 的普通 helper unit，而不是伪装成新的 `*.ffi.pas`
-
-### Architecture Decision
-
-- `*.ffi.pas` 继续只表示拥有 `external` ABI declaration 的 owner 单元；纯 helper 不再命名成
-  `*.ffi.pas`，避免和 `test_platform_ffi_owner_boundary` 以及文档规则冲突。
-- 这批新增 `core/src/nextpas.core.platform.windows.math.pas`，承载
-  `windows_qpc_to_ns` / `windows_qpc_resolution_ns` 与相关饱和乘除换算。
-- `platform.time` 在 Windows 目标继续通过 `windows.ffi` 暴露的 helper 名消费 Windows 时钟契约；
-  非 Windows 目标则复用 `windows.math`，从而保持纯换算语义一致但不引入 `kernel32` 链接依赖。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：`test_platform_time_helpers` 在 Linux 上暴露 `-lkernel32` 链接污染
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求存在 helper-only Windows math sibling
-- [x] 新增 `nextpas.core.platform.windows.math`
-- [x] 让 `windows.ffi` 委托纯 QPC 数学给 `windows.math`
-- [x] 让 `platform.time` 在非 Windows 目标复用 `windows.math`
-- [x] 修正 helper unit 命名，避免把纯 helper 伪装成 `*.ffi.pas`
-- [x] focused：`test_platform_time_helpers` / `test_platform_time_host_ffi_surface` /
-  `test_platform_ffi_owner_boundary` / Win64 compile-only 通过
-- [x] fresh `make -C core test`
-- [x] fresh `make -C core examples`
-- [x] fresh `make -C core benchmarks`
-- [x] fresh `bash build/verify_local.sh`
-
-### Non-goals
-
-- 这批不改 `platform.time` public API 名称
-- 这批不新增 Windows runtime 证据
-- 这批不把 `platform.time` 里的其余 host-owned clock helper 全部重画边界
-
-## Addendum: 2026-05-27 Platform Sync Windows Timeout Result FFI Ownership
-
-### Goal
-
-继续把 Windows wait timeout 语义从 `platform.sync` consumer 收回 `windows.ffi` owner：
-
-- `platform.sync` 不再自己判断 `windows_error_i32_is_timeout`
-- Windows condvar timedwait / address-wait 的 timeout classifier 分支不再散落在 consumer
-- caller 仍然保留 nextPas public timeout result 常量的最终选择权
-
-### Architecture Decision
-
-- `SleepConditionVariableSRW` / `WaitOnAddress` 的 raw ABI、`GetLastError` 读取与 `ERROR_TIMEOUT`
-  classifier 继续归 `nextpas.core.platform.windows.ffi`。
-- 为了不把 nextPas public error 常量硬编码进 ffi owner，这批采用 caller-supplied timeout result
-  形态：`windows_condvar_timedwait_timeout_result`、
-  `windows_wait_address_i32_timeout_result`。
-- `platform.sync` 继续保留 public contract 与 generic error surface，但不再自己写 Windows timeout
-  classifier 分支。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 拥有 timeout-result helper
-- [x] RED：禁止 `platform.sync` 继续消费 `windows_error_i32_is_timeout` 与 raw timedwait timeout helper
-- [x] 在 `windows.ffi` 实现 timeout-result helper
-- [x] 切换 `platform.sync` Windows condvar/address-wait consumer
-- [x] 同步 design/tracking 文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `make -C core test`
-- [x] 跑 fresh `make -C core examples`
-- [x] 跑 fresh `make -C core benchmarks`
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must expose Windows condvar timedwait helper that maps timeout semantics for sync`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Full:
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `corePlatformSyncHostFfiSurfaceCheck":"pass"`、
-    `corePlatformSyncCheck":"pass"`、`verify-local=pass` 与
-    `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不把 `PLATFORM_ERR_TIMEOUT` 常量硬编码进 `windows.ffi`
-- 这批不改 `platform.sync` public API
-- 这批不处理 Windows trylock busy-result 映射
-
-## Addendum: 2026-05-27 Platform Sync POSIX Helper FFI Ownership
-
-### Goal
-
-继续把 `platform.sync` 里剩余的 shared POSIX helper duplication 收回正确 owner：
-
-- shared `timespec` deadline arithmetic 不再在 `platform.sync` 本地复制
-- public mutex kind 到宿主 pthread kind 的映射不再停在 consumer
-- owner boundary 继续保持克制，不把整个 wait-bucket / deadline policy 都粗暴塞进 ffi
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 可以拥有真正跨 POSIX 宿主共享的 helper，不只限于 raw `external`
-  声明；这批新增的就是 shared `timespec -> ns`、`timespec + ns` 与 remaining-time 算术。
-- `TPlatformMutexKind` 到宿主 pthread mutex kind 编号的映射属于 host-owned contract，应该由
-  `linux/android/darwin/freebsd/unix.ffi` 各自暴露统一 helper
-  `platform_pthread_mutex_init_platform_kind`。
-- `platform.sync` 继续保留 public opaque storage contract、error mapping、deadline 计算与
-  wait-bucket 策略；这批不重划更大的 sync ownership 边界。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 `test_platform_posix_ffi_surface`，要求 shared `posix.ffi` 显式暴露 POSIX timespec 算术 helper
-- [x] 扩 `test_platform_sync_host_ffi_surface`，要求 host ffi owner 暴露 public mutex kind init helper
-- [x] 删除 `platform.sync` 本地 timespec / mutex-kind helper duplication，切到 ffi owner helper
-- [x] 同步 design/tracking 文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `make -C core test`
-- [x] 跑 fresh `make -C core examples`
-- [x] 跑 fresh `make -C core benchmarks`
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - 扩完 `test_platform_posix_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 后，主线先暴露出
-    shared POSIX timespec helper 缺失与 `platform.sync` 仍保留 local mutex-kind / deadline helper
-    duplication 的 owner-boundary 失败。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `corePlatformPosixFfiSurfaceCheck":"pass"`、
-    `corePlatformSyncHostFfiSurfaceCheck":"pass"`、`corePlatformSyncCheck":"pass"`、
-    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、`verify-local=pass` 与
-    `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不把 `platform.sync` 的 wait-bucket strategy 下沉到 ffi owner
-- 这批不新增 public sync API
-- 这批不把 compile-only evidence 包装成 Darwin / Android / FreeBSD 的真实 runtime truth
-
-## Addendum: 2026-05-27 Platform Simulated Host Compile Matrix
-
-### Goal
-
-给 `platform` 宿主分支补一条诚实的 compile-proof：
-
-- 在 Linux 主机上用 test-only host override 驱动 Darwin / Android / FreeBSD / generic Unix
-  分支选择
-- compile-only 验证 `platform.time` / `platform.thread` / `platform.sync` 连同对应 host ffi
-  单元的编译自洽
-- 把这条 proof 接进 `build/verify_local.sh`，但明确它不是 runtime evidence
-
-### Architecture Decision
-
-- `nextpas.core.settings.inc` 允许 test-only `NEXTPAS_FORCE_HOST_*` 宏覆盖宿主选择，范围仅限独立测试
-  项目和 compile-only 证明。
-- 这类 proof 验证的是 branch selection correctness、public API surface 与 host ffi compile coherence，
-  不是 cross toolchain / cross runtime truth。
-- generic Unix fallback 已有 `nextpas.core.platform.unix.ffi` 承载 POSIX clock helper，因此
-  `NEXTPAS_POSIX_CLOCK` 必须成为 generic Unix contract 的一部分，不能让 `platform.time`
-  继续把 generic Unix 当成 unsupported。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：新增独立 `test_platform_simulated_host_compile_matrix` 项目并在主线上先跑出失败
-- [x] 在 `nextpas.core.settings.inc` 增加 test-only `NEXTPAS_FORCE_HOST_*` override
-- [x] 修掉 simulated matrix 暴露出的真实分支缺陷
-- [x] 将 simulated host compile matrix 接入 `build/verify_local.sh`
-- [x] 同步 design/tracking 文档
-- [x] 跑 fresh `make -C core test`
-- [x] 跑 fresh `make -C core examples`
-- [x] 跑 fresh `make -C core benchmarks`
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    初始失败在
-    `simulated darwin compile must select NEXTPAS_MACOS`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出四条 target pass 与 `simulated-host-compile-matrix-status=pass`。
-- Full:
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `core-platform-simulated-host-compile-matrix-check=pass`、
-    `corePlatformSimulatedHostCompileMatrixCheck":"pass"`、`verify-local=pass` 与
-    `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不把 simulated compile-only proof 伪装成 Darwin / Android / FreeBSD / generic Unix 的真实
-  runtime 证据
-- 这批不引入新的 public platform API
-- 这批不替代后续真实 cross toolchain / runtime 验证
-
-## Addendum: 2026-05-27 Platform Windows Timeout Conversion FFI Ownership
-
-### Goal
-
-继续把 Windows host-specific timeout/sleep policy 收回 `windows.ffi` owner 单元：
-
-- `platform.sync` 不再自己拥有 ns->ms timeout helper
-- `platform.thread` 不再自己拥有 Windows sleep rounding/saturation 逻辑
-- `windows.ffi` 统一拥有向上取整、`INFINITE` sentinel 与最大有限毫秒截断 policy
-
-### Architecture Decision
-
-- `Sleep`、`WaitOnAddress`、`SleepConditionVariableSRW` 本身继续是 Windows ABI declaration，归
-  `nextpas.core.platform.windows.ffi`。
-- 与这些 ABI 一起出现的 timeout/sleep conversion truth 也归 `nextpas.core.platform.windows.ffi`；
-  这不是 generic arithmetic，而是 Windows wait API contract 的一部分。
-- `platform.sync` / `platform.thread` 继续只消费 helper/token，不各自复制 Windows policy。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 thread/sync host ffi surface tests，要求 `windows.ffi` 拥有 timeout/sleep helper
-- [x] RED：要求 `platform.sync` / `platform.thread` 消费 helper，并禁止 local helper/raw literal 回归
-- [x] 在 `windows.ffi` 实现统一 timeout/sleep conversion helper
-- [x] 切换 `platform.sync` / `platform.thread` 的 Windows consumer
-- [x] 同步 design/tracking 文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must expose Windows sleep timeout conversion policy`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must expose Windows wait timeout conversion policy`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-  `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不改 `platform.sync` / `platform.thread` 的 public API
-- 这批不引入新的 Windows runtime feature detection
-- 这批不处理 wait result / last-error mapping 的进一步 ownerization
-
-## Addendum: 2026-05-27 Platform Time Windows FILETIME Host FFI Ownership
-
-### Goal
-
-继续把 `platform.time` 的宿主时钟真相从实现层字面量收回到 host-specific FFI owner：
-
-- Windows `FILETIME` 的 Unix epoch offset 不能继续裸写在 `platform.time`
-- Windows `FILETIME` 的 tick size（100ns）也不能继续裸写在 `platform.time`
-- focused gate 必须同时冻结 “owner 在 `windows.ffi`” 与 “实现层不回归魔数”
-
-### Architecture Decision
-
-- Windows `FILETIME` 的 API entry points 继续归 `nextpas.core.platform.windows.ffi`。
-- 与该 ABI 绑定的 epoch/tick truth 也归 `nextpas.core.platform.windows.ffi`；这类事实不是 shared
-  clock algebra，而是宿主时间 ABI 的一部分。
-- `platform.time` 继续只负责换算流程与稳定 L0 contract，不再保存 Windows-specific magic number。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 `windows.ffi` 拥有 FILETIME epoch/tick token
-- [x] RED：要求 `platform.time` 消费这些 token，并禁止裸 epoch 魔数回归
-- [x] 将 FILETIME epoch/tick truth 下沉到 `windows.ffi`
-- [x] 调整 `platform.time` 的 Windows realtime 换算逻辑
-- [x] 同步设计约定与 tracking 文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在
-    `windows.ffi must own the FILETIME unix epoch offset token for platform.time`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-    通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-  `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不改 `platform.time` 的 public API
-- 这批不宣称新的 Windows runtime 证据矩阵已经补齐
-- 这批不处理 Darwin mach timebase caching policy
-
-## Addendum: 2026-05-27 Platform Thread Sleep EINTR FFI Ownership
-
-### Goal
-
-继续把 `platform.thread` 的宿主错误语义从实现层下沉到 host-specific FFI owner：
-
-- retryable `nanosleep` errno truth 不能再隐含在实现层 while-loop 里
-- Linux / Android / macOS / FreeBSD / generic Unix 各自都要显式拥有 `EINTR` token
-- `platform.thread` 必须消费 host-owned errno binding 与 `EINTR` token，而不是对任意错误一律重试
-
-### Architecture Decision
-
-- `nanosleep` 本身仍属于 shared POSIX ABI，所以继续留在 `posix.ffi`。
-- “什么错误可以安全重试”属于宿主 errno truth，继续归 `linux/darwin/android/freebsd/unix` 各自 FFI owner。
-- `platform.thread` 继续只负责线程 API 契约与 sleep policy，不再凭实现层假设“所有 Unix 错误都可重试”。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 focused tests，要求 host ffi 暴露 `PLATFORM_POSIX_EINTR`
-- [x] RED：扩 focused tests，要求 `platform.thread` 消费 host-owned errno binding 与 `EINTR`
-- [x] 将 `PLATFORM_POSIX_EINTR` 下沉到各 Unix host ffi
-- [x] 调整 `platform.thread` 的 POSIX sleep 只在 `EINTR` 上重试
-- [x] 同步设计约定与跟踪文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-    初始失败在 `linux.ffi must expose Linux EINTR for retryable sleep semantics`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux EINTR for retryable nanosleep`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-    通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-  `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不引入新的 thread public API
-- 这批不宣称 Darwin / FreeBSD / Android 已获得新的真实 runtime 证据
-- 这批不扩展 signal handling 抽象
-
-## Addendum: 2026-05-27 Platform Sync Pthread Capability FFI Ownership
-
-### Goal
-
-继续把 `platform.sync` 需要的宿主 pthread capability / policy truth 从 shared `posix.ffi`
-与实现层条件编译下沉到 host-specific FFI owner：
-
-- `pthread_mutex_*` kind 编号必须进入各自 host ffi
-- `pthread_condattr_setclock` 的符号拥有权与“是否支持”事实必须进入各自 host ffi
-- condvar timedwait 使用哪个 clock id 也必须成为 host-owned token
-
-### Architecture Decision
-
-- `nextpas.core.platform.posix.ffi` 只继续拥有 shared POSIX ABI 形状，不再拥有 per-host mutex kind
-  编号，也不继续拥有 `pthread_condattr_setclock` 这种宿主可用性会分叉的绑定。
-- `linux/darwin/android/freebsd/unix` 各自拥有
-  `PLATFORM_PTHREAD_MUTEX_*_KIND`、
-  `PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED`、
-  `PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID` 与
-  `platform_pthread_condattr_setclock`。
-- `platform.sync` 继续只负责把这些 host-owned truth 组装成稳定的 nextPas 同步契约，不再自己知道
-  “macOS 例外” 或 FreeBSD mutex kind 编号。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 focused tests，要求 `posix.ffi` 退出 pthread capability ownership
-- [x] RED：扩 focused tests，要求 `platform.sync` 消费新的 host-owned pthread capability token
-- [x] 将 pthread mutex kind / condattr clock capability / timeout clock policy 下沉到 host ffi
-- [x] 调整 `platform.sync` 消费新的 host-owned token
-- [x] 同步设计约定文档
-- [x] 跑 focused tests
-- [x] 跑 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-    初始失败在 `posix.ffi must not keep per-host pthread mutex kind numbering after ffi partitioning`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `platform.sync must consume host-owned pthread mutex normal numbering`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-  `human-summary=local verification passed`。
-
-### Non-goals
-
-- 这批不声称 Darwin / FreeBSD / Android 已获得新的真实 runtime 证据
-- 这批不扩展新的 L1 sync API
-- 这批不新增 Windows-only pthread compatibility 抽象
-
-## Addendum: 2026-05-27 Platform Sync Host FFI Surface Guard
-
-### Goal
-
-给 `platform.sync` 补上和 `platform.time` / `platform.thread` 对等的 host-ffi surface 守卫：
-
-- focused test 必须冻结 `platform.sync` 对 Linux futex ABI、Windows wait-on-address ABI、
-  以及 host-owned errno/clock token 的消费关系
-- `build/verify_local.sh` 必须把这条新 gate 纳入 official envelope
-- 这批收口后要把旧 `platform-time-integration` worktree 的 merge 价值说清楚，避免把过期平台分支误认成待合主线
-
-### Architecture Decision
-
-- `platform.sync` 的生产实现继续只负责同步原语契约、等待策略与错误映射，不在实现单元重新散落 ABI declaration。
-- Linux futex ABI 继续归 `nextpas.core.platform.linux.ffi`，Windows wait-address ABI 继续归
-  `nextpas.core.platform.windows.ffi`，shared pthread ABI 继续归 `nextpas.core.platform.posix.ffi`，
-  host-owned errno/clock token 继续归 `android/darwin/freebsd/unix` 等目标 FFI owner 单元。
-- source-surface gate 只冻结“谁拥有 ABI、谁消费 ABI”，不把它伪装成 Darwin / FreeBSD / Android
-  已有新的真实 runtime 证据。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：确认 `test_platform_sync_host_ffi_surface` 目录缺失
-- [x] RED：确认 `build/verify_local.sh` 尚无 sync host ffi surface gate
-- [x] 新增 platform.sync host ffi surface focused test 与独立 Makefile
-- [x] 把新 gate 接进 `build/verify_local.sh` 与 final envelope
-- [x] 运行 focused test
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body implicit-self function-result arity deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
 - [x] 运行 fresh `bash build/verify_local.sh`
-- [x] 复盘 `platform-time-integration` worktree 的 merge 价值
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED:
-  - `test -d core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface`
-    初始失败。
-  - `rg -n "core-platform-sync-host-ffi-surface-check|corePlatformSyncHostFfiSurfaceCheck" build/verify_local.sh`
-    初始无结果。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-sync-host-ffi-surface-check=pass`、
-  `corePlatformSyncHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Focused heaptrc：`-gl -gh` 运行后没有新的 heap leak 输出，修复后的 `test_semantic_call_bindings`
+  不再保留 imported-unit body parse tree。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
   `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source unit body function-result arity guard-first：新增 semantic harness deferred
+  guard、补齐 analyzer imported tree ownership、同步 spec / records / goal tree。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；heaptrc 复检后未再
+  报新的 unfreed block 峰值；changed files 不包含 `core`。
 
 ### Non-goals
 
-- 这批不修改 `platform.sync` 的行为语义或 public API
-- 这批不宣称 Darwin / FreeBSD / Android 已获得新的 host-side runtime 证据
-- 这批不直接整条合并旧 `platform-time-integration` worktree
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 installed-source ordinary diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking
+- 不修改 `core`
 
-## Addendum: 2026-05-27 Platform Time Host FFI Surface Guard
+## Addendum: 2026-05-28 Batch 203 Installed-source Unit Method Body Implicit-self Function Result No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-给 `platform.time` 补上和 `platform.thread` 对等的 host-ffi surface 守卫：
+给 Batch 186 的 imported `project-source` unit method body implicit-self same-unit function-result
+`no-matching-overload` 补同形 installed-source deferred guard：
 
-- focused test 必须冻结 `platform.time` 对 POSIX/Darwin/Windows 时钟 ABI 的消费关系
-- `build/verify_local.sh` 必须把这条新 gate 纳入 official envelope
-- `platform.time` 自己的 focused helper tests 要 direct 覆盖 `platform_realtime_ns` 与
-  `platform_monotonic_resolution_ns`
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker.Pick(Value: Integer)`、`TWorker.Pick(Value: AnsiString)`、
+  `TWorker.Run`，并在同一 imported unit implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Pick(Flag); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.no-matching-overload`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
 
-### Architecture Decision
+### Acceleration Plan
 
-- `platform.time` 的生产实现继续只负责稳定 clock contract 与换算逻辑，不散落 ABI declaration。
-- 宿主 ABI truth 继续归 `platform.posix.ffi`、`platform.darwin.ffi`、`platform.windows.ffi`
-  等 owner 单元；time-focused source-surface 只验证“谁拥有 ABI、谁消费 ABI”。
-- 这批不把 source-surface gate 伪装成 Darwin / FreeBSD / Android 已有真实 runtime 证据。
+- 固定“矩阵双拍”：已有 imported `project-source` 正向 diagnostic official gate 后，补同形
+  imported `installed-source` deferred guard，防止 incomplete installed/helper/RTL unit-body overload truth
+  被提前误报。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不能证明 `ruoInstalledSource`。
+- 本轮不碰 `core`；除非 focused probe 证明 analyzer 过宽，否则不改 analyzer。
+- 不扩大到 installed-source ordinary diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking。
 
 ### Status
 
-Completed; verification passed.
+Completed; focused semantic and fresh local verification passed
 
 ### Planned Steps
 
-- [x] RED：确认 `test_platform_time_host_ffi_surface` 目录缺失
-- [x] RED：确认 `build/verify_local.sh` 尚无 time host ffi surface gate
-- [x] 新增 platform.time host ffi surface focused test 与独立 Makefile
-- [x] 给 time helpers 追加 direct public API coverage
-- [x] 把新 gate 接进 `build/verify_local.sh` 与 final envelope
-- [x] 运行 focused tests
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body implicit-self function-result no-match deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
 - [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED:
-  - `test -d core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface`
-    初始失败。
-  - `rg -n "core-platform-time-host-ffi-surface-check|corePlatformTimeHostFfiSurfaceCheck" build/verify_local.sh`
-    初始无结果。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-    输出 `11 total, 11 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-time-host-ffi-surface-check=pass`、
-  `corePlatformTimeHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source unit body function-result no-match guard-first：新增 semantic harness deferred
+  guard、保持 analyzer 不变、同步 spec / records / goal tree。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 installed-source ordinary diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 201 Installed-source Unit Method Body Inherited Implicit-self Known Property Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 196 的 imported `project-source` unit method body inherited known property
+`invalid-call-shape` 补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TBaseWorker = class private FValue: Integer; public property Value: Integer read FValue write FValue; end`
+  与 `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.invalid-call-shape`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍”：Batch 196 project-source inherited property 正向 diagnostic gate 后，补同形
+  installed-source inherited property deferred guard，闭合 inherited field/property 的 installed-source
+  unit-body 防误报面。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不适合伪造 installed-source truth。
+- 本轮不碰 `core`，不修改 analyzer，除非 focused probe 证明当前 inherited property provenance guard
+  漏了；不实现 property accessor lowering、visibility、implicit conversion、default parameter ranking
+  或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body inherited implicit-self known property deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source inherited property guard-first：新增 semantic harness deferred guard 与
+  spec/records/goal-tree 说明；没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 property accessor lowering、visibility、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 200 Installed-source Unit Method Body Inherited Implicit-self Known Field Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 195 的 imported `project-source` unit method body inherited known field
+`invalid-call-shape` 补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TBaseWorker = class Value: Integer; end` 与
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.invalid-call-shape`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍”：每个 imported `project-source` 正向 diagnostic official gate 后，补同形
+  imported `installed-source` deferred guard；这样能持续防止 incomplete helper/RTL truth 被提前误报。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不适合伪造 installed-source truth。
+- 本轮不碰 `core`，不修改 analyzer，除非 focused probe 证明当前 inherited provenance guard 漏了；
+  不实现 visibility、implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body inherited implicit-self known field deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source inherited guard-first：新增 semantic harness deferred guard 与
+  spec/records/goal-tree 说明；没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 visibility、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 199 Installed-source Unit Method Body Implicit-self Known Field Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 194 的 imported `project-source` unit method body known field `invalid-call-shape`
+补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker = class Value: Integer; procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.invalid-call-shape`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“双拍加速”：project-source 正向 diagnostic gate 完成后，补同形 installed-source
+  deferred guard，避免 incomplete installed/helper/RTL truth 被提前误报成普通
+  `sema.invalid-call-shape`。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不适合伪造 installed-source truth。
+- 本轮不碰 `core`，不修改 analyzer，除非 focused probe 证明当前 guard 漏了；不实现
+  property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、双拍加速、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body implicit-self known field deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source guard-first：新增 semantic harness deferred guard 与 spec/records/goal-tree
+  说明；没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 198 Installed-source Unit Method Body Implicit-self Known Property Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 197 的 imported `project-source` unit method body known property `invalid-call-shape`
+补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker = class private FValue: Integer; public property Value: Integer read FValue write FValue; procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.invalid-call-shape`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“双拍加速”：project-source 正向 diagnostic gate 完成后，下一轮立即补同形
+  installed-source deferred guard，减少未来误报返工和上下文切换。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不适合伪造 installed-source truth。
+- 本轮不碰 `core`，不修改 analyzer，除非 focused RED 证明当前 guard 漏了；不实现 property accessor
+  lowering、implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、双拍加速、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body implicit-self known property deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source guard-first：新增 semantic harness deferred guard 与 spec/records 说明；
+  没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 197 Imported Unit Method Body Implicit-self Known Property Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿总地图继续 imported unit method body implicit-self diagnostics 面，把 non-inherited known
+non-callable property 被 bare implicit-self 当 callable 使用的场景推进到 official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class private FValue: Integer; public property Value: Integer read FValue write FValue; procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.invalid-call-shape`，message 为
+  `member "Value" is not callable`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，先 focused probe，
+  GREEN 直接 official gate，RED 才最小修 analyzer。
+- 本轮加速点：Batch 194 已证明 imported unit body bare implicit-self known field
+  `invalid-call-shape` emission，Batch 169 已证明 imported known property direct member-call
+  truth 可输出 `invalid-call-shape`，Batch 196 已证明 inherited property 与 imported unit body
+  implicit-self traversal 可组合；因此 non-inherited property 是最近相邻空格。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 property accessor lowering、
+  implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic、stage0 focused probe 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD/focused：增加 imported unit method body implicit-self known property invalid-call-shape focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-known-property-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused evidence 证明本轮是 promotion-only：不需要修改 analyzer，不触碰 `core`，不扩大
+  installed-source provenance。
+- 简短 review：新增 fixture 与 `verify_local.sh` gate 只固定 imported `project-source` unit method
+  body bare implicit-self known property invalid-call-shape；diagnostic code/message 与既有 known
+  property/direct property 边界一致，final envelope 已同步。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 196 Imported Unit Method Body Inherited Implicit-self Known Property Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿总地图继续 imported unit method body implicit-self diagnostics 面，把 inherited known
+non-callable property 被 bare implicit-self 当 callable 使用的场景推进到 official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class property Value: Integer read FValue write FValue; end`
+  与 `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.invalid-call-shape`，message 为
+  `member "Value" is not callable`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，先 focused probe，
+  GREEN 直接 official gate，RED 才最小修 analyzer。
+- 复用 Batch 173 的 imported inherited known property invalid-call-shape、Batch 176/181-193 的
+  imported unit body inherited implicit-self owner-aware traversal、Batch 194 的 bare implicit-self
+  `invalid-call-shape` emission，以及 Batch 195 的 imported unit body inherited known field
+  promotion 模式。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 property accessor lowering、
+  implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic、stage0 focused probe 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self known property invalid-call-shape focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`.
+- Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused evidence 证明本轮是 promotion-only：不需要修改 analyzer，不触碰 `core/`，不扩大
+  installed-source provenance。
+- 简短 review：新增 fixture 与 `verify_local.sh` gate 只固定 imported `project-source` unit method
+  body inherited bare implicit-self known property invalid-call-shape；diagnostic code/message 与既有
+  known property/direct inherited property 边界一致，final envelope 已同步。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 195 Imported Unit Method Body Inherited Implicit-self Known Field Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿总地图继续 imported unit method body implicit-self diagnostics 面，把 inherited known
+non-callable field 被 bare implicit-self 当 callable 使用的场景推进到 official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class Value: Integer; end` 与
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.invalid-call-shape`，message 为
+  `member "Value" is not callable`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前 + promotion-first”：每轮只推进一个 source-owned 相邻格，先 focused probe，
+  GREEN 直接 official gate，RED 才最小修 analyzer。
+- 复用 Batch 171 的 imported inherited known field invalid-call-shape、Batch 176/181-193 的
+  imported unit body inherited implicit-self owner-aware traversal，以及 Batch 194 的 bare
+  implicit-self `invalid-call-shape` emission。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 property accessor lowering、
+  implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; focused semantic、stage0 focused probe 与 fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self known field invalid-call-shape focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`.
+- Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused evidence 证明本轮是 promotion-only：不需要修改 analyzer，不触碰 `core/`，不扩大
+  installed-source provenance。
+- 简短 review：新增 fixture 与 `verify_local.sh` gate 只固定 imported `project-source` unit method
+  body inherited bare implicit-self known field invalid-call-shape；diagnostic code/message 与既有 direct
+  known field 边界一致，final envelope 已同步。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 194 Imported Unit Method Body Implicit-self Known Field Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿总地图继续 imported unit method body implicit-self diagnostics 面，把 known non-callable field
+被 bare implicit-self 当 callable 使用的场景推进到 official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class Value: Integer; procedure Run; end`。
+- `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.invalid-call-shape`，message 为
+  `member "Value" is not callable`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前 + promotion-first”：不换赛道，继续沿 G1.5/G1.6 source-owned
+  diagnostics 面补相邻格。
+- 复用 Batch 119/167 的 known field invalid-call-shape、Batch 176 的 imported unit body
+  owner-aware traversal，以及 Batch 177-193 的 imported unit body implicit-self/inherited ladder。
+- focused semantic probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、
+  `verify_local.sh` official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 property accessor lowering、
+  implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self known field invalid-call-shape focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-known-field-invalid-call-shape-diagnostic`。
+- GREEN focused：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：dedicated fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、`diagnostic-message=member "Value" is not callable`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-known-field-invalid-call-shape-check=pass`、
+  `importedUnitBodyImplicitSelfKnownFieldInvalidCallShapeCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- RED 证明 bare implicit-self diagnostic emission 漏了 `invalid-call-shape`；最小 analyzer 修复只补
+  missing emission branch，known field truth 与 project-source provenance guard 仍复用既有路径。
+- Stage0 fixture 与 `verify_local.sh` official gate 已补；fresh local verification 已通过。
+- 本批不触碰 `core/`，不扩大 installed-source provenance，不扩 overload resolver。
+- 下一步建议继续按 G1.5/G1.6 的 source-owned diagnostics 矩阵 re-rank，优先补 imported unit
+  method body inherited implicit-self known field invalid-call-shape 或相邻 known property 边界。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 property accessor lowering、implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 193 Imported Unit Method Body Inherited Implicit-self Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图补齐 imported unit method body inherited implicit-self failure ladder 中缺失的
+`unknown-member` official gate：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch; end` 与
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Missing; end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.unknown-member`，semantic model 为 `failure`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵波前推进，不换赛道”：继续沿 G1.5/G1.6 source-owned diagnostics 面补相邻格，
+  让已成熟路径尽快进入 official gate。
+- 复用 Batch 175 的 inherited implicit-self unknown-member、Batch 176 的 imported unit body
+  owner-aware traversal，以及 Batch 181-184 / 188-192 的 imported inherited implicit-self ladder。
+- focused semantic probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self unknown-member focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfUnknownMemberCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- imported unit body owner-aware traversal 与 inherited implicit-self parent-chain unknown-member
+  lookup 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 analyzer，也不修改 `core/`；下一步建议 re-rank G1.5/G1.6，继续选择
+  source-owned、误报风险低、可 official gate 的相邻诊断缺口推进。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 192 Imported Unit Method Body Inherited Implicit-self Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图补齐 imported unit method body inherited implicit-self same-unit function-result
+failure ladder 中缺失的 `wrong-argument-count` 格子：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`，并在同一 `project-source` unit
+  implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Touch(Count, Count); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.wrong-argument-count`，semantic model 为 `failure`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵补洞 + promotion-first”：优先选择同一语义面已由相邻批次证明的 source-owned
+  stable evidence 缺口，减少主题切换和 analyzer 误动。
+- 复用 Batch 181 的 imported unit body inherited implicit-self arity miss，以及 Batch 188-190
+  的 inherited same-owner `project-source` function-result evidence。
+- focused semantic probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self function-result wrong-argument-count focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- inherited implicit-self parent-chain arity miss 与 same-owner `project-source` function-result
+  stable evidence 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议 re-rank G1.5/G1.6，选择 source-owned、可 official gate
+  的相邻诊断缺口继续推进。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 191 Imported Unit Method Body Implicit-self Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图继续 imported unit method body implicit-self same-unit function-result evidence 面，把
+bare implicit-self single-target method 的 `wrong-argument-count` 收口：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Pick(Value: Integer); procedure Run; end`，
+  并在同一 `project-source` unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count, Count); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵补洞 + promotion-first”：优先选择同一语义面中已由相邻批次证明的 source-owned
+  stable evidence 缺口，避免频繁切换主题。
+- 复用 Batch 177 的 imported unit body bare implicit-self stable literal arity miss，以及 Batch
+  185-187 的 same-owner `project-source` function-result evidence。
+- focused semantic probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self function-result wrong-argument-count focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 与 imported method body implicit-self
+  single-target arity miss 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议先 re-rank G1.5/G1.6 语义矩阵，再选 source-owned、
+  误报风险低、可 official gate 的相邻缺口。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 190 Imported Unit Method Body Inherited Implicit-self Function Result Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图继续 inherited implicit-self same-unit function-result evidence 面，把 imported unit method
+body 中 inherited bare implicit-self overload set 的 `ambiguous-overload` 收口：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); procedure Touch(Value: LongInt); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`，并在同一 `project-source` unit
+  implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Touch(Count); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“语义矩阵波前推进”：只推进上一轮已经证明的 inherited implicit-self + same-owner
+  function-result surface 的相邻 ambiguity 格子。
+- 复用 Batch 184 的 inherited implicit-self stable literal ambiguity、Batch 187 的 same-owner
+  function-result ambiguity，以及 Batch 188/189 的 inherited function-result target path。
+- focused probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self function-result ambiguous-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 与 inherited implicit-self parent-chain
+  overload-set ambiguity lookup 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议先 re-rank G1.5/G1.6 语义矩阵，再选 source-owned、
+  误报风险低、可 official gate 的相邻缺口。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 189 Imported Unit Method Body Inherited Implicit-self Function Result No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图继续 inherited implicit-self same-unit function-result evidence 面，把 imported unit method
+body 中 inherited bare implicit-self overload set 的 `no-matching-overload` 收口：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); procedure Touch(Value: AnsiString); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`，并在同一 `project-source` unit
+  implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Touch(Flag); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“一条语义面流水线”：复用 Batch 183 的 inherited implicit-self overload-set no-match，
+  复用 Batch 186 的 same-owner `project-source` function-result no-match，以及 Batch 188 的 inherited
+  function-result target path。
+- focused probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self function-result no-matching-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 与 inherited implicit-self parent-chain
+  overload-set no-match lookup 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议沿同一 inherited implicit-self function-result evidence 面推进
+  `ambiguous-overload`。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 188 Imported Unit Method Body Inherited Implicit-self Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图继续 same-unit function-result evidence 面，把 imported unit method body 中
+inherited bare implicit-self method call 的 `type-mismatch` 收口：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`，并在同一 `project-source` unit
+  implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Touch(Flag); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“一条语义面流水线”：复用 Batch 181-184 的 inherited implicit-self parent-chain lookup，
+  复用 Batch 185-187 的 same-owner `project-source` function-result stable evidence。
+- focused probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self function-result type-mismatch focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 与 inherited implicit-self parent-chain lookup
+  可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议沿同一 inherited implicit-self function-result evidence 面推进
+  `no-matching-overload`。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 187 Imported Unit Method Body Implicit-self Function Result Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续 same-unit function-result evidence 面，收 imported unit method body bare implicit-self overload-set
+`ambiguous-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Pick(Value: Integer); procedure Pick(Value: LongInt); procedure Run; end`，并在同一 project-source unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 继续“同一语义面连续流水线”：复用 Batch 185 的 same-owner function-result evidence、Batch 186 的 function-result fixture/gate 命名形状，以及 Batch 180 的 imported method body ambiguity 断言形状。
+- 先加 focused semantic regression；如果 GREEN，直接 promotion 到 dedicated stage0 fixture、`verify_local.sh` official gate 和 final envelope；如果 RED，只做最小 analyzer 修复。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self function-result ambiguous-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 边界保持不变，installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议沿同一 imported method body function-result evidence 面推进
+  inherited implicit-self same-unit function-result failure ladder。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 186 Imported Unit Method Body Implicit-self Function Result No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续 same-unit function-result evidence 面，收 imported unit method body bare implicit-self overload-set
+`no-matching-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Pick(Value: Integer); procedure Pick(Value: AnsiString); procedure Run; end`，并在同一 project-source unit implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Pick(Flag); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“同一语义面连续流水线”：复用 Batch 185 的 same-owner function-result evidence 和 Batch 179 的 imported method body no-match 模板，减少重新探索。
+- 先加 focused semantic regression；如果 GREEN，直接 promotion 到 dedicated stage0 fixture、`verify_local.sh` official gate 和 final envelope；如果 RED，只做最小 analyzer 修复。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不做 ambiguity 后续格，不实现 implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self function-result no-matching-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-function-result-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 边界保持不变，installed-source provenance 继续 deferred。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 ambiguity 后续格
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 185 Imported Unit Method Body Implicit-self Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+切到 imported unit method body implicit-self 的 same-unit function-result evidence 相邻面，先收 single-target
+`type-mismatch`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Pick(Value: Integer); procedure Run; end`，并在同一
+  project-source unit implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Pick(Flag); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 继续“同面阶梯流水线 + focused-first + gate-template promotion”：上一阶段 literal evidence 已覆盖
+  imported method body implicit-self，本轮只把 stable same-unit project-source 零参 function-result evidence 接入同一路径的 proof。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated stage0 fixture /
+  `verify_local.sh` official gate / final envelope；如果 RED，只最小修改 imported method body implicit-self
+  argument evidence propagation。
+- 复用 Batch 178 的 imported method body fixture/gate 形状与 Batch 132 的 function-result evidence 断言形状。
+- 本轮不碰 `core/`，不扩 installed-source provenance、不做 no-match/ambiguity 后续格，不实现 implicit conversion、
+  default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self function-result type-mismatch focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-function-result-type-mismatch-diagnostic`。
+- GREEN focused：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-function-result-type-mismatch-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- 本批修复的不是 root program 向 imported unit 暴露函数；正确语义是 imported `project-source`
+  owner unit 内同 owner 零参 function result 可作为稳定 evidence。
+- Installed-source provenance 仍通过 `OwnerUnitAllowsProjectSourceDiagnostic` 保持 deferred；本批不修改
+  `core/`。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 no-match / ambiguity 后续格
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 184 Imported Unit Method Body Inherited Implicit-self Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 181-183 的 imported unit method body inherited implicit-self surface，收最后一格 stable literal
+`ambiguous-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); procedure Touch(Value: LongInt); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Touch(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 继续“同面阶梯流水线 + focused-first + gate-template promotion”：不换语义面，只把 Batch 183 后续
+  ambiguity 格推进到 official gate。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated stage0 fixture /
+  `verify_local.sh` official gate / final envelope；如果 RED，只最小修改 imported method body parent-chain
+  ambiguity evidence propagation。
+- 复用 Batch 183 的 inherited fixture/gate 命名形状与 Batch 180 的 ambiguity 断言形状，降低切换成本。
+- 本轮不碰 `core/`，不做 installed-source provenance，不扩 implicit conversion、default parameter ranking
+  或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self ambiguous-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-ambiguous-overload-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Existing owner-aware imported method body traversal 与 inherited implicit-self parent-chain lookup
+  已自然覆盖 stable literal ambiguity；本批不需要修改 analyzer。
+- 改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；本批不修改 `core/`。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不扩 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 183 Imported Unit Method Body Inherited Implicit-self No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 181-182 的 imported unit method body inherited implicit-self surface，继续收 stable literal `no-matching-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); procedure Touch(Value: AnsiString); end`，`TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Touch(True); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 继续“同面阶梯流水线 + focused-first + gate-template promotion”：沿同一个 parent-chain owner context 只推进 `no-matching-overload` 一格。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated stage0 fixture / official gate / final envelope；如果 RED，只最小修改 inherited imported method body no-match evidence propagation。
+- 复用 Batch 182 的 fixture/gate 命名形状和 Batch 179 的 no-match 断言形状，减少切换成本。
+- 本轮不碰 `core/`，不做 installed-source provenance，不扩 implicit conversion、default parameter ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self no-matching-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `importedUnitBodyInheritedImplicitSelfNoMatchingOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Existing owner-aware imported method body traversal 与 inherited implicit-self parent-chain lookup
+  已自然覆盖 stable literal no-match；本批不需要修改 analyzer。
+- 改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；本批不修改 `core/`。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 inherited implicit-self 的 ambiguity 后续格
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 182 Imported Unit Method Body Inherited Implicit-self Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 181 新开的 imported unit method body inherited implicit-self surface，继续收
+stable literal `type-mismatch`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Touch(True); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.type-mismatch`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 继续“同面阶梯流水线 + focused-first + gate-template promotion”：沿 Batch 181 的 parent-chain
+  owner context 只推进 `type-mismatch` 一格。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated
+  stage0 fixture / official gate / final envelope；如果 RED，只最小修改 inherited imported
+  method body implicit-self type evidence propagation。
+- 复用 Batch 181 的 fixture/gate 命名形状和 Batch 178 的 type-mismatch 断言形状，减少切换成本。
+- 本轮不碰 `core/`，不做 installed-source provenance，不扩 implicit conversion 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self type-mismatch focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfTypeMismatchCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Existing owner-aware imported method body traversal 与 inherited implicit-self parent-chain lookup
+  已自然覆盖 stable literal mismatch；本批不需要修改 analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，imported
+  `project-source` unit method body inherited implicit-self type-mismatch 已进入可回归验证面。
+- Final diff review 确认：改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；
+  `core/` 无改动。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 inherited implicit-self 的 no-match / ambiguity 后续格
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 181 Imported Unit Method Body Inherited Implicit-self Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 176-180 已收口的 imported `project-source` unit method body surface，切到 inherited
+implicit-self 组合面，先收最有信号的 `wrong-argument-count`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TBaseWorker = class procedure Touch(Value: Integer); end`，
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `procedure TWorker.Run; begin Touch; end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.wrong-argument-count`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“同面阶梯流水线 + focused-first + gate-template promotion”：
+  这次把 imported unit method body 与 inherited implicit-self 组合成一个新面，先拿
+  `wrong-argument-count` 证明 parent-chain target 在 imported body 中也能正确诊断。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated
+  stage0 fixture / official gate / final envelope；如果 RED，只最小修改 inherited imported
+  method body implicit-self propagation。
+- 复用 Batch 177/180 的 fixture 命名、verify gate 断言、文档段落和记录格式，减少重新设计成本。
+- 本轮不碰 `core/`，不做 installed-source provenance，不扩完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body inherited implicit-self wrong-argument-count focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-inherited-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Existing owner-aware imported method body traversal 已自然覆盖 parent-chain arity miss；本批不需要修改
+  analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，imported
+  `project-source` unit method body inherited implicit-self wrong-argument-count 已进入可回归验证面。
+- Final diff review 确认：改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；
+  `core/` 无改动。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 inherited implicit-self 的 type-mismatch / no-match / ambiguity 后续格
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 180 Imported Unit Method Body Implicit-self Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 176-179 已打通的 imported `project-source` unit method body traversal，收完
+bare implicit-self failure ladder 的 `ambiguous-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Run; procedure Pick(Value: Integer);
+  procedure Pick(Value: LongInt); end`。
+- `procedure TWorker.Run; begin Pick(1); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.ambiguous-overload`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“同面阶梯流水线 + fixture/gate 模板复用 + focused-first”：
+  imported unit method body 的 unknown-member → wrong-argument-count → type-mismatch →
+  no-match 已收口，本批只补 ambiguity，不跨 surface。
+- 先加 focused semantic regression 并运行单测；如果 GREEN，直接 promotion 到 dedicated
+  stage0 fixture / official gate / final envelope；如果 RED，只最小修改 imported unit
+  method body implicit-self ambiguity propagation。
+- 复用 Batch 179 的 fixture 命名、verify gate 断言、文档段落和记录格式，减少重新设计成本。
+- 每批结束同步总地图、规格和进度文件，跑 fresh `bash build/verify_local.sh`，review 后提交。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self ambiguous-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_ambiguous_overload/imported_unit_body_implicit_self_ambiguous_overload_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostics-summary=sema.ambiguous-overload`、
+  `diagnostic-code=sema.ambiguous-overload`、`diagnostic-phase=sema` 与
+  `diagnostic-message=ambiguous overload for "Pick"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-ambiguous-overload-check=pass`、
+  `importedUnitBodyImplicitSelfAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Batch 176-179 的 owner-aware imported method body traversal 已自然覆盖 stable literal
+  ambiguity，本批走 promotion-first，不需要修改 analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，
+  imported `project-source` unit method body implicit-self ambiguous-overload 已进入可回归验证面。
+- Final diff review 已确认：改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；
+  `core/` 无改动。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 179 Imported Unit Method Body Implicit-self No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 176-178 已打通的 imported `project-source` unit method body traversal，继续收
+bare implicit-self failure ladder 的 `no-matching-overload`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Run; procedure Pick(Value: Integer);
+  procedure Pick(Value: AnsiString); end`。
+- `procedure TWorker.Run; begin Pick(True); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.no-matching-overload`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“同面阶梯流水线 + focused-first + gate-template promotion”：
+  unknown-member → wrong-argument-count → type-mismatch → no-match → ambiguity。
+- 每轮只收一个 failure kind；优先复制相邻 Batch 176-178 的 harness/gate/fixture 形状，
+  降低重新摸索成本。
+- 先跑 focused semantic probe；如果 GREEN，直接 promotion 到 dedicated stage0 fixture /
+  official gate；如果 RED，只最小修改 imported unit method body implicit-self failure propagation。
+- 每批结束都要同步总地图、规格和进度文件，跑 fresh `bash build/verify_local.sh`，review 后提交。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self no-matching-overload focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_no_matching_overload/imported_unit_body_implicit_self_no_matching_overload_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostics-summary=sema.no-matching-overload`、
+  `diagnostic-code=sema.no-matching-overload`、`diagnostic-phase=sema` 与
+  `diagnostic-message=no matching overload for "Pick"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-no-matching-overload-check=pass`、
+  `importedUnitBodyImplicitSelfNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Batch 176-178 的 owner-aware imported method body traversal 已自然覆盖 stable literal
+  no-match，本批走 promotion-first，不需要修改 analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，
+  imported `project-source` unit method body implicit-self no-matching-overload 已进入可回归验证面。
+- Final diff review 已确认：改动集中在 semantic regression、stage0 gate/fixture 与规格/进度记录；
+  `core/` 无改动。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 imported unit method body 的 ambiguity
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 178 Imported Unit Method Body Implicit-self Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 176/177 已打通的 imported `project-source` unit method body traversal，继续收
+bare implicit-self failure ladder 的 `type-mismatch`：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Run; procedure Pick(Value: Integer); end`。
+- `procedure TWorker.Run; begin Pick(True); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.type-mismatch`，semantic model 为 `failure`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“同面阶梯流水线 + focused-first”：同一个 imported unit method body surface
+  继续按 unknown-member → wrong-argument-count → type-mismatch → no-match → ambiguity 顺序推进。
+- 每轮只收一个 failure kind；先 focused semantic probe，GREEN 直接 promotion 到
+  stage0 fixture / official gate，RED 才最小修改 analyzer。
+- 这一打法减少重新找任务、重新搭测试环境和跨 surface 切换成本；同时保持每轮有明确
+  `/plan`、验证证据、review 与 git commit。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self type-mismatch focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_type_mismatch/imported_unit_body_implicit_self_type_mismatch_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostics-summary=sema.type-mismatch`、`diagnostic-code=sema.type-mismatch`、
+  `diagnostic-phase=sema` 与
+  `diagnostic-message=argument type mismatch for "Pick"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-type-mismatch-check=pass`、
+  `importedUnitBodyImplicitSelfTypeMismatchCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Batch 176/177 的 owner-aware imported method body traversal 已自然覆盖 stable literal
+  argument mismatch，本批走 promotion-first，不需要修改 analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，
+  imported `project-source` unit method body implicit-self type-mismatch 已进入可回归验证面。
+- 提交前 review 确认没有修改 `core/`；下一步继续同面阶梯流水线，优先补
+  imported unit method body implicit-self no-matching-overload。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 imported unit method body 的 no-match / ambiguity
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 177 Imported Unit Method Body Implicit-self Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿 Batch 176 已打通的 imported `project-source` unit method body traversal，把 bare
+implicit-self failure ladder 的下一格收掉：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Run; procedure Pick(Value: Integer); end`。
+- `procedure TWorker.Run; begin Pick; end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.wrong-argument-count`，semantic model 为
+  `failure`，且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“同面阶梯流水线”：在同一个 imported unit method body surface 上连续推进
+  unknown-member → wrong-argument-count → type-mismatch → no-match → ambiguity。
+- 每轮只收一个 failure kind，复用 focused semantic harness、dedicated fixture 与
+  `verify_local.sh` gate 模板，减少重新找任务和重新搭测试环境的成本。
+- 先写 focused semantic regression；如果 GREEN，直接 promotion 到 stage0 fixture /
+  official gate；如果 RED，只最小修改 analyzer 的 imported body implicit-self failure propagation。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、同面阶梯流水线、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self wrong-argument-count focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_wrong_argument_count/imported_unit_body_implicit_self_wrong_argument_count_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostics-summary=sema.wrong-argument-count`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-phase=sema` 与
+  `diagnostic-message=wrong number of arguments for "Pick"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Batch 176 的 owner-aware imported method body traversal 已自然覆盖 arity miss，本批走
+  promotion-first，不需要修改 analyzer。
+- 新增 focused semantic regression、dedicated stage0 fixture 和 official verify gate 后，
+  imported `project-source` unit method body implicit-self wrong-argument-count 已进入可回归验证面。
+- 提交前 review 确认没有修改 `core/`；下一步继续同面阶梯流水线，优先补
+  imported unit method body implicit-self type-mismatch。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 imported unit method body 的 type-mismatch / no-match / ambiguity
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 176 Imported Unit Method Body Implicit-self Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 Batch 175 的 inherited class-context unknown-member 继续推进到 imported `project-source`
+unit method body：
+
+- root source `uses Worker;`，imported `Worker.pas` 声明 `TWorker = class procedure Run; end`。
+- `procedure TWorker.Run; begin Missing; end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.unknown-member`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 采用“连续小格流水线”：每轮只推进上轮 non-goal 中最贴近、source-owned、误报风险低的一格，减少重新找任务的成本。
+- 先写 focused semantic regression；如果 GREEN，直接 promotion 到 dedicated imported-unit fixture /
+  `verify_local.sh` official gate。
+- 如果 RED，只最小修改 imported unit body seeding / implicit-self diagnostic propagation，不碰 `core/`，
+  不扩大到 installed-source provenance，也不处理 imported unit body 的其它 overload failure kind。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、连续小格流水线、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self unknown-member focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`tests/semantic/test_semantic_call_bindings.pas` 失败在
+  `semantic-call-bindings-failure=missing-imported-unit-body-implicit-self-unknown-member-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_unit_body_implicit_self_unknown_member/imported_unit_body_implicit_self_unknown_member_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.unknown-member` 与
+  `diagnostic-message=unknown member "Missing"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-unknown-member-check=pass`、
+  `importedUnitBodyImplicitSelfUnknownMemberCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Root cause：`SeedImportedUnitBodies` 已经登记 imported unit type/method/body truth，但
+  `SeedCallBindings` 只遍历 root AST，imported unit class method body 内的 bare call 没有进入
+  call-binding / diagnostics pass。
+- Fix：call-binding traversal 携带 current owner unit；`Self` receiver 用当前 owner 解析 type；
+  imported `project-source` class-qualified procedure body 额外进入 traversal，同时保持
+  installed-source provenance 不扩张。
+- Review：提交前检查确认本批没有 `core/` 改动；provenance guard 重命名为
+  `OwnerUnitAllowsProjectSourceDiagnostic`，避免 unknown-member / overload 路径继续复用
+  type-mismatch 专名。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不处理 imported unit method body 的 type-mismatch / no-match / ambiguity / arity miss
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 175 Inherited Implicit-self Bare Method Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 class method body 内 bare implicit-self unknown-member 矩阵从 exact current class 推进到
+inherited class context：
+
+- root source 声明 `TBaseWorker = class procedure Touch; end` 和
+  `TWorker = class(TBaseWorker) procedure Run; end`。
+- `TWorker.Run` body 内写 bare `Missing;`，当前 class 和 parent chain 都没有同名 method。
+- 期望发 `sema.unknown-member`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵空格扫描 + focused-first”：先选 G1.5/G1.6 中已有相邻能力、source-owned 且误报风险低的
+  单格，避免跨模块大跳。
+- 先加 focused semantic regression；如果 GREEN，直接 promotion 到 dedicated fixture /
+  `verify_local.sh` official gate。
+- 如果 RED，只最小修改 implicit-self failure propagation / diagnostic emission，不碰 `core/`，
+  不扩大到 imported unit body 或 installed-source provenance。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 inherited implicit-self bare method unknown-member focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/inherited_implicit_self_bare_method_unknown_member/inherited_implicit_self_bare_method_unknown_member_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.unknown-member` 与
+  `diagnostic-message=unknown member "Missing"`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `inherited-implicit-self-bare-method-unknown-member-check=pass`、
+  `inheritedImplicitSelfBareMethodUnknownMemberCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probes 直接 GREEN，说明 Batch 130 的 implicit-self unknown-member emission 已覆盖
+  inherited class context；本批不修改 analyzer。
+- 本批新增 official stage0 gate 和 final envelope 字段，不修改 `core/`。
+- 提交前 review 确认改动只覆盖 semantic regression、stage0 fixture、verify gate/envelope 与同步记录；
+  `git diff --check`、`bash -n build/verify_local.sh` 均无输出。
+
+### Non-goals
+
+- 不处理 imported unit method body unknown-member
+- 不处理 installed-source provenance
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 174 Installed-source Inherited Known Property Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 173 的 imported `project-source` inherited known property invalid-call-shape gate 补
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露
+  `TBaseWorker = class ... property Value: Integer ... end` 和
+  `TWorker = class(TBaseWorker) end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望保持 deferred：不发 `sema.invalid-call-shape`，semantic model 为 `ready`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“同形双拍 + focused-first”：每个 project-source 正向 diagnostics gate 落地后，下一轮立即收
+  同形 installed-source deferred guard，减少重新理解上下文的成本。
+- 本轮只用 semantic harness 构造 `ruoInstalledSource` provenance；不新增 stage0 sibling fixture，
+  避免把 workspace sibling unit 误当 installed-source 证明。
+- focused semantic 如果 GREEN，直接记录为 promotion guard，同步 spec / README / findings /
+  progress，再跑 fresh `bash build/verify_local.sh`。
+- focused semantic 如果 RED，只最小修改 analyzer 的 inherited property known non-method provenance
+  guard，不碰 `core/`，不扩大 indexed/default property access。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source inherited known property invalid-call-shape deferred focused guard
+- [x] 运行 focused semantic probe，确认 GREEN 或定位 RED
+- [x] 若 RED，仅最小修改 analyzer provenance guard；若 GREEN，不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`，证明 installed-source inherited property invalid-call-shape
+  保持 deferred。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused semantic 直接 GREEN，说明 Batch 168/170 的 known non-method provenance guard 已覆盖
+  inherited parent-chain property truth；本批不修改 analyzer。
+- official proof 保持在 semantic harness；不新增 stage0 sibling fixture，避免伪造 installed-source
+  provenance。
+- Review 确认 changed files do not include `core/`；本批没有 stage0 fixture 或 analyzer 变更。
+
+### Non-goals
+
+- 不新增 stage0 sibling fixture
+- 不处理 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 173 Imported Inherited Known Property Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable invalid-call-shape 矩阵从 imported `project-source` inherited field 推进到
+imported `project-source` inherited property：
+
+- root source `uses Worker;`，`Worker` unit 暴露
+  `TBaseWorker = class ... property Value: Integer ... end` 和
+  `TWorker = class(TBaseWorker) end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望发 `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍 + focused-first”加速策略：先收 imported `project-source` inherited property
+  正向 diagnostics gate；下一拍立即补同形 installed-source deferred guard。
+- 先加 focused semantic regression，并用 stage0 临时/正式 fixture probe 当前 analyzer 能力；
+  如果 GREEN，直接 promotion 到 dedicated fixture / `verify_local.sh` official gate。
+- 只有 focused 或 stage0 probe RED 时，才最小修改 analyzer 的 parent-chain property known
+  non-method provenance path。
+- 不修改 `core/`，不扩大到 indexed/default property access。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported inherited known property invalid-call-shape focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_known_property_member_call/imported_inherited_known_property_member_call_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape` 与
+  `diagnostic-message=member "Value" is not callable`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-inherited-known-property-member-call-check=pass`、
+  `importedInheritedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused probes 直接 GREEN，说明现有 parent-chain known non-method member path 已覆盖 imported
+  `project-source` inherited property；本批不修改 analyzer。
+- Review 确认 changed files do not include `core/`；下一轮优先补同形 installed-source inherited
+  property deferred guard，并继续只用 semantic harness 证明 installed-source provenance。
+
+### Notes
+
+- 第一次 stage0 focused probe 把临时 `nextpas` binary 放在 `/tmp`，导致 target config
+  discovery 失败为 `unsupported target: linux-x86_64`；已改为在 repo 内 `.sisyphus/tmp`
+  编译 stage0 binary 后重跑，避免重复这个工具位置问题。
+
+### Non-goals
+
+- 不处理 installed-source inherited property deferred guard
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 172 Installed-source Inherited Known Field Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 171 的 imported `project-source` inherited known field invalid-call-shape gate 补
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露 `TBaseWorker = class Value: Integer; end` 和
+  `TWorker = class(TBaseWorker) end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望保持 deferred：不发 `sema.invalid-call-shape`，semantic model 为 `ready`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍 + focused-first”加速策略：`project-source` 正向 diagnostics gate 收完后，
+  下一拍立即补同形 `installed-source` deferred guard，避免未来误报返工。
+- 本轮只用 semantic harness 显式注入 `ruoInstalledSource` provenance；普通 stage0 sibling
+  fixture 会被当作 workspace project-source，不能证明 installed-source truth。
+- Focused probe 若 GREEN，直接 promotion 到 official semantic guard、同步记录并跑 fresh verify；
+  若 RED，才最小修改 analyzer 的 parent-chain known non-method provenance path。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source inherited known field deferred focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused semantic 直接 GREEN，证明 Batch 168 的 known non-method provenance guard 也覆盖
+  inherited parent-chain field truth；本批不修改 analyzer。
+- official proof 保持在 semantic harness；没有新增 stage0 fixture 伪造 installed-source provenance。
+- Review 确认 changed files do not include `core/`；下一轮优先收 imported inherited known property
+  正向 diagnostics gate。
+
+### Non-goals
+
+- 不处理 imported inherited property
+- 不处理 installed-source inherited property deferred guard
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 171 Imported Inherited Known Field Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable invalid-call-shape 矩阵从 imported `project-source` direct field/property 推进到
+imported `project-source` inherited field：
+
+- root source `uses Worker;`，`Worker` unit 暴露 `TBaseWorker = class Value: Integer; end` 和
+  `TWorker = class(TBaseWorker) end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望发 `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 继续固定“双拍语义矩阵流水线”：先收 imported `project-source` inherited field 正向 diagnostics
+  gate；下一轮优先补同形 installed-source deferred guard。
+- Probe-first promotion：focused semantic 与 stage0 probe 若 GREEN，直接 promotion 到 dedicated
+  fixture / `verify_local.sh` official gate；若 RED，才最小修改 analyzer 的 parent-chain known
+  non-method provenance path。
+- 只处理 inherited field；property 与 installed-source 留给后续成对批次，保持单轮高吞吐。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported inherited known field invalid-call-shape focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_known_field_member_call/imported_inherited_known_field_member_call_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape` 与
+  `diagnostic-message=member "Value" is not callable`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-inherited-known-field-member-call-check=pass`、
+  `importedInheritedKnownFieldMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused probes 直接 GREEN，说明现有 parent-chain known non-method member path 已覆盖 imported
+  `project-source` inherited field；本批不修改 analyzer。
+- Review 确认 changed files do not include `core/`；本轮只新增 imported inherited field 正向 gate，
+  下一轮优先补同形 installed-source inherited field deferred guard。
+
+### Non-goals
+
+- 不处理 imported inherited property
+- 不处理 installed-source inherited field/property deferred guard
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 170 Installed-source Known Property Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 169 的 imported `project-source` known property invalid-call-shape gate 补
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露 `TWorker = class ... property Value: Integer ... end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望保持 deferred：不发 `sema.invalid-call-shape`，semantic model 为 `ready`，
+  且不注册失败 `member-call` binding。
+
+### Acceleration Plan
+
+- 继续固定“双拍语义矩阵流水线”：每收一个 `project-source` 正向 diagnostics gate，
+  下一拍立即补同形 `installed-source` deferred guard，避免后面再返工找误报。
+- 本轮只补 semantic harness guard；`installed-source` provenance 只能通过 `TUnitGraph`
+  显式标记 `ruoInstalledSource` 证明，stage0 sibling unit 会被当作 project-source，
+  不用于本轮 official proof。
+- Focused probe 若 GREEN，直接同步记录并跑 fresh verify；若 RED，才最小修改 analyzer 的
+  known non-method member provenance gate。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source known property deferred focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source property guard promotion：focused probe GREEN，证明 Batch 168 的
+  known non-method provenance guard 已覆盖 property `$read` / `$write` truth；不修改 analyzer。
+- official proof 保持在 semantic harness；没有新增 stage0 fixture 伪造 installed-source provenance。
+- Review 确认 changed files do not include `core/`。
+
+### Non-goals
+
+- 不处理 imported inherited property/field
+- 不处理 indexed/default property access
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 169 Imported Known Property Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable invalid-call-shape 矩阵从 imported `project-source` direct field 推进到
+imported `project-source` direct property：
+
+- root source `uses Worker;`，`Worker` unit 暴露 `TWorker = class ... property Value: Integer ... end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望发 `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 本轮固定新的加速策略：语义矩阵双拍流水线。每个 `project-source` 正向 gate 收完，下一拍优先补
+  `installed-source` deferred guard；同族相邻单元连续推进，减少上下文切换。
+- 当前队列从 field 双拍转到 property 双拍：Batch 169 收 imported `project-source` property
+  正向 gate；下一轮优先补 installed-source property deferred guard。
+- Probe-first promotion：focused probe 若 GREEN，直接 promotion 到 stage0 fixture /
+  `verify_local.sh` official gate；若 RED，才最小修改 analyzer。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported known property invalid-call-shape focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_known_property_member_call/imported_known_property_member_call_fail.pas`
+  按预期失败，并输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape` 与
+  `diagnostic-message=member "Value" is not callable`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-known-property-member-call-check=pass`、
+  `importedKnownPropertyMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 promotion-first：focused probe GREEN 后直接 official 化 stage0 fixture 与 verify gate，
+  不修改 analyzer。
+- property truth 复用 `$read` / `$write` 已有 known non-method member guard，当前实现路径与
+  Batch 120 / Batch 122 的 root/inherited property 语义保持一致。
+- Review 确认 changed files do not include `core/`。
+
+### Non-goals
+
+- 不处理 installed-source property deferred guard
+- 不处理 inherited imported field/property
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 168 Installed-source Known Field Invalid Call Shape Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 167 的 imported `project-source` known field invalid-call-shape gate 补
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露 `TWorker = class Value: Integer; end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望保持 deferred：不发 `sema.invalid-call-shape`，semantic model 为 `ready`，
+  且不注册失败 `member-call` binding。
+
+### Architecture Decision
+
+- 本轮继续采用矩阵空格扫描 + probe-first promotion。project-source 正向 gate 已在 Batch 167
+  official 化，下一步必须补 installed-source deferred guard，防止 incomplete installed truth
+  被提前投影成 ordinary diagnostic。
+- installed-source provenance 只能在 semantic harness 中用 `TUnitGraph` 标记
+  `ruoInstalledSource`；普通 stage0 sibling fixture 会被 workspace 当成 project-source，不能证明
+  本轮边界。
+- Focused probe 如果 GREEN，只补 semantic guard/规格/记录并 fresh verify；如果 RED，才最小修改
+  analyzer 的 provenance gate。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source known field invalid-call-shape deferred guard
+- [x] Focused probe 后决定记录已有能力或最小 analyzer 修复
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-known-field-member-call-diagnostic:sema.invalid-call-shape`。
+- GREEN focused：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source provenance 修复：旧实现会把 installed-source direct field truth 提前投影成
+  ordinary `sema.invalid-call-shape`，现在 known non-method member failure kind 只允许
+  root source / imported `project-source` owner 发诊断。
+- official proof 落在 semantic harness；不新增 stage0 fixture 伪造 installed-source provenance。
+- Review 确认 changed files do not include `core/`；本批只改 compiler/sema、semantic harness 与规格/记录。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不处理 imported property / inherited imported field/property
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 167 Imported Known Field Invalid Call Shape Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable invalid-call-shape 矩阵推进到 imported `project-source` direct field：
+
+- root source `uses Worker;`，`Worker` unit 暴露 `TWorker = class Value: Integer; end`。
+- root source 声明 `Worker: TWorker` 并调用 `Worker.Value(1)`。
+- 期望发 `sema.invalid-call-shape`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 本轮采用加速策略：矩阵空格扫描 + probe-first promotion。function-result 诊断矩阵已经连续闭环，
+  下一组高价值边界转向 known non-callable member-call。
+- 先收 imported `project-source` direct field 正向 gate；若 focused probe GREEN，直接 promotion 到
+  stage0 fixture / `verify_local.sh` official gate；若 RED，才最小修改 analyzer。
+- installed-source direct field deferred guard、imported property 与 inherited imported field/property 留给后续
+  成对批次，避免一轮混太多形态。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported known field invalid-call-shape focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: direct compile/run of
+  `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 fixture / fresh local: `bash build/verify_local.sh` 输出
+  `imported-known-field-member-call-check=pass`、
+  `importedKnownFieldMemberCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe GREEN；现有 analyzer 已能把 imported `project-source` class field truth 传给
+  known non-callable member-call guard，本批不修改 analyzer。
+- 新增 dedicated stage0 fixture 与 verify gate，把该行为提升为 official gate。
+- Review 确认 changed files do not include `core/`；property 与 installed-source 成对护栏留给后续批次。
+
+### Non-goals
+
+- 不处理 installed-source direct field deferred guard
+- 不处理 imported property / inherited imported field/property
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 166 Installed-source Function Result Wrong Argument Count Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 165 的 imported project-source bare function-result arity gate 补 installed-source
+成对护栏：
+
+- imported `installed-source` unit 暴露 single target：`procedure Pick(Value: Integer)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Pick(Flag, Flag)`。
+- 期望保持 deferred：没有 `sema.wrong-argument-count` diagnostic，semantic model 为 `ready`，
+  且不注册失败 `call` binding。
+
+### Architecture Decision
+
+- 本轮采用加速策略：成对矩阵流水线。每个 project-source 正向 gate 收完，下一轮立刻补
+  installed-source deferred guard，防止 incomplete installed truth 被提前投影为 ordinary diagnostic。
+- installed-source provenance 只能在 semantic harness 中用 `TUnitGraph` 标记 `ruoInstalledSource`；
+  普通 stage0 sibling fixture 会被 workspace 当成 project-source，不能证明本轮边界。
+- Focused probe 如果 GREEN，只补 guard/规格/记录并 fresh verify；如果 RED，才最小修改 analyzer
+  的 provenance gate。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source bare function-result wrong-argument-count deferred guard
+- [x] Focused probe 后决定记录已有能力或最小 analyzer 修复
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: direct compile/run of
+  `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused guard GREEN；现有 bare callable lookup provenance guard 已保持 installed-source
+  function-result arity miss deferred，本批不修改 analyzer。
+- installed-source proof 只落在 semantic harness；不新增 stage0 fixture。
+- Review 确认 changed files do not include `core/`；本批只新增 semantic harness deferred guard
+  与规格/记录同步。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不扩展完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 165 Imported Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported bare function-result 家族补齐 arity failure：
+
+- root source 没有同名 callable。
+- imported `project-source` unit 暴露 single target：`procedure Pick(Value: Integer)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Pick(Flag, Flag)`。
+- 期望发 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败 `call`
+  binding。
+
+### Architecture Decision
+
+- 本轮采用加速策略：semantic matrix 单元流水线。先 `/plan` 固定一个最近缺口，再做 focused
+  probe；GREEN 直接 promotion 到 stage0 fixture / `verify_local.sh` official gate，RED 才最小改
+  analyzer。
+- 选择本格是因为 bare function-result type-mismatch/no-match/ambiguity 已有 official gate，
+  direct/inherited member function-result arity 也已闭环；bare function-result arity 是同族最近缺口。
+- 只收 imported `project-source` 正向 gate；installed-source bare function-result arity deferred
+  guard 若缺失，留给下一轮成对收口。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported bare function-result wrong-argument-count focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: direct compile/run of
+  `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe: repo-local `.sisyphus/tmp/stage0-b165/nextpas build
+  tests/fixtures/imported_function_result_wrong_argument_count/imported_function_result_wrong_argument_count_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostics-summary=sema.wrong-argument-count`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-phase=sema`、`diagnostic-message=wrong number of arguments for "Pick"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local: `bash build/verify_local.sh` 输出
+  `imported-function-result-wrong-argument-count-check=pass`、
+  `importedFunctionResultWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 与 stage0 probe 都 GREEN；既有 analyzer 已能把 root-owned 零参
+  function-result arguments 传给 imported `project-source` bare callable arity projection，
+  本批不修改 analyzer。
+- 第一轮 stage0 手动 probe 用 `/tmp` build dir 生成 binary，target config 相对路径不可见而报
+  `unsupported target`；改用 repo-local `.sisyphus/tmp/stage0-b165` 后证明语义边界成立。
+- Review 确认 changed files do not include `core/`；本批新增 official gate 与记录同步，下一轮补
+  installed-source bare function-result arity deferred guard。
+
+### Non-goals
+
+- 不处理 installed-source bare function-result wrong-argument-count
+- 不扩展完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 164 Installed-source Inherited Member Function Result Wrong Argument Count Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 163 的 imported project-source inherited member function-result arity gate 补
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露 inherited single target：`TBase.Pick(Integer)`，
+  `TWorker = class(TBase)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Worker.Pick(Flag, Flag)`。
+- 期望保持 deferred：没有 `sema.wrong-argument-count` diagnostic，semantic model 为 `ready`，
+  且不注册失败 `member-call` binding。
+
+### Architecture Decision
+
+- 本轮继续 semantic matrix 双拍闭环：project-source 正向 gate 后立刻补 installed-source
+  deferred guard，避免 incomplete installed truth 被提前投影成 ordinary diagnostic。
+- installed-source provenance 只能在 semantic harness 中用 `TUnitGraph` 标记 `ruoInstalledSource`；
+  普通 stage0 sibling fixture 会被 workspace 当成 project-source，不能证明本轮边界。
+- 如果 focused guard GREEN，只记录并同步规格；如果 RED，才最小修改 analyzer 的 provenance gate。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source inherited member function-result wrong-argument-count deferred guard
+- [x] Focused probe 后决定记录已有能力或最小 analyzer 修复
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- Focused guard GREEN，本批只新增 semantic harness deferred guard 与规格/记录同步；
+  不修改 analyzer，不新增 stage0 fixture，不修改 `core/`。
+- Review 确认 changed files do not include `core/`；`tools/stage0/README.md` 已覆盖本类
+  installed-source focused guard，无需重复改动。
+
+### Non-goals
+
+- 不新增 stage0 installed-source fixture
+- 不扩展完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 163 Imported Inherited Member Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续 semantic matrix 双拍闭环，把 imported inherited member function-result 家族补齐 arity failure：
+
+- imported `project-source` unit 暴露 inherited single target：`TBase.Pick(Integer)`，`TWorker = class(TBase)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Worker.Pick(Flag, Flag)`。
+- 期望发 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 本轮只收一个可回滚 semantic matrix cell：imported inherited member function-result
+  wrong-argument-count。
+- Batch 145/147/149 已证明 imported inherited member function-result 的
+  type-mismatch/no-match/ambiguity；Batch 161/162 已闭环 direct member function-result arity。
+  因此本轮是同族最近缺口，优先 probe-first / promotion-first。
+- `project-source` 是可诊断 truth；如果 focused probe GREEN，直接 promotion 到 stage0 fixture 与
+  `verify_local.sh` official gate；如果 RED，才最小修改 analyzer。
+- installed-source inherited member function-result arity deferred guard 留给下一轮成对收口。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵缺口、验证方式与不碰 `core/`
+- [x] TDD：增加 imported inherited member function-result wrong-argument-count focused regression
+- [x] Focused probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe:
+  `tests/fixtures/imported_inherited_member_function_result_wrong_argument_count/imported_inherited_member_function_result_wrong_argument_count_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local: `bash build/verify_local.sh`。
+  输出 `imported-inherited-member-function-result-wrong-argument-count-check=pass`、
+  `importedInheritedMemberFunctionResultWrongArgumentCountCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 promotion-first：focused probe GREEN 后新增 dedicated stage0 fixture 与 verify gate，
+  不修改 analyzer。
+- Review 确认 diff 不包含 `core/`；installed-source inherited arity guard 留给下一轮成对收口。
+
+### Non-goals
+
+- 不处理 installed-source inherited member function-result wrong-argument-count，本轮只收 project-source 正向 gate
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 162 Installed-source Member Function Result Wrong Argument Count Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“同一 semantic matrix family 双拍闭环”的加速思路，给 Batch 161 的 imported
+project-source direct member function-result arity gate 补 installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露单一 `TWorker.Pick(Integer)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Worker.Pick(Flag, Flag)`。
+- 期望保持 deferred：没有 `sema.wrong-argument-count` diagnostic，semantic model 为
+  `ready`，且不注册失败 `member-call` binding。
+
+### Architecture Decision
+
+- 继续固定 direct member function-result 家族，减少上下文切换；每个 project-source 正向 gate
+  后立即补 installed-source deferred guard。
+- `installed-source` / RTL truth 当前可能不完整，不能把 incomplete imported truth 提前投影成
+  ordinary arity diagnostic。
+- installed-source provenance 只能在 semantic harness 里用 `TUnitGraph` 显式标记
+  `ruoInstalledSource`；普通 stage0 sibling fixture 会被当成 `project-source`，不用于本轮 official proof。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 installed-source direct member function-result wrong-argument-count deferred guard
+- [x] Focused GREEN，仅记录已有能力；本轮不需要修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local: `bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source guard-first：新增 semantic harness deferred guard 与 spec/README 说明。
+- 本轮没有修改 `compiler/sema/np_semantic_analyzer.pas`，也没有修改 `core/`。
+
+### Non-goals
+
+- 不新增 stage0 installed-source fixture
+- 不扩展完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 161 Imported Member Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿“同族近邻推进”的提速思路，把 direct imported member function-result 家族从
+type/no-match/ambiguity 扩到 arity failure：
+
+- imported `project-source` unit 暴露单一 `TWorker.Pick(Integer)`。
+- root `function Flag: Boolean` 作为两个 arguments 调用 `Worker.Pick(Flag, Flag)`。
+- 期望发 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 当前加速策略：先闭环 direct member function-result 三格，再沿相同 harness 推进 arity 维度；
+  这样比切到无关模块更快，也能持续增加真实 diagnostics 覆盖。
+- `project-source` 是可诊断 truth；本轮是正向 gate，若 focused probe GREEN，则 promotion 到
+  stage0 fixture 与 `verify_local.sh`。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string；本轮重点是
+  arity failure 不应因为 argument expression 是 function result 而丢失。
+- installed-source 同形状 deferred guard 留给下一轮成对收口。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、同族近邻提速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 imported project-source direct member + root-owned function-result wrong-argument-count
+- [x] Probe GREEN 后 promotion 到 stage0 fixture 与 `verify_local.sh`；本轮不需要修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe: `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe: `tests/fixtures/imported_member_function_result_wrong_argument_count`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local: `bash build/verify_local.sh` 输出
+  `imported-member-function-result-wrong-argument-count-check=pass`、
+  `importedMemberFunctionResultWrongArgumentCountCheck":"pass"`、`verify-local=pass`
+  与 `human-summary=local verification passed`。
+
+### Review
+
+- Diff 范围集中在 semantic harness、stage0 failure fixture、`verify_local.sh` gate/final envelope
+  与工作记录/规格同步。
+- 本轮没有修改 `compiler/sema/np_semantic_analyzer.pas`，也没有修改 `core/`。
+
+### Non-goals
+
+- 不处理 installed-source direct member function-result wrong-argument-count，本轮只收 project-source 正向 gate
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 160 Installed-source Member Function Result Type Mismatch Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“矩阵闭环连打”的提速思路，补齐 direct member function-result single-target type-mismatch 的
+installed-source 成对护栏：
+
+- imported `installed-source` unit 暴露单一 `TWorker.Pick(Integer)`。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望没有 `sema.type-mismatch` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 当前加速策略：固定 direct member function-result 家族，按 type-mismatch / no-match /
+  ambiguity 三格连续闭环；每格继续采用“project-source 正向 gate -> installed-source guard”的
+  双拍节奏。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 当前仍可能不完整，继续保守
+  deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，因此 official proof 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵闭环提速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 direct installed-source member single-target + root-owned function result type-mismatch deferred
+- [x] Probe GREEN，保留为 semantic-call-bindings official guard；未修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- 本批只新增 semantic harness installed-source deferred guard 与文档记录；不修改 analyzer。
+- Review 确认不触碰 `core/`，且不新增 stage0 fixture 伪造 installed-source provenance。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 159 Installed-source Member Function Result No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 156 的 direct imported member function-result no-match 正向 gate 补成对
+installed-source 防误报护栏：
+
+- imported `installed-source` unit 暴露 `TWorker.Pick(Integer)` 与
+  `TWorker.Pick(AnsiString)`。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望没有 `sema.no-matching-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 继续执行“project-source 正向 gate -> installed-source deferred guard”的双拍节奏。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 当前仍可能不完整，继续保守
+  deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，因此 official proof 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、双拍节奏、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 direct installed-source member overload-set + root-owned function result no-match deferred
+- [x] Probe GREEN，保留为 semantic-call-bindings official guard；未修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- 本批只新增 semantic harness installed-source deferred guard 与文档记录；不修改 analyzer。
+- Review 确认不触碰 `core/`，且不新增 stage0 fixture 伪造 installed-source provenance。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-28 Batch 158 Installed-source Member Function Result Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“正向 gate 后立刻补 installed-source guard”的加速节拍，给 Batch 157 的 direct imported
+member function-result ambiguity 补成对防误报护栏：
+
+- imported `installed-source` unit 暴露 `TWorker.Pick(Integer)` 与 `TWorker.Pick(LongInt)`。
+- root `function Count: Integer` 作为 argument 调用 `Worker.Pick(Count)`。
+- 期望没有 `sema.ambiguous-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 提速思路：沿同一矩阵族连续推进，使用“project-source 正向 gate -> installed-source guard”
+  双拍节奏，减少重新找上下文。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 当前仍可能不完整，继续保守
+  deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，因此 official proof 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、提速节拍、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 direct installed-source member overload-set + root-owned function result ambiguity deferred
+- [x] Probe GREEN，同步 spec / README / findings / progress；未修改 analyzer
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- 本批只新增 semantic harness installed-source deferred guard 与文档记录；不修改 analyzer。
+- Review 确认不触碰 `core/`，且不新增 stage0 fixture 伪造 installed-source provenance。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 157 Imported Member Function Result Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“同族矩阵连打”的提速思路，紧接 Batch 156 补齐 direct imported member-call 的
+function-result overload-set ambiguity 矩阵格：
+
+- imported `project-source` unit 暴露 `TWorker.Pick(Integer)` 与 `TWorker.Pick(LongInt)`。
+- root `function Count: Integer` 作为 argument 调用 `Worker.Pick(Count)`。
+- 期望发 `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 这是 direct member 形状，不走 inherited parent-chain；目标是补 Batch 156 同族 no-match 后的
+  ambiguity 配对格。
+- 提速策略：固定一个成熟矩阵族连续推进，优先复用 focused semantic harness、stage0 fixture 与
+  `verify_local.sh` gate 模板，减少搜索和上下文切换。
+- `project-source` 是可诊断 truth；`installed-source` 同形状 ambiguity guard 留给下一轮成对收口。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 若 focused probe GREEN，则新增 dedicated stage0 fixture 与 `verify_local.sh` gate。
+- 若 focused probe RED，只做最小 analyzer provenance / failure projection 修复。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、同族连打提速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 direct imported member overload-set + root-owned function result ambiguity
+- [x] Probe GREEN，promotion 到 stage0 fixture 与 `verify_local.sh`；未修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Stage0 focused：fixture 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.ambiguous-overload`、`diagnostic-message=ambiguous overload for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-member-function-result-ambiguous-overload-check=pass`、
+  `importedMemberFunctionResultAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- 本批只新增 focused semantic guard、dedicated fixture、verify gate 与文档记录；不修改 analyzer。
+- Review 确认不触碰 `core/`，且 direct installed-source ambiguity guard 留给下一轮成对收口。
+
+### Non-goals
+
+- 不处理 installed-source direct member function-result ambiguity，本轮只收 project-source 正向 gate
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 156 Imported Member Function Result No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+补齐 direct imported member-call 的 function-result overload-set no-match 矩阵格，继续保持
+“成熟矩阵组合 + probe-first + promotion-first”的节奏：
+
+- imported `project-source` unit 暴露 `TWorker.Pick(Integer)` 与 `TWorker.Pick(AnsiString)`。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望发 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- 这是 direct member 形状，不走 inherited parent-chain；目标是补 Batch 144 之后 direct member
+  function-result 只覆盖 single-target mismatch 的缺口。
+- `project-source` 是可诊断 truth；`installed-source` 同形状 guard 留给下一轮成对收口。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 若 focused probe GREEN，则新增 dedicated stage0 fixture 与 `verify_local.sh` gate。
+- 若 focused probe RED，只做最小 analyzer provenance / failure projection 修复。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵缺口、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 direct imported member overload-set + root-owned function result no-match
+- [x] 若 probe GREEN，promotion 到 stage0 fixture 与 `verify_local.sh`；若 RED，最小修复 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe 已 GREEN：`semantic-call-bindings-status=pass`。
+- Stage0 gate: `imported-member-function-result-no-matching-overload-check=pass`。
+- Fresh `bash build/verify_local.sh`: `imported-member-function-result-no-matching-overload-check=pass`、
+  `importedMemberFunctionResultNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不修改 `platform.time` 生产 ABI 或换算语义
-- 这批不宣称 Darwin / FreeBSD / Android 已获得新的 host-side runtime 证据
-- 这批不把 L1 `Duration` / `Instant` / `Stopwatch` 混入 platform
+- 不处理 direct imported member function-result ambiguity，本轮只收 no-match
+- 不把 installed-source direct member overload-set 纳入 ordinary diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-27 Platform Thread Native Thread ID Host FFI Hardening
+## Addendum: 2026-05-27 Batch 155 Installed-source Function Result Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把 `platform_thread_id` 从“Unix 下一律拿 `pthread_self` 强转”继续收紧成更诚实的 host-owned ABI：
+把 Batch 154 的 imported `project-source` bare function-result ambiguity gate 立刻补成对
+installed-source 防误报护栏，继续固定当前加速思路：
 
-- Linux / Android 走宿主 `gettid`
-- macOS 走 `pthread_threadid_np`
-- FreeBSD 走 `pthread_getthreadid_np`
-- generic Unix 才保留 `pthread_self` fallback
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 正向 `project-source` diagnostic gate 完成后，下一轮优先补同形状 installed-source deferred guard。
+- focused guard 先跑；RED 才最小修改 analyzer provenance；GREEN 直接记录为 official semantic harness guard。
 
-同时把这批 host-native thread id surface 固定进 focused gate 与 `verify-local` envelope。
+目标场景：
+
+- imported `HelperA.Pick(Integer)` 与 `HelperB.Pick(LongInt)` 都来自 `installed-source` unit。
+- root `function Count: Integer` 作为 argument 调用 bare `Pick(Count)`。
+- 期望没有 `sema.ambiguous-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `call` binding。
 
 ### Architecture Decision
 
-- `platform_thread_self` 与 `platform_thread_id` 是两个不同层次的契约：
-  前者是 platform token，后者是宿主 native integer thread id。
-- host-specific native thread id ABI 必须继续沉到各自 `platform.*.ffi.pas`，而不是让
-  `platform.thread` 去假设所有 POSIX 都能把 `pthread_self` 当整数 id。
-- 这批不引入新的 L1 thread 抽象，也不把 generic Unix fallback 冒充成 Darwin/FreeBSD/Android
-  的真实宿主语义。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 在当前阶段仍可能不完整，继续保守 deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 因 stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，official guard 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 先补 RED：让 Linux behavior test 与新的 source-surface test 暴露 thread id FFI 缺口
-- [x] 在 `linux.ffi` / `android.ffi` / `darwin.ffi` / `freebsd.ffi` 补 native thread id 声明
-- [x] 修改 `platform.thread` 按 host 选择 native thread id ABI
-- [x] 把新的 source-surface gate 接进 `build/verify_local.sh`
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare overload-set + root-owned function result ambiguity deferred
+- [x] 若 probe GREEN，保留为 semantic-call-bindings official guard；若 RED，最小修复 analyzer provenance
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-    初始失败在 `Identifier not found "gettid"`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux native thread id ABI: function gettid`。
-- GREEN focused:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
-  通过。
-- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
-  通过。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-thread-host-ffi-surface-check=pass`、
-  `corePlatformThreadHostFfiSurfaceCheck":"pass"`、`verify-local=pass` 与
+- Focused semantic probe 已 GREEN：`semantic-call-bindings-status=pass`。
+- Fresh `bash build/verify_local.sh`: `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不把 `platform_thread_self` 重新定义成 native integer thread id
-- 这批不宣称 Darwin / FreeBSD / Android 已获得新的 host-side runtime 证据
-- 这批不在 `platform` 层引入更高层线程抽象
+- 不把 installed-source overload-set 纳入 ordinary ambiguity diagnostics
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-27 Platform FFI Owner Boundary Guard
+## Addendum: 2026-05-27 Batch 154 Imported Function Result Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把“platform 所需 ABI 归 FFI 子模块所有”从局部约定提升成整组 `platform` 单元的官方 guard：
+继续按总地图推进 semantic diagnostics matrix，本轮走“正向 gate”拍，下一轮自然接同形状
+installed-source guard：
 
-- 非 `*.ffi.pas` 的 platform 单元不得直接声明 `external` ABI。
-- `platform.*.ffi.pas` 必须继续承担 ABI owner 角色，而不是退回实现层散落 `external`。
-- 旧的按模块切碎 FFI 形态（例如 `platform.sync.windows.ffi`）不能死灰复燃。
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 优先选择刚完成 deferred guard 的相邻 `project-source` 正向 gate，最大化复用现有 harness 与 analyzer path。
+- focused probe 先跑；GREEN 直接 promotion 到 stage0 official gate；RED 才最小修改 analyzer provenance。
+
+本批组合 Batch 139 的 imported bare callable ambiguity 与 Batch 143/152/153 的 root-owned
+function-result stable evidence：
+
+- imported `project-source` helper 暴露 `Pick(Integer)` 与 `Pick(LongInt)`。
+- root `function Count: Integer` 作为 argument 调用 bare `Pick(Count)`。
+- 期望发 `sema.ambiguous-overload`，semantic model 为 `failure`，且不注册失败 `call` binding。
 
 ### Architecture Decision
 
-- `platform.time`、`platform.thread`、`platform.sync` 这些实现单元负责策略、错误映射与稳定契约，
-  不负责 ABI declaration。
-- “所有 `external` 都沉到 `platform.*.ffi.pas`” 应该是整组 `nextpas.core.platform*.pas`
-  的通用约束，而不是只靠 `sync` / `time` / `thread` 各自零散静态检查。
-- Windows FFI 继续优先保持 host-owned 归并，不接受重新拆回 `platform.sync.windows.ffi`
-  这种按模块切碎的 owner 形态。
+- `project-source` 是可诊断 truth；当 compact signature collision 无法唯一选择时，可以发 ordinary
+  ambiguity。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 若 focused probe GREEN，则新增 dedicated stage0 fixture 与 `verify_local.sh` gate，使能力进入 final envelope。
+- 若 focused probe RED，只做最小 analyzer 修复，不扩展完整 overload resolver / implicit conversion。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 写新的 platform-level owner-boundary test project
-- [x] 在测试里扫描整组 `nextpas.core.platform*.pas`
-- [x] 固定非 ffi 单元不得直接声明 `external`
-- [x] 固定 ffi 单元必须继续拥有 `external`
-- [x] 固定 `platform.sync.windows.ffi` 不得回归
-- [x] 把新 gate 接进 `build/verify_local.sh`
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 imported project-source bare overload-set + root-owned function result ambiguity
+- [x] 若 probe GREEN，promotion 到 stage0 fixture 与 `verify_local.sh`；若 RED，最小修复 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED: `test -d core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary` 初始失败，
-  证明这条 guard 还不存在。
-- GREEN focused:
-  `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  通过。
-- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
-  通过。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-ffi-owner-boundary-check=pass`、
-  `corePlatformFfiOwnerBoundaryCheck":"pass"`、`verify-local=pass` 与
+- Focused semantic probe 已 GREEN：`semantic-call-bindings-status=pass`。
+- Stage0 gate: `imported-function-result-ambiguous-overload-check=pass`。
+- Fresh `bash build/verify_local.sh`: `imported-function-result-ambiguous-overload-check=pass`、
+  `importedFunctionResultAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不新增宿主 ABI
-- 这批不宣称新增 Darwin / FreeBSD / Android runtime 证据
-- 这批不替代后续更细的 host-specific compile/runtime matrix 工作
+- 不把 installed-source overload-set 纳入 ordinary ambiguity diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-27 Platform Host-owned FFI Partitioning
+## Addendum: 2026-05-27 Batch 153 Installed-source Function Result No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把 `platform` 的宿主 ABI 真相继续从共享 POSIX 包装层里剥离出来：
+把 Batch 152 的 imported `project-source` 正向 gate 立刻补成对 installed-source 防误报护栏，继续固定
+当前最高吞吐路线：
 
-- `nextpas.core.platform.posix.ffi` 只保留共享 POSIX ABI 声明。
-- Linux、macOS、Android、FreeBSD 与 generic Unix 各自拥有自己的 clock id、`sysconf`
-  id、errno 常量与 errno symbol binding。
-- 这条 ownership 不只停在源码 diff，而要进入 focused gate 和 `verify-local`
-  machine-readable envelope。
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 正向 diagnostic gate 完成后，下一轮优先补同形状 installed-source deferred guard，减少搜索成本。
+- focused guard 先跑；RED 才最小修改 analyzer provenance；GREEN 直接记录为 official semantic harness guard。
+
+目标场景：
+
+- imported `HelperA.Pick(Integer)` 与 `HelperB.Pick(AnsiString)` 都来自 `installed-source` unit。
+- root `function Flag: Boolean` 作为 argument 调用 bare `Pick(Flag)`。
+- 期望没有 `sema.no-matching-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `call` binding。
 
 ### Architecture Decision
 
-- `platform.posix.ffi` 是 shared ABI owner，不再承载 per-host 常量和符号名。
-- host-specific truth 必须放进按目标划分的 `platform.*.ffi.pas`；generic Unix fallback 也要有
-  自己的 `platform.unix.ffi`，避免继续把 Linux 近似值冒充“通用 Unix”。
-- `platform.time`、`platform.thread`、`platform.sync` 只选择并消费对应 host FFI unit，不在实现层
-  重新散落宿主 token。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 在当前阶段仍可能不完整，继续保守 deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 因 stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，official guard 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 从 `platform.posix.ffi` 移出 host-owned `CLOCK_*`、`_SC_NPROCESSORS_ONLN`、errno surface
-- [x] 扩充 `linux.ffi` / `darwin.ffi`，并新增 `android.ffi`、`freebsd.ffi`、`unix.ffi`
-- [x] 让 `platform.time`、`platform.thread`、`platform.sync` 切到 host-owned FFI unit
-- [x] 新增 `test_platform_ffi_partition_surface`
-- [x] 把新 gate 与新文件接进 `build/verify_local.sh`
-- [x] 修正新 gate 只在测试目录下才能解析源码路径的运行入口缺口
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare overload-set + root-owned function result no-match deferred
+- [x] 若 probe GREEN，保留为 semantic-call-bindings official guard；若 RED，最小修复 analyzer provenance
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED: 首次 fresh `bash build/verify_local.sh` 失败在
-  `core-platform-ffi-partition-surface-run-failed`；根因是新测试只会按测试目录相对路径读取源码，
-  从 repo root 执行时触发 `File not found`。
-- GREEN focused:
-  `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`、
-  `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
-  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-  通过。
-- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
-  通过。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-ffi-partition-surface-check=pass`、
-  `corePlatformFfiPartitionSurfaceCheck":"pass"`、`verify-local=pass` 与
+- Focused semantic probe: `semantic-call-bindings-status=pass`。
+- Fresh `bash build/verify_local.sh`: `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
   `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不宣称 Darwin / FreeBSD / Android 已有新的 host-side runtime 证据
-- 这批不新增新的 L0 public API
-- 这批不把 source-surface proof 伪装成 cross-target compile/runtime closure
+- 不把 installed-source overload-set 纳入 ordinary no-match diagnostics
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-27 Platform Sync FFI-owned Opaque Size Derivation
+## Addendum: 2026-05-27 Batch 152 Imported Function Result No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把 `platform.sync` 的 public opaque size contract 再往 FFI owner 方向推进一步：
+继续按总地图推进 semantic diagnostics matrix，并把本阶段加速方式固定成“同族成熟格交叉流水线”：
 
-- POSIX size 直接由 `pthread_*` FFI 类型决定，而不是 wrapper 再重复一套平台分支。
-- Windows size 直接由 `SRWLOCK` / `CONDITION_VARIABLE` FFI 类型决定，而不是 wrapper
-  继续手写数字。
-- 这条 ownership 进入 source-surface test，而不是只留在代码风格层。
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 优先选择刚完成 guard 的相邻 `project-source` 正向 gate，最大化复用现有 harness 与 analyzer path。
+- focused probe 先跑；GREEN 直接 promotion 到 stage0 official gate；RED 才最小修改 analyzer provenance。
+
+本批组合 Batch 140 的 imported bare callable overload-set no-match 与 Batch 143/151 的
+root-owned function-result stable evidence：
+
+- imported `project-source` helper 暴露 `Pick(Integer)` 与 `Pick(AnsiString)`。
+- root `function Flag: Boolean` 作为 argument 调用 bare `Pick(Flag)`。
+- 期望发 `sema.no-matching-overload`，semantic model 为 `failure`，且不注册失败 `call` binding。
 
 ### Architecture Decision
 
-- wrapper implementation 可以保留 policy 和 error mapping，但 ABI type/size truth 尽量只放在
-  `platform.*.ffi.pas`。
-- `platform.sync` 的 interface 如果需要公开依赖 `SizeOf(...)`，可以直接 uses nextPas-owned
-  FFI 单元；这比在 wrapper 里复制平台数字更诚实。
+- `project-source` 是可诊断 truth；当 overload-set 全部同 arity candidate 都与稳定 argument signature
+  不兼容时，可以发 ordinary no-match。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 若 focused probe GREEN，则新增 dedicated stage0 fixture 与 `verify_local.sh` gate，使能力进入 final envelope。
+- 若 focused probe RED，只做最小 analyzer 修复，不扩展完整 overload resolver / implicit conversion。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 先把 source-surface test 改成要求 `SizeOf(...)` ownership
-- [x] 跑一次 RED，确认当前实现确实还在重复写 size 常量
-- [x] 在 Windows FFI 中补 `SRWLOCK` / `CONDITION_VARIABLE` 类型
-- [x] 改 `platform.sync` interface size 常量为从 FFI 类型派生
-- [x] 跑 focused tests
-- [x] 跑 Win64 compile-only proof
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 imported project-source bare overload-set + root-owned function result no-match
+- [x] 若 probe GREEN，promotion 到 stage0 fixture 与 `verify_local.sh`；若 RED，最小修复 analyzer
+- [x] 同步 semantic model spec / stage0 README / findings / progress
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED: fresh `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-  失败在 `platform_mutex_size = sizeof(pthread_mutex_t)` token 缺失。
-- GREEN focused: `test_platform_sync_posix_surface clean test`、
-  `test_platform_sync_sizes clean test` 通过。
-- GREEN Win64 compile-only:
-  `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FUcore/build/review-win64-sync -FEcore/build/review-win64-sync -Fucore/src -Ficore/src core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
-  通过。
+- Focused semantic probe: `semantic-call-bindings-status=pass`。
+- Stage0 gate: `imported-function-result-no-matching-overload-check=pass`。
+- Fresh `bash build/verify_local.sh`: `imported-function-result-no-matching-overload-check=pass`、
+  `importedFunctionResultNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不改变 `platform.sync` 行为语义
-- 这批不声称 Darwin/FreeBSD/Android 已新增 runtime 证据
-- 这批不新增新的 L0 public API
+- 不把 installed-source overload-set 纳入 ordinary no-match diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-27 Platform POSIX FFI Target Matrix Hardening
+## Addendum: 2026-05-27 Batch 151 Installed-source Bare Function Result Type Mismatch Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把 `platform` 的 POSIX ABI 基线从 “Linux 近似值可以先顶着” 提升到更诚实的 target matrix：
+把 Batch 143 的 imported `project-source` bare callable function-result type mismatch gate 补成对
+installed-source 防误报护栏，继续固定加速路线：
 
-- `nextpas.core.platform.posix.ffi` 的 pthread types/opaque sizes/attr kinds 要开始按 Linux、
-  Android、macOS、FreeBSD 分支说真话。
-- `platform.sync` 的 public opaque storage 要跟着 target matrix 收紧，至少先把 public
-  size/alignment contract 调整到不明显失真。
-- 这批 contract 不能只存在于源码 diff 里，要进入 focused gate 与 `verify-local`
-  的 machine-readable success envelope。
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- function-result 正向 diagnostic gate 完成后，优先补同形状 installed-source deferred guard。
+- focused guard 先跑；RED 才最小修改 analyzer provenance；GREEN 直接记录为 official semantic harness guard。
+
+目标场景：
+
+- imported `Helper.Pick(Integer)` 来自 `installed-source` unit。
+- root `function Flag: Boolean` 作为 argument 调用 bare `Pick(Flag)`。
+- 期望没有 `sema.type-mismatch` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `call` binding。
 
 ### Architecture Decision
 
-- platform FFI 继续集中在 nextPas-owned `*.ffi.pas`，实现单元只消费 ABI 声明，不回退到
-  FPC 平台单元。
-- 对于当前主机暂时无法 cross-compile 的 Darwin/FreeBSD/Android，先用 source-surface gate
-  冻结 ABI contract，而不是伪装成“已经有真实跨平台编译证据”。
-- `platform.sync` public opaque size 先优先追求 target honesty，再继续做更细的 ABI matrix
-  compile/runtime proof。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 在当前阶段仍可能不完整，继续保守 deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 因 stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，official guard 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 收紧 `nextpas.core.platform.posix.ffi` 的 pthread target matrix
-- [x] 补齐 `pthread_rwlockattr_t`
-- [x] 固定 FreeBSD mutex kind 编号
-- [x] 调整 `platform.sync` 的 target-specific public opaque sizes
-- [x] 修正 `platform.thread` 对 pointer-shaped `pthread_t` 的初始化假设
-- [x] 新增 `test_platform_posix_ffi_surface`
-- [x] 扩充 `test_platform_sync_posix_surface`
-- [x] 把新 gate 与 sync gate result 写进 `build/verify_local.sh`
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare callable + root-owned function result mismatch deferred
+- [x] 若 probe GREEN，保留为 semantic-call-bindings official guard；若 RED，最小修复 analyzer provenance
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- Focused GREEN: `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`、
-  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`、
-  `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`、
-  `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test` 通过。
-- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
-- Full: fresh `bash build/verify_local.sh` 输出
-  `core-platform-posix-ffi-surface-check=pass`、`corePlatformPosixFfiSurfaceCheck":"pass"`、
-  `corePlatformSyncCheck":"pass"`、`corePlatformSyncPosixFallbackCheck":"pass"`、
-  `coreSyncPosixFallbackCheck":"pass"`、`verify-local=pass`。
+- Focused semantic probe: `semantic-call-bindings-status=pass`。
+- Fresh `bash build/verify_local.sh`: `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不宣称 Darwin/FreeBSD/Android 已有 host-side runtime 证据
-- 这批不引入新的 platform public API
-- 这批不把 source-surface gate 伪装成 cross-target compile proof
+- 不把 installed-source bare callable 纳入 ordinary function-result type mismatch diagnostics
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
 
-## Addendum: 2026-05-26 Platform Sync POSIX Fallback Runtime Coverage
+## Addendum: 2026-05-27 Batch 150 Installed-source Inherited Function Result Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-把 `platform.sync` 从 “Linux futex + Windows WaitOnAddress 已落地，其余 Unix 仍是诚实缺口”
-推进到更完整的 L0 runtime 形状：
+把 Batch 149 的 `project-source` 正向 gate 立刻补成对 installed-source 防误报护栏，固定加速路线：
 
-- non-Linux Unix 获得 pthread-backed address-wait fallback，而不是继续停留在 unsupported stub。
-- Linux 保持 futex 默认实现，但要能在 Linux 主机上强制切到 POSIX fallback 做 host-side 真实验证。
-- 这条 fallback 不只验证 `platform.sync` 自己，也要验证消费它的 `nextpas.core.sync` L1 surface。
+- 每轮先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 正向 diagnostic gate 完成后，下一轮优先补同形状 installed-source deferred guard。
+- focused guard 先跑；RED 才最小修改 analyzer provenance；GREEN 直接记录为 official semantic harness guard。
+
+目标场景：
+
+- `TWorker = class(TBase)`，`TBase` 来自 imported `installed-source` unit。
+- `TBase.Pick(Integer)` 与 `TBase.Pick(LongInt)` 均可见。
+- root `function Count: Integer` 作为 argument 调用 `Worker.Pick(Count)`。
+- 期望没有 `sema.ambiguous-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `member-call` binding。
 
 ### Architecture Decision
 
-- `platform.sync` 继续保持“Linux 默认最快路径 + generic Unix 诚实 fallback”的双层结构，而不是把
-  futex 细节抹平成对所有 Unix 都一样。
-- forced fallback selector 只用于 verification，不改变 Linux 默认 runtime 策略。
-- timeout/error policy 继续由 `platform.sync` 实现层统一；POSIX errno/clock/pthread ABI 仍沉到
-  `nextpas.core.platform.posix.ffi`。
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 在当前阶段仍可能不完整，继续保守 deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 因 stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，official guard 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 本轮不新增 stage0 fixture，不修改 analyzer，除非 focused guard 证明存在误报。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed; verification passed
 
 ### Planned Steps
 
-- [x] 为 POSIX errno 增加跨平台常量与 `posix_errno_location` 绑定
-- [x] 把 pthread 分支从 Linux-only 扩成 generic `NEXTPAS_UNIX`
-- [x] 为 generic Unix 增加 wait-bucket condvar fallback 的 address wait/wake 实现
-- [x] 为 Linux 增加 `NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK` host-side selector
-- [x] 新增 source guard，固定 forced fallback surface 真实存在
-- [x] 新增 `platform.sync` forced fallback Makefile gate
-- [x] 新增 `nextpas.core.sync` forced fallback Makefile gate
-- [x] 修正 FPC 宿主 pthread 测试 teardown 崩溃
-- [x] 回写 `build/verify_local.sh`
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source inherited overload-set + root-owned function result ambiguity deferred
+- [x] probe GREEN，保留为 semantic-call-bindings official guard；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED: `test_platform_sync_posix_surface` 初版失败，因为 `platform.sync` 还没有 generic Unix
-  fallback surface。
-- Debug/Fix: `test_platform_sync_posix_fallback` 初版虽然 14/14 全绿，但进程在退出时 segfault；
-  根因收敛到 FPC 宿主缺少 `cthreads`，修正后 forced fallback tests 稳定通过。
-- GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`、
-  `test_platform_sync_posix_fallback clean test`、`test_platform_sync_posix_surface test`、
-  `make -C core/tests/nextpas.core.sync/test_sync_posix_fallback clean test` 全部通过。
-- Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `core-platform-sync-posix-surface-check=pass`、
-  `core-platform-sync-posix-fallback-check=pass`、`core-sync-posix-fallback-check=pass`、
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official guard：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`
+  与 `semanticCallBindingsCheck":"pass"`，其中包含本批 installed-source deferred guard。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 installed-source inherited overload-set 纳入 ordinary ambiguity diagnostics
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 149 Imported Inherited Function Result Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“成熟格组合流水线”推进 semantic diagnostics matrix：
+
+- Batch 115 已证明 imported `project-source` inherited member ambiguity 可安全诊断。
+- Batch 145/147 已证明 root-owned 零参 builtin function result evidence 可穿过 imported
+  inherited member-call 路径。
+- 本批组合两者：parent chain 上存在多个同名同 arity inherited member target，root
+  `function Count: Integer` 作为 argument，且 compact signature collision 后无法唯一选择时，
+  应失败为 `sema.ambiguous-overload`。
+
+目标场景：
+
+- `TWorker = class(TBase)`，`TBase` 来自 imported `project-source` unit。
+- `TBase.Pick(Integer)` 与 `TBase.Pick(LongInt)` 均可见。
+- root `function Count: Integer` 作为 argument 调用 `Worker.Pick(Count)`。
+- 期望 `sema.ambiguous-overload`，semantic model `failure`，且不注册错误
+  `member-call` binding。
+
+### Architecture Decision
+
+- 只承认 root-owned、零参、builtin scalar/string function result evidence。
+- 只打开 imported `project-source` inherited overload-set ambiguity；`installed-source` 继续 deferred。
+- 不实现完整 overload ranking、implicit conversion、visibility、var/out compatibility 或默认参数 ranking。
+- 若 focused probe GREEN，直接 promotion 到 official stage0 gate；若 RED，只做最小 analyzer 修复。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 imported inherited overload-set + root-owned function result ambiguity
+- [x] probe GREEN，promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/imported_inherited_member_function_result_ambiguous_overload/imported_inherited_member_function_result_ambiguous_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.ambiguous-overload`、
+  `diagnostic-message=ambiguous overload for "Pick"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-inherited-member-function-result-ambiguous-overload-check=pass`、
+  `importedInheritedMemberFunctionResultAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 installed-source inherited overload-set 纳入 ordinary ambiguity diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 148 Installed-source Inherited Function Result No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 Batch 147 的 `project-source` 正向 gate 立刻补成对 installed-source 防误报护栏，固定当前加速策略：
+
+- 每轮必须先写 `/plan`，只收一个可回滚 semantic matrix cell。
+- 优先选择“刚完成的正向诊断 gate”对应的 installed-source deferred guard，减少误扩散风险。
+- focused guard 先跑；RED 才最小修改 analyzer provenance；GREEN 直接记录为 official semantic harness guard。
+
+目标场景：
+
+- `TWorker = class(TBase)`，`TBase` 来自 imported `installed-source` unit。
+- `TBase.Pick(Integer)` 与 `TBase.Pick(AnsiString)` 均可见。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望没有 `sema.no-matching-overload` diagnostic，semantic model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Architecture Decision
+
+- `project-source` 是可诊断 truth；`installed-source` / RTL truth 在当前阶段仍可能不完整，继续保守 deferred。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 本轮只证明 installed-source imported inherited overload-set no-match 不被提前投影；不实现完整 overload resolver。
+- 因 stage0 workspace fixture 不能把 sibling unit 标成 `installed-source`，official guard 放在
+  `semantic-call-bindings-check` 的 focused semantic harness 中。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source inherited overload-set + root-owned function result no-match deferred
+- [x] probe GREEN，保留为 semantic-call-bindings official guard；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official guard：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`
+  与 `semanticCallBindingsCheck":"pass"`，其中包含本批 installed-source deferred guard。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 installed-source inherited overload-set 纳入 ordinary no-matching-overload diagnostics
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 147 Imported Inherited Function Result No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“成熟格组合流水线”推进 semantic diagnostics matrix：
+
+- Batch 114 已证明 imported `project-source` inherited member overload-set no-match 可安全诊断。
+- Batch 145 已证明 root-owned 零参 builtin function result 可作为 imported inherited member-call stable evidence。
+- 本批组合两者：parent chain 上存在多个同名同 arity inherited member target，root `function Flag: Boolean`
+  作为 argument，且所有 target signature 都不匹配时，应失败为 `sema.no-matching-overload`。
+
+目标场景：
+
+- `TWorker = class(TBase)`，`TBase` 来自 imported `project-source` unit。
+- `TBase.Pick(Integer)` 与 `TBase.Pick(AnsiString)` 均可见。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望 `sema.no-matching-overload`，semantic model `failure`，且不注册错误 `member-call` binding。
+
+### Architecture Decision
+
+- 只承认 root-owned、零参、builtin scalar/string function result evidence。
+- 只打开 imported `project-source` inherited overload-set no-match；`installed-source` 继续 deferred。
+- 不扩大到 implicit conversion、default parameter ranking、visibility、var/out compatibility 或完整 overload resolver。
+- 若 focused probe GREEN，直接 promotion 到 official stage0 gate；若 RED，只做最小 analyzer 修复。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 imported inherited overload-set + root-owned function result no-match
+- [x] probe GREEN，promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official gate：`bash build/verify_local.sh` 输出
+  `imported-inherited-member-function-result-no-matching-overload-check=pass` 与
+  `importedInheritedMemberFunctionResultNoMatchingOverloadCheck":"pass"`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 installed-source inherited overload-set 纳入 ordinary no-matching-overload diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 146 Installed-source Inherited Member Function Result Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“成熟格组合流水线”推进，但本批选择成对护栏而不是继续扩 project-source 正向格：
+
+- Batch 145 刚把 imported `project-source` inherited member + root-owned function-result evidence
+  收进 `sema.type-mismatch` gate。
+- 本批必须证明同形状的 imported `installed-source` inherited member 仍然 deferred。
+- 这能防止 compiler 对 incomplete installed-source / RTL truth 过早报 ordinary semantic diagnostic。
+
+目标场景：
+
+- `TWorker = class(TBase)`，`TBase.Pick(Integer)` 来自 imported `installed-source` unit。
+- root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)`。
+- 期望没有 `sema.type-mismatch` diagnostic，semantic model 保持 `ready`，且不注册错误 `member-call` binding。
+
+### Architecture Decision
+
+- `project-source` 是可诊断 truth，`installed-source` 是保守 deferred truth。
+- function-result evidence 仍只承认 root-owned、零参、builtin scalar/string。
+- 由于 stage0 workspace build 不能直接把 sibling unit 标成 `installed-source`，本批 official guard
+  落在 `semantic-call-bindings-check` 的 focused semantic harness 中，由 `TUnitGraph` 显式注入
+  `ruoInstalledSource`。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source inherited member + root-owned function result deferred
+- [x] probe GREEN，保留为 semantic-call-bindings official guard；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official guard：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`
+  与 `semanticCallBindingsCheck":"pass"`，其中包含本批 installed-source deferred guard。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不新增 stage0 fixture，因为普通 stage0 source fixture 不能证明 imported unit origin 是 `installed-source`
+- 不把 installed-source inherited member 纳入 ordinary type mismatch diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 145 Imported Inherited Member Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按总地图推进 semantic diagnostics matrix，并把本阶段的加速方式固定为“成熟格组合流水线”：
+
+- 优先选择两个已经由 official gate 证明过的成熟格交叉出来的新空格。
+- 先 focused probe；GREEN 直接 promotion 到 official stage0 gate，RED 才最小改 analyzer。
+- 每轮只收一个可回滚功能点，fresh `bash build/verify_local.sh`、review 和 commit 后结束。
+
+本批组合 Batch 117 与 Batch 144：
+
+- Batch 117 已证明 imported `project-source` inherited member single-target mismatch 可以安全诊断。
+- Batch 144 已证明 root-owned 零参 builtin function result 是 imported direct member-call 的 stable evidence。
+- 新目标：`TWorker = class(TBase)`，`TBase.Pick(Integer)` 来自 imported `project-source` unit；
+  root `function Flag: Boolean` 作为 argument 调用 `Worker.Pick(Flag)` 时必须失败为
+  `sema.type-mismatch`。
+- 失败路径不注册错误 `member-call` binding。
+
+### Architecture Decision
+
+- 只承认 root-owned、零参、builtin scalar/string function result evidence。
+- 只把 imported `project-source` owner 纳入 diagnostics；`installed-source` 继续 deferred。
+- 不扩大到 imported function result、带参 function result、member function result、function pointer、
+  implicit conversion、default parameter ranking、var/out compatibility、visibility 或完整 overload resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 imported inherited project-source member + root-owned function result mismatch
+- [x] probe GREEN，直接 promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official gate：`bash build/verify_local.sh` 输出
+  `imported-inherited-member-function-result-type-mismatch-call-check=pass` 与
+  `importedInheritedMemberFunctionResultTypeMismatchCallCheck":"pass"`。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 imported function result、member function result 或 installed-source inherited member 纳入 type mismatch diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 144 Imported Member Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“组合成熟格单元流水线”加速推进 semantic diagnostics matrix：
+
+- 复用两个已验证成熟格，组合出一个新 official gate。
+- 先 focused probe；若现有 analyzer 已成立，直接 promotion 到 stage0 gate。
+- 若 probe RED，只做最小 analyzer 修复，不扩大 resolver 设计面。
+- 每轮仍以 fresh `bash build/verify_local.sh`、review 和 commit 收口。
+
+本批组合 Batch 109 与 Batch 131：
+
+- Batch 109 已证明 imported `project-source` direct member-call single-target mismatch 可以安全诊断。
+- Batch 131 已证明 root-owned 零参 builtin function result 是 direct member-call 的 stable evidence。
+- 新目标：root `function Flag: Boolean` 作为 argument，调用 imported `project-source`
+  `Worker.Pick(Integer)`：`uses Worker; begin Worker.Pick(Flag); end.` 必须失败为
+  `sema.type-mismatch`。
+- 失败路径不注册错误 `member-call` binding。
+
+### Architecture Decision
+
+- 只承认 root-owned、零参、builtin scalar/string function result evidence。
+- 只把 imported `project-source` owner 纳入 diagnostics；`installed-source` 继续 deferred。
+- 不扩大到 imported function result、带参 function result、member function result、function pointer、
+  implicit conversion、default parameter ranking、var/out compatibility、visibility 或完整 overload resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 imported project-source direct member-call + root-owned function result mismatch
+- [x] probe GREEN，直接 promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official gate：`bash build/verify_local.sh` 输出
+  `imported-member-function-result-type-mismatch-call-check=pass` 与
+  `importedMemberFunctionResultTypeMismatchCallCheck":"pass"`。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 imported function result、member function result 或 installed-source member 纳入 type mismatch diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 143 Imported Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按总地图推进 semantic diagnostics matrix，并把开发提速方法固定为“组合成熟格单元流水线”：
+
+- 从相邻已完成能力中组合一个空格，而不是重新打开大设计面。
+- 先 focused probe 证明当前 truth；GREEN 就直接 promotion 到 official stage0 gate，RED 才最小修 analyzer。
+- 每轮只收一个可回滚功能点，fresh `bash build/verify_local.sh`、review 和 commit 后结束。
+
+本批组合 Batch 104 与 Batch 108：
+
+- Batch 104 已证明 root-owned 零参 builtin function result 是 stable evidence。
+- Batch 108 已证明 imported `project-source` bare single-target mismatch 可以安全诊断。
+- 新目标：root `function Flag: Boolean` 作为 argument，调用 imported `Helper.Pick(Integer)`：
+  `uses Helper; begin Pick(Flag); end.` 必须失败为 `sema.type-mismatch`。
+- 失败路径不注册错误 `call` binding。
+
+### Architecture Decision
+
+- 只承认 root-owned、零参、builtin scalar/string function result evidence。
+- 只把 imported `project-source` owner 纳入 diagnostics；`installed-source` 继续 deferred。
+- 不扩大到 imported function result、带参 function result、function pointer、implicit conversion、
+  default parameter ranking、var/out compatibility、visibility 或完整 overload resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 imported project-source bare callable + root-owned function result mismatch
+- [x] probe GREEN，直接 promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official gate：`bash build/verify_local.sh` 输出
+  `imported-function-result-type-mismatch-call-check=pass` 与
+  `importedFunctionResultTypeMismatchCallCheck":"pass"`。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 imported function result 或 installed-source callable 纳入 type mismatch diagnostics
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 142 Inherited Implicit Self Bare Method Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按总地图继续推进 semantic diagnostics matrix，并把提速方法固定成每轮可执行 `/plan`：
+
+- 先沿已有同族能力选最贴近的矩阵空格，避免重新开大设计面。
+- 先 focused probe；若能力天然成立，直接 promotion 到 official stage0 gate。
+- 只有 RED 证明 analyzer 缺口时，才做最小实现修复。
+- 每轮仍以 fresh `bash build/verify_local.sh`、review 和 commit 收口。
+
+本批目标是补齐 inherited implicit-self bare method call 中的 function-result stable evidence：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)`
+- `function Flag: Boolean`
+- `procedure TWorker.Run; begin Touch(Flag); end;`
+- 必须失败为 `sema.type-mismatch`
+- 不注册失败 `member-call` binding
+
+### Architecture Decision
+
+- 本批只验证和必要时修正 root-owned parent method target 的 implicit-self fallback。
+- function result 仍只接受当前 semantic model 能证明的 root-owned builtin scalar/string return type。
+- 不打开 implicit conversion、default parameter ranking、var/out compatibility、visibility 或完整 overload resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速思路、范围与不碰 `core/`
+- [x] PROBE：focused semantic test 覆盖 inherited implicit-self bare method + function result mismatch
+- [x] probe GREEN，直接 promotion 到 official gate；本批不修改 analyzer
+- [x] 同步 semantic model spec / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Official gate：`bash build/verify_local.sh` 输出
+  `inherited-implicit-self-bare-method-function-result-type-mismatch-check=pass` 与
+  `inheritedImplicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`。
+- Fresh local：`bash build/verify_local.sh` 输出 `verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不实现完整 overload resolver / implicit conversion / visibility
+- 不扩大到 imported installed-source 或 function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 141 Installed-source Bare Unknown Callable Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按总地图推进 imported bare callable diagnostics 的 provenance 边界：source-owned
+bare name miss 已由 `unknown-callable-check` 固定，但当当前 compilation 已导入
+`installed-source` unit 时，helper/RTL callable truth 可能不完整，不能把 bare name miss
+提前报成普通 `sema.unknown-callable`。
+
+- root program `uses Helper;`
+- imported `Helper` 标记为 `installed-source`
+- helper 源码本轮可为空 callable surface
+- root source 调用 `MissingThing(1);`
+- 调用必须保持 deferred：不发 `sema.unknown-callable`
+- 失败路径不能注册错误 `call` binding
+
+### Architecture Decision
+
+- root-only bare unknown callable 继续报 `sema.unknown-callable`。
+- 只要当前 resolved unit graph 中存在非 root 的 `installed-source` unit，bare callable name miss
+  继续保守跳过，避免把 incomplete helper/RTL truth 当成完整 source-owned reality。
+- 该 guard 只用于 bare callable name miss；不改变 arity/type/no-match/ambiguity 已收紧的
+  project-source provenance rules。
+- 不实现完整 package/visibility/imported symbol table completeness 判断。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标节点、加速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source import 下 bare unknown callable deferred
+- [x] GREEN：按 probe 结果最小修复 analyzer provenance guard
+- [x] 同步 semantic model spec / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：新增 guard 后先失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-unknown-callable-diagnostic:sema.unknown-callable`。
+- GREEN focused：在 bare unknown-callable 分支加 installed-source import guard 后，
+  direct compile/run of `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` clean；changed files do not include `core/`。
+
+### Non-goals
+
+- 不把 installed-source import 下的 bare name miss 纳入 diagnostics
+- 不实现完整 imported callable completeness / visibility / package symbol truth
+- 不扩大到 member receiver / inherited receiver / function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 140 Installed-source Bare Callable No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行“一个 semantic diagnostic matrix cell + 一个 installed-source 防误报护栏”的加速路线，
+把 imported bare callable no-match 的 installed-source 边界补齐：
+
+- root program `uses HelperA, HelperB;`
+- imported `HelperA` 与 `HelperB` 都标记为 `installed-source`
+- `HelperA.Pick(Integer)` / `HelperB.Pick(AnsiString)` 同时可见
+- root source 调用 `Pick(True);`
+- 调用必须保持 deferred：不发 `sema.no-matching-overload`
+- 失败路径不能注册错误 `call` binding
+
+### Architecture Decision
+
+- project-source imported bare no-match 已由 `imported-no-matching-overload-check` 固定；
+  本轮只补 installed-source conservative boundary。
+- no-match 只有在当前 imported same-arity candidate set 全部来自允许诊断的 project-source owner
+  且存在 stable type-mismatch evidence 时才投影。
+- installed-source 或 mixed installed/project-source candidate set 继续保守跳过，避免把 helper/RTL
+  不完整 truth 提前报成 ordinary overload failure。
+- 不扩大到 implicit conversion、default parameter ranking、visibility、var/out、function pointer
+  或完整 overload resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标节点、加速策略、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare callable no-match deferred
+- [x] GREEN：按 probe 结果最小修复 analyzer provenance guard
+- [x] 同步 semantic model spec / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：新增 guard 后先失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-no-matching-overload-diagnostic:sema.no-matching-overload`。
+- GREEN focused：在 imported bare callable no-match 分支加 project-source provenance guard 后，
+  direct compile/run of `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：diff 只触及 imported bare callable no-match provenance guard、focused semantic guard、
+  semantic model spec 与持续记录；未触碰 `core/`，未改变 project-source official gate 或
+  overload ranking。
+
+### Non-goals
+
+- 不把 installed-source bare callable no-match 纳入 diagnostics
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 member receiver / inherited receiver / function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 139 Installed-source Bare Callable Ambiguous Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续给 imported bare callable 诊断矩阵补防误报护栏：project-source 的 imported ambiguity
+已经由 `ambiguous-overload-check` 固定，但 installed-source 仍不应因为 helper/RTL truth
+不完整而提前报错。
+
+- root program `uses HelperA, HelperB;`
+- imported `HelperA` 与 `HelperB` 都标记为 `installed-source`
+- 两个 helper 都提供同签名 `procedure Pick(Value: Integer);`
+- root source 调用 `Pick(1);`
+- 调用必须保持 deferred：不发 `sema.ambiguous-overload`
+- 失败路径不能注册错误 `call` binding
+
+### Architecture Decision
+
+- 继续执行“project-source 诊断 gate 后立刻补 installed-source deferred 护栏”的节奏。
+- 只收紧 imported bare callable ambiguity 的 provenance guard；不实现 installed-source callable
+  diagnostics。
+- 不扩大到 default parameter lowering、implicit conversion、visibility、var/out、function pointer
+  或完整 overload resolver。
+- 不修改 `core/`；本轮只允许 compiler/stage0 测试与工作记录范围内的必要变更。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标节点、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare callable ambiguity deferred
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] 同步持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：新增 guard 后先失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-ambiguous-overload-diagnostic:sema.ambiguous-overload`。
+- GREEN focused：在 bare imported callable ambiguity 分支加 project-source provenance guard 后，
+  direct compile/run of `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Review 修正：把无 signature ambiguity 的 provenance 计数从同名 project-source 候选收紧为
+  同 arity match 的 project-source 候选，并重新跑 focused semantic 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 installed-source bare callable ambiguity 纳入 diagnostics
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 member receiver / inherited receiver / function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 138 Installed-source Bare Callable Wrong Argument Count Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 Batch 137 的 imported `project-source` bare callable arity diagnostics 立即配上
+installed-source 防误报护栏，加快后续矩阵推进而不牺牲 resolver 诚实度：
+
+- root program `uses Helper;`
+- imported `Helper` 作为 `installed-source`，只提供 `procedure Pick(Value: Integer);`
+- root source 调用 `Pick;`
+- 调用必须保持 deferred：不发 `sema.wrong-argument-count`
+- 失败路径不能注册错误 `call` binding
+- focused semantic guard 必须固定这条非 project-source 边界
+
+### Architecture Decision
+
+- 本轮采用“project-source 诊断 gate 后立刻补 installed-source deferred 护栏”的加速策略：
+  后续每补一个真实诊断能力，立即补对应误报边界，减少返工。
+- 只承诺 imported `installed-source` bare callable + 单一 imported target + arity miss 继续
+  deferred；不实现 installed-source callable diagnostics。
+- 不扩大到 default parameter lowering、implicit conversion、visibility、var/out、function pointer
+  或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定加速策略、目标节点、范围与不碰 `core/`
+- [x] PROBE：focused semantic guard 覆盖 installed-source bare callable arity miss deferred
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] 同步 semantic model / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：新增 guard 后先失败于
+  `semantic-call-bindings-failure=unexpected-installed-imported-wrong-argument-count-diagnostic:sema.wrong-argument-count`。
+- GREEN focused：在 bare imported callable arity miss 分支加 project-source provenance guard 后，
+  direct compile/run of `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 installed-source bare callable arity miss 纳入 diagnostics
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 member receiver / inherited receiver / function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 137 Imported Bare Callable Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续按“一个语义诊断矩阵空格一提交”的节奏推进真实编译器能力，把 imported
+`project-source` bare callable 的 arity miss 固定为 focused semantic truth 与 official
+stage0 gate：
+
+- root program `uses Helper;`
+- imported `Helper` 只提供 `procedure Pick(Value: Integer);`
+- root source 调用 `Pick;`
+- 调用必须失败为 `sema.wrong-argument-count`
+- 失败路径不能注册错误 `call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 本轮继续沿 G1.5/G1.6 的 source-owned、稳定事实、低误报风险边界推进。
+- 只承诺 imported `project-source` bare callable + 单一 imported target + arity miss；不扩大到
+  installed-source、default parameter lowering、implicit conversion、visibility、var/out、
+  function pointer 或完整 overload resolver。
+- 使用 TDD/probe-first：先 focused semantic test；若现有 analyzer 已 GREEN，只 promotion
+  到 fixture/gate/docs/records；若 RED，再做最小 analyzer 修复。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、范围与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 imported bare callable wrong-argument-count
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `imported-wrong-argument-count-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 focused 验证与 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/imported_wrong_argument_count/imported_wrong_argument_count_fail.pas --target
+  linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.wrong-argument-count`、`diagnostic-message=wrong number of arguments
+  for "Pick"` 与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-wrong-argument-count-check=pass`、
+  `importedWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 overload ranking / implicit conversion / default parameter lowering
+- 不扩大到 installed-source / member receiver / inherited receiver / function pointer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 136 Implicit Self Bare Method Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行加速路线：沿同一 exact current-class bare implicit-self method call 路径连续补齐
+failure matrix，减少上下文切换和 analyzer 扩散，把 signature collision ambiguity 固定为
+official gate：
+
+- `procedure TWorker.Run; begin Pick(1); end;`
+- 当前 class root-owned methods 同时包含 `Pick(Value: Integer)` 与 `Pick(Value: LongInt)`
+- `1` 是 builtin integer literal stable evidence，当前 compact signature 不能唯一选择 target
+- 调用必须失败为 `sema.ambiguous-overload`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 本轮继续使用“同路径诊断矩阵连续补格 + promotion-first”加速策略：先 focused probe；若现有
+  analyzer 已 GREEN，只升格测试与 official gate；若 RED，再做最小 analyzer 修复。
+- 只承诺 exact current-class implicit-self method call + root-owned overload set + compact signature
+  collision ambiguity。
+- 保持三类诊断分工：单一 target 不兼容报 `type-mismatch`；多候选全不匹配报
+  `no-matching-overload`；多候选 signature collision 无法唯一选择报 `ambiguous-overload`。
+- 不扩展 imported / installed-source、default parameter lowering、implicit conversion、
+  var/out compatibility、visibility checking、record/property/array/deref receiver 或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 `Pick(1);` exact implicit-self
+      ambiguous-overload 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-ambiguous-overload-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_ambiguous_overload/implicit_self_bare_method_ambiguous_overload_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.ambiguous-overload`、`diagnostic-message=ambiguous overload for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `implicit-self-bare-method-ambiguous-overload-check=pass`、
+  `implicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 full overload ranking
+- 不扩大到 imported / installed-source / record / property / array / deref receiver
+- 不实现 default parameter lowering / implicit conversion / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 135 Implicit Self Bare Method No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行“同路径诊断矩阵连续补格”的加速策略，把 exact current-class bare implicit-self
+method call 的 overload-set signature no-match 固定为 official gate：
+
+- `procedure TWorker.Run; begin Pick(True); end;`
+- 当前 class root-owned methods 同时包含 `Pick(Value: Integer)` 与 `Pick(Value: AnsiString)`
+- `True` 是 builtin Boolean literal stable evidence
+- 调用必须失败为 `sema.no-matching-overload`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 本轮继续沿 Batch 133/134 的相邻格 promotion-first 方法：先 focused probe；若现有 analyzer
+  已 GREEN，只升格测试与 official gate；若 RED，再做最小 analyzer 修复。
+- 只承诺 exact current-class implicit-self method call + root-owned overload set + stable literal
+  argument signature 全不匹配。
+- 保持 `type-mismatch` 与 `no-matching-overload` 分工：单一 target 不兼容报 type mismatch；
+  多候选集合全不匹配报 no-matching-overload。
+- 不扩展 imported / installed-source、default parameter lowering、implicit conversion、
+  var/out compatibility、visibility checking、record/property/array/deref receiver 或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 `Pick(True);` exact implicit-self
+      no-matching-overload 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-no-matching-overload-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_no_matching_overload/implicit_self_bare_method_no_matching_overload_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.no-matching-overload`、`diagnostic-message=no matching overload for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `implicit-self-bare-method-no-matching-overload-check=pass`、
+  `implicitSelfBareMethodNoMatchingOverloadCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 full overload ranking
+- 不扩大到 imported / installed-source / record / property / array / deref receiver
+- 不实现 default parameter lowering / implicit conversion / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 134 Implicit Self Bare Method Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行“同路径诊断矩阵连续补格”的加速策略，把 exact current-class bare implicit-self
+method call 的 arity miss 固定为 official gate：
+
+- `procedure TWorker.Run; begin Pick; end;`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- 调用必须失败为 `sema.wrong-argument-count`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 本轮采用 Batch 133 的相邻格 promotion-first 方法：先 focused probe；若现有 analyzer
+  已 GREEN，只升格测试与 official gate；若 RED，再做最小 analyzer 修复。
+- 只承诺 exact current-class implicit-self method call + root-owned method name + arity miss。
+- 不扩展 imported / installed-source、default parameter lowering、implicit conversion、
+  var/out compatibility、visibility checking、record/property/array/deref receiver 或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 `Pick;` exact implicit-self
+      wrong-argument-count 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-wrong-argument-count-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_wrong_argument_count/implicit_self_bare_method_wrong_argument_count_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.wrong-argument-count`、`diagnostic-message=wrong number of arguments for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `implicit-self-bare-method-wrong-argument-count-check=pass`、
+  `implicitSelfBareMethodWrongArgumentCountCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 full overload ranking
+- 不扩大到 imported / installed-source / record / property / array / deref receiver
+- 不实现 default parameter lowering / implicit conversion / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 133 Implicit Self Bare Method Literal Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续执行“同路径矩阵 + promotion-first”的加速策略，把 exact current-class bare implicit-self
+method call 的最普通 literal type mismatch 固定为 official gate：
+
+- `procedure TWorker.Run; begin Pick(True); end;`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- `True` 是 builtin Boolean literal stable evidence
+- 调用必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮的加速思路是“矩阵补格”：优先选择同一路径中已被相邻批次证明实现接近的缺口，
+  先 focused probe；若已 GREEN，则只 promotion 到 official gate；若 RED，再最小修复。
+- 只承诺 exact current-class implicit-self method call + builtin literal stable evidence。
+- 不扩展 imported / installed-source、implicit conversion、default parameter ranking、var/out
+  compatibility、visibility checking、record/property/array/deref receiver 或完整 overload resolver。
+- 不修改 `core/`；继续在隔离 sema worktree 推进 compiler/stage0 切片。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略与不碰 `core/`
+- [x] PROBE：focused semantic regression 覆盖 `Pick(True);` exact implicit-self
+      type-mismatch 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-type-mismatch-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_type_mismatch/implicit_self_bare_method_type_mismatch_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.type-mismatch`、`diagnostic-message=argument type mismatch for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `implicit-self-bare-method-type-mismatch-check=pass`、
+  `implicitSelfBareMethodTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 full overload ranking
+- 不扩大到 imported / installed-source / record / property / array / deref receiver
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 132 Implicit Self Bare Method Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+继续沿同一条 stable evidence 矩阵补齐，把 root-owned 零参 function-result
+type-mismatch 从 direct member-call 推进到 class method body 内的 bare implicit-self method call：
+
+- `procedure TWorker.Run; begin Pick(Flag); end;`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- `Flag: Boolean` 是 root-owned、零参、builtin scalar return type 的 function
+- 调用必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 优先 probe：若 focused semantic 已天然成立，则走 promotion-first，不改 analyzer。
+- 只复用已有 `ExpressionTypeFactIsStable(...)` / `CallArgumentSignatureIsStable(...)`
+  与 implicit-self fallback failure propagation，不引入完整 expression typing。
+- imported / 带参 / member function result、function pointer、implicit conversion、default parameter
+  ranking、var/out compatibility、visibility checking 继续 deferred。
+- 不修改 `core/`；继续在隔离 sema worktree 中推进 compiler/stage0 切片。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、交付边界与不碰 `core/`
+- [x] PROBE：focused semantic regression 证明或暴露 implicit-self bare method function-result
+      type-mismatch 边界
+- [x] GREEN：按 probe 结果最小修复或确认现有实现天然成立
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-function-result-type-mismatch-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Stage0 fixture probe：`.sisyphus/tmp/stage0-bootstrap/nextpas build
+  tests/fixtures/implicit_self_bare_method_function_result_type_mismatch/implicit_self_bare_method_function_result_type_mismatch_fail.pas
+  --target linux-x86_64 --workspace <repo>` 输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.type-mismatch`、`diagnostic-message=argument type mismatch for "Pick"`
+  与 `human-summary=semantic-analysis-failed`。
+- Fresh local：`bash build/verify_local.sh` 已输出
+  `implicitSelfBareMethodFunctionResultTypeMismatchCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现完整 expression typing 或 function reference 语义
+- 不把 imported / 带参 / member function result 纳入 type mismatch diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 131 Member Function Result Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+按“同路径矩阵连续补格”的加速打法，把 Batch 104 已证明安全的 root-owned 零参
+function-result evidence 从 bare call 推进到 direct class member-call：
+
+- `Self.Pick(Flag);`
+- `Pick(Value: Integer)` 是当前 class 的 root-owned method
+- `Flag: Boolean` 是 root-owned、零参、builtin scalar return type 的 function
+- 调用必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮只复用现有 `ExpressionTypeFactIsStable(...)` / `CallArgumentSignatureIsStable(...)`
+  evidence 规则，不引入完整 function-reference、function pointer 或 member function result 语义。
+- imported function result、带参 function result、member function result、class/record/alias/Pointer/Text/
+  Variant return type 继续 deferred。
+- 不实现 implicit conversion、default parameter ranking、var/out compatibility 或 visibility checking。
+- 不修改 `core/`；在隔离 worktree 中推进 compiler/stage0 切片，避开主 checkout 的 core WIP。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速打法与不碰 `core/`
+- [x] PROBE：focused semantic regression 证明现有实现已天然支持 member-call function-result
+      type-mismatch diagnostic
+- [x] GREEN：确认现有实现天然成立，本轮不改 analyzer
+- [x] promotion：新增 dedicated fixture 与 official
+      `member-type-mismatch-function-result-call-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- First attempted focused command used an invalid harness group and failed with `unknown-group:
+  semantic-call-bindings`; corrected to the same direct compile/run route used by `build/verify_local.sh`.
+- Focused semantic probe：direct compile/run of `tests/semantic/test_semantic_call_bindings.pas`
+  输出 `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 已输出
+  `member-type-mismatch-function-result-call-check=pass`、
+  `memberTypeMismatchFunctionResultCallCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` 无输出；`bash -n build/verify_local.sh` 与
+  `sh -n build/verify_local.sh` 无输出；`git diff --name-only | rg '^core/'` 无输出。
+
+### Non-goals
+
+- 不把 imported / 带参 / member function result 纳入 type mismatch diagnostics
+- 不实现 function pointer / full expression typing
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 130 Implicit Self Bare Method Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 class method body 内 bare implicit-self method call 的 name miss 从 silent deferred 推进到
+structured `unknown-member` diagnostic：
+
+- `TWorker.Run` 内写 `Missing;`
+- 当前 `Self` class 与 parent chain 没有同名 method
+- 失败必须是 `sema.unknown-member`，而不是普通 top-level `sema.unknown-callable`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+- 这轮只补 implicit-self fallback failure emission：当 bare call 的常规 callable lookup 失败，且
+  class method context 已知时，`TryRegisterImplicitSelfBareMethodCallBinding(...)` 会把
+  `MethodSymbolIdForClassTypeMember(...)` 的 `unknown-member` failure kind 透传回统一 emission 分支。
+- 不改变 direct member-call 的 resolver；不扩大到 typecast receiver、record method、property accessor、
+  array/deref receiver、visibility 或 full overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点和不碰 `core/`
+- [x] RED：focused semantic regression 证明 `Missing;` 在 class method body 内缺少
+      `sema.unknown-member`
+- [x] GREEN：在 bare implicit-self fallback emission 中补 `unknown-member`
+- [x] promotion：新增 dedicated fixture 与 official
+      `implicit-self-bare-method-unknown-member-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`semantic-call-bindings-failure=missing-implicit-self-bare-method-unknown-member-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 已输出
+  `implicit-self-bare-method-unknown-member-check=pass`、
+  `implicitSelfBareMethodUnknownMemberCheck":"pass"`、`semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+- Review：`git diff --check` 无输出；`bash -n build/verify_local.sh` 与
+  `sh -n build/verify_local.sh` 无输出；`git diff --name-only | rg '^core/'` 无输出。
+
+### Non-goals
+
+- 不实现完整 member resolver
+- 不实现 implicit conversion / overload ranking / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 129 Inherited Implicit Self Bare Method Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+按“同一路径失败矩阵推进”的加速打法，补齐 inherited implicit-self bare method 的
+ambiguous-overload gate：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: LongInt)`
+- `procedure TWorker.Run; begin Touch(1); end;`
+- `Touch(1);` 必须失败为 `sema.ambiguous-overload`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+这是 Batch 126/127/128 后同一路径 failure matrix 的第四格 promotion-first 补齐：
+
+- 先用 focused semantic regression probe，确认现有
+  `TryRegisterImplicitSelfBareMethodCallBinding(...)` failure-kind out params 已天然透传
+  `ambiguous-overload`。
+- 不修改 analyzer；只把已成立的语义边界提升为 dedicated fixture 与 official verify gate。
+- 保持 ambiguity 与 no-match 分工：compact signature collision 后无法唯一选择报 ambiguous；
+  stable signature 与全部候选都不兼容报 no matching overload。
+- 不顺手扩大到 implicit conversion、default parameter ranking、visibility、override/virtual dispatch、
+  function pointer、record/property/array/deref receiver 或完整 overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定加速思路：同一路径矩阵推进 / TDD focused probe / promotion-first
+- [x] focused semantic regression：新增 inherited implicit-self bare method ambiguous-overload 覆盖
+- [x] focused GREEN：`semantic-call-bindings-status=pass`，证明 analyzer 不需要再改
+- [x] promotion：新增 dedicated fixture 与 official
+      `inherited-implicit-self-bare-method-ambiguous-overload-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused probe 已输出 `diagnostics-summary=sema.ambiguous-overload`、
+  `diagnostic-code=sema.ambiguous-overload`、
+  `diagnostic-message=ambiguous overload for "Touch"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-ambiguous-overload-check=pass`、
+  `inheritedImplicitSelfBareMethodAmbiguousOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 implicit conversion / overload ranking
+- 不修改 analyzer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 128 Inherited Implicit Self Bare Method No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+沿 Batch 126/127 的 failure-kind propagation 加速补齐 inherited implicit-self bare method 的
+overload-set no-match：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)` 与 `TBaseWorker.Touch(Value: AnsiString)`
+- `procedure TWorker.Run; begin Touch(True); end;`
+- `Touch(True);` 必须失败为 `sema.no-matching-overload`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+这是 inherited implicit-self bare method failure matrix 的第三格 promotion-first 补齐：
+
+- 先用 focused semantic regression 证明 Batch 126 的
+  `TryRegisterImplicitSelfBareMethodCallBinding(...)` failure-kind out params 已天然透传
+  `no-matching-overload`。
+- 不修改 analyzer；只把已成立的语义边界提升为 dedicated fixture 与 official verify gate。
+- 保持 `type-mismatch` 与 `no-matching-overload` 分工：单一 target 不兼容报 type mismatch；
+  多候选同 arity但 stable signature 全不匹配报 no matching overload。
+- 不顺手扩大到 default parameters、visibility、override/virtual dispatch、implicit conversion、
+  function pointer、record/property/array/deref receiver 或完整 overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定单刀目标与加速法：失败矩阵补齐 / promotion-first / TDD focused probe
+- [x] focused semantic regression：新增 inherited implicit-self bare method no-matching-overload
+      diagnostic 覆盖
+- [x] focused GREEN：`semantic-call-bindings-status=pass`，证明 analyzer 不需要再改
+- [x] promotion：新增 dedicated fixture 与 official
+      `inherited-implicit-self-bare-method-no-matching-overload-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused probe 已输出 `diagnostics-summary=sema.no-matching-overload`、
+  `diagnostic-code=sema.no-matching-overload`、
+  `diagnostic-message=no matching overload for "Touch"` 与
+  `human-summary=semantic-analysis-failed`。
+- Fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-no-matching-overload-check=pass`、
+  `inheritedImplicitSelfBareMethodNoMatchingOverloadCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass"`、
+  `verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 implicit conversion / overload ranking
+- 不修改 analyzer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 127 Inherited Implicit Self Bare Method Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+沿 Batch 126 的 failure-kind propagation 加速补齐同一热路径的 arity failure：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)`
+- `procedure TWorker.Run; begin Touch; end;`
+- `Touch;` 必须失败为 `sema.wrong-argument-count`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+这是 inherited implicit-self bare method failure matrix 的 promotion-first 补齐：
+
+- 先用 focused semantic regression 证明 Batch 126 的
+  `TryRegisterImplicitSelfBareMethodCallBinding(...)` failure-kind out params 已天然透传
+  `wrong-argument-count`。
+- 不修改 analyzer；只把已成立的语义边界提升为 dedicated fixture 与 official verify gate。
+- 继续保持成功 binding 路径不变；普通 bare call failure 仍使用原 call name/offset。
+- 不顺手扩大到 default parameters、visibility、override/virtual dispatch、implicit conversion、
+  function pointer、record/property/array/deref receiver 或完整 overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定单刀目标与加速法：失败矩阵补齐 / promotion-first / TDD focused probe
+- [x] focused semantic regression：新增 inherited implicit-self bare method wrong-argument-count
+      diagnostic 覆盖
+- [x] focused GREEN：`semantic-call-bindings-status=pass`，证明 analyzer 不需要再改
+- [x] promotion：新增 dedicated fixture 与 official
+      `inherited-implicit-self-bare-method-wrong-argument-count-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused probe 已输出 `diagnostics-summary=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Touch"` 与
+  `human-summary=semantic-analysis-failed`。
+- Full：fresh `bash build/verify_local.sh` 已输出
+  `inherited-implicit-self-bare-method-wrong-argument-count-check=pass`、
+  `inheritedImplicitSelfBareMethodWrongArgumentCountCheck":"pass"`、
+  `semantic-call-bindings-check=pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 implicit conversion / overload ranking
+- 不修改 analyzer
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 126 Inherited Implicit Self Bare Method Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+把 Batch 125 的 inherited implicit-self bare method call 正向绑定补上对应失败诊断：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)`
+- `procedure TWorker.Run; begin Touch(True); end;`
+- `Touch(True);` 必须失败为 `sema.type-mismatch`
+- 失败路径不能注册错误 `member-call` binding
+- stage0 build 与 verify-local envelope 必须固定同一份 diagnostics truth
+
+### Architecture Decision
+
+这是 implicit-self fallback 的 failure-kind propagation，不是 overload ranking 扩张：
+
+- `TryRegisterImplicitSelfBareMethodCallBinding(...)` 继续复用
+  `MethodSymbolIdForClassTypeMember(...)` 的 parent-chain lookup 与 stable signature evidence。
+- 当 fallback 没有 target，但 lookup 已证明 `type-mismatch` / arity / overload failure 时，把
+  failure kind、callee name 与 callee offset 返回给 `SeedCallBindingsInNode(...)`，复用已有
+  bare-call diagnostic emission。
+- 成功 binding 路径保持不变；普通 bare call failure 仍使用原 call name/offset。
+- 不顺手扩大到 default parameters、visibility、override/virtual dispatch、implicit conversion、
+  function pointer、record/property/array/deref receiver 或完整 overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定单刀目标与提速法：单热点 / TDD RED / promotion-first
+- [x] RED：focused semantic regression 先失败在缺少 inherited implicit-self bare method
+      argument type-mismatch diagnostic
+- [x] 最小修复：让 implicit-self fallback 透传 failure kind / failure name / offset
+- [x] GREEN：focused semantic 输出 `semantic-call-bindings-status=pass`
+- [x] stage0 focused probe：确认 dedicated fixture 输出 `sema.type-mismatch`
+- [x] promotion：新增 dedicated fixture 与 official
+      `inherited-implicit-self-bare-method-type-mismatch-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED focused：`tests/semantic/test_semantic_call_bindings.pas` 曾输出
+  `semantic-call-bindings-failure=missing-inherited-implicit-self-bare-method-call-argument-type-mismatch-diagnostic`。
+- GREEN focused：同一 focused test 已输出 `semantic-call-bindings-status=pass`。
+- Fresh stage0 probe：
+  `nextpas build tests/fixtures/inherited_implicit_self_bare_method_type_mismatch/inherited_implicit_self_bare_method_type_mismatch_fail.pas --target linux-x86_64 --workspace <repo>`
+  已输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.type-mismatch` 与
+  `diagnostic-message=argument type mismatch for "Touch"`。
+- Full：fresh `bash build/verify_local.sh` 已输出
+  `inheritedImplicitSelfBareMethodTypeMismatchCheck":"pass"`、
+  `semanticCallBindingsCheck":"pass"`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不实现 implicit conversion / overload ranking
+- 不修改 query success fixture
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 125 Inherited Implicit Self Bare Method Call Argument Binding
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+把 inherited implicit-self bare method call 从零参推进到带参数 method：
+
+- `TWorker = class(TBaseWorker)`
+- `TBaseWorker.Touch(Value: Integer)`
+- `procedure TWorker.Run; begin Touch(7); end;`
+- `Touch(7);` 必须注册为 `member-call`
+- binding target 必须指向 parent class 上 param signature 为 `i` 的 `TBaseWorker.Touch`
+- `query-bindings` / `query-definitions` 必须投影同一份 truth，包括 `targetParamCount=1`
+  与 `targetParamSignature="i"`
+
+本批次新增并冻结：
+
+- focused semantic regression 覆盖 inherited implicit-self bare method call with argument，要求
+  `Touch(7);` 产生唯一 `member-call` binding，target 为
+  `TBaseWorker.Touch(Value: Integer)`，且不报 diagnostic。
+- `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+  `stage0-query-member-call-bindings-check` 新增 `TChildWorker.Run` 内的 bare `Touch(7);`
+  query gate，固定 `query-bindings` / `query-definitions` / envelope projection。
+
+### Architecture Decision
+
+这是 Batch 124 inherited implicit-self bare call 的 argument/arity promotion，不是 overload
+ranking 扩张：
+
+- 复用现有 `CallArgumentCount(...)`、compact argument signature 与
+  `MethodSymbolIdForClassTypeMember(...)` 的 parent-chain lookup truth。
+- focused semantic 与 stage0 query probe 已证明能力天然成立，因此本批不修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- 不顺手扩大到 default parameters、visibility、override/virtual dispatch、implicit conversion、
+  record/property/array/deref receiver、function pointer 或完整 overload ranking。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定单刀目标与提速法：单热点 / fresh probe / promotion-first
+- [x] focused semantic probe：确认 inherited bare `Touch(7);` 已绑定到
+      `TBaseWorker.Touch(Value: Integer)`
+- [x] fresh stage0 query probe：确认 `byteOffset=1038` 的 `Touch` 已进入
+      `query-bindings` / `query-definitions`，并投影 param metadata
+- [x] promotion：补 query fixture 与 official `stage0-query-member-call-bindings-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`，证明 `TWorker.Run` 内 bare `Touch(7);` 绑定到
+  `TBaseWorker.Touch(Value: Integer)`。
+- Fresh stage0 query probe：
+  `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas --target linux-x86_64 --workspace <repo>`
+  已输出 `query-bindings` 中 `byteOffset=1038` 的 `Touch` `member-call`，target symbol 为
+  `TBaseWorker.Touch`；`query-definitions` 同步投影 `targetParamCount=1` 与
+  `targetParamSignature="i"`。
+- Full：fresh `bash build/verify_local.sh` 已输出
+  `stage0-query-member-call-bindings-check=pass`、`semantic-call-bindings-check=pass`、
   `verify-local=pass` 与 `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不声称 macOS / FreeBSD / Android 已有真实宿主运行证据
-- 这批不最终冻结 non-Linux Unix 的 opaque size 常量
-- 这批不重构 `platform.sync` public API
-- 这批不引入新的 L1 sync 抽象
+- 不修改 semantic analyzer 实现
+- 不扩大到 default parameters / visibility / virtual dispatch / implicit conversion
+- 不修改 `core/`
 
-## Addendum: 2026-05-26 Platform Sync FFI Surface Parity
+## Addendum: 2026-05-27 Batch 124 Inherited Implicit Self Bare Method Call Binding
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
 
 ### Goal
 
-把 `platform.sync` 推到与 `platform.time` / `platform.thread` 同等严格的 FFI 与验证形状：
+把 class method body 内 bare implicit-self method call 从 exact class method 继续推进到 inherited
+method：
 
-- Windows synchronization ABI 不再留在按模块切碎的 `platform.sync.windows.ffi`，而是尽量归并到
-  统一平台单元 `platform.windows.ffi`。
-- `platform.sync` 补齐 no-FPC、L0 boundary、example、benchmark 的 official local gates。
-- sync benchmark 不再直接旁路 platform contract 去调用裸 POSIX clock FFI。
+- `TWorker = class(TBaseWorker)`
+- `procedure TWorker.Run; begin Touch; end;`
+- `Touch;` 必须注册为 `member-call`
+- binding target 必须指向 parent class 上的 `TBaseWorker.Touch`
+- `query-bindings` / `query-definitions` 必须投影同一份 truth
+
+本批次新增并冻结：
+
+- focused semantic regression 覆盖 inherited implicit-self bare method call，要求 `Touch;` 产生唯一
+  `member-call` binding，target 为 `TBaseWorker.Touch`，且不报 diagnostic。
+- `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+  `stage0-query-member-call-bindings-check` 新增 `TChildWorker.Run` 内的 bare `Touch;`
+  query gate，固定 `query-bindings` / `query-definitions` / envelope projection。
 
 ### Architecture Decision
 
-- platform FFI 优先按宿主平台归并，而不是按 time/sync/thread 各长一套零散 Windows FFI。
-- `platform.sync` 的实现层只负责策略、错误码和 timeout 语义，不在实现单元里散落 `external`
-  声明。
-- benchmark 可以依赖同属 L0 的 `platform.time` 取时，但不能回退到裸 `posix.ffi` 直接碰 ABI。
+这是 Batch 123 exact-class implicit-self bare call 的 inherited promotion，不是 resolver 扩张：
+
+- 复用现有 `MethodSymbolIdForClassTypeMember(...)` 的 `ParentTypeId` lookup truth。
+- focused semantic 与 stage0 query probe 已证明能力天然成立，因此本批不修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+- 不顺手扩大到 visibility、override/virtual dispatch、default parameters、record/property/array/deref
+  receiver、function pointer、typecast callable 或完整 overload ranking。
+- 不修改 `core/`。
 
 ### Status
 
-Completed; verification passed.
+Completed
 
 ### Planned Steps
 
-- [x] 把 Windows sync ABI 声明并入 `core/src/nextpas.core.platform.windows.ffi.pas`
-- [x] 删除 `core/src/nextpas.core.platform.sync.windows.ffi.pas`，并让
-      `platform.sync` 只依赖统一 Windows FFI
-- [x] 新增 `platform.sync` 的 no-FPC focused test
-- [x] 新增 `platform.sync` 的 L0 boundary focused test
-- [x] 给 `platform_sync_basics` 增加 machine-readable 输出
-- [x] 让 `bench_platform_sync` 改走 `platform.time` 的 L0 时钟源
-- [x] 把 sync 的 no-FPC / L0 / example / benchmark gate 纳入 `build/verify_local.sh`
-- [x] 运行 focused、aggregate 与 fresh `bash build/verify_local.sh`
+- [x] `/plan` 固定单刀目标与提速法：单热点 / fresh probe / promotion-first
+- [x] focused semantic probe：确认 inherited bare `Touch;` 已绑定到 `TBaseWorker.Touch`
+- [x] fresh stage0 query probe：确认 `byteOffset=935` 的 `Touch` 已进入
+      `query-bindings` / `query-definitions`
+- [x] promotion：补 query fixture 与 official `stage0-query-member-call-bindings-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
 
 ### Verification
 
-- RED: `test_platform_sync_no_fpc_units` 初版误把 `linux_syscall` 里的 `syscall` 符号当成
-  FPC `Syscall` 单元引用，先失败在 `platform.sync must not reference FPC unit/token: Syscall`。
-- GREEN focused: `make -C core/tests/nextpas.core.platform.sync/test_platform_sync test`、
-  `test_platform_sync_no_fpc_units test`、`test_platform_sync_l0_boundary test`、
-  `test_platform_sync_sizes test`、`make -C core/examples/nextpas.core.platform.sync/platform_sync_basics run`、
-  `make -C core/benchmarks/nextpas.core.platform.sync/bench_platform_sync run` 全部通过。
-- Aggregate: `make -C core test`、`make -C core examples`、`make -C core benchmarks` 通过。
-- Full: fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-  `human-summary=local verification passed`。
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 已输出
+  `semantic-call-bindings-status=pass`，证明 `TWorker.Run` 内 bare `Touch;` 绑定到
+  `TBaseWorker.Touch`。
+- Fresh stage0 query probe：
+  `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas --target linux-x86_64 --workspace <repo>`
+  已输出 `query-bindings` 中 `byteOffset=935` 的 `Touch` `member-call`，target symbol 为
+  `TBaseWorker.Touch`；`query-definitions` 同步投影 `targetName="TBaseWorker.Touch"`。
+- Full：fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
 
 ### Non-goals
 
-- 这批不把 `platform.sync` 扩到 macOS / FreeBSD / Android 的 pthread runtime 语义
-- 这批不重新设计 `platform.sync` public API
-- 这批不引入新的 L1 sync abstraction
-- 这批不改动非 platform 范围的并行工作
+- 不修改 semantic analyzer 实现
+- 不扩大到 bare implicit-self overload ranking / visibility / virtual dispatch
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 123 Implicit Self Bare Method Call Binding
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.4 Semantic model`
+
+### Goal
+
+把 class method body 内的 bare implicit-self method call 从 deferred 推进到真实 semantic/query truth：
+
+- `procedure TWorker.Run; begin Touch; end;`
+- `Touch;` 必须注册为 `member-call`
+- binding target 必须指向 `TWorker.Touch`
+- `query-bindings` / `query-definitions` 必须投影同一份 truth
+
+本批次新增并冻结：
+
+- focused semantic regression 从 deferred 改为真实 binding 断言，要求 `Touch;` 产生唯一
+  `member-call` binding，target 为 `TWorker.Touch`，且不报 diagnostic。
+- `compiler/sema/np_semantic_analyzer.pas` 新增 bare callee name 提取与最小 implicit-self
+  fallback：只有 bare call 正常 lookup 失败、且 method context 已知时才尝试把 `Touch;`
+  绑定到当前 class method symbol。
+- `tests/fixtures/query_member_call_bindings/member_call_bindings.pas` 与
+  `stage0-query-member-call-bindings-check` 新增 `Touch;` query gate，固定
+  `query-bindings` / `query-definitions` / envelope projection。
+
+### Architecture Decision
+
+这是 implicit-self bare method call 的最小 binding truth 收口，不是完整 bare/member 统一 resolver 扩张：
+
+- 只处理 class method body 内 bare name 能唯一回到当前 class method symbol 的安全分支。
+- 不顺手扩大到 visibility、default parameters、implicit conversion、record/property/array/deref
+  receiver、function pointer、typecast callable 或更完整 member access 语义。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定单刀目标与提速法：先 fresh query probe，再决定 promotion or minimal fix
+- [x] focused semantic regression 从 deferred 升格为真实 binding 断言
+- [x] 最小 sema 修复：补 bare callee fallback 与 implicit-self binding fallback
+- [x] fresh stage0 query probe：确认 `Touch;` 已进入 `query-bindings` / `query-definitions`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 现在要求 `Touch;` 产生唯一
+  `member-call` binding，target 为 `TWorker.Touch`，且 `Model.BindingCount = 1`。
+- Fresh stage0 query probe：
+  `.sisyphus/tmp/stage0-bootstrap/nextpas query symbols tests/fixtures/query_member_call_bindings/member_call_bindings.pas --target linux-x86_64 --workspace <repo>`
+  已输出 `query-bindings` 中 `byteOffset=519` 的 `Touch` `member-call`，target symbol 为
+  `TWorker.Touch`；`query-definitions` 同步投影 `targetName="TWorker.Touch"`。
+- Full：fresh `bash build/verify_local.sh` 已输出
+  `semantic-call-bindings-check=pass`、`stage0-query-member-call-bindings-check=pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不扩大到 bare implicit-self overload ranking / visibility
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 122 Inherited Known Property Member Invalid Call Shape
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable 家族从 inherited class field 继续推进到 inherited class property：当 receiver type
+已知、class layout truth 已知，且 parent chain 上的同名 property 已知存在但被当成 call 使用时，固定失败为
+`sema.invalid-call-shape`，同时继续保持 `System.Free` 与 specialized generic member-call deferred。
+
+本批次新增并冻结：
+
+- `Worker.Value(1);`，其中 `TWorker = class(TBaseWorker)` 且 `TBaseWorker.Value` 是已知 class property 而不是
+  callable 时，必须失败为 `sema.invalid-call-shape`，且失败调用不注册 `member-call` binding。
+- `build/verify_local.sh` 新增 `inherited-known-property-member-call-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `inheritedKnownPropertyMemberCallCheck`。
+- 本批继续走 promotion-only 快路径：focused semantic probe 与 stage0 probe 已证明能力天然成立，因此不修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+
+### Architecture Decision
+
+这是 inherited known non-callable property 的 verification promotion 批次，不是新的 inherited property /
+member access 设计扩张：
+
+- 只把已存在的 inherited class property non-callable 边界提升到 official gate。
+- 不顺手扩大到 indexed/default property access、record/property 访问语义、visibility、generic
+  specialization、array/deref receiver 或更完整 member resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：在 focused semantic test 中加入 inherited known property member-call regression
+- [x] 确认 inherited known property 边界已天然输出 `sema.invalid-call-shape`
+- [x] stage0 probe：确认真实 `nextpas build` 路径也输出 `sema.invalid-call-shape`
+- [x] 新增 `tests/fixtures/inherited_known_property_member_call` 与
+      `inherited-known-property-member-call-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`，证明 inherited class property member-call 已天然失败为
+  `sema.invalid-call-shape`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/inherited_known_property_member_call/inherited_known_property_member_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、
+  `diagnostic-message=member "Value" is not callable`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `inherited-known-property-member-call-check=pass`、
+  `inheritedKnownPropertyMemberCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 121 Inherited Known Field Member Invalid Call Shape
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 known non-callable 家族从 direct class field/property 继续推进到 inherited class field：当 receiver type
+已知、class layout truth 已知，且 parent chain 上的同名 field 已知存在但被当成 call 使用时，固定失败为
+`sema.invalid-call-shape`，同时继续保持 `System.Free` 与 specialized generic member-call deferred。
+
+本批次新增并冻结：
+
+- `Worker.Value(1);`，其中 `TWorker = class(TBaseWorker)` 且 `TBaseWorker.Value: Integer` 已知存在但不是
+  callable 时，必须失败为 `sema.invalid-call-shape`，且失败调用不注册 `member-call` binding。
+- `build/verify_local.sh` 新增 `inherited-known-field-member-call-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `inheritedKnownFieldMemberCallCheck`。
+- 本批继续走 promotion-only 快路径：focused semantic probe 与 stage0 probe 已证明能力天然成立，因此不修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+
+### Architecture Decision
+
+这是 inherited known non-callable field 的 verification promotion 批次，不是新的 inherited property /
+member access 设计：
+
+- 只把已存在的 inherited class field non-callable 边界提升到 official gate。
+- 不顺手扩大到 inherited property、indexed/default property access、record/property 访问语义、visibility、
+  generic specialization、array/deref receiver 或更完整 member resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：在 focused semantic test 中加入 inherited known field member-call regression
+- [x] 确认 inherited known field 边界已天然输出 `sema.invalid-call-shape`
+- [x] stage0 probe：确认真实 `nextpas build` 路径也输出 `sema.invalid-call-shape`
+- [x] 新增 `tests/fixtures/inherited_known_field_member_call` 与
+      `inherited-known-field-member-call-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`，证明 inherited class field member-call 已天然失败为
+  `sema.invalid-call-shape`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/inherited_known_field_member_call/inherited_known_field_member_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、
+  `diagnostic-message=member "Value" is not callable`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `inherited-known-field-member-call-check=pass`、
+  `inheritedKnownFieldMemberCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不扩大到 inherited property / indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 120 Known Property Member Invalid Call Shape
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 Batch 119 打开的 known non-callable 家族继续推进到 direct class property：当 receiver type 已知、
+class layout truth 已知，且同名 class property 已知存在但被当成 call 使用时，固定失败为
+`sema.invalid-call-shape`，同时继续保持 `System.Free` 与 specialized generic member-call deferred。
+
+本批次新增并冻结：
+
+- `Worker.Value(1);`，其中 `TWorker.Value` 是已知 class property 而不是 callable 时，必须失败为
+  `sema.invalid-call-shape`，且失败调用不注册 `member-call` binding。
+- `build/verify_local.sh` 新增 `known-property-member-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `knownPropertyMemberCallCheck`。
+- 本批继续走 promotion-only 快路径：focused semantic probe 已证明能力天然成立，因此不修改
+  `compiler/sema/np_semantic_analyzer.pas`。
+
+### Architecture Decision
+
+这是 known non-callable property 的 verification promotion 批次，不是新的 property access 设计：
+
+- 只把已存在的 direct class property non-callable 边界提升到 official gate。
+- 不顺手扩大到 indexed/default property access、record/property 访问语义、visibility、generic
+  specialization、array/deref receiver 或更完整 member resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] RED/probe：在 focused semantic test 中加入 known property member-call regression
+- [x] 确认 property 边界已天然输出 `sema.invalid-call-shape`
+- [x] 新增 `tests/fixtures/known_property_member_call` 与 `known-property-member-call-check`
+- [x] 同步 semantic model / stage0 README / 持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`，证明 direct class property member-call 已天然失败为
+  `sema.invalid-call-shape`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/known_property_member_call/known_property_member_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、
+  `diagnostic-message=member "Value" is not callable`。
+- Full：fresh `bash build/verify_local.sh` 必须输出
+  `known-property-member-call-check=pass`、
+  `knownPropertyMemberCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不扩大到 indexed/default property access
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 119 Known Field Member Invalid Call Shape
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把第一条 known non-callable member-call 从 deferred 推进到结构化 diagnostics：当 receiver type 已知、
+class layout truth 已知，且同名 field/property 已知存在但被当成 call 使用时，固定失败为
+`sema.invalid-call-shape`，同时继续保持 `System.Free` 与 specialized generic member-call deferred。
+
+本批次新增并冻结：
+
+- `Worker.Value(1);`，其中 `TWorker.Value: Integer` 已知存在但不是 callable 时，必须失败为
+  `sema.invalid-call-shape`，且失败调用不注册 `member-call` binding。
+- `build/verify_local.sh` 新增 `known-field-member-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `knownFieldMemberCallCheck`。
+- `Worker.Free;` 与 specialized generic member-call 继续保持 deferred，不顺手扩大范围。
+
+### Architecture Decision
+
+这是 known non-callable 的最小切片，不是完整 member access 设计：
+
+- 只收 direct class field/property name 已知但不可调用的第一条安全边界。
+- 不把它误归类成 `unknown-member`，而是使用更准确的 `sema.invalid-call-shape`。
+- 不顺手扩大到 record/property access、generic specialization、visibility、array/deref receiver
+  或更完整 member resolver。
+- 不修改 `core/`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] RED：把 known field member-call focused semantic regression 从 deferred 改成
+      `sema.invalid-call-shape`
+- [x] 在 `compiler/sema/np_semantic_analyzer.pas` 对已知 non-callable member 带出
+      `invalid-call-shape` failure kind
+- [x] 新增 `tests/fixtures/known_field_member_call` 与 `known-field-member-call-check`
+- [x] 同步 sema/spec/stage0 README 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED：focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-known-field-member-call-diagnostic`。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/known_field_member_call/known_field_member_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、
+  `diagnostic-code=sema.invalid-call-shape`、
+  `diagnostic-message=member "Value" is not callable`。
+- Full：fresh `bash build/verify_local.sh` 必须输出
+  `known-field-member-call-check=pass`、
+  `knownFieldMemberCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不扩大到 `System.Free` / specialized generic member-call
+- 不实现完整 field/property access 语义
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 118 Imported Inherited Unknown Member Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported inherited direct member-call 的 `sema.unknown-member` 正式纳入官方验证面：当 receiver type
+已知、exact receiver type 自身没有同名 method、parent chain 上也不存在同名 inherited member 时，
+固定 project-source 路径失败为 `sema.unknown-member`，同时继续保证 installed-source inherited
+unknown-member 保守 deferred。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Missing(1);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Missing`，且 `TBase` 也没有 `Missing` 时，必须失败为 `sema.unknown-member`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` inherited unknown-member 继续 deferred，不发 diagnostics，也不注册错误
+  binding。
+- `build/verify_local.sh` 新增 `imported-inherited-unknown-member-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `importedInheritedUnknownMemberCheck`。
+- 本批继续沿用“probe 后 promotion”提速法：先验证能力是否天然成立；若已成立，则直接 promotion 到
+  semantic/stage0/verify contract。
+
+### Architecture Decision
+
+这是 imported inherited unknown-member 的 verification promotion 批次，不是新的 member resolver 设计：
+
+- 只把已存在的 imported `project-source` inherited name miss 行为提升到 official gate。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 incomplete imported truth 提前报成
+  ordinary unknown-member。
+- 不顺手扩大到 known non-callable、visibility、record/property/array/deref receiver 或更完整 member
+  resolver。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：先验证 project-source inherited name miss 当前是否已天然产生 `sema.unknown-member`
+- [x] semantic：新增 imported inherited project-source regression
+- [x] semantic：新增 imported inherited installed-source deferred guard
+- [x] 新增 `tests/fixtures/imported_inherited_unknown_member` 与
+  `imported-inherited-unknown-member-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Probe：focused semantic regression 已证明 imported inherited `project-source`
+  `Worker.Missing(1)` 会失败为 `sema.unknown-member`，同时 installed-source inherited unknown-member
+  继续保持 deferred。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_unknown_member/imported_inherited_unknown_member_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.unknown-member`、
+  `diagnostic-message=unknown member "Missing"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-unknown-member-check=pass`、
+  `importedInheritedUnknownMemberCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不把 imported `installed-source` inherited unknown-member 纳入 diagnostics
+- 不扩大到 known non-callable / visibility / 更复杂 receiver form
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 117 Imported Inherited Member Type Mismatch Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported inherited member-call 的 `sema.type-mismatch` 正式纳入官方验证面：当 receiver type 已知、
+exact receiver type 自身没有同名 method、parent chain 上存在单一 inherited member target，且当前稳定
+argument signature 明确与该 target 的 param signature 不兼容时，固定 project-source 路径失败为
+`sema.type-mismatch`，同时继续保证 installed-source inherited mismatch 保守 deferred。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(True);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` 可见时，必须失败为 `sema.type-mismatch`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` inherited type-mismatch 继续 deferred，不发 diagnostics，也不注册错误 binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-type-mismatch-call-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberTypeMismatchCallCheck`。
+- 本批继续沿用“probe 后 promotion”提速法：先验证能力是否天然成立；若已成立，则直接 promotion 到
+  semantic/stage0/verify contract。
+
+### Architecture Decision
+
+这是 imported inherited type-mismatch 的 verification promotion 批次，不是新的 resolver 设计：
+
+- 只把已存在的 imported `project-source` inherited single-target mismatch 行为提升到 official gate。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 incomplete imported truth 提前报成
+  ordinary type mismatch。
+- 不顺手扩大到 multi-target ranking、implicit conversion、visibility 或 `unknown-member`。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：先验证 project-source inherited mismatch 当前是否已天然产生 `sema.type-mismatch`
+- [x] semantic：新增 imported inherited project-source regression
+- [x] semantic：新增 imported inherited installed-source deferred guard
+- [x] 新增 `tests/fixtures/imported_inherited_member_type_mismatch_call` 与
+  `imported-inherited-member-type-mismatch-call-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Probe：使用 `.sisyphus/tmp/stage0-bootstrap/nextpas build` 构造临时 imported inherited fixture，已输出
+  `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.type-mismatch`、
+  `diagnostic-message=argument type mismatch for "Pick"`，证明核心行为本来就成立。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_type_mismatch_call/imported_inherited_member_type_mismatch_call_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.type-mismatch`、
+  `diagnostic-message=argument type mismatch for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-type-mismatch-call-check=pass`、
+  `importedInheritedMemberTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不把 imported `installed-source` inherited mismatch 纳入 diagnostics
+- 不扩大到 multi-target overload ranking / `unknown-member`
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 116 Imported Inherited Member Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 imported inherited member-call 的 `sema.wrong-argument-count` 正式纳入官方验证面：当 receiver type
+已知、exact receiver type 自身没有同名 method、parent chain 上存在 inherited member target，且 call 的
+argument count 与所有 visible inherited member target 都不匹配时，固定 project-source 路径失败为
+`sema.wrong-argument-count`，同时继续保证 installed-source inherited arity miss 保守 deferred。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1, 2);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` 可见时，必须失败为 `sema.wrong-argument-count`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` inherited wrong-argument-count 继续 deferred，不发 diagnostics，也不注册错误
+  binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-wrong-argument-count-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberWrongArgumentCountCheck`。
+- 本批继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit`，但针对同一家族相邻边界引入新的提速变体：先 probe 当前行为，若能力已天然成立，则直接
+  promotion 到 official gate，而不是机械再造一轮无意义的 compiler 改动。
+
+### Architecture Decision
+
+这是 imported inherited wrong-argument-count 的 verification promotion 批次，不是新的 resolver 设计：
+
+- 只把已存在的 imported `project-source` inherited arity miss 行为提升到 semantic regression 与 stage0
+  verify gate。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 incomplete imported truth 提前报成
+  ordinary arity error。
+- 不顺手扩大到 imported inherited `type-mismatch` / `unknown-member` / ranking / visibility /
+  implicit conversion。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与提速策略
+- [x] probe：先验证 project-source inherited arity miss 当前是否已天然产生 `sema.wrong-argument-count`
+- [x] semantic：新增 imported inherited project-source regression
+- [x] semantic：新增 imported inherited installed-source deferred guard
+- [x] 新增 `tests/fixtures/imported_inherited_member_wrong_argument_count` 与
+  `imported-inherited-member-wrong-argument-count-check`
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Probe：使用 `.sisyphus/tmp/stage0-bootstrap/nextpas build` 构造临时 imported inherited fixture，已输出
+  `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`，证明核心行为本来就成立。
+- GREEN focused：`tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_wrong_argument_count/imported_inherited_member_wrong_argument_count_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-wrong-argument-count-check=pass`、
+  `importedInheritedMemberWrongArgumentCountCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不修改 `compiler/sema/np_semantic_analyzer.pas`
+- 不把 imported `installed-source` inherited arity miss 纳入 diagnostics
+- 不扩大到 imported inherited `type-mismatch` / `unknown-member`
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 115 Imported Inherited Member Ambiguous Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 `sema.ambiguous-overload` 从 root-owned / exact member-call 推进到第一条 imported `project-source`
+inherited direct member-call 安全边界：当 receiver type 已知、exact receiver type 自身没有同名 method、
+parent chain 上存在同名同 arity 的多个 inherited member target，且当前 stable argument signature
+无法唯一选择候选时，发出 `sema.ambiguous-overload`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` / `TBase.Pick(LongInt)` 可见时，必须失败为
+  `sema.ambiguous-overload`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` inherited ambiguity 继续 deferred，不发 diagnostics，也不注册错误 binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-ambiguous-overload-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberAmbiguousOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏；提速仍依赖同一家族 sema diagnostics 连续切批。
+
+### Architecture Decision
+
+这是 imported inherited member ambiguity 的第一条 source-owned 切片，不是完整 Pascal inherited resolver：
+
+- 只覆盖 imported `project-source` unit 的 inherited direct member-call ambiguity。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 runtime baseline / helper surface 的
+  incomplete imported truth 提前误报成 ordinary ambiguity。
+- exact receiver own-method mismatch 穿透 parent 的代偿路径、record/property/array/deref receiver、
+  implicit conversion、default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与加速策略
+- [x] RED：新增 imported inherited project-source ambiguity focused regression
+- [x] RED：新增 imported inherited installed-source deferred guard
+- [x] 在 exact member ambiguity 分支增加 imported provenance guard
+- [x] 新增 `tests/fixtures/imported_inherited_member_ambiguous_overload` 与
+  `imported-inherited-member-ambiguous-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED：focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-imported-inherited-member-ambiguous-overload-diagnostic:sema.ambiguous-overload`。
+- GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_ambiguous_overload/imported_inherited_member_ambiguous_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.ambiguous-overload`、
+  `diagnostic-message=ambiguous overload for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-ambiguous-overload-check=pass`、
+  `importedInheritedMemberAmbiguousOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` inherited ambiguity 纳入 diagnostics
+- 不扩大到 imported inherited `wrong-argument-count` / `unknown-member`
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 114 Imported Inherited Member No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 `sema.no-matching-overload` 从 root-owned inherited direct member-call 推进到第一条 imported
+`project-source` inherited direct member-call 安全边界：当 receiver type 已知、exact receiver type
+自身没有同名 method、parent chain 上存在同名同 arity 的多个 inherited member target，且当前稳定
+argument signature 与所有 inherited candidate signature 都不匹配时，发出
+`sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(True);`，其中 imported `project-source` `TWorker = class(TBase)` 自身没有
+  `Pick`，但 `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 可见时，必须失败为
+  `sema.no-matching-overload`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` inherited member no-match 继续 deferred，不发 diagnostics，也不注册错误 binding。
+- `build/verify_local.sh` 新增 `imported-inherited-member-no-matching-overload-check`，固定 stage0 failure
+  projection 与 final verify envelope 的
+  `importedInheritedMemberNoMatchingOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏；提速仍依赖同一家族 sema diagnostics 连续切批。
+
+### Architecture Decision
+
+这是 imported inherited member no-match 的第一条 source-owned 切片，不是完整 Pascal inherited resolver：
+
+- 只覆盖 imported `project-source` unit 的 inherited direct member-call stable signature no-match。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 runtime baseline / helper surface 的
+  incomplete imported truth 提前误报成 ordinary overload failure。
+- exact receiver own-method mismatch 穿透 parent 的代偿路径、record/property/array/deref receiver、
+  implicit conversion、default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与加速策略
+- [x] RED：新增 imported inherited project-source no-match focused regression
+- [x] RED：新增 imported inherited installed-source deferred guard
+- [x] 在 parent-chain member lookup 的 no-match gate 中放开 imported `project-source`
+- [x] 新增 `tests/fixtures/imported_inherited_member_no_matching_overload` 与
+  `imported-inherited-member-no-matching-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED：focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-inherited-member-no-matching-overload-diagnostic`。
+- GREEN focused：focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused：
+  `nextpas build tests/fixtures/imported_inherited_member_no_matching_overload/imported_inherited_member_no_matching_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.no-matching-overload`、
+  `diagnostic-message=no matching overload for "Pick"`。
+- Full：fresh `bash build/verify_local.sh` 输出
+  `imported-inherited-member-no-matching-overload-check=pass`、
+  `importedInheritedMemberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` inherited member no-match 纳入 diagnostics
+- 不扩大到 inherited `unknown-member` / `wrong-argument-count`
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 113 Inherited Member No Matching Overload Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+把 `sema.no-matching-overload` 从 root-owned exact class direct member-call 推进到第一条 root-owned
+inherited direct member-call 安全边界：当 receiver type 已知、exact receiver type 本身没有同名 method、
+但 parent chain 上存在同名同 arity 的多个 member target，且当前稳定 argument signature 与所有
+inherited candidate signature 都不匹配时，发出 `sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `TBase.Pick(Integer)` / `TBase.Pick(AnsiString)` 后调用 `Worker.Pick(True)`，其中
+  `TWorker = class(TBase)` 且 exact receiver type 自身没有 `Pick` 时，必须失败为
+  `sema.no-matching-overload`，且失败调用不注册 `member-call` binding。
+- 只打开 root-owned inherited member no-match；imported inherited member no-match 继续 deferred。
+- `build/verify_local.sh` 新增 `inherited-member-no-matching-overload-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `inheritedMemberNoMatchingOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+- 提速策略固定为沿同一家族 sema diagnostics 连续切批，优先选择只差 provenance /
+  inherited / imported 边界的一刀收口。
+
+### Architecture Decision
+
+这是 inherited member no-match 的第一条 root-owned 切片，不是完整 Pascal inherited resolver：
+
+- 只覆盖 root-owned parent chain direct member-call 的 stable signature no-match。
+- 如果 exact receiver type 自身已声明同名 method，仍按现有“保守停止、不穿透 parent 代偿”边界处理。
+- imported inherited member、record/property/array/deref receiver、implicit conversion、default
+  parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与模板化快节奏执行法
+- [x] RED：把 inherited member no-match deferred guard 翻成正向诊断回归
+- [x] 在 parent-chain member lookup 中为 root-owned inherited path 放开 no-match diagnostic gate
+- [x] 新增 `tests/fixtures/inherited_member_no_matching_overload` 与
+  `inherited-member-no-matching-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-inherited-member-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused: `nextpas build tests/fixtures/inherited_member_no_matching_overload/inherited_member_no_matching_overload_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.no-matching-overload`、
+  `diagnostic-message=no matching overload for "Pick"`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `inherited-member-no-matching-overload-check=pass`、
+  `inheritedMemberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported inherited member no-match 纳入 diagnostics
+- 不打开 exact receiver own-method mismatch 穿透 parent 的代偿路径
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 112 Imported Member Wrong Argument Count Diagnostics
+
+### Goal
+
+把 `sema.wrong-argument-count` 从 root-owned direct member-call 推进到第一条 imported direct
+member-call 安全边界：当 receiver type 已知、imported `project-source` unit 的 exact class / parent chain
+里存在同名 method，但当前 argument count 与任何 visible member target 都不匹配时，发出
+`sema.wrong-argument-count`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(1, 2);`，其中 imported project-source `TWorker.Pick(Value: Integer)`
+  可见时，必须失败为 `sema.wrong-argument-count`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member wrong-argument-count 继续 deferred，不注册错误 binding，也不提前诊断。
+- `build/verify_local.sh` 新增 `imported-member-wrong-argument-count-check`，固定 stage0 failure
+  projection 与 final verify envelope 的 `importedMemberWrongArgumentCountCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+
+### Architecture Decision
+
+这是 imported member wrong-argument-count 的第一条 source-owned 切片，不是完整 Pascal member resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class / inherited class direct member-call arity miss。
+- imported `installed-source` / RTL/helper 继续 deferred，避免把 runtime baseline / helper surface 的
+  incomplete truth 误报成 ordinary arity error。
+- imported/inherited member 其他 deferred 边界、record/property/array/deref receiver、implicit
+  conversion、default parameter lowering/ranking、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与模板化快节奏执行法
+- [x] RED：新增 imported project-source member wrong-argument-count focused regression
+- [x] RED：新增 imported installed-source member wrong-argument-count deferred guard
+- [x] 在 exact member lookup 的 `wrong-argument-count` 分支增加 imported owner provenance guard
+- [x] 新增 `tests/fixtures/imported_member_wrong_argument_count` 与
+  `imported-member-wrong-argument-count-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-imported-member-wrong-argument-count-diagnostic:sema.wrong-argument-count`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Stage0 focused: `nextpas build tests/fixtures/imported_member_wrong_argument_count/imported_member_wrong_argument_count_fail.pas`
+  输出 `failure-kind=semantic-analysis-failed`、`diagnostic-code=sema.wrong-argument-count`、
+  `diagnostic-message=wrong number of arguments for "Pick"`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-member-wrong-argument-count-check=pass`、
+  `importedMemberWrongArgumentCountCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member wrong-argument-count 纳入 diagnostics
+- 不把 default parameter ranking / implicit conversion / visibility checking 纳入这轮
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 111 Imported Member Unknown Member Diagnostics
+
+### Goal
+
+把 `sema.unknown-member` 从 root-owned direct class member-call 推进到第一条 imported direct
+member-call 安全边界：当 receiver type 已知、imported `project-source` unit 的 exact class / parent chain
+里都不存在同名 method，且当前 receiver 仍属于已知 class layout truth 时，发出
+`sema.unknown-member`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Missing(1);`，其中 imported project-source `TWorker` 只有 `Run` 而没有
+  `Missing` 时，必须失败为 `sema.unknown-member`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member unknown-member 继续 deferred，不注册错误 binding，也不提前诊断。
+- `build/verify_local.sh` 新增 `imported-unknown-member-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedUnknownMemberCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+
+### Architecture Decision
+
+这是 imported member unknown-member 的第一条 source-owned 切片，不是完整 Pascal member resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class direct member-call name miss。
+- imported `installed-source` / RTL/helper 继续 deferred，避免重演 `System` / runtime baseline
+  缺口被误报成 ordinary unknown member。
+- imported/inherited member 其他 deferred 边界、record/property/array/deref receiver、generic
+  specialization member truth、implicit conversion、default parameter ranking、var/out compatibility、
+  visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与快节奏执行法
+- [x] 复查当前 unknown-member 热路径，并确认 imported project-source regression 已实际为绿
+- [x] RED：新增 imported installed-source unknown-member deferred guard，并定位真实过宽诊断边界
+- [x] 在 member lookup 的 unknown-member 尾端增加 imported owner provenance guard
+- [x] 新增 `tests/fixtures/imported_unknown_member` 与 `imported-unknown-member-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused probe: imported project-source unknown-member regression保持 `semantic-call-bindings-status=pass`。
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=unexpected-installed-unknown-member-diagnostic:sema.unknown-member`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-unknown-member-check=pass`、
+  `importedUnknownMemberCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member unknown-member 纳入 diagnostics
+- 不把 generic specialization / alias / record receiver member miss 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 110 Imported Member No Matching Overload Diagnostics
+
+### Goal
+
+把 `sema.no-matching-overload` 从 root-owned direct member-call 与 imported bare overload set
+推进到第一条 imported direct member-call overload set 安全边界：当 receiver type 已知、imported
+`project-source` unit 的 exact class type 中存在同 arity 的多个 member target，且当前
+argument signature 来自稳定事实、没有任何 candidate signature 匹配时，发出
+`sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(True);`，其中 imported project-source `TWorker.Pick(Integer)` /
+  `TWorker.Pick(AnsiString)` 同时可见时，必须失败为 `sema.no-matching-overload`，且失败调用不注册
+  `member-call` binding。
+- imported `installed-source` member overload set no-match 继续 deferred，不注册错误 binding，也不提前诊断。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  implicit conversion、future member resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-member-no-matching-overload-check`，固定 stage0 failure projection
+  与 final verify envelope 的 `importedMemberNoMatchingOverloadCheck`。
+- 继续沿用 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 -> focused GREEN -> fresh verify ->
+  review -> commit` 固定节奏，单轮只处理一条 sema 热路径。
+
+### Architecture Decision
+
+这是 imported member-call overload-set no-match 的第一条 source-owned 切片，不是完整 Pascal member
+resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class direct member-call 多候选全不匹配。
+- imported `installed-source` / RTL/helper 继续 deferred，避免过宽误报。
+- imported/inherited member single-target mismatch 以外的 inherited no-match、record/property/array/deref
+  receiver、implicit conversion、default parameter ranking、var/out compatibility、visibility checking
+  继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮单刀目标与快节奏执行法
+- [x] RED：新增 imported project-source member no-matching-overload focused regression
+- [x] RED：新增 imported installed-source member no-matching-overload deferred guard
+- [x] 在 member exact class lookup 中带出 imported project-source `no-matching-overload` failure kind，并禁止错误 binding
+- [x] 新增 `tests/fixtures/imported_member_no_matching_overload` 与 `imported-member-no-matching-overload-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-member-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-member-no-matching-overload-check=pass`、
+  `importedMemberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member overload-set no-match 纳入 diagnostics
+- 不把 imported/inherited member 其他 deferred 边界纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 109 Imported Member Single-target Type Mismatch Diagnostics
+
+### Goal
+
+把 `sema.type-mismatch` 从 root-owned member single-target call 与 imported bare single-target call
+推进到第一条 imported direct member-call 安全边界：当 receiver type 已知、root source 中没有同 owner
+class method、imported `project-source` unit 中 exact class type 只有一个同 arity member target，且当前
+argument signature 来自稳定事实并与 target param signature 明确不兼容时，发出
+`sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `uses Worker; Worker.Pick(True);`，其中 imported project-source `TWorker.Pick(Integer)` 是唯一
+  member target 时，必须失败为 `sema.type-mismatch`，且失败调用不注册 `member-call` binding。
+- imported `installed-source` member single-target mismatch 继续 deferred，不注册错误 binding，也不提前诊断。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 mismatch，避免把未知表达式、
+  implicit conversion、future member resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-member-type-mismatch-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedMemberTypeMismatchCallCheck`。
+- 从本批次起，后续 sema 热点轮次统一按 `/plan -> 单刀目标 -> RED -> 根因定位 -> 最小修复 ->
+  focused GREEN -> fresh verify -> review -> commit` 的固定节奏推进，用单目标与热路径约束加快开发。
+
+### Architecture Decision
+
+这是 imported member-call single-target mismatch 的第一条 source-owned 切片，不是完整 Pascal member
+resolver：
+
+- 只覆盖 imported `project-source` unit 的 exact class direct member-call 单目标。
+- imported `installed-source` / RTL/helper 继续 deferred，避免过宽误报。
+- imported/inherited member no-match、record/property/array/deref receiver、implicit conversion、
+  default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] `/plan` 固定本轮目标与快节奏执行法
+- [x] RED：新增 imported project-source member single-target mismatch focused regression
+- [x] RED：新增 imported installed-source member single-target mismatch deferred guard
+- [x] 在 member exact class lookup 中带出 imported project-source `type-mismatch` failure kind，并禁止错误 binding
+- [x] 新增 `tests/fixtures/imported_member_type_mismatch_call` 与 `imported-member-type-mismatch-call-check`
+- [x] 同步持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-member-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-member-type-mismatch-call-check=pass`、
+  `importedMemberTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` member single-target mismatch 纳入 diagnostics
+- 不把 imported/inherited member no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 108 Imported Single-target Type Mismatch Diagnostics
+
+### Goal
+
+把 `sema.type-mismatch` 从 root-owned single-target bare/member call 推进到第一条 imported bare
+call 安全边界：当 root source 没有同名 callable，imported `project-source` unit 中只有一个同 arity
+target，当前 argument signature 来自稳定事实，且与 target param signature 明确不兼容时，发出
+`sema.type-mismatch`。
+
+本批次新增并冻结：
+
+- `uses Helper; Pick(True);`，其中 `Helper.Pick(Integer)` 是唯一 imported project-source target 时，
+  必须失败为 `sema.type-mismatch`，且失败调用不注册 `call` binding。
+- imported `installed-source` 单目标 mismatch 继续 deferred，不注册错误 binding，也不提前诊断。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 mismatch，避免把未知表达式、
+  implicit conversion、future imported resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-type-mismatch-call-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedTypeMismatchCallCheck`。
+
+### Architecture Decision
+
+这是 imported bare single-target mismatch 的第一条 source-owned 切片，不是完整 imported callable
+type system：
+
+- 只覆盖 imported `project-source` unit 的 bare callable 单目标。
+- imported `installed-source` / RTL/helper 继续 deferred，避免重演 `ExpandFileName` /
+  `FileExists` 那类过宽误报。
+- imported 多候选 no-match 仍由 `sema.no-matching-overload` 表达；member mismatch、implicit
+  conversion、default parameter ranking、var/out compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 imported single-target `Pick(Integer)` 调 `Pick(True)` 的 focused regression
+- [x] RED：新增 imported `installed-source` single-target mismatch deferred guard
+- [x] 在 imported bare call lookup 中带出 `type-mismatch` failure kind，并禁止错误 binding
+- [x] 新增 `tests/fixtures/imported_type_mismatch_call` 与 `imported-type-mismatch-call-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-call-type-mismatch-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-type-mismatch-call-check=pass`、`importedTypeMismatchCallCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported `installed-source` single-target mismatch 纳入 diagnostics
+- 不把 member-call imported mismatch 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-27 Batch 107 Member No Matching Overload Diagnostics
+
+### Goal
+
+把 `sema.no-matching-overload` 从 bare/root/imported callable set 推进到第一条 direct member-call
+安全边界：当 receiver type 已知、root-owned exact class type 中存在同 owner / 同 qualified name /
+同 arity 的多个 method candidates，当前 argument signature 来自稳定事实，且没有任何 candidate
+signature 匹配时，发出 `sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `Worker.Pick(True)`，其中 `TWorker.Pick(Integer)` 与 `TWorker.Pick(AnsiString)` 同时可见时，
+  必须失败为 `sema.no-matching-overload`，且失败调用不注册 `member-call` binding。
+- 只覆盖 direct class variable receiver 与 root-owned exact class type；imported class member no-match、
+  inherited no-match、record/property/array/deref receiver 继续 deferred。
+- focused semantic guard 固定 inherited parent overload no-match 仍保持 deferred，避免 parent-chain
+  lookup 越过本批次 exact receiver 边界。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  implicit conversion、future member resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `member-no-matching-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `memberNoMatchingOverloadCheck`。
+
+### Architecture Decision
+
+这是 member-call failure surface 的 no-match 切片，不是完整 Pascal member overload resolver：
+
+- 单一 root-owned member target 不兼容继续报 `sema.type-mismatch`。
+- 同 arity 多候选且 signature collision / 不可消歧继续报 `sema.ambiguous-overload`。
+- root-owned exact class type 多候选全不匹配才报 `sema.no-matching-overload`。
+- imported / inherited member no-match、implicit conversion、default parameter ranking、var/out
+  compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 `TWorker.Pick(Integer)` / `TWorker.Pick(AnsiString)` 调 `Worker.Pick(True)` 的
+      focused regression
+- [x] 在 member exact class method lookup 中带出 `no-matching-overload` failure kind
+- [x] 增加 inherited member no-match deferred guard，确认 parent-chain 不提前诊断
+- [x] 在 qualified member-call diagnostic path 中发 `sema.no-matching-overload`
+- [x] 新增 `tests/fixtures/member_no_matching_overload` 与 `member-no-matching-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-member-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Review guard: inherited member no-match focused guard 曾失败在
+  `semantic-call-bindings-failure=unexpected-inherited-member-no-matching-overload-diagnostic:sema.no-matching-overload`；
+  收窄到 receiver exact type 后 focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `member-no-matching-overload-check=pass`、`memberNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported / inherited member no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-26 Batch 106 Imported No Matching Overload Diagnostics
+
+### Goal
+
+把 Batch 105 的 `sema.no-matching-overload` 从 root-owned overload set 推进到第一条 imported
+callable 安全边界：当 root source 没有同名 callable，imported units 中存在同名同参数个数的多个
+候选，当前 argument signature 来自稳定事实，且没有任何 imported candidate signature 匹配时，
+发出 `sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `uses HelperA, HelperB; Pick(True);`，其中 `HelperA.Pick(Integer)` 与
+  `HelperB.Pick(AnsiString)` 同时可见时，必须失败为 `sema.no-matching-overload`，且失败调用不注册
+  `call` binding。
+- root callable 仍优先；只在 root 没有同名 callable、imported candidate set 可证明全不匹配时报告。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  implicit conversion、future imported resolver 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `imported-no-matching-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `importedNoMatchingOverloadCheck`。
+
+### Architecture Decision
+
+这是 imported callable failure surface 的第一条 no-match 切片，不是完整 Pascal overload resolver：
+
+- root / imported 优先级不改变；root 明确有 callable name 时不回落 imported。
+- imported ambiguity 仍由 `sema.ambiguous-overload` 表达，single imported target 的 type mismatch 继续
+  deferred。
+- member no-match、implicit conversion、default parameter ranking、var/out compatibility、visibility
+  checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 imported `Pick(Integer)` / `Pick(AnsiString)` 调 `Pick(True)` 的 focused regression
+- [x] 在 imported bare call lookup 中带出 `no-matching-overload` failure kind
+- [x] 复用 semantic analyzer 中现有 `sema.no-matching-overload` 投影
+- [x] 新增 `tests/fixtures/imported_no_matching_overload` 与 `imported-no-matching-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-imported-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `imported-no-matching-overload-check=pass`、`importedNoMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 single imported target type mismatch 纳入 diagnostics
+- 不把 member-call no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
+
+## Addendum: 2026-05-26 Batch 105 No Matching Overload Diagnostics
+
+### Goal
+
+把 Batch 75 之前明确 deferred 的 root-owned overload signature no-match 推进成第一条安全诊断：
+当 bare procedure/function call 在 root source 中存在同名同参数个数的多个候选，当前 argument
+signature 来自稳定事实，且没有任何候选 signature 匹配时，发出
+`sema.no-matching-overload`。
+
+本批次新增并冻结：
+
+- `procedure Pick(Integer); procedure Pick(AnsiString); Pick(True);` 必须失败为
+  `sema.no-matching-overload`，且失败调用不注册 `call` binding。
+- 只覆盖 root-owned bare callable set；root callable 仍优先，不回落 imported 代偿。
+- 只有 `AHasArgSignature` 且 `AHasTypeMismatchEvidence` 成立时才报告 no-match，避免把未知表达式、
+  builtin/future callable、implicit conversion 或 ranking 缺口误报成错误。
+- `build/verify_local.sh` 新增 `no-matching-overload-check`，固定 stage0 failure projection 与
+  final verify envelope 的 `noMatchingOverloadCheck`。
+
+### Architecture Decision
+
+这是 overload failure surface 的第一条 no-match 切片，不是完整 Pascal overload resolver：
+
+- ambiguity、wrong arity、single-target type mismatch、unknown callable 已经各自有结构化 code；
+  本批补上“root 多候选但稳定签名全不匹配”这个空缺。
+- `sema.no-matching-overload` 与 `sema.type-mismatch` 分开：前者描述多候选集合没有匹配项，后者描述
+  单一 target 的参数类型不兼容。
+- imported no-match、member no-match、implicit conversion、default parameter ranking、var/out
+  compatibility、visibility checking 继续 deferred。
+
+### Status
+
+Completed
+
+### Planned Steps
+
+- [x] RED：新增 root bare overload `Pick(Integer)` / `Pick(AnsiString)` 调 `Pick(True)` 的 focused regression
+- [x] 在 bare call lookup 中带出 `no-matching-overload` failure kind
+- [x] 在 semantic analyzer 中发 `sema.no-matching-overload`
+- [x] 新增 `tests/fixtures/no_matching_overload` 与 `no-matching-overload-check`
+- [x] 同步 semantic model / stage0 docs 与持续记录
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- RED: focused semantic test 失败在
+  `semantic-call-bindings-failure=missing-bare-no-matching-overload-diagnostic`。
+- GREEN focused: focused semantic test 输出 `semantic-call-bindings-status=pass`。
+- Full: fresh `bash build/verify_local.sh` 输出
+  `no-matching-overload-check=pass`、`noMatchingOverloadCheck":"pass"`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Non-goals
+
+- 不把 imported callable no-match 纳入 diagnostics
+- 不把 member-call no-match 纳入 diagnostics
+- 不实现 implicit conversion / default parameter ranking / var-out compatibility / visibility checking
+- 不修改 `core/`
 
 ## Addendum: 2026-05-26 Batch 104 Function Result Call Type Mismatch Evidence
 
@@ -8758,1466 +12079,135 @@ Completed
   完整 multi-root workspace model、更丰富的 package/workspace provenance 与
   nextPas 完整脱离宿主 FPC 的最终 codegen
 
-## Addendum: 2026-05-27 Platform Windows Wait/Error Semantics Ownerization
+## Addendum: 2026-05-28 Batch 204 Installed-source Unit Method Body Implicit-self Function Result Ambiguous Overload Deferred Guard
 
-### Goal Node
+### Goal Nodes
 
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-把 Windows wait result / last-error semantics 继续从 `platform.thread`、
-`platform.sync` 的 consumer 实现里抽离到 host-owned
-`nextpas.core.platform.windows.ffi`，让 platform L0 owner boundary 更诚实。
-
-### Current Gap
-
-- 前几批已经把 Windows timeout conversion 和 `FILETIME` token 下沉到了
-  `windows.ffi`，但 `platform.thread`、`platform.sync` 里仍有 raw
-  `GetLastError`、`WAIT_OBJECT_0`、`ERROR_TIMEOUT` 语义。
-- 这些 raw Windows token 还没有被 focused source-surface gate 冻结为
-  “必须由 host ffi owner 提供”的公开约束。
-
-### Architecture Decision
-
-- Windows wait result / error semantics 与 timeout conversion 一样，都属于宿主 ABI /
-  policy truth，应继续归 `nextpas.core.platform.windows.ffi` owner。
-- `platform.thread`、`platform.sync` 继续负责 nextPas 的稳定错误映射和 API 契约，
-  但不直接持有 raw `GetLastError` / `WAIT_*` / `ERROR_*` 语义。
-- 这批只收紧 owner boundary，不改变 `platform.thread` / `platform.sync`
-  对外 public API，也不伪装成已经拿到 Windows runtime evidence。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩充 `nextpas.core.platform.windows.ffi`，补齐 Windows last-error / wait-result helper
-- [x] 让 `platform.thread` 改为消费 host-owned Windows error / wait semantics
-- [x] 让 `platform.sync` 改为消费 host-owned Windows error / timeout semantics
-- [x] 扩充 `test_platform_thread_host_ffi_surface`
-- [x] 扩充 `test_platform_sync_host_ffi_surface`
-- [x] 运行 focused tests
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `windows.ffi must expose Windows last-error conversion helper`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `windows.ffi must expose Windows last-error conversion helper`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 Windows wait API 的 public contract
-- 这批不声称 macOS / FreeBSD / Android 已有新增 runtime evidence
-- 这批不继续扩 `platform.time` / `platform.sync` 的下一轮 ownerization 目标
-
-## Addendum: 2026-05-27 Platform POSIX Errno Read Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-继续把 POSIX errno 读取语义从 `platform.thread` / `platform.sync` 的 consumer 实现层下沉到
-host-owned ffi owner，让“当前 errno 值怎么读”不再散落在平台实现单元里。
+给 Batch 187 的 imported `project-source` unit method body implicit-self same-unit function-result
+`ambiguous-overload` 补同形 installed-source deferred guard：
 
-### Current Gap
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker.Pick(Value: Integer)`、`TWorker.Pick(Value: LongInt)`、
+  `TWorker.Run`，并在同一 imported unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.ambiguous-overload`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
 
-- `linux/darwin/android/freebsd/unix` ffi 单元已经拥有 `platform_errno_location` 外部符号绑定，
-  但 `platform.thread` 与 `platform.sync` 仍各自本地解引用 errno storage。
-- 这让 errno symbol binding 已经 host-owned，但 errno value read 仍停在 consumer 层，owner boundary
-  还差半步。
+### Acceleration Plan
 
-### Architecture Decision
+- 不新增 stage0 fixture、不碰 `core/`。
+- 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadStaysDeferred`。
+- 注册到 harness main body。
+- Focused semantic probe → 预期直接 GREEN（现有 installed-source provenance guard 已覆盖）。
+- 同步 spec / records / goal tree。
+- Fresh `bash build/verify_local.sh`。
+- Git commit。
 
-- `platform_errno_location` 的绑定继续留在各 host ffi owner。
-- 基于该绑定读取当前 errno 的 helper 也继续归各 host ffi owner，因此 consumer 只消费
-  `platform_posix_errno_value`，不直接写 `platform_errno_location^`。
-- 这批只收紧 owner boundary，不改 `platform.thread` / `platform.sync` public API，也不宣称新增
-  Darwin / FreeBSD / Android runtime evidence。
+## Addendum: 2026-05-28 Batch 218 Default Parameter Extended Coverage
 
-### Status
+### Goal Nodes
 
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩充 `linux/darwin/android/freebsd/unix` ffi，补齐 `platform_posix_errno_value`
-- [x] 让 `platform.thread` 改为消费 host-owned errno value helper
-- [x] 让 `platform.sync` 改为消费 host-owned errno value helper
-- [x] 扩充 `test_platform_thread_host_ffi_surface`
-- [x] 扩充 `test_platform_sync_host_ffi_surface`
-- [x] 运行 focused tests
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux errno value helper for retryable nanosleep`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux errno value helper for sync`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不新增宿主 ABI externals
-- 这批不修改 `platform.time`
-- 这批不把 POSIX error-code 到 nextPas error-code 的映射再下沉到 ffi
-
-## Addendum: 2026-05-27 Platform Time Host Clock Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
+- `G1.5 Call, member, and overload resolution`
 
 ### Goal
 
-继续把 `platform.time` 里的 Darwin / Windows 宿主时钟 helper 从 consumer 实现层下沉到
-host-owned ffi owner，让 `platform.time` 尽量只保留跨平台 clock contract 与通用安全换算。
+加固 default parameter 语义能力，覆盖更多真实场景：
+1. 多个 default params：`Pick(A: Integer; B: Integer = 0; C: Integer = 0)` 调用 `Pick(1)` / `Pick(1,2)` / `Pick(1,2,3)`
+2. Inherited method with default params：`TBase.Touch(V: Integer; Extra: Integer = 0)` 被子类调用
+3. Implicit-self with default params：class body 内 `Pick(1)` 面对 `Pick(A: Integer; B: Integer = 0)`
+4. Default param + overload 交互：确认不误报 ambiguous
 
-### Current Gap
+### 不做
 
-- `platform.time` 虽然已经不再依赖 FPC 平台单元，也已经通过 `windows.ffi` /
-  `darwin.ffi` 声明 raw externals，但 macOS monotonic 路径仍把
-  `mach_timebase_info` cache / sanitize 逻辑留在 consumer。
-- Windows monotonic / realtime 路径也仍直接在 consumer 中调用
-  `QueryPerformanceFrequency`、`QueryPerformanceCounter` 与
-  `GetSystemTimeAsFileTime`，并自己维护 QPC 频率初始化。
+- 不碰 `core/`
+- 不实现 default value codegen
+- 不实现 default value type checking diagnostics
 
-### Architecture Decision
+## Addendum: 2026-05-28 Batch 221 Protected Visibility + Same-Unit Private Access
 
-- `platform.time` 继续拥有跨平台通用的安全换算 helper，例如 `platform_qpc_to_ns`、
-  `platform_resolution_from_frequency_ns`、`platform_timespec_to_ns`。
-- Darwin `mach` timebase cache / sanitize 与 monotonic helper 继续归
-  `nextpas.core.platform.darwin.ffi` owner。
-- Windows QPC 频率读取、counter 读取与 `FILETIME -> Unix ns` realtime helper
-  继续归 `nextpas.core.platform.windows.ffi` owner。
-- 这批只收紧 owner boundary，不改变 `platform.time` public API，也不伪装成已经拿到
-  Darwin runtime evidence。
+### Goal Nodes
 
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩充 `test_platform_time_host_ffi_surface`，先把 Darwin / Windows host clock helper gate 打成 RED
-- [x] 在 `darwin.ffi` 新增 Darwin monotonic / resolution helper
-- [x] 在 `windows.ffi` 新增 QPC frequency / counter / FILETIME realtime helper
-- [x] 让 `platform.time` 改为消费 host-owned helper
-- [x] 运行 focused tests
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在 `darwin.ffi must expose Darwin monotonic clock helper for platform.time`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_time_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-- Additional evidence gap:
-  - `fpc -Tdarwin -Cn ... core/tests/nextpas.core.time/test_time/test_time.lpr`
-    在当前 Linux 宿主失败于 `Can't find unit system`，因此这批没有新增 Darwin compile/runtime proof
-
-### Non-goals
-
-- 这批不改 `platform.time` public API
-- 这批不把 `clock_gettime/getres` 从 shared `posix.ffi` 再抽走
-- 这批不声称当前 Linux 宿主已获得 Darwin runtime evidence
-
-## Addendum: 2026-05-27 Platform Thread Host Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-继续把 `platform.thread` 里仍散落在 consumer 的 Windows / Unix 线程 helper 下沉到各自
-host-owned ffi owner，让 `platform.thread` 更聚焦于 L0 thread contract 和 handle 生命周期。
+补齐 visibility 语义的两个关键规则：
+1. `protected` member 允许子类通过 implicit-self 访问（class body 内）
+2. 同一 compilation unit（program/unit）内的代码可以访问任何 class 的 `private` member（FPC 语义）
 
-### Current Gap
+### 设计决策
 
-- `platform.thread` 虽然已经把 Windows wait/error、sleep timeout 和 POSIX errno truth
-  下沉到了 host ffi，但 consumer 仍直接调用 Windows `GetCurrentThreadId`、
-  `SwitchToThread`、`Tls*`、`GetSystemInfo`。
-- Unix 分支也仍直接调用 `pthread_self`、`gettid`、`pthread_threadid_np`、
-  `pthread_getthreadid_np` 与 `sysconf(...)`，使当前线程 token、native thread id 和
-  CPU count helper 仍泄漏在 consumer。
+FPC 的 visibility 规则：
+- `private`：同一 unit 内可见（不同于 Delphi 的 strict private）
+- `protected`：同一 unit + 子类可见
+- `public`：任何地方可见
+- `published`：同 public + RTTI
 
-### Architecture Decision
+当前 Batch 220 的实现过于严格：它只允许同一 class 内部访问 private。需要放宽为"同一 unit 内可访问"。
 
-- Windows current-thread id、yield、TLS alloc/free/set/get、CPU count helper 继续归
-  `nextpas.core.platform.windows.ffi` owner。
-- Linux/Android/Darwin/FreeBSD/generic Unix 统一新增
-  `platform_thread_self_token_u64`、`platform_native_thread_id_u64`、
-  `platform_cpu_count_i32`，把 Unix host helper 继续收进各宿主 ffi owner。
-- `platform.thread` 只继续拥有 create/join/detach state、public API 契约与跨平台
-  `nanosleep` request construction，不再直接散落上述 raw helper 调用。
+对于 root source（program），所有 type 声明都在同一 compilation unit 中，所以 private 应该总是可访问的。只有 imported unit 的 private member 才应该被拒绝。
 
-### Status
+### 实现计划
 
-Completed; verification passed.
+1. **TDD：写测试**
+   - same-unit private access 应该允许（当前会误报）
+   - imported unit private access 应该拒绝
+   - protected member 子类 implicit-self 访问应该允许
+   - protected member 外部非子类访问应该拒绝
 
-### Planned Steps
+2. **修改 visibility check 逻辑**
+   - 如果 caller 和 target 在同一 unit（同一 OwnerUnitId），private/protected 都允许
+   - 如果 caller 是 target class 的子类，protected 允许
+   - 否则 private/protected 拒绝
 
-- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 Windows / Unix helper owner boundary 打成 RED
-- [x] 在 `windows.ffi` 新增 current-thread / yield / TLS / CPU count helper
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 self token / native id / CPU count helper
-- [x] 让 `platform.thread` 改为消费 host-owned helper
-- [x] 运行 focused tests
-- [x] 运行 fresh `bash build/verify_local.sh`
+3. **验证**
 
-### Verification
+## Addendum: 2026-05-28 Batch 217 Default Parameter Member Method Call Binding
 
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `windows.ffi must expose Windows current-thread id helper`
-  - 同一测试扩充 Unix helper gate 后再次 RED，失败在
-    `linux.ffi must expose Linux thread self token helper`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 -FU/home/dtamade/projects/nextPas/.sisyphus/tmp/manual_core_platform_thread_win64 /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
+### Goal Nodes
 
-### Non-goals
-
-- 这批不重写 Windows create/join/detach state machine
-- 这批不改 `platform.thread` public API
-- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence
-
-## Addendum: 2026-05-27 Platform Thread Windows Lifecycle Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
 
 ### Goal
 
-继续把 `platform.thread` 的 Windows handle lifecycle / sleep / atomic refcount helper
-从 consumer 实现层收回 `nextpas.core.platform.windows.ffi`，让 `platform.thread`
-更像 public contract consumer，而不是继续散落 raw WinAPI 调用。
+让 member method call binding 正确处理 default parameters：当 `TWorker.Pick(Value: Integer; Extra: Integer = 0)` 被调用为 `Obj.Pick(1)` 时，应该成功绑定（当前 exact-match 逻辑会失败）。
 
-### Current Gap
+### 问题分析
 
-- `platform.thread` 虽然已经把 Windows wait/error、current-thread id、TLS、CPU count
-  等 helper 收回 host ffi owner，但 Windows 分支仍直接调用
-  `CreateThread`、`WaitForSingleObject`、`CloseHandle`、`Sleep` 与
-  `InterlockedDecrement`。
-- 这意味着 owned thread handle 的底层创建/等待/关闭语义，以及 thread state 的 atomic
-  refcount 细节，仍泄漏在 consumer 里。
+1. `TSemanticSymbol.ParamCount` 只存总参数数，没有 `MinParamCount`
+2. `MethodSymbolIdForExactClassTypeMember` 用 `Symbol.ParamCount = AArgCount` 做精确匹配
+3. Body matching fallback 用 `CountDeclParams(...) = AArgCount` 也是精确匹配
 
-### Architecture Decision
+### 实现计划
 
-- `nextpas.core.platform.windows.ffi` 继续拥有 raw Windows thread lifecycle ABI truth，并新增：
-  - `windows_thread_create_handle`
-  - `windows_thread_wait_terminated`
-  - `windows_thread_close_handle`
-  - `windows_thread_sleep_ns`
-  - `windows_atomic_decrement_i32`
-- `platform.thread` 继续保留 `TPlatformThreadHandle` public contract、Windows thread state
-  record、join/detach 生命周期收口与返回值语义，但不再直接写 raw
-  `CreateThread` / `WaitForSingleObject` / `CloseHandle` / `Sleep` /
-  `InterlockedDecrement`。
-- 这批不改 public API，不重写整个 Windows state machine；范围只收紧 helper ownership。
+1. **TDD：先写失败测试**
+   - 新增 `tests/semantic/test_semantic_default_params.pas`
+   - 测试 member method call with default parameter binding
+   - 预期：call binding 成功，model status = ready
 
-### Status
+2. **最小实现改动**
+   - `np_semantic_model.pas`：在 `TSemanticSymbol` 增加 `MinParamCount: LongInt`
+   - `np_semantic_model.pas`：新增 `SetSymbolMinParamCount` 方法
+   - `np_semantic_analyzer.pas`：symbol 注册时同时设置 `MinParamCount`
+   - `np_semantic_analyzer.pas`：`MethodSymbolIdForExactClassTypeMember` 改用范围检查
 
-Completed; verification passed.
+3. **验证**
+   - Focused test pass
+   - Fresh `bash build/verify_local.sh` pass
+   - 确认不破坏现有 semantic-call-bindings 测试
 
-### Planned Steps
+### 不做
 
-- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 Windows lifecycle helper owner boundary 打成 RED
-- [x] 在 `windows.ffi` 新增 Windows thread lifecycle / sleep / atomic helper wrappers
-- [x] 让 `platform.thread` 的 Windows 分支改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `windows.ffi must expose Windows thread create helper: windows_thread_create_handle`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 `platform.thread` public API
-- 这批不引入 Windows runtime-only 证据；新增的是 Win64 compile-only + fresh 主门证明
-- 这批不顺手扩到 POSIX pthread lifecycle helper ownerization
-
-## Addendum: 2026-05-27 Platform Thread POSIX Lifecycle Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.thread` 的 POSIX pthread lifecycle / TLS / yield / sleep raw 调用从 consumer
-实现层收回当前选定宿主的 ffi owner，让 `platform.thread` 在 Unix 路径下也保持和 Windows
-路径同样干净的 owner boundary。
-
-### Current Gap
-
-- `platform.thread` 虽然已经把 Unix self token、native thread id、CPU count 和 errno read
-  helper 收回各宿主 ffi owner，但 consumer 仍直接调用 `pthread_create`、`pthread_join`、
-  `pthread_detach`、`pthread_key_*`、`sched_yield` 与 `nanosleep`。
-- 这意味着 POSIX thread handle lifecycle、TLS key 操作和 sleep retry 语义仍泄漏在
-  consumer，而不是收口到当前宿主 ffi owner。
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
-  - `platform_pthread_create_handle`
-  - `platform_pthread_join_handle`
-  - `platform_pthread_detach_handle`
-  - `platform_pthread_yield`
-  - `platform_pthread_sleep_ns`
-  - `platform_pthread_tls_create`
-  - `platform_pthread_tls_destroy`
-  - `platform_pthread_tls_set`
-  - `platform_pthread_tls_get`
-- `platform.thread` 继续保留 `TPlatformThreadHandle` public contract、`TPosixThreadState`
-  state record、join/detach 收口时机与返回值语义，但不再直接写 raw `pthread_*` /
-  `sched_yield` / `nanosleep`。
-- 这批不改 public API，不顺手扩到 `platform.sync` 的 pthread helper ownerization。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩充 `test_platform_thread_host_ffi_surface`，先把 POSIX lifecycle/TLS/yield/sleep helper owner boundary 打成 RED
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 POSIX pthread helper wrappers
-- [x] 让 `platform.thread` 的 Unix 分支改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux pthread create helper: platform_pthread_create_handle`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-thread -FE/home/dtamade/projects/nextPas/core/build/review-win64-thread -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.thread/test_platform_thread/test_platform_thread.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 `platform.thread` public API
-- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
-- 这批不顺手把 `platform.sync` 的 pthread raw 调用一起抽走
-
-## Addendum: 2026-05-27 Platform Sync POSIX Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.sync` 的 POSIX pthread mutex / rwlock / condvar / timeout clock raw 调用
-从 consumer 实现层收回当前宿主 ffi owner，让 `platform.sync` 在 Unix 路径下也像 Windows /
-Linux futex 路径那样保持清晰的 owner boundary。
-
-### Current Gap
-
-- `platform.sync` 虽然已经把 pthread capability token、Linux futex helper、Windows sync helper
-  和 errno read truth 收回 host ffi owner，但 consumer 仍直接调用
-  `clock_gettime`、`pthread_mutexattr_*`、`pthread_mutex_*`、`pthread_rwlock_*`、
-  `pthread_condattr_*`、`pthread_cond_*` 与 `sched_yield`。
-- 这意味着 POSIX timeout clock 读取、mutex/cond attr 初始化、raw pthread 调用和 spin-yield
-  细节仍泄漏在 consumer，而不是收口到当前宿主 ffi owner。
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
-  - `platform_pthread_timeout_clock_now`
-  - `platform_pthread_mutex_*`
-  - `platform_pthread_rwlock_*`
-  - `platform_pthread_condvar_*`
-- `platform.sync` 继续保留 `PLATFORM_ERR_*` 映射、public opaque storage contract、
-  deadline 计算与 wait-bucket fallback 策略，但不再直接写 raw `clock_gettime` /
-  `pthread_*` / `sched_yield`。
-- 这批不改 public API，不顺手改变 Linux futex path 或 Windows helper 形状。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩充 `test_platform_sync_host_ffi_surface`，先把 POSIX sync helper owner boundary 打成 RED
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 POSIX sync helper wrappers
-- [x] 让 `platform.sync` 的 Unix 分支改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose pthread timeout clock helper for sync: platform_pthread_timeout_clock_now`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 `platform.sync` public API
-- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
-- 这批不顺手改写 wait-bucket fallback 算法或跨模块抽象
-
-## Addendum: 2026-05-27 Platform Time POSIX Clock Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.time` 的 POSIX raw clock 调用从 consumer 实现层收回当前宿主 ffi owner，让
-`platform.time` 的 Unix / Darwin 路径也像 `platform.thread` / `platform.sync` 一样保持清晰的
-host helper boundary。
-
-### Current Gap
-
-- `platform.time` 虽然已经把 Windows QPC / FILETIME helper、Darwin `mach_*` helper 和
-  host clock id token 收回 `*.ffi` owner，但 POSIX 路径仍在 consumer 里直接调用
-  `clock_gettime` / `clock_getres`。
-- 这意味着 monotonic / realtime / resolution 的 raw POSIX clock 调用细节和 host clock id
-  依赖仍泄漏在 consumer，而不是继续收口到当前宿主 ffi owner。
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 统一新增：
-  - `platform_clock_monotonic_now`
-  - `platform_clock_realtime_now`
-  - `platform_clock_monotonic_getres`
-- `platform.time` 继续保留 `platform_timespec_to_ns`、QPC/frequency 安全换算和 public clock
-  contract，但不再直接写 raw `clock_gettime` / `clock_getres` 或 host clock id token。
-- 这批不改 `platform.time` public API，不改 Windows helper 形状，也不顺手引入 L1 `core.time`
-  抽象。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 `test_platform_time_host_ffi_surface`，先把 POSIX clock helper owner boundary 打成 RED
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 新增 host clock helper wrappers
-- [x] 让 `platform.time` 的 POSIX / Darwin realtime 路径改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose host monotonic clock helper for platform.time: platform_clock_monotonic_now`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -Fi/home/dtamade/projects/nextPas/core/src -Fu/home/dtamade/projects/nextPas/core/src -FE/home/dtamade/projects/nextPas/core/build/review-win64-time -FU/home/dtamade/projects/nextPas/core/build/review-win64-time /home/dtamade/projects/nextPas/core/tests/nextpas.core.time/test_time/test_time.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 `platform.time` public API
-- 这批不声称新增 Darwin / FreeBSD / Android runtime evidence；新增的是 source-surface proof、Linux focused runtime 与 Win64 compile-only
-- 这批不顺手改变 L1 `core.time` 示例/基准或 `Stopwatch` 归属
-
-## Addendum: 2026-05-27 Platform Sync Windows Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.sync` 的 Windows 同步 helper 从 consumer 实现层下沉到
-`nextpas.core.platform.windows.ffi`，让 `platform.sync` 更像 public contract consumer，
-而不是散落 raw WinAPI 调用的脚本层。
-
-### Current Gap
-
-- `platform.sync` 虽然已经把 Windows sync ABI declaration 统一并入
-  `nextpas.core.platform.windows.ffi`，但 Windows 分支仍直接调用
-  `InitializeSRWLock`、`AcquireSRWLock*`、`SleepConditionVariableSRW`、
-  `WaitOnAddress`、`WakeByAddress*`。
-- `test_platform_sync_host_ffi_surface` 之前只冻结了 wait/error/timeout helper，
-  还没有把 mutex/rwlock/condvar/address-wait helper owner boundary 一起锁死。
-
-### Architecture Decision
-
-- `windows.ffi` 继续拥有 raw Windows sync ABI declaration，并新增：
-  - `windows_mutex_*`
-  - `windows_rwlock_*`
-  - `windows_condvar_*`
-  - `windows_wait_address_i32`
-  - `windows_wake_address_*`
-- `platform.sync` 继续保留 nextPas public opaque storage contract、`PLATFORM_ERR_BUSY` /
-  `PLATFORM_ERR_TIMEOUT` 映射，以及 `windows_timeout_ns_to_ms` +
-  `windows_last_error_is_timeout` 这层跨平台 wait policy 消费。
-- 这批不扩到 Linux futex helper ownerization；范围只收紧 Windows sync helper boundary。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 修正 `test_platform_sync_host_ffi_surface` 到正确的 Windows helper contract，并观察 RED
-- [x] 在 `windows.ffi` 新增 Windows mutex/rwlock/condvar/address-wait helper wrappers
-- [x] 让 `platform.sync` 的 Windows 分支改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `windows.ffi must expose Windows mutex init helper: windows_mutex_init`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不重写 Linux futex 路径
-- 这批不改 `platform.sync` public API
-- 这批不声称新增 Windows runtime evidence；新增的是 Win64 compile-only + Linux 主门证据
-
-## Addendum: 2026-05-27 Platform Sync Linux Futex Helper Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.sync` 的 Linux futex helper 从 consumer 实现层下沉到
-`nextpas.core.platform.linux.ffi`，让 Linux path 与刚收口的 Windows helper owner boundary
-保持同一形状。
-
-### Current Gap
-
-- `platform.sync` 虽然已经通过 `linux.ffi` 拥有 futex ABI declaration、syscall number、
-  `FUTEX_*` 常量和 errno helper，但 Linux address-wait path 仍在 consumer 里直接拼
-  `linux_syscall + FUTEX_* + timespec`。
-- `test_platform_sync_host_ffi_surface` 之前只冻结“使用 `linux.ffi`”这一级，还没有明确要求
-  futex wait/wake helper 本身归 `linux.ffi` owner。
-
-### Architecture Decision
-
-- `linux.ffi` 继续保留 raw futex ABI declaration 与 constants，并新增：
-  - `linux_futex_wait_i32`
-  - `linux_futex_wake_one_i32`
-  - `linux_futex_wake_all_i32`
-- `platform.sync` 继续保留 nextPas public contract 检查（例如 nil/value mismatch）与
-  `platform_posix_map_error` 映射，但不再直接写 raw futex syscall 拼装。
-- 这批不把 POSIX fallback bucket runtime 再抽走；范围只收紧 Linux futex helper boundary。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 `test_platform_sync_host_ffi_surface`，先把 Linux futex helper owner boundary 打成 RED
-- [x] 在 `linux.ffi` 新增 futex wait/wake helper wrappers
-- [x] 让 `platform.sync` 的 Linux futex path 改为消费这些 helper
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `linux.ffi must expose Linux futex wait helper for sync: linux_futex_wait_i32`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 -Cn -MObjFPC -Sh -O2 -gl -FU/home/dtamade/projects/nextPas/core/build/review-win64-sync -FE/home/dtamade/projects/nextPas/core/build/review-win64-sync -Fu/home/dtamade/projects/nextPas/core/src -Fi/home/dtamade/projects/nextPas/core/src /home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不重写 pthread mutex/rwlock/condvar path
-- 这批不改 `platform.sync` public API
-- 这批不声称新增 Linux futex semantic matrix 以外的平台 runtime evidence
-
-## Addendum: 2026-05-27 Platform ABI Size Token Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.thread` / `platform.sync` 仍然留在 consumer 里的 raw ABI size truth 收回
-host ffi owner，让“谁拥有 raw ABI type 形状，谁就拥有由它派生出来的 opaque storage size token”
-这条边界闭合。
-
-### Current Gap
-
-- 前几轮虽然已经把 pthread / futex / Windows sync / POSIX clock 的 raw declaration 和 helper
-  收进 `*.ffi` owner，但 `platform.thread` 仍直接在 consumer state record 里保存 `pthread_t`。
-- `platform.sync` 仍在 consumer interface 里直接写
-  `SizeOf(pthread_mutex_t)` / `SizeOf(pthread_rwlock_t)` / `SizeOf(pthread_cond_t)` /
-  `SizeOf(SRWLOCK)` / `SizeOf(CONDITION_VARIABLE)`，所以 public opaque storage size truth
-  还没有真正归回 host ffi owner。
-- `test_platform_sync_posix_surface` 也还冻结着旧设计，要求 consumer 直接写 raw `SizeOf(...)`，
-  会和新的 owner boundary 冲突。
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 统一继续拥有：
-  - `PLATFORM_PTHREAD_TOKEN_SIZE`
-  - `PLATFORM_PTHREAD_MUTEX_SIZE`
-  - `PLATFORM_PTHREAD_RWLOCK_SIZE`
-  - `PLATFORM_PTHREAD_CONDVAR_SIZE`
-- `windows.ffi` 继续拥有：
-  - `PLATFORM_WINDOWS_MUTEX_SIZE`
-  - `PLATFORM_WINDOWS_RWLOCK_SIZE`
-  - `PLATFORM_WINDOWS_CONDVAR_SIZE`
-- `platform.thread` 的 Unix consumer 继续保留 nextPas 自己的 state record、join/detach
-  生命周期收口与 public contract，但 thread token storage 改成 nextPas-owned opaque byte
-  storage，不再直接保存 raw `pthread_t`。
-- `platform.sync` 继续保留 nextPas 的 public opaque storage contract、error mapping 与 wait
-  policy，但 public size 常量只消费 host-owned size token，不再在 consumer 里再次
-  `SizeOf(...)` raw type。
-- 这批不扩到新的 public API，也不顺手改写更高层的并发抽象。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 thread/sync host ffi surface tests，先把 size-token owner boundary 打成 RED
-- [x] 在 POSIX host ffi / windows.ffi 暴露 ABI size token
-- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 token
-- [x] 修正 stale `test_platform_sync_posix_surface` 到新的 owner boundary
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `platform_pthread_token_size`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `platform_pthread_mutex_size`
-  - 首轮 `bash build/verify_local.sh` 初始失败在 stale
-    `test_platform_sync_posix_surface`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 ... test_platform_thread.lpr`
-  - `fpc -Twin64 ... test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
-
-### Non-goals
-
-- 这批不新增 Darwin / FreeBSD / Android runtime 证据
-- 这批不改 `platform.thread` / `platform.sync` public API
-- 这批不把 ABI shape 本身从 shared `posix.ffi` 搬走；搬走的是 consumer 里的 size truth
-
-## Addendum: 2026-05-27 Platform ABI Alignment Carrier Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.thread` / `platform.sync` consumer 里残留的 raw ABI alignment truth 收回
-host ffi owner，让“谁拥有 raw ABI type，谁就拥有由它派生出来的 alignment carrier”这条边界和
-上一轮的 size-token ownerization 一起闭合。
-
-### Current Gap
-
-- 前一轮已经把 opaque storage 的 size truth 收回 host ffi owner，但 `platform.thread` 的 Unix
-  state record 仍用 `FAlign: PtrUInt` 继承对齐，`platform.sync` 的 public opaque storage 仍用
-  `FAlign: UInt64` 近似对齐。
-- 这些 generic scalar 在 Linux x86_64 上碰巧没炸，不代表 owner boundary 正确；Darwin /
-  FreeBSD / Android / Windows 的 native pthread 或 SRWLOCK / CONDITION_VARIABLE 对齐事实，
-  仍不该由 consumer 继续硬猜。
-- `test_platform_thread_host_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 之前也还没有
-  source-surface gate 明确冻结 “align carrier type 必须由 host ffi owner 暴露并被 consumer
-  消费” 这条契约。
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 统一继续拥有：
-  - `TPlatformPThreadTokenAlign`
-  - `TPlatformPThreadMutexAlign`
-  - `TPlatformPThreadRwLockAlign`
-  - `TPlatformPThreadCondVarAlign`
-- `windows.ffi` 继续拥有：
-  - `TPlatformWindowsMutexAlign`
-  - `TPlatformWindowsRwLockAlign`
-  - `TPlatformWindowsCondVarAlign`
-- `platform.thread` 的 Unix consumer 继续保留 nextPas 自己的 opaque byte storage，但通过
-  host-owned `TPlatformPThreadTokenAlign` 继承 pthread token 的宿主对齐，而不再保留
-  `FAlign: PtrUInt`。
-- `platform.sync` 继续保留 nextPas 的 public opaque storage contract、error mapping 与 wait
-  policy，但 `TPlatformMutex` / `TPlatformRwLock` / `TPlatformCondVar` 的 variant-record 对齐分支
-  只消费 host-owned align carrier type，不再保留 `FAlign: UInt64` 这种 consumer-side 猜测。
-- 这批不扩到新的 public API；收紧的是 ABI ownership 边界与 source-surface guard。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 thread/sync host ffi surface tests，先把 align-carrier owner boundary 打成 RED
-- [x] 在 POSIX host ffi / windows.ffi 暴露 host-owned align carrier type
-- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 align carrier
-- [x] 在 Linux `test_platform_sync_sizes` 补一条 native embedding alignment 对照 proof
-- [x] 修正 `build/verify_local.sh` 对 `test_platform_sync_sizes` summary 的 stale 断言
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `tplatformpthreadtokenalign`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `tplatformpthreadmutexalign`
-  - 首轮 `bash build/verify_local.sh` 初始失败在 stale
-    `missing-core-platform-sync-size-pass-summary`，根因是
-    `test_platform_sync_sizes` summary 已从 `4 total, 4 passed` 变成 `5 total, 5 passed`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 ... test_platform_thread.lpr`
-  - `fpc -Twin64 ... test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
-
-### Non-goals
-
-- 这批不新增 Darwin / FreeBSD / Android runtime 证据
-- 这批不改 `platform.thread` / `platform.sync` public API
-- 这批不把 deadline arithmetic、errno mapping 或 wait policy 挪进 ffi；收回的是 raw ABI alignment truth
-
-## Addendum: 2026-05-27 Platform Windows ABI Type Leakage Ownership
-
-### Goal Node
-
-- `G3: RTL、core 和 framework`
-
-### Goal
-
-继续把 `platform.thread` / `platform.sync` Windows consumer 里残留的 raw ABI type / calling
-convention / scalar conversion 泄漏收回 `windows.ffi` owner，让 Windows 宿主细节不只拥有 raw
-API declaration 和 helper 名称，也继续拥有 thread state thunk、TLS key ABI 投影以及 timeout /
-error 的 `DWORD` 中间形状。
-
-### Current Gap
-
-- 之前虽然已经把 Windows lifecycle helper、TLS raw helper、timeout conversion 与 last-error
-  semantics 收进 `windows.ffi`，但 `platform.thread` 仍保留本地 `HANDLE` 字段、
-  `DWORD` TLS key 转换和 `stdcall` thread entry thunk。
-- `platform.sync` 的 Windows condvar / `WaitOnAddress` 路径仍保留 `DWORD` timeout 临时变量，以及
-  `windows_last_error_is_timeout(DWORD(LError))` 这种 consumer-side ABI scalar 投影。
-- 这些 raw type / calling convention 细节在 source-surface 上仍然说明 owner boundary 没有彻底闭合。
-
-### Architecture Decision
-
-- `nextpas.core.platform.windows.ffi` 继续拥有 raw Windows declaration，并新增：
-  - `TPlatformWindowsThreadProc`
-  - `PPlatformWindowsThreadState` / `TPlatformWindowsThreadState`
-  - `windows_thread_state_create`
-  - `windows_thread_state_join`
-  - `windows_thread_state_detach`
-  - `windows_tls_create_platform_key`
-  - `windows_tls_destroy_platform_key`
-  - `windows_tls_set_platform_key`
-  - `windows_tls_get_platform_key`
-  - `windows_error_i32_is_timeout`
-  - `windows_condvar_timedwait_ns`
-  - `windows_wait_address_i32_timeout_ns`
-- `platform.thread` 继续保留 nextPas 的 public thread contract、join/detach API 和 thread proc
-  contract，但 Windows 分支不再自己声明 raw `HANDLE` / `DWORD` state、`stdcall` thunk 或 TLS
-  key 投影。
-- `platform.sync` 继续保留 nextPas 的 `PLATFORM_ERR_TIMEOUT` 映射和跨平台 wait policy，但 Windows
-  分支不再自己保留 `DWORD` timeout / timeout-classifier 中间层。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] 扩 thread/sync host ffi surface tests，先把 Windows ABI type leakage boundary 打成 RED
-- [x] 在 `windows.ffi` 增加 Windows thread-state / TLS platform-key / timeout-classifier helper
-- [x] 让 `platform.thread` / `platform.sync` 改为消费这些 ownerized helper/type
-- [x] 运行 focused tests
-- [x] 运行 Win64 compile-only
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在 `tplatformwindowsthreadproc`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在 `windows_error_i32_is_timeout`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- Win64 compile-only:
-  - `fpc -Twin64 ... test_platform_thread.lpr`
-  - `fpc -Twin64 ... test_platform_sync.lpr`
-- Full:
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass`
-
-### Non-goals
-
-- 这批不新增 Darwin / FreeBSD / Android runtime 证据
-- 这批不改 `platform.thread` / `platform.sync` public API
-- 这批不把 nextPas 的 timeout/error mapping 直接塞进 ffi；收回的是 Windows ABI type / thunk / scalar leakage
-
-## Addendum: 2026-05-27 Platform Time Host Clock Ns Helper Ownership
-
-### Goal
-
-继续把 `platform.time` 的宿主时钟 ownership 再收紧一层：
-
-- host ffi owner 不只暴露 raw `timespec` / mach / QPC / FILETIME helper
-- 各宿主 ffi owner 直接暴露统一命名的高层 clock result helper
-- `platform.time` consumer 尽量只保留 public clock contract 和对 host helper 的薄 delegation
-
-### Architecture Decision
-
-- `linux/android/darwin/freebsd/unix.ffi` 与 `windows.ffi` 统一继续拥有：
-  - `platform_clock_monotonic_ns_u64`
-  - `platform_clock_realtime_ns_u64`
-  - `platform_clock_monotonic_resolution_ns_u64`
-- shared `posix.ffi` 允许继续拥有所有 POSIX 宿主都复用的饱和 `timespec -> ns` helper；这类 helper 不携带
-  host capability truth，也不回退成 consumer 本地逻辑复制。
-- `platform.time` 继续保留 public pure helper API 和 public clock contract，但 consumer 分支不再直接消费
-  `platform_clock_monotonic_now` / `platform_clock_realtime_now` /
-  `platform_clock_monotonic_getres`、Darwin `mach_*` helper，或 Windows `windows_qpc_*` /
-  `windows_filetime_now_unix_ns`。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_time_host_ffi_surface`，要求 host ffi owner 暴露 `platform_clock_*_ns_u64`
-- [x] RED：禁止 `platform.time` consumer 继续直接消费 raw timespec/Darwin/Windows clock helper
-- [x] 在 `posix.ffi` 增加共享 `platform_posix_timespec_to_ns_u64`
-- [x] 在 Linux/Android/Darwin/FreeBSD/Unix/Windows ffi owner 中补齐 `platform_clock_*_ns_u64`
-- [x] 让 `platform.time` 改成薄 delegation
-- [x] 回写文档与跟踪文件
-- [x] 运行 fresh `make -C core test`
-- [x] 运行 fresh `make -C core examples`
-- [x] 运行 fresh `make -C core benchmarks`
-- [x] 运行 fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在 `platform_clock_monotonic_ns_u64`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - fresh `bash build/verify_local.sh`
-    输出 `verify-local=pass` 与 `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不改 `platform.time` public API
-- 这批不宣称 Darwin / FreeBSD / Android / Windows 新增 runtime truth
-- 这批不把 `TDuration`、`TInstant`、`TStopwatch` 或其他 L1 时间抽象带回 platform
-
-## Addendum: 2026-05-27 Platform Host Base/FFI Split
-
-### Goal
-
-把 `platform.<host>.ffi` 继续拆成更符合四件套范式的 host owner：
-
-- `platform.<host>.base` 承载宿主常量、record、ABI scalar/type alias、opaque carrier、
-  size/align token 与 capability token。
-- `platform.<host>.ffi` 只承载 external declaration 与围绕宿主 ABI 的 thin helper。
-- `platform.time`、`platform.sync`、`platform.thread` 作为跨宿主统一 contract，直接消费
-  `platform.<host>.base` / `platform.<host>.ffi`，不再把 feature-specific ffi 作为默认形态。
-
-### Architecture Decision
-
-- 新增 `posix/linux/darwin/android/freebsd/unix/windows.base`，把原来散落在 `.ffi` 的
-  ABI 载体、opaque storage、size/align token、clock/sysconf/errno/futex/Windows 常量迁入 base。
-- `.ffi` 明确 `uses` 自己的 host `.base`，需要 POSIX 共享 ABI 形状时再 `uses posix.base`。
-- `platform.sync` 的 interface 只引用 host `.base` 暴露 public opaque storage，implementation
-  再引用 host `.ffi`；避免 public surface 因为类型常量而拉入 raw external owner。
-- source-surface gates 升级为同时冻结 base 文件存在性、`.ffi -> .base` 消费关系，以及
-  feature consumer 不回退到重复 ABI 载体。
-
-### Status
-
-Completed; verification passed in isolated worktree.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_ffi_partition_surface`，要求 host base files 存在并被 `.ffi` 消费
-- [x] RED：扩 `test_platform_ffi_owner_boundary`，把 base 视为非 FFI owner 并冻结 owner 边界
-- [x] 新增 7 个 host/shared base 单元并迁移 ABI 常量/类型/opaque carrier
-- [x] 更新 time/sync/thread consumer 与 host ffi uses 关系
-- [x] 更新 source-surface、simulated-host、sync/thread/time focused tests
-- [x] 更新 `build/verify_local.sh` 与设计文档
-- [x] 运行 focused tests、full core test/example/benchmark、fresh `bash build/verify_local.sh`
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-    初始失败在缺少 `nextpas.core.platform.posix.base.pas`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    初始失败在 base absence / non-ffi owner count
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_sizes clean test`
-- Full:
-  - `make -C core test` 输出 `All tests passed.`
-  - `make -C core examples` 输出 `All examples compiled.`
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不新增 `platform.time.ffi` / `platform.sync.ffi` / `platform.thread.ffi`
-- 这批不改变 time/sync/thread public API
-- 这批不宣称新增 macOS / FreeBSD / Android / Windows runtime 证据
-
-## Addendum: 2026-05-27 Platform POSIX Math Helper Split
-
-### Goal
-
-修正 `platform.time.host` 为了纯 `timespec -> ns` 换算而无条件拉入 `posix.ffi` 的边界问题：
-
-- 纯 POSIX timespec 数学放入 helper-only `nextpas.core.platform.posix.math`。
-- `posix.ffi` 继续拥有 POSIX external declaration 和贴近 external 的共享 helper。
-- `platform.time.host` 对 public timespec 换算只依赖 `posix.math`，只有 Unix host clock 分支才拉入
-  `posix.ffi`。
-
-### Architecture Decision
-
-- 新增 `core/src/nextpas.core.platform.posix.math.pas`，承载
-  `platform_posix_timespec_to_ns_u64`、`platform_posix_timespec_add_ns` 与
-  `platform_posix_timespec_remaining_ns_u64`。
-- `posix.ffi` 改为消费 `posix.math`，不再定义这些纯数学 helper。
-- `platform.time.host` 的 uses 边界改为：
-  - unconditionally consume `posix.base` / `posix.math`
-  - only under `NEXTPAS_UNIX` consume `posix.ffi` and host ffi owners
-- `build/verify_local.sh` 的输入面加入 `posix.math`。
-
-### Status
-
-Completed; verification passed.
-
-### Planned Steps
-
-- [x] RED：扩 time/posix/owner source-surface tests，要求 `posix.math` 存在
-- [x] RED：要求 `posix.ffi` 不再定义纯 timespec 数学 helper
-- [x] 新增 `posix.math` 并迁移 pure helper
-- [x] 更新 `posix.ffi` 和 `platform.time.host` uses 边界
-- [x] 运行 affected focused tests
-- [x] 运行 full core test/example/benchmark 和 fresh `bash build/verify_local.sh`
-- [x] 合并前更新最终验证证据
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-    初始失败在 `File not found`
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在 `File not found`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    初始失败在 helper-only math unit 计数不足
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - `make -C core test` 输出 `All tests passed.`
-  - `make -C core examples` 输出 `All examples compiled.`
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 这批不新增 feature-specific `platform.time.ffi`
-- 这批不改变 public time/sync/thread API
-- 这批不宣称新增 Windows runtime link evidence；先用 source-surface、Linux runtime 和 compile-only
-  matrix 收紧边界
-
-## Addendum: 2026-05-27 Platform POSIX Mutex Timedlock ABI Surface
-
-### Goal
-
-按“FPC 源码是 ABI 依据，不是运行时依赖”的规则，补齐有明确证据的 POSIX mutex timedlock ABI surface：
-
-- `posix.ffi` 拥有 `pthread_mutex_timedlock` raw declaration 与 shared thin helper。
-- `linux/android/freebsd.base` 显式标记 timedlock supported。
-- `darwin/unix.base` 显式标记 timedlock unsupported / unknown，host ffi 暴露 ENOTSUP stub。
-- 不新增 `platform.sync` public API，不对 raw pthread timedlock 做 runtime 单元测试。
-
-### Architecture Decision
-
-- Linux 与 FreeBSD 的 FPC `pthread.inc` 明确声明 `pthread_mutex_timedlock`；Linux 声明覆盖 Android
-  分支，因此这三类宿主可委托 shared `platform_posix_pthread_mutex_timedlock_abs`。
-- FPC Darwin pthread 声明没有 `pthread_mutex_timedlock`，generic Unix 也没有足够宿主依据；这两个
-  host owner 暴露同名 helper 但返回 `PLATFORM_POSIX_ENOTSUP`。
-- `pthread_rwlock_timedrdlock` / `pthread_rwlock_timedwrlock` 这轮不搬入通用 POSIX surface，因为当前
-  FPC 证据只在 `netwlibc`，不是 Linux/FreeBSD/Darwin/Android host pthread 依据。
-
-### Status
-
-Completed; verification passed in isolated worktree.
-
-### Planned Steps
-
-- [x] RED：扩 `test_platform_posix_ffi_surface`，要求 shared timedlock declaration/helper
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 host capability token 与 host helper/stub
-- [x] RED：扩 `test_platform_ffi_partition_surface`，要求 timedlock capability 属于 host base
-- [x] 实现 host base capability、`posix.ffi` raw declaration/shared helper、host ffi wrapper/stub
-- [x] 运行 focused gates 与 simulated host compile matrix
-- [x] 运行 full core test/example/benchmark 与 fresh `bash build/verify_local.sh`
-- [x] commit / merge / cleanup
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-    初始失败在缺少 `platform_posix_pthread_mutex_timedlock_abs`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-    初始失败在缺少 `platform_pthread_mutex_timedlock_supported`
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform/test_platform_posix_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- Full:
-  - `make -C core test` 输出 `All tests passed.`
-  - `make -C core examples` 输出 `All examples compiled.`
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`
-  - fresh `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`
-
-### Non-goals
-
-- 不新增 `platform_mutex_timedlock` public API。
-- 不把 raw `pthread_mutex_timedlock` 当成 nextPas runtime 单测目标。
-- 不搬入当前 host FPC pthread 证据不足的 rwlock timedlock ABI。
-
-## Addendum: 2026-05-27 Platform Time Integration Worktree Closeout
-
-### Goal
-
-审查并收口旧 `codex/platform-time-integration` worktree，避免它继续被误认为待合主线：
-
-- 不整条合入会回滚当前 host-owner platform 架构的旧提交。
-- 只择优移植仍有价值且未被主线吸收的小颗粒。
-- 清理历史 worktree / 分支，减少并行开发噪音。
-
-### Decision
-
-`codex/platform-time-integration @ 02be065` 相对当前主线只领先 1 个旧提交，但主线已经领先 91+
-个提交。该提交混合了过期 platform.time FFI 形态、L1 `demo_stopwatch`、L1 time benchmark、
-旧 Makefile 脚本与 text 边界补丁；其中 platform/time/build 方向已被主线以更好的
-`platform.time facade + base + host`、host `base/ffi` owner、platform 专属 example/benchmark、
-source-surface gate 和 full verification 吸收。
-
-本轮只择优保留 text public contract 边界：
-
-- `TextSplit('a,,c', ',')` 保留空字段。
-- `TextSplit('abc', '')` 返回原字符串单元素数组。
-- `TextIndexOf('hello', '')` 返回 0。
-
-### Planned Steps
-
-- [x] 对比 `main...codex/platform-time-integration` 提交和文件差异
-- [x] 确认整条合并会删除/回滚当前 platform host-owner 成果
-- [x] 移植仍有价值的 text 边界测试
-- [x] 修复 `TextIndexOf` 空 substring contract
-- [x] 跑 focused / broader verification
-- [x] 删除旧 worktree 和分支
-- [x] 提交 closeout
-
-### Verification
-
-- RED:
-  - `make -C core/tests/nextpas.core.text/test_text clean test` 失败在
-    `TextIndexOf('hello', '')` expected 0, got -1。
-- GREEN:
-  - `make -C core/tests/nextpas.core.text/test_text clean test` 通过，21/21 pass。
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_helpers clean test` 通过，11/11 pass。
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary clean test` 通过，6/6 pass。
-  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test` 通过，1/1 pass。
-  - `make -C core test` 输出 `All tests passed.`
-  - `make -C core examples` 输出 `All examples compiled.`
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`
-
-### Non-goals
-
-- 不合入旧 `demo_stopwatch` 到 platform。
-- 不恢复旧 `core/scripts/project.mk` 构建形态。
-- 不回退当前 `platform.time`、`platform.sync`、`platform.thread` host-owner FFI 分层。
-
-## Addendum: 2026-05-27 Platform ABI Owner Audit And Gap Matrix
-
-### Goal
-
-从最新 `main` 重新进入 platform 下一轮，不继续背旧 `platform-time-integration` 分支：
-
-- 以 `task_plan.md` 为准绳，先补计划再实施。
-- 全量审计 `platform.time` / `platform.sync` / `platform.thread` 是否还残留 raw OS ABI token、
-  raw scalar、calling convention、errno 读取、timeout 换算、`SizeOf(raw type)` 或 inline
-  `external` 声明。
-- 把确认存在的宿主 truth 下沉到 `platform.<host>.base` / `platform.<host>.ffi`，把纯数学 helper
-  放到 `posix.math` / `windows.math` 这类普通 helper owner。
-- 建立真实的 platform gap matrix，明确 Linux runtime、Win64 compile-only、simulated host compile-only
-  与尚未覆盖的 macOS / Android / FreeBSD / Windows runtime 缺口。
-
-### Current Decision
-
-下一轮优先从 `platform.thread` 做 owner audit。理由：
-
-- `platform.thread` 是 L0 系统线程 API，不是 L1 `ThreadPool` / `Channel` / `Future`。
-- 它同时碰到 POSIX `pthread`、`nanosleep`、TLS、native thread id、CPU count、Windows thread state
-  与 Windows TLS key，最容易把宿主 ABI 细节泄回 consumer。
-- 当前 `platform.time`、`platform.sync` 已有较强 source-surface gate；thread 继续审计能补齐三者一致性。
-
-### Planned Steps
-
-- [x] 在最新 `main` 开 `codex/platform-thread-owner-audit` isolated worktree
-- [x] 跑 platform focused baseline：
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 审计 `core/src/nextpas.core.platform.thread.pas` 与 host `base/ffi` consumer boundary
-- [x] 先扩 source-surface test 成 RED，冻结发现的 owner gap
-- [x] 再移动最小实现，让 RED 变 GREEN
-- [x] 同步 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates、`make -C core test`、`make -C core examples`、`make -C core benchmarks`
-- [x] 跑 fresh `bash build/verify_local.sh`
-- [x] 复盘、提交、合并回 `main`，再清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] production platform code 不 `uses Linux`、`UnixType`、`PThreads`、`BaseUnix`、`Syscall`、`Windows`
-- [x] production platform implementation 不散落新的 raw `external` 声明
-- [x] `platform.thread` 不创建 feature-specific `platform.thread.ffi`
-- [x] `platform.thread` consumer 不保留 raw Windows `HANDLE` / `DWORD` / `stdcall` thunk
-- [x] `platform.thread` consumer 不保留 raw POSIX `pthread_t` / `pthread_key_t` / `nanosleep` ABI 细节
-- [x] host size / align / capability token 只由 host `.base` 暴露
-- [x] host ABI wrapper、errno binding、native thread id、TLS key glue 只由 host `.ffi` / shared `posix.ffi`
-  暴露
-- [x] POSIX thread state carrier 与分配/释放归 host `.base` / `.ffi`，`platform.thread` 只消费
-  `platform_pthread_state_create/join/detach`
-- [x] runtime tests 只覆盖 `platform.thread` public contract，不直接测试 raw OS API
-
-### Verification Plan
-
-- Focused RED/GREEN gate 必须记录初始失败点和修复后通过命令。
-- Linux runtime 证据以 `test_platform_thread`、example、benchmark 为主。
-- Win64 仍为 compile-only；不能包装成 Windows runtime truth。
-- Darwin / Android / FreeBSD / generic Unix 仍以 simulated host compile-only 和 source-surface gate 为主；
-  不能包装成真实 runtime truth。
-- 收口前必须 fresh 跑：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-
-### Non-goals
-
-- 不改 L1 `nextpas.core.thread`。
-- 不加入 `ThreadPool`、`Channel`、`Future`、scheduler、task 等 L1 抽象。
-- 不对 raw `pthread_*`、`nanosleep`、Windows thread API 做 runtime 单测。
-- 不宣称新增 macOS / Android / FreeBSD / Windows runtime 证据。
-- 不为 `platform.thread` 新建 feature-specific `*.ffi.pas`，除非先证明它不属于任何 host owner。
-
-### Implementation Notes
-
-- 审计发现 `platform.thread` 的 POSIX 路径还保留本地
-  `PPosixThreadState` / `TPosixThreadState`、`New(LState)`、`Dispose(LState)` 与
-  `@LState^.Thread[0]`。这层生命周期和 storage offset 不属于 unified consumer，应归 host
-  `base/ffi` owner。
-- RED:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    初始失败在
-    `linux.ffi must expose Linux pthread state create helper: platform_pthread_state_create`。
-- GREEN:
-  - `linux/android/darwin/freebsd/unix.base` 新增
-    `PPlatformPThreadState` / `TPlatformPThreadState`。
-  - shared `posix.ffi` 新增
-    `platform_posix_pthread_state_create/join/detach`，只处理 pthread token storage 的通用 glue。
-  - `linux/android/darwin/freebsd/unix.ffi` 新增
-    `platform_pthread_state_create/join/detach`，负责 state 分配、清零、释放与 shared helper
-    委托。
-  - `platform.thread` POSIX 分支删除本地 state carrier 和直接 `New/Dispose`，只消费 host-owned
-    state helper。
-- 期间 focused 行为测试第一次失败在
-  `nextpas.core.platform.thread.pas(140,8) Error: ENDIF without IF(N)DEF`，原因是删除本地
-  POSIX state type 时误删了 Unix implementation guard；已恢复 `{$IFDEF NEXTPAS_UNIX}`。
-- Fresh verification:
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-    输出 `8 total, 8 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
-    输出 `3 total, 3 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    输出 `2 total, 2 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出 `simulated-host-compile-matrix-status=pass`。
-  - `make -C core test` 输出 `All tests passed.`。
-  - `make -C core examples` 输出 `All examples compiled.`。
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
-  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`。
-- Merge closeout:
-  - worktree commit `45f867a platform: ownerize posix thread state`。
-  - feature 分支合入最新 `main@9793e94` 后生成整合提交 `a49af35`，无冲突，并保留主线新增
-    collections/mem contract tests。
-  - `main` 已 fast-forward 到 `a49af35`。
-  - 合并后主线 focused verification:
-    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
-      输出 `1 total, 1 passed, 0 failed`。
-    - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread clean test`
-      输出 `8 total, 8 passed, 0 failed`。
-    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-      输出 `simulated-host-compile-matrix-status=pass`。
-    - `git diff --check` 无输出。
-  - `codex/platform-thread-owner-audit` worktree 与分支已删除。
-  - 注意：主线仍有非本轮 collections WIP（`core/src/nextpas.core.collections.deque.pas` 与
-    `core/tests/nextpas.core.collections/test_deque/test_deque.lpr`），本轮未修改、未提交。
-
-## Addendum: 2026-05-27 Platform Sync POSIX Error Result Host Ownership
-
-### Goal
-
-继续从最新 `main` 执行 platform ABI owner gap matrix，这轮只收 `platform.sync` 中仍由 consumer
-直接保存的 POSIX errno classifier：
-
-- `PLATFORM_ERR_*` 是 nextPas public sync result contract，继续归 `platform.sync` 所有。
-- `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` / `PLATFORM_POSIX_EINVAL` /
-  `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT` 是 host errno truth，不应继续被
-  `platform.sync` consumer 直接 case。
-- POSIX host `.ffi` 暴露 caller-supplied public-result helper，让 host owner 负责 errno
-  分类，consumer 只传入 public result 值。
-
-### Architecture Decision
-
-- 不新增 `platform.sync.ffi`。`platform.sync` 是统一跨宿主 L0 public contract，不是 FFI owner。
-- shared `posix.ffi` 可以承载无宿主 truth 的 classifier skeleton，但具体 errno token 来自
-  `linux/android/darwin/freebsd/unix.base`，并通过各 host `.ffi` helper 暴露。
-- `platform.sync` 保留 public opaque storage、public error constants、wait-bucket fallback 策略与
-  wait/wake public contract。
-- raw pthread/futex/errno API 不进入 runtime 单元测试；本轮 evidence 以 RED/GREEN source-surface
-  guard、focused public behavior test 与 compile-only matrix 为主。
-
-### Planned Steps
-
-- [x] 在最新 `main` 开 `codex/platform-sync-owner-audit` isolated worktree
-- [x] 跑 focused baseline：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-- [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 暴露
-  `platform_pthread_sync_result`，并禁止 `platform.sync` 继续引用 `PLATFORM_POSIX_E*`
-- [x] 在 shared `posix.ffi` 增加 caller-supplied errno classifier skeleton helper
-- [x] 在 `linux/android/darwin/freebsd/unix.ffi` 增加 host-owned sync-result wrapper
-- [x] 修改 `platform.sync` POSIX 路径，让所有 pthread/futex 返回码走 host helper 映射到
-  `PLATFORM_ERR_*`
-- [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
-- [x] 跑 focused gates：
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-- [x] 跑 full verification：
-  - `make -C core test`
-  - `make -C core examples`
-  - `make -C core benchmarks`
-  - `bash build/verify_local.sh`
-- [x] commit、择优合并回 `main`、清理 worktree / 分支
-
-### Audit Checklist
-
-- [x] `platform.sync` 不直接引用 `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` /
-  `PLATFORM_POSIX_EINVAL` / `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT`
-- [x] `platform.sync` 不新增 raw `external` 声明，不 uses FPC platform/RTL binding unit
-- [x] `platform.sync` 不创建 feature-specific `platform.sync.ffi`
-- [x] POSIX host `.ffi` helper 接收 caller-supplied public result，避免 host ffi 硬编码
-  `PLATFORM_ERR_*`
-- [x] Windows sync helper ownership 不被本轮回退
-
-### Implementation Notes
-
-- RED:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    初始失败在
-    `linux must delegate POSIX sync error classification to shared posix.ffi skeleton: platform_posix_sync_result_from_error`。
-- GREEN:
-  - `nextpas.core.platform.posix.ffi` 新增
-    `platform_posix_sync_result_from_error`，只做 caller-supplied errno token 与 caller-supplied
-    public result 的参数化投影，不保存任何宿主 errno 数字，也不硬编码 `PLATFORM_ERR_*`。
-  - `linux/android/darwin/freebsd/unix.ffi` 新增
-    `platform_pthread_sync_result`，把各自 host-owned `PLATFORM_POSIX_E*` token 交给 shared skeleton。
-  - `platform.sync` 的 `platform_posix_map_error` 改成 thin adapter，只把 nextPas public
-    `PLATFORM_ERR_*` result 值传给 host helper。
-  - `test_platform_sync_host_ffi_surface` 现在同时冻结 shared skeleton、host wrapper 与 consumer
-    不再引用 `PLATFORM_POSIX_E*`。
-- Focused GREEN:
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    输出 `14 total, 14 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
-    输出 `1 total, 1 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
-    输出 `2 total, 2 passed, 0 failed`。
-  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    输出 `simulated-host-compile-matrix-status=pass`。
-- Full GREEN:
-  - `make -C core test` 输出 `All tests passed.`。
-  - `make -C core examples` 输出 `All examples compiled.`。
-  - `make -C core benchmarks` 输出 `All benchmarks passed.`。
-  - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
-    `human-summary=local verification passed`。
-- Merge closeout:
-  - committed as `fce88c3 platform: ownerize posix sync errno result mapping`。
-  - fast-forward merged into `main`。
-  - removed `platform-sync-owner-audit` worktree and deleted `codex/platform-sync-owner-audit` branch。
-  - post-merge focused gates on `main` passed:
-    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
-    - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
-    - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-  - post-merge `git diff --check` passed and `git status --short --branch` showed clean `main`。
-
-### Non-goals
-
-- 不改变 `platform.sync` public API 名称或 public result 常量值。
-- 不移动 wait-bucket fallback 策略。
-- 不对 raw pthread/futex/errno API 写 runtime 单元测试。
-- 不宣称新增 macOS / Android / FreeBSD / Windows runtime evidence。
+- 不碰 `core/`
+- 不实现 default value 的 codegen/emission（那是后续 batch）
+- 不实现 default parameter 的 diagnostics（如 default value type mismatch）
+- 只做 member method binding 修复，free-standing 已经工作

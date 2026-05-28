@@ -22,10 +22,11 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 优雅：每层有清楚 owner、truth object、projection、promotion gate 和诚实非目标。
 - 可维护：新增能力优先复用现有 session/model/tooling，不把逻辑复制到 driver 或 shell。
 - 高性能：数据结构、增量分析、代码生成和工具调用能支撑真实项目，不只支撑 smoke fixture。
+- 可验证：公开 API / interface 没有对应单元测试、接口覆盖与内存泄漏验证时，不宣布完成。
 
 ## 当前全局位置
 
-截至 2026-05-26，当前 live baseline 是：
+截至 2026-05-28，当前 live baseline 是：
 
 - 当前完成批次、验证证据和提交点以 `progress.md` / `task_plan.md` 的最新记录为准。
 - fresh `bash build/verify_local.sh` 是本地权威 gate；每轮收口必须重新跑并记录
@@ -35,7 +36,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - `core/` 已开始成为 nextPas 未来 RTL + framework 的独立基础设施，但当前由 core 负责人推进；
   非 core 开发不得直接修改 `core/` 代码，只能提出 compiler/tooling 侧需求或 review 意见。
 - 最大未完成面仍在 compiler correctness，尤其是语义系统：完整 overload resolver、完整 type checking、
-  imported callable no-match、unknown callable/member、record/property/array/deref receiver、
+  imported/inherited member no-match、unknown callable/member、record/property/array/deref receiver、
   implicit conversion、default parameter lowering/ranking、visibility 与更完整 FPC 兼容语义。
 
 ## 使用规则
@@ -57,6 +58,69 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - fresh `bash build/verify_local.sh` 结果。
 - 下一轮最自然的目标节点。
 
+## 当前优先级栈（按投入产出比排序）
+
+每轮开始前从这里取最高优先级项。完成后划掉并补充新项。
+
+1. **protected visibility subclass access** — protected 允许子类通过 implicit-self 访问（当前 protected 只做了 cross-unit 拒绝，还没做子类允许）
+2. **implicit type conversion (Integer ↔ LongInt, Char → String)** — overload resolution 和 type checking 的核心缺口，真实代码大量依赖
+3. **function result as expression** — `X := Foo()` 的 result 类型推断和 assignment 类型检查
+4. **generic instantiation** — `specialize TList<Integer>` 的 member truth 生成
+5. **interface/implementation visibility 区分** — interface section 的 symbol 对外可见，implementation 的不可见
+
+完成项（保留追溯）：
+- ~~default parameter member method call binding~~ (Batch 217-218)
+- ~~private member visibility enforcement~~ (Batch 219-220)
+- ~~same-unit private access (FPC semantics)~~ (Batch 221)
+- ~~installed-source unit body deferred guard matrix~~ (Batch 198-216)
+
+## 语义能力路线图
+
+量化当前 G1.5 overload resolution 的覆盖状态：
+
+### 已完成
+
+| 能力 | 覆盖场景 | 验证 |
+|------|----------|------|
+| bare function call binding | root + imported project-source | stage0 + semantic harness |
+| member method call binding | direct + inherited + implicit-self | semantic harness |
+| overload resolution (ambiguous/no-match) | bare + member + inherited | stage0 + semantic harness |
+| wrong-argument-count | bare + member + inherited | stage0 + semantic harness |
+| type-mismatch (stable evidence) | literal + variable + param + function-result | stage0 + semantic harness |
+| unknown-member | direct + implicit-self + inherited | stage0 + semantic harness |
+| invalid-call-shape (field/property as callable) | direct + inherited | semantic harness |
+| default parameters | direct + inherited + implicit-self + multi-default | semantic harness |
+| visibility (private) | direct member call from external | semantic harness |
+| installed-source deferred guards | 全矩阵闭合 | semantic harness |
+
+### 未完成（按优先级）
+
+| 能力 | 缺口 | 影响 |
+|------|------|------|
+| protected/published visibility | 子类访问 protected、same-unit private | 真实 FPC 代码大量使用 |
+| implicit conversion | Integer→LongInt, Char→String, enum→ordinal | overload ranking 依赖 |
+| function result type propagation | `X := Foo()` 的 type checking | assignment 类型安全 |
+| generic instantiation | `specialize TList<Integer>` | 容器/集合类型 |
+| default parameter value codegen | 缺省值的 runtime emission | 完整 default param 支持 |
+| operator overloading | `+`, `-`, `=` 等 | 数学/字符串操作 |
+| property read/write accessor binding | `Obj.Prop := X` | 封装模式 |
+| with statement scope | `with Obj do Method` | 旧代码兼容 |
+
+## 真实项目验证目标（G7）
+
+目标：用真实 FPC 项目作为 conformance target，证明 nextPas 不只能处理 fixture。
+
+阶段：
+
+1. **Phase 1（当前）**：nextPas 能正确解析并产出语义模型的 fixture 数量 > 100
+2. **Phase 2**：选取 LazUtils 中一个简单 unit（如 `LazUTF8`），nextPas 能完成 lexer + parser + unit resolution 无错误
+3. **Phase 3**：同一 unit 能通过 semantic analysis 无误报（可能需要 deferred 大量 installed-source）
+4. **Phase 4**：nextPas 能自举编译自身的一个 unit（如 `np_lexer.pas`）
+
+当前状态：Phase 1 已达成（fixture 数量远超 100）。Phase 2 需要先补齐 generic instantiation 和更完整的 uses clause resolution。
+
+---
+
 ## G0: 项目控制面和质量纪律
 
 目标：让 nextPas 的开发节奏可追踪、可验证、可回滚。
@@ -66,12 +130,16 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 所有主线能力都有目标节点、owner、truth object、projection 与 promotion gate。
 - `task_plan.md`、`progress.md`、`findings.md` 只记录当前事实，不包装未完成能力。
 - `build/verify_local.sh` 是本地权威 verification gate。
+- public API / interface work 必须有对应单元测试；目标口径是接口行为覆盖 100%。
+- 涉及 API / runtime / resource ownership 的批次必须纳入内存泄漏验证，未验证只能标为未收口。
 - 每个真实改动批次都小步提交，commit 能独立回滚。
 - 工作树污染、生成物、临时证据和 stale docs 不进入提交。
 
 当前状态：
 
 - `verify_local` 已成为主门。
+- public API 覆盖和 leak verification 作为质量门槛已写入目标树；后续凡是 API/interface
+  批次必须在 `/plan` 中写明单测覆盖与 leak evidence。
 - 持续记录已存在，但最近路线图顶部状态有过 Batch 状态漂移。
 - 当前新增本目标树，后续批次必须绑定目标节点。
 
@@ -169,10 +237,59 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 当前状态：
 
-- 已完成 ambiguity、wrong argument count、部分 single-target type mismatch。
+- 已完成 ambiguity、wrong argument count、root-owned stable no matching overload、部分 single-target
+  type mismatch。
 - 已完成 source-owned bare unknown callable 与 direct class unknown member 的第一条结构化诊断。
+- `sema.unknown-member` 已推进到 class method body bare implicit-self、inherited class context，
+  以及 imported `project-source` unit method body 的 owner-aware traversal。
+- imported `project-source` unit method body 的 inherited bare implicit-self unknown-member 已进入
+  official gate。
+- imported `project-source` unit method body 的 bare implicit-self known field invalid-call-shape
+  已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self known field invalid-call-shape
+  继续 deferred，并由 semantic harness 固定防误报。
+- imported `project-source` unit method body 的 bare implicit-self known property invalid-call-shape
+  已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self known property invalid-call-shape
+  继续 deferred，并由 semantic harness 固定防误报。
+- imported `project-source` unit method body 的 inherited bare implicit-self known field
+  invalid-call-shape 已进入 official gate。
+- imported `installed-source` unit method body 的 inherited bare implicit-self known field
+  invalid-call-shape 继续 deferred，并由 semantic harness 固定防误报。
+- imported `project-source` unit method body 的 inherited bare implicit-self known property
+  invalid-call-shape 已进入 official gate。
+- imported `installed-source` unit method body 的 inherited bare implicit-self known property
+  invalid-call-shape 继续 deferred，并由 semantic harness 固定防误报。
+- imported `project-source` unit method body 的 bare implicit-self wrong-argument-count 已进入
+  official gate。
+- imported `project-source` unit method body 的 bare implicit-self same-unit function-result
+  wrong-argument-count 已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  wrong-argument-count 继续 deferred，并由 semantic harness 固定防误报。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  no-matching-overload 继续 deferred，并由 semantic harness 固定防误报。
+- imported `project-source` unit method body 的 inherited bare implicit-self wrong-argument-count 已进入
+  official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self type-mismatch 已进入
+  official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self same-unit
+  function-result wrong-argument-count 已进入 official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self same-unit
+  function-result no-matching-overload 已进入 official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self same-unit
+  function-result ambiguous-overload 已进入 official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self no-matching-overload 已进入
+  official gate。
+- imported `project-source` unit method body 的 inherited bare implicit-self ambiguous-overload 已进入
+  official gate。
+- imported `project-source` unit method body 的 bare implicit-self type-mismatch 已进入
+  official gate。
+- imported `project-source` unit method body 的 bare implicit-self no-matching-overload 已进入
+  official gate。
+- imported `project-source` unit method body 的 bare implicit-self ambiguous-overload 已进入
+  official gate。
 - 仍未完成完整 overload resolver、implicit conversion、default parameter lowering/ranking、
-  imported target type mismatch、多 target no-matching-overload，以及非 source-owned /
+  imported/member target no-match、non-project-source imported target type mismatch，以及非 source-owned /
   typecast / function-pointer 等更复杂 callable 边界。
 
 下一步证据：
@@ -192,7 +309,90 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 
 - 多类 compiler/sema/toolchain/package/env 错误已有结构化 projection。
 - `sema.unknown-callable` 已覆盖 source-owned bare callable name miss。
-- `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss。
+- `sema.unknown-member` 已覆盖 receiver type 已知的 direct class member-call name miss、class
+  method body bare implicit-self name miss、inherited class context，以及 imported
+  `project-source` unit method body。
+- `sema.unknown-member` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  仍找不到 bare implicit-self member name 的场景。
+- `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中 known field
+  被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中 known field 被 bare implicit-self 当作 callable
+  使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
+- `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中 known property
+  被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中 known property 被 bare implicit-self 当作 callable
+  使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
+- `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中沿 parent chain
+  命中的 inherited known field 被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中沿 parent chain 命中的 inherited known field
+  被 bare implicit-self 当作 callable 使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
+- `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中沿 parent chain
+  命中的 inherited known property 被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中沿 parent chain 命中的 inherited known property
+  被 bare implicit-self 当作 callable 使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
+- `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self arity miss。
+- `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self same-unit function-result arity miss。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  arity miss 继续 deferred，不提前发 `sema.wrong-argument-count`。
+- `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self target 后的 arity miss。
+- `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self target 后的 stable literal mismatch。
+- `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self target 后的 same-unit function-result mismatch。
+- `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self target 后的 same-unit function-result arity miss。
+- `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self overload set 后的 same-unit function-result no-match。
+- `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self overload set 后的 same-unit function-result ambiguity。
+- `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self overload set 后的 stable literal no-match。
+- `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self overload set 后的 stable literal ambiguity。
+- `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self stable literal mismatch。
+- `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self same-unit function-result mismatch。
+- `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self same-unit function-result no-match。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  no-match 继续 deferred，不提前发 `sema.no-matching-overload`。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  ambiguity 继续 deferred，不提前发 `sema.ambiguous-overload`。
+- imported `installed-source` unit method body 的 bare implicit-self stable literal
+  ambiguity 继续 deferred，不提前发 `sema.ambiguous-overload`。
+- imported `installed-source` unit method body 的 bare implicit-self stable literal
+  no-match 继续 deferred，不提前发 `sema.no-matching-overload`。
+- imported `installed-source` unit method body 的 bare implicit-self stable literal
+  type-mismatch 继续 deferred，不提前发 `sema.type-mismatch`。
+- imported `installed-source` unit method body 的 bare implicit-self wrong-argument-count
+  继续 deferred，不提前发 `sema.wrong-argument-count`。
+- imported `installed-source` unit method body 的 inherited implicit-self wrong-argument-count
+  继续 deferred，不提前发 `sema.wrong-argument-count`。
+- imported `installed-source` unit method body 的 inherited implicit-self type-mismatch
+  继续 deferred，不提前发 `sema.type-mismatch`。
+- imported `installed-source` unit method body 的 inherited implicit-self no-matching-overload
+  继续 deferred，不提前发 `sema.no-matching-overload`。
+- imported `installed-source` unit method body 的 inherited implicit-self ambiguous-overload
+  继续 deferred，不提前发 `sema.ambiguous-overload`。
+- imported `installed-source` unit method body 的 inherited implicit-self function-result
+  type-mismatch 继续 deferred，不提前发 `sema.type-mismatch`。
+- imported `installed-source` unit method body 的 inherited implicit-self function-result
+  wrong-argument-count / no-matching-overload / ambiguous-overload 继续 deferred。
+- installed-source unit body implicit-self / inherited implicit-self deferred guard 矩阵已完整闭合。
+- default parameter member method call binding 已正确支持：direct call、inherited call、
+  implicit-self call、多个 default params 场景均已通过测试验证。
+- visibility enforcement 已落地：private member 从外部 direct member call 访问时发出
+  `sema.inaccessible-member` 诊断；class 内部访问自身 private member 不受限制。
+- `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self same-unit function-result ambiguity。
+- `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self stable literal no-match。
+- `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 的 bare
+  implicit-self stable literal ambiguity。
 - 语义错误覆盖仍不完整。
 
 下一步证据：
