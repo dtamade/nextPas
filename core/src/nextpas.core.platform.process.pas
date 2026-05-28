@@ -9,6 +9,9 @@ uses
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
+function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
+  out APipes: TPlatformProcessPipes): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
@@ -48,6 +51,65 @@ begin
     halt(127);
   end;
   AProc.Pid := LPid;
+  Result := 0;
+end;
+
+function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
+  out APipes: TPlatformProcessPipes): Int32;
+var
+  LPid: pid_t;
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(APipes, SizeOf(APipes), $FF);
+  if pipe(@LStdinPipe[0]) <> 0 then Exit(platform_get_errno);
+  if pipe(@LStdoutPipe[0]) <> 0 then
+  begin
+    close(LStdinPipe[0]); close(LStdinPipe[1]);
+    Exit(platform_get_errno);
+  end;
+  if pipe(@LStderrPipe[0]) <> 0 then
+  begin
+    close(LStdinPipe[0]); close(LStdinPipe[1]);
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    Exit(platform_get_errno);
+  end;
+
+  LPid := fork;
+  if LPid < 0 then
+  begin
+    close(LStdinPipe[0]); close(LStdinPipe[1]);
+    close(LStdoutPipe[0]); close(LStdoutPipe[1]);
+    close(LStderrPipe[0]); close(LStderrPipe[1]);
+    Exit(platform_get_errno);
+  end;
+
+  if LPid = 0 then
+  begin
+    close(LStdinPipe[1]);
+    close(LStdoutPipe[0]);
+    close(LStderrPipe[0]);
+    dup2(LStdinPipe[0], 0);
+    dup2(LStdoutPipe[1], 1);
+    dup2(LStderrPipe[1], 2);
+    close(LStdinPipe[0]);
+    close(LStdoutPipe[1]);
+    close(LStderrPipe[1]);
+    if AEnvp <> nil then
+      execve(APath, AArgv, AEnvp)
+    else
+      execve(APath, AArgv, nil);
+    halt(127);
+  end;
+
+  close(LStdinPipe[0]);
+  close(LStdoutPipe[1]);
+  close(LStderrPipe[1]);
+  AProc.Pid := LPid;
+  APipes.StdinWrite := LStdinPipe[1];
+  APipes.StdoutRead := LStdoutPipe[0];
+  APipes.StderrRead := LStderrPipe[0];
   Result := 0;
 end;
 
@@ -163,11 +225,22 @@ begin if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then Result := 0 else 
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := Int32(AProc.Pid); end;
+
+function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
+  out APipes: TPlatformProcessPipes): Int32;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(APipes, SizeOf(APipes), $FF);
+  Result := -1; // not yet implemented on Windows
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 begin FillChar(AProc, SizeOf(AProc), 0); Result := -1; end;
+function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+begin FillChar(AProc, SizeOf(AProc), 0); FillChar(APipes, SizeOf(APipes), $FF); Result := -1; end;
 function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;

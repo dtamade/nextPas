@@ -5,6 +5,7 @@ program test_platform_process;
 uses
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.testing;
 
 var
@@ -119,6 +120,80 @@ begin
   Check(R.ExitCode = 42, 'exit code 42');
 end;
 
+procedure TestSpawnPipedStdout;
+var
+  P: TPlatformProcess;
+  Pipes: TPlatformProcessPipes;
+  R: TPlatformProcessResult;
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..63] of AnsiChar;
+  LRead: PtrInt;
+begin
+  LArgv[0] := '/bin/echo';
+  LArgv[1] := 'hello';
+  LArgv[2] := nil;
+  Check(platform_process_spawn_piped('/bin/echo', @LArgv[0], nil, P, Pipes) = 0, 'spawn piped');
+  Check(Pipes.StdoutRead >= 0, 'stdout pipe valid');
+  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StdoutRead, @LBuf[0], 64);
+  Check(LRead >= 5, 'read >= 5 bytes');
+  Check(LBuf[0] = 'h', 'stdout[0] = h');
+  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
+  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 0, 'exit 0');
+end;
+
+procedure TestSpawnPipedStderr;
+var
+  P: TPlatformProcess;
+  Pipes: TPlatformProcessPipes;
+  R: TPlatformProcessResult;
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..255] of AnsiChar;
+  LRead: PtrInt;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'echo errmsg >&2; exit 1';
+  LArgv[3] := nil;
+  Check(platform_process_spawn_piped('/bin/sh', @LArgv[0], nil, P, Pipes) = 0, 'spawn');
+  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
+  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StderrRead, @LBuf[0], 256);
+  Check(LRead > 0, 'stderr has output');
+  Check(LBuf[0] = 'e', 'stderr[0] = e');
+  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 1, 'exit 1');
+end;
+
+procedure TestSpawnPipedStdin;
+var
+  P: TPlatformProcess;
+  Pipes: TPlatformProcessPipes;
+  R: TPlatformProcessResult;
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..63] of AnsiChar;
+  LRead: PtrInt;
+begin
+  LArgv[0] := '/bin/cat';
+  LArgv[1] := nil;
+  Check(platform_process_spawn_piped('/bin/cat', @LArgv[0], nil, P, Pipes) = 0, 'spawn cat');
+  nextpas.core.platform.posix.ffi.write(Pipes.StdinWrite, PAnsiChar('ping'), 4);
+  nextpas.core.platform.posix.ffi.close(Pipes.StdinWrite);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := nextpas.core.platform.posix.ffi.read(Pipes.StdoutRead, @LBuf[0], 64);
+  Check(LRead = 4, 'read 4 from cat');
+  Check(LBuf[0] = 'p', 'data[0] = p');
+  nextpas.core.platform.posix.ffi.close(Pipes.StdoutRead);
+  nextpas.core.platform.posix.ffi.close(Pipes.StderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 0, 'exit 0');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.process');
   T.Run('spawn /bin/true', @TestSpawnTrue);
@@ -128,5 +203,8 @@ begin
   T.Run('try_wait non-blocking', @TestTryWait);
   T.Run('spawn non-existent', @TestSpawnNonExistent);
   T.Run('spawn with args', @TestSpawnWithArgs);
+  T.Run('piped: capture stdout', @TestSpawnPipedStdout);
+  T.Run('piped: capture stderr', @TestSpawnPipedStderr);
+  T.Run('piped: write stdin', @TestSpawnPipedStdin);
   T.Summary;
 end.

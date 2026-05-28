@@ -27,6 +27,12 @@ type
     ExitCode: Int32;
   end;
 
+  TPlatformProcessPipes = record
+    StdinWrite: Int32;
+    StdoutRead: Int32;
+    StderrRead: Int32;
+  end;
+
 implementation
 
 end.
