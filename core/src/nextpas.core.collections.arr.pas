@@ -69,7 +69,8 @@ type
     procedure DoReplaceIf(aProxy: TPredicateProxyMethod; const aNewElement: T; aPredicate, aData: Pointer); override;
     procedure DoReplaceIf(aProxy: TPredicateProxyMethod; const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate, aData: Pointer); virtual;
     function  DoIsSorted(aCompareProxy: TCompareProxyMethod; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer): Boolean; virtual;
-    procedure DoQuickSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aComparer, aData: Pointer); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure DoHeapSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aComparer, aData: Pointer);
+    procedure DoQuickSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aDepthLimit: Integer; aComparer, aData: Pointer);
     procedure DoSort(aCompareProxy: TCompareProxyMethod; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer); virtual;
     function  DoBinarySearch(aCompareProxy: TCompareProxyMethod; const aValue: T; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer): SizeInt; virtual;
     function  DoBinarySearchInsert(aCompareProxy: TCompareProxyMethod; const aValue: T; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer): SizeInt; virtual;
@@ -939,57 +940,89 @@ begin
   Result := True;
 end;
 
-procedure TArray.DoQuickSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aComparer, aData: Pointer);
-
-  function MedianOfThree(const A, B, C: T): T; inline;
-  begin
-    if aCompareProxy(aComparer, A, B, aData) < 0 then
-    begin
-      if aCompareProxy(aComparer, B, C, aData) < 0 then
-        Exit(B)
-      else if aCompareProxy(aComparer, A, C, aData) < 0 then
-        Exit(C)
-      else
-        Exit(A);
-    end
-    else
-    begin
-      if aCompareProxy(aComparer, A, C, aData) < 0 then
-        Exit(A)
-      else if aCompareProxy(aComparer, B, C, aData) < 0 then
-        Exit(C)
-      else
-        Exit(B);
-    end;
-  end;
-
-  procedure InsertionSort(aLeft, aRight: SizeUInt); inline;
-  var
-    LP:   PElement;
-    i, j: SizeUInt;
-    temp: T;
-  begin
-    LP := PElement(FMemory);
-
-    for i := aLeft + 1 to aRight do
-    begin
-      temp := LP[i];
-      j := i;
-
-      while (j > aLeft) and (aCompareProxy(aComparer, LP[j - 1], temp, aData) > 0) do
-      begin
-        LP[j] := LP[j - 1];
-        Dec(j);
-      end;
-
-      LP[j] := temp;
-    end;
-  end;
-
+procedure TArray.DoHeapSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aComparer, aData: Pointer);
 var
-  LP:    PElement;
-  i, j:  SizeUInt;
-  pivot: T;
+  LP: PElement;
+  LHeapSize, i, LIndex, LChild: SizeUInt;
+  LTemp: T;
+begin
+  if aLeft >= aRight then
+    Exit;
+
+  LP := PElement(FMemory);
+  LHeapSize := aRight - aLeft + 1;
+
+  i := LHeapSize div 2;
+  while True do
+  begin
+    Dec(i);
+    LIndex := i;
+    LTemp := LP[aLeft + LIndex];
+    while True do
+    begin
+      LChild := 2 * LIndex + 1;
+      if LChild >= LHeapSize then Break;
+      if (LChild + 1 < LHeapSize) and
+         (aCompareProxy(aComparer, LP[aLeft + LChild], LP[aLeft + LChild + 1], aData) < 0) then
+        Inc(LChild);
+      if aCompareProxy(aComparer, LTemp, LP[aLeft + LChild], aData) >= 0 then Break;
+      LP[aLeft + LIndex] := LP[aLeft + LChild];
+      LIndex := LChild;
+    end;
+    LP[aLeft + LIndex] := LTemp;
+    if i = 0 then Break;
+  end;
+
+  i := LHeapSize - 1;
+  while i > 0 do
+  begin
+    LTemp := LP[aLeft + i];
+    LP[aLeft + i] := LP[aLeft];
+    LP[aLeft] := LTemp;
+    Dec(LHeapSize);
+    LIndex := 0;
+    LTemp := LP[aLeft];
+    while True do
+    begin
+      LChild := 2 * LIndex + 1;
+      if LChild >= LHeapSize then Break;
+      if (LChild + 1 < LHeapSize) and
+         (aCompareProxy(aComparer, LP[aLeft + LChild], LP[aLeft + LChild + 1], aData) < 0) then
+        Inc(LChild);
+      if aCompareProxy(aComparer, LTemp, LP[aLeft + LChild], aData) >= 0 then Break;
+      LP[aLeft + LIndex] := LP[aLeft + LChild];
+      LIndex := LChild;
+    end;
+    LP[aLeft + LIndex] := LTemp;
+    Dec(i);
+  end;
+end;
+
+procedure TArray.DoQuickSort(aCompareProxy: TCompareProxyMethod; aLeft, aRight: SizeUInt; aDepthLimit: Integer; aComparer, aData: Pointer);
+var
+  LP: PElement;
+  lt, gt, i: SizeUInt;
+  pivot, temp: T;
+  cmp: Integer;
+
+  procedure InsertionSort(aL, aR: SizeUInt); inline;
+  var
+    ii, jj: SizeUInt;
+    tmp: T;
+  begin
+    for ii := aL + 1 to aR do
+    begin
+      tmp := LP[ii];
+      jj := ii;
+      while (jj > aL) and (aCompareProxy(aComparer, LP[jj - 1], tmp, aData) > 0) do
+      begin
+        LP[jj] := LP[jj - 1];
+        Dec(jj);
+      end;
+      LP[jj] := tmp;
+    end;
+  end;
+
 begin
   LP := PElement(FMemory);
 
@@ -1001,48 +1034,103 @@ begin
       Exit;
     end;
 
-    i := aLeft;
-    j := aRight;
-
-    pivot := MedianOfThree(
-      LP[aLeft],
-      LP[(aLeft + aRight) div 2],
-      LP[aRight]
-    );
-
-    repeat
-      while aCompareProxy(aComparer, LP[i], pivot, aData) < 0 do Inc(i);
-      while aCompareProxy(aComparer, LP[j], pivot, aData) > 0 do Dec(j);
-
-      if i <= j then
-      begin
-        if i <> j then
-          SwapUnchecked(i, j);
-        Inc(i);
-        Dec(j);
-      end;
-    until i > j;
-
-    // 尾递归优化：先处理小段，尾递归处理大段
-    if (j - aLeft) < (aRight - i) then
+    if aDepthLimit = 0 then
     begin
-      DoQuickSort(aCompareProxy, aLeft, j, aComparer, aData);
-      aLeft := i;
+      DoHeapSort(aCompareProxy, aLeft, aRight, aComparer, aData);
+      Exit;
+    end;
+    Dec(aDepthLimit);
+
+    // median-of-three pivot
+    i := (aLeft + aRight) div 2;
+    if aCompareProxy(aComparer, LP[aLeft], LP[i], aData) > 0 then
+    begin temp := LP[aLeft]; LP[aLeft] := LP[i]; LP[i] := temp; end;
+    if aCompareProxy(aComparer, LP[aLeft], LP[aRight], aData) > 0 then
+    begin temp := LP[aLeft]; LP[aLeft] := LP[aRight]; LP[aRight] := temp; end;
+    if aCompareProxy(aComparer, LP[i], LP[aRight], aData) > 0 then
+    begin temp := LP[i]; LP[i] := LP[aRight]; LP[aRight] := temp; end;
+    pivot := LP[i];
+
+    // Dutch National Flag 三路分区
+    lt := aLeft;
+    gt := aRight;
+    i := aLeft;
+
+    while i <= gt do
+    begin
+      cmp := aCompareProxy(aComparer, LP[i], pivot, aData);
+      if cmp < 0 then
+      begin
+        temp := LP[i]; LP[i] := LP[lt]; LP[lt] := temp;
+        Inc(lt);
+        Inc(i);
+      end
+      else if cmp > 0 then
+      begin
+        temp := LP[i]; LP[i] := LP[gt]; LP[gt] := temp;
+        Dec(gt);
+      end
+      else
+        Inc(i);
+    end;
+
+    // 递归较小的一侧，尾递归较大的一侧
+    if (lt - aLeft) < (aRight - gt) then
+    begin
+      if lt > aLeft + 1 then
+        DoQuickSort(aCompareProxy, aLeft, lt - 1, aDepthLimit, aComparer, aData);
+      aLeft := gt + 1;
     end
     else
     begin
-      DoQuickSort(aCompareProxy, i, aRight, aComparer, aData);
-      aRight := j;
+      if gt + 1 < aRight then
+        DoQuickSort(aCompareProxy, gt + 1, aRight, aDepthLimit, aComparer, aData);
+      if lt = 0 then Exit;
+      aRight := lt - 1;
     end;
   end;
 end;
 
 procedure TArray.DoSort(aCompareProxy: TCompareProxyMethod; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer);
+var
+  LDepthLimit: Integer;
+  LN: SizeUInt;
+  LP: PElement;
+  i: SizeUInt;
+  LReversed: Boolean;
 begin
   if aCount < 2 then
     Exit;
 
-  DoQuickSort(aCompareProxy, aStartIndex, aStartIndex + aCount - 1, aComparer, aData);
+  if DoIsSorted(aCompareProxy, aStartIndex, aCount, aComparer, aData) then
+    Exit;
+
+  LP := PElement(FMemory);
+  LReversed := True;
+  for i := aStartIndex to aStartIndex + aCount - 2 do
+  begin
+    if aCompareProxy(aComparer, LP[i], LP[i + 1], aData) < 0 then
+    begin
+      LReversed := False;
+      Break;
+    end;
+  end;
+  if LReversed then
+  begin
+    DoReverse(aStartIndex, aCount);
+    Exit;
+  end;
+
+  LDepthLimit := 0;
+  LN := aCount;
+  while LN > 1 do
+  begin
+    LN := LN shr 1;
+    Inc(LDepthLimit);
+  end;
+  LDepthLimit := LDepthLimit * 2;
+
+  DoQuickSort(aCompareProxy, aStartIndex, aStartIndex + aCount - 1, LDepthLimit, aComparer, aData);
 end;
 
 function TArray.DoBinarySearch(aCompareProxy: TCompareProxyMethod; const aValue: T; aStartIndex, aCount: SizeUInt; aComparer, aData: Pointer): SizeInt;

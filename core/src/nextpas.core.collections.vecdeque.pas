@@ -171,7 +171,7 @@ type
     { 排序辅助方法 }
     function DoCompare(const aLeft, aRight: T; aComparer: TCompareFunc; aData: Pointer): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure DoSwap(aIndex1, aIndex2: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function DoPartition(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeUInt;
+    procedure DoPartition(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer; out aLt, aGt: SizeUInt);
     procedure DoHeapify(aIndex, aHeapSize: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
     procedure DoMerge(aLeft, aMid, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
     function DoIntroSortDepthLimit(aCount: SizeUInt): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -3451,8 +3451,6 @@ end;
 procedure TVecDeque.RotateLeft(aPositions: SizeUInt);
 var
   LActualPositions: SizeUInt;
-  i: SizeUInt;
-  LElement: T;
 begin
   if (FCount <= 1) or (aPositions = 0) then
     Exit;
@@ -3461,19 +3459,12 @@ begin
   if LActualPositions = 0 then
     Exit;
 
-  // 将前面的元素移动到后面
-  for i := 1 to LActualPositions do
-  begin
-    LElement := PopFront;
-    PushBack(LElement);
-  end;
+  FHead := WrapAdd(FHead, LActualPositions);
 end;
 
 procedure TVecDeque.RotateRight(aPositions: SizeUInt);
 var
   LActualPositions: SizeUInt;
-  i: SizeUInt;
-  LElement: T;
 begin
   if (FCount <= 1) or (aPositions = 0) then
     Exit;
@@ -3482,12 +3473,7 @@ begin
   if LActualPositions = 0 then
     Exit;
 
-  // 将后面的元素移动到前面
-  for i := 1 to LActualPositions do
-  begin
-    LElement := PopBack;
-    PushFront(LElement);
-  end;
+  FHead := WrapSub(FHead, LActualPositions);
 end;
 
 function TVecDeque.Split(aIndex: SizeUInt): TVecDeque;
@@ -7634,52 +7620,53 @@ begin
 end;
 
 // 快速排序分区函数 (改进的Lomuto分区，更好处理重复元素)
-function TVecDeque.DoPartition(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer): SizeUInt;
+procedure TVecDeque.DoPartition(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer; out aLt, aGt: SizeUInt);
 var
   LPivot: T;
-  i, j: SizeUInt;
-  LCompareResult: Integer;
-  LJPhysical: SizeUInt;
+  i: SizeUInt;
+  LCmp: Integer;
 begin
-  { 快速排序的分区操作 - 改进的Lomuto分区方案 }
   if aLeft >= aRight then
   begin
-    Result := aLeft;
+    aLt := aLeft;
+    aGt := aRight;
     Exit;
   end;
 
-  // 选择中间元素作为基准，移到末尾
-  DoSwap((aLeft + aRight) div 2, aRight);
-  LPivot := FBuffer.GetUnchecked(GetPhysicalIndex(aRight));
+  LPivot := FBuffer.GetUnchecked(GetPhysicalIndex((aLeft + aRight) div 2));
+
+  aLt := aLeft;
+  aGt := aRight;
   i := aLeft;
 
-  // 优化：减少 GetPhysicalIndex 调用
-  for j := aLeft to aRight - 1 do
+  while i <= aGt do
   begin
-    LJPhysical := GetPhysicalIndex(j);
-    LCompareResult := DoCompare(FBuffer.GetUnchecked(LJPhysical), LPivot, aComparer, aData);
-    if LCompareResult < 0 then  // 严格小于，改善重复元素处理
+    LCmp := DoCompare(FBuffer.GetUnchecked(GetPhysicalIndex(i)), LPivot, aComparer, aData);
+    if LCmp < 0 then
     begin
-      if i <> j then
-        DoSwap(i, j);
+      DoSwap(i, aLt);
+      Inc(aLt);
       Inc(i);
-    end;
+    end
+    else if LCmp > 0 then
+    begin
+      DoSwap(i, aGt);
+      Dec(aGt);
+    end
+    else
+      Inc(i);
   end;
-
-  DoSwap(i, aRight);
-  Result := i;
 end;
 
 // 快速排序实现 (改进版，添加保护机制)
 procedure TVecDeque.DoQuickSort(aLeft, aRight: SizeUInt; aComparer: TCompareFunc; aData: Pointer);
 const
-  INSERTION_SORT_THRESHOLD = 16; // 小数组使用插入排序
-  MAX_RECURSION_DEPTH = 64;     // 最大递归深度保护
+  INSERTION_SORT_THRESHOLD = 16;
+  MAX_RECURSION_DEPTH = 64;
 procedure QuickSortRecursive(aL, aR: SizeUInt; aDepth: Integer);
   var
-    LPart: SizeUInt;
+    LLt, LGt: SizeUInt;
   begin
-    // 递归深度保护
     if aDepth <= 0 then
     begin
       DoHeapSort(aL, aR, aComparer, aData);
@@ -7689,24 +7676,21 @@ procedure QuickSortRecursive(aL, aR: SizeUInt; aDepth: Integer);
     if aL >= aR then
       Exit;
 
-    // 小数组使用插入排序
     if aR - aL + 1 <= INSERTION_SORT_THRESHOLD then
     begin
       DoInsertionSort(aL, aR, aComparer, aData);
       Exit;
     end;
 
-    LPart := DoPartition(aL, aR, aComparer, aData);
+    DoPartition(aL, aR, aComparer, aData, LLt, LGt);
 
-    // 递归排序左右两部分
-    if LPart > aL then
-      QuickSortRecursive(aL, LPart - 1, aDepth - 1);
-    if LPart + 1 <= aR then
-      QuickSortRecursive(LPart + 1, aR, aDepth - 1);
+    if LLt > aL then
+      QuickSortRecursive(aL, LLt - 1, aDepth - 1);
+    if LGt < aR then
+      QuickSortRecursive(LGt + 1, aR, aDepth - 1);
   end;
 
 begin
-  { 快速排序 - 改进版，平均O(n log n) }
   if aLeft >= aRight then
     Exit;
 
@@ -7923,37 +7907,33 @@ const
   INSERTION_SORT_THRESHOLD = 16;
 var
   LDepthLimit: Integer;
-  LPartition: SizeUInt;
+  LLt, LGt: SizeUInt;
 
   procedure IntroSortRecursive(aL, aR: SizeUInt; aDepth: Integer);
   begin
     if aL >= aR then
       Exit;
 
-    // 小数组使用插入排序
     if aR - aL + 1 <= INSERTION_SORT_THRESHOLD then
     begin
       DoInsertionSort(aL, aR, aComparer, aData);
       Exit;
     end;
 
-    // 递归深度过深时使用堆排序
     if aDepth = 0 then
     begin
       DoHeapSort(aL, aR, aComparer, aData);
       Exit;
     end;
 
-    // 否则使用快速排序
-    LPartition := DoPartition(aL, aR, aComparer, aData);
-    if LPartition > aL then
-      IntroSortRecursive(aL, LPartition - 1, aDepth - 1);
-    if LPartition + 1 <= aR then
-      IntroSortRecursive(LPartition + 1, aR, aDepth - 1);
+    DoPartition(aL, aR, aComparer, aData, LLt, LGt);
+    if LLt > aL then
+      IntroSortRecursive(aL, LLt - 1, aDepth - 1);
+    if LGt < aR then
+      IntroSortRecursive(LGt + 1, aR, aDepth - 1);
   end;
 
 begin
-  { 内省排序 - 混合算法，最优性能 }
   if aLeft >= aRight then
     Exit;
 

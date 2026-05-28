@@ -1,0 +1,1 @@
+/home/dtamade/projects/nextPas/core/benchmarks/nextpas.core.collections/bench_sort/compare_rust/target/release/bench_sort: /home/dtamade/projects/nextPas/core/benchmarks/nextpas.core.collections/bench_sort/compare_rust/src/main.rs

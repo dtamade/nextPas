@@ -1,0 +1,8 @@
+[package]
+name = "bench_sort_rust"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bench_sort"
+path = "src/main.rs"

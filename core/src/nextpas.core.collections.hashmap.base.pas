@@ -5,7 +5,7 @@ unit nextpas.core.collections.hashmap.base;
 interface
 
 const
-  DEFAULT_MAX_LOAD_FACTOR = 0.86;
+  DEFAULT_MAX_LOAD_FACTOR = 0.75;
 
 type
   {**

@@ -687,6 +687,37 @@ begin
   end;
 end;
 
+procedure TestSortAdversarial;
+var
+  LV: TIntVec;
+  i: Integer;
+begin
+  LV := TIntVec.Create;
+  try
+    for i := 999 downto 0 do
+      LV.Push(i);
+    LV.Sort;
+    for i := 0 to 998 do
+      Check(LV.Get(i) <= LV.Get(i + 1), 'reverse sorted');
+
+    LV.Clear;
+    for i := 0 to 999 do
+      LV.Push(42);
+    LV.Sort;
+    for i := 0 to 999 do
+      CheckEqual(Int64(42), Int64(LV.Get(i)), 'all same');
+
+    LV.Clear;
+    for i := 0 to 999 do
+      LV.Push(i);
+    LV.Sort;
+    for i := 0 to 998 do
+      Check(LV.Get(i) <= LV.Get(i + 1), 'already sorted');
+  finally
+    LV.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.vec');
   T.Run('Create', @TestCreate);
@@ -732,5 +763,6 @@ begin
   T.Run('Get/SetGrowStrategy', @TestGetSetGrowStrategy);
   T.Run('RemoveCopyAt', @TestRemoveCopyAt);
   T.Run('SwapRemoveCopyAt', @TestSwapRemoveCopyAt);
+  T.Run('Sort adversarial inputs', @TestSortAdversarial);
   T.Summary;
 end.
