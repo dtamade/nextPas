@@ -120,6 +120,7 @@ type
   TPThreadStartRoutine = function(AArg: Pointer): Pointer; cdecl;
   TPThreadCondAttrSetClockProc = function(attr: Pointer; clk_id: Int32): Int32; cdecl;
 
+{$packrecords default}
   {$IFDEF NEXTPAS_FREEBSD}
   pthread_mutex_t = Pointer;
   pthread_mutexattr_t = Pointer;
@@ -249,6 +250,7 @@ type
   end;
   {$ENDIF}
 
+{$packrecords c}
 const
   PLATFORM_POSIX_PROT_NONE = Int32(0);
   PLATFORM_POSIX_PROT_READ = Int32(1);
