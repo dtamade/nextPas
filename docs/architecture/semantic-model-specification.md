@@ -116,6 +116,7 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   imported unit method body bare implicit-self wrong-argument-count、
   imported unit method body inherited implicit-self wrong-argument-count、
   imported unit method body inherited implicit-self type-mismatch、
+  imported unit method body inherited implicit-self no-matching-overload、
   direct/inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned
   零参内建标量/字符串 function result）、
   class/record/alias 变量/参数、imported/带参/member function result 相关 no-match、

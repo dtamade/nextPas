@@ -20,8 +20,12 @@ Wrong Argument Count Deferred Guard 已完成并通过 focused semantic / heaptr
 下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
-当前最新索引补充：Batch 210 Installed-source Unit Method Body Inherited Implicit-self Type
-Mismatch Deferred Guard 将按同形矩阵双拍推进；下一行旧长索引保留历史上下文，当前
+当前最新索引补充：Batch 211 Installed-source Unit Method Body Inherited Implicit-self No
+Matching Overload Deferred Guard 将按同形矩阵双拍推进；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 210 Installed-source Unit Method Body Inherited Implicit-self Type
+Mismatch Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前
 reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
 当前上一批为 Batch 209 Installed-source Unit Method Body Inherited Implicit-self Wrong
