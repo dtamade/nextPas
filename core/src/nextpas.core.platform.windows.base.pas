@@ -14,6 +14,7 @@ type
   WINBOOL = LongBool;
   BOOL = WINBOOL;
   HANDLE = Pointer;
+  PHANDLE = ^HANDLE;
   FARPROC = Pointer;
   HMODULE = HANDLE;
   LPVOID = Pointer;

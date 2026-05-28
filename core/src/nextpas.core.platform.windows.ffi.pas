@@ -116,7 +116,6 @@ function CancelIoEx(hFile: HANDLE; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall
 function CreateFileMappingA(hFile: HANDLE; lpAttributes: LPSECURITY_ATTRIBUTES; flProtect: DWORD; dwMaximumSizeHigh: DWORD; dwMaximumSizeLow: DWORD; lpName: LPCSTR): HANDLE; stdcall; external 'kernel32' name 'CreateFileMappingA';
 function MapViewOfFile(hFileMappingObject: HANDLE; dwDesiredAccess: DWORD; dwFileOffsetHigh: DWORD; dwFileOffsetLow: DWORD; dwNumberOfBytesToMap: PtrUInt): Pointer; stdcall; external 'kernel32' name 'MapViewOfFile';
 function UnmapViewOfFile(lpBaseAddress: Pointer): WINBOOL; stdcall; external 'kernel32' name 'UnmapViewOfFile';
-function GetFileSize(hFile: HANDLE; lpFileSizeHigh: LPDWORD): DWORD; stdcall; external 'kernel32' name 'GetFileSize';
 function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: LPSECURITY_ATTRIBUTES; nSize: DWORD): WINBOOL; stdcall; external 'kernel32' name 'CreatePipe';
 function SetHandleInformation(hObject: HANDLE; dwMask: DWORD; dwFlags: DWORD): WINBOOL; stdcall; external 'kernel32' name 'SetHandleInformation';
 function DuplicateHandle(hSourceProcessHandle: HANDLE; hSourceHandle: HANDLE; hTargetProcessHandle: HANDLE; lpTargetHandle: PHANDLE; dwDesiredAccess: DWORD; bInheritHandle: WINBOOL; dwOptions: DWORD): WINBOOL; stdcall; external 'kernel32' name 'DuplicateHandle';
@@ -128,6 +127,8 @@ function SetConsoleMode(hConsoleHandle: HANDLE; dwMode: DWORD): WINBOOL; stdcall
 function GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE; lpConsoleScreenBufferInfo: Pointer): WINBOOL; stdcall; external 'kernel32' name 'GetConsoleScreenBufferInfo';
 function FormatMessageA(dwFlags: DWORD; lpSource: Pointer; dwMessageId: DWORD; dwLanguageId: DWORD; lpBuffer: LPSTR; nSize: DWORD; Arguments: Pointer): DWORD; stdcall; external 'kernel32' name 'FormatMessageA';
 function LocalFree(hMem: Pointer): Pointer; stdcall; external 'kernel32' name 'LocalFree';
+function GetModuleFileNameA(hModule: HMODULE; lpFilename: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetModuleFileNameA';
+function GetTempPathA(nBufferLength: DWORD; lpBuffer: LPSTR): DWORD; stdcall; external 'kernel32' name 'GetTempPathA';
 function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
 
 { winsock2 FFI }
