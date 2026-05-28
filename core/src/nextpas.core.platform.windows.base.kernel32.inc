@@ -3,6 +3,17 @@
 const
   MAX_PATH = 260;
 
+  { Memory mapping }
+  PAGE_READONLY          = $02;
+  PAGE_READWRITE         = $04;
+  PAGE_WRITECOPY         = $08;
+  PAGE_EXECUTE_READ      = $20;
+  PAGE_EXECUTE_READWRITE = $40;
+  FILE_MAP_READ          = $0004;
+  FILE_MAP_WRITE         = $0002;
+  FILE_MAP_COPY          = $0001;
+  FILE_MAP_EXECUTE       = $0020;
+
   ERROR_SUCCESS             = DWORD(0);
   ERROR_INVALID_FUNCTION    = DWORD(1);
   ERROR_FILE_NOT_FOUND      = DWORD(2);

@@ -113,6 +113,10 @@ function TryEnterCriticalSection(lpCriticalSection: LPCRITICAL_SECTION): WINBOOL
 function GetOverlappedResult(hFile: HANDLE; lpOverlapped: LPOVERLAPPED; lpNumberOfBytesTransferred: LPDWORD; bWait: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'GetOverlappedResult';
 function CancelIo(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'CancelIo';
 function CancelIoEx(hFile: HANDLE; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'CancelIoEx';
+function CreateFileMappingA(hFile: HANDLE; lpAttributes: LPSECURITY_ATTRIBUTES; flProtect: DWORD; dwMaximumSizeHigh: DWORD; dwMaximumSizeLow: DWORD; lpName: LPCSTR): HANDLE; stdcall; external 'kernel32' name 'CreateFileMappingA';
+function MapViewOfFile(hFileMappingObject: HANDLE; dwDesiredAccess: DWORD; dwFileOffsetHigh: DWORD; dwFileOffsetLow: DWORD; dwNumberOfBytesToMap: PtrUInt): Pointer; stdcall; external 'kernel32' name 'MapViewOfFile';
+function UnmapViewOfFile(lpBaseAddress: Pointer): WINBOOL; stdcall; external 'kernel32' name 'UnmapViewOfFile';
+function GetFileSize(hFile: HANDLE; lpFileSizeHigh: LPDWORD): DWORD; stdcall; external 'kernel32' name 'GetFileSize';
 
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}
