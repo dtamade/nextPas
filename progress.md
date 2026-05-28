@@ -3,7 +3,7 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
-当前最新索引补充：Batch 200 installed-source unit body inherited implicit self known field
+当前最新索引补充：Batch 201 installed-source unit body inherited implicit self known property
 invalid-call-shape deferred guard 已完成并通过 fresh local verification；
 旧长索引行保留历史上下文。
 
@@ -20,6 +20,43 @@ Batch 98 platform.time FFI boundary、
 Batch 97 object header ownership contract、
 Batch 96 object allocation helper boundary 和 Batch 93 platform.thread FFI boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Session: 2026-05-28 (Batch 201 installed-source unit body inherited implicit self known property invalid-call-shape deferred guard)
+
+- **Status:** completed; verification passed
+- Goal nodes:
+  - `G1.5 Call, member, and overload resolution`
+  - `G1.6 Diagnostics`
+- Acceleration strategy:
+  - 固定“矩阵双拍”：Batch 196 的 imported `project-source` inherited implicit-self known
+    property diagnostic gate 后，立即补同形 imported `installed-source` deferred guard，闭合
+    inherited field/property 的 installed-source unit-body 防误报面。
+- Objective:
+  - root source `uses Worker;`，imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph，
+    `TBaseWorker.Value` 是 inherited known property，`TWorker = class(TBaseWorker)` 的
+    `procedure TWorker.Run; begin Value(1); end;` 位于 imported unit implementation body。
+  - 该场景必须保持 deferred：不发 `sema.invalid-call-shape`，semantic model 为 `ready`，
+    且不注册失败 `member-call` binding。
+- Actions taken:
+  - 在 `task_plan.md` 固定 Batch 201 `/plan`，明确本轮矩阵双拍、不新增 stage0 fixture、不碰
+    `core`。
+  - 在 `tests/semantic/test_semantic_call_bindings.pas` 增加
+    `CheckInstalledSourceUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeStaysDeferred`。
+  - Focused semantic probe 直接 GREEN：现有 inherited known non-method provenance guard 已覆盖该边界，
+    本批不修改 analyzer。
+  - 同步 `docs/architecture/semantic-model-specification.md`、`docs/architecture/nextpas-goal-tree.md`
+    与 `findings.md`。
+- Verification:
+  - Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+    `semantic-call-bindings-status=pass`。
+  - Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+    `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+    `human-summary=local verification passed`。
+- Review:
+  - 本批是 installed-source inherited property guard-first：新增 semantic harness deferred guard 与
+    spec/records/goal-tree 说明；没有修改 analyzer，也没有新增 stage0 fixture 伪造 provenance。
+  - 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+    `core`。
 
 ## Session: 2026-05-28 (Batch 200 installed-source unit body inherited implicit self known field invalid-call-shape deferred guard)
 
