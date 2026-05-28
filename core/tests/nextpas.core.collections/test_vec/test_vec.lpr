@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.collections,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec;
 
@@ -489,6 +490,203 @@ begin
   end;
 end;
 
+procedure TestReserveExact;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3]);
+    LV.ReserveExact(5);
+    Check(LV.GetCapacity >= 8, 'reserve exact grows');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count unchanged');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestResizeExact;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3, 4, 5]);
+    LV.ResizeExact(3);
+    CheckEqual(Int64(3), Int64(LV.Count), 'count after resize down');
+    Check(LV.GetCapacity <= 5, 'capacity shrunk');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestSetCapacity;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3]);
+    LV.SetCapacity(10);
+    CheckEqual(Int64(10), Int64(LV.GetCapacity), 'capacity set');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count unchanged');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestFreeBuffer;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3]);
+    LV.FreeBuffer;
+    CheckEqual(Int64(0), Int64(LV.Count), 'count 0 after free buffer');
+    CheckEqual(Int64(0), Int64(LV.GetCapacity), 'capacity 0');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestWrite;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3]);
+    LV.Write(1, [10, 20, 30]);
+    CheckEqual(Int64(4), Int64(LV.Count), 'write extends');
+    CheckEqual(Int64(1), Int64(LV.Get(0)), '[0] unchanged');
+    CheckEqual(Int64(10), Int64(LV.Get(1)), '[1] written');
+    CheckEqual(Int64(30), Int64(LV.Get(3)), '[3] written');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestWriteExact;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([0, 0, 0, 0, 0]);
+    LV.WriteExact(2, [7, 8, 9]);
+    CheckEqual(Int64(5), Int64(LV.Count), 'count unchanged');
+    CheckEqual(Int64(7), Int64(LV.Get(2)), '[2]');
+    CheckEqual(Int64(9), Int64(LV.Get(4)), '[4]');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestTryLoadFrom;
+var
+  LV, LSrc: TIntVec;
+begin
+  LV := TIntVec.Create;
+  LSrc := TIntVec.Create;
+  try
+    LSrc.Push([10, 20, 30]);
+    Check(LV.TryLoadFrom(LSrc), 'try load from');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count');
+    CheckEqual(Int64(10), Int64(LV.Get(0)), '[0]');
+  finally
+    LSrc.Free;
+    LV.Free;
+  end;
+end;
+
+procedure TestTryAppend;
+var
+  LV, LSrc: TIntVec;
+begin
+  LV := TIntVec.Create;
+  LSrc := TIntVec.Create;
+  try
+    LV.Push([1, 2]);
+    LSrc.Push([3, 4]);
+    Check(LV.TryAppend(LSrc), 'try append');
+    CheckEqual(Int64(4), Int64(LV.Count), 'count');
+    CheckEqual(Int64(3), Int64(LV.Get(2)), '[2]');
+  finally
+    LSrc.Free;
+    LV.Free;
+  end;
+end;
+
+function SameDiv10(const A, B: Integer; aData: Pointer): Boolean;
+begin
+  Result := (A div 10) = (B div 10);
+end;
+
+procedure TestDedupBy;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([11, 12, 21, 22, 23, 31]);
+    LV.DedupBy(@SameDiv10, nil);
+    CheckEqual(Int64(3), Int64(LV.Count), 'dedup by div10');
+    CheckEqual(Int64(11), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(21), Int64(LV.Get(1)), '[1]');
+    CheckEqual(Int64(31), Int64(LV.Get(2)), '[2]');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestGetSetGrowStrategy;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    Check(LV.GetGrowStrategy <> nil, 'has default strategy');
+    LV.SetGrowStrategy(DoublingGrow);
+    Check(LV.GetGrowStrategy <> nil, 'strategy set');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestRemoveCopyAt;
+var
+  LV: TIntVec;
+  LDst: Integer;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([10, 20, 30, 40]);
+    LV.RemoveCopyAt(1, @LDst, 1);
+    CheckEqual(Int64(20), Int64(LDst), 'copied value');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count after remove copy');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestSwapRemoveCopyAt;
+var
+  LV: TIntVec;
+  LDst: Integer;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([10, 20, 30, 40]);
+    LV.SwapRemoveCopyAt(1, @LDst, 1);
+    CheckEqual(Int64(20), Int64(LDst), 'copied value');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count');
+    CheckEqual(Int64(40), Int64(LV.Get(1)), 'last swapped in');
+  finally
+    LV.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.vec');
   T.Run('Create', @TestCreate);
@@ -522,5 +720,17 @@ begin
   T.Run('Dedup', @TestDedup);
   T.Run('Splice', @TestSplice);
   T.Run('EnsureCapacity', @TestEnsureCapacity);
+  T.Run('ReserveExact', @TestReserveExact);
+  T.Run('ResizeExact', @TestResizeExact);
+  T.Run('SetCapacity', @TestSetCapacity);
+  T.Run('FreeBuffer', @TestFreeBuffer);
+  T.Run('Write', @TestWrite);
+  T.Run('WriteExact', @TestWriteExact);
+  T.Run('TryLoadFrom', @TestTryLoadFrom);
+  T.Run('TryAppend', @TestTryAppend);
+  T.Run('DedupBy', @TestDedupBy);
+  T.Run('Get/SetGrowStrategy', @TestGetSetGrowStrategy);
+  T.Run('RemoveCopyAt', @TestRemoveCopyAt);
+  T.Run('SwapRemoveCopyAt', @TestSwapRemoveCopyAt);
   T.Summary;
 end.
