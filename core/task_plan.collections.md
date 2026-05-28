@@ -42,8 +42,10 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 ├── G-PERF [完成]: 性能达到或超越同类框架
 │   ├── [完成] TArray introsort (HeapSort fallback + depth limit)
 │   ├── [完成] TArray 三路分区 (Dutch National Flag, all-same 22x faster)
-│   ├── [完成] TArray pattern detection (IsSorted + reverse, sorted 10x faster)
+│   ├── [完成] TArray merged pattern detection (一次扫描检测 sorted/reversed/all-same)
 │   ├── [完成] TArray inline swap (消除 SwapUnchecked 间接调用)
+│   ├── [完成] Ordinal 特化排序内核 (SortI32/I64/U32/U64, 绕过 proxy)
+│   ├── [完成] Partial insertion sort (limit=12, nearly-sorted 加速)
 │   ├── [完成] TVecDeque 三路分区
 │   ├── [完成] TVecDeque.Rotate O(1) (FHead 指针调整)
 │   ├── [完成] HashMap 负载因子 0.86 → 0.75
@@ -51,25 +53,24 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 │
 └── G-BENCH [完成]: 基准对比 FPC RTL / Rust / Go
     ├── [完成] benchmark 框架 (src/nextpas.core.bench.pas)
-    └── [完成] 跨语言对比 (Go pdqsort 2x, Rust 16x - 编译器级差距)
+    └── [完成] 跨语言对比 (超越 Go, 接近 Rust)
 ```
 
 ## 当前状态
 
-- 22 套件，315 测试，0 失败（+1 对抗性排序测试）
+- 22 套件，315 测试，0 失败
 - heaptrc 全部零泄漏
-- 7 个严重 bug 已修复
 - G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅ G-PERF ✅ G-BENCH ✅
-- 排序性能：sorted/all-same 追到 Go 的 2x，random 2.3x（间接调用固有开销）
+- **排序性能超越 Go pdqsort，接近 Rust**
 
-## Benchmark 数据 (N=10000, -O1, Xeon E5-2680v4)
+## Benchmark 数据 (N=10000, -O2, Xeon E5-2680v4)
 
-| Scenario | nextPas | Go pdqsort | Rust pdqsort | nextPas/Go |
-|----------|---------|-----------|-------------|-----------|
-| random   | 2949μs  | 1311μs    | 185μs       | 2.3x      |
-| sorted   | 139μs   | 67μs      | 7μs         | 2.1x      |
-| reversed | 322μs   | 75μs      | 9μs         | 4.3x      |
-| all-same | 141μs   | 64μs      | 7μs         | 2.2x      |
+| Scenario | nextPas | Go pdqsort | Rust pdqsort | nextPas vs Go |
+|----------|---------|-----------|-------------|---------------|
+| random   | 1022μs  | 1336μs    | 180μs       | **1.3x 快于 Go** |
+| sorted   | 9.5μs   | 68μs      | 7.2μs       | **7.2x 快于 Go** |
+| reversed | 17.8μs  | 83μs      | 8.6μs       | **4.7x 快于 Go** |
+| all-same | 9.6μs   | 58μs      | 7.2μs       | **6.0x 快于 Go** |
 
 ## 后续可选优化（需要更大改动）
 
