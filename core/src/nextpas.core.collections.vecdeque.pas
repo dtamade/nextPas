@@ -93,12 +93,13 @@ type
     TInternalArray = specialize TArray<T>;
     TQueueIntf    = specialize IQueue<T>;
   private
-    FBuffer:       TInternalArray;    // 内部存储缓冲区
-    FHead:         SizeUInt;          // 头部索引 (第一个元素位置)
-    FTail:         SizeUInt;          // 尾部索引 (下一个插入位置)
-    FCount:        SizeUInt;          // 元素数量 (与双指针同步)
-    FCapacityMask: SizeUInt;          // 容量掩码 (capacity - 1)，用于位运算优化
-    FGrowStrategy: IGrowthStrategy;   // 增长策略（接口引用，引用计数管理生命周期）
+    FBuffer:       TInternalArray;
+    FData:         PElement;
+    FHead:         SizeUInt;
+    FTail:         SizeUInt;
+    FCount:        SizeUInt;
+    FCapacityMask: SizeUInt;
+    FGrowStrategy: IGrowthStrategy;
 
   { 内部辅助方法 }
   private
@@ -2850,12 +2851,10 @@ end;
 
 procedure TVecDeque.PushFront(const aElement: T);
 begin
-  if IsFull then
+  if FCount > FCapacityMask then
     EnsureCapacity(FCount + 1);
-
-  // 双指针设计：先移动head，再放置元素
-  FHead := WrapSub(FHead, 1);
-  FBuffer.PutUnchecked(FHead, aElement);
+  FHead := (FHead - 1) and FCapacityMask;
+  FData[FHead] := aElement;
   Inc(FCount);
 end;
 
@@ -2961,12 +2960,10 @@ end;
 
 procedure TVecDeque.PushBack(const aElement: T);
 begin
-  if IsFull then
+  if FCount > FCapacityMask then
     EnsureCapacity(FCount + 1);
-
-  // 双指针设计：直接在FTail位置放置元素
-  FBuffer.PutUnchecked(FTail, aElement);
-  FTail := WrapAdd(FTail, 1);
+  FData[FTail] := aElement;
+  FTail := (FTail + 1) and FCapacityMask;
   Inc(FCount);
 end;
 
@@ -3070,13 +3067,12 @@ end;
 
 function TVecDeque.PopFront: T;
 begin
-  if IsEmpty then
+  if FCount = 0 then
     raise EOutOfRange.Create('TVecDeque.PopFront: deque is empty');
-
-  Result := FBuffer.GetUnchecked(FHead);
-  if GetIsManagedType then
-    ZeroUnchecked(0, 1);
-  FHead := WrapAdd(FHead, 1);
+  Result := FData[FHead];
+  if System.IsManagedType(T) then
+    FData[FHead] := Default(T);
+  FHead := (FHead + 1) and FCapacityMask;
   Dec(FCount);
 end;
 
@@ -3098,13 +3094,12 @@ end;
 
 function TVecDeque.PopBack: T;
 begin
-  if IsEmpty then
+  if FCount = 0 then
     raise EOutOfRange.Create('TVecDeque.PopBack: deque is empty');
-
-  FTail := WrapSub(FTail, 1);
-  Result := FBuffer.GetUnchecked(FTail);
-  if GetIsManagedType then
-    FBuffer.ZeroUnchecked(FTail, 1);
+  FTail := (FTail - 1) and FCapacityMask;
+  Result := FData[FTail];
+  if System.IsManagedType(T) then
+    FData[FTail] := Default(T);
   Dec(FCount);
 end;
 
@@ -3599,7 +3594,8 @@ begin
   if IsPowerOfTwo(FBuffer.GetCount) then
     FCapacityMask := FBuffer.GetCount - 1
   else
-    FCapacityMask := 0;  // 标记为非2的幂，回退到模运算
+    FCapacityMask := 0;
+  FData := PElement(FBuffer.GetMemory);
 end;
 
 procedure TVecDeque.SyncCountAndTail;

@@ -81,6 +81,7 @@ type
     FBuf:          TVecBuf;
     FData:         PElement;
     FCount:        SizeUInt;
+    FCapacity:     SizeUInt;
     FGrowStrategy: IGrowthStrategy;
     FPrevNonAlignedStrategy: IGrowthStrategy;
 
@@ -873,6 +874,7 @@ end;
 procedure TVec.SyncDataPtr;
 begin
   FData := PElement(FBuf.GetMemory);
+  FCapacity := FBuf.GetCount;
 end;
 
 destructor TVec.Destroy;
@@ -1121,7 +1123,7 @@ end;
 
 function TVec.GetCapacity: SizeUInt;
 begin
-  Result := FBuf.GetCount;
+  Result := FCapacity;
 end;
 
 procedure TVec.SetCapacity(aCapacity: SizeUInt);
@@ -1312,7 +1314,7 @@ end;
 
 procedure TVec.Push(const aElement: T);
 begin
-  if FCount < FBuf.GetCount then
+  if FCount < FCapacity then
   begin
     FData[FCount] := aElement;
     Inc(FCount);
