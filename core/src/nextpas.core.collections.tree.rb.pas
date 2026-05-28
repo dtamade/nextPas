@@ -30,10 +30,14 @@ type
   private
     FRoot: PNode;
     FCount: SizeUInt;
-    FSentinel: TNode; // black leaf sentinel
+    FSentinel: TNode;
     FCompare: TCompareMethod;
     FCompareData: Pointer;
     FFinalize: TFinalizeMethod;
+    FPoolBlocks: array of Pointer;
+    FPoolBlockCount: SizeUInt;
+    FPoolNext: PNode;
+    FPoolEnd: PNode;
   private
     procedure InitTree; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function  Cmp(const L, R: T): SizeInt; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -93,6 +97,10 @@ begin
   FSentinel.Color := Black;
   FRoot := @FSentinel;
   FCount := 0;
+  FPoolBlockCount := 0;
+  SetLength(FPoolBlocks, 0);
+  FPoolNext := nil;
+  FPoolEnd := nil;
 end;
 
 constructor TRBTreeCore.Create(aCompare: TCompareMethod; aCompareData: Pointer; aFinalize: TFinalizeMethod);
@@ -111,16 +119,27 @@ begin
 end;
 
 function TRBTreeCore.Cmp(const L, R: T): SizeInt;
-var C: SizeInt;
 begin
-  if not Assigned(FCompare) then raise EInvalidOperation.Create('RBTreeCore: comparer is nil');
-  C := FCompare(L, R, FCompareData);
-  if C < 0 then Exit(-1) else if C > 0 then Exit(1) else Exit(0);
+  Result := FCompare(L, R, FCompareData);
 end;
 
 function TRBTreeCore.NewNode(const AValue: T): PNode;
+const
+  BLOCK_SIZE = 256;
+var
+  LBlock: Pointer;
 begin
-  New(Result);
+  if FPoolNext >= FPoolEnd then
+  begin
+    GetMem(LBlock, BLOCK_SIZE * SizeOf(TNode));
+    Inc(FPoolBlockCount);
+    SetLength(FPoolBlocks, FPoolBlockCount);
+    FPoolBlocks[FPoolBlockCount - 1] := LBlock;
+    FPoolNext := PNode(LBlock);
+    FPoolEnd := PNode(LBlock) + BLOCK_SIZE;
+  end;
+  Result := FPoolNext;
+  Inc(FPoolNext);
   Result^.Left := @FSentinel;
   Result^.Right := @FSentinel;
   Result^.Parent := @FSentinel;
@@ -132,7 +151,6 @@ procedure TRBTreeCore.FreeNode(ANode: PNode);
 begin
   if (ANode = nil) or (ANode = @FSentinel) then Exit;
   if Assigned(FFinalize) then FFinalize(ANode^.Data);
-  Dispose(ANode);
 end;
 
 function TRBTreeCore.MinNode(N: PNode): PNode;
@@ -335,22 +353,30 @@ end;
 
 procedure TRBTreeCore.Clear;
 
-  procedure FreeSubtree(N: PNode);
+  procedure FinalizeSubtree(N: PNode);
   begin
     if (N = nil) or (N = @FSentinel) then Exit;
-    FreeSubtree(N^.Left);
-    FreeSubtree(N^.Right);
-    FreeNode(N);
+    FinalizeSubtree(N^.Left);
+    FinalizeSubtree(N^.Right);
+    if Assigned(FFinalize) then FFinalize(N^.Data);
   end;
 
 var
   LRoot: PNode;
+  i: SizeUInt;
 begin
   if FRoot = @FSentinel then Exit;
   LRoot := FRoot;
   FRoot := @FSentinel;
   FCount := 0;
-  FreeSubtree(LRoot);
+  if Assigned(FFinalize) then
+    FinalizeSubtree(LRoot);
+  for i := 0 to FPoolBlockCount - 1 do
+    FreeMem(FPoolBlocks[i]);
+  SetLength(FPoolBlocks, 0);
+  FPoolBlockCount := 0;
+  FPoolNext := nil;
+  FPoolEnd := nil;
 end;
 
 function TRBTreeCore.GetCount: SizeUInt;
