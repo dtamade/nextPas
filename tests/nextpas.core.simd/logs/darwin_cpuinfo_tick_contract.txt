@@ -1,0 +1,5 @@
+[DARWIN-CONTRACT] Darwin CPUInfo lazy / tick contract
+  - checks:  8
+  - issues:  0
+[DARWIN-CONTRACT] OK
+DARWIN_CPUINFO_TICK_CONTRACT checks=8 issues=0 status=ok

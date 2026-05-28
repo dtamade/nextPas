@@ -1,0 +1,90 @@
+ Time:01:23.042 N:43 E:0 F:0 I:5
+  TTestCase_Global Time:00.435 N:9 E:0 F:0 I:0
+    00.224  Test_GetCPUInfo
+    00.000  Test_IsBackendAvailable
+    00.001  Test_BackendSupportPredicateConsistency
+    00.001  Test_GetAvailableBackends
+    00.001  Test_ClearSupportedAliases_PreserveCpuOnlySemantics
+    00.001  Test_GetBestBackend
+    00.000  Test_GetBestBackendOnCPU_IndependentFromActiveBackend
+    00.001  Test_GetBackendInfo
+    00.203  Test_ResetCPUInfo
+  TTestCase_ThreadSafety Time:00.013 N:2 E:0 F:0 I:0
+    00.004  Test_GetCPUInfo_Consistency
+    00.009  Test_GetCPUInfo_Performance
+  TTestCase_PlatformSpecific Time:01.458 N:22 E:0 F:0 I:5
+    00.000  Test_X86Features
+    00.000  Test_IntrinsicsAVXAvailability_Semantics
+    00.000  Test_IntrinsicsFacade_FullConsistency
+    00.001  Test_BackendFeatureBidirectionalConsistency
+    00.000  Test_AVXUsable_XCR0Semantics
+    00.000  Test_AVX512Usable_XCR0Semantics
+    01.171  Test_DiagnosticReport_UsableViewConsistency
+    00.000  Test_ARMFeatures
+    00.000  Test_LoongArchFeatures
+    00.006  Test_ARMFeatureParserSamples
+    00.001  Test_ARMHWCAPMergeSamples
+    00.001  Test_ARMVendorModelParserSamples
+    00.030  Test_ARMProcessorInfoBasic
+    00.002  Test_ARMProcessorInfoParserSamples
+    00.002  Test_CacheSizeParserSamples
+    00.240  Test_NonX86CacheInfoOnLinux
+    00.002  Test_RISCVISAParserSamples  Ignored test: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVISASelectionSamples  Ignored test: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVHWCAPMergeSamples  Ignored test: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.001  Test_RISCVVendorModelParserSamples  Ignored test: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_RISCVProcessorInfoBasic  Ignored test: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+    00.000  Test_FeatureHierarchy
+  TTestCase_ErrorHandling Time:00.001 N:2 E:0 F:0 I:0
+    00.000  Test_InvalidBackend
+    00.000  Test_ExceptionHandling
+  TTestCase_LazyCPUInfo Time:01:21.131 N:8 E:0 F:0 I:0
+    00.000  Test_ParseCacheSizeTextToKB_Boundaries
+    00.199  Test_GetCPUInfoLazy_BasicFields
+    01.087  Test_HasFeatureLazy_Consistency
+    00.400  Test_LazyEager_GenericFeatureParity
+    00.350  Test_Reset_ReloadConsistency
+    00.398  Test_NonX86CacheInfoOnLinux
+    31.263  Test_GetCPUInfoLazy_ConcurrentReaders
+    47.420  Test_GetCPUInfoLazy_ResetWhileReading
+
+Number of run tests: 43
+Number of errors:    0
+Number of failures:  0
+
+List of ignored tests:
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVISAParserSamples: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V ISA parser samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVISASelectionSamples: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V ISA selection samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVHWCAPMergeSamples: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V HWCAP merge samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVVendorModelParserSamples: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V vendor/model parser samples skipped when SIMD_RISCV_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_RISCVProcessorInfoBasic: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: RISC-V processor info test skipped when SIMD_RISCV_AVAILABLE is off
+
+
+
+SSE2 available: FALSE
+AVX2 available: FALSE
+NEON available: TRUE
+Average GetCPUInfo time: 500.00 ns
+x86 features not available in this build
+ARM Features:
+  NEON: TRUE
+  AdvSIMD: TRUE
+  FP: TRUE
+  SVE: TRUE
+  Crypto: TRUE
+

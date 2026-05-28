@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-05-26T14:11:04",
+  "analyzer": "public VecU function declarations + generated facade declarations + operator source scan",
+  "targets": 58,
+  "generated_backed_targets": 58,
+  "operator_declarations": 58,
+  "operator_implementations": 58,
+  "missing_public_functions": [],
+  "missing_vec_implementations": [],
+  "missing_operator_declarations": [],
+  "missing_operator_implementations": [],
+  "bad_operator_bodies": [],
+  "extra_unsigned_operators": [],
+  "status": "ok"
+}

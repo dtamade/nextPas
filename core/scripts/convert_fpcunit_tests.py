@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert fafafa.core FPCUnit tests to nextpas.core TTestRunner format.
+Convert nextpas.core FPCUnit tests to nextpas.core TTestRunner format.
 
 Usage: python3 convert_tests.py <input.pas> <output.lpr> <module_name>
 
@@ -10,7 +10,7 @@ Transforms:
 - AssertTrue/AssertFalse → Check
 - CheckException → try/except blocks
 - SetUp/TearDown → inline create/free per test
-- fafafa.core.* → nextpas.core.*
+- nextpas.core.* → nextpas.core.*
 """
 
 import sys
@@ -19,8 +19,8 @@ from pathlib import Path
 
 
 def convert_uses(line: str) -> str:
-    """Replace fafafa.core with nextpas.core in uses clause."""
-    line = line.replace('fafafa.core.', 'nextpas.core.')
+    """Replace nextpas.core with nextpas.core in uses clause."""
+    line = line.replace('nextpas.core.', 'nextpas.core.')
     line = line.replace('fpcunit, testutils, testregistry,', '')
     line = line.replace('fpcunit, testutils, testregistry', '')
     line = line.replace('Classes, SysUtils,', 'SysUtils,')
@@ -78,7 +78,7 @@ def convert_fafafa_symbols(line: str) -> str:
     """Replace FAFAFA_ symbols with NEXTPAS_."""
     line = line.replace('FAFAFA_CORE_', 'NEXTPAS_CORE_')
     line = line.replace('FAFAFA_COLLECTIONS_', 'NEXTPAS_COLLECTIONS_')
-    line = line.replace('{$I fafafa.core.settings.inc}', '{$I nextpas.core.settings.inc}')
+    line = line.replace('{$I nextpas.core.settings.inc}', '{$I nextpas.core.settings.inc}')
     return line
 
 

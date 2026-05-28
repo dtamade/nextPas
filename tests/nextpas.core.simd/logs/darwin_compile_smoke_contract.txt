@@ -1,0 +1,5 @@
+[DARWIN-COMPILE-CONTRACT] Darwin compile-smoke contract
+  - checks:  16
+  - issues:  0
+[DARWIN-COMPILE-CONTRACT] OK
+DARWIN_COMPILE_SMOKE_CONTRACT checks=16 issues=0 status=ok

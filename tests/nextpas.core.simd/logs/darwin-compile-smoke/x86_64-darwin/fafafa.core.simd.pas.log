@@ -1,0 +1,142 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.avx2.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.dispatch.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.scalar.pas
+fafafa.core.simd.scalar.pas(768,3) Note: Local variable "LInput" is assigned but never used
+fafafa.core.simd.scalar.pas(784,3) Note: Local variable "LInput" is assigned but never used
+fafafa.core.simd.scalar.f32x16.arith.inc(1,2) Warning: Comment level 2 found
+fafafa.core.simd.scalar.f64x8.arith.inc(1,2) Warning: Comment level 2 found
+fafafa.core.simd.scalar.i8x64.inc(1,2) Warning: Comment level 2 found
+fafafa.core.simd.scalar.u8x64.inc(1,2) Warning: Comment level 2 found
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafaclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+.core.simd.scalar.s
+fafafa.core.simd.dispatch.pas(903,3) Note: Local variable "g_CurrentDispatch" is assigned but never used
+fafafa.core.simd.dispatch.pas(915,3) Note: Local variable "g_DispatchInitialized" is assigned but never used
+Assembling (pipe) /tmpclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.dispatch.s
+fafafa.core.simd.avx2.pas(416,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.avx2.pas(444,4) Note: "assembler" not yet supported insideclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ inline procedure/function
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.avx2.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.sse42.pas
+fafafa.core.simd.sse42.pas(162,4) Note: "assembler" not clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+yet supported inside inline procedure/function
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.sse42.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.sse41.pas
+fafafa.core.simd.sse41.pas(718,4) Nclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ote: "assembler" not yet supported inside inline procedure/function
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.sse41.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.ssse3.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.sse2.pas
+fafafa.core.simd.sse2.pas(400,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(418,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(436,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(452,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(470,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(491,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(508,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(525,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(542,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(559,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(576,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(593,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(610,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse2.pas(4934,3) Note: Local variable "LInput" is assigned but never used
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+win/simd-units/fafafa.core.simd.sse2.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.sse3.pas
+fafafa.core.simd.sse3.pas(329,4) Note: "assembler" not yet supported inside inline procedure/function
+fafafa.core.simd.sse3.pas(357,4) Note: "clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+assembler" not yet supported inside inline procedure/function
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.sse3.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.ssse3.sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.utils.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.utils.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.runtime.pas
+fafafa.core.simd.runtime.pas(182,19) Warning: Function result variable of a managed type does not seem to be initialized
+fafafa.core.simd.runtime.pas(234,56) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+" marked as inline is not inlined
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.runtime.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.memutils.pas
+fafafa.core.simd.memutils.pas(151,17) Note:clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ Call to subroutine "function AlignUp(ptr:Pointer;alignment:NativeUInt):System.Pointer;" marked as inline is not inlined
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.memutils.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.dataplane.pas
+fafafa.core.simd.dataplane.pas(174,58) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+Assembling (pipe) /tmp/fafafa-core-dclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+arwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.dataplane.s
+fafafa.core.simd.pas(2499,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2499,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2504,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2504,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2509,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2509,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2522,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,41) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,41) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,41) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,41) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,41) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2527,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,44) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2532,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2537,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2537,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2542,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2542,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2547,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2547,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2552,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2552,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2564,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2564,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2569,13) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.pas(2569,13) Note: Call to subroutine "functionclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.s
+48523 lines compiled, 2.5 sec
+5 warning(s) issued
+66 note(s) issued

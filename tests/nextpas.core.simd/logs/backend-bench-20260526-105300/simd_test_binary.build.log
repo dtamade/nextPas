@@ -1,0 +1,5 @@
+[LOCK] Waiting for output-root lock: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/.simd-output-root.lock
+[LOCK] Acquired output-root lock: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/.simd-output-root.lock
+[BUILD] Project: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.test.lpi (mode=Release, output_root=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd)
+[BUILD] OK
+[LOCK] Released output-root lock: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/.simd-output-root.lock

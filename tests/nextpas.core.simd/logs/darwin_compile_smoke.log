@@ -1,0 +1,14 @@
+DARWIN_COMPILE_SMOKE_CONTEXT sdk=/home/dtamade/osxcross/target/SDK/MacOSX12.3.sdk rtl=/opt/fpcupdeluxe/fpcsrc/rtl
+DARWIN_COMPILE_SMOKE_CONTEXT require_aarch64=0 fpc_x86_64=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 fpc_aarch64=missing
+UNIT x86_64-darwin src/fafafa.core.simd.cpuinfo.darwin.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.cpuinfo.darwin.pas.log
+UNIT x86_64-darwin src/fafafa.core.simd.cpuinfo.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.cpuinfo.pas.log
+UNIT x86_64-darwin src/fafafa.core.simd.cpuinfo.diagnostic.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.cpuinfo.diagnostic.pas.log
+UNIT x86_64-darwin src/fafafa.core.simd.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.pas.log
+UNIT x86_64-darwin src/fafafa.core.simd.api.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.api.pas.log
+UNIT x86_64-darwin src/fafafa.core.time.tick.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.time.tick.pas.log
+UNIT x86_64-darwin src/fafafa.core.time.stopwatch.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.time.stopwatch.pas.log
+UNIT x86_64-darwin tests/fafafa.core.simd/fafafa.core.simd.darwin_link_smoke.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.darwin_link_smoke.pas.log
+UNIT x86_64-darwin tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.darwin_link_smoke.pas status=PASS log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/fafafa.core.simd.cpuinfo.darwin_link_smoke.pas.log
+TARGET x86_64-darwin status=PASS compiler=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/ppcx64 compiled=9 rtl_log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke/x86_64-darwin/build-rtl.log
+TARGET aarch64-darwin status=SKIP detail=compiler-unavailable
+DARWIN_COMPILE_SMOKE_SUMMARY status=PASS require_aarch64=0 summary_log=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin_compile_smoke.log detail_root=/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/darwin-compile-smoke

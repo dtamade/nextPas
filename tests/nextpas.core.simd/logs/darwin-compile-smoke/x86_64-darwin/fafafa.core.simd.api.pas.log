@@ -1,0 +1,60 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.simd.api.pas
+Compiling /homeclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+/dtamade/projects/fafafa.core/src/fafafa.core.simd.direct.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.direct.s
+fafafa.core.simd.api.pas(86,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(86,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(86,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(93,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(93,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(93,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(100,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(100,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(100,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(107,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(107,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(107,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(114,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(114,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(114,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(121,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(121,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(121,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(130,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(130,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(130,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(137,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(137,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(137,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(144,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(144,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(144,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(153,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(153,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(153,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(160,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(160,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(160,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(167,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(167,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(167,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(174,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(174,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(174,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(183,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(183,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(183,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(192,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(192,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64;" marked as inline is not inlined
+fafafa.core.simd.api.pas(192,15) Note: Call to subroutine "function atomic_load_64(var aObj:Int64;aOrder:memory_order_t):System.Int64clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+;" marked as inline is not inlined
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.api.s
+1352 lines compiled, 0.1 sec
+45 note(s) issued

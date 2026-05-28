@@ -1,0 +1,308 @@
+{
+  "generated_at": "2026-05-21T13:59:58",
+  "summary_file": "D:\\a\\nextpas.core\\nextpas.core\\tests\\nextpas.core.simd\\logs\\gate_summary.md",
+  "filter": "ALL",
+  "warn_ms": 20000,
+  "fail_ms": 120000,
+  "total_rows": 33,
+  "matched_rows": 33,
+  "rows": [
+    {
+      "time": "2026-05-21 13:57:10",
+      "step": "gate",
+      "status": "START",
+      "duration_ms": "-",
+      "event": "START",
+      "detail": "profile=fast-gate; mode=Release; interface-completeness=1; public-api-coverage=1; contract-signature=1; publicabi-signature=1; publicabi-smoke=0; publicabi-concurrent-chain=1; adapter-sync-pascal=1; adapter-sync=1; parity-suites=1; wiring=1; coverage=1; perf=0...(truncated 306 chars)",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/build.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/public_api_test_coverage.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/publicabi_concurrent_chain.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/wiring_sync.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/riscvv_abi_shape.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/nonx86_native_evidence.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:12",
+      "step": "build-check",
+      "status": "PASS",
+      "duration_ms": "62484",
+      "event": "SLOW_WARN",
+      "detail": "build/check/parity passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/build.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:13",
+      "step": "interface-completeness",
+      "status": "PASS",
+      "duration_ms": "337",
+      "event": "NORMAL",
+      "detail": "interface completeness passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/interface_completeness.json; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/interface_completeness.md"
+    },
+    {
+      "time": "2026-05-21 13:58:14",
+      "step": "public-api-coverage",
+      "status": "PASS",
+      "duration_ms": "1057",
+      "event": "NORMAL",
+      "detail": "public api test coverage passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/public_api_test_coverage.json; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/public_api_test_coverage.md"
+    },
+    {
+      "time": "2026-05-21 13:58:15",
+      "step": "contract-signature",
+      "status": "PASS",
+      "duration_ms": "875",
+      "event": "NORMAL",
+      "detail": "dispatch contract signature passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/dispatch_contract_signature.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/dispatch_contract_signature.json"
+    },
+    {
+      "time": "2026-05-21 13:58:15",
+      "step": "publicabi-signature",
+      "status": "PASS",
+      "duration_ms": "212",
+      "event": "NORMAL",
+      "detail": "public ABI signature passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/public_abi_signature.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/public_abi_signature.json"
+    },
+    {
+      "time": "2026-05-21 13:58:15",
+      "step": "publicabi-smoke",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_PUBLICABI_SMOKE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd.publicabi/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:21",
+      "step": "publicabi-concurrent-chain",
+      "status": "PASS",
+      "duration_ms": "5242",
+      "event": "NORMAL",
+      "detail": "public ABI concurrent regression chain passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/publicabi_concurrent_chain.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:21",
+      "step": "adapter-sync-pascal",
+      "status": "PASS",
+      "duration_ms": "305",
+      "event": "NORMAL",
+      "detail": "backend adapter pascal smoke passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:29",
+      "step": "adapter-sync",
+      "status": "PASS",
+      "duration_ms": "7531",
+      "event": "NORMAL",
+      "detail": "backend adapter sync passed (python-only; pascal smoke in adapter-sync-pascal step)",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/backend_adapter_sync.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/backend_adapter_sync.json"
+    },
+    {
+      "time": "2026-05-21 13:58:29",
+      "step": "wiring-sync",
+      "status": "PASS",
+      "duration_ms": "321",
+      "event": "NORMAL",
+      "detail": "legacy=60 grouped=60 helper=60 missing=0 extra=0 markers_missing=0 strict_extra=0 shared_legacy=1 shared_grouped=1",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/wiring_sync.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/wiring_sync.json"
+    },
+    {
+      "time": "2026-05-21 13:58:30",
+      "step": "register-truthfulness",
+      "status": "PASS",
+      "duration_ms": "792",
+      "event": "NORMAL",
+      "detail": "neon:backend=neon assignments=341 asm_exact=280 asm_suffix_only=10 backend_composed=51 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1 riscvv:backend=riscvv assignments=432 asm_exact=312 asm_suffix_only=117 backend_composed=...(truncated 85 chars)",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/register_truthfulness_neon.txt; /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/register_truthfulness_riscvv.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:31",
+      "step": "simd-list-suites",
+      "status": "PASS",
+      "duration_ms": "192",
+      "event": "NORMAL",
+      "detail": "suite-list + leak-check passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:31",
+      "step": "simd-avx2-fallback",
+      "status": "PASS",
+      "duration_ms": "469",
+      "event": "NORMAL",
+      "detail": "suite + leak-check passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:32",
+      "step": "cross-backend-parity",
+      "status": "PASS",
+      "duration_ms": "796",
+      "event": "NORMAL",
+      "detail": "dispatch slot/api parity suites passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:32",
+      "step": "nonx86-ieee754",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_NONX86_IEEE754=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:37",
+      "step": "cpuinfo-portable",
+      "status": "PASS",
+      "duration_ms": "4626",
+      "event": "NORMAL",
+      "detail": "list + platform-specific passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd.cpuinfo/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:37",
+      "step": "cpuinfo-lazy-repeat",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_CPUINFO_LAZY_REPEAT=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd.cpuinfo/logs/repeat.TTestCase_LazyCPUInfo.*.txt"
+    },
+    {
+      "time": "2026-05-21 13:58:40",
+      "step": "cpuinfo-x86",
+      "status": "PASS",
+      "duration_ms": "2782",
+      "event": "NORMAL",
+      "detail": "list + global passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd.cpuinfo.x86/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:59:55",
+      "step": "run-all-chain",
+      "status": "PASS",
+      "duration_ms": "74362",
+      "event": "SLOW_WARN",
+      "detail": "filtered run_all check passed; logs=/d/a/nextpas.core/nextpas.core/tests/_run_all_logs_sh; summary=/d/a/nextpas.core/nextpas.core/tests/run_all_tests_summary_sh.txt",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/_run_all_logs_sh; /d/a/nextpas.core/nextpas.core/tests/run_all_tests_summary_sh.txt"
+    },
+    {
+      "time": "2026-05-21 13:59:55",
+      "step": "concurrent-repeat",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_CONCURRENT_REPEAT=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/repeat.TTestCase_SimdConcurrent.*.txt"
+    },
+    {
+      "time": "2026-05-21 13:59:55",
+      "step": "experimental-intrinsics",
+      "status": "PASS",
+      "duration_ms": "346",
+      "event": "NORMAL",
+      "detail": "experimental entry isolation passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/check_intrinsics_experimental_status.py"
+    },
+    {
+      "time": "2026-05-21 13:59:55",
+      "step": "experimental-tests",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_EXPERIMENTAL_TESTS=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd.intrinsics.experimental"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "coverage",
+      "status": "PASS",
+      "duration_ms": "238",
+      "event": "NORMAL",
+      "detail": "coverage passed",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/check_intrinsics_coverage.py"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "perf-smoke",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_PERF_SMOKE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/test.txt"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "qemu-nonx86-evidence",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_QEMU_NONX86_EVIDENCE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-*"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "qemu-cpuinfo-nonx86-evidence",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-*"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "qemu-cpuinfo-nonx86-full-evidence",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-*"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "qemu-cpuinfo-nonx86-full-repeat",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-*"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "qemu-arch-matrix-evidence",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "SIMD_GATE_QEMU_ARCH_MATRIX_EVIDENCE=0",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/qemu-multiarch-*"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "nonx86-native-evidence-verify",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "non-x86 native evidence entries missing under root (optional in gate): /d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/nonx86_native_evidence.txt"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "evidence-verify",
+      "status": "SKIP",
+      "duration_ms": "-",
+      "event": "SKIP",
+      "detail": "windows evidence log missing (optional in gate)",
+      "artifacts": "/d/a/nextpas.core/nextpas.core/tests/nextpas.core.simd/logs/windows_b07_gate.log"
+    },
+    {
+      "time": "2026-05-21 13:59:56",
+      "step": "gate",
+      "status": "PASS",
+      "duration_ms": "166527",
+      "event": "SLOW_CRIT",
+      "detail": "all steps passed",
+      "artifacts": "-"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+[BUILD] SKIP fafafa-core-simd-test:arm-v7 (linux/arm/v7) policy=if-missing
+[RUN] fafafa-core-simd-test:arm-v7 (linux/arm/v7)
+[BUILD] Project: /work/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/work/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[CHECK] OK (no src/ warnings/hints)
+[REPEAT] 1/3 cpuinfo-full
+[BUILD] Project: /work/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/work/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[TEST] Running: /work/tests/fafafa.core.simd.cpuinfo/bin/fafafa.core.simd.cpuinfo.test 
+[TEST] OK
+[LEAK] OK
+[REPEAT] 2/3 cpuinfo-full
+[BUILD] Project: /work/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/work/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[TEST] Running: /work/tests/fafafa.core.simd.cpuinfo/bin/fafafa.core.simd.cpuinfo.test 
+[TEST] OK
+[LEAK] OK
+[REPEAT] 3/3 cpuinfo-full
+[BUILD] Project: /work/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/work/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[TEST] Running: /work/tests/fafafa.core.simd.cpuinfo/bin/fafafa.core.simd.cpuinfo.test 
+[TEST] OK
+[LEAK] OK

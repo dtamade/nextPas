@@ -1,0 +1,31 @@
+[simdgen] Loaded 30 types, 107 operations, 571 slots
+  [DRIFT] nextpas.core.simd.dispatch.slots.inc - generated differs from existing
+  [DRIFT] nextpas.core.simd.scalar.decl.inc - generated differs from existing
+  [DRIFT] nextpas.core.simd.scalar.impl.inc - generated differs from existing
+  [DRIFT] nextpas.core.simd.fillbase.inc - generated differs from existing
+  [DRIFT] nextpas.core.simd.facade.decl.inc - generated differs from existing
+  [DRIFT] nextpas.core.simd.facade.impl.inc - generated differs from existing
+
+[simdgen] Verifying AVX2 batch kernels...
+  [OK] AVX2ArrayAddF32
+  [OK] AVX2ArrayMulF32
+  [OK] AVX2ArraySubF32
+  [OK] AVX2ArrayDivF32
+  [OK] AVX2ArrayMinF32
+  [OK] AVX2ArrayMaxF32
+  [OK] AVX2ArrayAbsF32
+  [OK] AVX2ArrayNegF32
+  [OK] AVX2ArraySqrtF32
+  [OK] AVX2ArrayRcpF32
+  [OK] AVX2ArrayRsqrtF32
+  [OK] AVX2ArrayAddScalarF32
+  [OK] AVX2ArrayMulScalarF32
+  [OK] AVX2ArrayAxpyF32
+  [OK] AVX2ArrayClampF32
+  [OK] AVX2ArrayFmaF32
+  [OK] AVX2ReduceSumF32
+  [OK] AVX2ReduceMinF32
+  [OK] AVX2ReduceMaxF32
+  [OK] AVX2ReduceDotF32
+
+[verify-avx2-batch] Checked 20, OK 20, DRIFT 0

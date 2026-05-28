@@ -1,0 +1,732 @@
+[B07] Windows evidence capture 
+[B07] Source: collect_windows_b07_evidence.bat 
+[B07] HostOS: Windows_NT 
+[B07] CmdVer: Microsoft Windows [Version 10.0.26100.32860] 
+[B07] Started: Fri 05/22/2026  6:33:44.87 
+[B07] Working dir: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\ 
+[B07] Command: BuildOrTest.sh gate 
+[B07] BashGateRequest: 1 
+[B07] BashPrereq.Resolve: 1 
+[B07] BashPrereq.RunAllSh: 1 
+[B07] BashPrereq.BuildOrTestSh: 1 
+[B07] BashPrereq.PublicAbiSmokeHeader: 1 
+[B07] BashCommandSource: env-explicit 
+[B07] BashCommand: C:\Program Files\Git\bin\bash.exe 
+[B07] GateRunnerMode: bash-optin 
+ 
+[GATE] Profile: fast-gate (routine/base gate) 
+[GATE] Experimental boundary: default entry chain keeps experimental intrinsics isolated. 
+[GATE] Note: gate/gate-strict PASS does not imply every experimental path is release-grade. 
+[B07] Using canonical bash gate runner for gate_summary.md 
+[LOCK] WARN: MSYS/Cygwin shell does not provide reliable fd-based flock semantics here; proceeding without output-root lock (/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd)
+[GATE] Running fast-gate profile (日常改动/基础门禁)
+[GATE] Profile: fast-gate (日常改动快门禁/基础门禁)
+[GATE] Experimental boundary: default entry chain keeps experimental intrinsics isolated.
+[GATE] Note: gate/gate-strict PASS does not imply every experimental path is release-grade.
+[GATE] 1/6 Build + check SIMD module
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.test.lpi (mode=Release, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd)
+[BUILD] OK
+[CHECK] OK (no SIMD-unit warnings/hints on stable path)
+[CHECK] OK (windows runner parity signatures present)
+[CHECK] OK (cpuinfo runner parity signatures present)
+[CHECK] OK (runner parity quick path)
+[CHECK] OK (AVX512 opt-in runner guard present)
+[CHECK] OK (non-x86 opt-in runner guard present)
+[CHECK] OK (Windows experimental tests runner guard present)
+[CHECK] OK (Windows direct experimental runner guard present)
+[CHECK] OK (Windows public ABI runner guard present)
+[CHECK] OK (Windows evidence collector guard present)
+[CHECK] OK (Windows simulated evidence guard present)
+[CHECK] OK (Windows gate-summary helper guard present)
+[CHECK] OK (Windows manual closeout guard source-safe)
+[CHECK] OK (Windows manual closeout guard present)
+[CHECK] OK (Windows closeout helper runtime guard present)
+[CHECK] OK (Windows via-gh cross gate guard present)
+[CHECK] OK (closeout-release entrypoint guard present)
+[CHECK] OK (gate-summary JSON runtime guard present)
+[CHECK] OK (perf-smoke scalar guard present)
+[CHECK] OK (perf-smoke public ABI benchmark shape present)
+[CHECK] OK (Windows qemu runner guard present)
+[CHECK] OK (Windows bash helper runner guard present)
+[CHECK] OK (RVV opcode lane compile/runtime contract guard present)
+[CHECK] OK (non-x86 native evidence runner guard present)
+[CHECK] OK (QEMU non-x86 evidence runner guard present)
+[CHECK] OK (nightly evidence restore runner guard present)
+[CHECK] OK (QEMU experimental python helper guard present)
+[CHECK] OK (Python checker runtime guard present)
+[CHECK] OK active closeout truth: 6 target docs
+[HELPER-SEMANTICS] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_nonx86_helper_semantics.py --summary-line
+NONX86_HELPER_SEMANTICS_SUMMARY checks=777 status=ok
+[HELPER-SEMANTICS] Summary: checks=777 status=ok
+[KEY-SLOT-AUDIT] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_nonx86_key_slot_audit.py --summary-line
+[KEY-SLOT-AUDIT] backend=neon register=D:\a\fafafa.core\fafafa.core\src\fafafa.core.simd.neon.register.inc
+  - AndI64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterKeepsBaseScalar)
+  - NotI64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterKeepsBaseScalar)
+  - ShiftLeftI32x16 [backend_owned] -> NEONShiftLeftI32x16 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=NEONShiftLeftI32x16Asm, line=296 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterHasAsmOwnedSlot)
+  - ShiftRightArithI64x4 [backend_owned] -> NEONShiftRightArithI64x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=NEONShiftRightArithI64x4Asm, line=306 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterHasAsmOwnedSlot)
+  - SubI32x8 [backend_owned] -> NEONSubI32x8 (class=asm_exact, context=asm-only wrapper=exact_assembler, line=309 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterHasAsmOwnedSlot)
+  - MinU32x8 [backend_owned] -> NEONMinU32x8 (class=asm_exact, context=asm-only wrapper=exact_assembler, line=286 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterHasAsmOwnedSlot)
+  - AddI64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterKeepsBaseScalar)
+  - MulI32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterKeepsBaseScalar)
+  - MaxU32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders::AssertRegisterKeepsBaseScalar)
+  - SubI64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned::AssertRegisterKeepsBaseScalar)
+  - ClampF64x2 [backend_owned] -> NEONClampF64x2 (class=asm_exact, context=asm-only wrapper=exact_assembler, line=421 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_For_F32_And_F64_When_NoAsm::AssertAsmBindingStillPresent)
+  - ClampF64x4 [backend_owned] -> NEONClampF64x4 (class=asm_exact, context=asm-only wrapper=exact_assembler, line=422 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_For_F32_And_F64_When_NoAsm::AssertAsmBindingStillPresent)
+  - ClampF64x8 [backend_owned] -> NEONClampF64x8 (class=asm_exact, context=asm-only wrapper=exact_assembler, line=423 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_For_F32_And_F64_When_NoAsm::AssertAsmBindingStillPresent)
+  - MaxF32x16 [backend_owned] -> NEONMaxF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMaxF32x4, line=470 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wrappers_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - MaxF64x8 [backend_owned] -> NEONMaxF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMaxF64x4, line=481 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wrappers_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - MinF32x16 [backend_owned] -> NEONMinF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMinF32x4, line=482 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wrappers_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - MinF64x8 [backend_owned] -> NEONMinF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMinF64x4, line=490 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wrappers_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - AddF32x16 [backend_owned] -> NEONAddF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONAddF32x4, line=391 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - AddF64x8 [backend_owned] -> NEONAddF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONAddF64x4, line=397 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - SubF32x16 [backend_owned] -> NEONSubF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONSubF32x4, line=553 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - SubF64x8 [backend_owned] -> NEONSubF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONSubF64x4, line=559 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - MulF32x16 [backend_owned] -> NEONMulF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMulF32x4, line=493 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - MulF64x8 [backend_owned] -> NEONMulF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONMulF64x4, line=499 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - DivF32x16 [backend_owned] -> NEONDivF32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONDivF32x4, line=437 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - DivF64x8 [backend_owned] -> NEONDivF64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONDivF64x4, line=443 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - SelectF32x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_NEON_SelectF32x4_Keep_LocalSourceCompanion_But_Reuse_BaseScalar_RuntimeSlot::AssertRegisterKeepsBaseScalar)
+  - AndNotI8x16 [backend_owned] -> NEONAndNotI8x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONAndI8x16, line=577 truth=TTestCase_DispatchAPI.Test_NEON_AndNotSlots_Keep_AsmOwnedCompositions_And_RuntimeOwnership::AssertRegisterHasAsmOwnedSlot)
+  - AndNotU16x8 [backend_owned] -> NEONAndNotU16x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONAndU16x8, line=578 truth=TTestCase_DispatchAPI.Test_NEON_AndNotSlots_Keep_AsmOwnedCompositions_And_RuntimeOwnership::AssertRegisterHasAsmOwnedSlot)
+  - AndNotU8x16 [backend_owned] -> NEONAndNotU8x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONAndU8x16, line=579 truth=TTestCase_DispatchAPI.Test_NEON_AndNotSlots_Keep_AsmOwnedCompositions_And_RuntimeOwnership::AssertRegisterHasAsmOwnedSlot)
+  - CmpEqI32x16 [backend_owned] -> NEONCmpEqI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=346 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpEqI32x8 [backend_owned] -> NEONCmpEqI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=347 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpEqI64x4 [backend_owned] -> NEONCmpEqI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=348 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpEqI64x8 [backend_owned] -> NEONCmpEqI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=349 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpEqU32x8 [backend_owned] -> NEONCmpEqU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=350 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpEqU64x4 [backend_owned] -> NEONCmpEqU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=351 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeI32x16 [backend_owned] -> NEONCmpGeI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=352 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeI32x8 [backend_owned] -> NEONCmpGeI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=353 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeI64x4 [backend_owned] -> NEONCmpGeI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=354 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeI64x8 [backend_owned] -> NEONCmpGeI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=355 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeU32x8 [backend_owned] -> NEONCmpGeU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=356 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGeU64x4 [backend_owned] -> NEONCmpGeU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=357 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtI32x16 [backend_owned] -> NEONCmpGtI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=358 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtI32x8 [backend_owned] -> NEONCmpGtI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=359 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtI64x4 [backend_owned] -> NEONCmpGtI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=360 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtI64x8 [backend_owned] -> NEONCmpGtI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=361 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtU32x8 [backend_owned] -> NEONCmpGtU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=362 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpGtU64x4 [backend_owned] -> NEONCmpGtU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=363 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeI32x16 [backend_owned] -> NEONCmpLeI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=364 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeI32x8 [backend_owned] -> NEONCmpLeI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=365 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeI64x4 [backend_owned] -> NEONCmpLeI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=366 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeI64x8 [backend_owned] -> NEONCmpLeI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=367 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeU32x8 [backend_owned] -> NEONCmpLeU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=368 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLeU64x4 [backend_owned] -> NEONCmpLeU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=369 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtI32x16 [backend_owned] -> NEONCmpLtI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=370 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtI32x8 [backend_owned] -> NEONCmpLtI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=371 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtI64x4 [backend_owned] -> NEONCmpLtI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=372 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtI64x8 [backend_owned] -> NEONCmpLtI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=373 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtU32x8 [backend_owned] -> NEONCmpLtU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=374 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpLtU64x4 [backend_owned] -> NEONCmpLtU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=375 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeI32x16 [backend_owned] -> NEONCmpNeI32x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask8To16, line=376 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeI32x8 [backend_owned] -> NEONCmpNeI32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=377 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeI64x4 [backend_owned] -> NEONCmpNeI64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=378 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeI64x8 [backend_owned] -> NEONCmpNeI64x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=379 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeU32x8 [backend_owned] -> NEONCmpNeU32x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask4To8, line=380 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+  - CmpNeU64x4 [backend_owned] -> NEONCmpNeU64x4 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=NEONCombineMask2To4, line=381 truth=TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar::AssertAsmBindingStillPresent)
+[KEY-SLOT-AUDIT] backend=neon ok slots=65
+[KEY-SLOT-AUDIT] backend=riscvv register=D:\a\fafafa.core\fafafa.core\src\fafafa.core.simd.riscvv.register.inc
+  - AndI64x8 [backend_owned] -> RISCVVAndI64x8 (class=asm_exact, context=always wrapper=exact_assembler, line=497 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - NotI64x8 [backend_owned] -> RISCVVNotI64x8 (class=asm_exact, context=always wrapper=exact_assembler, line=500 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - ShiftLeftI32x16 [backend_owned] -> RISCVVShiftLeftI32x16 (class=asm_suffix_only, context=always wrapper=asm_helper_forwarder helper=RISCVVShiftLeftI32x16Asm, line=244 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - ShiftRightArithI64x4 [backend_owned] -> RISCVVShiftRightArithI64x4 (class=asm_suffix_only, context=always wrapper=asm_helper_forwarder helper=RISCVVShiftRightArithI64x4Asm, line=468 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - SubI32x8 [backend_owned] -> RISCVVSubI32x8 (class=asm_exact, context=always wrapper=exact_assembler, line=216 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - MinU32x8 [backend_owned] -> RISCVVMinU32x8 (class=asm_exact, context=always wrapper=exact_assembler, line=628 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - AddI64x4 [backend_owned] -> RISCVVAddI64x4 (class=asm_exact, context=always wrapper=exact_assembler, line=459 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - MulI32x16 [backend_owned] -> RISCVVMulI32x16 (class=asm_exact, context=always wrapper=exact_assembler, line=238 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - SubI64x8 [backend_owned] -> RISCVVSubI64x8 (class=asm_exact, context=always wrapper=exact_assembler, line=496 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - MaxU32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders::AssertRegisterKeepsBaseScalar)
+  - SelectF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wrappers_Are_ScalarPassThrough::AssertRegisterKeepsBaseScalar)
+  - SelectF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wrappers_Are_ScalarPassThrough::AssertRegisterKeepsBaseScalar)
+  - SelectI32x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wrappers_Are_ScalarPassThrough::AssertRegisterKeepsBaseScalar)
+  - DotF64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_DotF64Slots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - DotF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_DotF64Slots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - AndNotI64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - MinI64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - MaxI64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - AndNotU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CmpEqU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CmpLtU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CmpGtU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - MinU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - MaxU64x2 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - ExtractF32x8 [backend_owned] -> RISCVVExtractF32x8 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractF32x8Asm, line=430 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractF32x16 [backend_owned] -> RISCVVExtractF32x16 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractF32x16Asm, line=429 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractF64x2 [backend_owned] -> RISCVVExtractF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractF64x2Asm, line=431 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractF64x4 [backend_owned] -> RISCVVExtractF64x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractF64x4Asm, line=432 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractI32x4 [backend_owned] -> RISCVVExtractI32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractI32x4Asm, line=513 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractI32x8 [backend_owned] -> RISCVVExtractI32x8 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractI32x8Asm, line=515 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractI32x16 [backend_owned] -> RISCVVExtractI32x16 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractI32x16Asm, line=517 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractI64x2 [backend_owned] -> RISCVVExtractI64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractI64x2Asm, line=519 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - ExtractI64x4 [backend_owned] -> RISCVVExtractI64x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVExtractI64x4Asm, line=486 truth=TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead::AssertRegisterHasAsmOwnedSlot)
+  - AndNotI8x16 [backend_owned] -> RISCVVAndNotI8x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=RISCVVAndI8x16, line=552 truth=TTestCase_DispatchAPI.Test_RISCVV_AndNotSlots_Keep_AsmOwnedCompositions_And_Reuse_BaseScalar_When_NoAsm::AssertRegisterHasAsmOwnedSlot)
+  - AndNotU16x8 [backend_owned] -> RISCVVAndNotU16x8 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=RISCVVAndU16x8, line=643 truth=TTestCase_DispatchAPI.Test_RISCVV_AndNotSlots_Keep_AsmOwnedCompositions_And_Reuse_BaseScalar_When_NoAsm::AssertRegisterHasAsmOwnedSlot)
+  - AndNotU8x16 [backend_owned] -> RISCVVAndNotU8x16 (class=backend_composed, context=asm-only wrapper=backend_local_composition helper=RISCVVAndU8x16, line=664 truth=TTestCase_DispatchAPI.Test_RISCVV_AndNotSlots_Keep_AsmOwnedCompositions_And_Reuse_BaseScalar_When_NoAsm::AssertRegisterHasAsmOwnedSlot)
+  - CeilF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CeilF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CeilF32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - CeilF64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - FloorF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - FloorF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - FloorF32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - FloorF64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - RoundF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - RoundF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - RoundF32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - RoundF64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - TruncF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - TruncF64x4 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - TruncF32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - TruncF64x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - ClampF32x8 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - ClampF32x16 [reuse_base_scalar] -> <FillBaseDispatchTable> (class=base_scalar_inherited, context=inherited, line=n/a truth=TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead::AssertRegisterKeepsBaseScalar)
+  - AbsF64x2 [backend_owned] -> RISCVVAbsF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVAbsF64x2Asm, line=323 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF64x2Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - SqrtF64x2 [backend_owned] -> RISCVVSqrtF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVSqrtF64x2Asm, line=330 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF64x2Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - FmaF64x2 [backend_owned] -> RISCVVFmaF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVFmaF64x2Asm, line=363 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF64x2Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - AbsF32x4 [backend_owned] -> RISCVVAbsF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVAbsF32x4Asm, line=58 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - SqrtF32x4 [backend_owned] -> RISCVVSqrtF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVSqrtF32x4Asm, line=59 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - FmaF32x4 [backend_owned] -> RISCVVFmaF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVFmaF32x4Asm, line=62 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - RcpF32x4 [backend_owned] -> RISCVVRcpF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVRcpF32x4Asm, line=63 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - RsqrtF32x4 [backend_owned] -> RISCVVRsqrtF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVRsqrtF32x4Asm, line=64 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - ClampF32x4 [backend_owned] -> RISCVVClampF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVClampF32x4Asm, line=65 truth=TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - MinF64x2 [backend_owned] -> RISCVVMinF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVMinF64x2Asm, line=337 truth=TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF64x2_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - MaxF64x2 [backend_owned] -> RISCVVMaxF64x2 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVMaxF64x2Asm, line=344 truth=TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF64x2_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - MinF32x4 [backend_owned] -> RISCVVMinF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVMinF32x4Asm, line=60 truth=TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF32x4_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - MaxF32x4 [backend_owned] -> RISCVVMaxF32x4 (class=asm_suffix_only, context=asm-only wrapper=asm_helper_forwarder helper=RISCVVMaxF32x4Asm, line=61 truth=TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF32x4_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding::AssertRegisterHasAsmOwnedSlot)
+  - ReduceMinF64x2 [backend_owned] -> RISCVVReduceMinF64x2 (class=asm_exact, context=always wrapper=exact_assembler, line=381 truth=TTestCase_DispatchAPI.Test_RISCVV_ReduceF64x2_Stays_BackendOwned_With_ExactScalarNoAsmWitness::AssertRegisterOwnsBackendSlot)
+  - ReduceMaxF64x2 [backend_owned] -> RISCVVReduceMaxF64x2 (class=asm_exact, context=always wrapper=exact_assembler, line=376 truth=TTestCase_DispatchAPI.Test_RISCVV_ReduceF64x2_Stays_BackendOwned_With_ExactScalarNoAsmWitness::AssertRegisterOwnsBackendSlot)
+  - ClampF64x4 [backend_owned] -> RISCVVClampF64x4 (class=asm_exact, context=always wrapper=exact_assembler, line=353 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+  - ClampF64x8 [backend_owned] -> RISCVVClampF64x8 (class=asm_exact, context=always wrapper=exact_assembler, line=354 truth=TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned::AssertRegisterOwnsBackendSlot)
+[KEY-SLOT-AUDIT] backend=riscvv ok slots=71
+NONX86_KEY_SLOT_AUDIT_SUMMARY backends=neon,riscvv slots=136 issues=0 status=ok
+[KEY-SLOT-AUDIT] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/nonx86_key_slot_audit.json
+[KEY-SLOT-AUDIT] Summary: backends=neon,riscvv slots=136 issues=0 status=ok
+[IMPL-MATRIX] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_implementation_matrix_sync.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/implementation_matrix_sync.json
+[IMPL-MATRIX] file=D:\a\fafafa.core\fafafa.core\docs\fafafa.core.simd.implementation-matrix.md
+[IMPL-MATRIX] OK nonx86_slots=22 x86_rows=10
+IMPLEMENTATION_MATRIX_SYNC nonx86_slots=22 x86_rows=10 issues=0 status=ok
+[IMPL-MATRIX] Summary: nonx86_slots=22 x86_rows=10 issues=0 status=ok
+[RISCVV-ABI] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_riscvv_abi_shape.py --summary-line
+[RISCVV-ABI] source shape
+  - direct vector-return functions: 103
+  - explicit helper checks:         10
+  - missing result store:           0
+  - suspicious a0 loads:            0
+[RISCVV-ABI] OK
+RISCVV_ABI_SHAPE_SUMMARY direct_functions=103 explicit_checks=10 missing_result_store=0 suspicious_a0_loads=0 status=ok
+[RISCVV-ABI] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/riscvv_abi_shape.json
+[RISCVV-ABI] Summary: direct_functions=103 explicit_checks=10 missing_result_store=0 suspicious_a0_loads=0 status=ok
+[CHECK] OK (public ABI output isolation present)
+[CHECK] OK (public ABI shell export guard present)
+[CHECK] OK (isolated clean coverage present)
+[CHECK] OK (run_all output isolation present)
+[CHECK] OK (intrinsics runner output isolation present)
+[CHECK] OK (experimental intrinsics output isolation present)
+[CHECK] OK (dispatch preinit smoke guard present)
+[CHECK] OK (daily standalone runner guard present)
+[CHECK] OK (Linux evidence output isolation present)
+[CHECK] OK (freeze-status output isolation present)
+[SKIP] wine not found; skip Windows cpuinfo.x86 batch success-criteria smoke
+[REGISTER-INCLUDE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_backend_register_include_consistency.py --summary-line
+[REGISTER-INCLUDE] backend register include consistency
+  - register_includes: 10
+  - missing_units:     0
+  - orphan_includes:   0
+REGISTER_INCLUDE_SUMMARY includes=10 missing_units=0 orphan_includes=0
+[REGISTER-INCLUDE] OK
+[SOURCE-REACHABILITY] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_simd_source_reachability.py --summary-line
+[SOURCE-REACHABILITY] SIMD source include reachability
+  - tracked include files:      86
+  - reachable include files:    85
+  - allowed unreachable files:  1
+  - unexpected unreachable:     0
+  - missing include refs:       0
+[SOURCE-REACHABILITY] Allowed audit-only unreachable include files:
+  - fafafa.core.simd.neon.scalar.wide_memory.inc: audit-only checker fixture retained for non-x86 helper semantics
+[SOURCE-REACHABILITY] OK (no unexpected unreachable include files)
+SIMD_SOURCE_REACHABILITY_SUMMARY tracked_includes=86 reachable_includes=85 allowed_unreachable=1 unexpected_unreachable=0 missing_include_refs=0
+[SOURCE-REACHABILITY] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/source_reachability.json
+[SOURCE-REACHABILITY] Summary: tracked_includes=86 reachable_includes=85 allowed_unreachable=1 unexpected_unreachable=0 missing_include_refs=0
+[DARWIN-CONTRACT] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_darwin_cpuinfo_tick_contract.py --summary-line
+[DARWIN-CONTRACT] Darwin CPUInfo lazy / tick contract
+  - checks:  8
+  - issues:  0
+[DARWIN-CONTRACT] OK
+DARWIN_CPUINFO_TICK_CONTRACT checks=8 issues=0 status=ok
+[DARWIN-CONTRACT] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/darwin_cpuinfo_tick_contract.json
+[DARWIN-CONTRACT] Summary: checks=8 issues=0 status=ok
+[DARWIN-COMPILE-CONTRACT] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_darwin_compile_smoke_contract.py --summary-line
+[DARWIN-COMPILE-CONTRACT] Darwin compile-smoke contract
+  - checks:  16
+  - issues:  0
+[DARWIN-COMPILE-CONTRACT] OK
+DARWIN_COMPILE_SMOKE_CONTRACT checks=16 issues=0 status=ok
+[DARWIN-COMPILE-CONTRACT] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/darwin_compile_smoke_contract.json
+[DARWIN-COMPILE-CONTRACT] Summary: checks=16 issues=0 status=ok
+[DARWIN-PUBLICABI-CONTRACT] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_darwin_publicabi_contract.py --summary-line
+[DARWIN-PUBLICABI-CONTRACT] Darwin publicabi loader/export contract
+  - checks:  11
+  - issues:  0
+[DARWIN-PUBLICABI-CONTRACT] OK
+DARWIN_PUBLICABI_CONTRACT checks=11 issues=0 status=ok
+[DARWIN-PUBLICABI-CONTRACT] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/darwin_publicabi_contract.json
+[DARWIN-PUBLICABI-CONTRACT] Summary: checks=11 issues=0 status=ok
+[METADATA-SCOPE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_metadata_query_scope.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/metadata_query_scope.json
+[METADATA-SCOPE] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\metadata_query_scope.json
+[METADATA-SCOPE] OK
+METADATA_QUERY_SCOPE scanned_files=150 symbols=4 allowed_hits=18 forbidden_hits=0
+[METADATA-SCOPE] Summary: scanned_files=150 symbols=4 allowed_hits=18 forbidden_hits=0
+[DATAPLANE-SCOPE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_dataplane_consumer_scope.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/dataplane_consumer_scope.json
+[DATAPLANE-SCOPE] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\dataplane_consumer_scope.json
+[DATAPLANE-SCOPE] OK
+DATAPLANE_CONSUMER_SCOPE scanned_files=150 symbols=3 allowed_hits=17 forbidden_hits=0
+[DATAPLANE-SCOPE] Summary: scanned_files=150 symbols=3 allowed_hits=17 forbidden_hits=0
+[DIRECT-SCOPE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_direct_dispatch_scope.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/direct_dispatch_scope.json
+[DIRECT-SCOPE] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\direct_dispatch_scope.json
+[DIRECT-SCOPE] OK
+DIRECT_DISPATCH_SCOPE symbol=GetDirectDispatchTable scanned_files=150 allowed_files=4 allowed_hits=70 forbidden_hits=0
+[DIRECT-SCOPE] Summary: symbol=GetDirectDispatchTable scanned_files=150 allowed_files=4 allowed_hits=70 forbidden_hits=0
+[DISPATCH-READ-SCOPE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_dispatch_read_scope.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/dispatch_read_scope.json
+[DISPATCH-READ-SCOPE] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\dispatch_read_scope.json
+[DISPATCH-READ-SCOPE] OK
+DISPATCH_READ_SCOPE symbol=GetDispatchTable scanned_files=150 allowed_files=3 allowed_hits=6 forbidden_hits=0 active_doc_issues=0 facade_issues=0
+[DISPATCH-READ-SCOPE] Summary: symbol=GetDispatchTable scanned_files=150 allowed_files=3 allowed_hits=6 forbidden_hits=0 active_doc_issues=0 facade_issues=0
+[SSE2-STRUCTURE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_sse2_structure.py --summary-line
+[SSE2-STRUCTURE] SSE2 register/include structural contract
+  - register_include_exists:        True
+  - root_include_count:             1
+  - root_wide_include_count:        1
+  - root_select_include_count:      1
+  - root_header_count:              1
+  - register_header_count:          1
+  - select_include_exists:          True
+  - wide_self_include_count:        0
+  - duplicate_leaf_names:           0
+  - root_uses_hits:                 0
+  - raw_leaf_forbidden_hits:        0
+  - constref_aligned_load_violations:0
+  - forbidden_raw_float_opcode_hits:0
+  - missing_required_side_effect_opcodes:0
+  - backend_truth_rows_count:       10
+  - intrinsics_disposition_rows:    21
+  - repo_intrinsics_units_count:    21
+  - migration_missing_sections:     0
+  - migration_missing_tokens:       0
+  - root_symbol_counts:
+    - MemDiffRange_SSE2: 1
+    - SSE2AddF32x16: 1
+    - SSE2AddF64x8: 1
+    - SSE2AddI32x16: 1
+    - SSE2AddI64x4: 1
+    - SSE2AddI64x8: 1
+    - SSE2AddU32x8: 1
+    - SSE2AddU64x4: 1
+    - Utf8Validate_SSE2: 1
+  - wide_symbol_counts:
+    - MemDiffRange_SSE2: 1
+    - SSE2AddF32x16: 1
+    - SSE2AddF64x8: 1
+    - SSE2AddI32x16: 1
+    - SSE2AddI64x4: 1
+    - SSE2AddI64x8: 1
+    - SSE2AddU32x8: 1
+    - SSE2AddU64x4: 1
+    - Utf8Validate_SSE2: 1
+  - select_symbol_counts:
+    - SSE2SelectF64x2: 1
+  - wide_section_counts:
+    - // === F32x16 操作 (16×Float32) - 使用 2×F32x8 ===: 1
+    - // === F64x8 操作 (8×Float64) - 使用 2×F64x4 ===: 1
+    - // === I32x16 操作 (16×Int32) - 使用 2×I32x8 ===: 1
+    - // === SSE2 Arithmetic Operations ===: 0
+    - // === SSE2 Comparison Operations ===: 0
+    - // === SSE2 Math Functions ===: 0
+    - // === SSE2 Memory Operations ===: 0
+    - // === SSE2 Reduction Operations ===: 0
+    - // === SSE2 Utility Operations ===: 0
+SSE2_STRUCTURE_SUMMARY register_include_exists=1 root_include_count=1 root_wide_include_count=1 root_select_include_count=1 root_header_count=1 register_header_count=1 select_include_exists=1 wide_self_include_count=0 duplicate_leaf_names=0 root_uses_hits=0 raw_leaf_forbidden_hits=0 constref_aligned_load_violations=0 forbidden_raw_float_opcode_hits=0 missing_required_side_effect_opcodes=0 backend_truth_rows=10 intrinsics_disposition_rows=21 migration_missing_sections=0 migration_missing_tokens=0 failure_count=0 status=ok
+[SSE2-STRUCTURE] OK
+[SSE2-STRUCTURE] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/sse2_structure.json
+[SSE2-STRUCTURE] Summary: register_include_exists=1 root_include_count=1 root_wide_include_count=1 root_select_include_count=1 root_header_count=1 register_header_count=1 select_include_exists=1 wide_self_include_count=0 duplicate_leaf_names=0 root_uses_hits=0 raw_leaf_forbidden_hits=0 constref_aligned_load_violations=0 forbidden_raw_float_opcode_hits=0 missing_required_side_effect_opcodes=0 backend_truth_rows=10 intrinsics_disposition_rows=21 migration_missing_sections=0 migration_missing_tokens=0 failure_count=0 status=ok
+[SUITE-MANIFEST] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_suite_manifest_sync.py --summary-line
+[SUITE-MANIFEST] simd runner suite manifest sync
+  - testcase_files:      23
+  - used_test_units:     22
+  - registered_suites:   55
+  - handled_suites:      55
+  - missing_in_runner:   0
+  - extra_in_runner:     0
+  - missing_units:       0
+  - label_mismatches:    0
+SUITE_MANIFEST_SUMMARY testcase_files=23 used_test_units=22 registered_suites=55 handled_suites=55 missing_in_runner=0 extra_in_runner=0 missing_units=0 label_mismatches=0
+[SUITE-MANIFEST] OK
+[BACKEND-OPS] Building standalone program: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/test_backend_ops.pas
+[BACKEND-OPS] Running standalone program: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/backend.ops/bin/test_backend_ops
+=== TSimdBackendOps Interface Test ===
+
+[PASS] FillScalarOps sets Backend = sbScalar
+[PASS] FillScalarOps sets Name = Scalar
+[PASS] FillScalarOps sets Available = True
+[PASS] ArithmeticF32x4.Add is assigned
+[PASS] ArithmeticF32x4.Sub is assigned
+[PASS] ArithmeticF32x4.Mul is assigned
+[PASS] ArithmeticF32x4.OpDiv is assigned
+[PASS] Add: 1.0 + 0.5 = 1.5
+[PASS] Add: 2.0 + 1.0 = 3.0
+[PASS] Mul: 2.0 * 1.0 = 2.0
+[PASS] Mul: 3.0 * 1.5 = 4.5
+[PASS] Facade.MemEqual is assigned
+[PASS] Facade.SumBytes is assigned
+[PASS] Facade.CountByte is assigned
+[PASS] RegisterBackendOps succeeds
+
+=== Summary ===
+Passed: 15
+Failed: 0
+All tests PASSED!
+[SIMD-BOUNDARY] Building standalone program: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/test_simd_boundary.pas
+[SIMD-BOUNDARY] Running standalone program: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/simd.boundary/bin/test_simd_boundary
+========================================
+SIMD 边界测试 - Rust 级别代码质量验证
+========================================
+
+=== NaN 处理测试 ===
+  [PASS] NaN + 1.0 产生 NaN
+  [PASS] 正常值不受 NaN 影响
+  [PASS] NaN * 1.0 产生 NaN
+  [PASS] NaN / 1.0 产生 NaN
+  [PASS] NaN 不等于自身 (IEEE 754)
+
+=== 无穷大处理测试 ===
+  [PASS] Inf + 1.0 = Inf
+  [PASS] -Inf + 1.0 = -Inf
+  [PASS] Inf - Inf = NaN
+  [PASS] 0 * Inf = NaN
+
+=== 负零处理测试 ===
+  [PASS] -0.0 + 0.0 结果为零
+  [PASS] -0.0 * 5.0 结果为零
+  [PASS] 1.0 / -0.0 = -Inf
+
+=== 零长度操作测试 ===
+  [PASS] MemEqual(a, b, 0) = True
+  [PASS] MemFindByte(p, 0, x) = -1
+  [PASS] Utf8Validate(p, 0) = True
+  [PASS] SumBytes(p, 0) = 0
+  [PASS] CountByte(p, 0, x) = 0
+
+=== 空指针处理测试 ===
+  [PASS] Utf8Validate(nil, 10) = False
+  [PASS] MemFindByte(nil, 10, x) 安全处理
+
+=== 索引边界饱和策略测试 ===
+  [PASS] Extract(v, -1) 饱和到索引 0
+  [PASS] Extract(v, -100) 饱和到索引 0
+  [PASS] Extract(v, 4) 饱和到索引 3
+  [PASS] Extract(v, 999) 饱和到索引 3
+  [PASS] Insert(v, 99, -1) 饱和到索引 0
+  [PASS] Insert(v, 88, 5) 饱和到索引 3
+  [PASS] Extract(v, 0) 正常
+  [PASS] Extract(v, 3) 正常
+
+=== 对齐访问测试 ===
+  [PASS] 对齐加载正确读取数据[0]
+  [PASS] 对齐加载正确读取数据[1]
+  [PASS] 对齐加载正确读取数据[2]
+  [PASS] 对齐加载正确读取数据[3]
+  [PASS] 对齐存储正确写入数据[0]
+  [PASS] 对齐存储正确写入数据[3]
+
+=== 非对齐访问测试 ===
+  [PASS] 非对齐加载正确读取数据[0]
+  [PASS] 非对齐加载正确读取数据[3]
+  [PASS] 非对齐存储正确写入数据[0]
+  [PASS] 非对齐存储正确写入数据[3]
+
+=== Reduction 边界测试 ===
+  [PASS] ReduceAdd 含 NaN 产生 NaN
+  [PASS] ReduceMul 含 NaN 产生 NaN
+  [PASS] ReduceAdd 含 Inf 产生 Inf
+  [PASS] ReduceAdd 全零 = 0
+  [PASS] ReduceMul 全零 = 0
+  [PASS] ReduceMax 含 Inf = Inf
+  [PASS] ReduceMin 正确找到最小值
+
+========================================
+测试汇总
+========================================
+通过: 44
+失败: 0
+
+所有边界测试通过!
+[PUBLIC-SMOKE] Building standalone smoke: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.public_smoke.pas
+[PUBLIC-SMOKE] Running standalone smoke: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/public.smoke/bin/fafafa.core.simd.public_smoke
+CPU vendor: AuthenticAMD
+CPU model:  AMD EPYC 7763 64-Core Processor                
+Backend:    SSE4.2
+[PASS] Default backend is SSE4.2
+[DISPATCH-PREINIT] Building standalone smoke: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.dispatch_preinit_smoke.pas
+[DISPATCH-PREINIT] Running standalone smoke: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/dispatch.preinit.smoke/bin/fafafa.core.simd.dispatch_preinit_smoke
+[DISPATCH-PREINIT] OK
+[NONX86-OPTIN] neon: test --list-suites
+[LOCK] WARN: MSYS/Cygwin shell does not provide reliable fd-based flock semantics here; proceeding without output-root lock (/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/neon)
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.test.lpi (mode=Release, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/neon)
+[BUILD] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/neon/bin2/fafafa.core.simd.test --list-suites
+[TEST] OK
+[LEAK] OK
+[NONX86-OPTIN] riscvv: test --list-suites
+[LOCK] WARN: MSYS/Cygwin shell does not provide reliable fd-based flock semantics here; proceeding without output-root lock (/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/riscvv)
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.test.lpi (mode=Release, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/riscvv)
+[BUILD] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/nonx86.optin/riscvv/bin2/fafafa.core.simd.test --list-suites
+[TEST] OK
+[LEAK] OK
+[GATE] Optional interface completeness check
+[INTERFACE-CHECK] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_interface_implementation_completeness.py --strict --strict-level p2 --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/interface_completeness.json --md-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/interface_completeness.md
+[SIMD-COMPLETENESS] interface->dispatch->backend->tests
+  - dispatch_slots_total: 558
+  - backend_slot_counts: {'scalar': 558, 'sse2': 464, 'sse3': 10, 'ssse3': 0, 'sse41': 28, 'sse42': 1, 'avx2': 491, 'avx512': 183, 'neon': 458, 'riscvv': 529}
+  - severity_counts: {'P0': 0, 'P1': 0, 'P2': 0}
+  - strict_level: p2
+  - analyzer: heuristic token/assignment scan (not semantic proof)
+  - json: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\interface_completeness.json
+  - markdown: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\interface_completeness.md
+[SIMD-COMPLETENESS] OK
+[GATE] Public API test coverage (default strict-thin)
+[PUBLIC-API-COVERAGE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_public_api_test_coverage.py --summary-line --min-refs 2 --strict-thin --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/public_api_test_coverage.json --md-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/public_api_test_coverage.md
+[PUBLIC-API-COVERAGE] simd public facade/api test coverage
+  - test_files:           65
+  - public_symbols_total: 556
+  - covered_symbols:      556
+  - missing_symbols:      0
+  - thin_symbols(<2): 0
+  - analyzer: pascal-state-machine-mask + case-insensitive token scan
+[PUBLIC-API-COVERAGE] OK
+PUBLIC_API_TEST_COVERAGE_SUMMARY test_files=65 symbols=556 covered=556 missing=0 thin=0 min_refs=2 strict_thin=1 status=ok
+[PUBLIC-API-COVERAGE] Summary: test_files=65 symbols=556 covered=556 missing=0 thin=0 min_refs=2 strict_thin=1 status=ok
+[GATE] Optional dispatch contract signature
+[DISPATCH-CONTRACT] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_dispatch_contract_signature.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/dispatch_contract_signature.json
+[DISPATCH-CONTRACT] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\dispatch_contract_signature.json
+DISPATCH_CONTRACT_SIGNATURE backend_info_sha=5475286897138f473cd3148caa3e4df907f45b52b2eff55d2e67b7d2161b4b3a dispatch_table_sha=989a99fbe81fa562839cd0b98baf3dbbcc3da39810afcf98dfd19e1a1303da9a backend_info_fields=6 dispatch_table_fields=560
+[DISPATCH-CONTRACT] OK
+[DISPATCH-CONTRACT] Summary: backend_info_sha=5475286897138f473cd3148caa3e4df907f45b52b2eff55d2e67b7d2161b4b3a dispatch_table_sha=989a99fbe81fa562839cd0b98baf3dbbcc3da39810afcf98dfd19e1a1303da9a backend_info_fields=6 dispatch_table_fields=560
+[GATE] Optional public ABI signature
+[PUBLIC-ABI] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_public_abi_signature.py --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/public_abi_signature.json
+[PUBLIC-ABI] JSON snapshot: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\public_abi_signature.json
+PUBLIC_ABI_SIGNATURE overall_sha=de9da52c4405512e8f0665e246c863b851a6fe1eb3985732c848632297efa47a backend_enum_sha=56fba1c6fcf6dfd04a2bf96ad7440055375242a72361c5157deead2bbe7fd1fc public_api_sha=95bb6e6554525d5be364351966910a958af38a9c4e22434cadec3558aefd0dd9 header_public_api_sha=8c8c9f4c24d0ae6ab0a67da1a715a332d00ccb191aa38c75f16499b575903d31 backends=10 capabilities=12 backend_pod_fields=5 public_api_fields=22 pascal_api=8 export_aliases=8
+[PUBLIC-ABI] OK
+[PUBLIC-ABI] Summary: overall_sha=de9da52c4405512e8f0665e246c863b851a6fe1eb3985732c848632297efa47a backend_enum_sha=56fba1c6fcf6dfd04a2bf96ad7440055375242a72361c5157deead2bbe7fd1fc public_api_sha=95bb6e6554525d5be364351966910a958af38a9c4e22434cadec3558aefd0dd9 header_public_api_sha=8c8c9f4c24d0ae6ab0a67da1a715a332d00ccb191aa38c75f16499b575903d31 backends=10 capabilities=12 backend_pod_fields=5 public_api_fields=22 pascal_api=8 export_aliases=8
+[GATE] Optional public ABI concurrent regression chain
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_PublicAbi,TTestCase_SimdConcurrentPublicAbi,TTestCase_SimdConcurrentFramework
+[TEST] OK
+[LEAK] OK
+[GATE] Optional backend adapter sync Pascal smoke
+[ADAPTER-SYNC-PASCAL] suite=TTestCase_DispatchAPI
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_DispatchAPI
+[TEST] OK
+[LEAK] OK
+[GATE] Optional backend adapter sync
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/fafafa.core.simd.test.lpi (mode=Release, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd)
+[BUILD] OK
+[ADAPTER-SYNC] SKIP Pascal smoke (SIMD_ADAPTER_SYNC_PASCAL_SMOKE=0)
+[ADAPTER-SYNC] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_backend_adapter_sync.py --summary-line
+[ADAPTER-SYNC] Checker also verifies CSV spec <-> generated include drift, dispatch slot existence, and FillBaseDispatchTable coverage.
+[ADAPTER-SYNC] backend.iface <-> backend.adapter.csv/.inc
+  - expected_ops_paths: 131
+  - spec_paths: 131
+  - mapped_forward: 131
+  - mapped_backward: 131
+  - dispatch_slots_total: 558
+  - mapped_slots_unique: 131
+  - fill_base_assigned_slots: 558
+  - issues: missing_spec=0, extra_spec=0, generated_include_drift=0, spec_forward_drift=0, spec_backward_drift=0, missing_forward=0, missing_backward=0, extra_forward=0, extra_backward=0, mismatched=0, dup_path=0, dup_slot=0, unconditional_forward=0, missing_dispatch_slot_defs=0, missing_fill_base_assignments=0
+[ADAPTER-SYNC] OK
+ADAPTER_SYNC_SUMMARY expected=131 spec=131 missing_spec=0 extra_spec=0 generated_include_drift=0 spec_forward_drift=0 spec_backward_drift=0 forward=131 backward=131 missing_forward=0 missing_backward=0 extra_forward=0 extra_backward=0 mismatched=0 dup_path=0 dup_slot=0 unconditional_forward=0 dispatch_slots_total=558 mapped_slots_unique=131 fill_base_assigned=558 missing_dispatch_slot_defs=0 missing_fill_base_assignments=0
+[ADAPTER-SYNC] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/backend_adapter_sync.json
+[ADAPTER-SYNC] Summary: expected=131 spec=131 missing_spec=0 extra_spec=0 generated_include_drift=0 spec_forward_drift=0 spec_backward_drift=0 forward=131 backward=131 missing_forward=0 missing_backward=0 extra_forward=0 extra_backward=0 mismatched=0 dup_path=0 dup_slot=0 unconditional_forward=0 dispatch_slots_total=558 mapped_slots_unique=131 fill_base_assigned=558 missing_dispatch_slot_defs=0 missing_fill_base_assignments=0
+[GATE] Optional wiring-sync enabled
+[WIRING-SYNC] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_nonx86_wiring_sync.py --summary-line
+[WIRING-SYNC] non-x86 wiring consistency
+  - helper slots:  60
+  - legacy slots:  60
+  - grouped slots: 60
+  - shared helper in legacy:  True
+  - shared helper in grouped: True
+  - missing in grouped: 0
+  - extra in grouped:   0
+[WIRING-SYNC] OK
+WIRING_SYNC_SUMMARY legacy=60 grouped=60 helper=60 missing=0 extra=0 markers_missing=0 strict_extra=0 shared_legacy=1 shared_grouped=1
+[WIRING-SYNC] JSON snapshot: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/wiring_sync.json
+[WIRING-SYNC] Summary: legacy=60 grouped=60 helper=60 missing=0 extra=0 markers_missing=0 strict_extra=0 shared_legacy=1 shared_grouped=1
+[GATE] Register-truthfulness
+[REG-TRUTH] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_nonx86_register_truthfulness.py --backend neon --summary-line --strict
+[REG-TRUTH] backend=neon
+  - register file:       D:\a\fafafa.core\fafafa.core\src\fafafa.core.simd.neon.register.inc
+  - source files:        23
+  - assignments:         341
+  - asm exact:           280
+  - asm suffix only:     10
+  - backend composed:    51
+  - wrapper only:        0
+  - scalar passthrough:  0
+  - no definition:       0
+  - miswired:            0
+  - always composed ok:  0
+  - asm-only composed ok:51
+  - no-asm composed ok:  0
+  - always wrapper ok:   0
+  - asm-only wrapper ok: 0
+  - no-asm wrapper ok:   0
+  - unused allowlist:    0
+  - conflicting assign:  0
+[REG-TRUTH] OK
+NONX86_REGISTER_TRUTHFULNESS_SUMMARY backend=neon assignments=341 asm_exact=280 asm_suffix_only=10 backend_composed=51 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1
+[REG-TRUTH] JSON snapshot (neon): /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/register_truthfulness_neon.json
+[REG-TRUTH] Summary (neon): backend=neon assignments=341 asm_exact=280 asm_suffix_only=10 backend_composed=51 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1
+[REG-TRUTH] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_nonx86_register_truthfulness.py --backend riscvv --summary-line --strict
+[REG-TRUTH] backend=riscvv
+  - register file:       D:\a\fafafa.core\fafafa.core\src\fafafa.core.simd.riscvv.register.inc
+  - source files:        5
+  - assignments:         432
+  - asm exact:           312
+  - asm suffix only:     117
+  - backend composed:    3
+  - wrapper only:        0
+  - scalar passthrough:  0
+  - no definition:       0
+  - miswired:            0
+  - always composed ok:  0
+  - asm-only composed ok:3
+  - no-asm composed ok:  0
+  - always wrapper ok:   0
+  - asm-only wrapper ok: 0
+  - no-asm wrapper ok:   0
+  - unused allowlist:    0
+  - conflicting assign:  0
+[REG-TRUTH] OK
+NONX86_REGISTER_TRUTHFULNESS_SUMMARY backend=riscvv assignments=432 asm_exact=312 asm_suffix_only=117 backend_composed=3 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1
+[REG-TRUTH] JSON snapshot (riscvv): /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/register_truthfulness_riscvv.json
+[REG-TRUTH] Summary (riscvv): backend=riscvv assignments=432 asm_exact=312 asm_suffix_only=117 backend_composed=3 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1
+[GATE] 2/6 SIMD list suites
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --list-suites
+[TEST] OK
+[LEAK] OK
+[GATE] 3/6 SIMD AVX2 stable vector suites
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_VecI32x8
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_VecU32x8
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_VecF64x4
+[TEST] OK
+[LEAK] OK
+[GATE] Optional cross-backend parity suites
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_DispatchAPI
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_DataPlane
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_DirectDispatch
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test --suite=TTestCase_DirectDispatchConcurrent
+[TEST] OK
+[LEAK] OK
+[GATE] 4/6 CPUInfo portable suites
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo/bin/fafafa.core.simd.cpuinfo.test.exe --list
+[TEST] OK
+[LEAK] OK
+[BUILD] Project: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo/fafafa.core.simd.cpuinfo.test.lpr (mode=FPC, output_root=/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo)
+[BUILD] OK
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo/bin/fafafa.core.simd.cpuinfo.test.exe --suite=TTestCase_PlatformSpecific
+[TEST] OK
+[LEAK] OK
+[GATE] 5/6 CPUInfo x86 suites
+[LOCK] WARN: MSYS/Cygwin shell does not provide reliable fd-based flock semantics here; proceeding without build lock (/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86)
+[BUILD] Target: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86/fafafa.core.simd.cpuinfo.x86.test.lpi (mode=Release, lazarus-mode=Default)
+[BUILD] OK
+[CHECK] OK (no SIMD-unit and cpuinfo.x86-test warnings/hints)
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86/bin/fafafa.core.simd.cpuinfo.x86.test --list
+[TEST] OK
+[LEAK] OK
+[LOCK] WARN: MSYS/Cygwin shell does not provide reliable fd-based flock semantics here; proceeding without build lock (/d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86)
+[BUILD] Target: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86/fafafa.core.simd.cpuinfo.x86.test.lpi (mode=Release, lazarus-mode=Default)
+[BUILD] OK
+[CHECK] OK (no SIMD-unit and cpuinfo.x86-test warnings/hints)
+[TEST] Running: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd.cpuinfo.x86/bin/fafafa.core.simd.cpuinfo.x86.test --suite=TTestCase_Global
+[TEST] OK
+[LEAK] OK
+[GATE] 6/6 Filtered run_all check chain
+Running module test scripts under: /d/a/fafafa.core/fafafa.core/tests
+Logs: /d/a/fafafa.core/fafafa.core/tests/_run_all_logs_sh
+[CHECK] OK (src tree hygiene: no .o/.ppu/.bak artifacts)
+[PASS] fafafa.core.simd (rc=0)
+[PASS] fafafa.core.simd.cpuinfo (rc=0)
+[PASS] fafafa.core.simd.cpuinfo.x86 (rc=0)
+[PASS] fafafa.core.simd.intrinsics.mmx (rc=0)
+[PASS] fafafa.core.simd.intrinsics.sse (rc=0)
+========================================
+Run-all summary (2026-05-22 06:36:15)
+Logs dir: /d/a/fafafa.core/fafafa.core/tests/_run_all_logs_sh
+========================================
+Total:  5
+Passed: 5
+Failed: 0
+[GATE] Optional experimental intrinsics isolation
+[EXPERIMENTAL] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_intrinsics_experimental_status.py
+[EXPERIMENTAL] SIMD intrinsics entry isolation
+  - tracked experimental units: 15
+  - checked entry files:        6
+  - leaked files:               0
+  - leaked units:               0
+  - missing guard markers:      0
+  - default-define leaks:       0
+  - missing x86 fail-close:     0
+  - missing cross-host opt-in:  0
+  - missing hold fail-close:    0
+  - missing qualification fail-close: 0
+[EXPERIMENTAL] OK (no experimental units in default entry chain)
+[GATE] Optional intrinsics coverage
+[COVERAGE] Running: python3 /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/check_intrinsics_coverage.py  --summary-line --json-file /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/intrinsics_coverage.json
+[COVERAGE] SIMD intrinsics direct-test mapping
+  - sse: declared=79 tested=79 missing=0 extra=0 mode=suite_name scope=required
+  - mmx: declared=75 tested=75 missing=0 extra=0 mode=suite_name scope=required
+  - avx2: declared=60 tested=60 missing=0 extra=0 mode=symbol_ref scope=optional
+  - aes: declared=6 tested=6 missing=0 extra=0 mode=symbol_ref scope=optional
+  - sha: declared=7 tested=7 missing=0 extra=0 mode=symbol_ref scope=optional
+  - sse2-x86-raw: declared=221 tested=221 missing=0 extra=0 mode=symbol_ref scope=required thin=0 min_refs=2
+[COVERAGE] OK (no missing direct-test mappings)
+INTRINSICS_COVERAGE_SUMMARY modules=6 missing_required=0 missing_optional=0 thin_required=0 thin_optional=0 extra=0 strict_extra=0 require_avx2=0 require_experimental=0 sse2_min_refs=2 status=ok
+[COVERAGE] Summary: modules=6 missing_required=0 missing_optional=0 thin_required=0 thin_optional=0 extra=0 strict_extra=0 require_avx2=0 require_experimental=0 sse2_min_refs=2 status=ok
+[GATE] Non-x86 native evidence verify (optional unless SIMD_GATE_REQUIRE_NONX86_NATIVE_EVIDENCE=1)
+[GATE] SKIP non-x86 native evidence verify (no native-evidence-neon-*/native-evidence-riscvv-* entries under: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs)
+[GATE] Evidence verify (windows log optional unless SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1)
+[GATE] SKIP evidence verify (windows log not present: /d/a/fafafa.core/fafafa.core/tests/fafafa.core.simd/logs/windows_b07_gate.log)
+[GATE] OK
+[B07] GateSummaryJson: D:\a\fafafa.core\fafafa.core\tests\fafafa.core.simd\logs\gate_summary.json 
+[B07] GateSummaryExportRc: 0 
+ 
+[B07] GATE_EXIT_CODE=0 
+ 
+[B07] run_all summary snapshot 
+========================================
+Run-all summary (2026-05-22 06:36:15)
+Logs dir: /d/a/fafafa.core/fafafa.core/tests/_run_all_logs_sh
+========================================
+Total:  5
+Passed: 5
+Failed: 0
+[B07] Passed: 15
+[B07] Failed: 0
+[B07] Total:  5
+[B07] Passed: 5
+[B07] Failed: 0
+[B07] Total:  5
+[B07] Passed: 5
+[B07] Failed: 0

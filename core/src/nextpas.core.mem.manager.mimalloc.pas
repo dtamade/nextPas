@@ -5,7 +5,7 @@ unit nextpas.core.mem.manager.mimalloc;
 {
   Optional global memory manager installer for mimalloc.
   - Manual install/uninstall via InstallMimallocMemoryManager/UninstallMimallocMemoryManager
-  - Guarded by FAFAFA_CORE_MIMALLOC_ALLOCATOR
+  - Guarded by NEXTPAS_CORE_MIMALLOC_ALLOCATOR
   - Not compatible with heaptrc (do not use together)
 
   Usage (must be as early as possible):
@@ -19,7 +19,7 @@ unit nextpas.core.mem.manager.mimalloc;
 
 interface
 
-{$IFDEF FAFAFA_CORE_MIMALLOC_ALLOCATOR}
+{$IFDEF NEXTPAS_CORE_MIMALLOC_ALLOCATOR}
 uses
   SysUtils,
   nextpas.core.mem.allocator.mimalloc,
@@ -29,11 +29,11 @@ procedure InstallMimallocMemoryManager;
 procedure UninstallMimallocMemoryManager;
 function IsMimallocMemoryManagerInstalled: Boolean;
 
-{$ENDIF} // FAFAFA_CORE_MIMALLOC_ALLOCATOR
+{$ENDIF} // NEXTPAS_CORE_MIMALLOC_ALLOCATOR
 
 implementation
 
-{$IFDEF FAFAFA_CORE_MIMALLOC_ALLOCATOR}
+{$IFDEF NEXTPAS_CORE_MIMALLOC_ALLOCATOR}
 
 
 var
@@ -129,6 +129,6 @@ begin
   Result := GInstalled;
 end;
 
-{$ENDIF} // FAFAFA_CORE_MIMALLOC_ALLOCATOR
+{$ENDIF} // NEXTPAS_CORE_MIMALLOC_ALLOCATOR
 
 end.

@@ -1,0 +1,85 @@
+ Time:12:05.954 N:43 E:0 F:0 I:5
+  TTestCase_Global Time:00.375 N:9 E:0 F:0 I:0
+    00.197  Test_GetCPUInfo
+    00.001  Test_IsBackendAvailable
+    00.002  Test_BackendSupportPredicateConsistency
+    00.001  Test_GetAvailableBackends
+    00.001  Test_ClearSupportedAliases_PreserveCpuOnlySemantics
+    00.001  Test_GetBestBackend
+    00.001  Test_GetBestBackendOnCPU_IndependentFromActiveBackend
+    00.000  Test_GetBackendInfo
+    00.168  Test_ResetCPUInfo
+  TTestCase_ThreadSafety Time:00.070 N:2 E:0 F:0 I:0
+    00.062  Test_GetCPUInfo_Consistency
+    00.008  Test_GetCPUInfo_Performance
+  TTestCase_PlatformSpecific Time:01.044 N:22 E:0 F:0 I:5
+    00.000  Test_X86Features
+    00.001  Test_IntrinsicsAVXAvailability_Semantics
+    00.000  Test_IntrinsicsFacade_FullConsistency
+    00.001  Test_BackendFeatureBidirectionalConsistency
+    00.000  Test_AVXUsable_XCR0Semantics
+    00.000  Test_AVX512Usable_XCR0Semantics
+    00.697  Test_DiagnosticReport_UsableViewConsistency
+    00.001  Test_ARMFeatures
+    00.000  Test_LoongArchFeatures
+    00.001  Test_ARMFeatureParserSamples  Ignored test: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMHWCAPMergeSamples  Ignored test: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMVendorModelParserSamples  Ignored test: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMProcessorInfoBasic  Ignored test: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+    00.000  Test_ARMProcessorInfoParserSamples  Ignored test: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+    00.003  Test_CacheSizeParserSamples
+    00.200  Test_NonX86CacheInfoOnLinux
+    00.014  Test_RISCVISAParserSamples
+    00.007  Test_RISCVISASelectionSamples
+    00.000  Test_RISCVHWCAPMergeSamples
+    00.003  Test_RISCVVendorModelParserSamples
+    00.114  Test_RISCVProcessorInfoBasic
+    00.000  Test_FeatureHierarchy
+  TTestCase_ErrorHandling Time:00.000 N:2 E:0 F:0 I:0
+    00.000  Test_InvalidBackend
+    00.000  Test_ExceptionHandling
+  TTestCase_LazyCPUInfo Time:12:04.464 N:8 E:0 F:0 I:0
+    00.001  Test_ParseCacheSizeTextToKB_Boundaries
+    00.159  Test_GetCPUInfoLazy_BasicFields
+    00.826  Test_HasFeatureLazy_Consistency
+    00.320  Test_LazyEager_GenericFeatureParity
+    00.271  Test_Reset_ReloadConsistency
+    00.324  Test_NonX86CacheInfoOnLinux
+    49.075  Test_GetCPUInfoLazy_ConcurrentReaders
+    13.475  Test_GetCPUInfoLazy_ResetWhileReading
+
+Number of run tests: 43
+Number of errors:    0
+Number of failures:  0
+
+List of ignored tests:
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMFeatureParserSamples: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM feature parser samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMHWCAPMergeSamples: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM HWCAP merge samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMVendorModelParserSamples: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM vendor/model parser samples skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMProcessorInfoBasic: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM processor info test skipped when SIMD_ARM_AVAILABLE is off
+  Ignored test: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMProcessorInfoParserSamples: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+    Exception class:   EIgnoredTest
+    Exception message: ARM processor info parser samples skipped when SIMD_ARM_AVAILABLE is off
+
+
+
+SSE2 available: FALSE
+AVX2 available: FALSE
+NEON available: FALSE
+Average GetCPUInfo time: 600.00 ns
+x86 features not available in this build
+ARM features not available in this build
+

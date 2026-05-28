@@ -1,0 +1,30 @@
+SuiteList Time:00.002 N:8 E:0 F:1 I:0
+  TTestCase_Global Time:00.002 N:8 E:0 F:1 I:0
+    00.001  Test_GetCPUInfo
+    00.000  Test_IsBackendAvailable
+    00.000  Test_BackendSupportPredicateConsistency
+    00.000  Test_GetAvailableBackends  Failed: Backends should be sorted by priority
+      Exception:   Backends should be sorted by priority
+      at   $0000000000000000
+    00.000  Test_GetBestBackend
+    00.000  Test_GetBestBackendOnCPU_IndependentFromActiveBackend
+    00.000  Test_GetBackendInfo
+    00.001  Test_ResetCPUInfo
+
+Number of run tests: 8
+Number of errors:    0
+Number of failures:  1
+
+List of failures:
+  Failure: 
+    Message:           TTestCase_Global.Test_GetAvailableBackends: Backends should be sorted by priority
+    Exception class:   EAssertionFailedError
+    Exception message: Backends should be sorted by priority
+        at   $0000000000000000
+
+
+
+SSE2 available: TRUE
+AVX2 available: TRUE
+NEON available: FALSE
+

@@ -1,0 +1,8 @@
+host_arch=riscv64
+backend=riscvv
+backend_label=RISCVV
+output_root=/tmp/riscvv/run
+tmpdir=/tmp/riscvv/tmp
+fa_build_mode=Release
+runner_kind=canonical
+enable_backend_asm=0

@@ -5,7 +5,7 @@ unit nextpas.core.mem.manager.crt;
 {
   Optional global memory manager installer for CRT (C runtime malloc/calloc/realloc/free).
   - Manual install/uninstall via InstallCrtMemoryManager/UninstallCrtMemoryManager
-  - Guarded by FAFAFA_CORE_CRT_ALLOCATOR (CRT allocator enabled)
+  - Guarded by NEXTPAS_CORE_CRT_ALLOCATOR (CRT allocator enabled)
   - Not compatible with heaptrc; ensure this unit is used deliberately
 
   Usage (put early in uses of your program):
@@ -19,7 +19,7 @@ unit nextpas.core.mem.manager.crt;
 
 interface
 
-{$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+{$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 uses
   SysUtils;
 
@@ -27,11 +27,11 @@ procedure InstallCrtMemoryManager;
 procedure UninstallCrtMemoryManager;
 function IsCrtMemoryManagerInstalled: Boolean;
 
-{$ENDIF} // FAFAFA_CORE_CRT_ALLOCATOR
+{$ENDIF} // NEXTPAS_CORE_CRT_ALLOCATOR
 
 implementation
 
-{$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+{$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 uses
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.crt_allocator,
@@ -139,6 +139,6 @@ end;
 initialization
   GManagerLock := TMutex.Create;
 
-{$ENDIF} // FAFAFA_CORE_CRT_ALLOCATOR
+{$ENDIF} // NEXTPAS_CORE_CRT_ALLOCATOR
 
 end.

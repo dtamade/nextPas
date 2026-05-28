@@ -1,0 +1,3 @@
+[B07] Skip gate-summary export for native batch evidence collection
+[B07] Reason: batch path does not generate a fresh gate_summary.md; exporting here risks reusing stale summary artifacts.
+[B07] Existing gate summary left untouched: Z:\home\dtamade\projects\fafafa.core\tests\fafafa.core.simd\logs\gate_summary.md

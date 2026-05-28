@@ -1,0 +1,240 @@
+{
+  "generated_at": "2026-05-28T17:09:00",
+  "slots": [
+    {
+      "slot": "ArrayAddF32",
+      "scalar_fallback": "ScalarArrayAddF32",
+      "sse2_owner": "SSE2ArrayAddF32",
+      "avx2_owner": "AVX2ArrayAddF32",
+      "sse2_opcodes": [
+        "movups",
+        "addps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vaddps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArraySubF32",
+      "scalar_fallback": "ScalarArraySubF32",
+      "sse2_owner": "SSE2ArraySubF32",
+      "avx2_owner": "AVX2ArraySubF32",
+      "sse2_opcodes": [
+        "movups",
+        "subps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vsubps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayMulF32",
+      "scalar_fallback": "ScalarArrayMulF32",
+      "sse2_owner": "SSE2ArrayMulF32",
+      "avx2_owner": "AVX2ArrayMulF32",
+      "sse2_opcodes": [
+        "movups",
+        "mulps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vmulps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayDivF32",
+      "scalar_fallback": "ScalarArrayDivF32",
+      "sse2_owner": "SSE2ArrayDivF32",
+      "avx2_owner": "AVX2ArrayDivF32",
+      "sse2_opcodes": [
+        "movups",
+        "divps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vdivps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayMinF32",
+      "scalar_fallback": "ScalarArrayMinF32",
+      "sse2_owner": "SSE2ArrayMinF32",
+      "avx2_owner": "AVX2ArrayMinF32",
+      "sse2_opcodes": [
+        "movups",
+        "minps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vminps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayMaxF32",
+      "scalar_fallback": "ScalarArrayMaxF32",
+      "sse2_owner": "SSE2ArrayMaxF32",
+      "avx2_owner": "AVX2ArrayMaxF32",
+      "sse2_opcodes": [
+        "movups",
+        "maxps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vmaxps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayAbsF32",
+      "scalar_fallback": "ScalarArrayAbsF32",
+      "sse2_owner": "SSE2ArrayAbsF32",
+      "avx2_owner": "AVX2ArrayAbsF32",
+      "sse2_opcodes": [
+        "movups",
+        "andps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vandps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayNegF32",
+      "scalar_fallback": "ScalarArrayNegF32",
+      "sse2_owner": "SSE2ArrayNegF32",
+      "avx2_owner": "AVX2ArrayNegF32",
+      "sse2_opcodes": [
+        "movups",
+        "xorps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vxorps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArraySqrtF32",
+      "scalar_fallback": "ScalarArraySqrtF32",
+      "sse2_owner": "SSE2ArraySqrtF32",
+      "avx2_owner": "AVX2ArraySqrtF32",
+      "sse2_opcodes": [
+        "movups",
+        "sqrtps"
+      ],
+      "avx2_opcodes": [
+        "vmovups",
+        "vsqrtps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayMulScalarF32",
+      "scalar_fallback": "ScalarArrayMulScalarF32",
+      "sse2_owner": "SSE2ArrayMulScalarF32",
+      "avx2_owner": "AVX2ArrayMulScalarF32",
+      "sse2_opcodes": [
+        "movss",
+        "shufps",
+        "mulps"
+      ],
+      "avx2_opcodes": [
+        "vmovss",
+        "vbroadcastss",
+        "vmulps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayAddScalarF32",
+      "scalar_fallback": "ScalarArrayAddScalarF32",
+      "sse2_owner": "SSE2ArrayAddScalarF32",
+      "avx2_owner": "AVX2ArrayAddScalarF32",
+      "sse2_opcodes": [
+        "movss",
+        "shufps",
+        "addps"
+      ],
+      "avx2_opcodes": [
+        "vmovss",
+        "vbroadcastss",
+        "vaddps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayClampF32",
+      "scalar_fallback": "ScalarArrayClampF32",
+      "sse2_owner": "SSE2ArrayClampF32",
+      "avx2_owner": "AVX2ArrayClampF32",
+      "sse2_opcodes": [
+        "movss",
+        "shufps",
+        "maxps",
+        "minps"
+      ],
+      "avx2_opcodes": [
+        "vmovss",
+        "vbroadcastss",
+        "vmaxps",
+        "vminps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    },
+    {
+      "slot": "ArrayAxpyF32",
+      "scalar_fallback": "ScalarArrayAxpyF32",
+      "sse2_owner": "SSE2ArrayAxpyF32",
+      "avx2_owner": "AVX2ArrayAxpyF32",
+      "sse2_opcodes": [
+        "movss",
+        "shufps",
+        "mulps",
+        "addps"
+      ],
+      "avx2_opcodes": [
+        "vmovss",
+        "vbroadcastss",
+        "vmulps",
+        "vaddps",
+        "vzeroupper"
+      ],
+      "sse2_tail_scalar": true,
+      "avx2_tail_scalar": true
+    }
+  ],
+  "issues": [],
+  "status": "ok"
+}

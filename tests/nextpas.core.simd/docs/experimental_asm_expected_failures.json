@@ -1,0 +1,13 @@
+{
+  "scenario": "nonx86-experimental-asm",
+  "updated_at": "2026-02-21",
+  "notes": [
+    "Experimental asm scenario is expected to PASS at scenario level for linux/arm64 and linux/riscv64.",
+    "Set SIMD_QEMU_ENABLE_BACKEND_ASM=1 to inject per-backend asm defines (NEON/RISCVV gates).",
+    "Compiler-ready defines are FAFAFA_SIMD_NEON_ASM_COMPILER_READY and FAFAFA_SIMD_RISCVV_ASM_COMPILER_READY.",
+    "Real RVV asm in nextpas.core.simd.riscvv additionally requires FAFAFA_SIMD_RISCVV_ASM_OPCODE_READY.",
+    "Current stock riscv64 toolchain still rejects RVV opcodes; keep opcode-ready define unset in default CI lanes.",
+    "When backend probe mode is on, unsupported backend-asm toolchains can fallback and keep scenario PASS."
+  ],
+  "platforms": {}
+}

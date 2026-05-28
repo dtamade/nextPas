@@ -1,0 +1,3 @@
+[METADATA-SCOPE] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/metadata_query_scope.json
+[METADATA-SCOPE] OK
+METADATA_QUERY_SCOPE scanned_files=150 symbols=4 allowed_hits=18 forbidden_hits=0

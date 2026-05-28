@@ -1,0 +1,3 @@
+[PUBLIC-ABI] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/public_abi_signature.json
+PUBLIC_ABI_SIGNATURE overall_sha=de9da52c4405512e8f0665e246c863b851a6fe1eb3985732c848632297efa47a backend_enum_sha=56fba1c6fcf6dfd04a2bf96ad7440055375242a72361c5157deead2bbe7fd1fc public_api_sha=95bb6e6554525d5be364351966910a958af38a9c4e22434cadec3558aefd0dd9 header_public_api_sha=8c8c9f4c24d0ae6ab0a67da1a715a332d00ccb191aa38c75f16499b575903d31 backends=10 capabilities=12 backend_pod_fields=5 public_api_fields=22 pascal_api=8 export_aliases=8
+[PUBLIC-ABI] OK

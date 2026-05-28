@@ -30,7 +30,7 @@ FFI binding to Microsoft's mimalloc C library.
 - 需要系统安装 mimalloc 库或将库文件放在可执行文件目录
 
 ### 静态链接
-- 在 nextpas.core.settings.inc 中启用 FAFAFA_CORE_MIMALLOC_STATIC
+- 在 nextpas.core.settings.inc 中启用 NEXTPAS_CORE_MIMALLOC_STATIC
 - 编译时链接静态库，无需运行时依赖
 - 需要在链接器搜索路径中包含对应平台的 lib 目录
 
@@ -107,7 +107,7 @@ const
     {$ENDIF}
   {$ENDIF}
 
-{$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+{$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
 {------------------------------------------------------------------------------
   静态链接声明 - Static Linking Declarations
   使用 external 在链接期绑定 mimalloc 库
@@ -314,14 +314,14 @@ procedure UnloadMimalloc;
 implementation
 
 uses
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   DynLibs,
   {$ENDIF}
   SysUtils;
 
 var
   GMimallocBinding: IAlloc = nil;
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   GMimallocLib: TLibHandle = NilHandle;
   GMimallocLoaded: Boolean = False;
   GMimallocChecked: Boolean = False;
@@ -346,7 +346,7 @@ var
   _mi_heap_realloc: Tmi_heap_realloc = nil;
   {$ENDIF}
 
-{$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+{$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
 function TryLoadLibrary(const aName: string): TLibHandle;
 begin
   Result := LoadLibrary(aName);
@@ -355,7 +355,7 @@ end;
 
 function LoadMimalloc: Boolean;
 begin
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   // 静态链接模式：始终可用
   Result := True;
   {$ELSE}
@@ -404,7 +404,7 @@ end;
 
 procedure UnloadMimalloc;
 begin
-  {$IFNDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if GMimallocLib <> NilHandle then
   begin
     UnloadLibrary(GMimallocLib);
@@ -435,7 +435,7 @@ end;
 
 function IsMimallocAvailable: Boolean;
 begin
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   // 静态链接模式：始终可用
   Result := True;
   {$ELSE}
@@ -468,7 +468,7 @@ begin
   inherited Create(LCaps);
 
   FUsePrivateHeap := aUsePrivateHeap;
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if FUsePrivateHeap then
     FHeap := mi_heap_new()
   else
@@ -483,7 +483,7 @@ end;
 
 destructor TMimallocBinding.Destroy;
 begin
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if FUsePrivateHeap and (FHeap <> nil) then
     mi_heap_destroy(FHeap);
   {$ELSE}
@@ -495,7 +495,7 @@ end;
 
 function TMimallocBinding.DoAlloc(aSize: SizeUInt; aAlign: SizeUInt): Pointer;
 begin
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if aAlign <= MEM_DEFAULT_ALIGN then
   begin
     // 默认对齐
@@ -538,7 +538,7 @@ procedure TMimallocBinding.DoDealloc(aPtr: Pointer; aSize: SizeUInt; aAlign: Siz
 begin
   // mimalloc 的 mi_free 可以释放任何 mi_malloc* 分配的内存
   // 对齐信息不需要，mimalloc 内部跟踪
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   mi_free(aPtr);
   {$ELSE}
   _mi_free(aPtr);
@@ -547,7 +547,7 @@ end;
 
 function TMimallocBinding.DoRealloc(aPtr: Pointer; aOldSize, aNewSize, aAlign: SizeUInt): Pointer;
 begin
-  {$IFDEF FAFAFA_CORE_MIMALLOC_STATIC}
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   if aAlign <= MEM_DEFAULT_ALIGN then
   begin
     if FUsePrivateHeap and (FHeap <> nil) then

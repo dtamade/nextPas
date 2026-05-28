@@ -1,0 +1,16 @@
+
+Symbol table '.dynsym' contains 13 entries:
+   Num:    Value          Size Type    Bind   Vis      Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND __gmon_start__
+     2: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND sysconf@GLIBC_2.2.5 (2)
+     3: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND _ITM_deregisterTMCloneTable
+     4: 0000000000000000     0 NOTYPE  WEAK   DEFAULT  UND _ITM_registerTMCloneTable
+     5: 0000000000000000     0 FUNC    WEAK   DEFAULT  UND __cxa_finalize@GLIBC_2.2.5 (2)
+     6: 00000000000451c0     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_get_backend_pod_info
+     7: 00000000000451d0     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_get_public_api
+     8: 00000000000451b0     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_backend_name
+     9: 00000000000451a0     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_backend_description
+    10: 0000000000045180     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_abi_version_minor
+    11: 0000000000045170     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_abi_version_major
+    12: 0000000000045190     5 FUNC    GLOBAL DEFAULT   11 fafafa_simd_abi_signature

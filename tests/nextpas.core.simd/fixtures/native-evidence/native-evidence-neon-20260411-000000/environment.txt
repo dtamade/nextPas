@@ -1,0 +1,8 @@
+host_arch=arm64
+backend=neon
+backend_label=NEON
+output_root=/tmp/neon/run
+tmpdir=/tmp/neon/tmp
+fa_build_mode=Release
+runner_kind=canonical
+enable_backend_asm=0

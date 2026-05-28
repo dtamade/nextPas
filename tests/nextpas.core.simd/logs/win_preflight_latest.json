@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-05-23T10:59:04Z",
+  "status": "PASS",
+  "code": "OK",
+  "exit_code": 0,
+  "workflow_file": "simd-windows-b07-evidence.yml",
+  "repo": "dtamade/nextpas.core",
+  "lookback_limit": 6,
+  "billing_window_hours": 24,
+  "message": "workflow=simd-windows-b07-evidence.yml, repo=dtamade/nextpas.core, scanned_failed_runs=2"
+}

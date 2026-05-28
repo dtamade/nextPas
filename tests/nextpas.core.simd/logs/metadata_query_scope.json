@@ -1,0 +1,140 @@
+{
+  "repo_root": "/home/dtamade/projects/nextpas.core",
+  "scan_globs": [
+    "src/nextpas.core.simd*.pas",
+    "src/nextpas.core.simd*.inc"
+  ],
+  "allowed_files": {
+    "GetBackendInfo": [
+      "src/nextpas.core.simd.backend.adapter.pas",
+      "src/nextpas.core.simd.dispatch.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc",
+      "src/nextpas.core.simd.runtime.pas"
+    ],
+    "TryGetRegisteredBackendDispatchTable": [
+      "src/nextpas.core.simd.backend.adapter.pas",
+      "src/nextpas.core.simd.dispatch.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc"
+    ],
+    "GetBackendNameTextPtr": [
+      "src/nextpas.core.simd.dispatch.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc"
+    ],
+    "GetBackendDescriptionTextPtr": [
+      "src/nextpas.core.simd.dispatch.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc"
+    ]
+  },
+  "scanned_files": 150,
+  "allowed_hits": [
+    {
+      "symbol": "TryGetRegisteredBackendDispatchTable",
+      "path": "src/nextpas.core.simd.backend.adapter.pas",
+      "line": 109,
+      "text": "if TryGetRegisteredBackendDispatchTable(backend, LTable) then"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.backend.adapter.pas",
+      "line": 116,
+      "text": "LCanonicalInfo := GetBackendInfo(backend);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.backend.adapter.pas",
+      "line": 127,
+      "text": "Result.BackendInfo := GetBackendInfo(backend);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 818,
+      "text": "function GetBackendInfo(backend: TSimdBackend): TSimdBackendInfo;"
+    },
+    {
+      "symbol": "GetBackendNameTextPtr",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 822,
+      "text": "function GetBackendNameTextPtr(backend: TSimdBackend): PAnsiChar;"
+    },
+    {
+      "symbol": "GetBackendDescriptionTextPtr",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 826,
+      "text": "function GetBackendDescriptionTextPtr(backend: TSimdBackend): PAnsiChar;"
+    },
+    {
+      "symbol": "TryGetRegisteredBackendDispatchTable",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 831,
+      "text": "function TryGetRegisteredBackendDispatchTable(backend: TSimdBackend; out dispatchTable: TSimdDispatchTable): Boolean;"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 1721,
+      "text": "function GetBackendInfo(backend: TSimdBackend): TSimdBackendInfo;"
+    },
+    {
+      "symbol": "GetBackendNameTextPtr",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 1756,
+      "text": "function GetBackendNameTextPtr(backend: TSimdBackend): PAnsiChar;"
+    },
+    {
+      "symbol": "GetBackendDescriptionTextPtr",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 1770,
+      "text": "function GetBackendDescriptionTextPtr(backend: TSimdBackend): PAnsiChar;"
+    },
+    {
+      "symbol": "TryGetRegisteredBackendDispatchTable",
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 1784,
+      "text": "function TryGetRegisteredBackendDispatchTable(backend: TSimdBackend; out dispatchTable: TSimdDispatchTable): Boolean;"
+    },
+    {
+      "symbol": "TryGetRegisteredBackendDispatchTable",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 640,
+      "text": "LRegistered := TryGetRegisteredBackendDispatchTable(aBackend, LDispatchTable);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 649,
+      "text": "aInfo.Priority := GetBackendInfo(aBackend).Priority;"
+    },
+    {
+      "symbol": "GetBackendNameTextPtr",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 659,
+      "text": "Result := GetBackendNameTextPtr(aBackend);"
+    },
+    {
+      "symbol": "GetBackendDescriptionTextPtr",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 664,
+      "text": "Result := GetBackendDescriptionTextPtr(aBackend);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.runtime.pas",
+      "line": 106,
+      "text": "aSnapshot.CurrentBackendInfo := GetBackendInfo(sbScalar);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.runtime.pas",
+      "line": 162,
+      "text": "LCanonicalInfo := GetBackendInfo(aDispatch^.Backend);"
+    },
+    {
+      "symbol": "GetBackendInfo",
+      "path": "src/nextpas.core.simd.runtime.pas",
+      "line": 173,
+      "text": "Result := GetBackendInfo(LBackend);"
+    }
+  ],
+  "forbidden_hits": []
+}

@@ -1,0 +1,48 @@
+=== fafafa.core.simd Test Suite ===
+Starting SIMD facade function tests...
+
+CPU Features:
+  SSE2: TRUE
+  AVX2: TRUE
+  Active Backend: 6
+  VectorAsm: TRUE
+  Benchmarks: TRUE
+
+
+=== SIMD Benchmark (x86_64/AVX2) ===
+
+Operation              Size     Compare            Base ops/s   Candidate ops/s   Speedup
+--------------------------------------------------------------------------------------------
+MemEqual               4096 B  Scalar->Active          2.54 M           6.41 M    2.53x
+MemFindByte            4096 B  Scalar->Active          4.08 M          55.63 M   13.62x
+SumBytes               4096 B  Scalar->Active        456.75 K           7.41 M   16.22x
+CountByte              4096 B  Scalar->Active        275.20 K           5.87 M   21.31x
+BitsetPopCount         4096 B  Scalar->Active        308.33 K           1.72 M    5.58x
+ArrayAddF32            16384 B  Scalar->Dispatch        1.17 G           1.70 G    1.45x
+ArrayMulF32            16384 B  Scalar->Dispatch        1.12 G           1.73 G    1.55x
+ArrayMulScalarF32      16384 B  Scalar->Dispatch        1.69 G           3.16 G    1.87x
+ArrayAxpyF32           16384 B  Scalar->Dispatch        1.19 G           1.75 G    1.47x
+VecF32x4Add                 -  Scalar->Active         60.89 M          53.36 M    0.88x
+VecF32x4AddRaw              -  Scalar->Active         58.98 M          54.71 M    0.93x
+VecF32x4Mul                 -  Scalar->Active         61.05 M          46.33 M    0.76x
+VecF32x4Div                 -  Scalar->Active         60.62 M          41.46 M    0.68x
+VecI32x4Add                 -  Scalar->Active         62.31 M          36.59 M    0.59x
+VecI16x32Add                -  Scalar->Active         24.80 M          55.63 M    2.24x
+VecI16x32AddRaw             -  Scalar->Active         25.23 M          56.28 M    2.23x
+VecF32x4Dot                 -  Scalar->Active        209.51 M         130.08 M    0.62x
+VecI8x16AndNot              -  Scalar->Active         73.47 K         150.57 K    2.05x
+VecU16x8AndNot              -  Scalar->Active         73.65 K         145.52 K    1.98x
+VecU8x16AndNot              -  Scalar->Active         72.00 K         144.07 K    2.00x
+VecU32x16Mul                -  Scalar->Active         44.38 M          41.07 M    0.93x
+VecU32x16MulRaw             -  Scalar->Active         43.88 M          41.57 M    0.95x
+VecU64x8Add                 -  Scalar->Active         68.19 M          48.84 M    0.72x
+VecU64x8AddRaw              -  Scalar->Active         62.47 M          47.24 M    0.76x
+VecU8x64Max                 -  Scalar->Active          9.33 M          55.45 M    5.95x
+VecU8x64MaxRaw              -  Scalar->Active          9.44 M          47.90 M    5.07x
+HotMemEqPubCache         32 B  Facade->PubCache       69.11 M          56.77 M    0.82x
+HotMemEqPubGet           32 B  Facade->PubGet         69.11 M          39.81 M    0.58x
+HotMemEqDispGet          32 B  Facade->DispGet        69.11 M          61.43 M    0.89x
+HotSumPubCache           32 B  Facade->PubCache       82.89 M          64.48 M    0.78x
+HotSumPubGet             32 B  Facade->PubGet         82.89 M          46.35 M    0.56x
+HotSumDispGet            32 B  Facade->DispGet        82.89 M          58.01 M    0.70x
+

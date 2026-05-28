@@ -1,0 +1,7 @@
+[RISCVV-ABI] source shape
+  - direct vector-return functions: 103
+  - explicit helper checks:         10
+  - missing result store:           0
+  - suspicious a0 loads:            0
+[RISCVV-ABI] OK
+RISCVV_ABI_SHAPE_SUMMARY direct_functions=103 explicit_checks=10 missing_result_store=0 suspicious_a0_loads=0 status=ok

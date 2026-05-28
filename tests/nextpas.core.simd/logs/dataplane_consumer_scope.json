@@ -1,0 +1,129 @@
+{
+  "repo_root": "/home/dtamade/projects/nextpas.core",
+  "scan_globs": [
+    "src/nextpas.core.simd*.pas",
+    "src/nextpas.core.simd*.inc"
+  ],
+  "allowed_files": {
+    "GetCurrentSimdDataPlane": [
+      "src/nextpas.core.simd.dataplane.pas",
+      "src/nextpas.core.simd.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc"
+    ],
+    "GetCurrentSimdDataPlaneDispatch": [
+      "src/nextpas.core.simd.dataplane.pas",
+      "src/nextpas.core.simd.direct.pas",
+      "src/nextpas.core.simd.public_abi.impl.inc"
+    ],
+    "RebindSimdDataPlane": [
+      "src/nextpas.core.simd.dataplane.pas",
+      "src/nextpas.core.simd.direct.pas"
+    ]
+  },
+  "scanned_files": 150,
+  "allowed_hits": [
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 41,
+      "text": "function GetCurrentSimdDataPlane: PSimdDataPlane; inline;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlaneDispatch",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 42,
+      "text": "function GetCurrentSimdDataPlaneDispatch: PSimdDispatchTable; inline;"
+    },
+    {
+      "symbol": "RebindSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 43,
+      "text": "procedure RebindSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 107,
+      "text": "function GetCurrentSimdDataPlane: PSimdDataPlane; inline;"
+    },
+    {
+      "symbol": "RebindSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 117,
+      "text": "RebindSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlaneDispatch",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 126,
+      "text": "function GetCurrentSimdDataPlaneDispatch: PSimdDispatchTable; inline;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 130,
+      "text": "LDataPlane := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "RebindSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 137,
+      "text": "procedure RebindSimdDataPlane;"
+    },
+    {
+      "symbol": "RebindSimdDataPlane",
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 203,
+      "text": "RebindSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlaneDispatch",
+      "path": "src/nextpas.core.simd.direct.pas",
+      "line": 36,
+      "text": "Result := GetCurrentSimdDataPlaneDispatch;"
+    },
+    {
+      "symbol": "RebindSimdDataPlane",
+      "path": "src/nextpas.core.simd.direct.pas",
+      "line": 41,
+      "text": "RebindSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.pas",
+      "line": 1213,
+      "text": "LDataPlane := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.pas",
+      "line": 1256,
+      "text": "LDataPlane := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 148,
+      "text": "LTargetDataPlane := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 217,
+      "text": "Result := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlane",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 500,
+      "text": "LDataPlane := GetCurrentSimdDataPlane;"
+    },
+    {
+      "symbol": "GetCurrentSimdDataPlaneDispatch",
+      "path": "src/nextpas.core.simd.public_abi.impl.inc",
+      "line": 630,
+      "text": "LCurrentDispatch := GetCurrentSimdDataPlaneDispatch;"
+    }
+  ],
+  "forbidden_hits": []
+}

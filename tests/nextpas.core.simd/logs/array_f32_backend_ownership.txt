@@ -1,0 +1,17 @@
+[ARRAY-F32-OWNERSHIP] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/array_f32_backend_ownership.json
+[ARRAY-F32-OWNERSHIP] ArrayF32 dispatch/backend ownership
+  - ArrayAddF32: scalar=ScalarArrayAddF32 sse2=SSE2ArrayAddF32 avx2=AVX2ArrayAddF32
+  - ArraySubF32: scalar=ScalarArraySubF32 sse2=SSE2ArraySubF32 avx2=AVX2ArraySubF32
+  - ArrayMulF32: scalar=ScalarArrayMulF32 sse2=SSE2ArrayMulF32 avx2=AVX2ArrayMulF32
+  - ArrayDivF32: scalar=ScalarArrayDivF32 sse2=SSE2ArrayDivF32 avx2=AVX2ArrayDivF32
+  - ArrayMinF32: scalar=ScalarArrayMinF32 sse2=SSE2ArrayMinF32 avx2=AVX2ArrayMinF32
+  - ArrayMaxF32: scalar=ScalarArrayMaxF32 sse2=SSE2ArrayMaxF32 avx2=AVX2ArrayMaxF32
+  - ArrayAbsF32: scalar=ScalarArrayAbsF32 sse2=SSE2ArrayAbsF32 avx2=AVX2ArrayAbsF32
+  - ArrayNegF32: scalar=ScalarArrayNegF32 sse2=SSE2ArrayNegF32 avx2=AVX2ArrayNegF32
+  - ArraySqrtF32: scalar=ScalarArraySqrtF32 sse2=SSE2ArraySqrtF32 avx2=AVX2ArraySqrtF32
+  - ArrayMulScalarF32: scalar=ScalarArrayMulScalarF32 sse2=SSE2ArrayMulScalarF32 avx2=AVX2ArrayMulScalarF32
+  - ArrayAddScalarF32: scalar=ScalarArrayAddScalarF32 sse2=SSE2ArrayAddScalarF32 avx2=AVX2ArrayAddScalarF32
+  - ArrayClampF32: scalar=ScalarArrayClampF32 sse2=SSE2ArrayClampF32 avx2=AVX2ArrayClampF32
+  - ArrayAxpyF32: scalar=ScalarArrayAxpyF32 sse2=SSE2ArrayAxpyF32 avx2=AVX2ArrayAxpyF32
+[ARRAY-F32-OWNERSHIP] OK
+ARRAY_F32_BACKEND_OWNERSHIP_SUMMARY slots=13 scalar=13 sse2=13 avx2=13 issues=0 status=ok

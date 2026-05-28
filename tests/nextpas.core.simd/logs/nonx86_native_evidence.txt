@@ -1,0 +1,16 @@
+[NATIVE-EVIDENCE] backend=neon
+  - directory:    /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-neon-20260411-000000
+  - summary:      /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-neon-20260411-000000/summary.md
+  - environment:  /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-neon-20260411-000000/environment.txt
+  - host_arch:    arm64
+  - runner_kind:  canonical
+  - build_mode:   Release
+[NATIVE-EVIDENCE] backend=riscvv
+  - directory:    /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-riscvv-20260411-000000
+  - summary:      /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-riscvv-20260411-000000/summary.md
+  - environment:  /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/fixtures/native-evidence/native-evidence-riscvv-20260411-000000/environment.txt
+  - host_arch:    riscv64
+  - runner_kind:  canonical
+  - build_mode:   Release
+[NATIVE-EVIDENCE] OK
+NONX86_NATIVE_EVIDENCE_SUMMARY backends=neon,riscvv ok=2 total=2 status=ok

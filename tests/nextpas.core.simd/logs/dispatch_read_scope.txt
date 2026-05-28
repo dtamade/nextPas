@@ -1,0 +1,3 @@
+[DISPATCH-READ-SCOPE] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/dispatch_read_scope.json
+[DISPATCH-READ-SCOPE] OK
+DISPATCH_READ_SCOPE symbol=GetDispatchTable scanned_files=150 allowed_files=3 allowed_hits=6 forbidden_hits=0 active_doc_issues=0 facade_issues=0

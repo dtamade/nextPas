@@ -1,0 +1,2 @@
+[BENCH] >>> AVX512_vs_AVX2
+[BENCH] FAILED (compile rc=1): AVX512_vs_AVX2

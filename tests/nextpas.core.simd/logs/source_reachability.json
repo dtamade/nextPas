@@ -1,0 +1,16 @@
+{
+  "allowed_unreachable": 1,
+  "allowed_unreachable_files": [
+    {
+      "file": "nextpas.core.simd.neon.scalar.wide_memory.inc",
+      "reason": "audit-only checker fixture retained for non-x86 helper semantics"
+    }
+  ],
+  "missing_include_refs": 0,
+  "missing_refs": [],
+  "ok": true,
+  "reachable_includes": 86,
+  "tracked_includes": 87,
+  "unexpected_unreachable": 0,
+  "unexpected_unreachable_files": []
+}

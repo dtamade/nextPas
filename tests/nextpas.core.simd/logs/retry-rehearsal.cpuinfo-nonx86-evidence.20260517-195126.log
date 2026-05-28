@@ -1,0 +1,12 @@
+[QEMU] Build policy: if-missing (always|if-missing|skip)
+[INFO] Repo: /home/dtamade/projects/fafafa.core
+[INFO] Scenario: cpuinfo-nonx86-evidence
+[INFO] Platforms: linux/riscv64
+[INFO] Build policy: if-missing
+[INFO] Report dir: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/qemu-multiarch-20260517-195126-48
+[BUILD] fafafa-core-simd-test:riscv64 (linux/riscv64)
+ERROR: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+[ERROR] build linux/riscv64 failed after 1 attempt(s), rc=1
+[WARN] Platform linux/riscv64 failed (rc=1), continue to collect remaining evidence.
+[DONE] Completed with failures: 1
+[DONE] Summary: /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/logs/qemu-multiarch-20260517-195126-48/summary.md

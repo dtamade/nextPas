@@ -1,0 +1,1 @@
+tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh: line 180: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd.cpuinfo/bin/x86_64-linux/nextpas.core.simd.cpuinfo.test: Text file busy

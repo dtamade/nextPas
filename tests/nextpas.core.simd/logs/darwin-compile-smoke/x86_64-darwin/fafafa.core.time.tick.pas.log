@@ -1,0 +1,40 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.tick.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.tick.hardware.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.tick.hardware.x86_64.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.tick.base.pas
+Compiling /homeclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+/dtamade/projects/fafafa.core/src/fafafa.core.time.consts.pas
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.base.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.base.s
+Assembling (pipe) /tmp/fafafa-coclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+re-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.tick.base.s
+Compiling /home/dtamade/projects/fafafa.core/src/fafafa.core.time.cpu.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.cpu.s
+Compiling /home/clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+dtamade/projects/fafafa.core/src/fafafa.core.time.tick.darwin.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.tick.darwin.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.tclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+ime.tick.hardware.x86_64.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.tick.hardware.s
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.time.tick.s
+6356 lines compiled, 0.4 sec

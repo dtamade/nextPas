@@ -1,0 +1,17 @@
+[BUILD] SKIP fafafa-core-simd-test:riscv64 (linux/riscv64) policy=if-missing
+[RUN] fafafa-core-simd-test:riscv64 (linux/riscv64)
+[FPC] version=3.3.1 target=riscv64-linux mode=Release
+[FPC] output_root=/tmp/fafafa-simd-qemu-nonx86-riscv64
+[BUILD] fpc fafafa.core.simd.test.lpr
+[BUILD] OK
+[CHECK] OK (no SIMD-unit warnings/hints)
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-riscv64/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86IEEE754
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-riscv64/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86BackendParity,TTestCase_DataPlane
+[TEST] OK
+[LEAK] OK
+[BENCH] >>> RISCVV_vs_Scalar
+[BENCH] PASS RISCVV_vs_Scalar
+[BENCH] DONE: /tmp/fafafa-simd-qemu-nonx86-riscv64/logs/backend-bench-20260413-171650
+[BENCH] SUMMARY: /tmp/fafafa-simd-qemu-nonx86-riscv64/logs/backend-bench-20260413-171650/summary.md

@@ -1,0 +1,49 @@
+{
+  "symbol": "GetDispatchTable",
+  "repo_root": "/home/dtamade/projects/nextpas.core",
+  "scan_globs": [
+    "src/nextpas.core.simd*.pas",
+    "src/nextpas.core.simd*.inc"
+  ],
+  "allowed_files": [
+    "src/nextpas.core.simd.dataplane.pas",
+    "src/nextpas.core.simd.dispatch.pas",
+    "src/nextpas.core.simd.runtime.pas"
+  ],
+  "scanned_files": 150,
+  "allowed_hits": [
+    {
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 145,
+      "text": "LDispatch := GetDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.dataplane.pas",
+      "line": 174,
+      "text": "atomic_store(g_SimdDataPlaneTargetDispatchPtr, Pointer(GetDispatchTable), mo_release);"
+    },
+    {
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 807,
+      "text": "function GetDispatchTable: PSimdDispatchTable; inline;"
+    },
+    {
+      "path": "src/nextpas.core.simd.dispatch.pas",
+      "line": 1641,
+      "text": "function GetDispatchTable: PSimdDispatchTable; inline;"
+    },
+    {
+      "path": "src/nextpas.core.simd.runtime.pas",
+      "line": 199,
+      "text": "LDispatch := GetDispatchTable;"
+    },
+    {
+      "path": "src/nextpas.core.simd.runtime.pas",
+      "line": 234,
+      "text": "atomic_store(g_SimdRuntimeTargetDispatchPtr, Pointer(GetDispatchTable), mo_release);"
+    }
+  ],
+  "forbidden_hits": [],
+  "active_doc_issues": [],
+  "facade_issues": []
+}

@@ -1,0 +1,17 @@
+[BUILD] SKIP fafafa-core-simd-test:arm64 (linux/arm64) policy=if-missing
+[RUN] fafafa-core-simd-test:arm64 (linux/arm64)
+[FPC] version=3.3.1 target=aarch64-linux mode=Release
+[FPC] output_root=/tmp/fafafa-simd-qemu-nonx86-arm64
+[BUILD] fpc fafafa.core.simd.test.lpr
+[BUILD] OK
+[CHECK] OK (no SIMD-unit warnings/hints)
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-arm64/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86IEEE754
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-arm64/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86BackendParity,TTestCase_DataPlane
+[TEST] OK
+[LEAK] OK
+[BENCH] >>> NEON_vs_Scalar
+[BENCH] SKIP NEON_vs_Scalar
+[BENCH] DONE: /tmp/fafafa-simd-qemu-nonx86-arm64/logs/backend-bench-20260508-023447
+[BENCH] SUMMARY: /tmp/fafafa-simd-qemu-nonx86-arm64/logs/backend-bench-20260508-023447/summary.md

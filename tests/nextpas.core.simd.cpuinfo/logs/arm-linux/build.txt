@@ -1,0 +1,251 @@
+Free Pascal Compiler version 3.2.2+dfsg-20 [2023/03/30] for arm
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for ARMHF
+Compiling /work/tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.test.lpr
+Compiling ./tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas
+Compiling ./src/nextpas.core.simd.base.pas
+Compiling ./src/nextpas.core.simd.intrinsics.pas
+Compiling ./src/nextpas.core.simd.intrinsics.base.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.base.pas
+Compiling ./src/nextpas.core.atomic.pas
+nextpas.core.atomic.pas(721,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1008,11) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1027,11) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1029,11) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1040,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1048,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1048,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1048,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1056,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1139,23) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1139,23) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1139,23) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1151,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1157,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1157,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1157,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1162,13) Note: Call to subroutine "function atomic_load(var aObj:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(1386,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1399,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1401,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1411,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1411,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1418,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1418,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1418,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1426,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1426,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1527,23) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1527,23) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1527,23) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1537,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1537,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1559,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1566,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1587,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1592,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1599,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1632,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1637,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1642,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1649,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1698,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:Pointer;var aExpected:Pointer;aDesired:Pointer;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(1719,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1736,9) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1738,9) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1751,9) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1753,9) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1766,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1766,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1766,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1766,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1766,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1926,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1926,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1926,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1926,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1926,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1939,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1939,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1939,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1939,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1939,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1945,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1945,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1945,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1945,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1945,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1979,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1979,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1979,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1979,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1979,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1988,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1988,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1988,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1988,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1988,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1994,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1994,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1994,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1994,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(1994,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2028,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2028,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2028,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2028,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2028,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2035,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2041,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(2075,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(2081,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2088,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2137,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2144,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2189,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2196,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2224,23) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2245,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2252,20) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2277,13) Note: Call to subroutine "function atomic_fetch_add(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2300,13) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2307,20) Note: Call to subroutine "function atomic_fetch_and(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2345,13) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2352,20) Note: Call to subroutine "function atomic_fetch_or(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2390,13) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2397,20) Note: Call to subroutine "function atomic_fetch_xor(var aObj:LongInt;aArg:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(2432,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2445,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2447,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2458,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2458,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2458,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2530,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2530,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2530,13) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2537,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2537,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2537,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2588,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2606,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2608,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2619,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2619,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2619,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2699,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2715,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2717,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2726,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2726,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2726,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2806,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2822,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2824,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2833,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2833,20) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2833,20) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2917,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2936,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2938,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2945,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(2945,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3011,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3030,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3032,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3039,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3039,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3105,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3121,7) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3123,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3130,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3130,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3183,14) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3183,14) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3191,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3309,25) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3309,25) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3309,25) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3321,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3351,25) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3351,25) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3351,25) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3361,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3361,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3368,3) Note: Local variable "LExpected64" not used
+nextpas.core.atomic.pas(3374,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3374,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3374,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3374,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3374,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3387,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3387,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3387,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3394,3) Note: Local variable "LExpected64" not used
+nextpas.core.atomic.pas(3400,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3400,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3400,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3400,15) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3400,15) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3413,13) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(3421,17) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3422,17) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3424,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3425,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3435,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3436,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3437,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3438,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3439,17) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.atomic.pas(3468,14) Note: Call to subroutine "function atomic_load(var aObj:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(3470,8) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.atomic.pas(3483,19) Note: Call to subroutine "function atomic_load(var aObj:LongInt;aOrder:memory_order_t):LongInt;" marked as inline is not inlined
+nextpas.core.atomic.pas(3486,8) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+Compiling ./src/nextpas.core.simd.cpuinfo.unix.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.arm.pas
+nextpas.core.simd.cpuinfo.pas(476,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.simd.cpuinfo.pas(476,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.simd.cpuinfo.pas(476,13) Note: Call to subroutine "procedure ReadWriteBarrier;" marked as inline is not inlined
+nextpas.core.simd.cpuinfo.pas(492,10) Note: Call to subroutine "function atomic_compare_exchange_strong(var aObj:LongInt;var aExpected:LongInt;aDesired:LongInt;aSuccessOrder:memory_order_t;aFailureOrder:memory_order_t):Boolean;" marked as inline is not inlined
+nextpas.core.simd.intrinsics.pas(177,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.intrinsics.pas(202,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.intrinsics.pas(215,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.intrinsics.pas(228,3) Note: Local variable "LCPUInfo" not used
+Compiling ./src/nextpas.core.simd.cpuinfo.lazy.pas
+Compiling ./src/nextpas.core.simd.cpuinfo.diagnostic.pas
+nextpas.core.simd.cpuinfo.diagnostic.pas(122,3) Note: Local variable "Info" is assigned but never used
+Compiling ./src/nextpas.core.simd.dispatch.pas
+Compiling ./src/nextpas.core.simd.scalar.pas
+nextpas.core.simd.dispatch.pas(926,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(990,21) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1002,14) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1029,7) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1066,12) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1189,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1198,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(1214,3) Note: Call to subroutine "procedure ReadBarrier;" marked as inline is not inlined
+nextpas.core.simd.dispatch.pas(874,3) Note: Local variable "g_DispatchInitialized" is assigned but never used
+nextpas.core.simd.cpuinfo.testcase.pas(601,3) Note: Local variable "cpuInfo" is assigned but never used
+nextpas.core.simd.cpuinfo.testcase.pas(627,3) Note: Local variable "cpuInfo" is assigned but never used
+nextpas.core.simd.cpuinfo.testcase.pas(650,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.cpuinfo.testcase.pas(651,3) Note: Local variable "LExpectedAVX" not used
+nextpas.core.simd.cpuinfo.testcase.pas(652,3) Note: Local variable "LExpectedAVX2" not used
+nextpas.core.simd.cpuinfo.testcase.pas(680,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.cpuinfo.testcase.pas(814,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.cpuinfo.testcase.pas(815,3) Note: Local variable "LExpectedUsable256" not used
+nextpas.core.simd.cpuinfo.testcase.pas(843,3) Note: Local variable "LCPUInfo" not used
+nextpas.core.simd.cpuinfo.testcase.pas(844,3) Note: Local variable "LExpectedUsable" not used
+nextpas.core.simd.cpuinfo.testcase.pas(870,3) Note: Local variable "LExpectedUsable256" not used
+nextpas.core.simd.cpuinfo.testcase.pas(871,3) Note: Local variable "LExpectedUsable512" not used
+nextpas.core.simd.cpuinfo.testcase.pas(2140,3) Note: Local variable "cpuInfo" is assigned but never used
+Compiling ./tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.lazy.testcase.pas
+Linking /work/tests/nextpas.core.simd.cpuinfo/bin/arm-linux/nextpas.core.simd.cpuinfo.test
+nextpas.core.simd.cpuinfo.test.lpr(42,1) Warning: "crtbegin.o" not found, this will probably cause a linking failure
+nextpas.core.simd.cpuinfo.test.lpr(42,1) Warning: "crtend.o" not found, this will probably cause a linking failure
+27950 lines compiled, 22.5 sec
+2 warning(s) issued
+227 note(s) issued

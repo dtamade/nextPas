@@ -1,0 +1,75 @@
+ Time:50.284 N:41 E:0 F:1 I:0
+  TTestCase_Global Time:00.149 N:8 E:0 F:0 I:0
+    00.002  Test_GetCPUInfo
+    00.001  Test_IsBackendAvailable
+    00.002  Test_BackendSupportPredicateConsistency
+    00.000  Test_GetAvailableBackends
+    00.000  Test_GetBestBackend
+    00.001  Test_GetBestBackendOnCPU_IndependentFromActiveBackend
+    00.000  Test_GetBackendInfo
+    00.140  Test_ResetCPUInfo
+  TTestCase_ThreadSafety Time:00.114 N:2 E:0 F:0 I:0
+    00.104  Test_GetCPUInfo_Consistency
+    00.010  Test_GetCPUInfo_Performance
+  TTestCase_PlatformSpecific Time:00.834 N:21 E:0 F:1 I:0
+    00.000  Test_X86Features
+    00.000  Test_IntrinsicsAVXAvailability_Semantics
+    00.000  Test_IntrinsicsFacade_FullConsistency
+    00.000  Test_BackendFeatureBidirectionalConsistency
+    00.000  Test_AVXUsable_XCR0Semantics
+    00.000  Test_AVX512Usable_XCR0Semantics
+    00.602  Test_DiagnosticReport_UsableViewConsistency
+    00.001  Test_ARMFeatures
+    00.007  Test_ARMFeatureParserSamples  Failed: metadata key values should not imply NEON in fallback mode
+      Exception:   metadata key values should not imply NEON in fallback mode
+      at   $0009D700
+    00.000  Test_ARMHWCAPMergeSamples
+    00.002  Test_ARMVendorModelParserSamples
+    00.026  Test_ARMProcessorInfoBasic
+    00.002  Test_ARMProcessorInfoParserSamples
+    00.003  Test_CacheSizeParserSamples
+    00.183  Test_NonX86CacheInfoOnLinux
+    00.000  Test_RISCVISAParserSamples
+    00.000  Test_RISCVISASelectionSamples
+    00.000  Test_RISCVHWCAPMergeSamples
+    00.001  Test_RISCVVendorModelParserSamples
+    00.000  Test_RISCVProcessorInfoBasic
+    00.000  Test_FeatureHierarchy
+  TTestCase_ErrorHandling Time:00.000 N:2 E:0 F:0 I:0
+    00.000  Test_InvalidBackend
+    00.000  Test_ExceptionHandling
+  TTestCase_LazyCPUInfo Time:49.186 N:8 E:0 F:0 I:0
+    00.001  Test_ParseCacheSizeTextToKB_Boundaries
+    00.132  Test_GetCPUInfoLazy_BasicFields
+    00.624  Test_HasFeatureLazy_Consistency
+    00.281  Test_LazyEager_GenericFeatureParity
+    00.224  Test_Reset_ReloadConsistency
+    00.274  Test_NonX86CacheInfoOnLinux
+    18.741  Test_GetCPUInfoLazy_ConcurrentReaders
+    28.901  Test_GetCPUInfoLazy_ResetWhileReading
+
+Number of run tests: 41
+Number of errors:    0
+Number of failures:  1
+
+List of failures:
+  Failure: 
+    Message:           TTestCase_PlatformSpecific.Test_ARMFeatureParserSamples: metadata key values should not imply NEON in fallback mode
+    Exception class:   EAssertionFailedError
+    Exception message: metadata key values should not imply NEON in fallback mode
+        at   $0009D700
+
+
+
+SSE2 available: FALSE
+AVX2 available: FALSE
+NEON available: TRUE
+Average GetCPUInfo time: 600.00 ns
+x86 features not available in this build
+ARM Features:
+  NEON: TRUE
+  AdvSIMD: TRUE
+  FP: TRUE
+  SVE: FALSE
+  Crypto: TRUE
+

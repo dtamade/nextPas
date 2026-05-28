@@ -1,0 +1,3 @@
+[DISPATCH-CONTRACT] JSON snapshot: /home/dtamade/projects/nextpas.core/tests/nextpas.core.simd/logs/dispatch_contract_signature.json
+DISPATCH_CONTRACT_SIGNATURE backend_info_sha=5475286897138f473cd3148caa3e4df907f45b52b2eff55d2e67b7d2161b4b3a dispatch_table_sha=f5727966308911e2c4d50d601518c09effff47a332fba10ce118d987710cfede backend_info_fields=6 dispatch_table_fields=568
+[DISPATCH-CONTRACT] OK

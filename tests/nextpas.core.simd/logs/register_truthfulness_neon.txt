@@ -1,0 +1,21 @@
+[REG-TRUTH] backend=neon
+  - register file:       /home/dtamade/projects/nextpas.core/src/nextpas.core.simd.neon.register.inc
+  - source files:        23
+  - assignments:         341
+  - asm exact:           280
+  - asm suffix only:     10
+  - backend composed:    51
+  - wrapper only:        0
+  - scalar passthrough:  0
+  - no definition:       0
+  - miswired:            0
+  - always composed ok:  0
+  - asm-only composed ok:51
+  - no-asm composed ok:  0
+  - always wrapper ok:   0
+  - asm-only wrapper ok: 0
+  - no-asm wrapper ok:   0
+  - unused allowlist:    0
+  - conflicting assign:  0
+[REG-TRUTH] OK
+NONX86_REGISTER_TRUTHFULNESS_SUMMARY backend=neon assignments=341 asm_exact=280 asm_suffix_only=10 backend_composed=51 wrapper_only=0 scalar_passthrough=0 no_def=0 miswired=0 unused_allowlist=0 strict=1

@@ -1,0 +1,9 @@
+[PUBLIC-API-COVERAGE] simd public facade/api test coverage
+  - test_files:           86
+  - public_symbols_total: 560
+  - covered_symbols:      560
+  - missing_symbols:      0
+  - thin_symbols(<2): 0
+  - analyzer: pascal-state-machine-mask + case-insensitive token scan
+[PUBLIC-API-COVERAGE] OK
+PUBLIC_API_TEST_COVERAGE_SUMMARY test_files=86 symbols=560 covered=560 missing=0 thin=0 min_refs=2 strict_thin=1 status=ok

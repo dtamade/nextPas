@@ -1,0 +1,9 @@
+[COVERAGE] SIMD intrinsics direct-test mapping
+  - sse: declared=79 tested=79 missing=0 extra=0 mode=suite_name scope=required
+  - mmx: declared=75 tested=75 missing=0 extra=0 mode=suite_name scope=required
+  - avx2: declared=60 tested=60 missing=0 extra=0 mode=symbol_ref scope=optional
+  - aes: declared=6 tested=6 missing=0 extra=0 mode=symbol_ref scope=optional
+  - sha: declared=7 tested=7 missing=0 extra=0 mode=symbol_ref scope=optional
+  - sse2-x86-raw: declared=221 tested=221 missing=0 extra=0 mode=symbol_ref scope=required thin=0 min_refs=2
+[COVERAGE] OK (no missing direct-test mappings)
+INTRINSICS_COVERAGE_SUMMARY modules=6 missing_required=0 missing_optional=0 thin_required=0 thin_optional=0 extra=0 strict_extra=0 require_avx2=0 require_experimental=0 sse2_min_refs=2 status=ok

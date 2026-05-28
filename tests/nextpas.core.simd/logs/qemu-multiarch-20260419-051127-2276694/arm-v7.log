@@ -1,0 +1,14 @@
+[BUILD] SKIP fafafa-core-simd-test:arm-v7 (linux/arm/v7) policy=if-missing
+[RUN] fafafa-core-simd-test:arm-v7 (linux/arm/v7)
+[FPC] version=3.2.2 target=arm-linux mode=Release
+[FPC] output_root=/tmp/fafafa-simd-qemu-nonx86-arm-v7
+[BUILD] fpc fafafa.core.simd.test.lpr
+[BUILD] OK
+[CHECK] OK (no SIMD-unit warnings/hints)
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-arm-v7/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86IEEE754
+[TEST] OK
+[LEAK] OK
+[TEST] Running: /tmp/fafafa-simd-qemu-nonx86-arm-v7/bin2/fafafa.core.simd.test --suite=TTestCase_NonX86BackendParity,TTestCase_DataPlane
+[TEST] OK
+[LEAK] OK
+[BENCH] SKIP (no benchmark target for host arch: armv7l)

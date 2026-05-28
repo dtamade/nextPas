@@ -1,0 +1,16 @@
+SuiteList Time:00.268 N:7 E:0 F:0 I:0
+  TTestCase_LazyCPUInfo Time:00.268 N:7 E:0 F:0 I:0
+    00.001  Test_GetCPUInfoLazy_BasicFields
+    00.001  Test_HasFeatureLazy_Consistency
+    00.001  Test_LazyEager_GenericFeatureParity
+    00.001  Test_Reset_ReloadConsistency
+    00.001  Test_NonX86CacheInfoOnLinux
+    00.101  Test_GetCPUInfoLazy_ConcurrentReaders
+    00.162  Test_GetCPUInfoLazy_ResetWhileReading
+
+Number of run tests: 7
+Number of errors:    0
+Number of failures:  0
+
+
+

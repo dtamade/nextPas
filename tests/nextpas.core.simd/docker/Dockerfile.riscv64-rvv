@@ -1,0 +1,86 @@
+# RISC-V RVV dedicated toolchain image for SIMD opcode lane.
+# This image is intentionally separate from the default gate image so the
+# stable lane remains unchanged.
+
+ARG RVV_BASE_IMAGE="fafafa-core-simd-test:riscv64"
+FROM ${RVV_BASE_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG FPC_SOURCE_ARCHIVE_URL="https://gitlab.com/freepascal.org/fpc/source/-/archive/main/source-main.tar.gz"
+ARG FPC_SOURCE_ARCHIVE_TOPDIR="source-main"
+ARG FPC_RVV_PATCH_REL="docs/fpc_rvv_support.patch"
+ARG FPC_MAKE_TARGET="compiler"
+ARG FPC_MAKE_JOBS="1"
+ARG FPC_ERROR_LANG="n"
+
+RUN apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
+  && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tar \
+    gzip \
+    patch \
+    make \
+    gcc \
+    g++ \
+    binutils \
+    libc6-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY ${FPC_RVV_PATCH_REL} /tmp/fpc_rvv_support.patch
+
+# Build a patched ppcrv64 with RVV opcode table support.
+RUN curl -L --retry 5 --retry-delay 2 --speed-limit 500 --speed-time 120 \
+    -o /tmp/fpcsrc.tar.gz "${FPC_SOURCE_ARCHIVE_URL}" \
+  && tar -xzf /tmp/fpcsrc.tar.gz -C /opt \
+  && if [[ ! -d "/opt/${FPC_SOURCE_ARCHIVE_TOPDIR}" ]]; then \
+       echo "[RVV-TOOLCHAIN] source top dir not found: /opt/${FPC_SOURCE_ARCHIVE_TOPDIR}"; \
+       ls -la /opt; \
+       exit 2; \
+     fi \
+  && mv "/opt/${FPC_SOURCE_ARCHIVE_TOPDIR}" /opt/fpcsrc \
+  && cd /opt/fpcsrc \
+  && patch -p1 < /tmp/fpc_rvv_support.patch \
+  && (make clean >/tmp/fpc_make_clean.log 2>&1 || true) \
+  && cd /opt/fpcsrc/compiler \
+  && if make ./msg2inc PP=/usr/local/bin/ppcrv64 OPT="-O1" >/tmp/fpc_msg2inc_make.log 2>&1; then \
+       true; \
+     else \
+       LRC=$?; \
+       echo "[RVV-TOOLCHAIN] make ./msg2inc failed rc=${LRC}"; \
+       tail -n 120 /tmp/fpc_msg2inc_make.log || true; \
+       exit "${LRC}"; \
+     fi \
+  && if ./msg2inc "msg/error${FPC_ERROR_LANG}.msg" msg msg >/tmp/fpc_msg2inc_run.log 2>&1; then \
+       true; \
+     else \
+       LRC=$?; \
+       echo "[RVV-TOOLCHAIN] ./msg2inc failed rc=${LRC}"; \
+       tail -n 120 /tmp/fpc_msg2inc_run.log || true; \
+       exit "${LRC}"; \
+     fi \
+  && touch msgtxt.inc msgidx.inc \
+  && mkdir -p /opt/fpcsrc/compiler/riscv64/units \
+  && ln -sfn /opt/fpc/lib/fpc/3.3.1/units/riscv64-linux/rtl /opt/fpcsrc/compiler/riscv64/units/riscv64-linux \
+  && cd /opt/fpcsrc \
+  && if make -j"${FPC_MAKE_JOBS}" "${FPC_MAKE_TARGET}" PP=/usr/local/bin/ppcrv64 OPT="-O1" >/tmp/fpc_make_all.log 2>&1; then \
+       true; \
+     else \
+       LRC=$?; \
+       echo "[RVV-TOOLCHAIN] make ${FPC_MAKE_TARGET} failed rc=${LRC}"; \
+       tail -n 200 /tmp/fpc_make_all.log || true; \
+       exit "${LRC}"; \
+     fi \
+  && if [[ ! -x /opt/fpcsrc/compiler/ppcrv64 ]]; then \
+       echo "[RVV-TOOLCHAIN] missing compiler output: /opt/fpcsrc/compiler/ppcrv64"; \
+       tail -n 200 /tmp/fpc_make_all.log || true; \
+       exit 2; \
+     fi \
+  && ln -sf /opt/fpcsrc/compiler/ppcrv64 /usr/local/bin/ppcrv64 \
+  && ln -sf /opt/fpcsrc/compiler/ppcrv64 /usr/local/bin/fpc \
+  && /usr/local/bin/fpc -iV \
+  && rm -rf /tmp/fpcsrc.tar.gz /tmp/fpc_rvv_support.patch
+
+WORKDIR /work

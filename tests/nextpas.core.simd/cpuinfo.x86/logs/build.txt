@@ -1,0 +1,20 @@
+Hint: (lazarus) Build Project: nothing to do.
+Hint: (11030) Start of reading config file /home/dtamade/.fpc.cfg
+Hint: (11031) End of reading config file /home/dtamade/.fpc.cfg
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+(1002) Target OS: Linux for x86-64
+(3104) Compiling nextpas.core.simd.cpuinfo.x86.test.lpr
+(3104) Compiling nextpas.core.simd.cpuinfo.x86.testcase.pas
+(3104) Compiling /tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.pas
+(3104) Compiling /tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.base.pas
+(3104) Compiling /tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.base.pas
+/tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.base.pas(58,3) Note: (5027) Local variable "LLeaf0" is assigned but never used
+/tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.base.pas(73,3) Note: (5027) Local variable "LLeaf2" is assigned but never used
+/tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.base.pas(74,3) Note: (5027) Local variable "LLeaf3" is assigned but never used
+/tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.base.pas(75,3) Note: (5027) Local variable "LLeaf4" is assigned but never used
+(3104) Compiling /tmp/fafafa-core-win-evidence-20260419-152/src/nextpas.core.simd.cpuinfo.x86.x86_64.pas
+(9015) Linking /tmp/fafafa-core-win-evidence-20260419-152/tests/nextpas.core.simd.cpuinfo.x86/bin/nextpas.core.simd.cpuinfo.x86.test
+(1008) 4798 lines compiled, 0.5 sec, 997648 bytes code, 1551752 bytes data
+(1022) 2 hint(s) issued
+(1023) 4 note(s) issued

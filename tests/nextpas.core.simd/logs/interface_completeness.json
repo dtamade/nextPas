@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-05-26T07:11:08",
+  "strict": true,
+  "strict_level": "p2",
+  "analyzer": "heuristic-token-assignment-scan",
+  "dispatch_slots_total": 566,
+  "backend_slot_counts": {
+    "scalar": 566,
+    "sse2": 470,
+    "sse3": 10,
+    "ssse3": 0,
+    "sse41": 28,
+    "sse42": 1,
+    "avx2": 497,
+    "avx512": 183,
+    "neon": 458,
+    "riscvv": 529
+  },
+  "severity_counts": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0
+  },
+  "p0_items": [],
+  "p1_items": [],
+  "p2_items": []
+}

@@ -27,7 +27,7 @@ uses
   nextpas.core.mem.allocator.rtl_allocator,
   nextpas.core.mem.allocator.callback_allocator,
   nextpas.core.mem.allocator.mimalloc
-  {$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+  {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
   ,nextpas.core.mem.allocator.crt_allocator
   {$ENDIF}
   ;
@@ -45,14 +45,14 @@ type
 
   // 具体分配器类型重导出
   TRtlAllocator = nextpas.core.mem.allocator.rtl_allocator.TRtlAllocator;
-  {$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+  {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
   TCrtAllocator = nextpas.core.mem.allocator.crt_allocator.TCrtAllocator;
   {$ENDIF}
   TCallbackAllocator = nextpas.core.mem.allocator.callback_allocator.TCallbackAllocator;
 
   // 获取/工厂函数声明（门面转发）
   function GetRtlAllocator: IAllocator;
-  {$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+  {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
   function GetCrtAllocator: IAllocator;
   {$ENDIF}
   function GetMimallocAllocator: IAllocator;
@@ -79,7 +79,7 @@ begin
   Result := nextpas.core.mem.allocator.mimalloc.TryGetMimallocAllocator(A);
 end;
 
-{$IFDEF FAFAFA_CORE_CRT_ALLOCATOR}
+{$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 function GetCrtAllocator: IAllocator;
 begin
   Result := nextpas.core.mem.allocator.crt_allocator.GetCrtAllocator;

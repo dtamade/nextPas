@@ -1,0 +1,366 @@
+# SIMD 发布候选检查单（Linux）
+
+更新时间：2026-03-11
+
+## A. 设计与接口
+
+- [x] public API 命名保持稳定（未引入破坏性变更）
+- [x] intrinsics direct mapping 覆盖达标（`missing=0, extra=0`）
+- [x] strict-extra 模式通过
+- [x] 机器检查（接口->dispatch->后端->测试）已接入并可复验
+  - `python3 tests/nextpas.core.simd/check_interface_implementation_completeness.py --strict`
+  - 当前快照：`dispatch=558, P0=0, P1=0, P2=0`
+  - 说明：该检查属于 token/赋值启发式扫描，用于发现缺口；不等价于完整语义证明。
+- [x] dispatch contract signature guard 已接入并可复验
+  - `python3 tests/nextpas.core.simd/check_dispatch_contract_signature.py --summary-line`
+  - 当前快照：`backend_info_fields=6, dispatch_table_fields=560`
+  - 说明：该检查用于守住仓库内 `TSimdBackendInfo` / `TSimdDispatchTable` 声明签名，不把当前 record layout 当成 public binary ABI。
+- [x] public ABI signature/layout guard 已接入并可复验
+  - `python3 tests/nextpas.core.simd/check_public_abi_signature.py --summary-line`
+  - 当前快照：`backends=10, capabilities=12, backend_pod_fields=5, public_api_fields=15, pascal_api=7, export_aliases=7`
+  - 说明：该检查用于守住 public ABI wrapper 的 Pascal 声明、ABI 常量、backend/capability ID 映射，以及 `publicabi_smoke.h` 的 consumer-side contract。
+
+## B. 正确性
+
+- [x] `TTestCase_AdvancedAlgorithms` 通过
+- [x] `sse/mmx` 子模块测试通过
+- [x] NaN/Inf 与舍入模式边界测试已补强
+
+## C. 性能与门禁
+
+- [x] `closeout-release` 是 Linux/Git Bash/WSL 侧完整收口的唯一官方入口。
+  - 命令：`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh closeout-release SIMD-YYYYMMDD-152`
+  - 固定顺序：`win-evidence-preflight -> impl-smoke-x86 -> closeout-host-local -> win-evidence-via-gh -> freeze-status`
+  - 当前 `HEAD` 额外前提：这条 closeout lane 已在 `SIMD-20260519-152` fresh 收口到 `freeze-status = ready=True / cross-ready=True`。如果 future `freeze-status` 再次红在 `linux_sources_not_newer_than_gate` / `windows_sources_not_newer_than_evidence`，先补 fresh `gate` 与 fresh Windows evidence；只有 future preflight 再次回到 `RECENT_BILLING_BLOCK` 时，才在 preflight 处 fail-close，状态按 `code-green / release-evidence-blocked` 记录。
+- [x] `perf-smoke` 通过（non-scalar backend healthy）
+- [x] `gate` 通过（simd + cpuinfo + cpuinfo.x86）
+- [x] `gate` 在 Release + nonx86/qemu 选项下通过
+  - 命令：`FAFAFA_BUILD_MODE=Release SIMD_GATE_NONX86_IEEE754=1 SIMD_GATE_QEMU_NONX86_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_GATE_QEMU_ARCH_MATRIX_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate`
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-02 09:43:02`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-02 23:28:16`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 03:54:10`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 09:06:51`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 09:20:05`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 13:32:37`）
+- [x] 最新 gate 复验通过（Release，启用 `SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 14:50:07`）
+- [x] `gate-strict` 默认已收紧（2026-03-03）：
+  - 默认强制：`SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1`、`SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1`。
+  - 默认轮次：`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=1`（可显式覆盖）。
+  - non-x86 默认平台：`linux/arm/v7 linux/arm64 linux/riscv64`（可用 `SIMD_QEMU_PLATFORMS_NONX86` 覆盖，不影响 `arch-matrix-evidence` 的固定全矩阵要求）。
+- [x] 最新 closeout 口径 `gate-strict` 复验通过（2026-03-11，含 `contract-signature` / `publicabi-signature` / `publicabi-smoke`）
+  - 命令：`SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=0 SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_GATE_EXPERIMENTAL_TESTS=0 SIMD_GATE_PERF_SMOKE=1 SIMD_PERF_VECTOR_ASM=auto bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict`
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260311-211136-2040384/summary.md`
+- [x] 最新 `gate-strict` 复验通过（Release，收紧默认生效）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 20:09:01`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195057/summary.md`（cpuinfo-nonx86-full-evidence）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195237/summary.md`（cpuinfo-nonx86-full-repeat）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195412/summary.md`（arch-matrix-evidence）。
+- [x] 最新 `gate-strict` 复验通过（Release，含 nonx86-evidence/full-evidence/full-repeat 三平台）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 21:08:30`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-204626/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-205024/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-205236/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-205450/summary.md`（arch-matrix-evidence）。
+- [x] 最新 `gate-strict` 复验通过（Release，含 nonx86-evidence/full-evidence/full-repeat + arch-matrix）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 22:04:01`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214107/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214445/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214705/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214919/summary.md`（arch-matrix-evidence：386/amd64/arm-v7/arm64/riscv64 全 PASS）。
+- [x] 最新 gate 复验通过（Release，启用 `qemu-cpuinfo-nonx86-evidence/full-evidence/full-repeat` + `cpuinfo-lazy-repeat=3`）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 22:36:46`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-222519/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-222859/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-223142/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS，rounds=3）。
+- [x] 最新 gate 复验通过（Release，含 riscv `LazyCPUInfo` suite 实际执行）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 23:07:59`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-225207/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS，三平台日志均含 `--suite=TTestCase_LazyCPUInfo`）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-225709/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-230015/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS，rounds=3）。
+- [x] 最新 `gate-strict` 复验通过（Release，含 nonx86-evidence/full-evidence/full-repeat + arch-matrix + concurrent-repeat）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-04 00:22:52`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-235737/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000250/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000611/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000921/summary.md`（arch-matrix-evidence：386/amd64/arm-v7/arm64/riscv64 全 PASS）。
+- [x] 最新 `gate-strict` 复验通过（Release，含 `misa` 解析增强后全链路回归）
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-04 01:38:39`）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011031/summary.md`（cpuinfo-nonx86-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011538/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011855/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-012238/summary.md`（arch-matrix-evidence：386/amd64/arm-v7/arm64/riscv64 全 PASS）。
+- [x] 最新 gate（Release，三架构 CPUInfo full-\* 专项）通过
+  - 结果：`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-03 20:21:45`，`qemu-cpuinfo-nonx86-full-evidence/full-repeat` 均 PASS）。
+  - 对应 QEMU 证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-201716/summary.md`（cpuinfo-nonx86-full-evidence：arm-v7/arm64/riscv64 全 PASS）、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-201931/summary.md`（cpuinfo-nonx86-full-repeat：arm-v7/arm64/riscv64 全 PASS）。
+- [x] gate 摘要已细化到步骤级（含 FAIL/SKIP）：`tests/nextpas.core.simd/logs/gate_summary.md`
+- [x] gate 摘要包含耗时与事件标记（DurationMs/Event）
+- [x] gate 摘要包含 artifacts 路径（build/test/wiring/run-all）
+- [x] gate-summary 支持 `FAIL/SLOW` 过滤视图（Linux）
+- [x] gate-summary 支持 JSON 导出（Linux，启用导出时缺 Python 会 fail-close）
+- [x] Linux 支持 `gate-summary-selfcheck` 快速自检
+- [x] Windows 脚本层支持 gate-summary 过滤视图（FAIL/SLOW）
+- [x] Windows 脚本层支持 gate-summary JSON 导出（依赖 Python，缺失时 fail-close）
+- [x] gate-summary 样本生成与阈值演练脚本可用（Linux）
+- [x] Windows 脚本层具备样本生成与演练入口（`gate-summary-sample` / `gate-summary-rehearsal`）
+- [x] Linux/Windows 脚本层具备非侵入式注入与回滚入口（`gate-summary-inject` / `gate-summary-rollback` / `gate-summary-backups`）
+- [x] `wiring-sync` strict 对账通过（Linux）
+- [x] gate 摘要日志可生成：`BuildOrTest.sh gate-summary`
+- [x] gate 步骤失败传播为 fail-fast（首个失败 step 立即终止并写入 `failed-step`）
+- [x] Linux 支持 `freeze-status` 自动冻结判定（缺失项给出 next-actions）
+- [x] `freeze-status` 支持可选强约束：`SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_EVIDENCE=1`（将 `qemu-cpuinfo-nonx86-evidence` 升级为 required gate step）
+- [x] `freeze-status` 支持可选强约束：`SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1`（将 `qemu-cpuinfo-nonx86-full-evidence` 升级为 required gate step）
+- [x] `freeze-status` 支持可选强约束：`SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1`（将 `qemu-cpuinfo-nonx86-full-repeat` 升级为 required gate step）
+- [x] `freeze-status` 支持可选强约束：`SIMD_FREEZE_REQUIRE_CPUINFO_LAZY_REPEAT=1`（将 `cpuinfo-lazy-repeat` 升级为 required gate step）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-02 23:28:16`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 03:54:10`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 09:06:51`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 09:20:05`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 13:32:37`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 14:27:17`）
+- [x] 最新 `freeze-status-linux` 通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 14:50:07`）
+- [x] `freeze-status-linux` 强约束模式复验通过（Release）
+  - 命令：`SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux`
+  - 结果：`ready=True, mainline-ready=True`，并显示 `linux_qemu_cpuinfo_nonx86_evidence/full_evidence/full_repeat: PASS`
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 17:44:10`）
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 18:43:09`）
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，三架构 CPUInfo full-\* 证据）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 20:21:45`，并显示 `linux_qemu_cpuinfo_nonx86_evidence/full_evidence/full_repeat`、`linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 与 `linux_cpuinfo_lazy_repeat` 全 PASS）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，含 nonx86-evidence 三平台覆盖）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 21:08:30`，并显示 `linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 与 `linux_cpuinfo_lazy_repeat` 全 PASS）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，与最新 gate-strict 对齐）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 22:04:01`，并显示 `linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 与 `linux_cpuinfo_lazy_repeat` 全 PASS）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，随最新 gate 更新）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 22:36:46`，并显示 `linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 与 `linux_cpuinfo_lazy_repeat` 全 PASS）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，含 riscv lazy suite 执行路径）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True @ 2026-03-03 23:07:59`，并显示 `linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 与 `linux_cpuinfo_lazy_repeat` 全 PASS）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，对齐 `gate-strict @ 2026-03-04 00:22:52`）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True`；`linux_qemu_cpuinfo_nonx86_evidence/full_evidence/full_repeat` 与平台约束全 PASS，其中 `full_repeat_platforms` 指向 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004733/summary.md`）。
+- [x] 最新 `freeze-status-linux` 强约束复验通过（Release，对齐 `gate-strict @ 2026-03-04 01:38:39`）
+  - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True`；`linux_qemu_cpuinfo_nonx86_evidence_platforms/full_evidence_platforms/full_repeat_platforms` 分别指向 `qemu-multiarch-20260304-011031/011538/011855`，均为 arm-v7/arm64/riscv64 全 PASS）。
+- [x] `freeze-status-rehearsal` 已覆盖 lazy 强约束回归（Release）
+  - 命令：`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-rehearsal`
+  - 结果：新增 case `case_linux_lazy_missing_rc=1`（缺少 `cpuinfo-lazy-repeat` 必须失败）与补齐后 PASS 路径均通过；并新增 `case_linux_platform_missing_rc=1`（`qemu-cpuinfo-nonx86-evidence/full-*` 缺少 `arm-v7` 平台时必须失败）。
+- [x] 关键 suite repeat 压测通过（Release，串行）
+  - `tests/nextpas.core.simd/BuildOrTest.sh test-concurrent-repeat 20`（`TTestCase_SimdConcurrent` 20/20 通过，日志：`tests/nextpas.core.simd/logs/repeat.TTestCase_SimdConcurrent_.{1..20}.txt`）
+  - `tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`（5/5 通过）
+  - `tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_LazyCPUInfo`（5/5 通过）
+  - `for i in 1 2 3 4 5; do FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific; done`（2026-03-03 新一轮 5/5 通过）
+  - `FAFAFA_BUILD_MODE=Release SIMD_CPUINFO_LAZY_REPEAT_ROUNDS=10 bash tests/nextpas.core.simd/BuildOrTest.sh cpuinfo-lazy-repeat`（2026-03-04 新一轮 10/10 通过；`TTestCase_LazyCPUInfo` + leak check 全 PASS）
+  - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`（2026-03-04 独立三架构复压 2 轮全 PASS，见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-002539/summary.md`）
+  - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`（2026-03-04 多代理并行复压 2 轮全 PASS，见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-024846/summary.md`）
+  - 流程注意：`freeze-status-linux` 不应与长时 QEMU 场景并发执行；并发时可能读取“进行中的 summary”导致 `*_platforms missing` 假失败。应在 QEMU 任务完成后串行重跑 `freeze-status-linux`。
+  - 修复：`evaluate_simd_freeze_status.py` 已引入 gate-step 时间锚点选证据（`parse_gate_row_time` + `not_after` 过滤），避免并发场景误选“更晚但未完成”的 qemu summary。
+  - 修复：`freeze_status.json` payload 增加兼容字段 `ready`（等价 `freeze_ready`）与 `linux_only`，并在 `freeze-status-rehearsal` 增加 JSON 字段断言，避免文本/JSON 判定口径不一致。
+  - `freeze-status-rehearsal` 已新增并发回归样例（构造 `qemu-multiarch-20260210-000020/000021/000022` 不完整 summary），验证 freeze 仅使用 gate 对应时间点及之前的证据。
+  - 修复：`tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh` 改为按 FPC target 隔离产物目录（`bin/<cpu>-<os>`、`lib/<cpu>-<os>`），避免本地 x86_64 与 QEMU arm/arm64/riscv64 并发构建时 `.o/.ppu` 互相污染（`file in wrong format`）。
+  - 并发复验（Release）通过：在 `qemu-cpuinfo-nonx86-full-repeat` 执行期间并行执行本地 `cpuinfo PlatformSpecific` 多轮，最终 `arm-v7/arm64/riscv64` 全 PASS（见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-031955/summary.md`）。
+  - 增强：`cpuinfo` runner 新增 `log-layout-check`，用于校验 `logs/<cpu>-<os>/{build,test}.txt` 与 legacy `logs/{build,test}.txt` 双路径同步。
+  - 增强：`run_multiarch_qemu.sh` 在 `cpuinfo-*` 场景重试失败时自动输出 target/legacy 构建日志 tail（`SIMD_QEMU_CPUINFO_RETRY_LOG_TAIL_LINES` 可调），用于定位 riscv64 偶发重试。
+  - 演练：新增 `SIMD_QEMU_CPUINFO_FAIL_ONCE=1` 可控注入开关（默认关闭），用于强制触发一次 `run_with_retry` 并校验 `[DIAG]` 输出链路（Release 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-082621/summary.md`）。
+  - 演练脚本：新增 `tests/nextpas.core.simd/rehearse_qemu_cpuinfo_retry_diagnostics.sh`，封装 `[INJECT]/[DIAG]/summary` 断言（Release 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-085155/summary.md`、`tests/nextpas.core.simd/logs/retry-rehearsal.cpuinfo-nonx86-evidence.20260304-085155.log`）。
+  - 三平台演练（Release）通过：`SIMD_QEMU_RETRY_REHEARSAL_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/rehearse_qemu_cpuinfo_retry_diagnostics.sh qemu-cpuinfo-nonx86-evidence`（见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-090430/summary.md`、`tests/nextpas.core.simd/logs/retry-rehearsal.cpuinfo-nonx86-evidence.20260304-090430.log`）。
+  - 最新 `freeze-status-linux` 复验通过（Release）
+    - 输出：`tests/nextpas.core.simd/logs/freeze_status.json`（`mainline-ready=True @ 2026-03-04 02:33:12`，`linux_qemu_cpuinfo_nonx86_evidence/full_evidence/full_repeat` 与平台约束全 PASS）。
+  - 最新关键 repeat 复压通过（Release）
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh test-concurrent-repeat 20`（20/20 通过，`TEST OK + LEAK OK`）。
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh cpuinfo-lazy-repeat 10`（10/10 通过，`TEST OK + LEAK OK`）。
+
+## D. 代码质量基线（testcase）
+
+- [x] warning baseline 已建立：`tests/nextpas.core.simd/docs/warning_baseline_20260208.md`
+- [x] `Hint(5091)` 收敛完成（13 → 0）
+- [x] `Hint(5057)` 收敛完成（33 → 0）
+- [x] `Warning(4110)` / `Hint(4055)` / `Hint(5060)` 已收敛清零（Batch41）
+
+## E. 证据链
+
+- [x] Linux 一键证据脚本可用：`BuildOrTest.sh evidence-linux`
+- [x] 最新证据目录：
+  - `tests/nextpas.core.simd/logs/evidence-20260208-194744`
+  - `tests/nextpas.core.simd/logs/evidence-20260208-050508`
+  - `tests/nextpas.core.simd/logs/evidence-20260208-050109`
+- [x] Linux non-x86 QEMU 证据（Release）通过：
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-091515/summary.md`（nonx86-evidence: arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-092937/summary.md`（arch-matrix-evidence: 386/amd64/arm-v7/arm64/riscv64 全 PASS）
+- [x] Linux CPUInfo non-x86 QEMU 专项（Release）通过：
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-110845/summary.md`（cpuinfo-nonx86-evidence: arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-114834/summary.md`（gate 内 cpuinfo-nonx86-evidence: arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-115636/summary.md`（parser/cache 测试增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-115926/summary.md`（增强后 gate 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-120454/summary.md`（`isa extensions` 与 `key=value` 兼容增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-121015/summary.md`（设备树 `riscv,isa` 合并与 `riscv,isa` 键解析增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-121232/summary.md`（设备树合并与 `riscv,isa` 增强后的 gate 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-121813/summary.md`（`GetRISCVProcessorInfo` 实探测化与一致性测试增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-122002/summary.md`（`GetRISCVProcessorInfo` 增强后的 gate 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-123325/summary.md`（vendor/model 解析统一与 ISA 单双引号归一化增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-123514/summary.md`（vendor/model 解析统一增强后的 gate 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-124447/summary.md`（vendor/model 优先级解析 + 设备树 model/compatible 回退 + parser 样例增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-124822/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-125533/summary.md`（RISC-V parser 边界样例增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-125844/summary.md`（重复压测：gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-125930/summary.md`（重复压测：CPUInfo non-x86 专项复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-130620/summary.md`（ARM token 化特性解析 + parser 样例增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-130844/summary.md`（ARM parser 改动后 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-131336/summary.md`（ARM vendor/model 优先级解析 + 设备树回退 + parser 样例增强后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-131526/summary.md`（ARM vendor/model 改动后 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-132230/summary.md`（缓存 size 解析增强（支持 KiB/MiB/GiB）后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-132411/summary.md`（缓存 size 解析增强后 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-134244/summary.md`（lazy non-x86 cache 路径修复后复验；每架构执行 `check + --list-suites + PlatformSpecific`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-134618/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验；`check + --list-suites + PlatformSpecific`：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-135052/summary.md`（`PlatformSpecific` 新增 lazy/eager non-x86 cache 一致性断言后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-135400/summary.md`（同断言在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-225300/summary.md`（lazy non-x86 vendor/model + core-count 对齐后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-225613/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-230308/summary.md`（QEMU 场景加入 `TTestCase_LazyCPUInfo` 条件执行后复验：arm-v7/arm64 运行 lazy suite，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-230722/summary.md`（同场景在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64 运行 lazy suite，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-231751/summary.md`（修复 ARM `DetectARMFeatures` 初始化类型回归后复验：arm-v7/arm64 运行 lazy suite，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260302-232547/summary.md`（同修复在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64 运行 lazy suite，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-034633/summary.md`（Linux non-x86 cache 探测从 `cpu0` 扩展到 `cpu*/cache` 聚合后复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-035056/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64 运行 lazy suite，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-084047/summary.md`（冷构建策略 `SIMD_QEMU_BUILD_POLICY=always` 下复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-090422/summary.md`（gate 内复验：arm64/riscv64 全 PASS；arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP，全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-091355/summary.md`（`CacheSize` parser 边界样例增强后复验：arm64/riscv64 全 PASS；arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-091738/summary.md`（同改动在 gate 内复验：arm64/riscv64 全 PASS；arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-092142/summary.md`（三架构复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-132432/summary.md`（RISC-V ISA key 兼容增强（`extensions` / `riscv extensions` / `isa_ext`）后三架构复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-212128/summary.md`（RISC-V ISA key 兼容增强（新增 `march` / `riscv,march`，并确保 `marchid` 不误判）后三架构复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-213301/summary.md`（RISC-V ISA key 兼容增强（新增 `riscv march`）+ 设备树 `cpus/cpu*` 节点扫描回退链复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-132957/summary.md`（同改动在 gate 内复验：arm64/riscv64 全 PASS；arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-141859/summary.md`（ARM feature key/token 兼容增强（`extensions` / `isa_ext` / `cpu feature` + `asimd*`/`aes*`/`pmull*`/`sha*`）后三架构复验：arm-v7/arm64/riscv64 全 PASS；arm-v7/arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-142436/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-evidence` 复验：arm64/riscv64 全 PASS；arm64 执行 `LazyCPUInfo`，riscv64 显式 SKIP）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-143112/summary.md`（新增 `cpuinfo-nonx86-full-evidence` 场景：在 arm-v7/arm64/riscv64 上执行 `BuildOrTest.sh check + test`（CPUInfo 全量 suite）全部 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-144510/summary.md`（`BuildOrTest.sh qemu-cpuinfo-nonx86-full-evidence` 入口复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-144824/summary.md`（gate 内 `qemu-cpuinfo-nonx86-full-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-155232/summary.md`（ARM/RISCV 增加 `auxv(AT_HWCAP/AT_HWCAP2)` 兜底后复验：arm-v7/arm64/riscv64 全 PASS，CPUInfo 全量 suite）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-155558/summary.md`（同改动在 gate 内 `qemu-cpuinfo-nonx86-full-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-164537/summary.md`（Release 稳定性复压：`qemu-cpuinfo-nonx86-full-evidence` 再次执行，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-165104/summary.md`（gate 内开启 `SIMD_GATE_CONCURRENT_REPEAT=10` 后复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-170012/summary.md`（新增 `cpuinfo-nonx86-full-repeat` 场景后首轮复验：`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-170456/summary.md`（gate 内仅开启 `qemu-cpuinfo-nonx86-full-repeat` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-170812/summary.md`（gate 内 `qemu-cpuinfo-nonx86-full-evidence` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-171047/summary.md`（gate 同时开启 `qemu-cpuinfo-nonx86-full-evidence` + `qemu-cpuinfo-nonx86-full-repeat` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195057/summary.md`（`gate-strict` 默认收紧后，`qemu-cpuinfo-nonx86-full-evidence` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195237/summary.md`（`gate-strict` 默认收紧后，`qemu-cpuinfo-nonx86-full-repeat` 复验：arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-195412/summary.md`（同轮 `gate-strict` 的 `arch-matrix-evidence` 复验：386/amd64/arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-201716/summary.md`（默认 non-x86 平台扩展为 arm-v7/arm64/riscv64 后，`qemu-cpuinfo-nonx86-full-evidence` 复验：三架构全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-201931/summary.md`（同配置下 `qemu-cpuinfo-nonx86-full-repeat` 复验：三架构全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214107/summary.md`（最新 `gate-strict` 中 `cpuinfo-nonx86-evidence` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214445/summary.md`（最新 `gate-strict` 中 `cpuinfo-nonx86-full-evidence` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214705/summary.md`（最新 `gate-strict` 中 `cpuinfo-nonx86-full-repeat` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-214919/summary.md`（最新 `gate-strict` 中 `arch-matrix-evidence` 复验：386/amd64/arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-221631/summary.md`（RISC-V ISA key 别名兼容增强（`riscv isa extensions` / `riscv,isa extensions` / `riscv_isa_ext`）后三架构 CPUInfo 全量 suite 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-221954/summary.md`（同改动稳定性复压：`cpuinfo-nonx86-full-repeat`，`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-222519/summary.md`（最新 gate 复验中的 `cpuinfo-nonx86-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-222859/summary.md`（最新 gate 复验中的 `cpuinfo-nonx86-full-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-223142/summary.md`（最新 gate 复验中的 `cpuinfo-nonx86-full-repeat`：`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=3`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-224137/summary.md`（`cpuinfo-nonx86-evidence` 复验：arm-v7/arm64/riscv64 全 PASS，`riscv64.log` 明确执行 `--suite=TTestCase_LazyCPUInfo`）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-224651/summary.md`（`cpuinfo-nonx86-full-evidence` 复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-225207/summary.md`（最新 gate 中 `cpuinfo-nonx86-evidence`：arm-v7/arm64/riscv64 全 PASS，三平台均执行 `TTestCase_LazyCPUInfo`）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-225709/summary.md`（最新 gate 中 `cpuinfo-nonx86-full-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-230015/summary.md`（最新 gate 中 `cpuinfo-nonx86-full-repeat`：`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=3`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-235737/summary.md`（`gate-strict` 新一轮 `cpuinfo-nonx86-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000250/summary.md`（`gate-strict` 新一轮 `cpuinfo-nonx86-full-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000611/summary.md`（`gate-strict` 新一轮 `cpuinfo-nonx86-full-repeat`：`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=1`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-000921/summary.md`（`gate-strict` 新一轮 `arch-matrix-evidence`：386/amd64/arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-002539/summary.md`（独立稳定性复压：`qemu-cpuinfo-nonx86-full-repeat`，`SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2`，arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004333/summary.md`（`misa` 位图解析增强后，`qemu-cpuinfo-nonx86-full-evidence` 三架构复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004733/summary.md`（`misa` 位图解析增强后，`qemu-cpuinfo-nonx86-full-repeat` 三架构复验：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011031/summary.md`（`gate-strict` 回归中的 `cpuinfo-nonx86-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011538/summary.md`（`gate-strict` 回归中的 `cpuinfo-nonx86-full-evidence`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-011855/summary.md`（`gate-strict` 回归中的 `cpuinfo-nonx86-full-repeat`：arm-v7/arm64/riscv64 全 PASS）
+  - `tests/nextpas.core.simd/logs/qemu-multiarch-20260304-012238/summary.md`（`gate-strict` 回归中的 `arch-matrix-evidence`：386/amd64/arm-v7/arm64/riscv64 全 PASS）
+- [x] Linux RISC-V RVV opcode lane（可选深度验证）通过：
+  - `tests/nextpas.core.simd/logs/rvv-opcode-lane-20260302-094743/summary.md`
+- [x] non-x86 编译阻断已修复（2026-03-02）：
+  - 初始失败证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260302-084959/summary.md`
+  - 根因：`src/nextpas.core.simd.cpuinfo.pas` 在 `IsBackendSupportedOnCPU` 中无条件访问 `TCPUInfo.X86.*`，导致 arm/arm64/riscv 编译期报 `no member "X86"`。
+  - 修复：在对应 case 分支加入 `{$IFDEF SIMD_X86_AVAILABLE}` 条件编译回退。
+- [x] ARM CPUInfo 初始化类型回归已修复（2026-03-02）：
+  - 初始失败证据：`tests/nextpas.core.simd/logs/qemu-multiarch-20260302-231240/summary.md`
+  - 根因：`src/nextpas.core.simd.cpuinfo.arm.pas` 在 `DetectARMFeatures` 误设 `Result := Default(TARMProcessorInfo)`，触发 `TARMFeatures` 类型不匹配编译失败。
+  - 修复：`DetectARMFeatures` 改回 `Result := Default(TARMFeatures)`，并将 `GetARMProcessorInfo` 初始化统一为 `Default(TARMProcessorInfo)`。
+  - 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260302-231751/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260302-232547/summary.md`、`tests/nextpas.core.simd/logs/gate_summary.md`、`tests/nextpas.core.simd/logs/freeze_status.json`
+- [x] ARM/RISCV `auxv(HWCAP)` 兜底已接入（2026-03-03）：
+  - 缺口：`/proc/cpuinfo` 在极简环境下可能缺失/裁剪，导致 non-x86 特性只能保守推断。
+  - 修复：
+    - `src/nextpas.core.simd.cpuinfo.arm.pas`：新增 Linux `AT_HWCAP/AT_HWCAP2` 读取与 `FP/NEON/AdvSIMD/SVE/Crypto` 映射合并。
+    - `src/nextpas.core.simd.cpuinfo.riscv.pas`：新增 Linux `AT_HWCAP` 读取与 `I/M/A/F/D/C/V` 映射合并。
+    - `tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas`：新增 `Test_ARMHWCAPMergeSamples` / `Test_RISCVHWCAPMergeSamples` 样例验证。
+  - 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-155232/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-155558/summary.md`、`tests/nextpas.core.simd/logs/gate_summary.md`、`tests/nextpas.core.simd/logs/freeze_status.json`
+- [x] RISC-V `misa` 数值位图解析已接入（2026-03-04）：
+  - 缺口：能力解析过度依赖 `isa/march/extensions` 字符串键值，在仅暴露 `misa` 数值位图的环境中证据不足。
+  - 修复：
+    - `src/nextpas.core.simd.cpuinfo.riscv.pas`：新增 `misa/csr misa` 键识别，仅在值可解析为数值位图时生效（支持十进制/十六进制、`0x`/`$`、`_` 分隔），并按位回填 `RV32I/RV64I + M/A/F/D/C/V`。
+    - `tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas`：`Test_RISCVISAParserSamples` 新增 `misa` rv64/rv32 数值样例，并保留非数值 `misa` 负样例防误判。
+  - 复验：`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`、`FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004333/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-004733/summary.md`（arm-v7/arm64/riscv64 全 PASS）。
+- [x] RISC-V ISA 候选优选与 `misa` 回填 ISA 字符串已接入（2026-03-04）：
+  - 缺口：`GetRISCVProcessorInfo` 先前对多 ISA 键采用“首个命中”，在 `extensions` 先出现或仅有 `misa` 位图时，`ISA/Architecture/XLEN` 回填不够稳定。
+  - 修复：
+    - `src/nextpas.core.simd.cpuinfo.riscv.pas`：新增 `ExtractBestRISCVISAFromCpuInfo`，按“含 RV 基线 + 键优先级 + 信息量”选择最佳 ISA 候选；合并数值 `misa` 证据，并在无可用 ISA 字符串时合成基线 ISA（如 `rv64imafdcv`）。
+    - `tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.testcase.pas`：新增 `Test_RISCVISASelectionSamples`，覆盖多键优选、`misa` 合成、非数值 `misa` 负样例。
+  - 复验：
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test`
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific`
+    - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-evidence`
+    - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=1 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict`
+    - `FAFAFA_BUILD_MODE=Release SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 SIMD_FREEZE_REQUIRE_CPUINFO_LAZY_REPEAT=1 bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux`
+    - 关键 summary：`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-015020/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-015404/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-020229/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-020756/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-021453/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260304-021827/summary.md`；`tests/nextpas.core.simd/logs/gate_summary.md`（`gate PASS @ 2026-03-04 02:33:12`）；`tests/nextpas.core.simd/logs/freeze_status.json`（`ready=True, mainline-ready=True`）。
+- [x] CPUInfo lazy suite 已扩展到 riscv 构建（2026-03-03）：
+  - 缺口：`tests/nextpas.core.simd.cpuinfo/nextpas.core.simd.cpuinfo.test.lpr` 先前在 `SIMD_RISCV_AVAILABLE` 条件下排除了 `nextpas.core.simd.cpuinfo.lazy.testcase`，导致 riscv QEMU 场景长期 `SKIP lazy cpuinfo suite`。
+  - 修复：恢复 UNIX 通用 `cthreads`，并将 `nextpas.core.simd.cpuinfo.lazy.testcase` 纳入所有架构测试编译单元（保留 riscv `consoletestrunner` 退出路径 workaround）。
+  - 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-224137/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-225207/summary.md`，其中 `riscv64.log` 出现 `--suite=TTestCase_LazyCPUInfo` 且 PASS。
+- [x] Release 稳定性 repeat 复压（2026-03-03）：
+  - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh test-concurrent-repeat 30`：30/30 + leak check 全 PASS（输出轮次日志：`tests/nextpas.core.simd/logs/repeat.TTestCase_SimdConcurrent.*.txt`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_GATE_CONCURRENT_REPEAT=10 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 ... bash tests/nextpas.core.simd/BuildOrTest.sh gate`：gate PASS；`concurrent-repeat` 与 `qemu-cpuinfo-nonx86-full-evidence` 步骤均 PASS（见 `tests/nextpas.core.simd/logs/gate_summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux`：PASS（见 `tests/nextpas.core.simd/logs/freeze_status.json`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_GATE_CONCURRENT_REPEAT=20 SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=1 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 ... bash tests/nextpas.core.simd/BuildOrTest.sh gate`：高压 gate PASS；`concurrent-repeat` 20/20、`qemu-cpuinfo-nonx86-full-evidence`、`qemu-cpuinfo-nonx86-full-repeat` 均 PASS（见 `tests/nextpas.core.simd/logs/gate_summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-174031/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-174221/summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux`：PASS（`ready=True, mainline-ready=True @ 2026-03-03 17:44:10`，见 `tests/nextpas.core.simd/logs/freeze_status.json`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_CPUINFO_LAZY_REPEAT_ROUNDS=2 bash tests/nextpas.core.simd/BuildOrTest.sh cpuinfo-lazy-repeat`：`TTestCase_LazyCPUInfo` 2/2 PASS（见 `tests/nextpas.core.simd.cpuinfo/logs/repeat.TTestCase_LazyCPUInfo.1.txt`、`tests/nextpas.core.simd.cpuinfo/logs/repeat.TTestCase_LazyCPUInfo.2.txt`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_GATE_CPUINFO_LAZY_REPEAT=2 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=0 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=0 ... bash tests/nextpas.core.simd/BuildOrTest.sh gate`：gate PASS；新增 `cpuinfo-lazy-repeat` 步骤 PASS（`gate PASS @ 2026-03-03 18:29:04`，见 `tests/nextpas.core.simd/logs/gate_summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_GATE_CPUINFO_LAZY_REPEAT=5 SIMD_GATE_CONCURRENT_REPEAT=20 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 ... bash tests/nextpas.core.simd/BuildOrTest.sh gate`：高压 gate PASS；`cpuinfo-lazy-repeat`、`concurrent-repeat`、`qemu-cpuinfo-nonx86-full-evidence`、`qemu-cpuinfo-nonx86-full-repeat` 均 PASS（`gate PASS @ 2026-03-03 18:43:09`，见 `tests/nextpas.core.simd/logs/gate_summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-183801/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-183936/summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-evidence`：三架构全 PASS（见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-184625/summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_CPUINFO_REPEAT_ROUNDS=2 SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`：三架构 repeat 全 PASS（见 `tests/nextpas.core.simd/logs/qemu-multiarch-20260303-184849/summary.md`）。
+  - `FAFAFA_BUILD_MODE=Release SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_FREEZE_REQUIRE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 SIMD_FREEZE_REQUIRE_CPUINFO_LAZY_REPEAT=1 bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status-linux`：PASS（`ready=True, mainline-ready=True @ 2026-03-03 18:43:09`，并显示 `linux_cpuinfo_lazy_repeat: PASS`，见 `tests/nextpas.core.simd/logs/freeze_status.json`）。
+- [x] `cpuinfo-nonx86-full-repeat` 脚本化能力已接入（2026-03-03）：
+  - 新增 action：`bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-full-repeat`（通过 `SIMD_QEMU_CPUINFO_REPEAT_ROUNDS` 控制每架构重复轮数）。
+  - 入口对齐：Linux runner、Windows runner（脚本层 parity）、QEMU scenario 三处均已接入。
+  - gate 可选步骤：`SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1`（与 `...FULL_EVIDENCE` 可同时开启）。
+  - 复验：`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-170012/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-170456/summary.md`、`tests/nextpas.core.simd/logs/qemu-multiarch-20260303-171047/summary.md`、`tests/nextpas.core.simd/logs/gate_summary.md`、`tests/nextpas.core.simd/logs/freeze_status.json`。
+- [x] `cpuinfo-lazy-repeat` 稳定性能力已接入（2026-03-03）：
+  - 新增 action：`bash tests/nextpas.core.simd/BuildOrTest.sh cpuinfo-lazy-repeat`（通过 `SIMD_CPUINFO_LAZY_REPEAT_ROUNDS` 控制轮数，默认 5）。
+  - gate 可选步骤：`SIMD_GATE_CPUINFO_LAZY_REPEAT=<rounds>`（示例：`3`）。
+  - 入口对齐：Linux runner、Windows runner（脚本层 parity）已接入。
+  - 复验：`tests/nextpas.core.simd.cpuinfo/logs/repeat.TTestCase_LazyCPUInfo.1.txt`、`tests/nextpas.core.simd.cpuinfo/logs/repeat.TTestCase_LazyCPUInfo.2.txt`、`tests/nextpas.core.simd/logs/gate_summary.md`。
+- [x] Windows 证据入口已就绪：`tests/nextpas.core.simd/buildOrTest.bat evidence-win`
+- [x] Windows 证据校验入口已就绪：`tests/nextpas.core.simd/buildOrTest.bat verify-win-evidence`
+- [x] Windows 一键收口入口已就绪：`tests/nextpas.core.simd/buildOrTest.bat evidence-win-verify`
+  - 说明：该入口当前只应在真实 Windows runner / Windows 实机上使用，且 `LAZBUILD` 必须解析到 native Windows `.exe/.bat/.cmd`
+  - 若显式试 `SIMD_WIN_EVIDENCE_USE_BASH_GATE=1`，也只限 `cmd.exe` 真能解析 `bash` 的环境；当前本机 Wine 不属于这种环境，不要把它当成 host-side Unix bridge 逃生口。
+- [x] Windows wiring-sync 入口已就绪：`tests/nextpas.core.simd/buildOrTest.bat wiring-sync`
+- [x] Windows gate 摘要查看入口已就绪：`tests/nextpas.core.simd/buildOrTest.bat gate-summary`
+- [x] experimental asm 失败归因报告入口已就绪：
+  - `bash tests/nextpas.core.simd/BuildOrTest.sh qemu-experimental-report`
+  - `bash tests/nextpas.core.simd/BuildOrTest.sh qemu-experimental-baseline-check`
+  - 产物：`tests/nextpas.core.simd/docs/experimental_asm_blockers.md`
+  - 基线：`tests/nextpas.core.simd/docs/experimental_asm_expected_failures.json`
+- [x] Windows 实机证据日志曾归档（历史批次）
+  - 目标文件：`tests/nextpas.core.simd/logs/windows_b07_gate.log`
+  - 历史闭环顺序（按当时的 freeze-status next-actions）：
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh win-evidence-preflight`
+    - `tests\nextpas.core.simd\buildOrTest.bat evidence-win-verify`
+    - `FAFAFA_BUILD_MODE=Release SIMD_QEMU_PLATFORMS='linux/arm/v7 linux/arm64 linux/riscv64' SIMD_GATE_QEMU_NONX86_EVIDENCE=0 SIMD_GATE_QEMU_CPUINFO_NONX86_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_EVIDENCE=1 SIMD_GATE_QEMU_CPUINFO_NONX86_FULL_REPEAT=1 SIMD_GATE_QEMU_ARCH_MATRIX_EVIDENCE=0 SIMD_GATE_CPUINFO_LAZY_REPEAT=3 SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate`
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-finalize SIMD-YYYYMMDD-152`
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh freeze-status`
+  - 历史结果：旧批次曾达到 `cross-ready=True`，并生成 `tests/nextpas.core.simd/logs/windows_b07_closeout_summary.md`
+  - 注意：这里的 `[x]` 只表示历史 Windows 实机证据批次已经归档；如果后续源码继续前进、evidence freshness 过期，或 verifier 规则继续收紧，当前 `HEAD` 是否仍 cross-ready 仍必须以最新 `freeze-status` 为准
+  - 快捷打印（复制即跑）：
+    - `FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh win-closeout-3cmd SIMD-YYYYMMDD-152`
+  - 分步兜底：
+    - `tests\nextpas.core.simd\buildOrTest.bat evidence-win`
+  - 当前 `HEAD` 若仍看到 `TOOLCHAIN BLOCK`，优先动作不是重试 Wine，而是提供真实 Windows runner / native Windows `lazbuild.exe`
+    - `tests\nextpas.core.simd\buildOrTest.bat verify-win-evidence`
+
+## F. 当前结论
+
+- Linux 侧：功能与门禁已达到发布候选状态。
+- Linux 侧：代码质量基线已收敛到 testcase 0 warning/hint。
+- Linux 侧：arm/arm64/riscv non-x86 QEMU 证据链（Release）已闭环通过。
+- Windows 侧：历史实机日志已归档；当前 `HEAD` 是否完成跨平台证据闭环，仍以最新 `freeze-status` 为准。

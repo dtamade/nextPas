@@ -105,7 +105,7 @@
 - 外部审查报告要求优先关闭 `P0` 验证失真，再关闭 `P1` resolver correctness 问题。
 - 当前阶段的表述必须诚实：
   已经落地的能力可以明确写，仍然 host-backed 或尚未实现的部分不能包装成已完成。
-- Collections 迁移按用户要求以 `fafafa.core` 搬入代码为基础继续重构；不能用自写简化版替代原实现。
+- Collections 迁移按用户要求以 `nextpas.core` 搬入代码为基础继续重构；不能用自写简化版替代原实现。
 
 ## Research Findings
 

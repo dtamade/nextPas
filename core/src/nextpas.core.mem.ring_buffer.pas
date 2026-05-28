@@ -71,8 +71,8 @@ type
     FBaseAllocator: IAllocator;
     FIsPow2Capacity: Boolean;
 
-    function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetNextIndex(aIndex: SizeUInt): SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function GetElementPtr(aIndex: SizeUInt): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetNextIndex(aIndex: SizeUInt): SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   public
     {**
@@ -164,9 +164,9 @@ type
     property Count: SizeUInt read FCount;
 
     // 状态查询 Status queries
-    function IsEmpty: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function IsFull: Boolean; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
-    function GetAvailableSpace: SizeUInt; {$IFDEF FAFAFA_CORE_INLINE} inline;{$ENDIF}
+    function IsEmpty: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function IsFull: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetAvailableSpace: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function GetUsageRatio: Single; // 使用率 (0.0..1.0)
     function GetUsagePercent: Single; // 使用率百分比 (0..100)
 

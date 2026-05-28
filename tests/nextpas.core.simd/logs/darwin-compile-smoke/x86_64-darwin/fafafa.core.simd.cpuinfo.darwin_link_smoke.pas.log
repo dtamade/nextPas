@@ -1,0 +1,10 @@
+Free Pascal Compiler version 3.3.1-19195-gebfc7485b1-dirty [2026/01/07] for x86_64
+Copyright (c) 1993-2025 by Florian Klaempfl and others
+Target OS: Darwin for x86_64
+Compiling /home/dtamade/projects/fafafa.core/tests/fafafa.core.simd.cpuinfo/fafafa.core.sclang: warning: argument unused during compilation: '-mlinker-version=711' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/dtamade/osxcross/target/bin/../SDK/MacOSX12.3.sdk/usr/include/c++/v1' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /home/linuxbrew/.linuxbrew/Cellar/llvm/22.1.2/bin/../lib/clang/22/include' [-Wunused-command-line-argument]
+imd.cpuinfo.darwin_link_smoke.pas
+Assembling (pipe) /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.cpuinfo.darwin_link_smoke.s
+Linking /tmp/fafafa-core-darwin-smoke/x86_64-darwin/simd-units/fafafa.core.simd.cpuinfo.darwin_link_smoke
+571 lines compiled, 0.4 sec, 897024 bytes code, 180223 bytes data

@@ -2118,7 +2118,7 @@ Completed; verification passed.
 
 ### Goal
 
-继续把从 `fafafa.core` 搬入的 collections 按 nextpas.core 三件套范式规整：
+继续把从 `nextpas.core` 搬入的 collections 按 nextpas.core 三件套范式规整：
 
 - `ICollection` 与 `IGenericCollection<T>` 的真实接口定义进入 `collections.intf`
 - `collections.base` 不再拥有这些 interface definition

@@ -1,0 +1,5 @@
+CPU vendor: GenuineIntel
+CPU model:  Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz
+Backend:    AVX2
+[PASS] Default backend is AVX2
+[PASS] ArrayF32 public facade helpers are callable
