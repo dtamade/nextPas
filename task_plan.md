@@ -20,6 +20,10 @@ Wrong Argument Count Deferred Guard 已完成并通过 focused semantic / heaptr
 下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
+当前最新索引补充：Batch 203 Installed-source Unit Method Body Implicit-self Function Result
+No Matching Overload Deferred Guard 将按同形矩阵双拍推进；下一行旧长索引保留历史上下文，当前
+reality 以本补充、最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
+
 当前上一批为 Batch 201 Installed-source Unit Method Body Inherited Implicit-self Known Property
 Invalid Call Shape Deferred Guard 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、
 最新 addendum 与 fresh `bash build/verify_local.sh` 为准。
@@ -151,6 +155,71 @@ Completed; focused semantic, heaptrc, and fresh local verification passed
   guard、补齐 analyzer imported tree ownership、同步 spec / records / goal tree。
 - 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；heaptrc 复检后未再
   报新的 unfreed block 峰值；changed files 不包含 `core`。
+
+### Non-goals
+
+- 不新增 stage0 fixture 伪造 installed-source provenance
+- 不实现 installed-source ordinary diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking
+- 不修改 `core`
+
+## Addendum: 2026-05-28 Batch 203 Installed-source Unit Method Body Implicit-self Function Result No Matching Overload Deferred Guard
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+给 Batch 186 的 imported `project-source` unit method body implicit-self same-unit function-result
+`no-matching-overload` 补同形 installed-source deferred guard：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 以 `ruoInstalledSource` 加入 unit graph。
+- imported `Worker.pas` 声明 `TWorker.Pick(Value: Integer)`、`TWorker.Pick(Value: AnsiString)`、
+  `TWorker.Run`，并在同一 imported unit implementation 中声明 `function Flag: Boolean;`。
+- `procedure TWorker.Run; begin Pick(Flag); end;` 位于 imported unit implementation body。
+- 期望 semantic analysis 不发 `sema.no-matching-overload`，model 保持 `ready`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵双拍”：已有 imported `project-source` 正向 diagnostic official gate 后，补同形
+  imported `installed-source` deferred guard，防止 incomplete installed/helper/RTL unit-body overload truth
+  被提前误报。
+- 只用 semantic harness 证明 installed-source provenance；不新增 stage0 fixture，因为普通 sibling
+  fixture 会被当作 project/root source，不能证明 `ruoInstalledSource`。
+- 本轮不碰 `core`；除非 focused probe 证明 analyzer 过宽，否则不改 analyzer。
+- 不扩大到 installed-source ordinary diagnostics、default parameter lowering、implicit conversion、visibility、
+  var/out 或完整 overload ranking。
+
+### Status
+
+Completed; focused semantic and fresh local verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、矩阵双拍、范围与不碰 `core`
+- [x] TDD/focused：增加 installed-source unit method body implicit-self function-result no-match deferred guard
+- [x] Focused semantic probe 后决定 guard-first promotion 或最小 analyzer 修复
+- [x] 同步 semantic model spec / findings / progress / goal tree；不新增 stage0 fixture
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：`semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出 `semantic-call-bindings-check=pass`、
+  `semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`。
+
+### Review
+
+- 本批是 installed-source unit body function-result no-match guard-first：新增 semantic harness deferred
+  guard、保持 analyzer 不变、同步 spec / records / goal tree。
+- 简短 review：guard 断言 no diagnostics、model `ready`、binding count 为 0；changed files 不包含
+  `core`。
 
 ### Non-goals
 

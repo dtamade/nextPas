@@ -203,6 +203,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   wrong-argument-count 已进入 official gate。
 - imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
   wrong-argument-count 继续 deferred，并由 semantic harness 固定防误报。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  no-matching-overload 继续 deferred，并由 semantic harness 固定防误报。
 - imported `project-source` unit method body 的 inherited bare implicit-self wrong-argument-count 已进入
   official gate。
 - imported `project-source` unit method body 的 inherited bare implicit-self type-mismatch 已进入
@@ -293,6 +295,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   implicit-self same-unit function-result mismatch。
 - `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self same-unit function-result no-match。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  no-match 继续 deferred，不提前发 `sema.no-matching-overload`。
 - `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self same-unit function-result ambiguity。
 - `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 的 bare
