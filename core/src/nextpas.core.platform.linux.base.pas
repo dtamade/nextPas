@@ -273,6 +273,12 @@ const
 {$IFDEF NEXTPAS_AARCH64}
 {$I nextpas.core.platform.linux.base.syscall.generic.inc}
 {$ENDIF}
+{$IFDEF NEXTPAS_RISCV64}
+{$I nextpas.core.platform.linux.base.syscall.riscv64.inc}
+{$ENDIF}
+{$IFDEF NEXTPAS_ARM}
+{$I nextpas.core.platform.linux.base.syscall.arm32.inc}
+{$ENDIF}
 
 { core OS types - pollfd, iovec, dirent, statfs, rlimit, flock, tms, utsname, fdset, cpu_set }
 {$I nextpas.core.platform.linux.base.ostypes.inc}

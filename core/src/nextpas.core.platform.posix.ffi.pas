@@ -84,6 +84,48 @@ function pthread_cond_timedwait(cond: Pointer; mutex: Pointer; abstime: PTimeSpe
 function pthread_cond_signal(cond: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_signal';
 function pthread_cond_broadcast(cond: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_broadcast';
 
+function pipe(pipefd: PInt32): cint; cdecl; external 'c' name 'pipe';
+function dup(oldfd: cint): cint; cdecl; external 'c' name 'dup';
+function dup2(oldfd: cint; newfd: cint): cint; cdecl; external 'c' name 'dup2';
+function readlink(path: PAnsiChar; buf: PAnsiChar; bufsiz: size_t): ssize_t; cdecl; external 'c' name 'readlink';
+function symlink(target: PAnsiChar; linkpath: PAnsiChar): cint; cdecl; external 'c' name 'symlink';
+function link(oldpath: PAnsiChar; newpath: PAnsiChar): cint; cdecl; external 'c' name 'link';
+function chmod(path: PAnsiChar; mode: mode_t): cint; cdecl; external 'c' name 'chmod';
+function fchmod(fd: cint; mode: mode_t): cint; cdecl; external 'c' name 'fchmod';
+function chown(path: PAnsiChar; owner: uid_t; group: gid_t): cint; cdecl; external 'c' name 'chown';
+function fchown(fd: cint; owner: uid_t; group: gid_t): cint; cdecl; external 'c' name 'fchown';
+function lchown(path: PAnsiChar; owner: uid_t; group: gid_t): cint; cdecl; external 'c' name 'lchown';
+function getuid: uid_t; cdecl; external 'c' name 'getuid';
+function geteuid: uid_t; cdecl; external 'c' name 'geteuid';
+function getgid: gid_t; cdecl; external 'c' name 'getgid';
+function getegid: gid_t; cdecl; external 'c' name 'getegid';
+function setuid(uid: uid_t): cint; cdecl; external 'c' name 'setuid';
+function setgid(gid: gid_t): cint; cdecl; external 'c' name 'setgid';
+function umask(mask: mode_t): mode_t; cdecl; external 'c' name 'umask';
+function poll(fds: Pointer; nfds: cuint; timeout: cint): cint; cdecl; external 'c' name 'poll';
+function socket(domain: cint; xtype: cint; protocol: cint): cint; cdecl; external 'c' name 'socket';
+function bind(sockfd: cint; addr: Pointer; addrlen: socklen_t): cint; cdecl; external 'c' name 'bind';
+function listen(sockfd: cint; backlog: cint): cint; cdecl; external 'c' name 'listen';
+function accept(sockfd: cint; addr: Pointer; addrlen: Pointer): cint; cdecl; external 'c' name 'accept';
+function connect(sockfd: cint; addr: Pointer; addrlen: socklen_t): cint; cdecl; external 'c' name 'connect';
+function send(sockfd: cint; buf: Pointer; len: size_t; flags: cint): ssize_t; cdecl; external 'c' name 'send';
+function recv(sockfd: cint; buf: Pointer; len: size_t; flags: cint): ssize_t; cdecl; external 'c' name 'recv';
+function sendto(sockfd: cint; buf: Pointer; len: size_t; flags: cint; dest_addr: Pointer; addrlen: socklen_t): ssize_t; cdecl; external 'c' name 'sendto';
+function recvfrom(sockfd: cint; buf: Pointer; len: size_t; flags: cint; src_addr: Pointer; addrlen: Pointer): ssize_t; cdecl; external 'c' name 'recvfrom';
+function shutdown(sockfd: cint; how: cint): cint; cdecl; external 'c' name 'shutdown';
+function getsockname(sockfd: cint; addr: Pointer; addrlen: Pointer): cint; cdecl; external 'c' name 'getsockname';
+function getpeername(sockfd: cint; addr: Pointer; addrlen: Pointer): cint; cdecl; external 'c' name 'getpeername';
+function getsockopt(sockfd: cint; level: cint; optname: cint; optval: Pointer; optlen: Pointer): cint; cdecl; external 'c' name 'getsockopt';
+function setsockopt(sockfd: cint; level: cint; optname: cint; optval: Pointer; optlen: socklen_t): cint; cdecl; external 'c' name 'setsockopt';
+function socketpair(domain: cint; xtype: cint; protocol: cint; sv: PInt32): cint; cdecl; external 'c' name 'socketpair';
+function getaddrinfo(node: PAnsiChar; service: PAnsiChar; hints: PAddrInfo; res: PPAddrInfo): cint; cdecl; external 'c' name 'getaddrinfo';
+procedure freeaddrinfo(res: PAddrInfo); cdecl; external 'c' name 'freeaddrinfo';
+function getnameinfo(sa: Pointer; salen: socklen_t; host: PAnsiChar; hostlen: size_t; serv: PAnsiChar; servlen: size_t; flags: cint): cint; cdecl; external 'c' name 'getnameinfo';
+function readv(fd: cint; iov: piovec; iovcnt: cint): ssize_t; cdecl; external 'c' name 'readv';
+function writev(fd: cint; iov: piovec; iovcnt: cint): ssize_t; cdecl; external 'c' name 'writev';
+function sendmsg(sockfd: cint; msg: Pointer; flags: cint): ssize_t; cdecl; external 'c' name 'sendmsg';
+function recvmsg(sockfd: cint; msg: Pointer; flags: cint): ssize_t; cdecl; external 'c' name 'recvmsg';
+
 implementation
 
 end.
