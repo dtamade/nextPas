@@ -138,6 +138,7 @@ function tcflow(fd: cint; action: cint): cint; cdecl; external 'c' name 'tcflow'
 function tcsendbreak(fd: cint; duration: cint): cint; cdecl; external 'c' name 'tcsendbreak';
 function isatty(fd: cint): cint; cdecl; external 'c' name 'isatty';
 function ioctl(fd: cint; request: culong; args: Pointer): cint; cdecl; varargs; external 'c' name 'ioctl';
+function strerror(errnum: cint): PAnsiChar; cdecl; external 'c' name 'strerror';
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';

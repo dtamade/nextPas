@@ -123,6 +123,11 @@ function DuplicateHandle(hSourceProcessHandle: HANDLE; hSourceHandle: HANDLE; hT
 function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurrentProcess';
 function SetConsoleCtrlHandler(HandlerRoutine: Pointer; Add: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleCtrlHandler';
 function GetStdHandle(nStdHandle: DWORD): HANDLE; stdcall; external 'kernel32' name 'GetStdHandle';
+function GetConsoleMode(hConsoleHandle: HANDLE; lpMode: LPDWORD): WINBOOL; stdcall; external 'kernel32' name 'GetConsoleMode';
+function SetConsoleMode(hConsoleHandle: HANDLE; dwMode: DWORD): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleMode';
+function GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE; lpConsoleScreenBufferInfo: Pointer): WINBOOL; stdcall; external 'kernel32' name 'GetConsoleScreenBufferInfo';
+function FormatMessageA(dwFlags: DWORD; lpSource: Pointer; dwMessageId: DWORD; dwLanguageId: DWORD; lpBuffer: LPSTR; nSize: DWORD; Arguments: Pointer): DWORD; stdcall; external 'kernel32' name 'FormatMessageA';
+function LocalFree(hMem: Pointer): Pointer; stdcall; external 'kernel32' name 'LocalFree';
 function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
 
 { winsock2 FFI }
