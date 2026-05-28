@@ -806,15 +806,15 @@ begin
   if LP <> nil then
   begin
     for i := 0 to FSinglePoolBlockCount - 1 do
-      FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
-    FreeMem(LP);
+      FAllocator.FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
+    FAllocator.FreeMem(LP);
   end;
   LP := FDoublePoolBlocks;
   if LP <> nil then
   begin
     for i := 0 to FDoublePoolBlockCount - 1 do
-      FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
-    FreeMem(LP);
+      FAllocator.FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
+    FAllocator.FreeMem(LP);
   end;
   FElementManager.Free;
   inherited Destroy;
@@ -829,14 +829,14 @@ var
 begin
   if PtrUInt(FSinglePoolNext) >= PtrUInt(FSinglePoolEnd) then
   begin
-    GetMem(LBlock, BLOCK_SIZE * SizeOf(TSingleNode));
+    LBlock := FAllocator.GetMem(BLOCK_SIZE * SizeOf(TSingleNode));
     FillChar(LBlock^, BLOCK_SIZE * SizeOf(TSingleNode), 0);
     Inc(FSinglePoolBlockCount);
-    GetMem(LNew, FSinglePoolBlockCount * SizeOf(Pointer));
+    LNew := PPointer(FAllocator.GetMem(FSinglePoolBlockCount * SizeOf(Pointer)));
     if FSinglePoolBlocks <> nil then
     begin
       Move(FSinglePoolBlocks^, LNew^, (FSinglePoolBlockCount - 1) * SizeOf(Pointer));
-      FreeMem(FSinglePoolBlocks);
+      FAllocator.FreeMem(FSinglePoolBlocks);
     end;
     FSinglePoolBlocks := LNew;
     PPointer(PtrUInt(LNew) + (FSinglePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
@@ -860,14 +860,14 @@ var
 begin
   if PtrUInt(FDoublePoolNext) >= PtrUInt(FDoublePoolEnd) then
   begin
-    GetMem(LBlock, BLOCK_SIZE * SizeOf(TDoubleNode));
+    LBlock := FAllocator.GetMem(BLOCK_SIZE * SizeOf(TDoubleNode));
     FillChar(LBlock^, BLOCK_SIZE * SizeOf(TDoubleNode), 0);
     Inc(FDoublePoolBlockCount);
-    GetMem(LNew, FDoublePoolBlockCount * SizeOf(Pointer));
+    LNew := PPointer(FAllocator.GetMem(FDoublePoolBlockCount * SizeOf(Pointer)));
     if FDoublePoolBlocks <> nil then
     begin
       Move(FDoublePoolBlocks^, LNew^, (FDoublePoolBlockCount - 1) * SizeOf(Pointer));
-      FreeMem(FDoublePoolBlocks);
+      FAllocator.FreeMem(FDoublePoolBlocks);
     end;
     FDoublePoolBlocks := LNew;
     PPointer(PtrUInt(LNew) + (FDoublePoolBlockCount - 1) * SizeOf(Pointer))^ := LBlock;
