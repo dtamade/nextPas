@@ -4429,6 +4429,9 @@ begin
             if (ParentTypeId > 0) and
               (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
               ParentTypeId := 0;
+            if (ParentTypeId = 0) and (Pos('<', TypeChild.ChildAt(0).Text) > 0) then
+              FModel.AddStringConstValue(Child.Text + '$generic_parent',
+                TypeChild.ChildAt(0).Text);
           end;
         end
         else
@@ -4563,6 +4566,12 @@ begin
     I := J + 1;
   end;
 
+  for I := 0 to High(ArgTypes) do
+  begin
+    if Pos('<', ArgTypes[I]) > 0 then
+      ResolveOrInstantiateInlineGeneric(ArgTypes[I], AOwnerUnitId);
+  end;
+
   SetLength(Constraints, 0);
   I := 1;
   while I <= Length(ConstraintStr) do
@@ -4646,6 +4655,29 @@ begin
   end;
   FModel.SetTypeParent(AInstanceTypeId,
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
+  if FModel.LookupStringConstValue(GenericName + '$generic_parent', SubstSig) then
+  begin
+    for I := 0 to High(ParamNames) do
+    begin
+      J := Pos(ParamNames[I], SubstSig);
+      while J > 0 do
+      begin
+        if ((J = 1) or not (SubstSig[J-1] in ['A'..'Z','a'..'z','0'..'9','_'])) and
+          ((J + Length(ParamNames[I]) - 1 = Length(SubstSig)) or
+           not (SubstSig[J + Length(ParamNames[I])] in ['A'..'Z','a'..'z','0'..'9','_'])) then
+        begin
+          SubstSig := Copy(SubstSig, 1, J - 1) + ArgTypes[I] +
+            Copy(SubstSig, J + Length(ParamNames[I]), MaxInt);
+        end;
+        J := Pos(ParamNames[I], SubstSig);
+        if J <= Length(ArgTypes[I]) then
+          Break;
+      end;
+    end;
+    GtPos := ResolveOrInstantiateInlineGeneric(SubstSig, AOwnerUnitId);
+    if GtPos > 0 then
+      FModel.SetTypeParent(AInstanceTypeId, GtPos);
+  end;
   if FModel.LookupConstValue(GenericName + '$size', SizeVal) then
     FModel.AddConstValue(InstanceName + '$size', SizeVal)
   else

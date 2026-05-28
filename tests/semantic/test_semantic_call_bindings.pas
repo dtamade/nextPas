@@ -3363,6 +3363,135 @@ begin
   end;
 end;
 
+procedure CheckNestedGenericInstantiation;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program NestedGeneric;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TWrapper<U> = class' + LineEnding +
+    '    procedure Wrap(const Item: U);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWrapper.Wrap(const Item: U);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TBoxWrapper = specialize TWrapper<TBox<Integer>>;' + LineEnding +
+    'var' + LineEnding +
+    '  W: TBoxWrapper;' + LineEnding +
+    'begin' + LineEnding +
+    '  W.Wrap(nil);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('nested-generic-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('nested-generic-missing-model');
+    if Model.BindingCount < 1 then
+      Fail('nested-generic-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericParentChainInstantiation;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericParentChain;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBase<T> = class' + LineEnding +
+    '    procedure DoBase(const X: T);' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TChild<T> = class(TBase<T>)' + LineEnding +
+    '    procedure DoChild(const Y: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBase.DoBase(const X: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TChild.DoChild(const Y: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TMyChild = specialize TChild<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  C: TMyChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.DoChild(1);' + LineEnding +
+    '  C.DoBase(2);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-parent-chain-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('generic-parent-chain-missing-model');
+    if Model.BindingCount < 2 then
+      Fail('generic-parent-chain-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15705,6 +15834,8 @@ begin
     CheckGenericWhereClauseConstraint;
     CheckGenericArityMismatchDiagnostic;
     CheckGenericConstructorBinding;
+    CheckNestedGenericInstantiation;
+    CheckGenericParentChainInstantiation;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
