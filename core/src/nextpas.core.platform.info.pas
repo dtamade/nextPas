@@ -37,6 +37,7 @@ begin
     osMacOS: Result := 'macOS';
     osWindows: Result := 'Windows';
     osAndroid: Result := 'Android';
+    osFreeBSD: Result := 'FreeBSD';
     osUnix: Result := 'Unix';
   else
     Result := 'Unknown';
@@ -48,6 +49,8 @@ begin
   case CurrentCPU of
     cpuX86_64: Result := 'x86_64';
     cpuAArch64: Result := 'aarch64';
+    cpuARM32: Result := 'arm';
+    cpuRISCV64: Result := 'riscv64';
   else
     Result := 'Unknown';
   end;
