@@ -41,9 +41,11 @@ uses
 {$ENDIF}
 {$IFDEF NEXTPAS_MACOS}
   , nextpas.core.platform.darwin.base
+  , nextpas.core.platform.darwin.ffi
 {$ENDIF}
 {$IFDEF NEXTPAS_FREEBSD}
   , nextpas.core.platform.freebsd.base
+  , nextpas.core.platform.freebsd.ffi
 {$ENDIF}
   ;
 {$ENDIF}
@@ -305,6 +307,41 @@ var
   LNameLen: Int32;
   LNamePtr: PAnsiChar;
 {$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+type
+  PDarwinDirent = ^TDarwinDirent;
+  TDarwinDirent = packed record
+    d_ino: UInt64;
+    d_seekoff: UInt64;
+    d_reclen: UInt16;
+    d_namlen: UInt16;
+    d_type: Byte;
+    d_name: array[0..0] of AnsiChar;
+  end;
+var
+  LDent: PDarwinDirent;
+  LNameLen: Int32;
+  LNamePtr: PAnsiChar;
+  LBase: Int64;
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+type
+  PFreeBSDDirent = ^TFreeBSDDirent;
+  TFreeBSDDirent = packed record
+    d_fileno: UInt64;
+    d_off: Int64;
+    d_reclen: UInt16;
+    d_type: Byte;
+    d_pad0: Byte;
+    d_namlen: UInt16;
+    d_pad1: UInt16;
+    d_name: array[0..0] of AnsiChar;
+  end;
+var
+  LDent: PFreeBSDDirent;
+  LNameLen: Int32;
+  LNamePtr: PAnsiChar;
+{$ENDIF}
 begin
   FillChar(AEntry, SizeOf(AEntry), 0);
 {$IFDEF NEXTPAS_LINUX}
@@ -353,8 +390,97 @@ begin
     Result := 0;
     Exit;
   end;
-{$ELSE}
-  Result := 1;
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  LBase := 0;
+  while True do
+  begin
+    if AHandle.Pos >= AHandle.Len then
+    begin
+      AHandle.Len := Int32(getdirentries(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf), @LBase));
+      if AHandle.Len <= 0 then
+      begin
+        if AHandle.Len = 0 then
+          Result := 1
+        else
+          Result := platform_get_errno;
+        Exit;
+      end;
+      AHandle.Pos := 0;
+    end;
+    LDent := PDarwinDirent(@AHandle.Buf[AHandle.Pos]);
+    Inc(AHandle.Pos, LDent^.d_reclen);
+    LNamePtr := @LDent^.d_name[0];
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
+      Continue;
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = '.') and (LNamePtr[2] = #0) then
+      Continue;
+    LNameLen := Int32(LDent^.d_namlen);
+    if LNameLen > 255 then
+      LNameLen := 255;
+    Move(LNamePtr^, AEntry.Name[0], LNameLen);
+    AEntry.Name[LNameLen] := #0;
+    AEntry.NameLen := LNameLen;
+    AEntry.Ino := LDent^.d_ino;
+    case LDent^.d_type of
+      8:  AEntry.FileType := ftRegular;
+      4:  AEntry.FileType := ftDirectory;
+      10: AEntry.FileType := ftSymlink;
+      2:  AEntry.FileType := ftCharDevice;
+      6:  AEntry.FileType := ftBlockDevice;
+      1:  AEntry.FileType := ftFifo;
+      12: AEntry.FileType := ftSocket;
+    else
+      AEntry.FileType := ftUnknown;
+    end;
+    Result := 0;
+    Exit;
+  end;
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  while True do
+  begin
+    if AHandle.Pos >= AHandle.Len then
+    begin
+      AHandle.Len := Int32(getdents(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf)));
+      if AHandle.Len <= 0 then
+      begin
+        if AHandle.Len = 0 then
+          Result := 1
+        else
+          Result := platform_get_errno;
+        Exit;
+      end;
+      AHandle.Pos := 0;
+    end;
+    LDent := PFreeBSDDirent(@AHandle.Buf[AHandle.Pos]);
+    Inc(AHandle.Pos, LDent^.d_reclen);
+    LNamePtr := @LDent^.d_name[0];
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
+      Continue;
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = '.') and (LNamePtr[2] = #0) then
+      Continue;
+    LNameLen := Int32(LDent^.d_namlen);
+    if LNameLen > 255 then
+      LNameLen := 255;
+    Move(LNamePtr^, AEntry.Name[0], LNameLen);
+    AEntry.Name[LNameLen] := #0;
+    AEntry.NameLen := LNameLen;
+    AEntry.Ino := LDent^.d_fileno;
+    case LDent^.d_type of
+      8:  AEntry.FileType := ftRegular;
+      4:  AEntry.FileType := ftDirectory;
+      10: AEntry.FileType := ftSymlink;
+      2:  AEntry.FileType := ftCharDevice;
+      6:  AEntry.FileType := ftBlockDevice;
+      1:  AEntry.FileType := ftFifo;
+      12: AEntry.FileType := ftSocket;
+    else
+      AEntry.FileType := ftUnknown;
+    end;
+    Result := 0;
+    Exit;
+  end;
 {$ENDIF}
 end;
 
