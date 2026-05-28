@@ -4198,7 +4198,14 @@ begin
   while I <= Length(ArgStr) do
   begin
     J := I;
-    while (J <= Length(ArgStr)) and (ArgStr[J] <> ',') do Inc(J);
+    GtPos := 0;
+    while J <= Length(ArgStr) do
+    begin
+      if ArgStr[J] = '<' then Inc(GtPos)
+      else if ArgStr[J] = '>' then Dec(GtPos)
+      else if (ArgStr[J] = ',') and (GtPos = 0) then Break;
+      Inc(J);
+    end;
     SetLength(ArgNames, Length(ArgNames) + 1);
     ArgNames[High(ArgNames)] := Trim(Copy(ArgStr, I, J - I));
     I := J + 1;
@@ -4209,17 +4216,19 @@ begin
   begin
     ArgIndices[I] := -1;
     J := 1;
+    GtPos := 0;
     while J <= Length(OwnerParams) do
     begin
       if SameText(Copy(OwnerParams, J, Length(ArgNames[I])), ArgNames[I]) and
         ((J + Length(ArgNames[I]) - 1 = Length(OwnerParams)) or
          (OwnerParams[J + Length(ArgNames[I])] = ',')) then
       begin
-        ArgIndices[I] := I;
+        ArgIndices[I] := GtPos;
         Break;
       end;
       while (J <= Length(OwnerParams)) and (OwnerParams[J] <> ',') do Inc(J);
       Inc(J);
+      Inc(GtPos);
     end;
   end;
 
@@ -4931,7 +4940,9 @@ begin
     end;
   CacheKey := LowerCase(ASpecText);
   for I := 0 to Length(FGenericCacheKeys) - 1 do
-    if Pos(CacheKey, FGenericCacheKeys[I]) > 0 then
+    if (Length(FGenericCacheKeys[I]) > Length(CacheKey)) and
+      (FGenericCacheKeys[I][Length(FGenericCacheKeys[I]) - Length(CacheKey)] = '#') and
+      (Copy(FGenericCacheKeys[I], Length(FGenericCacheKeys[I]) - Length(CacheKey) + 1, MaxInt) = CacheKey) then
     begin
       Result := FGenericCacheTypeIds[I];
       FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, Result, 0);
