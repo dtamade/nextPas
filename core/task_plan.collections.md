@@ -32,16 +32,12 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 │   ├── [完成] TVecDeque WriteExact(Collection, StartIndex) 偏移
 │   └── [完成] TVecDeque.Create(0, nil, nil) 容量 1 + nil strategy
 │
-├── G-TESTED [进行中]: 100% API 测试覆盖 + 零内存泄漏
+├── G-TESTED [完成]: 100% API 测试覆盖 + 零内存泄漏
 │   ├── [完成] heaptrc 验证全部零泄漏
-│   ├── [完成] 所有容器有专项测试套件 (21 suites)
-│   ├── [进行中] 每个接口方法至少一个测试
-│   │   ├── Vec: 31/48 方法已测试 (65%)
-│   │   ├── VecDeque: 72 tests from fafafa.core
-│   │   ├── HashMap: 18/14 (超额)
-│   │   ├── 其他容器: 核心 API 已覆盖
-│   │   └── [待做] Vec 剩余 17 方法 + 其他容器缺口
-│   └── [待做] 错误路径测试 (越界、空容器、nil 参数)
+│   ├── [完成] 所有容器有专项测试套件 (22 suites)
+│   ├── [完成] 每个接口方法至少一个测试 (314 tests)
+│   ├── [完成] managed-type 资源管理测试 (string 类型全容器覆盖)
+│   └── [完成] 错误路径测试 (越界、空容器、nil 参数)
 │
 ├── G-PERF [待做]: 性能达到或超越同类框架
 │   ├── [待做] TArray introsort 防退化
@@ -57,9 +53,11 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 
 ## 当前状态
 
-- 21 套件，279 测试，0 失败
+- 22 套件，314 测试，0 失败
 - heaptrc 全部零泄漏
 - 7 个严重 bug 已修复
+- G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅
+- 下一步：G-PERF（性能优化）
 
 ## 执行顺序
 
