@@ -9,8 +9,8 @@ unit np_semantic_analyzer;
 interface
 
 uses
-  np_ast_facade, np_diagnostics_sink, np_source_database, np_unit_graph,
-  np_semantic_model, np_green_tree, np_lexer;
+  np_ast_facade, np_base_types, np_diagnostics_sink, np_source_database,
+  np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
 
 type
   TProcedureBodyEntry = record
@@ -184,7 +184,8 @@ type
       const ACurrentOwnerUnitId: string;
       out AResolutionFailureKind: string;
       out AFailureName: string;
-      out AFailureOffset: LongInt
+      out AFailureOffset: LongInt;
+      out AActualArgCount: LongInt
     ): Boolean;
     function TryRegisterImplicitSelfBareMethodCallBinding(
       const ACallNode: TGreenNode;
@@ -1924,7 +1925,8 @@ function TSemanticAnalyzer.TryRegisterMemberCallBinding(
   const ACurrentOwnerUnitId: string;
   out AResolutionFailureKind: string;
   out AFailureName: string;
-  out AFailureOffset: LongInt
+  out AFailureOffset: LongInt;
+  out AActualArgCount: LongInt
 ): Boolean;
 var
   ArgCount: LongInt;
@@ -1941,6 +1943,7 @@ begin
   AResolutionFailureKind := '';
   AFailureName := '';
   AFailureOffset := 0;
+  AActualArgCount := 0;
   if not ExtractDirectMemberCall(
     ACallNode,
     ReceiverName,
@@ -1949,6 +1952,7 @@ begin
     ArgCount
   ) then
     Exit;
+  AActualArgCount := ArgCount;
   AFailureName := MemberName;
   AFailureOffset := MemberOffset;
   ReceiverTypeId := TypeIdForMemberReceiver(
@@ -2273,6 +2277,7 @@ var
   Index: LongInt;
   MemberFailureName: string;
   MemberFailureOffset: LongInt;
+  MemberActualArgCount: LongInt;
   MethodClass: string;
   CallableOwnerUnitId: string;
   QualifiedPos: LongInt;
@@ -2304,7 +2309,8 @@ begin
         ACurrentOwnerUnitId,
         ResolutionFailureKind,
         MemberFailureName,
-        MemberFailureOffset
+        MemberFailureOffset,
+        MemberActualArgCount
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
         EmitSemaError(
           'sema.ambiguous-overload',
@@ -2663,8 +2669,14 @@ procedure TSemanticAnalyzer.EmitSemaError(
   const AMessage: string;
   const AByteOffset: LongInt
 );
+var
+  EmptyPayload: TDiagnosticPayload;
 begin
-  FDiagnostics.EmitError(ACode, 'sema', FRootFileId, AByteOffset, AMessage);
+  EmptyPayload.Kind := dpkNone;
+  FDiagnostics.EmitErrorWithPayload(
+    ACode, 'sema',
+    BuildCoreSourceSpan(FRootFileId, AByteOffset, 0),
+    AMessage, EmptyPayload);
   FModel.MarkFailure;
 end;
 
