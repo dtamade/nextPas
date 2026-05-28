@@ -330,7 +330,7 @@ begin
   {$IFDEF NEXTPAS_MACOS}
   Result := platform_time_darwin_monotonic_ns_u64;
   {$ELSEIF defined(NEXTPAS_UNIX)}
-  Result := platform_time_posix_clock_ns_u64(PLATFORM_CLOCK_MONOTONIC_ID);
+  Result := platform_time_posix_clock_ns_u64(CLOCK_MONOTONIC);
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
   Result := platform_time_windows_monotonic_ns_u64;
   {$ENDIF}
@@ -339,7 +339,7 @@ end;
 function platform_time_host_clock_realtime_ns_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_UNIX}
-  Result := platform_time_posix_clock_ns_u64(PLATFORM_CLOCK_REALTIME_ID);
+  Result := platform_time_posix_clock_ns_u64(CLOCK_REALTIME);
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
   Result := platform_time_windows_filetime_now_unix_ns;
   {$ENDIF}
@@ -350,7 +350,7 @@ begin
   {$IFDEF NEXTPAS_MACOS}
   Result := platform_time_darwin_monotonic_resolution_ns_u64;
   {$ELSEIF defined(NEXTPAS_UNIX)}
-  Result := platform_time_posix_clock_resolution_ns_u64(PLATFORM_CLOCK_MONOTONIC_ID);
+  Result := platform_time_posix_clock_resolution_ns_u64(CLOCK_MONOTONIC);
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
   Result := platform_time_windows_monotonic_resolution_ns_u64;
   {$ENDIF}

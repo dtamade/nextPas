@@ -183,7 +183,7 @@ begin
 
   while nanosleep(@LReq, @LRem) <> 0 do
   begin
-    if (LErrno = nil) or (LErrno^ <> PLATFORM_POSIX_EINTR) then
+    if (LErrno = nil) or (LErrno^ <> ESysEINTR) then
       Break;
     LReq := LRem;
   end;
@@ -219,7 +219,7 @@ function platform_thread_host_cpu_count_i32: Int32; inline;
 var
   LResult: PtrInt;
 begin
-  LResult := sysconf(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
+  LResult := sysconf(_SC_NPROCESSORS_ONLN);
   if LResult < 1 then
     Result := 1
   else

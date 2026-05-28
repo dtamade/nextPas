@@ -16,9 +16,9 @@ type
   TPlatformCondVar = nextpas.core.platform.sync.base.TPlatformCondVar;
 
 const
-  PLATFORM_MUTEX_SIZE = nextpas.core.platform.sync.base.PLATFORM_MUTEX_SIZE;
-  PLATFORM_RWLOCK_SIZE = nextpas.core.platform.sync.base.PLATFORM_RWLOCK_SIZE;
-  PLATFORM_CONDVAR_SIZE = nextpas.core.platform.sync.base.PLATFORM_CONDVAR_SIZE;
+  PTHREAD_MUTEX_SIZE = nextpas.core.platform.sync.base.PTHREAD_MUTEX_SIZE;
+  PTHREAD_RWLOCK_SIZE = nextpas.core.platform.sync.base.PTHREAD_RWLOCK_SIZE;
+  PTHREAD_CONDVAR_SIZE = nextpas.core.platform.sync.base.PTHREAD_CONDVAR_SIZE;
   PLATFORM_MUTEX_NORMAL = nextpas.core.platform.sync.base.PLATFORM_MUTEX_NORMAL;
   PLATFORM_MUTEX_ERRORCHECK = nextpas.core.platform.sync.base.PLATFORM_MUTEX_ERRORCHECK;
   PLATFORM_MUTEX_RECURSIVE = nextpas.core.platform.sync.base.PLATFORM_MUTEX_RECURSIVE;
@@ -133,15 +133,15 @@ function platform_sync_host_pthread_sync_result(
 begin
   if AError = 0 then
     Result := 0
-  else if AError = PLATFORM_POSIX_EAGAIN then
+  else if AError = ESysEAGAIN then
     Result := AAgainResult
-  else if AError = PLATFORM_POSIX_EBUSY then
+  else if AError = ESysEBUSY then
     Result := ABusyResult
-  else if AError = PLATFORM_POSIX_EINVAL then
+  else if AError = ESysEINVAL then
     Result := AInvalidResult
-  else if AError = PLATFORM_POSIX_ENOTSUP then
+  else if AError = ESysEOPNOTSUPP then
     Result := AUnsupportedResult
-  else if AError = PLATFORM_POSIX_ETIMEDOUT then
+  else if AError = ESysETIMEDOUT then
     Result := ATimeoutResult
   else
     Result := AError;
@@ -154,11 +154,11 @@ var
 begin
   case AKind of
     PLATFORM_MUTEX_NORMAL:
-      LHostKind := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
+      LHostKind := _PTHREAD_MUTEX_NORMAL;
     PLATFORM_MUTEX_RECURSIVE:
-      LHostKind := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
+      LHostKind := _PTHREAD_MUTEX_RECURSIVE;
   else
-    LHostKind := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
+    LHostKind := _PTHREAD_MUTEX_ERRORCHECK;
   end;
 
   Result := pthread_mutexattr_init(@LAttr);
@@ -185,16 +185,16 @@ begin
     {$IFDEF NEXTPAS_MACOS}
     Result := pthread_cond_init(ACondVar, @LAttr);
     {$ELSE}
-    if PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
+    if PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
     begin
       {$IFDEF NEXTPAS_LINUX}
-      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSEIF defined(NEXTPAS_ANDROID)}
-      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSEIF defined(NEXTPAS_FREEBSD)}
-      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSE}
-      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
       {$ENDIF}
       if Result <> 0 then
         Exit;
@@ -290,7 +290,7 @@ function platform_sync_host_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
 begin
-  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @ADeadline) <> 0 then
+  if clock_gettime(PTHREAD_TIMEOUT_CLOCK_ID, @ADeadline) <> 0 then
     Exit(PLATFORM_ERR_INVALID);
   platform_posix_timespec_add_ns(ADeadline, ANanoseconds);
   Result := 0;
@@ -305,7 +305,7 @@ begin
   ARemainingNs := 0;
   if ADeadline = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @LNow) <> 0 then
+  if clock_gettime(PTHREAD_TIMEOUT_CLOCK_ID, @LNow) <> 0 then
     Exit(PLATFORM_ERR_INVALID);
   ARemainingNs := platform_posix_timespec_remaining_ns_u64(ADeadline, @LNow);
   Result := 0;
@@ -714,7 +714,7 @@ var
 begin
   if ATimeoutNs < 0 then
     LRet := syscall(
-      LINUX_SYSCALL_FUTEX,
+      syscall_nr_futex,
       PtrUInt(AAddr),
       PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
       PtrUInt(UInt32(AExpected)),
@@ -726,7 +726,7 @@ begin
     LTimeout.tv_sec := ATimeoutNs div 1000000000;
     LTimeout.tv_nsec := ATimeoutNs mod 1000000000;
     LRet := syscall(
-      LINUX_SYSCALL_FUTEX,
+      syscall_nr_futex,
       PtrUInt(AAddr),
       PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
       PtrUInt(UInt32(AExpected)),
@@ -746,7 +746,7 @@ var
   LRet: PtrInt;
 begin
   LRet := syscall(
-    LINUX_SYSCALL_FUTEX,
+    syscall_nr_futex,
     PtrUInt(AAddr),
     PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG),
     PtrUInt(ACount),
