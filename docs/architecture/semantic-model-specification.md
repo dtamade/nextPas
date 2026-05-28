@@ -528,6 +528,9 @@ candidate collection
   - receiver type 与 field truth 来自 imported `installed-source` unit 时继续保守 deferred，不把
     incomplete helper/RTL class layout truth 提前投影成 ordinary `sema.invalid-call-shape`；这条
     guard 用 `semantic-call-bindings-check` 的 focused harness 固定
+  - imported `installed-source` unit method body 中 bare implicit-self 命中的 known field
+    也继续保守 deferred；这条 guard 同样只用 `semantic-call-bindings-check` 的 focused harness 固定，
+    不用普通 sibling stage0 fixture 伪造 provenance
   - 同一条边界同样适用于已知 class property 被当成 call 使用的场景；例如
     `Worker.Value(1)` 在 `Value` 是 property 时也会失败为 `sema.invalid-call-shape`
   - direct property 边界也适用于 receiver type 与 property truth 来自 imported `project-source`

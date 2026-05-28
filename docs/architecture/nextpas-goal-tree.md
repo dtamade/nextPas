@@ -178,8 +178,12 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   official gate。
 - imported `project-source` unit method body 的 bare implicit-self known field invalid-call-shape
   已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self known field invalid-call-shape
+  继续 deferred，并由 semantic harness 固定防误报。
 - imported `project-source` unit method body 的 bare implicit-self known property invalid-call-shape
   已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self known property invalid-call-shape
+  继续 deferred，并由 semantic harness 固定防误报。
 - imported `project-source` unit method body 的 inherited bare implicit-self known field
   invalid-call-shape 已进入 official gate。
 - imported `project-source` unit method body 的 inherited bare implicit-self known property
@@ -236,8 +240,12 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   仍找不到 bare implicit-self member name 的场景。
 - `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中 known field
   被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中 known field 被 bare implicit-self 当作 callable
+  使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
 - `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中 known property
   被 bare implicit-self 当作 callable 使用的场景。
+- imported `installed-source` unit method body 中 known property 被 bare implicit-self 当作 callable
+  使用时继续 deferred，不提前发 `sema.invalid-call-shape`。
 - `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中沿 parent chain
   命中的 inherited known field 被 bare implicit-self 当作 callable 使用的场景。
 - `sema.invalid-call-shape` 已覆盖 imported `project-source` unit method body 中沿 parent chain
