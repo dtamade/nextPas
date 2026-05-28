@@ -532,6 +532,10 @@ candidate collection
   - receiver type 与 property truth 来自 imported `installed-source` unit 时也继续保守 deferred；
     这条 guard 与 installed-source field guard 一样，只用 `semantic-call-bindings-check` 的 focused
     harness 固定，不用普通 sibling stage0 fixture 伪造 provenance
+  - imported `project-source` unit method body 中沿 parent chain 命中的 inherited known property
+    也走同一条边界；例如 imported `TBaseWorker.Value` property 被
+    `TWorker = class(TBaseWorker)` 的 `procedure TWorker.Run; begin Value(1); end;`
+    当作 bare implicit-self callable 使用时，同样失败为 `sema.invalid-call-shape`
   - 当 member lookup 沿 `ParentTypeId` 在 root/source-backed class truth 中命中 inherited
     field/property，且该 member 不是 callable 时，同样失败为 `sema.invalid-call-shape`
   - 同一条 inherited field 边界也适用于 receiver type 与 parent field truth 来自 imported
