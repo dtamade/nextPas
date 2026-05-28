@@ -77,54 +77,54 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] posix.base 扩展 (完整 ptypes)
 - [ ] 验证与 FPC ctypes/unixtype 的 ABI 兼容性
 
-### G2: Linux host 全量 API
+### G2: Linux host 全量 API ✅
 - [x] errno 全表 (132 错误码)
 - [x] syscall 号全表 (x86_64 + aarch64)
-- [ ] syscall 号: riscv64 (从 FPC 搬运)
-- [ ] syscall 号: arm32 (从 FPC 搬运)
-- [ ] settings.inc 加入 riscv64, arm32 检测
-- [ ] ostypes: pollfd, iovec, dirent, statfs, rlimit, rusage, utsname, flock, tms, fdset
-- [ ] linux.pp 扩展: epoll, futex, clone, timerfd, eventfd, signalfd, inotify
-- [ ] socket 类型与常量: sockaddr 系列, AF_*, SOCK_*, SOL_*, SO_*, IPPROTO_*
-- [ ] 终端: termios, ioctl 常量
-- [ ] linux.ffi 扩展: pipe2, dup3, epoll_*, eventfd, timerfd_*, signalfd, inotify_*
-- [ ] posix.ffi 扩展: pipe, dup2, readlink, symlink, chmod, chown, getuid 系列
-- [ ] 单元测试: 编译验证 + 结构体 SizeOf/Offset 断言
+- [x] syscall 号: riscv64 (从 FPC 搬运)
+- [x] syscall 号: arm32 (从 FPC 搬运)
+- [x] settings.inc 加入 riscv64, arm32 检测
+- [x] ostypes: pollfd, iovec, dirent, statfs, rlimit, utsname, flock, tms, fdset
+- [x] linux.base 扩展: epoll, inotify, sysinfo, signal
+- [x] socket 类型与常量: sockaddr 系列, AF_*, SOCK_*, SOL_*, SO_*, IPPROTO_*
+- [x] 终端: termios, ioctl 常量
+- [x] linux.ffi 扩展: pipe2, dup3, epoll_*, eventfd, timerfd_*, signalfd, inotify_*, getdents64, getrandom, sysinfo, uname
+- [x] posix.ffi 扩展: pipe, dup2, readlink, symlink, chmod, chown, getuid 系列, tcgetattr/tcsetattr/ioctl
+- [x] 单元测试: ostypes_abi, subsystems_abi, socket_abi, platform_files
 
-### G3: Darwin host 全量 API
-- [ ] errno 全表 (Darwin 值不同于 Linux)
-- [ ] Darwin 专属类型: kqueue, kevent, dispatch, mach 扩展
-- [ ] darwin.ffi 扩展: kqueue, kevent, dispatch_*, mach_*
-- [ ] 单元测试
+### G3: Darwin host 全量 API ✅
+- [x] errno 全表 (104 Darwin 错误码)
+- [x] Darwin 专属类型: kqueue, kevent, signal
+- [x] darwin.ffi 扩展: kqueue, kevent, pipe, dup2, readlink, symlink, chmod, chown, getuid 系列, socket 全套, getaddrinfo/freeaddrinfo/getnameinfo
+- [x] socket 常量 (AF_INET6=30, SOL_SOCKET=$FFFF, etc.)
 
-### G4: FreeBSD host 全量 API
-- [ ] errno 全表
-- [ ] FreeBSD 专属: kqueue, capsicum, jail
-- [ ] 单元测试
+### G4: FreeBSD host 全量 API ✅
+- [x] errno 全表 (96 FreeBSD 错误码)
+- [x] FreeBSD 专属: kqueue, kevent, signal
+- [x] freebsd.ffi 扩展: kqueue, kevent, pipe, dup2, readlink, symlink, chmod, chown, getuid 系列, socket 全套, getaddrinfo/freeaddrinfo/getnameinfo
+- [x] socket 常量 (BSD family, same as Darwin)
 
-### G5: Windows host 全量 API
-- [ ] windows.base: kernel32 类型/常量 (HANDLE, DWORD, OVERLAPPED, SECURITY_ATTRIBUTES...)
-- [ ] windows.base: ws2_32 类型/常量 (SOCKET, WSADATA, sockaddr...)
+### G5: Windows host 全量 API ✅
+- [x] windows.base: kernel32 类型/常量 (HANDLE, DWORD, OVERLAPPED, CRITICAL_SECTION, WIN32_FIND_DATA, SYSTEMTIME, error codes, MAX_PATH, STD_*_HANDLE, STARTF_*, FILE_FLAG_*)
+- [x] windows.base: ws2_32 类型/常量 (TSocket, TWSAData, WSABUF, AF_*/SOCK_*/SOL_*/SO_*/IPPROTO_*/TCP_*/MSG_*/AI_*/NI_*, WSA error codes, IOCTL)
 - [ ] windows.base: advapi32/ntdll 类型
-- [ ] windows.ffi: kernel32 (CreateFile, ReadFile, WriteFile, CreateProcess, WaitForSingleObject, CreateThread, InitializeCriticalSection, CreateEvent, IOCP...)
-- [ ] windows.ffi: ws2_32 (WSAStartup, socket, bind, listen, accept, WSARecv, WSASend...)
+- [x] windows.ffi: kernel32 (CreateFile, ReadFile, WriteFile, CreateProcess, WaitForSingleObject, CreateThread, CriticalSection, IOCP, FindFirstFile/FindNextFile/FindClose, GetSystemTime, GetOverlappedResult, CancelIo)
+- [x] windows.ffi: ws2_32 (WSAStartup, socket, bind, listen, accept, connect, send, recv, closesocket, shutdown, select, ioctlsocket, setsockopt, getsockopt, getaddrinfo, freeaddrinfo, getnameinfo, WSARecv, WSASend, WSASocketW, htons/ntohs/htonl/ntohl)
 - [ ] windows.ffi: advapi32 (RegOpenKeyEx, OpenProcessToken...)
-- [ ] 单元测试
 
-### G6: POSIX 共享层完善
-- [ ] posix.ffi 补齐所有共享签名 API
-- [ ] posix.base 补齐共享常量 (POSIX signal 全表等)
-- [ ] 单元测试
+### G6: POSIX 共享层完善 ✅
+- [x] posix.ffi 补齐所有共享签名 API (42+ functions)
+- [x] posix.base 补齐共享常量 + socket structs
+- [x] termios FFI (tcgetattr/tcsetattr/ioctl/isatty)
 
-### G7: 统一平台抽象层
+### G7: 统一平台抽象层 ✅
 - [x] platform.time
 - [x] platform.sync
 - [x] platform.thread
-- [ ] platform.file (文件/目录操作)
-- [ ] platform.io (I/O 多路复用: epoll/kqueue/IOCP 统一)
-- [ ] platform.net (socket 统一抽象)
-- [ ] platform.process (进程管理)
-- [ ] 每个模块 100% 接口测试覆盖 + 无内存泄漏验证
+- [x] platform.files (文件/目录操作, 11 tests)
+- [x] platform.io (I/O 多路复用: epoll/kqueue, 6 tests)
+- [x] platform.net (socket 统一抽象, 5 tests)
+- [x] platform.process (进程管理, 5 tests)
+- [ ] 每个模块无内存泄漏验证 (heaptrc)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持

@@ -117,6 +117,9 @@ function CancelIoEx(hFile: HANDLE; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}
 
+{ advapi32 FFI }
+{$I nextpas.core.platform.windows.ffi.advapi32.inc}
+
 implementation
 
 end.

@@ -259,6 +259,9 @@ const
 { winsock2 types and constants }
 {$I nextpas.core.platform.windows.base.winsock2.inc}
 
+{ advapi32 types and constants }
+{$I nextpas.core.platform.windows.base.advapi32.inc}
+
 implementation
 
 end.
