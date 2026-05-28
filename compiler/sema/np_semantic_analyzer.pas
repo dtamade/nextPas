@@ -871,11 +871,9 @@ begin
           Result := Result + 's'
         else if (TypeName = 'boolean') or (TypeName = 'bool') then
           Result := Result + 'b'
-        else if (TypeChild <> nil) and
-          FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
+        else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
           Result := Result + 'r'
-        else if (TypeChild <> nil) and
-          FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
+        else if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
           Result := Result + 'p'
         else
           Result := Result + 'i';
@@ -925,9 +923,9 @@ begin
               Result := Result + 's'
             else if (SubstType = 'boolean') or (SubstType = 'bool') then
               Result := Result + 'b'
-            else if FModel.LookupConstValue(AArgTypes[P] + '$record', Dummy) then
+            else if TypeMetaIsRecord(AArgTypes[P]) then
               Result := Result + 'r'
-            else if FModel.LookupConstValue(AArgTypes[P] + '$size', Dummy) then
+            else if TypeMetaSize(AArgTypes[P]) > 0 then
               Result := Result + 'p'
             else
               Result := Result + 'i';
@@ -942,11 +940,9 @@ begin
             Result := Result + 's'
           else if (TypeName = 'boolean') or (TypeName = 'bool') then
             Result := Result + 'b'
-          else if (TypeChild <> nil) and
-            FModel.LookupConstValue(TypeChild.Text + '$record', Dummy) then
+          else if (TypeChild <> nil) and TypeMetaIsRecord(TypeChild.Text) then
             Result := Result + 'r'
-          else if (TypeChild <> nil) and
-            FModel.LookupConstValue(TypeChild.Text + '$size', Dummy) then
+          else if (TypeChild <> nil) and (TypeMetaSize(TypeChild.Text) > 0) then
             Result := Result + 'p'
           else
             Result := Result + 'i';
@@ -1839,9 +1835,9 @@ begin
       Exit('r');
     Exit('p');
   end;
-  if FModel.LookupConstValue(TypeName + '$record', Dummy) then
+  if TypeMetaIsRecord(TypeName) then
     Exit('r');
-  if FModel.LookupConstValue(TypeName + '$size', Dummy) then
+  if TypeMetaSize(TypeName) > 0 then
     Exit('p');
   Result := 'i';
 end;
