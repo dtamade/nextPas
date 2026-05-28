@@ -10,6 +10,12 @@
 
 ## Research Findings
 
+- Batch 217-218 default parameter 能力落地：member method overload resolution 从 exact ParamCount
+  match 改为 MinParamCount..ParamCount 范围检查；signature 比较改为 prefix match。
+- 影响面：`TSemanticSymbol` 新增 `MinParamCount` 字段，`MethodSymbolIdForExactClassTypeMember`
+  和 body matching fallback 两处修改。free-standing function 已有正确逻辑无需改动。
+- 测试覆盖：direct member call / multiple defaults / inherited method / implicit-self 四种场景。
+- Codex 审查建议下一步：visibility (private/protected/public) → implicit conversion。
 - Batch 214-216 闭合结论：installed-source unit body inherited implicit-self function-result
   系列最后 3 个 guards（arity / no-match / ambiguous）一次性完成，矩阵完整闭合。
 - 全部 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖所有场景。
