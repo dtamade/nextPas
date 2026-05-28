@@ -481,6 +481,62 @@ begin
   end;
 end;
 
+procedure TestShrinkToFit;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.Reserve(100);
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.PushBack(3);
+    Check(LD.GetCapacity > 10, 'large capacity');
+    LD.ShrinkToFit;
+    Check(LD.GetCapacity <= 16, 'shrunk');
+    CheckEqual(Int64(3), Int64(LD.Count), 'count preserved');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestTruncate;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.PushBack(3);
+    LD.PushBack(4);
+    LD.PushBack(5);
+    LD.Truncate(3);
+    CheckEqual(Int64(3), Int64(LD.Count), 'truncated');
+    CheckEqual(Int64(3), Int64(LD.Get(2)), 'last element');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestResize;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(1);
+    LD.PushBack(2);
+    LD.Resize(5, 99);
+    CheckEqual(Int64(5), Int64(LD.Count), 'resized up');
+    CheckEqual(Int64(1), Int64(LD.Get(0)), 'original[0]');
+    CheckEqual(Int64(99), Int64(LD.Get(2)), 'filled[2]');
+    CheckEqual(Int64(99), Int64(LD.Get(4)), 'filled[4]');
+  finally
+    LD.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -508,5 +564,8 @@ begin
   T.Run('TryRemoveAt', @TestTryRemoveAt);
   T.Run('ReserveExact', @TestReserveExact);
   T.Run('SplitOff', @TestSplitOff);
+  T.Run('ShrinkToFit', @TestShrinkToFit);
+  T.Run('Truncate', @TestTruncate);
+  T.Run('Resize', @TestResize);
   T.Summary;
 end.
