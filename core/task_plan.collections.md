@@ -95,6 +95,13 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Rename positional pointer/array extraction helpers to `RemoveCopyAt` / `RemoveArrayAt` and `SwapRemoveCopyAt` / `SwapRemoveArrayAt`.
 - [x] Keep key/value based `Remove(Key)` / `Remove(Value)` APIs unchanged.
 
+### Completed Micro Batch: PriorityQueue Push/Pop Naming
+
+- [x] Remove `IPriorityQueue<T>.Enqueue` / `Dequeue`.
+- [x] Add `Push`, `TryPop`, checked `Pop`, `TryPeek`, and checked `Peek`.
+- [x] Keep capacity semantics unchanged: `Reserve(aCapacity)` remains absolute capacity.
+- [x] Verify focused collections tests and full `make test`.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -136,7 +143,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - Array-like indexed APIs use two access tiers: checked `Get(Index)`/`Put(Index, Value)` that throw on invalid indexes, and explicitly unsafe `GetUnchecked`/`PutUnchecked` for performance-sensitive code. Do not add `TryGet` to the base array/indexed-access contract; callers that need a non-throwing branch should check `Count` before indexing.
 - Unsafe fast-path methods use `Unchecked` as one word, for example `GetUnchecked`, `PutUnchecked`, `ReadUnchecked`, and `SortUnchecked`. The copied `UnChecked` spellings have already been renamed in collections source; calls into `nextpas.core.mem.utils.CopyUnChecked` are outside collections ownership.
 - Naming cleanup must be done as complete mechanical batches rather than piecemeal edits: `UnChecked` -> `Unchecked`, `OverWrite` -> `Overwrite`, `FindIF`/`FindIFNot` -> `FindIf`/`FindIfNot`, `CountIF` -> `CountIf`, `ReplaceIF` -> `ReplaceIf`, `SizeUint` -> `SizeUInt`, and spacing such as `aIndex:SizeUInt` -> `aIndex: SizeUInt`. Update interface declarations, implementation methods, docs/comments, factories/tests/examples that reference the public names, and then run compile verification.
-- Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Final indexed sequence APIs use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for positional extraction. Do not keep `Remove(Index)` as a public indexed-extraction synonym: the framework is unreleased and has no compatibility burden, so stale duplicate names should be removed during interface tuning. Value-based `Remove(Value)` belongs only to containers that explicitly support value lookup/removal semantics.
+- Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Indexed sequence APIs use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for explicit positional extraction. `Vec.Remove(Index)` may remain as a container-specific indexed extraction API when documented clearly; value-based `Remove(Value)` belongs only to containers that explicitly support value lookup/removal semantics.
 - `Vec` exposes `TryRemoveAt` and `TrySwapRemoveAt` because indexed extraction is a core contiguous-vector operation. `Deque` / `VecDeque` should not receive a symmetric `TrySwapRemoveAt` in this batch: their ring-buffer indexing semantics are weaker, and adding the API would imply a stronger Vec-like positional contract than we currently want.
 
 ## Verification Commands

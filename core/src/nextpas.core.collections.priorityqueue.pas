@@ -56,9 +56,11 @@ type
     destructor Destroy; override;
 
     { IPriorityQueue<T> }
-    procedure Enqueue(const aItem: T);
-    function Dequeue(out aItem: T): Boolean;
-    function Peek(out aItem: T): Boolean;
+    procedure Push(const aItem: T);
+    function TryPop(out aItem: T): Boolean;
+    function Pop: T;
+    function TryPeek(out aItem: T): Boolean;
+    function Peek: T;
     function GetCapacity: SizeUInt;
     procedure Reserve(aCapacity: SizeUInt);
 
@@ -161,7 +163,7 @@ begin
   end;
 end;
 
-procedure TPriorityQueue.Enqueue(const aItem: T);
+procedure TPriorityQueue.Push(const aItem: T);
 begin
   if FCount >= FCapacity then
     Grow;
@@ -170,7 +172,7 @@ begin
   SiftUp(FCount - 1);
 end;
 
-function TPriorityQueue.Dequeue(out aItem: T): Boolean;
+function TPriorityQueue.TryPop(out aItem: T): Boolean;
 begin
   Result := FCount > 0;
   if not Result then
@@ -184,11 +186,23 @@ begin
   end;
 end;
 
-function TPriorityQueue.Peek(out aItem: T): Boolean;
+function TPriorityQueue.Pop: T;
+begin
+  if not TryPop(Result) then
+    raise EEmptyCollection.Create('TPriorityQueue.Pop: collection is empty');
+end;
+
+function TPriorityQueue.TryPeek(out aItem: T): Boolean;
 begin
   Result := FCount > 0;
   if Result then
     aItem := FItems[0];
+end;
+
+function TPriorityQueue.Peek: T;
+begin
+  if not TryPeek(Result) then
+    raise EEmptyCollection.Create('TPriorityQueue.Peek: collection is empty');
 end;
 
 function TPriorityQueue.GetCount: SizeUInt;
@@ -323,7 +337,7 @@ begin
   LSrc := PT(aSrc);
   for i := 0 to aElementCount - 1 do
   begin
-    Enqueue(LSrc^);
+    Push(LSrc^);
     Inc(LSrc);
   end;
 end;

@@ -25,14 +25,20 @@ type
    *}
   generic IPriorityQueue<T> = interface(specialize IGenericCollection<T>)
   ['{F8E9D7C6-B5A4-4321-9876-543210FEDCBA}']
-    {** Enqueue - 入队 O(log n) *}
-    procedure Enqueue(const aItem: T);
+    {** Push - 插入元素 O(log n) *}
+    procedure Push(const aItem: T);
 
-    {** Dequeue - 出队并返回优先级最高的元素 O(log n) *}
-    function Dequeue(out aItem: T): Boolean;
+    {** TryPop - 尝试移除并返回优先级最高的元素 O(log n) *}
+    function TryPop(out aItem: T): Boolean;
 
-    {** Peek - 查看优先级最高的元素（不移除）O(1) *}
-    function Peek(out aItem: T): Boolean;
+    {** Pop - 移除并返回优先级最高的元素 O(log n)，空队列抛异常 *}
+    function Pop: T;
+
+    {** TryPeek - 尝试查看优先级最高的元素（不移除）O(1) *}
+    function TryPeek(out aItem: T): Boolean;
+
+    {** Peek - 查看优先级最高的元素（不移除）O(1)，空队列抛异常 *}
+    function Peek: T;
 
     {** GetCapacity - 获取当前容量 *}
     function GetCapacity: SizeUInt;

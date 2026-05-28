@@ -66,11 +66,14 @@
 - Scanned the current collections source and confirmed the earlier naming cleanups are already done: no remaining collections-owned `UnChecked`, `OverWrite`, `FindIF`, `CountIF`, `ReplaceIF`, or `SizeUint` symbols remain. The remaining `CopyUnChecked` calls belong to `nextpas.core.mem.utils`, outside this collections-only batch.
 - Started the `IArray.Ensure` contract-doc batch. Current `TArray.Ensure` and `TVec.Ensure` call `Resize` when `Count` is smaller, so the public `IArray<T>.Ensure` docs now describe logical count growth instead of pure capacity reservation. No implementation or interface name changed in this batch.
 - Verified the `IArray.Ensure` contract-doc batch with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
+- Continued interface-first review and corrected the stored Vec extraction decision: `Vec.Remove(Index)` may remain as indexed extraction when documented in Vec context; `RemoveAt` remains the explicit positional extraction name.
+- Removed `IPriorityQueue<T>.Enqueue` / `Dequeue` and aligned PriorityQueue with the framework `Push` / `TryPop` / checked `Pop` / `TryPeek` / checked `Peek` vocabulary. Capacity behavior and factory shape were left unchanged.
+- Verified the PriorityQueue push/pop naming batch with `git diff --check`, focused `test_facade` / `test_queue`, and full `make test`; all completed with zero failures.
 
 ## Next
 
-- Continue the Vec/Array naming cleanup implementation one batch at a time.
-- Next likely interface-tuning batch: decide whether `IArray.Ensure` should ultimately be renamed/re-owned, or whether a separate indexed-sequence/growable-capacity interface should absorb clearer capacity APIs.
+- Continue container-family interface review one batch at a time.
+- Next likely interface-tuning batch: continue Map family `Get` / `Put` / `TryGetValue` / `AddOrAssign` alignment or review remaining Queue/Deque historical aliases.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.
