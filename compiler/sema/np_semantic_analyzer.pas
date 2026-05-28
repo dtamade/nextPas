@@ -291,6 +291,8 @@ type
       const AWhereSpec: string);
     procedure ProcessInterfaceMethods(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
+    procedure VerifyInterfaceImplementation(const AClassTypeId: LongInt;
+      const AInterfaceList: string; const AOwnerUnitId: string);
     function CheckSingleConstraint(const AArgType: string;
       const AConstraint: string): Boolean;
     procedure RegisterStructuredGenericParent(const ATypeId: LongInt;
@@ -4161,6 +4163,65 @@ begin
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
+procedure TSemanticAnalyzer.VerifyInterfaceImplementation(
+  const AClassTypeId: LongInt; const AInterfaceList: string;
+  const AOwnerUnitId: string);
+var
+  I, J, K: LongInt;
+  IntfName, ClsN, MethN: string;
+  IntfTypeId: LongInt;
+  Symbol: TSemanticSymbol;
+  QualIntfMethod: string;
+  Found: Boolean;
+begin
+  ClsN := FModel.TypeAt(AClassTypeId - 1).Name;
+  I := 1;
+  while I <= Length(AInterfaceList) do
+  begin
+    J := I;
+    while (J <= Length(AInterfaceList)) and (AInterfaceList[J] <> ',') do
+      Inc(J);
+    IntfName := Trim(Copy(AInterfaceList, I, J - I));
+    I := J + 1;
+    if IntfName = '' then
+      Continue;
+    IntfTypeId := 0;
+    for K := 0 to FModel.TypeCount - 1 do
+      if SameText(FModel.TypeAt(K).Name, IntfName) then
+      begin
+        IntfTypeId := FModel.TypeAt(K).TypeId;
+        Break;
+      end;
+    if IntfTypeId <= 0 then
+      Continue;
+    for K := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(K);
+      if (Symbol.TypeId = IntfTypeId) and SameText(Symbol.Kind, 'method') then
+      begin
+        QualIntfMethod := IntfName + '.';
+        if Pos(QualIntfMethod, Symbol.Name) = 1 then
+        begin
+          MethN := Copy(Symbol.Name, Length(QualIntfMethod) + 1, MaxInt);
+          Found := False;
+          for J := 0 to FModel.SymbolCount - 1 do
+            if SameText(FModel.SymbolAt(J).Name, ClsN + '.' + MethN) and
+              (SameText(FModel.SymbolAt(J).Kind, 'method') or
+               SameText(FModel.SymbolAt(J).Kind, 'constructor')) then
+            begin
+              Found := True;
+              Break;
+            end;
+          if not Found then
+            FDiagnostics.EmitError('sema.missing-interface-method', 'sema',
+              FRootFileId, 0,
+              ClsN + ' does not implement ' + IntfName + '.' + MethN);
+        end;
+      end;
+    end;
+  end;
+end;
+
 function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
@@ -4750,7 +4811,11 @@ begin
         if InterfaceList <> '' then
           FModel.AddStringConstValue(Child.Text + '$interfaces', InterfaceList);
         if not SameText(TypeChild.Text, 'interface') then
-          ProcessClassFields(TypeChild, AOwnerUnitId, TypeId)
+        begin
+          ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
+          if InterfaceList <> '' then
+            VerifyInterfaceImplementation(TypeId, InterfaceList, AOwnerUnitId);
+        end
         else
           ProcessInterfaceMethods(TypeChild, AOwnerUnitId, TypeId);
       end
