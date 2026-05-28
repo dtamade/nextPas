@@ -1768,8 +1768,9 @@ begin
       begin
         Inc(SymbolMatchCount);
         SymbolId := Symbol.SymbolId;
-        if AHasArgSignature and
-          SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature) then
+        if (Symbol.ParamSignature = '') or
+          (AHasArgSignature and
+           SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature)) then
         begin
           Inc(SignatureMatchCount);
           SignatureSymbolId := Symbol.SymbolId;
@@ -4305,7 +4306,7 @@ begin
         'method', AOwnerUnitId, AInstanceTypeId, Symbol.ByteOffset);
       FModel.SetSymbolParamCount(NewSymbolId, Symbol.ParamCount);
       FModel.SetSymbolMinParamCount(NewSymbolId, Symbol.MinParamCount);
-      FModel.SetSymbolParamSignature(NewSymbolId, Symbol.ParamSignature);
+      FModel.SetSymbolParamSignature(NewSymbolId, '');
     end;
   end;
   FModel.SetTypeParent(AInstanceTypeId,
