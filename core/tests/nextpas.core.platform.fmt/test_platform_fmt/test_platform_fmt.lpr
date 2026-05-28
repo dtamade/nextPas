@@ -67,6 +67,34 @@ begin
   Check(Buf[0] = '1', 'truncated start');
 end;
 
+procedure TestFmtBufBasic;
+var Buf: array[0..255] of AnsiChar;
+begin
+  platform_fmt_buf('line %d col %d', [42, 7], @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'line 42 col 7'), 'line 42 col 7');
+end;
+
+procedure TestFmtBufString;
+var Buf: array[0..255] of AnsiChar;
+begin
+  platform_fmt_buf('file: %s', [PAnsiChar('test.pas')], @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'file: test.pas'), 'file: test.pas');
+end;
+
+procedure TestFmtBufHex;
+var Buf: array[0..255] of AnsiChar;
+begin
+  platform_fmt_buf('addr: %x', [$FF], @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'addr: FF'), 'addr: FF');
+end;
+
+procedure TestFmtBufEmpty;
+var Buf: array[0..31] of AnsiChar;
+begin
+  platform_fmt_buf('', [], @Buf[0], 32);
+  Check(BufEq(@Buf[0], ''), 'empty fmt');
+end;
+
 procedure TestNilBuffer;
 begin
   Check(platform_fmt_int(42, nil, 0) = -1, 'nil returns -1');
@@ -81,6 +109,10 @@ begin
   T.Run('uint max', @TestUintMax);
   T.Run('hex', @TestHex);
   T.Run('small buffer', @TestSmallBuffer);
+  T.Run('fmt_buf basic', @TestFmtBufBasic);
+  T.Run('fmt_buf string', @TestFmtBufString);
+  T.Run('fmt_buf hex', @TestFmtBufHex);
+  T.Run('fmt_buf empty', @TestFmtBufEmpty);
   T.Run('nil buffer', @TestNilBuffer);
   T.Summary;
 end.

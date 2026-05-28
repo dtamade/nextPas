@@ -40,6 +40,11 @@ implementation
 uses
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi;
+{$ENDIF}
 
 function IsSep(C: AnsiChar): Boolean; inline;
 begin
@@ -430,10 +435,20 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 function platform_path_resolve(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LLen: DWORD;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  Result := -1; // TODO: GetFullPathNameA
+  LLen := GetFullPathNameA(APath, DWORD(ABufLen), ABuf, nil);
+  if LLen = 0 then
+    Exit(-1);
+  if Int32(LLen) >= ABufLen then
+  begin
+    ABuf[ABufLen - 1] := #0;
+    Exit(Int32(LLen));
+  end;
+  Result := Int32(LLen);
 end;
 {$ENDIF}
 

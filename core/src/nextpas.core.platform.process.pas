@@ -229,10 +229,57 @@ begin Result := Int32(AProc.Pid); end;
 function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
   out APipes: TPlatformProcessPipes): Int32;
+var
+  LSI: STARTUPINFOA;
+  LPI: PROCESS_INFORMATION;
+  LCmd: AnsiString;
+  LStdinRd, LStdinWr, LStdoutRd, LStdoutWr, LStderrRd, LStderrWr: HANDLE;
+  LSA: SECURITY_ATTRIBUTES;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   FillChar(APipes, SizeOf(APipes), $FF);
-  Result := -1; // not yet implemented on Windows
+  FillChar(LSA, SizeOf(LSA), 0);
+  LSA.nLength := SizeOf(LSA);
+  LSA.bInheritHandle := True;
+
+  if not CreatePipe(@LStdinRd, @LStdinWr, @LSA, 0) then Exit(Int32(GetLastError));
+  if not CreatePipe(@LStdoutRd, @LStdoutWr, @LSA, 0) then
+  begin CloseHandle(LStdinRd); CloseHandle(LStdinWr); Exit(Int32(GetLastError)); end;
+  if not CreatePipe(@LStderrRd, @LStderrWr, @LSA, 0) then
+  begin CloseHandle(LStdinRd); CloseHandle(LStdinWr); CloseHandle(LStdoutRd); CloseHandle(LStdoutWr); Exit(Int32(GetLastError)); end;
+
+  SetHandleInformation(LStdinWr, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(LStdoutRd, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(LStderrRd, HANDLE_FLAG_INHERIT, 0);
+
+  FillChar(LSI, SizeOf(LSI), 0);
+  LSI.cb := SizeOf(LSI);
+  LSI.dwFlags := STARTF_USESTDHANDLES;
+  LSI.hStdInput := LStdinRd;
+  LSI.hStdOutput := LStdoutWr;
+  LSI.hStdError := LStderrWr;
+  FillChar(LPI, SizeOf(LPI), 0);
+  LCmd := BuildCmdLine(APath, AArgv);
+
+  if not CreateProcessA(nil, @LCmd[1], nil, nil, True, 0, nil, nil, @LSI, @LPI) then
+  begin
+    CloseHandle(LStdinRd); CloseHandle(LStdinWr);
+    CloseHandle(LStdoutRd); CloseHandle(LStdoutWr);
+    CloseHandle(LStderrRd); CloseHandle(LStderrWr);
+    Exit(Int32(GetLastError));
+  end;
+
+  CloseHandle(LStdinRd);
+  CloseHandle(LStdoutWr);
+  CloseHandle(LStderrWr);
+  CloseHandle(HANDLE(LPI.hThread));
+
+  AProc.ProcessHandle := PtrUInt(LPI.hProcess);
+  AProc.Pid := LPI.dwProcessId;
+  APipes.StdinWrite := Int32(PtrUInt(LStdinWr));
+  APipes.StdoutRead := Int32(PtrUInt(LStdoutRd));
+  APipes.StderrRead := Int32(PtrUInt(LStderrRd));
+  Result := 0;
 end;
 {$ENDIF}
 
