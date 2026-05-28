@@ -128,39 +128,39 @@ end;
 procedure TPriorityQueue.SiftUp(aIndex: SizeUInt);
 var
   LParentIdx: SizeUInt;
+  LItem: T;
 begin
+  LItem := FItems[aIndex];
   while aIndex > 0 do
   begin
-    LParentIdx := (aIndex - 1) div 2;
-    if FComparer(FItems[aIndex], FItems[LParentIdx], nil) >= 0 then
+    LParentIdx := (aIndex - 1) shr 1;
+    if FComparer(LItem, FItems[LParentIdx], nil) >= 0 then
       Break;
-    Swap(aIndex, LParentIdx);
+    FItems[aIndex] := FItems[LParentIdx];
     aIndex := LParentIdx;
   end;
+  FItems[aIndex] := LItem;
 end;
 
 procedure TPriorityQueue.SiftDown(aIndex: SizeUInt);
 var
-  LLeftIdx, LRightIdx, LSmallestIdx: SizeUInt;
+  LChild, LRight: SizeUInt;
+  LItem: T;
 begin
+  LItem := FItems[aIndex];
   while True do
   begin
-    LSmallestIdx := aIndex;
-    LLeftIdx := 2 * aIndex + 1;
-    LRightIdx := 2 * aIndex + 2;
-
-    if (LLeftIdx < FCount) and (FComparer(FItems[LLeftIdx], FItems[LSmallestIdx], nil) < 0) then
-      LSmallestIdx := LLeftIdx;
-
-    if (LRightIdx < FCount) and (FComparer(FItems[LRightIdx], FItems[LSmallestIdx], nil) < 0) then
-      LSmallestIdx := LRightIdx;
-
-    if LSmallestIdx = aIndex then
+    LChild := 2 * aIndex + 1;
+    if LChild >= FCount then Break;
+    LRight := LChild + 1;
+    if (LRight < FCount) and (FComparer(FItems[LRight], FItems[LChild], nil) < 0) then
+      LChild := LRight;
+    if FComparer(LItem, FItems[LChild], nil) <= 0 then
       Break;
-
-    Swap(aIndex, LSmallestIdx);
-    aIndex := LSmallestIdx;
+    FItems[aIndex] := FItems[LChild];
+    aIndex := LChild;
   end;
+  FItems[aIndex] := LItem;
 end;
 
 procedure TPriorityQueue.Push(const aItem: T);
