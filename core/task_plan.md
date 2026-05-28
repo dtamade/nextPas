@@ -9,19 +9,17 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 15 is merged to `main@6d3d17f` and post-merge
-  verification passed. The temporary worktree and feature branch
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
-  / `codex/platform-ffi-raw-boundary` have been removed.
+- Current status: Wave 16 is active from `main@7ada8f3` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-api-names`
+  on branch `codex/platform-ffi-raw-api-names`.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
 - Last closed wave: Platform Host ABI Completeness Wave 15 on `main@6d3d17f`.
-- Active correction: Wave 15 reverses the earlier "host FFI helper projection"
-  direction. Host/shared `.ffi` units are raw external ABI declaration owners
-  only. All inline helper/projection/wrapper logic must move into the unified
-  platform function layers such as `platform.time`, `platform.sync`, and
-  `platform.thread`, or wait for a future unified function layer such as
-  `platform.file`, `platform.path`, `platform.env`, or `platform.process`.
+- Active correction: Wave 16 fixes a raw FFI declaration-name regression left by
+  Wave 13/14 and not fully corrected by Wave 15. Host ownership is expressed by
+  the unit path (`linux.ffi`, `android.ffi`, `darwin.ffi`, etc.), not by
+  inventing Pascal identifiers such as `linux_syscall`, `android_syscall`,
+  `darwin_stat`, or `freebsd_sigaction` inside `.ffi`.
 
 ## Architecture Rules
 
@@ -33,6 +31,11 @@ the integration boundary.
   contain `inline` helper/projection/wrapper functions, synthetic convenience
   APIs, errno mapping, timeout arithmetic, allocation/state wrappers, or public
   platform semantics.
+- Raw FFI declaration identifiers should mirror the imported C/FPC API name as
+  closely as Pascal syntax allows. External symbol aliases such as
+  `external 'c' name 'stat$INODE64'` are valid when the symbol cannot be spelled
+  directly as a Pascal identifier, but the Pascal identifier must not gain a
+  synthetic host prefix.
 - `platform.time`, `platform.sync`, and `platform.thread` are unified platform
   function layers. They directly consume host/shared `base` + `ffi` raw APIs and
   own the cross-platform semantic wrapping for their domain.
@@ -58,6 +61,35 @@ the integration boundary.
 - Runtime behavior tests belong to unified nextPas public contracts only.
 
 ## Current Phase
+
+### Wave 16: raw FFI declaration-name correction
+
+Status: active in worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-api-names`;
+implementation and verification pending.
+
+- [x] Open isolated worktree from latest `main@7ada8f3`.
+- [x] Reconfirm user rule: `.ffi` files contain raw API declarations; the host
+  owner is the unit, not a synthetic Pascal identifier prefix.
+- [x] Add a narrow guard rejecting host-prefixed raw FFI declaration names in
+  `nextpas.core.platform*.ffi.pas`.
+- [x] Rename raw external declarations to C/FPC-like names and update unified
+  platform function consumers.
+- [x] Update only the required design rule so future FFI imports do not repeat
+  synthetic host prefixes.
+- [x] Run minimal code/compile checks.
+- [ ] Commit, merge, and clean the temporary
+  worktree.
+
+#### Wave 16 Verification Boundary
+
+- This is a declaration-name correction, not a runtime proof of OS APIs.
+- FPC source remains the authority for raw ABI definitions. This wave does not
+  add source-evidence documentation gates.
+- Minimal checks completed: `git diff --check`, production `.ffi` host-prefix
+  raw declaration scan, `test_platform_ffi_owner_boundary`,
+  `test_platform_simulated_host_compile_matrix`, `test_platform_thread`, and
+  `test_platform_sync`.
 
 ### Wave 15: FFI raw-only boundary correction
 

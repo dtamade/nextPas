@@ -175,8 +175,17 @@ procedure CheckPosixHostFfiTokens(
   AHostName,
   AHostPrefix: string);
 begin
-  CheckTokenPresent(ASource, AHostPrefix + '_errno_location',
-    AHostName + ' ffi must own errno binding');
+  if AHostPrefix = 'android' then
+    CheckTokenPresent(ASource, 'function __errno',
+      AHostName + ' ffi must own raw __errno binding')
+  else if (AHostPrefix = 'darwin') or (AHostPrefix = 'freebsd') then
+    CheckTokenPresent(ASource, 'function __error',
+      AHostName + ' ffi must own raw __error binding')
+  else
+    CheckTokenPresent(ASource, 'function __errno_location',
+      AHostName + ' ffi must own raw __errno_location binding');
+  CheckTokenAbsent(ASource, 'function ' + AHostPrefix + '_',
+    AHostName + ' ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(ASource, AHostPrefix + '_clock_monotonic_ns_u64',
     AHostName + ' ffi must not expose platform clock monotonic helper');
   CheckTokenAbsent(ASource, AHostPrefix + '_clock_realtime_ns_u64',
@@ -246,8 +255,10 @@ begin
     'Linux ffi must not expose unified-looking platform_pthread helper names');
   CheckTokenAbsent(LLinuxFfi, 'function platform_clock_',
     'Linux ffi must not expose unified-looking platform_clock helper names');
-  CheckTokenPresent(LLinuxFfi, 'linux_syscall',
+  CheckTokenPresent(LLinuxFfi, 'function syscall',
     'Linux ffi must own syscall binding');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_',
+    'Linux ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(LLinuxFfi, 'linux_futex_wait_i32',
     'Linux ffi must not own futex wait helper');
   CheckTokenPresent(LLinuxFfi, 'gettid',

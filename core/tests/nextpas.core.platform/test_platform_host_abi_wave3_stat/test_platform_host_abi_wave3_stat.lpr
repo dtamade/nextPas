@@ -160,8 +160,10 @@ begin
     'linux.base must own AT_EMPTY_PATH');
   CheckTokenPresent(LLinuxBase, 'linux_syscall_statx',
     'linux.base must own Linux statx syscall number token');
-  CheckTokenPresent(LLinuxFfi, 'function linux_syscall',
+  CheckTokenPresent(LLinuxFfi, 'function syscall',
     'linux.ffi must own raw syscall binding for statx');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_syscall',
+    'linux.ffi raw syscall declaration must not repeat the host prefix');
   CheckTokenAbsent(LLinuxFfi, 'function linux_statx',
     'linux.ffi must not expose Linux statx syscall helper');
   CheckTokenAbsent(LLinuxFfi, 'function linux_statx_path_basic',

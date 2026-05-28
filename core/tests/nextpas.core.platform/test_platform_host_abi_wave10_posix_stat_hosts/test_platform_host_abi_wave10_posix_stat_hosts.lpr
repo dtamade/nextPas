@@ -152,12 +152,14 @@ begin
   CheckTokenPresent(LDarwinBase, 'st_qspare',
     'darwin.base must preserve Darwin spare fields');
 
-  CheckTokenPresent(LDarwinFfi, 'function darwin_stat',
+  CheckTokenPresent(LDarwinFfi, 'function stat',
     'darwin.ffi must own Darwin stat binding');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_lstat',
+  CheckTokenPresent(LDarwinFfi, 'function lstat',
     'darwin.ffi must own Darwin lstat binding');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_fstat',
+  CheckTokenPresent(LDarwinFfi, 'function fstat',
     'darwin.ffi must own Darwin fstat binding');
+  CheckTokenAbsent(LDarwinFfi, 'function darwin_',
+    'darwin.ffi raw declarations must not repeat the host prefix');
   CheckTokenPresent(LDarwinFfi, 'name ''stat$inode64''',
     'darwin.ffi must use Darwin stat$INODE64 symbol');
   CheckTokenPresent(LDarwinFfi, 'name ''lstat$inode64''',
@@ -197,12 +199,14 @@ begin
   CheckTokenPresent(LFreeBSDBase, 'st_spare',
     'freebsd.base must preserve FreeBSD spare fields');
 
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_stat',
+  CheckTokenPresent(LFreeBSDFfi, 'function stat',
     'freebsd.ffi must own FreeBSD stat binding');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_lstat',
+  CheckTokenPresent(LFreeBSDFfi, 'function lstat',
     'freebsd.ffi must own FreeBSD lstat binding');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_fstat',
+  CheckTokenPresent(LFreeBSDFfi, 'function fstat',
     'freebsd.ffi must own FreeBSD fstat binding');
+  CheckTokenAbsent(LFreeBSDFfi, 'function freebsd_',
+    'freebsd.ffi raw declarations must not repeat the host prefix');
   CheckTokenPresent(LFreeBSDFfi, 'name ''stat''',
     'freebsd.ffi must use FreeBSD stat symbol');
   CheckTokenPresent(LFreeBSDFfi, 'name ''lstat''',
@@ -246,8 +250,10 @@ begin
   CheckTokenPresent(LAndroidBase, 'android_syscall_fstat',
     'android.base must own Android fstat syscall number');
 
-  CheckTokenPresent(LAndroidFfi, 'function android_syscall',
+  CheckTokenPresent(LAndroidFfi, 'function syscall',
     'android.ffi must own Android syscall binding');
+  CheckTokenAbsent(LAndroidFfi, 'function android_',
+    'android.ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(LAndroidFfi, 'function android_newfstatat',
     'android.ffi must not expose Android newfstatat helper');
   CheckTokenAbsent(LAndroidFfi, 'function android_fstat',

@@ -921,9 +921,11 @@ record 消费这些 carrier type，把宿主原生对齐要求继承进 nextPas 
 而不是在实现层保留 `FAlign: PtrUInt`、`FAlign: UInt64` 这类近似占位。
 
 不仅 errno token 要按宿主 owner，下层“当前 errno storage 在哪里”也属于 host ABI truth。
-外部 errno location 绑定应放进 `linux/darwin/android/freebsd/unix` 等 host ffi owner 单元，并优先使用
-宿主前缀命名，例如 `linux_errno_location`。读取 errno 当前值、映射 public result、retry
-决策等逻辑不属于 `.ffi`，应留在 `platform.thread`、`platform.sync` 等统一 platform 函数层。
+外部 errno location 绑定应放进 `linux/darwin/android/freebsd/unix` 等 host ffi owner 单元，但 raw
+declaration 的 Pascal 标识符应尽量贴近 C/FPC API 名，例如 `__errno_location`、`__errno` 或
+`__error`。host owner 已经由 unit 路径表达，不要再发明 `linux_errno_location` 这类宿主前缀名。
+读取 errno 当前值、映射 public result、retry 决策等逻辑不属于 `.ffi`，应留在
+`platform.thread`、`platform.sync` 等统一 platform 函数层。
 
 为了验证这些宿主分支不会只在 Linux 主机上“看起来没问题”，platform 层允许有限的
 **test-only simulated host selection**：`nextpas.core.settings.inc` 可以识别

@@ -132,12 +132,18 @@ begin
   CheckTokenPresent(LLinuxBase, 'st_ctime_nsec',
     'linux.base must preserve Linux stat ctime nanosecond field');
 
-  CheckTokenPresent(LLinuxFfi, 'function linux_xstat',
+  CheckTokenPresent(LLinuxFfi, 'function __xstat',
     'linux.ffi must own __xstat binding');
-  CheckTokenPresent(LLinuxFfi, 'function linux_lxstat',
+  CheckTokenPresent(LLinuxFfi, 'function __lxstat',
     'linux.ffi must own __lxstat binding');
-  CheckTokenPresent(LLinuxFfi, 'function linux_fxstat',
+  CheckTokenPresent(LLinuxFfi, 'function __fxstat',
     'linux.ffi must own __fxstat binding');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_xstat',
+    'linux.ffi __xstat declaration must not repeat the host prefix');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_lxstat',
+    'linux.ffi __lxstat declaration must not repeat the host prefix');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_fxstat',
+    'linux.ffi __fxstat declaration must not repeat the host prefix');
   CheckTokenAbsent(LLinuxFfi, 'function linux_stat_path',
     'linux.ffi must not expose Linux stat path helper');
   CheckTokenAbsent(LLinuxFfi, 'function linux_lstat_path',

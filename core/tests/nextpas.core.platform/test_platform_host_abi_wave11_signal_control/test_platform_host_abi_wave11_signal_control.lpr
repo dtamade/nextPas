@@ -190,8 +190,10 @@ begin
     'linux.base must own Linux rt_sigaction syscall number');
   CheckTokenPresent(LLinuxBase, 'linux_syscall_rt_sigprocmask',
     'linux.base must own Linux rt_sigprocmask syscall number');
-  CheckTokenPresent(LLinuxFfi, 'function linux_syscall',
+  CheckTokenPresent(LLinuxFfi, 'function syscall',
     'linux.ffi must own raw syscall binding for Linux signal control');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_syscall',
+    'linux.ffi raw syscall declaration must not repeat the host prefix');
   CheckTokenAbsent(LLinuxFfi, 'function linux_rt_sigaction',
     'linux.ffi must not expose Linux rt_sigaction syscall projection helper');
   CheckTokenAbsent(LLinuxFfi, 'function linux_rt_sigprocmask',
@@ -202,8 +204,10 @@ begin
     'android.base must own Android rt_sigaction syscall number');
   CheckTokenPresent(LAndroidBase, 'android_syscall_rt_sigprocmask',
     'android.base must own Android rt_sigprocmask syscall number');
-  CheckTokenPresent(LAndroidFfi, 'function android_syscall',
+  CheckTokenPresent(LAndroidFfi, 'function syscall',
     'android.ffi must own raw syscall binding for Android signal control');
+  CheckTokenAbsent(LAndroidFfi, 'function android_',
+    'android.ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(LAndroidFfi, 'function android_rt_sigaction',
     'android.ffi must not expose Android rt_sigaction syscall projection helper');
   CheckTokenAbsent(LAndroidFfi, 'function android_rt_sigprocmask',
@@ -223,24 +227,28 @@ begin
   LFreeBSDFfi := ReadSourceFile(ResolveRequiredPath(FREEBSD_FFI_PATH_FROM_TEST, FREEBSD_FFI_PATH_FROM_ROOT, 'freebsd ffi must exist'));
 
   CheckSignalBaseTokens(LDarwinBase, 'Darwin');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_sigaction',
+  CheckTokenPresent(LDarwinFfi, 'function sigaction',
     'darwin.ffi must own Darwin sigaction libc binding');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_sigprocmask',
+  CheckTokenPresent(LDarwinFfi, 'function sigprocmask',
     'darwin.ffi must own Darwin sigprocmask libc binding');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_pthread_sigmask',
+  CheckTokenPresent(LDarwinFfi, 'function pthread_sigmask',
     'darwin.ffi must own Darwin pthread_sigmask binding');
+  CheckTokenAbsent(LDarwinFfi, 'function darwin_',
+    'darwin.ffi raw declarations must not repeat the host prefix');
   CheckTokenPresent(LDarwinFfi, 'external ''c'' name ''pthread_sigmask''',
     'darwin.ffi must mirror FPC Darwin pthread_sigmask libc binding');
   CheckTokenPresent(LDarwinFfi, 'external ''c'' name ''pthread_sigmask''',
     'darwin.ffi must follow FPC Darwin pthread_sigmask libc binding');
 
   CheckSignalBaseTokens(LFreeBSDBase, 'FreeBSD');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_sigaction',
+  CheckTokenPresent(LFreeBSDFfi, 'function sigaction',
     'freebsd.ffi must own FreeBSD sigaction libc binding');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_sigprocmask',
+  CheckTokenPresent(LFreeBSDFfi, 'function sigprocmask',
     'freebsd.ffi must own FreeBSD sigprocmask libc binding');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_pthread_sigmask',
+  CheckTokenPresent(LFreeBSDFfi, 'function pthread_sigmask',
     'freebsd.ffi must own FreeBSD pthread_sigmask binding');
+  CheckTokenAbsent(LFreeBSDFfi, 'function freebsd_',
+    'freebsd.ffi raw declarations must not repeat the host prefix');
 end;
 
 procedure TestGenericUnixSignalControlStaysConservative;
@@ -253,10 +261,12 @@ begin
 
   CheckTokenPresent(LUnixBase, 'tplatformunixsigaction',
     'generic Unix base may carry a conservative libc sigaction record');
-  CheckTokenPresent(LUnixFfi, 'function unix_sigaction',
+  CheckTokenPresent(LUnixFfi, 'function sigaction',
     'generic Unix ffi must own conservative libc sigaction binding');
-  CheckTokenPresent(LUnixFfi, 'function unix_sigprocmask',
+  CheckTokenPresent(LUnixFfi, 'function sigprocmask',
     'generic Unix ffi must own conservative libc sigprocmask binding');
+  CheckTokenAbsent(LUnixFfi, 'function unix_',
+    'generic Unix ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(LUnixFfi, 'rt_sigaction',
     'generic Unix ffi must not invent a Linux syscall route');
 end;

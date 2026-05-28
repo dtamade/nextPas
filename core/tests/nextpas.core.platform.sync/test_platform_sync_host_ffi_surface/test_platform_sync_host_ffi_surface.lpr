@@ -147,8 +147,10 @@ begin
   CheckPThreadStorageBase(LUnixBaseSource, 'unix');
 
   CheckRawFFIUnit(LLinuxFfiSource, 'linux.ffi');
-  CheckTokenPresent(LLinuxFfiSource, 'function linux_syscall',
+  CheckTokenPresent(LLinuxFfiSource, 'function syscall',
     'linux.ffi must own raw syscall binding');
+  CheckTokenAbsent(LLinuxFfiSource, 'function linux_syscall',
+    'linux.ffi raw syscall declaration must not repeat the host prefix');
   CheckTokenPresent(LLinuxBaseSource, 'linux_syscall_futex',
     'linux.base must own futex syscall number');
   CheckTokenPresent(LLinuxBaseSource, 'futex_wait',
@@ -188,7 +190,7 @@ begin
     'platform.sync must own pthread condvar initialization wrapper logic');
   CheckTokenPresent(LSyncSource, 'pthread_rwlock_unlock',
     'platform.sync must own pthread rwlock unlock wrapping');
-  CheckTokenPresent(LSyncSource, 'linux_syscall(',
+  CheckTokenPresent(LSyncSource, 'syscall(',
     'platform.sync must own Linux futex syscall wrapping');
   CheckTokenPresent(LSyncSource, 'platform_linux_futex_wait_i32',
     'platform.sync must own Linux futex wait wrapper');

@@ -148,7 +148,7 @@ begin
     'posix.ffi must not own shared POSIX pthread wrappers');
 
   CheckHostPartition(LLinuxBaseSource, LLinuxFfiSource, 'linux',
-    'linux_syscall_futex', 'function linux_syscall');
+    'linux_syscall_futex', 'function syscall');
   CheckHostPartition(LDarwinBaseSource, LDarwinFfiSource, 'darwin',
     'mach_timebase_info_data_t', 'mach_absolute_time');
   CheckHostPartition(LAndroidBaseSource, LAndroidFfiSource, 'android',
@@ -156,7 +156,7 @@ begin
   CheckHostPartition(LFreeBSDBaseSource, LFreeBSDFfiSource, 'freebsd',
     'platform_clock_monotonic_id', 'pthread_getthreadid_np');
   CheckHostPartition(LUnixBaseSource, LUnixFfiSource, 'unix',
-    'platform_clock_monotonic_id', 'function unix_errno_location');
+    'platform_clock_monotonic_id', 'function __errno_location');
   CheckHostPartition(LWindowsBaseSource, LWindowsFfiSource, 'windows',
     'windows_filetime_unix_epoch_offset_100ns', 'queryperformancecounter');
 
@@ -166,6 +166,8 @@ begin
     'windows.base must own Windows wait result tokens');
   CheckTokenAbsent(LLinuxFfiSource, 'linux_errno_value',
     'linux.ffi must not own errno value helper');
+  CheckTokenAbsent(LLinuxFfiSource, 'function linux_',
+    'linux.ffi raw declarations must not repeat the host prefix');
   CheckTokenAbsent(LWindowsFfiSource, 'windows_last_error_i32',
     'windows.ffi must not own last-error helper');
 end;

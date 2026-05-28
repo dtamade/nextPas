@@ -1,5 +1,25 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 16 raw FFI declaration-name correction
+
+- User review found that Wave 15 removed helper bodies from `.ffi` but still
+  left many raw declarations with synthetic host-prefixed Pascal identifiers:
+  `android_syscall`, `android_errno_location`, `darwin_stat`,
+  `freebsd_sigaction`, `linux_xstat`, and similar names.
+- That shape is still wrong for raw FFI. The host owner is already expressed by
+  the unit name (`nextpas.core.platform.android.ffi`,
+  `nextpas.core.platform.darwin.ffi`, etc.). Repeating the host in each Pascal
+  declaration invents a nextPas naming layer over raw APIs and makes copied FPC
+  definitions look like wrappers.
+- Correct Wave 16 rule: `.ffi` declarations should use the raw C/FPC API name
+  as the Pascal identifier whenever Pascal syntax allows it. If the external
+  symbol cannot be a Pascal identifier, use a minimal raw-style Pascal spelling
+  plus `external ... name ...`; for example, Darwin can expose `stat` with
+  `external 'c' name 'stat$INODE64'`.
+- Unified platform semantic names still belong in `platform.time.host`,
+  `platform.sync`, and `platform.thread`; this correction must not create
+  feature-specific `.ffi` files or host `.impl` units.
+
 ## 2026-05-28: Wave 15 FFI raw-only correction
 
 - User review rejected the Wave 13/14 direction of keeping helper/projection

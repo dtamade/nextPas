@@ -188,13 +188,13 @@ begin
     if PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
     begin
       {$IFDEF NEXTPAS_LINUX}
-      Result := linux_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSEIF defined(NEXTPAS_ANDROID)}
-      Result := android_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSEIF defined(NEXTPAS_FREEBSD)}
-      Result := freebsd_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
       {$ELSE}
-      Result := unix_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      Result := pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
       {$ENDIF}
       if Result <> 0 then
         Exit;
@@ -701,7 +701,7 @@ end;
 
 function platform_linux_errno_value: Int32; inline;
 begin
-  Result := linux_errno_location^;
+  Result := __errno_location^;
 end;
 
 function platform_linux_futex_wait_i32(
@@ -713,7 +713,7 @@ var
   LTimeout: timespec;
 begin
   if ATimeoutNs < 0 then
-    LRet := linux_syscall(
+    LRet := syscall(
       LINUX_SYSCALL_FUTEX,
       PtrUInt(AAddr),
       PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
@@ -725,7 +725,7 @@ begin
   begin
     LTimeout.tv_sec := ATimeoutNs div 1000000000;
     LTimeout.tv_nsec := ATimeoutNs mod 1000000000;
-    LRet := linux_syscall(
+    LRet := syscall(
       LINUX_SYSCALL_FUTEX,
       PtrUInt(AAddr),
       PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
@@ -745,7 +745,7 @@ function platform_linux_futex_wake_i32(AAddr: PInt32; const ACount: Int32): Int3
 var
   LRet: PtrInt;
 begin
-  LRet := linux_syscall(
+  LRet := syscall(
     LINUX_SYSCALL_FUTEX,
     PtrUInt(AAddr),
     PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG),

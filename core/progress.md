@@ -2,6 +2,42 @@
 
 ## 2026-05-28
 
+- Started Wave 16 from `main@7ada8f3` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-api-names`
+  on branch `codex/platform-ffi-raw-api-names`.
+- User review found a remaining FFI boundary mistake: raw external declarations
+  were still named with synthetic host prefixes such as `android_syscall`,
+  `android_errno_location`, `darwin_stat`, and `freebsd_sigaction`.
+- Root cause: Wave 13/14 tried to fix misleading helper names by host-prefixing
+  them, and Wave 15 removed helper bodies but did not fully reverse that naming
+  idea for raw declarations. The correct owner boundary is the unit path, not
+  duplicated host prefixes inside the declaration names.
+- Wave 16 scope is declaration-name correction. It keeps `.ffi` raw-only, does
+  not add host `.impl` units, does not add source-evidence documentation gates,
+  and keeps wrapper semantics in `platform.time.host`, `platform.sync`, and
+  `platform.thread`.
+- Wave 16 implementation renamed raw FFI declarations to C/FPC-like identifiers
+  and updated the existing platform consumers:
+  - Linux: `syscall`, `__errno_location`, `__xstat`, `__lxstat`, `__fxstat`,
+    and `pthread_condattr_setclock`.
+  - Android: `syscall`, `__errno`, and `pthread_condattr_setclock`.
+  - Darwin / FreeBSD / generic Unix: raw errno, signal, stat, and condattr
+    declarations no longer repeat the host prefix.
+  - `platform.sync` and `platform.thread` now call those raw names directly from
+    the selected host FFI unit.
+- Minimal non-document validation passed:
+  - `git diff --check`: pass.
+  - `rg` scan found no production `.ffi` declarations starting with
+    `function/procedure linux_`, `android_`, `darwin_`, `freebsd_`, or `unix_`.
+  - `make -C tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`:
+    `2 total, 2 passed, 0 failed`.
+  - `make -C tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin / Android / FreeBSD / generic Unix simulated compile passed.
+  - `make -C tests/nextpas.core.platform.thread/test_platform_thread clean test`:
+    `8 total, 8 passed, 0 failed`.
+  - `make -C tests/nextpas.core.platform.sync/test_platform_sync clean test`:
+    `14 total, 14 passed, 0 failed`.
+
 - Started Wave 15 from `main@0f213de` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
   on branch `codex/platform-ffi-raw-boundary`.

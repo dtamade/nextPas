@@ -80,15 +80,15 @@ type
 function platform_thread_host_errno_location: PInt32; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
-  Result := linux_errno_location;
+  Result := __errno_location;
   {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_errno_location;
+  Result := __errno;
   {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_errno_location;
+  Result := __error;
   {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_errno_location;
+  Result := __error;
   {$ELSE}
-  Result := unix_errno_location;
+  Result := __errno_location;
   {$ENDIF}
 end;
 

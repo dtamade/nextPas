@@ -66,6 +66,47 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckNoSyntheticHostPrefixedRawNames(
+  const ASource,
+  AFileName: string);
+begin
+  if AFileName = 'nextpas.core.platform.linux.ffi.pas' then
+  begin
+    CheckTokenAbsent(ASource, 'function linux_',
+      'linux.ffi raw declarations must not repeat the host prefix');
+    CheckTokenAbsent(ASource, 'procedure linux_',
+      'linux.ffi raw declarations must not repeat the host prefix');
+  end
+  else if AFileName = 'nextpas.core.platform.android.ffi.pas' then
+  begin
+    CheckTokenAbsent(ASource, 'function android_',
+      'android.ffi raw declarations must not repeat the host prefix');
+    CheckTokenAbsent(ASource, 'procedure android_',
+      'android.ffi raw declarations must not repeat the host prefix');
+  end
+  else if AFileName = 'nextpas.core.platform.darwin.ffi.pas' then
+  begin
+    CheckTokenAbsent(ASource, 'function darwin_',
+      'darwin.ffi raw declarations must not repeat the host prefix');
+    CheckTokenAbsent(ASource, 'procedure darwin_',
+      'darwin.ffi raw declarations must not repeat the host prefix');
+  end
+  else if AFileName = 'nextpas.core.platform.freebsd.ffi.pas' then
+  begin
+    CheckTokenAbsent(ASource, 'function freebsd_',
+      'freebsd.ffi raw declarations must not repeat the host prefix');
+    CheckTokenAbsent(ASource, 'procedure freebsd_',
+      'freebsd.ffi raw declarations must not repeat the host prefix');
+  end
+  else if AFileName = 'nextpas.core.platform.unix.ffi.pas' then
+  begin
+    CheckTokenAbsent(ASource, 'function unix_',
+      'unix.ffi raw declarations must not repeat the host prefix');
+    CheckTokenAbsent(ASource, 'procedure unix_',
+      'unix.ffi raw declarations must not repeat the host prefix');
+  end;
+end;
+
 procedure CheckBehaviorTestHasNoHostFFI(const APath, AName: string);
 var
   LSource: string;
@@ -233,6 +274,7 @@ begin
           'platform ffi unit implementation must not import helper dependencies: ' + LSearch.Name);
         CheckTokenAbsent(LSource, 'begin' + #10,
           'platform ffi unit must stay raw ABI declarations only, without helper bodies: ' + LSearch.Name);
+        CheckNoSyntheticHostPrefixedRawNames(LSource, LFileName);
       end
       else
       begin
