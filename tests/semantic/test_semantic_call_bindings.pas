@@ -11679,6 +11679,100 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodTypeMismatchStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-type-mismatch-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledSourceUnitBodyInheritedImplicitSelfTypeMismatch;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TBaseWorker = class' + LineEnding +
+    '    procedure Touch(Value: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TWorker = class(TBaseWorker)' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TBaseWorker.Touch(Value: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Touch(True);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledSourceUnitBodyInheritedImplicitSelfTypeMismatch',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-source-unit-body-inherited-implicit-self-type-mismatch-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-source-unit-body-inherited-implicit-self-type-mismatch-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-source-unit-body-inherited-implicit-self-type-mismatch-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-source-unit-body-inherited-implicit-self-type-mismatch-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -13478,6 +13572,7 @@ begin
     CheckInstalledSourceUnitBodyImplicitSelfBareMethodTypeMismatchStaysDeferred;
     CheckInstalledSourceUnitBodyImplicitSelfBareMethodWrongArgumentCountStaysDeferred;
     CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodWrongArgumentCountStaysDeferred;
+    CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodTypeMismatchStaysDeferred;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultNoMatchingOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodFunctionResultAmbiguousOverloadDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodAmbiguousOverloadDiagnostic;

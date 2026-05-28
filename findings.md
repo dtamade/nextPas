@@ -10,6 +10,11 @@
 
 ## Research Findings
 
+- Batch 210 re-rank 结论：Batch 182 已打开 imported `project-source` unit method body inherited
+  implicit-self type-mismatch；补同形 installed-source deferred guard。
+- Batch 210 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 210 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodTypeMismatchStaysDeferred`。
 - Batch 209 re-rank 结论：Batch 181 已打开 imported `project-source` unit method body inherited
   implicit-self wrong-argument-count；补同形 installed-source deferred guard。
 - Batch 209 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
