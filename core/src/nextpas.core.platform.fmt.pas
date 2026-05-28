@@ -10,6 +10,10 @@ function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int3
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 
+function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int64): Int32;
+function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+function platform_parse_hex(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+
 implementation
 
 function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
@@ -243,6 +247,94 @@ begin
   end;
   ABuf[LOut] := #0;
   Result := LOut;
+end;
+
+function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+var
+  I: Int32;
+  LDigit: UInt64;
+  LPrev: UInt64;
+begin
+  AValue := 0;
+  if (AStr = nil) or (ALen <= 0) then
+    Exit(-1);
+  for I := 0 to ALen - 1 do
+  begin
+    if (AStr[I] < '0') or (AStr[I] > '9') then
+      Exit(-1);
+    LDigit := UInt64(Ord(AStr[I]) - Ord('0'));
+    LPrev := AValue;
+    AValue := AValue * 10 + LDigit;
+    if AValue < LPrev then
+    begin
+      AValue := 0;
+      Exit(-1);
+    end;
+  end;
+  Result := 0;
+end;
+
+function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int64): Int32;
+var
+  LU: UInt64;
+  LNeg: Boolean;
+  LStart, LActualLen: Int32;
+begin
+  AValue := 0;
+  if (AStr = nil) or (ALen <= 0) then
+    Exit(-1);
+  LNeg := AStr[0] = '-';
+  if LNeg or (AStr[0] = '+') then
+    LStart := 1
+  else
+    LStart := 0;
+  LActualLen := ALen - LStart;
+  if LActualLen <= 0 then
+    Exit(-1);
+  if platform_parse_uint(@AStr[LStart], LActualLen, LU) <> 0 then
+    Exit(-1);
+  if LNeg then
+  begin
+    if LU > UInt64(High(Int64)) + 1 then
+      Exit(-1);
+    AValue := -Int64(LU);
+  end
+  else
+  begin
+    if LU > UInt64(High(Int64)) then
+      Exit(-1);
+    AValue := Int64(LU);
+  end;
+  Result := 0;
+end;
+
+function platform_parse_hex(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+var
+  I: Int32;
+  LDigit: UInt64;
+  C: AnsiChar;
+begin
+  AValue := 0;
+  if (AStr = nil) or (ALen <= 0) then
+    Exit(-1);
+  for I := 0 to ALen - 1 do
+  begin
+    C := AStr[I];
+    case C of
+      '0'..'9': LDigit := UInt64(Ord(C) - Ord('0'));
+      'a'..'f': LDigit := UInt64(Ord(C) - Ord('a') + 10);
+      'A'..'F': LDigit := UInt64(Ord(C) - Ord('A') + 10);
+    else
+      Exit(-1);
+    end;
+    if (AValue and $F000000000000000) <> 0 then
+    begin
+      AValue := 0;
+      Exit(-1);
+    end;
+    AValue := (AValue shl 4) or LDigit;
+  end;
+  Result := 0;
 end;
 
 end.

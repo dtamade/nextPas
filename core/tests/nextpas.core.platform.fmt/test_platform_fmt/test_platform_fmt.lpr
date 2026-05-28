@@ -102,6 +102,51 @@ begin
   Check(platform_fmt_hex(42, nil, 0) = -1, 'nil hex returns -1');
 end;
 
+procedure TestParseUint;
+var V: UInt64;
+begin
+  Check(platform_parse_uint('0', 1, V) = 0, 'parse 0');
+  Check(V = 0, '0 value');
+  Check(platform_parse_uint('12345', 5, V) = 0, 'parse 12345');
+  Check(V = 12345, '12345 value');
+  Check(platform_parse_uint('18446744073709551615', 20, V) = 0, 'parse max uint64');
+  Check(V = High(UInt64), 'max uint64 value');
+end;
+
+procedure TestParseInt;
+var V: Int64;
+begin
+  Check(platform_parse_int('42', 2, V) = 0, 'parse 42');
+  Check(V = 42, '42 value');
+  Check(platform_parse_int('-1', 2, V) = 0, 'parse -1');
+  Check(V = -1, '-1 value');
+  Check(platform_parse_int('-9223372036854775808', 20, V) = 0, 'parse min int64');
+  Check(V = Low(Int64), 'min int64 value');
+end;
+
+procedure TestParseHex;
+var V: UInt64;
+begin
+  Check(platform_parse_hex('0', 1, V) = 0, 'parse hex 0');
+  Check(V = 0, 'hex 0 value');
+  Check(platform_parse_hex('DEADBEEF', 8, V) = 0, 'parse DEADBEEF');
+  Check(V = $DEADBEEF, 'DEADBEEF value');
+  Check(platform_parse_hex('ff', 2, V) = 0, 'parse ff lowercase');
+  Check(V = $FF, 'ff value');
+  Check(platform_parse_hex('FFFFFFFFFFFFFFFF', 16, V) = 0, 'parse max hex');
+  Check(V = High(UInt64), 'max hex value');
+end;
+
+procedure TestParseErrors;
+var Vi: Int64; Vu: UInt64;
+begin
+  Check(platform_parse_uint(nil, 0, Vu) <> 0, 'nil fails');
+  Check(platform_parse_uint('abc', 3, Vu) <> 0, 'non-digit fails');
+  Check(platform_parse_int('', 0, Vi) <> 0, 'empty fails');
+  Check(platform_parse_int('-', 1, Vi) <> 0, 'bare minus fails');
+  Check(platform_parse_hex('GG', 2, Vu) <> 0, 'invalid hex fails');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fmt');
   T.Run('int positive', @TestIntPositive);
@@ -114,5 +159,9 @@ begin
   T.Run('fmt_buf hex', @TestFmtBufHex);
   T.Run('fmt_buf empty', @TestFmtBufEmpty);
   T.Run('nil buffer', @TestNilBuffer);
+  T.Run('parse uint', @TestParseUint);
+  T.Run('parse int', @TestParseInt);
+  T.Run('parse hex', @TestParseHex);
+  T.Run('parse errors', @TestParseErrors);
   T.Summary;
 end.
