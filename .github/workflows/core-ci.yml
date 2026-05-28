@@ -67,7 +67,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-macos-aarch64-v4
+          key: fpc-trunk-macos-aarch64-v5
 
       - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
