@@ -15,7 +15,11 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
-当前最新索引补充：Batch 190 Imported Unit Method Body Inherited Implicit-self Function Result
+当前最新索引补充：Batch 191 Imported Unit Method Body Implicit-self Function Result Wrong
+Argument Count Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
+addendum 与 fresh `bash build/verify_local.sh` 为准。
+
+当前上一批为 Batch 190 Imported Unit Method Body Inherited Implicit-self Function Result
 Ambiguous Overload Diagnostics 已完成并通过 fresh local verification；下一行旧长索引保留历史上下文，当前 reality 以本补充、最新
 addendum 与 fresh `bash build/verify_local.sh` 为准。
 
@@ -43,6 +47,74 @@ Batch 98 Platform Time FFI Boundary、
 Batch 97 Object Header Ownership Contract、
 Batch 96 Object Allocation Helper Boundary 与 Batch 93 Platform Thread FFI Boundary 是并行
 platform/core 工作流保留下来的已完成记录。
+
+## Addendum: 2026-05-28 Batch 191 Imported Unit Method Body Implicit-self Function Result Wrong Argument Count Diagnostics
+
+### Goal Nodes
+
+- `G1.5 Call, member, and overload resolution`
+- `G1.6 Diagnostics`
+
+### Goal
+
+沿当前总地图继续 imported unit method body implicit-self same-unit function-result evidence 面，把
+bare implicit-self single-target method 的 `wrong-argument-count` 收口：
+
+- root source `uses Worker;`。
+- imported `Worker.pas` 声明 `TWorker = class procedure Pick(Value: Integer); procedure Run; end`，
+  并在同一 `project-source` unit implementation 中声明 `function Count: Integer;`。
+- `procedure TWorker.Run; begin Pick(Count, Count); end;` 位于 imported unit implementation body。
+- 期望 build/root semantic 失败为 `sema.wrong-argument-count`，semantic model 为 `failure`，且不注册失败
+  `member-call` binding。
+
+### Acceleration Plan
+
+- 固定“矩阵补洞 + promotion-first”：优先选择同一语义面中已由相邻批次证明的 source-owned
+  stable evidence 缺口，避免频繁切换主题。
+- 复用 Batch 177 的 imported unit body bare implicit-self stable literal arity miss，以及 Batch
+  185-187 的 same-owner `project-source` function-result evidence。
+- focused semantic probe 先判真相；如果 GREEN，直接 promotion 到 dedicated fixture、`verify_local.sh`
+  official gate、final envelope 与文档；如果 RED，只做最小 analyzer 修复，不扩大语义面。
+- 本轮不碰 `core/`，不扩 installed-source provenance，不实现 implicit conversion、default parameter
+  ranking 或完整 overload resolver。
+
+### Status
+
+Completed; verification passed
+
+### Planned Steps
+
+- [x] `/plan` 固定目标节点、加速策略、范围与不碰 `core/`
+- [x] TDD：增加 imported unit method body implicit-self function-result wrong-argument-count focused regression
+- [x] Focused semantic probe 后决定 promotion 或最小 analyzer 修复
+- [x] GREEN 后新增 stage0 fixture 与 `verify_local.sh` gate/final envelope；RED 后先最小修 sema
+- [x] 同步 semantic model spec / stage0 README / findings / progress / goal tree
+- [x] 运行 fresh `bash build/verify_local.sh`
+- [x] 简短 review 后提交
+
+### Verification
+
+- Focused semantic：direct compile/run `tests/semantic/test_semantic_call_bindings.pas` 输出
+  `semantic-call-bindings-status=pass`。
+- Fresh local：`bash build/verify_local.sh` 输出
+  `imported-unit-body-implicit-self-function-result-wrong-argument-count-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultWrongArgumentCountCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、
+  `verify-local=pass` 与 `human-summary=local verification passed`。
+
+### Review
+
+- Focused probe 已直接 GREEN；本批不修改 analyzer。
+- same-owner `project-source` function-result evidence 与 imported method body implicit-self
+  single-target arity miss 可自然组合；installed-source provenance 继续 deferred。
+- 本批不修改 `core/`；下一步建议先 re-rank G1.5/G1.6 语义矩阵，再选 source-owned、
+  误报风险低、可 official gate 的相邻缺口。
+
+### Non-goals
+
+- 不处理 installed-source provenance
+- 不实现 implicit conversion、default parameter ranking 或完整 overload resolver
+- 不修改 `core/`
 
 ## Addendum: 2026-05-28 Batch 190 Imported Unit Method Body Inherited Implicit-self Function Result Ambiguous Overload Diagnostics
 

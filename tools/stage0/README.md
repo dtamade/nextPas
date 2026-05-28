@@ -283,7 +283,9 @@ same path 的 bare implicit-self method call 若 stable argument signature 与 r
 若同一路径找到 method name 但 arity 不兼容，会失败为
 `sema.wrong-argument-count`（例如当前 class 的 `Pick;` 调 `Pick(Integer)`，或 inherited
 `Touch;` 调 `Touch(Integer)`，或 imported `project-source` unit method body 中
-`TWorker.Run` 的 `Pick;` 调 `Pick(Integer)`），同样不会注册错误 binding。
+`TWorker.Run` 的 `Pick;` 调 `Pick(Integer)`，或同一路径中的 `Pick(Count, Count);`
+调 `Pick(Integer)` 且 `Count` 是 same-owner `project-source` unit-owned 零参 Integer
+function result），同样不会注册错误 binding。
 若同一路径找到多个 method target 但 stable argument signature 全不匹配，会失败为
 `sema.no-matching-overload`（例如当前 class 的 `Pick(True);` 同时面对
 `Pick(Integer)` / `Pick(AnsiString)`，或 inherited `Touch(True);` 同时面对
@@ -952,6 +954,8 @@ inherited known field/property member call 断言
 bare implicit-self wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
 unit method body inherited bare implicit-self wrong argument count 断言
+`semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
+unit method body bare implicit-self same-unit function-result wrong argument count 断言
 `semantic-analysis-failed` + `sema.wrong-argument-count`，再对 imported `project-source`
 unit method body inherited bare implicit-self type mismatch 断言
 `semantic-analysis-failed` + `sema.type-mismatch`，再对 imported `project-source`
