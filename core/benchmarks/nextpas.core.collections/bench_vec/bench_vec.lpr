@@ -72,7 +72,7 @@ var
 begin
   for it := 1 to aIters do
     for i := 0 to N - 1 do
-      GSink := GSink + GVec.Get(i);
+      GSink := GSink + GVec[i];
 end;
 
 procedure BenchGetPtr(aIters: Int64);

@@ -138,6 +138,8 @@ type
     procedure SaveToUnchecked(aDst: TCollection); override;
 
     function  GetMemory: PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetItem(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure PutItem(aIndex: SizeUInt; const aValue: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  Get(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetUnchecked(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure Put(aIndex: SizeUInt; const aValue: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -765,7 +767,7 @@ type
 
     property Capacity:                SizeUInt        read GetCapacity     write SetCapacity;
     property GrowStrategy:            IGrowthStrategy read GetGrowStrategy write SetGrowStrategy;
-    property Items[aIndex: SizeUInt]: T               read Get             write Put; default;
+    property Items[aIndex: SizeUInt]: T               read GetItem         write PutItem; default;
     property Ptr[aIndex: SizeUInt]:   PElement        read GetPtr;
     property Memory:                  PElement        read GetMemory;
 
@@ -1020,6 +1022,20 @@ end;
 function TVec.GetMemory: PElement;
 begin
   Result := FData;
+end;
+
+function TVec.GetItem(aIndex: SizeUInt): T;
+begin
+  if aIndex >= FCount then
+    raise EOutOfRange.Create('TVec.Items: aIndex out of bounds');
+  Result := FData[aIndex];
+end;
+
+procedure TVec.PutItem(aIndex: SizeUInt; const aValue: T);
+begin
+  if aIndex >= FCount then
+    raise EOutOfRange.Create('TVec.Items: aIndex out of bounds');
+  FData[aIndex] := aValue;
 end;
 
 function TVec.Get(aIndex: SizeUInt): T;
