@@ -205,163 +205,126 @@ end;
 
 procedure TestBuilderBasic;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LResult: TBytes;
 begin
-  LB.InitDefault(16);
-  try
-    LB.AppendByte($AA);
-    LB.AppendByte($BB);
-    CheckEqual(SizeUInt(2), LB.Len, 'len');
-    LResult := LB.ToBytes;
-    CheckEqual(2, System.Length(LResult), 'result len');
-    CheckEqual(Byte($AA), LResult[0]);
-    CheckEqual(Byte($BB), LResult[1]);
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(16);
+  LB.AppendByte($AA);
+  LB.AppendByte($BB);
+  CheckEqual(SizeUInt(2), LB.Length, 'len');
+  LResult := LB.ToBytes;
+  CheckEqual(2, System.Length(LResult), 'result len');
+  CheckEqual(Byte($AA), LResult[0]);
+  CheckEqual(Byte($BB), LResult[1]);
 end;
 
 procedure TestBuilderAppendBytes;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LSrc: TBytes;
   LResult: TBytes;
 begin
-  LB.InitDefault(4);
-  try
-    LSrc := TBytes.Create(1, 2, 3, 4, 5);
-    LB.AppendBytes(@LSrc[0], System.Length(LSrc));
-    CheckEqual(SizeUInt(5), LB.Len);
-    LResult := LB.ToBytes;
-    Check(BytesEqual(LSrc, LResult), 'content match');
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(4);
+  LSrc := TBytes.Create(1, 2, 3, 4, 5);
+  LB.AppendBytes(@LSrc[0], System.Length(LSrc));
+  CheckEqual(SizeUInt(5), LB.Length);
+  LResult := LB.ToBytes;
+  Check(BytesEqual(LSrc, LResult), 'content match');
 end;
 
 procedure TestBuilderAppendSpan;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LSrc: TBytes;
   LS: TByteSpan;
 begin
-  LB.InitDefault(4);
-  try
-    LSrc := TBytes.Create(10, 20, 30);
-    LS := TByteSpan.FromBytes(LSrc);
-    LB.AppendSpan(LS);
-    CheckEqual(SizeUInt(3), LB.Len);
-    CheckEqual(Byte(10), LB.Data[0]);
-    CheckEqual(Byte(30), LB.Data[2]);
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(4);
+  LSrc := TBytes.Create(10, 20, 30);
+  LS := TByteSpan.FromBytes(LSrc);
+  LB.AppendSpan(LS);
+  CheckEqual(SizeUInt(3), LB.Length);
+  CheckEqual(Byte(10), LB.Data[0]);
+  CheckEqual(Byte(30), LB.Data[2]);
 end;
 
 procedure TestBuilderEndian;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LResult: TBytes;
 begin
-  LB.InitDefault(32);
-  try
-    LB.AppendUInt16BE($1234);
-    LB.AppendUInt32LE($DEADBEEF);
-    LResult := LB.ToBytes;
-    CheckEqual(Byte($12), LResult[0], 'BE16 high');
-    CheckEqual(Byte($34), LResult[1], 'BE16 low');
-    CheckEqual(Byte($EF), LResult[2], 'LE32 byte0');
-    CheckEqual(Byte($BE), LResult[3], 'LE32 byte1');
-    CheckEqual(Byte($AD), LResult[4], 'LE32 byte2');
-    CheckEqual(Byte($DE), LResult[5], 'LE32 byte3');
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(32);
+  LB.AppendUInt16BE($1234);
+  LB.AppendUInt32LE($DEADBEEF);
+  LResult := LB.ToBytes;
+  CheckEqual(Byte($12), LResult[0], 'BE16 high');
+  CheckEqual(Byte($34), LResult[1], 'BE16 low');
+  CheckEqual(Byte($EF), LResult[2], 'LE32 byte0');
+  CheckEqual(Byte($BE), LResult[3], 'LE32 byte1');
+  CheckEqual(Byte($AD), LResult[4], 'LE32 byte2');
+  CheckEqual(Byte($DE), LResult[5], 'LE32 byte3');
 end;
 
 procedure TestBuilderGrow;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LI: Integer;
 begin
-  LB.InitDefault(4);
-  try
-    for LI := 0 to 999 do
-      LB.AppendByte(Byte(LI and $FF));
-    CheckEqual(SizeUInt(1000), LB.Len, 'grew to 1000');
-    Check(LB.Cap >= 1000, 'capacity >= 1000');
-    CheckEqual(Byte(0), LB.Data[0]);
-    CheckEqual(Byte(255), LB.Data[255]);
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(4);
+  for LI := 0 to 999 do
+    LB.AppendByte(Byte(LI and $FF));
+  CheckEqual(SizeUInt(1000), LB.Length, 'grew to 1000');
+  Check(LB.Capacity >= 1000, 'capacity >= 1000');
+  CheckEqual(Byte(0), LB.Data[0]);
+  CheckEqual(Byte(255), LB.Data[255]);
 end;
 
 procedure TestBuilderClearReserve;
 var
-  LB: TBytesBuilder;
-  LOldCap: SizeUInt;
+  LB: IBytesBuilder;
 begin
-  LB.InitDefault(64);
-  try
-    LB.AppendFill($CC, 50);
-    CheckEqual(SizeUInt(50), LB.Len);
-    LB.Clear;
-    CheckEqual(SizeUInt(0), LB.Len, 'cleared');
-    Check(LB.Cap >= 64, 'cap preserved');
-    LB.Reserve(1024);
-    LOldCap := LB.Cap;
-    Check(LOldCap >= 1024, 'reserved');
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(64);
+  LB.AppendFill($CC, 50);
+  CheckEqual(SizeUInt(50), LB.Length);
+  LB.Clear;
+  CheckEqual(SizeUInt(0), LB.Length, 'cleared');
+  Check(LB.Capacity >= 64, 'cap preserved');
+  LB.Reserve(1024);
+  Check(LB.Capacity >= 1024, 'reserved');
 end;
 
 procedure TestBuilderTruncate;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
 begin
-  LB.InitDefault(32);
-  try
-    LB.AppendFill($FF, 20);
-    LB.Truncate(10);
-    CheckEqual(SizeUInt(10), LB.Len, 'truncated');
-    LB.Truncate(100);
-    CheckEqual(SizeUInt(10), LB.Len, 'no-op if larger');
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(32);
+  LB.AppendFill($FF, 20);
+  LB.Truncate(10);
+  CheckEqual(SizeUInt(10), LB.Length, 'truncated');
+  LB.Truncate(100);
+  CheckEqual(SizeUInt(10), LB.Length, 'no-op if larger');
 end;
 
 procedure TestBuilderWrittenSpan;
 var
-  LB: TBytesBuilder;
+  LB: IBytesBuilder;
   LS: TByteSpan;
 begin
-  LB.InitDefault(16);
-  try
-    LB.AppendByte(1);
-    LB.AppendByte(2);
-    LB.AppendByte(3);
-    LS := LB.WrittenSpan;
-    CheckEqual(SizeUInt(3), LS.Len);
-    CheckEqual(Byte(1), LS.Data[0]);
-    CheckEqual(Byte(3), LS.Data[2]);
-  finally
-    LB.Done;
-  end;
+  LB := CreateBytesBuilder(16);
+  LB.AppendByte(1);
+  LB.AppendByte(2);
+  LB.AppendByte(3);
+  LS := LB.WrittenSpan;
+  CheckEqual(SizeUInt(3), LS.Len);
+  CheckEqual(Byte(1), LS.Data[0]);
+  CheckEqual(Byte(3), LS.Data[2]);
 end;
 
-procedure TestBuilderDoubleDone;
+procedure TestBuilderAutoFree;
 var
-  LB: TBytesBuilder;
+  LResult: TBytes;
 begin
-  LB.InitDefault(16);
-  LB.AppendByte(1);
-  LB.Done;
-  LB.Done;
-  Check(not LB.IsInitialized, 'not initialized after done');
+  LResult := CreateBytesBuilder(16).ToBytes;
+  CheckEqual(0, System.Length(LResult), 'empty builder');
 end;
 
 begin
@@ -391,7 +354,7 @@ begin
   T.Run('builder: Clear/Reserve', @TestBuilderClearReserve);
   T.Run('builder: Truncate', @TestBuilderTruncate);
   T.Run('builder: WrittenSpan', @TestBuilderWrittenSpan);
-  T.Run('builder: Double Done', @TestBuilderDoubleDone);
+  T.Run('builder: AutoFree', @TestBuilderAutoFree);
 
   T.Summary;
 end.

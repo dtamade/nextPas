@@ -14,7 +14,9 @@ uses
 
 type
   TEndianness = nextpas.core.bytes.base.TEndianness;
-  TBytesBuilder = nextpas.core.bytes.builder.TBytesBuilder;
+  IBytesBuilder = nextpas.core.bytes.builder.IBytesBuilder;
+
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline;
 
 function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
@@ -24,6 +26,11 @@ function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
 implementation
+
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder;
+begin
+  Result := nextpas.core.bytes.builder.CreateBytesBuilder(AInitialCapacity);
+end;
 
 function BytesEqual(const A, B: TBytes): Boolean;
 begin
