@@ -75,7 +75,7 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 ### G1: 类型基础 ✅
 - [x] ctypes.inc (FPC 兼容 C 类型别名)
 - [x] posix.base 扩展 (完整 ptypes)
-- [ ] 验证与 FPC ctypes/unixtype 的 ABI 兼容性
+- [x] 验证与 FPC ctypes/unixtype 的 ABI 兼容性 (10 tests: cint/clong/csize_t/cfloat/cdouble/pid_t/pthread_t)
 
 ### G2: Linux host 全量 API ✅
 - [x] errno 全表 (132 错误码)
@@ -126,7 +126,9 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.process (进程管理: fork+execve/CreateProcess, 5 tests)
 - [x] platform.pipe (管道+dup2 统一抽象, 5 tests)
 - [x] platform.mmap (内存映射文件: mmap/CreateFileMapping, 5 tests)
-- [x] 每个模块无内存泄漏验证 (heaptrc: 9 modules, 0 leaks)
+- [x] platform.dl (动态库加载: dlopen/LoadLibrary, 8 tests)
+- [x] platform.env (环境变量: getenv/GetEnvironmentVariable, 7 tests)
+- [x] 每个模块无内存泄漏验证 (heaptrc: 11 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持
