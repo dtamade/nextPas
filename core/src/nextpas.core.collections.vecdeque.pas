@@ -1760,8 +1760,8 @@ begin
   aPtr := nil; aLen := 0;
   if FCount = 0 then Exit;
 
-  // 若本身已连续（Head <= Tail），直接返回
-  if FHead <= FTail then
+  // 若本身已连续（Head < Tail），直接返回
+  if FHead < FTail then
   begin
     aPtr := FBuffer.GetPtr(FHead);
     aLen := FCount;
@@ -2731,6 +2731,7 @@ begin
 
   FBuffer.PutUnchecked(GetPhysicalIndex(aIndex), aElement);
   Inc(FCount);
+  FTail := WrapAdd(FHead, FCount);
   Result := aIndex;
 end;
 
@@ -2744,11 +2745,8 @@ begin
 
   Result := FBuffer.GetUnchecked(GetPhysicalIndex(aIndex));
 
-  // 如果移除位置在前半部分，向后移动头部
   if aIndex <= FCount div 2 then
   begin
-    // 向后移动头部元素 - 优化：减少 GetPhysicalIndex 调用
-    // 修复：使用 while 循环避免无符号整数下溢导致的无限循环
     j := aIndex;
     while j > 0 do
     begin
@@ -2758,20 +2756,25 @@ begin
       Dec(j);
     end;
 
+    if GetIsManagedType then
+      FBuffer.ZeroUnchecked(FHead, 1);
     FHead := WrapAdd(FHead, 1);
   end
   else
   begin
-    // 向前移动尾部元素 - 优化：减少 GetPhysicalIndex 调用
     for i := aIndex to FCount - 2 do
     begin
       LPhysicalI := GetPhysicalIndex(i);
       LPhysicalIPlus1 := GetPhysicalIndex(i + 1);
       FBuffer.PutUnchecked(LPhysicalI, FBuffer.GetUnchecked(LPhysicalIPlus1));
     end;
+
+    if GetIsManagedType then
+      FBuffer.ZeroUnchecked(GetPhysicalIndex(FCount - 1), 1);
   end;
 
   Dec(FCount);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 function TVecDeque.SwapRemoveAt(aIndex: SizeUInt): T;
@@ -2784,14 +2787,17 @@ begin
   LPhysicalIndex := GetPhysicalIndex(aIndex);
   Result := FBuffer.GetUnchecked(LPhysicalIndex);
 
-  // 用最后一个元素替换被移除的元素 - 优化：减少 GetPhysicalIndex 调用
   if aIndex < FCount - 1 then
   begin
     LPhysicalLast := GetPhysicalIndex(FCount - 1);
     FBuffer.PutUnchecked(LPhysicalIndex, FBuffer.GetUnchecked(LPhysicalLast));
   end;
 
+  if GetIsManagedType then
+    FBuffer.ZeroUnchecked(GetPhysicalIndex(FCount - 1), 1);
+
   Dec(FCount);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 function TVecDeque.Add(const aElement: T): SizeUInt;
@@ -2905,17 +2911,6 @@ var
   LSrcPtr: PByte;
   LElementSize: SizeUInt;
   LRequiredCapacity: SizeUInt;
-
-  procedure CopyReversedBlock(aSrcPtr: Pointer; aDstIndex: SizeUInt; aCount: SizeUInt);
-  var
-    j: SizeUInt;
-    LSrc: PByte;
-  begin
-    LSrc := PByte(aSrcPtr);
-    for j := 0 to aCount - 1 do
-      FBuffer.OverwriteUnchecked(aDstIndex + j, LSrc + (aCount - 1 - j) * LElementSize, 1);
-  end;
-
 begin
   if aSrc = nil then
   begin
@@ -2930,7 +2925,6 @@ begin
   if IsOverlap(aSrc, aElementCount) then
     raise EInvalidArgument.Create('TVecDeque.PushFront: source overlaps with collection memory');
 
-  // 检查是否需要扩容
   LRequiredCapacity := RequireAddCount(FCount, aElementCount, 'TVecDeque.PushFront');
   if LRequiredCapacity > FBuffer.GetCount then
     EnsureCapacity(LRequiredCapacity);
@@ -2940,29 +2934,26 @@ begin
 
   if aElementCount <= FHead then
   begin
-    // 情况1：有足够空间在头部前面连续放置
-    FHead := WrapSub(FHead, aElementCount);
-    // 反向复制以保持正确顺序
-    CopyReversedBlock(LSrcPtr, FHead, aElementCount);
+    LNewHead := FHead - aElementCount;
+    FBuffer.OverwriteUnchecked(LNewHead, LSrcPtr, aElementCount);
+    FHead := LNewHead;
   end
   else
   begin
-    // 情况2：需要跨越缓冲区边界
     LFirstPartSize := FHead;
     LSecondPartSize := aElementCount - LFirstPartSize;
 
-    // 第一部分：放到头部前面（反向）
     if LFirstPartSize > 0 then
-      CopyReversedBlock(LSrcPtr + LSecondPartSize * LElementSize, 0, LFirstPartSize);
+      FBuffer.OverwriteUnchecked(0, LSrcPtr + LSecondPartSize * LElementSize, LFirstPartSize);
 
-    // 第二部分：放到缓冲区尾部（反向）
     LNewHead := FBuffer.GetCount - LSecondPartSize;
-    CopyReversedBlock(LSrcPtr, LNewHead, LSecondPartSize);
+    FBuffer.OverwriteUnchecked(LNewHead, LSrcPtr, LSecondPartSize);
 
     FHead := LNewHead;
   end;
 
   Inc(FCount, aElementCount);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 procedure TVecDeque.PushBack(const aElement: T);
@@ -3320,6 +3311,7 @@ begin
   end;
 
   Dec(FCount, aCount);
+  FTail := WrapAdd(FHead, FCount);
 
   // 检查是否需要优化容量
   if ShouldShrink then

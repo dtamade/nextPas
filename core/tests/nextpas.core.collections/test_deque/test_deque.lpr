@@ -291,6 +291,120 @@ begin
   end;
 end;
 
+procedure TestInsertThenPushBackIntegrity;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LD.PushBack(30);
+    LD.Insert(2, 25);
+    CheckEqual(Int64(4), Int64(LD.Count), 'count after insert');
+    CheckEqual(Int64(25), Int64(LD.Get(2)), 'inserted element');
+
+    LD.PushBack(40);
+    CheckEqual(Int64(5), Int64(LD.Count), 'count after pushback');
+    CheckEqual(Int64(40), Int64(LD.Get(4)), 'pushback after insert');
+    CheckEqual(Int64(30), Int64(LD.Get(3)), 'original tail preserved');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestRemoveAtThenPushBackIntegrity;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LD.PushBack(30);
+    LD.PushBack(40);
+    LD.RemoveAt(2);
+    CheckEqual(Int64(3), Int64(LD.Count), 'count after remove');
+    CheckEqual(Int64(40), Int64(LD.Get(2)), 'shifted element');
+
+    LD.PushBack(50);
+    CheckEqual(Int64(4), Int64(LD.Count), 'count after pushback');
+    CheckEqual(Int64(50), Int64(LD.Get(3)), 'pushback after remove');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestSwapRemoveAtThenPushBack;
+var
+  LD: TIntVecDeque;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(10);
+    LD.PushBack(20);
+    LD.PushBack(30);
+    LD.PushBack(40);
+    CheckEqual(Int64(20), Int64(LD.SwapRemoveAt(1)), 'swap removed value');
+    CheckEqual(Int64(3), Int64(LD.Count), 'count after swap remove');
+
+    LD.PushBack(50);
+    CheckEqual(Int64(4), Int64(LD.Count), 'count after pushback');
+    CheckEqual(Int64(50), Int64(LD.Get(3)), 'pushback lands correctly');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestPushFrontPointerOrderMatchesArray;
+var
+  LD: TIntVecDeque;
+  LSrc: array[0..2] of Integer;
+begin
+  LSrc[0] := 100;
+  LSrc[1] := 200;
+  LSrc[2] := 300;
+
+  LD := TIntVecDeque.Create;
+  try
+    LD.PushBack(999);
+    LD.PushFront(@LSrc[0], 3);
+    CheckEqual(Int64(4), Int64(LD.Count), 'count');
+    CheckEqual(Int64(100), Int64(LD.Get(0)), 'front[0] preserves order');
+    CheckEqual(Int64(200), Int64(LD.Get(1)), 'front[1] preserves order');
+    CheckEqual(Int64(300), Int64(LD.Get(2)), 'front[2] preserves order');
+    CheckEqual(Int64(999), Int64(LD.Get(3)), 'original element at back');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestMakeContiguousFullBuffer;
+var
+  LD: TIntVecDeque;
+  I: Integer;
+begin
+  LD := TIntVecDeque.Create;
+  try
+    for I := 0 to 7 do
+      LD.PushBack(I * 10);
+    LD.PopFront;
+    LD.PopFront;
+    LD.PushBack(80);
+    LD.PushBack(90);
+
+    for I := 0 to Integer(LD.Count) - 1 do
+      CheckEqual(Int64((I + 2) * 10), Int64(LD.Get(I)), 'element ' + IntToStr(I) + ' before contiguous');
+
+    LD.Sort;
+
+    for I := 0 to Integer(LD.Count) - 1 do
+      CheckEqual(Int64((I + 2) * 10), Int64(LD.Get(I)), 'element ' + IntToStr(I) + ' after sort (contiguous)');
+  finally
+    LD.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.deque');
   T.Run('PushBack/PopFront (FIFO)', @TestPushBackPopFront);
@@ -309,5 +423,10 @@ begin
   T.Run('AppendFrom self range copies snapshot', @TestAppendFromSelfRangeCopiesSnapshot);
   T.Run('InsertFrom self pointer copies snapshot', @TestInsertFromSelfPointerCopiesSnapshot);
   T.Run('AppendFrom range overflow raises', @TestAppendFromRangeOverflowRaises);
+  T.Run('Insert then PushBack integrity', @TestInsertThenPushBackIntegrity);
+  T.Run('RemoveAt then PushBack integrity', @TestRemoveAtThenPushBackIntegrity);
+  T.Run('SwapRemoveAt then PushBack', @TestSwapRemoveAtThenPushBack);
+  T.Run('PushFront(Pointer) order matches array', @TestPushFrontPointerOrderMatchesArray);
+  T.Run('MakeContiguous full buffer', @TestMakeContiguousFullBuffer);
   T.Summary;
 end.
