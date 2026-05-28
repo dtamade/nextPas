@@ -334,21 +334,23 @@ begin
 end;
 
 procedure TRBTreeCore.Clear;
-var Cur, Next: PNode;
+
+  procedure FreeSubtree(N: PNode);
+  begin
+    if (N = nil) or (N = @FSentinel) then Exit;
+    FreeSubtree(N^.Left);
+    FreeSubtree(N^.Right);
+    FreeNode(N);
+  end;
+
+var
+  LRoot: PNode;
 begin
-  // 先断开根，保证异常情况下不会二次释放或访问
-  if FRoot = @FSentinel then exit;
-  Cur := FRoot;
+  if FRoot = @FSentinel then Exit;
+  LRoot := FRoot;
   FRoot := @FSentinel;
   FCount := 0;
-  // 从最小节点开始依次释放
-  Cur := MinNode(Cur);
-  while (Cur <> @FSentinel) do
-  begin
-    Next := SuccessorNode(Cur);
-    FreeNode(Cur);
-    Cur := Next;
-  end;
+  FreeSubtree(LRoot);
 end;
 
 function TRBTreeCore.GetCount: SizeUInt;
