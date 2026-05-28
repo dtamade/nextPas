@@ -289,6 +289,8 @@ type
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure AppendWhereConstraint(const ATypeId: LongInt;
       const AWhereSpec: string);
+    procedure ProcessInterfaceMethods(const ANode: TGreenNode;
+      const AOwnerUnitId: string; const ATypeId: LongInt);
     function CheckSingleConstraint(const AArgType: string;
       const AConstraint: string): Boolean;
     procedure RegisterStructuredGenericParent(const ATypeId: LongInt;
@@ -4109,6 +4111,56 @@ begin
   FModel.AppendTypeConstraint(ATypeId, ParamName, Constraint);
 end;
 
+procedure TSemanticAnalyzer.ProcessInterfaceMethods(const ANode: TGreenNode;
+  const AOwnerUnitId: string; const ATypeId: LongInt);
+var
+  I: LongInt;
+  Child, NameNode: TGreenNode;
+  IntfName: string;
+  SymbolId: LongInt;
+  Meta: TTypeMetadata;
+begin
+  if ANode = nil then
+    Exit;
+  IntfName := FModel.TypeAt(ATypeId - 1).Name;
+  for I := 0 to ANode.ChildCount - 1 do
+  begin
+    Child := ANode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkClassMethod) then
+      Continue;
+    if Child.ChildCount > 0 then
+    begin
+      NameNode := Child.ChildAt(0);
+      if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+      begin
+        SymbolId := FModel.AddSymbol(
+          IntfName + '.' + NameNode.Text,
+          'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
+        FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
+        FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
+        FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+      end;
+    end;
+  end;
+  with Meta do
+  begin
+    TypeId := ATypeId;
+    Size := 8;
+    IsRecord := False;
+    VmtCount := 0;
+    ParentClassId := 0;
+    ParentClassName := '';
+    Interfaces := '';
+    ArrElemSize := 0;
+    ArrElemType := '';
+    SetLength(Fields, 0);
+    SetLength(VmtSlots, 0);
+    SetLength(RetPtrMethods, 0);
+    SetLength(Properties, 0);
+  end;
+  FModel.SetTypeMeta(ATypeId, Meta);
+end;
+
 function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
@@ -4698,7 +4750,9 @@ begin
         if InterfaceList <> '' then
           FModel.AddStringConstValue(Child.Text + '$interfaces', InterfaceList);
         if not SameText(TypeChild.Text, 'interface') then
-          ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
+          ProcessClassFields(TypeChild, AOwnerUnitId, TypeId)
+        else
+          ProcessInterfaceMethods(TypeChild, AOwnerUnitId, TypeId);
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then

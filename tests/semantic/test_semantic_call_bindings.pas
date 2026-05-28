@@ -3676,6 +3676,70 @@ begin
   end;
 end;
 
+procedure CheckInterfaceMethodCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  I: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  Found: Boolean;
+begin
+  SourceText :=
+    'program InterfaceCall;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IGreeter = interface' + LineEnding +
+    '    procedure Greet(const Name: String);' + LineEnding +
+    '    function GetMessage: String;' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  G: IGreeter;' + LineEnding +
+    'begin' + LineEnding +
+    '  G.Greet(' + #39 + 'World' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('interface-call-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('interface-call-missing-model');
+    Found := False;
+    for I := 0 to Model.BindingCount - 1 do
+      if SameText(Model.BindingAt(I).Name, 'Greet') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+      begin
+        Found := True;
+        Break;
+      end;
+    if not Found then
+      Fail('interface-call-greet-not-bound');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -16022,6 +16086,7 @@ begin
     CheckGenericParentChainInstantiation;
     CheckGenericSpecializeBeforeBody;
     CheckGenericFixedTypeParentChain;
+    CheckInterfaceMethodCallBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
