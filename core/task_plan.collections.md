@@ -12,7 +12,14 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec Pop Alias Removal
+### Current Micro Batch: Vec TryPeek Zero Count
+
+- [x] Make `TVec.TryPeekCopy(Pointer, 0)` a successful no-op.
+- [x] Keep `TVec.TryPeekCopy(nil, Count > 0)` returning `False`.
+- [x] Keep `TVec.PeekRange(0)` returning `nil` because no borrowed range exists.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec Pop Alias Removal
 
 - [x] Remove the concrete-class-only `TVec.Pop(out Element): Boolean` alias.
 - [x] Keep `TryPop(var Element): Boolean` as the non-throwing Vec API.

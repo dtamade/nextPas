@@ -52,6 +52,8 @@
 - Verified the alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 - Started the next Vec surface cleanup batch. Removed the concrete-class-only `TVec.Pop(out Element): Boolean` alias, leaving `TryPop(var Element): Boolean` for non-throwing extraction and `Pop: T` for checked throwing extraction. Other container families with intentional `Pop(out): Boolean` contracts were left untouched.
 - Verified the Vec pop alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the next Vec tail-observation semantics batch. `TryPeek(var array, 0)` already succeeds and `PeekRange(0)` already returns `nil`; changed `TryPeekCopy(Pointer, 0)` to succeed as the same zero-count no-op while keeping `nil` invalid for non-zero counts.
+- Verified the Vec TryPeek zero-count batch with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

@@ -1445,7 +1445,10 @@ var
   LP: Pointer;
 begin
   // Try 方法完整参数检查：确保永不抛异常
-  if (aCount = 0) or (aDst = nil) or (aCount > FCount) then
+  if aCount = 0 then
+    exit(True);
+
+  if (aDst = nil) or (aCount > FCount) then
     exit(False);
 
   LP := PeekRange(aCount);
