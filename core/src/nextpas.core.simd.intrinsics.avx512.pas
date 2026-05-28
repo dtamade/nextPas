@@ -53,7 +53,6 @@ function avx512_maskz_add_ps512(const a, b: TM512; mask: UInt16): TM512;
 implementation
 
 uses
-  SysUtils;
 
 type
   TAVX512F32x16BinaryOp = (avx512OpAdd, avx512OpSub, avx512OpMul, avx512OpDiv);
@@ -61,22 +60,16 @@ type
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.avx512 is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ENDIF}
+  
+  RunError(217);  {$ENDIF}
 end;
 
 procedure EnsureExperimentalAvx512TargetSupported; inline;
 begin
   {$IFNDEF CPUX86_64}
   {$IFNDEF CPUX86}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.avx512 experimental runtime is only qualified on x86/x86_64. ' +
-    'The non-x86 branch remains compile scaffolding, not executable semantics.'
-  );
-  {$ENDIF}
+  
+  RunError(217);  {$ENDIF}
   {$ENDIF}
 end;
 

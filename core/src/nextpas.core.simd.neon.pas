@@ -79,8 +79,7 @@ function BitsetPopCount_NEON(p: Pointer; byteLen: SizeUInt): SizeUInt;
 implementation
 
 uses
-  Math,  // RTL Math 单元
-  SysUtils,
+  nextpas.core.simd.mathutil,
   nextpas.core.simd.scalar;
 
 // === NEON Vector Type ===

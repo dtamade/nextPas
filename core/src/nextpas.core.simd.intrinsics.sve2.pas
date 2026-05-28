@@ -35,21 +35,15 @@ function sve2_mul_lane_u32(const a: TSVEVector; const b: TSVEVector; lane: Integ
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.sve2 is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
   if not HasSVE2 then
-    raise ENotSupportedException.Create(
-      'nextpas.core.simd.intrinsics.sve2 placeholder semantics are only qualified on AArch64 targets whose cpuinfo reports SVE2.'
-    );
+    
   {$ENDIF}
 end;
 

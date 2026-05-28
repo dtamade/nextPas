@@ -373,8 +373,7 @@ function Utf8Validate_SSE2(p: Pointer; len: SizeUInt): Boolean;
 implementation
 
 uses
-  SysUtils,
-  Math,  // RTL Math 单元
+  nextpas.core.simd.mathutil,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
   nextpas.core.simd.intrinsics.base,

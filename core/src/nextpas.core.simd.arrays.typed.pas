@@ -8,7 +8,7 @@ unit nextpas.core.simd.arrays.typed;
 interface
 
 uses
-  Math, nextpas.core.simd.alloc;
+  nextpas.core.simd.mathutil, nextpas.core.simd.alloc;
 
 type
   TSimdF32Array = record

@@ -58,8 +58,7 @@ procedure RegisterRISCVVBackend;
 implementation
 
 uses
-  Math,  // RTL Math 单元
-  SysUtils,
+  nextpas.core.simd.mathutil,
   nextpas.core.simd.scalar;
 
 // =============================================================

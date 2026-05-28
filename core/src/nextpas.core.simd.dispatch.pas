@@ -946,7 +946,6 @@ function CloneDispatchTable(fromBackend: TSimdBackend; var dispatchTable: TSimdD
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.scalar,
   nextpas.core.atomic,
   nextpas.core.simd.backend.priority; // atomic_thread_fence (MemoryBarrier replacement)

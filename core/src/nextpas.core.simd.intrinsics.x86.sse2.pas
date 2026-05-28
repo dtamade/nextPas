@@ -311,7 +311,7 @@ procedure simd_stream_si64(var Dest; Value: Int64); // Non-temporal store 64-bit
 implementation
 
 uses
-  Math;
+  nextpas.core.simd.mathutil;
 
 {$PUSH}
 {$WARN 5057 OFF} // raw leaf / assembler 路径的 Result 初始化误报

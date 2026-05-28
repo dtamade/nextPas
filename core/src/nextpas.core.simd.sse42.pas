@@ -51,7 +51,6 @@ function FindFirstNotOf_SSE42(const str: PAnsiChar; strLen: Integer;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 const

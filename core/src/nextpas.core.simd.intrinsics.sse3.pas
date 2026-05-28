@@ -60,27 +60,20 @@ procedure sse3_mwait(extensions, hints: Cardinal);
 implementation
 
 uses
-  SysUtils;
 
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.sse3 is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ENDIF}
+  
+  RunError(217);  {$ENDIF}
 end;
 
 procedure EnsureExperimentalSse3TargetSupported; inline;
 begin
   {$IFNDEF CPUX86_64}
   {$IFNDEF CPUX86}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.sse3 experimental runtime is only qualified on x86/x86_64. ' +
-    'The non-x86 branch remains compile scaffolding, not executable semantics.'
-  );
-  {$ENDIF}
+  
+  RunError(217);  {$ENDIF}
   {$ENDIF}
 end;
 

@@ -61,7 +61,7 @@ implementation
 
 uses
   SysUtils,
-  Math;
+  nextpas.core.simd.mathutil;
 
 const
   RGB_TO_GRAY_R = 0.2126;
@@ -156,7 +156,7 @@ begin
   for LIndex := 0 to 255 do
   begin
     LNormalized := LIndex / 255.0;
-    aLut[LIndex] := ClampByteFromSingle(Power(LNormalized, LInvGamma) * 255.0);
+    aLut[LIndex] := ClampByteFromSingle(SimdPowerF32(LNormalized, LInvGamma) * 255.0);
   end;
 end;
 

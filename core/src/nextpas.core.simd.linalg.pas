@@ -106,7 +106,8 @@ function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.simd,
+  nextpas.core.simd.linalg.gemm;
 
 class function TSimdF32Matrix.Create(aRows, aCols: SizeUInt): TSimdF32Matrix;
 begin
@@ -244,6 +245,20 @@ var
   LBt: TSimdF32Matrix;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) or (aB.Cols = 0) then Exit;
+
+  // Fast path: large matrices with simple alpha=1, beta=0 and contiguous layout
+  if (aA.Rows >= GEMM_MR) and (aB.Cols >= GEMM_NR) and (aA.Cols >= 8) and
+     (aAlpha = 1.0) and (aBeta = 0.0) and
+     (SizeUInt(aA.RowStride) = aA.Cols) and
+     (SizeUInt(aB.RowStride) = aB.Cols) and
+     (SizeUInt(aC.RowStride) = aC.Cols) then
+  begin
+    GemmBlockedF32(aA.Data, aB.Data, aC.Data,
+      aA.Rows, aB.Cols, aA.Cols, aA.Cols, aB.Cols, aC.Cols);
+    Exit;
+  end;
+
+  // Fallback: transpose-based ReduceDotF32 path
   if aA.Cols >= 8 then
   begin
     LBt := aB.Transpose;

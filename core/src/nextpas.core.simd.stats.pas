@@ -58,7 +58,6 @@ function ZScoreNormalizeF64(aSrc, aDst: PDouble; aCount: SizeUInt): Boolean;
 implementation
 
 uses
-  Math,
   nextpas.core.simd;
 
 function WeightedSumF32(aValues, aWeights: PSingle; aCount: SizeUInt): Single;

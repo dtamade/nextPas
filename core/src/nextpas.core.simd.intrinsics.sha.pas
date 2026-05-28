@@ -33,16 +33,12 @@ function sha_sha256rnds2_epu32(const a, b, k: TM128): TM128;
 implementation
 
 uses
-  SysUtils;
 
 procedure EnsureExperimentalIntrinsicsEnabled(const aFunctionName: string); inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.CreateFmt(
-    '%s is experimental placeholder semantics. Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.',
-    [aFunctionName]
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
   if aFunctionName = '' then
     ;
   {$ENDIF}

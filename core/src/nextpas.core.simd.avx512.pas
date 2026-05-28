@@ -48,7 +48,6 @@ procedure ToUpperAscii_AVX512(p: Pointer; len: SizeUInt);
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.avx2; // Fallback for some operations
 

@@ -56,21 +56,15 @@ function rvv_vmadd_vv_u32m1(const a, b, c: TRVVVector; vl: Integer): TRVVVector;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.rvv is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
   if not HasRISCVV then
-    raise ENotSupportedException.Create(
-      'nextpas.core.simd.intrinsics.rvv placeholder semantics are only qualified on RISC-V targets whose cpuinfo reports RVV.'
-    );
+    
   {$ENDIF}
 end;
 

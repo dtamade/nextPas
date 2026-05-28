@@ -7,7 +7,6 @@ unit nextpas.core.simd.api;
 interface
 
 uses
-  SysUtils;
 
 // === SIMD 门面函数 API ===
 // High-level facade entrypoints that dispatch to the best runtime SIMD implementation.

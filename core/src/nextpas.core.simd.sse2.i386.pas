@@ -48,7 +48,6 @@ function SSE2DivF64x2_i386(const a, b: TVecF64x2): TVecF64x2;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar;

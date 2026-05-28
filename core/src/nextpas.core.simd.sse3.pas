@@ -69,7 +69,6 @@ function SSE3NormalizeF32x3(const a: TVecF32x4): TVecF32x4;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 // === SSE3 Horizontal Arithmetic ===

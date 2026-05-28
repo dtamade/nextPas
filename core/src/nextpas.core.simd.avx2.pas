@@ -72,7 +72,6 @@ procedure MemSet_AVX2(dst: Pointer; len: SizeUInt; value: Byte);
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar; // For fallback functions

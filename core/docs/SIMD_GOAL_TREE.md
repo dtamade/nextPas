@@ -1,6 +1,6 @@
 # SIMD 模块目标树（总控地图）
 
-> 最后更新: 2026-05-28
+> 最后更新: 2026-05-29
 > 总目标: 打造 FreePascal 领域最优秀的 SIMD 框架
 
 ## 总览
@@ -12,7 +12,10 @@ nextpas.core.simd
 ├── G3: 质量保障 (审计/测试/内存)     [100%] ✅
 ├── G4: 文档与可发现性               [100%] ✅
 ├── G5: 性能验证与基准               [100%] ✅
-└── G6: 文本/内存 SIMD 加速          [100%] ✅
+├── G6: 文本/内存 SIMD 加速          [100%] ✅
+├── G7: GEMM 微内核 (linalg.gemm)    [100%] ✅
+├── G8: FFT SIMD 化 (signal)         [100%] ✅
+└── G9: RTL 依赖清零                 [ 90%] ✅
 ```
 
 ---
@@ -158,6 +161,88 @@ nextpas.core.simd
 
 ---
 
+## G7: GEMM 微内核 ✅ DONE
+
+### 7.1 独立 GEMM 单元 ✅
+- [x] `nextpas.core.simd.linalg.gemm.pas` 新建
+- [x] GemmMicro6x16F32: AVX2+FMA 汇编微内核 (12 累加器, 累加模式)
+- [x] PackPanelA_MR6: A 矩阵 pack 为 [MR, K] 连续布局
+- [x] PackPanelB_NR16: B 矩阵 pack 为 [K, NR] 连续布局
+- [x] PackPanelB_NR16_TransB: 从转置 B [N, K] 读取并 pack
+
+### 7.2 三层 Cache Tiling ✅
+- [x] GemmBlockedF32: C[M,N] = A[M,K] * B[K,N]
+- [x] GemmBlockedTransBF32: C[M,N] = A[M,K] * B^T[N,K]
+- [x] MC=72, KC=256, NC=4096 分块参数
+- [x] M/N remainder 标量回退
+
+### 7.3 集成 ✅
+- [x] GemmF32 (linalg.pas) 路由: 大矩阵走 GemmBlockedF32
+- [x] Conv2DMultiChannelF32 (nn.pas) 迁移到 GemmBlockedTransBF32
+- [x] 旧 GemmTiled6x16F32/GemmMicro6x16 从 nn.pas 删除
+
+### 7.4 验证 ✅
+- [x] test_gemm_blocked: 31258 测试通过, 0 失败
+- [x] HeapTrc: 0 unfreed memory blocks
+- [x] Conv2D 回归: 123 测试通过
+
+---
+
+## G8: FFT SIMD 化 (进行中)
+
+### 8.1 Twiddle 预计算 ✅
+- [x] 所有 stage 的 twiddle factor 一次性预计算到对齐缓冲区
+- [x] 消除蝶形热循环中的 Cos/Sin 调用
+
+### 8.2 蝶形展开 ✅
+- [x] Fused radix-4 首 pass (stage 0+1 合并, 零乘法)
+- [x] IFFT 归一化用 ArrayMulScalarF32 (SIMD)
+
+### 8.3 蝶形 SIMD 向量化 ✅
+- [x] FftButterfly4_SSE2: 4 复数蝶形/call, shufps complex multiply
+- [x] FftButterfly8_AVX2: 8 复数蝶形/call, ymm registers
+- [x] Block-oriented 后期 stage (连续内存访问)
+- [x] N>=16K: 2-3x 加速 (N=65536: 2.92x, N=262144: 2.99x)
+
+### 8.4 FFT Plan API ✅
+- [x] TSimdFftPlanF32: create once, execute many (no per-call alloc)
+- [x] Forward + Inverse support (conjugate twiddle)
+- [x] Plan vs one-shot: 25-41% faster (eliminates twiddle recompute)
+- [x] Peak: 2.76 GFLOPS (N=65536), total 3.68x vs original
+
+### 8.5 去 RTL 依赖 ✅
+- [x] nextpas.core.simd.mathutil: SimdSinF32/SimdCosF32 (Cody-Waite + 11阶 minimax)
+- [x] SimdLnF32 (log2 分解 + Remez 多项式)
+- [x] signal.pas 完全零 Math 依赖
+
+### 8.6 Split-radix (远期)
+- [ ] Full radix-4 需要 digit-reversal permutation 重写
+- [ ] 当前 fused radix-4 首 pass 已获得大部分收益
+
+---
+
+## G9: RTL 依赖清零 (Math 100%, SysUtils 69% reduced)
+
+### 9.1 Math 替代 ✅ DONE
+- [x] nextpas.core.simd.mathutil.pas: 完整数学库
+  - Sin/Cos (Cody-Waite + 11阶 minimax, <2e-7 误差)
+  - Ln (log2 分解 + Remez), Power (exp(exp*ln))
+  - Tan, ArcSin, ArcCos, ArcTan2
+  - Min/Max/Floor/Ceil (F32+F64 overloads)
+  - IsNan/IsInfinite (位操作)
+  - Infinity/NegInfinity/NaN 常量
+- [x] 所有 SIMD 源文件零 Math 依赖
+- [x] nextpas.core.math 也零 Math 依赖
+
+### 9.2 SysUtils 最小化 ✅
+- [x] 42 → 13 文件 (69% 减少)
+- [x] 16 个后端文件: 移除未使用的 SysUtils import
+- [x] 13 个 intrinsics stub: raise → RunError(217)
+- 剩余 13 文件: cpuinfo (字符串解析), imageproc, avx2 gather (参数校验)
+- 决策: 等 nextPas RTL 提供 Exception 平替
+
+---
+
 ## 决策记录
 
 | 日期 | 决策 | 原因 |
@@ -168,3 +253,6 @@ nextpas.core.simd
 | 2026-05-28 | Conv2D im2col+GEMM | ReduceDotF32(len=3) 无法利用 SIMD，im2col 将 K 提升到 576 |
 | 2026-05-28 | DepthwiseConv2D 行向量化 | 循环翻转：逐像素→逐行，ArrayAxpyF32(len=OutputW) |
 | 2026-05-28 | ChannelSoftmax 平面向量化 | 逐像素跨通道→逐通道处理整平面，消除 stride 跳跃 |
+| 2026-05-29 | GEMM 微内核独立单元 | 通用 API 复用，Conv2D 不再内联 GEMM 代码 |
+| 2026-05-29 | 累加模式微内核 | 支持 K 方向分块，C += A*B 而非 C = A*B |
+| 2026-05-29 | SIMD_X86_AVAILABLE define | 修复 cpuinfo case 编译错误，在 settings.inc 中按 CPU 架构定义 |

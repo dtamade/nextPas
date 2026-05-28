@@ -82,7 +82,6 @@ function SSE41LengthF32x3(const a: TVecF32x4): Single;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 // === SSE4.1 Dot Product ===
