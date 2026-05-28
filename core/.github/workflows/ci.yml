@@ -12,11 +12,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup FPC trunk
-        uses: ollydev/setup-lazarus-fpcup@v3
+      - name: Install bootstrap FPC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fpc
+
+      - name: Cache FPC trunk
+        id: cache-fpc
+        uses: actions/cache@v4
         with:
-          laz: "stable"
-          fpc: "main"
+          path: ~/fpc-trunk
+          key: fpc-trunk-linux-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Build FPC trunk
+        if: steps.cache-fpc.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/fpc-trunk
+          wget -q "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-x86_64-linux" -O ~/fpc-trunk/fpcup
+          chmod +x ~/fpc-trunk/fpcup
+          ~/fpc-trunk/fpcup --installdir=~/fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | tail -30
+
+      - name: Setup PATH
+        run: |
+          echo "$HOME/fpc-trunk/fpc/bin/x86_64-linux" >> $GITHUB_PATH
 
       - name: Verify FPC
         run: fpc -iV
@@ -29,11 +47,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup FPC trunk
-        uses: ollydev/setup-lazarus-fpcup@v3
+      - name: Install bootstrap FPC
+        run: brew install fpc
+
+      - name: Cache FPC trunk
+        id: cache-fpc
+        uses: actions/cache@v4
         with:
-          laz: "stable"
-          fpc: "main"
+          path: ~/fpc-trunk
+          key: fpc-trunk-macos-aarch64-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Build FPC trunk
+        if: steps.cache-fpc.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/fpc-trunk
+          wget -q "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-aarch64-darwin" -O ~/fpc-trunk/fpcup
+          chmod +x ~/fpc-trunk/fpcup
+          ~/fpc-trunk/fpcup --installdir=~/fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | tail -30
+
+      - name: Setup PATH
+        run: |
+          FPC_BIN=$(find ~/fpc-trunk/fpc/bin -name fpc -type f 2>/dev/null | head -1)
+          if [ -n "$FPC_BIN" ]; then
+            echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
+          fi
 
       - name: Verify FPC
         run: fpc -iV
@@ -61,11 +98,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup FPC trunk
-        uses: ollydev/setup-lazarus-fpcup@v3
+      - name: Cache FPC trunk
+        id: cache-fpc
+        uses: actions/cache@v4
         with:
-          laz: "stable"
-          fpc: "main"
+          path: C:\fpc-trunk
+          key: fpc-trunk-windows-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Install bootstrap and build FPC trunk
+        if: steps.cache-fpc.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          choco install freepascal --yes --no-progress
+          New-Item -ItemType Directory -Force -Path C:\fpc-trunk
+          Invoke-WebRequest -Uri "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-x86_64-win64.exe" -OutFile "C:\fpc-trunk\fpcup.exe"
+          & C:\fpc-trunk\fpcup.exe --installdir=C:\fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | Select-Object -Last 30
+
+      - name: Setup PATH
+        shell: bash
+        run: |
+          echo "C:/fpc-trunk/fpc/bin/x86_64-win64" >> $GITHUB_PATH
+          echo "C:/fpc-trunk/fpc/bin/i386-win32" >> $GITHUB_PATH
 
       - name: Verify FPC
         run: fpc -iV
