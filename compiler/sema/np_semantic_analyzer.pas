@@ -37,6 +37,7 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
+    FImportedUnitTrees: array of TGreenTree;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
@@ -273,6 +274,7 @@ type
     procedure SeedHaltCalls;
     procedure PreRegisterFunctionReturnTypes;
     procedure SeedFunctionBodies;
+    procedure RetainImportedUnitTree(const ATree: TGreenTree);
     procedure SeedImportedUnitBodies;
   public
     constructor Create(
@@ -655,7 +657,13 @@ begin
 end;
 
 destructor TSemanticAnalyzer.Destroy;
+var
+  Index: LongInt;
 begin
+  SetLength(FProcedureBodies, 0);
+  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+    FImportedUnitTrees[Index].Free;
+  SetLength(FImportedUnitTrees, 0);
   FModel.Free;
   inherited Destroy;
 end;
@@ -855,6 +863,18 @@ begin
   FProcedureBodies[NextIndex].Decl := ADecl;
   FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;
   FProcedureBodies[NextIndex].ScopeId := FCurrentScopeId;
+end;
+
+procedure TSemanticAnalyzer.RetainImportedUnitTree(const ATree: TGreenTree);
+var
+  NextIndex: SizeInt;
+begin
+  if ATree = nil then
+    Exit;
+
+  NextIndex := Length(FImportedUnitTrees);
+  SetLength(FImportedUnitTrees, NextIndex + 1);
+  FImportedUnitTrees[NextIndex] := ATree;
 end;
 
 function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
@@ -6923,6 +6943,7 @@ var
   SourceText, Line: string;
   UnitLexer: TLexerResult;
   UnitTree: TGreenTree;
+  UnitTreeRetained: Boolean;
   F: Text;
   SourcePath: string;
   TmpDiag: TDiagnosticsSink;
@@ -6958,17 +6979,28 @@ begin
       Close(F);
       UnitLexer := TLexerResult.Create(SourceText);
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
-      if (UnitTree <> nil) and UnitTree.IsValid and
-        (UnitTree.RootNode <> nil) then
-      begin
-        OwnerUnitId := ResolvedUnit.UnitId;
-        if OwnerUnitId = '' then
-          OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
-        RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
-      end
-      else if UnitTree <> nil then
-        UnitTree.Free;
-      UnitLexer.Free;
+      UnitTreeRetained := False;
+      try
+        if (UnitTree <> nil) and UnitTree.IsValid and
+          (UnitTree.RootNode <> nil) then
+        begin
+          OwnerUnitId := ResolvedUnit.UnitId;
+          if OwnerUnitId = '' then
+            OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
+          RetainImportedUnitTree(UnitTree);
+          UnitTreeRetained := True;
+          RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
+        end
+        else if UnitTree <> nil then
+        begin
+          UnitTree.Free;
+          UnitTree := nil;
+        end;
+      finally
+        UnitLexer.Free;
+        if (UnitTree <> nil) and not UnitTreeRetained then
+          UnitTree.Free;
+      end;
     end;
   finally
     TmpDiag.Free;
