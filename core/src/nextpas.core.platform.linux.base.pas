@@ -298,6 +298,9 @@ const
 { socket constants - AF_*, SOL_*, SO_*, IPPROTO_*, TCP_*, MSG_*, etc. }
 {$I nextpas.core.platform.linux.base.socket.inc}
 
+{ termios constants and types }
+{$I nextpas.core.platform.linux.base.termios.inc}
+
 implementation
 
 end.

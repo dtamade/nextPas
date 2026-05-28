@@ -126,6 +126,19 @@ function writev(fd: cint; iov: piovec; iovcnt: cint): ssize_t; cdecl; external '
 function sendmsg(sockfd: cint; msg: Pointer; flags: cint): ssize_t; cdecl; external 'c' name 'sendmsg';
 function recvmsg(sockfd: cint; msg: Pointer; flags: cint): ssize_t; cdecl; external 'c' name 'recvmsg';
 
+function tcgetattr(fd: cint; termios_p: Pointer): cint; cdecl; external 'c' name 'tcgetattr';
+function tcsetattr(fd: cint; optional_actions: cint; termios_p: Pointer): cint; cdecl; external 'c' name 'tcsetattr';
+function cfgetispeed(termios_p: Pointer): cuint32; cdecl; external 'c' name 'cfgetispeed';
+function cfgetospeed(termios_p: Pointer): cuint32; cdecl; external 'c' name 'cfgetospeed';
+function cfsetispeed(termios_p: Pointer; speed: cuint32): cint; cdecl; external 'c' name 'cfsetispeed';
+function cfsetospeed(termios_p: Pointer; speed: cuint32): cint; cdecl; external 'c' name 'cfsetospeed';
+function tcdrain(fd: cint): cint; cdecl; external 'c' name 'tcdrain';
+function tcflush(fd: cint; queue_selector: cint): cint; cdecl; external 'c' name 'tcflush';
+function tcflow(fd: cint; action: cint): cint; cdecl; external 'c' name 'tcflow';
+function tcsendbreak(fd: cint; duration: cint): cint; cdecl; external 'c' name 'tcsendbreak';
+function isatty(fd: cint): cint; cdecl; external 'c' name 'isatty';
+function ioctl(fd: cint; request: culong; args: Pointer): cint; cdecl; varargs; external 'c' name 'ioctl';
+
 implementation
 
 end.
