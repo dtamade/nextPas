@@ -149,6 +149,31 @@ begin
   platform_file_unlink('/tmp/nextpas_copy_dst.txt');
 end;
 
+procedure TestWriteAtomic;
+var
+  Size: Int64;
+  H: TPlatformFileHandle;
+  LBuf: array[0..31] of AnsiChar;
+  LRead: PtrUInt;
+const
+  DATA = 'atomic write test';
+  PATH = '/tmp/nextpas_atomic_test.dat';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_fs_write_atomic(PATH, PAnsiChar(DATA), 17) = 0, 'write_atomic ok');
+  Check(platform_fs_is_file(PATH), 'file exists');
+  Check(platform_fs_file_size(PATH, Size) = 0, 'stat');
+  Check(Size = 17, 'size = 17');
+  platform_file_open(PATH, fomReadOnly, fcmOpenExisting, H);
+  platform_file_read(H, @LBuf[0], 17, LRead);
+  platform_file_close(H);
+  Check(LRead = 17, 'read 17 bytes');
+  LBuf[17] := #0;
+  Check(LBuf[0] = 'a', 'content[0]');
+  Check(not platform_fs_exists(PAnsiChar(PATH + '.tmp')), 'tmp cleaned up');
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -161,5 +186,6 @@ begin
   T.Run('mktemp unique', @TestMktempUnique);
   T.Run('mkdir_p', @TestMkdirP);
   T.Run('copy_file', @TestCopyFile);
+  T.Run('write_atomic', @TestWriteAtomic);
   T.Summary;
 end.

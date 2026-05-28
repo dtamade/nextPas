@@ -13,6 +13,8 @@ function platform_fs_mktemp(const APrefix: PAnsiChar; const ASuffix: PAnsiChar;
   APathBuf: PAnsiChar; APathBufLen: Int32; out AFd: Int32): Int32;
 function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+function platform_fs_write_atomic(const APath: PAnsiChar;
+  AData: Pointer; ALen: PtrUInt): Int32;
 
 implementation
 
@@ -169,6 +171,53 @@ begin
   until (LR <> 0) or (LWritten < LRead);
   platform_file_close(LDstH);
   platform_file_close(LSrcH);
+  Result := LR;
+end;
+
+function platform_fs_write_atomic(const APath: PAnsiChar;
+  AData: Pointer; ALen: PtrUInt): Int32;
+var
+  LTmpPath: array[0..1023] of AnsiChar;
+  LPathLen, I: Int32;
+  LH: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LR: Int32;
+  LFd: Int32;
+begin
+  if (APath = nil) or (APath[0] = #0) then
+    Exit(-1);
+  LPathLen := 0;
+  while (LPathLen < 1000) and (APath[LPathLen] <> #0) do
+  begin
+    LTmpPath[LPathLen] := APath[LPathLen];
+    Inc(LPathLen);
+  end;
+  LTmpPath[LPathLen] := '.'; Inc(LPathLen);
+  LTmpPath[LPathLen] := 't'; Inc(LPathLen);
+  LTmpPath[LPathLen] := 'm'; Inc(LPathLen);
+  LTmpPath[LPathLen] := 'p'; Inc(LPathLen);
+  LTmpPath[LPathLen] := #0;
+
+  LR := platform_file_open(@LTmpPath[0], fomWriteOnly, fcmCreateAlways, LH);
+  if LR <> 0 then Exit(LR);
+
+  if ALen > 0 then
+  begin
+    LR := platform_file_write(LH, AData, ALen, LWritten);
+    if (LR <> 0) or (LWritten <> ALen) then
+    begin
+      platform_file_close(LH);
+      platform_file_unlink(@LTmpPath[0]);
+      Exit(LR);
+    end;
+  end;
+
+  platform_file_sync(LH);
+  platform_file_close(LH);
+
+  LR := platform_file_rename(@LTmpPath[0], APath);
+  if LR <> 0 then
+    platform_file_unlink(@LTmpPath[0]);
   Result := LR;
 end;
 
