@@ -68,8 +68,14 @@ function platform_thread_host_state_create(out AState: PPlatformPThreadState; co
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_state_create(AState, AStartRoutine, AArgument);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_state_create(AState, AStartRoutine, AArgument);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_state_create(AState, AStartRoutine, AArgument);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_state_create(AState, AStartRoutine, AArgument);
   {$ELSE}
-  Result := platform_pthread_state_create(AState, AStartRoutine, AArgument);
+  Result := unix_pthread_state_create(AState, AStartRoutine, AArgument);
   {$ENDIF}
 end;
 
@@ -77,8 +83,14 @@ function platform_thread_host_state_join(const AState: PPlatformPThreadState; ou
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_state_join(AState, ARetVal);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_state_join(AState, ARetVal);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_state_join(AState, ARetVal);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_state_join(AState, ARetVal);
   {$ELSE}
-  Result := platform_pthread_state_join(AState, ARetVal);
+  Result := unix_pthread_state_join(AState, ARetVal);
   {$ENDIF}
 end;
 
@@ -86,8 +98,14 @@ function platform_thread_host_state_detach(const AState: PPlatformPThreadState):
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_state_detach(AState);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_state_detach(AState);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_state_detach(AState);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_state_detach(AState);
   {$ELSE}
-  Result := platform_pthread_state_detach(AState);
+  Result := unix_pthread_state_detach(AState);
   {$ENDIF}
 end;
 
@@ -95,8 +113,14 @@ function platform_thread_host_self_token_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_thread_self_token_u64;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_thread_self_token_u64;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_thread_self_token_u64;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_thread_self_token_u64;
   {$ELSE}
-  Result := platform_thread_self_token_u64;
+  Result := unix_thread_self_token_u64;
   {$ENDIF}
 end;
 
@@ -104,8 +128,14 @@ function platform_thread_host_native_thread_id_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_native_thread_id_u64;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_native_thread_id_u64;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_native_thread_id_u64;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_native_thread_id_u64;
   {$ELSE}
-  Result := platform_native_thread_id_u64;
+  Result := unix_native_thread_id_u64;
   {$ENDIF}
 end;
 
@@ -113,8 +143,14 @@ procedure platform_thread_host_yield; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   linux_pthread_yield;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  android_pthread_yield;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  darwin_pthread_yield;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  freebsd_pthread_yield;
   {$ELSE}
-  platform_pthread_yield;
+  unix_pthread_yield;
   {$ENDIF}
 end;
 
@@ -122,8 +158,14 @@ procedure platform_thread_host_sleep_ns(const ANanoseconds: UInt64); inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   linux_pthread_sleep_ns(ANanoseconds);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  android_pthread_sleep_ns(ANanoseconds);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  darwin_pthread_sleep_ns(ANanoseconds);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  freebsd_pthread_sleep_ns(ANanoseconds);
   {$ELSE}
-  platform_pthread_sleep_ns(ANanoseconds);
+  unix_pthread_sleep_ns(ANanoseconds);
   {$ENDIF}
 end;
 
@@ -131,8 +173,14 @@ function platform_thread_host_tls_create(out AKey: PtrUInt): Int32; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_tls_create(AKey);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_tls_create(AKey);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_tls_create(AKey);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_tls_create(AKey);
   {$ELSE}
-  Result := platform_pthread_tls_create(AKey);
+  Result := unix_pthread_tls_create(AKey);
   {$ENDIF}
 end;
 
@@ -140,8 +188,14 @@ function platform_thread_host_tls_destroy(const AKey: PtrUInt): Int32; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_tls_destroy(AKey);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_tls_destroy(AKey);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_tls_destroy(AKey);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_tls_destroy(AKey);
   {$ELSE}
-  Result := platform_pthread_tls_destroy(AKey);
+  Result := unix_pthread_tls_destroy(AKey);
   {$ENDIF}
 end;
 
@@ -149,8 +203,14 @@ function platform_thread_host_tls_set(const AKey: PtrUInt; const AValue: Pointer
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_tls_set(AKey, AValue);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_tls_set(AKey, AValue);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_tls_set(AKey, AValue);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_tls_set(AKey, AValue);
   {$ELSE}
-  Result := platform_pthread_tls_set(AKey, AValue);
+  Result := unix_pthread_tls_set(AKey, AValue);
   {$ENDIF}
 end;
 
@@ -158,8 +218,14 @@ function platform_thread_host_tls_get(const AKey: PtrUInt): Pointer; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_pthread_tls_get(AKey);
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_pthread_tls_get(AKey);
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_pthread_tls_get(AKey);
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_pthread_tls_get(AKey);
   {$ELSE}
-  Result := platform_pthread_tls_get(AKey);
+  Result := unix_pthread_tls_get(AKey);
   {$ENDIF}
 end;
 
@@ -167,8 +233,14 @@ function platform_thread_host_cpu_count_i32: Int32; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_cpu_count_i32;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_cpu_count_i32;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_cpu_count_i32;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_cpu_count_i32;
   {$ELSE}
-  Result := platform_cpu_count_i32;
+  Result := unix_cpu_count_i32;
   {$ENDIF}
 end;
 

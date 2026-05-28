@@ -172,6 +172,16 @@ begin
     AHostLabel + ' must expose pthread condvar signal helper for sync');
   CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_broadcast',
     AHostLabel + ' must expose pthread condvar broadcast helper for sync');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condattr_setclock',
+    AHostLabel + ' must expose pthread condattr clock binding or stub');
+  CheckTokenAbsent(ASource, 'function platform_errno_location',
+    AHostLabel + ' must not expose unified-looking errno binding names');
+  CheckTokenAbsent(ASource, 'function platform_posix_errno_value',
+    AHostLabel + ' must not expose unified-looking errno value helper names');
+  CheckTokenAbsent(ASource, 'function platform_pthread_',
+    AHostLabel + ' must not expose unified-looking platform_pthread helper names');
+  CheckTokenAbsent(ASource, 'function platform_clock_',
+    AHostLabel + ' must not expose unified-looking platform_clock helper names');
   CheckTokenPresent(ASource, 'platform_posix_clock_now',
     AHostLabel + ' must delegate timeout clock reads to shared posix.ffi');
   CheckTokenPresent(ASource, 'platform_posix_clock_deadline_after_ns',
@@ -228,6 +238,49 @@ begin
     AHostLabel + ' must not keep a local public mutex kind mapping body after shared posix ownerization');
 end;
 
+procedure CheckSyncConsumerHostHelpers(
+  const ASource,
+  AHostLabel,
+  AHostPrefix: string);
+begin
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sync_result',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned POSIX sync result helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init_platform_kind',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex public-kind helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_deadline_after_ns',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread timeout deadline helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_remaining_ns_u64',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread timeout remaining helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex init helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_destroy',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex destroy helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_lock',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex lock helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_trylock',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex trylock helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_unlock',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex unlock helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_init',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock init helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_destroy',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock destroy helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdlock',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock read-lock helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrlock',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock write-lock helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_init',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar init helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_timedwait_abs',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar timedwait helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_signal',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar signal helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_broadcast',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar broadcast helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_yield',
+    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread yield helper');
+end;
+
 procedure TestPlatformSyncUsesHostFFISurface;
 var
   LSyncBaseSource: string;
@@ -282,24 +335,24 @@ begin
   CheckTokenPresent(LLinuxSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'linux.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
 
-  CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
+  CheckTokenPresent(LDarwinSource, 'darwin_errno_value',
     'darwin.ffi must expose Darwin errno value helper for sync');
-  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin', 'platform');
+  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin', 'darwin');
   CheckTokenPresent(LDarwinSource, 'platform_posix_enotsup',
     'darwin.ffi must keep unsupported pthread mutex timed-lock as a host-owned ENOTSUP stub');
-  CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
+  CheckTokenPresent(LAndroidSource, 'android_errno_value',
     'android.ffi must expose Android errno value helper for sync');
-  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android', 'platform');
+  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android', 'android');
   CheckTokenPresent(LAndroidSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'android.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
-  CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
+  CheckTokenPresent(LFreeBSDSource, 'freebsd_errno_value',
     'freebsd.ffi must expose FreeBSD errno value helper for sync');
-  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd', 'platform');
+  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd', 'freebsd');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_pthread_mutex_timedlock_abs',
     'freebsd.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
-  CheckTokenPresent(LUnixSource, 'platform_posix_errno_value',
+  CheckTokenPresent(LUnixSource, 'unix_errno_value',
     'unix.ffi must expose generic Unix errno value helper for sync');
-  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix', 'platform');
+  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix', 'unix');
   CheckTokenPresent(LUnixSource, 'platform_posix_enotsup',
     'unix.ffi must keep unknown pthread mutex timed-lock capability as a host-owned ENOTSUP stub');
 
@@ -436,54 +489,11 @@ begin
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.unix.ffi',
     'platform.sync must use unix.ffi for generic Unix host-owned errno/clock ids');
 
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init_platform_kind',
-    'platform.sync must consume host-owned pthread mutex init helper for public kind contract');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_deadline_after_ns',
-    'platform.sync must consume host-owned pthread timeout deadline helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_timeout_remaining_ns_u64',
-    'platform.sync must consume host-owned pthread timeout remaining helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_init',
-    'platform.sync must consume host-owned pthread mutex init helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_destroy',
-    'platform.sync must consume host-owned pthread mutex destroy helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_lock',
-    'platform.sync must consume host-owned pthread mutex lock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_trylock',
-    'platform.sync must consume host-owned pthread mutex trylock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_mutex_unlock',
-    'platform.sync must consume host-owned pthread mutex unlock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_init',
-    'platform.sync must consume host-owned pthread rwlock init helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_destroy',
-    'platform.sync must consume host-owned pthread rwlock destroy helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_rdlock',
-    'platform.sync must consume host-owned pthread rwlock read-lock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_tryrdlock',
-    'platform.sync must consume host-owned pthread rwlock try-read-lock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_wrlock',
-    'platform.sync must consume host-owned pthread rwlock write-lock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_trywrlock',
-    'platform.sync must consume host-owned pthread rwlock try-write-lock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_rdunlock',
-    'platform.sync must consume host-owned pthread rwlock read-unlock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_rwlock_wrunlock',
-    'platform.sync must consume host-owned pthread rwlock write-unlock helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_init',
-    'platform.sync must consume host-owned pthread condvar init helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_destroy',
-    'platform.sync must consume host-owned pthread condvar destroy helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_wait',
-    'platform.sync must consume host-owned pthread condvar wait helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_timedwait_abs',
-    'platform.sync must consume host-owned pthread condvar timedwait helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_signal',
-    'platform.sync must consume host-owned pthread condvar signal helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_condvar_broadcast',
-    'platform.sync must consume host-owned pthread condvar broadcast helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_sync_result',
-    'platform.sync must consume host-owned POSIX sync result helper');
-  CheckTokenPresent(LSyncSource, 'platform_pthread_yield',
-    'platform.sync must consume host-owned pthread yield helper');
+  CheckSyncConsumerHostHelpers(LSyncSource, 'Linux', 'linux');
+  CheckSyncConsumerHostHelpers(LSyncSource, 'Android', 'android');
+  CheckSyncConsumerHostHelpers(LSyncSource, 'Darwin', 'darwin');
+  CheckSyncConsumerHostHelpers(LSyncSource, 'FreeBSD', 'freebsd');
+  CheckSyncConsumerHostHelpers(LSyncSource, 'generic Unix', 'unix');
   CheckTokenPresent(LSyncSource, 'linux_futex_wait_i32',
     'platform.sync must consume Linux futex wait helper through linux.ffi');
   CheckTokenPresent(LSyncSource, 'linux_futex_wake_one_i32',

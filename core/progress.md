@@ -2,6 +2,73 @@
 
 ## 2026-05-28
 
+- Started Wave 14 from `main@dcf3fd3` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`
+  on branch `codex/platform-host-ffi-wave14-posix-names`.
+- Re-read the active `/plan` files, host gap matrix, source evidence index, and
+  host FFI surface tests after user review. The active correction is non-Linux
+  POSIX host helper names, not another runtime-validation pass over FPC raw ABI.
+- Recorded the user rule in plan/findings: FPC platform API definitions,
+  constants, records, external names, and calling conventions are accepted as
+  source authority; nextPas tests guard owner placement, naming, route truth,
+  no FPC platform-unit dependency, and compile coherence.
+- Scoped Wave 14 to Android / Darwin / FreeBSD / generic Unix
+  pthread/clock/errno/thread/cpu helper names consumed by
+  `platform.time.host`, `platform.sync`, and `platform.thread`. Older
+  file/path/env/dl `platform_*` helper names remain known debt for a later
+  cleanup wave so this merge stays reviewable.
+- RED results after adding source-surface guards:
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
+    failed as expected on missing `android_errno_location`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
+    failed as expected on missing `darwin_errno_value`.
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`
+    failed as expected on missing `android_clock_monotonic_now`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`
+    failed as expected on missing `android_errno_location`.
+- Renamed host-owned helper projections in Android, Darwin, FreeBSD, and
+  generic Unix FFI owners to their host prefixes:
+  `android_*`, `darwin_*`, `freebsd_*`, and `unix_*`.
+- Updated `platform.thread`, `platform.sync`, and `platform.time.host` so their
+  host-dispatch helpers consume host-prefixed helpers on Linux, Android,
+  Darwin, FreeBSD, and generic Unix branches while the public `platform_*`
+  contract names remain stable.
+- Extended the same rule to Windows clock helper projections in
+  `windows.ffi`, replacing the old fallback `platform_clock_*` helper names
+  with `windows_clock_*`.
+- Kept shared `platform_posix_*` skeleton helpers unchanged because their owner
+  is `nextpas.core.platform.posix.ffi`.
+- Updated source evidence, host gap matrix, design conventions, and goal tree
+  so Wave 14 records the current owner-name truth and keeps older
+  file/path/env/dl `platform_*` helpers as a later cleanup family.
+- First full `make -C core test` attempt stopped at the Wave 11 signal-control
+  goal-tree guard: the Wave 14 goal-tree edit had split the exact historical
+  phrase `Platform Host ABI Completeness Wave 11` across lines. Root cause was
+  docs route-truth token drift, not production code. Restored that phrase while
+  keeping Wave 14 as the current platform host ABI state.
+- Wave 14 focused and full pre-merge verification passed:
+  - `git diff --check`: pass.
+  - `sh -n build/verify_local.sh`: pass.
+  - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_gap_matrix clean test`:
+    `4 total, 4 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_ffi_partition_surface clean test`:
+    `1 total, 1 passed, 0 failed`.
+  - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`:
+    Darwin, Android, FreeBSD, and generic Unix simulated compile routes passed.
+  - `make -C core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control clean test`:
+    `7 total, 7 passed, 0 failed`.
+  - `make -C core test`: `All tests passed.`
+  - `make -C core examples`: `All examples compiled.`
+  - `make -C core benchmarks`: `All benchmarks passed.`
+  - `bash build/verify_local.sh`: `verify-local=pass`,
+    `human-summary=local verification passed`.
+
 - Started Wave 13 from `main@eab4c19` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave13-names`
   on branch `codex/platform-host-ffi-wave13-names`.
@@ -44,7 +111,8 @@
     `11 total, 11 passed, 0 failed`.
 - Updated design conventions, source evidence index, host gap matrix, and goal
   tree to record Wave 13 and to mark Android / Darwin / FreeBSD / generic Unix
-  helper-name cleanup as the next platform wave.
+  helper-name cleanup as the next platform wave. Wave 14 now closes that
+  thread/sync/time helper-name family.
 - Fixed two stale source-surface guards found during verification:
   - `test_platform_host_gap_matrix` still had one generic Unix call without the
     transitional `platform` host-helper prefix.
@@ -233,9 +301,9 @@
   `verify-local=pass`, `human-summary=local verification passed`, and final
   envelope token `corePlatformHostAbiWave11SignalControlCheck`.
 - Closeout note: Wave 11 added host-owned signal-control ABI inventory only.
-  Existing pre-Wave host FFI naming debt such as `platform_process_id` and
-  `platform_pthread_sync_result` remains visible and should be addressed in the
-  next platform cleanup wave before further public API growth.
+  Later owner-name cleanup waves addressed the visible process-id and
+  thread/sync/time helper naming debt; older file/path/env/dl helper names
+  remain a separate cleanup family.
 
 - Started Wave 10 from `main@eeac28c` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave10-posix-stat-hosts`

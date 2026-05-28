@@ -95,9 +95,9 @@ function windows_qpc_counter_u64(out ACounter: UInt64): Boolean;
 function windows_qpc_to_ns(const ACounter: UInt64; const AFrequency: UInt64): UInt64; inline;
 function windows_qpc_resolution_ns(const AFrequency: UInt64): UInt64; inline;
 function windows_filetime_now_unix_ns: UInt64;
-function platform_clock_monotonic_ns_u64: UInt64;
-function platform_clock_realtime_ns_u64: UInt64; inline;
-function platform_clock_monotonic_resolution_ns_u64: UInt64;
+function windows_clock_monotonic_ns_u64: UInt64;
+function windows_clock_realtime_ns_u64: UInt64; inline;
+function windows_clock_monotonic_resolution_ns_u64: UInt64;
 function windows_process_id_u64: UInt64; inline;
 function windows_load_library_a(const AName: PAnsiChar): HMODULE; inline;
 function windows_get_proc_address(const AModule: HMODULE; const AName: PAnsiChar): FARPROC; inline;
@@ -1298,7 +1298,7 @@ begin
     * WINDOWS_FILETIME_NANOSECONDS_PER_TICK;
 end;
 
-function platform_clock_monotonic_ns_u64: UInt64;
+function windows_clock_monotonic_ns_u64: UInt64;
 var
   LCounter: UInt64;
   LFrequency: UInt64;
@@ -1309,12 +1309,12 @@ begin
   Result := windows_qpc_to_ns(LCounter, LFrequency);
 end;
 
-function platform_clock_realtime_ns_u64: UInt64; inline;
+function windows_clock_realtime_ns_u64: UInt64; inline;
 begin
   Result := windows_filetime_now_unix_ns;
 end;
 
-function platform_clock_monotonic_resolution_ns_u64: UInt64;
+function windows_clock_monotonic_resolution_ns_u64: UInt64;
 begin
   Result := windows_qpc_resolution_ns(windows_qpc_frequency_u64);
   if Result = 0 then

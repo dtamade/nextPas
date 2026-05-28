@@ -223,7 +223,7 @@ begin
     'darwin.base must expose Darwin mach timebase record');
   CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadtokenalign',
     'darwin.base must expose Darwin pthread token align carrier');
-  CheckTokenPresent(LDarwinSource, 'function platform_errno_location',
+  CheckTokenPresent(LDarwinSource, 'function darwin_errno_location',
     'darwin.ffi must expose Darwin errno binding');
   CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_mutex_normal_kind',
     'darwin.base must expose Darwin pthread mutex kind numbering');
@@ -231,8 +231,14 @@ begin
     'darwin.base must expose Darwin pthread condattr clock capability');
   CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_mutex_timedlock_supported',
     'darwin.base must expose Darwin pthread mutex timed-lock capability');
-  CheckTokenPresent(LDarwinSource, 'function platform_pthread_condattr_setclock',
+  CheckTokenPresent(LDarwinSource, 'function darwin_pthread_condattr_setclock',
     'darwin.ffi must expose Darwin pthread condattr clock binding or stub');
+  CheckTokenAbsent(LDarwinSource, 'function platform_errno_location',
+    'darwin.ffi must not expose unified-looking errno helper names');
+  CheckTokenAbsent(LDarwinSource, 'function platform_pthread_',
+    'darwin.ffi must not expose unified-looking pthread helper names');
+  CheckTokenAbsent(LDarwinSource, 'function platform_clock_',
+    'darwin.ffi must not expose unified-looking clock helper names');
   CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_timeout_clock_id',
     'darwin.base must expose Darwin pthread timeout clock policy');
 
@@ -244,7 +250,7 @@ begin
     'android.base must expose Android EINTR for retryable sleep semantics');
   CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadtokenalign',
     'android.base must expose Android pthread token align carrier');
-  CheckTokenPresent(LAndroidSource, 'function platform_errno_location',
+  CheckTokenPresent(LAndroidSource, 'function android_errno_location',
     'android.ffi must expose Android errno binding');
   CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_mutex_normal_kind',
     'android.base must expose Android pthread mutex kind numbering');
@@ -252,8 +258,14 @@ begin
     'android.base must expose Android pthread condattr clock capability');
   CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_mutex_timedlock_supported',
     'android.base must expose Android pthread mutex timed-lock capability');
-  CheckTokenPresent(LAndroidSource, 'function platform_pthread_condattr_setclock',
+  CheckTokenPresent(LAndroidSource, 'function android_pthread_condattr_setclock',
     'android.ffi must expose Android pthread condattr clock binding');
+  CheckTokenAbsent(LAndroidSource, 'function platform_errno_location',
+    'android.ffi must not expose unified-looking errno helper names');
+  CheckTokenAbsent(LAndroidSource, 'function platform_pthread_',
+    'android.ffi must not expose unified-looking pthread helper names');
+  CheckTokenAbsent(LAndroidSource, 'function platform_clock_',
+    'android.ffi must not expose unified-looking clock helper names');
   CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_timeout_clock_id',
     'android.base must expose Android pthread timeout clock policy');
 
@@ -265,7 +277,7 @@ begin
     'freebsd.base must expose FreeBSD EINTR for retryable sleep semantics');
   CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadtokenalign',
     'freebsd.base must expose FreeBSD pthread token align carrier');
-  CheckTokenPresent(LFreeBSDSource, 'function platform_errno_location',
+  CheckTokenPresent(LFreeBSDSource, 'function freebsd_errno_location',
     'freebsd.ffi must expose FreeBSD errno binding');
   CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_mutex_normal_kind',
     'freebsd.base must expose FreeBSD pthread mutex kind numbering');
@@ -273,8 +285,14 @@ begin
     'freebsd.base must expose FreeBSD pthread condattr clock capability');
   CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_mutex_timedlock_supported',
     'freebsd.base must expose FreeBSD pthread mutex timed-lock capability');
-  CheckTokenPresent(LFreeBSDSource, 'function platform_pthread_condattr_setclock',
+  CheckTokenPresent(LFreeBSDSource, 'function freebsd_pthread_condattr_setclock',
     'freebsd.ffi must expose FreeBSD pthread condattr clock binding');
+  CheckTokenAbsent(LFreeBSDSource, 'function platform_errno_location',
+    'freebsd.ffi must not expose unified-looking errno helper names');
+  CheckTokenAbsent(LFreeBSDSource, 'function platform_pthread_',
+    'freebsd.ffi must not expose unified-looking pthread helper names');
+  CheckTokenAbsent(LFreeBSDSource, 'function platform_clock_',
+    'freebsd.ffi must not expose unified-looking clock helper names');
   CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_timeout_clock_id',
     'freebsd.base must expose FreeBSD pthread timeout clock policy');
 
@@ -286,7 +304,7 @@ begin
     'unix.base must expose generic Unix EINTR for retryable sleep semantics');
   CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadtokenalign',
     'unix.base must expose generic Unix pthread token align carrier');
-  CheckTokenPresent(LUnixSource, 'function platform_errno_location',
+  CheckTokenPresent(LUnixSource, 'function unix_errno_location',
     'unix.ffi must expose generic Unix errno binding');
   CheckTokenPresent(LUnixBaseSource, 'platform_pthread_mutex_normal_kind',
     'unix.base must expose generic Unix pthread mutex kind numbering');
@@ -294,8 +312,14 @@ begin
     'unix.base must expose generic Unix pthread condattr clock capability');
   CheckTokenPresent(LUnixBaseSource, 'platform_pthread_mutex_timedlock_supported',
     'unix.base must expose generic Unix pthread mutex timed-lock capability');
-  CheckTokenPresent(LUnixSource, 'function platform_pthread_condattr_setclock',
+  CheckTokenPresent(LUnixSource, 'function unix_pthread_condattr_setclock',
     'unix.ffi must expose generic Unix pthread condattr clock binding');
+  CheckTokenAbsent(LUnixSource, 'function platform_errno_location',
+    'unix.ffi must not expose unified-looking errno helper names');
+  CheckTokenAbsent(LUnixSource, 'function platform_pthread_',
+    'unix.ffi must not expose unified-looking pthread helper names');
+  CheckTokenAbsent(LUnixSource, 'function platform_clock_',
+    'unix.ffi must not expose unified-looking clock helper names');
   CheckTokenPresent(LUnixBaseSource, 'platform_pthread_timeout_clock_id',
     'unix.base must expose generic Unix pthread timeout clock policy');
 

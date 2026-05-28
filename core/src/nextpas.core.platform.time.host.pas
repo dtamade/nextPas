@@ -83,8 +83,16 @@ function platform_time_host_clock_monotonic_ns_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_clock_monotonic_ns_u64;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_clock_monotonic_ns_u64;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_clock_monotonic_ns_u64;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_clock_monotonic_ns_u64;
+  {$ELSEIF defined(NEXTPAS_UNIX)}
+  Result := unix_clock_monotonic_ns_u64;
   {$ELSE}
-  Result := platform_clock_monotonic_ns_u64;
+  Result := windows_clock_monotonic_ns_u64;
   {$ENDIF}
 end;
 
@@ -92,8 +100,16 @@ function platform_time_host_clock_realtime_ns_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_clock_realtime_ns_u64;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_clock_realtime_ns_u64;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_clock_realtime_ns_u64;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_clock_realtime_ns_u64;
+  {$ELSEIF defined(NEXTPAS_UNIX)}
+  Result := unix_clock_realtime_ns_u64;
   {$ELSE}
-  Result := platform_clock_realtime_ns_u64;
+  Result := windows_clock_realtime_ns_u64;
   {$ENDIF}
 end;
 
@@ -101,8 +117,16 @@ function platform_time_host_clock_monotonic_resolution_ns_u64: UInt64; inline;
 begin
   {$IFDEF NEXTPAS_LINUX}
   Result := linux_clock_monotonic_resolution_ns_u64;
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  Result := android_clock_monotonic_resolution_ns_u64;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  Result := darwin_clock_monotonic_resolution_ns_u64;
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  Result := freebsd_clock_monotonic_resolution_ns_u64;
+  {$ELSEIF defined(NEXTPAS_UNIX)}
+  Result := unix_clock_monotonic_resolution_ns_u64;
   {$ELSE}
-  Result := platform_clock_monotonic_resolution_ns_u64;
+  Result := windows_clock_monotonic_resolution_ns_u64;
   {$ENDIF}
 end;
 

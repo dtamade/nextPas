@@ -12,8 +12,8 @@ uses
 function mach_absolute_time: UInt64; cdecl; external 'c' name 'mach_absolute_time';
 function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; external 'c' name 'mach_timebase_info';
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
-function platform_errno_location: PInt32; cdecl; external 'c' name '__error';
-function platform_posix_errno_value: Int32; inline;
+function darwin_errno_location: PInt32; cdecl; external 'c' name '__error';
+function darwin_errno_value: Int32; inline;
 function darwin_sigaction(
   const ASignal: Int32;
   ANewAction: PPlatformDarwinSigAction;
@@ -26,7 +26,7 @@ function darwin_pthread_sigmask(
   const AHow: Int32;
   ANewSet: PPlatformDarwinSignalSet;
   AOldSet: PPlatformDarwinSignalSet): Int32; cdecl; external 'c' name 'pthread_sigmask';
-function platform_pthread_sync_result(
+function darwin_pthread_sync_result(
   const AError: Int32;
   const AAgainResult: Int32;
   const ABusyResult: Int32;
@@ -51,58 +51,58 @@ function darwin_lstat_path(
 function darwin_fstat_fd(
   const AFileDescriptor: TPlatformFileDescriptor;
   out ABuffer: TPlatformDarwinStat): Int32; inline;
-function platform_thread_self_token_u64: UInt64; inline;
-function platform_native_thread_id_u64: UInt64; inline;
-function platform_cpu_count_i32: Int32; inline;
-function platform_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
-function platform_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
-function platform_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
-function platform_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
-function platform_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
-function platform_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
-procedure platform_pthread_yield; inline;
-procedure platform_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
-function platform_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
-function platform_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
-function platform_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
-function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
-function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
-function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
-function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
-function platform_clock_monotonic_ns_u64: UInt64;
-function platform_clock_realtime_ns_u64: UInt64; inline;
-function platform_clock_monotonic_resolution_ns_u64: UInt64;
-function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
-function platform_pthread_timeout_deadline_after_ns(
+function darwin_thread_self_token_u64: UInt64; inline;
+function darwin_native_thread_id_u64: UInt64; inline;
+function darwin_cpu_count_i32: Int32; inline;
+function darwin_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+function darwin_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+function darwin_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+function darwin_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+function darwin_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
+function darwin_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
+procedure darwin_pthread_yield; inline;
+procedure darwin_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
+function darwin_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
+function darwin_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
+function darwin_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+function darwin_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
+function darwin_clock_monotonic_now(ATime: Pointer): Int32; inline;
+function darwin_clock_realtime_now(ATime: Pointer): Int32; inline;
+function darwin_clock_monotonic_getres(ATime: Pointer): Int32; inline;
+function darwin_clock_monotonic_ns_u64: UInt64;
+function darwin_clock_realtime_ns_u64: UInt64; inline;
+function darwin_clock_monotonic_resolution_ns_u64: UInt64;
+function darwin_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
+function darwin_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
-function platform_pthread_timeout_remaining_ns_u64(
+function darwin_pthread_timeout_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   out ARemainingNs: UInt64): Int32; inline;
-function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
-function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
-function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
-function platform_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
-function platform_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
-function platform_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
-function platform_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
-function platform_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
-function platform_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
-function platform_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
-function platform_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
-function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
-function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
-function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
+function darwin_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
+function darwin_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+function darwin_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+function darwin_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+function darwin_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 function darwin_mach_monotonic_ns: UInt64;
 function darwin_mach_monotonic_resolution_ns: UInt64;
-function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl;
+function darwin_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl;
 function darwin_process_id: TPlatformProcessId; inline;
 function darwin_parent_process_id: TPlatformProcessId; inline;
 function platform_mmap(
@@ -390,12 +390,12 @@ begin
   Result := dlerror;
 end;
 
-function platform_posix_errno_value: Int32; inline;
+function darwin_errno_value: Int32; inline;
 begin
-  Result := platform_posix_errno_value_from_location(platform_errno_location);
+  Result := platform_posix_errno_value_from_location(darwin_errno_location);
 end;
 
-function platform_pthread_sync_result(
+function darwin_pthread_sync_result(
   const AError: Int32;
   const AAgainResult: Int32;
   const ABusyResult: Int32;
@@ -417,39 +417,39 @@ begin
     ATimeoutResult);
 end;
 
-function platform_thread_self_token_u64: UInt64; inline;
+function darwin_thread_self_token_u64: UInt64; inline;
 begin
   Result := platform_posix_thread_self_token_u64;
 end;
 
-function platform_native_thread_id_u64: UInt64; inline;
+function darwin_native_thread_id_u64: UInt64; inline;
 begin
   Result := 0;
   if pthread_threadid_np(nil, @Result) <> 0 then
-    Result := platform_thread_self_token_u64;
+    Result := darwin_thread_self_token_u64;
 end;
 
-function platform_cpu_count_i32: Int32; inline;
+function darwin_cpu_count_i32: Int32; inline;
 begin
   Result := platform_posix_sysconf_positive_i32(PLATFORM_SYSCONF_NPROCESSORS_ONLN);
 end;
 
-function platform_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+function darwin_pthread_create_handle(AThreadStorage: Pointer; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_create_handle(AThreadStorage, AStartRoutine, AArgument);
 end;
 
-function platform_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
+function darwin_pthread_join_handle(AThreadStorage: Pointer; ARetVal: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_join_handle(AThreadStorage, ARetVal);
 end;
 
-function platform_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
+function darwin_pthread_detach_handle(AThreadStorage: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_detach_handle(AThreadStorage);
 end;
 
-function platform_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
+function darwin_pthread_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
 begin
   AState := nil;
   if AStartRoutine = nil then
@@ -466,7 +466,7 @@ begin
   end;
 end;
 
-function platform_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
+function darwin_pthread_state_join(const AState: PPlatformPThreadState; out ARetVal: Pointer): Int32; inline;
 begin
   ARetVal := nil;
   if AState = nil then
@@ -477,7 +477,7 @@ begin
     Dispose(AState);
 end;
 
-function platform_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
+function darwin_pthread_state_detach(const AState: PPlatformPThreadState): Int32; inline;
 begin
   if AState = nil then
     Exit(-1);
@@ -487,91 +487,91 @@ begin
     Dispose(AState);
 end;
 
-procedure platform_pthread_yield; inline;
+procedure darwin_pthread_yield; inline;
 begin
   platform_posix_pthread_yield;
 end;
 
-procedure platform_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
+procedure darwin_pthread_sleep_ns(const ANanoseconds: UInt64); inline;
 begin
-  platform_posix_pthread_sleep_ns(ANanoseconds, platform_errno_location, PLATFORM_POSIX_EINTR);
+  platform_posix_pthread_sleep_ns(ANanoseconds, darwin_errno_location, PLATFORM_POSIX_EINTR);
 end;
 
-function platform_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
+function darwin_pthread_tls_create(out AKey: PtrUInt): Int32; inline;
 begin
   Result := platform_posix_pthread_tls_create(AKey);
 end;
 
-function platform_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
+function darwin_pthread_tls_destroy(const AKey: PtrUInt): Int32; inline;
 begin
   Result := platform_posix_pthread_tls_destroy(AKey);
 end;
 
-function platform_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
+function darwin_pthread_tls_set(const AKey: PtrUInt; const AValue: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_tls_set(AKey, AValue);
 end;
 
-function platform_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
+function darwin_pthread_tls_get(const AKey: PtrUInt): Pointer; inline;
 begin
   Result := platform_posix_pthread_tls_get(AKey);
 end;
 
-function platform_clock_monotonic_now(ATime: Pointer): Int32; inline;
+function darwin_clock_monotonic_now(ATime: Pointer): Int32; inline;
 begin
   Result := platform_posix_clock_now(
     PLATFORM_CLOCK_MONOTONIC_ID,
     ATime,
-    platform_errno_location);
+    darwin_errno_location);
 end;
 
-function platform_clock_realtime_now(ATime: Pointer): Int32; inline;
+function darwin_clock_realtime_now(ATime: Pointer): Int32; inline;
 begin
   Result := platform_posix_clock_now(
     PLATFORM_CLOCK_REALTIME_ID,
     ATime,
-    platform_errno_location);
+    darwin_errno_location);
 end;
 
-function platform_clock_monotonic_getres(ATime: Pointer): Int32; inline;
+function darwin_clock_monotonic_getres(ATime: Pointer): Int32; inline;
 begin
   Result := platform_posix_clock_getres(
     PLATFORM_CLOCK_MONOTONIC_ID,
     ATime,
-    platform_errno_location);
+    darwin_errno_location);
 end;
 
-function platform_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
+function darwin_pthread_timeout_clock_now(ATime: Pointer): Int32; inline;
 begin
   Result := platform_posix_clock_now(
     PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
     ATime,
-    platform_errno_location);
+    darwin_errno_location);
 end;
 
-function platform_pthread_timeout_deadline_after_ns(
+function darwin_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
 begin
   Result := platform_posix_clock_deadline_after_ns(
     PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
-    platform_errno_location,
+    darwin_errno_location,
     ANanoseconds,
     ADeadline);
 end;
 
-function platform_pthread_timeout_remaining_ns_u64(
+function darwin_pthread_timeout_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   out ARemainingNs: UInt64): Int32; inline;
 begin
   Result := platform_posix_clock_deadline_remaining_ns_u64(
     PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
-    platform_errno_location,
+    darwin_errno_location,
     ADeadline,
     ARemainingNs);
 end;
 
-function platform_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
+function darwin_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_init_public_kind(
     AMutex,
@@ -581,106 +581,106 @@ begin
     PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND);
 end;
 
-function platform_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
+function darwin_pthread_mutex_init(AMutex: Pointer; const AKind: Int32): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_init_kind(AMutex, AKind);
 end;
 
-function platform_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_destroy(AMutex);
 end;
 
-function platform_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_lock(AMutex);
 end;
 
-function platform_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_trylock(AMutex);
 end;
 
-function platform_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+function darwin_pthread_mutex_timedlock_abs(AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 begin
   Result := PLATFORM_POSIX_ENOTSUP;
 end;
 
-function platform_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
+function darwin_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_mutex_unlock(AMutex);
 end;
 
-function platform_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_init(ARwLock);
 end;
 
-function platform_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_destroy(ARwLock);
 end;
 
-function platform_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_rdlock(ARwLock);
 end;
 
-function platform_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_tryrdlock(ARwLock);
 end;
 
-function platform_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_wrlock(ARwLock);
 end;
 
-function platform_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_trywrlock(ARwLock);
 end;
 
-function platform_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_unlock(ARwLock);
 end;
 
-function platform_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
+function darwin_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_rwlock_unlock(ARwLock);
 end;
 
-function platform_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_init_with_clock(
     ACondVar,
     PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID,
     PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED,
-    @platform_pthread_condattr_setclock);
+    @darwin_pthread_condattr_setclock);
 end;
 
-function platform_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_destroy(ACondVar);
 end;
 
-function platform_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+function darwin_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_wait(ACondVar, AMutex);
 end;
 
-function platform_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
+function darwin_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
 end;
 
-function platform_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_signal(ACondVar);
 end;
 
-function platform_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+function darwin_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 begin
   Result := platform_posix_pthread_condvar_broadcast(ACondVar);
 end;
@@ -809,16 +809,16 @@ begin
   Result := darwin_scale_units(mach_absolute_time, GDarwinTimebaseDenom, GDarwinTimebaseNumer);
 end;
 
-function platform_clock_monotonic_ns_u64: UInt64;
+function darwin_clock_monotonic_ns_u64: UInt64;
 begin
   Result := darwin_mach_monotonic_ns;
 end;
 
-function platform_clock_realtime_ns_u64: UInt64; inline;
+function darwin_clock_realtime_ns_u64: UInt64; inline;
 begin
   Result := platform_posix_clock_ns_u64(
     PLATFORM_CLOCK_REALTIME_ID,
-    platform_errno_location);
+    darwin_errno_location);
 end;
 
 function darwin_mach_monotonic_resolution_ns: UInt64;
@@ -835,12 +835,12 @@ begin
     Result := 1;
 end;
 
-function platform_clock_monotonic_resolution_ns_u64: UInt64;
+function darwin_clock_monotonic_resolution_ns_u64: UInt64;
 begin
   Result := darwin_mach_monotonic_resolution_ns;
 end;
 
-function platform_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl;
+function darwin_pthread_condattr_setclock(attr: Pointer; clk_id: Int32): Int32; cdecl;
 begin
   Result := PLATFORM_POSIX_ENOTSUP;
 end;

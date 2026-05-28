@@ -115,6 +115,100 @@ begin
     AHostLabel + ' must not keep a local errno-value load body after shared posix ownerization');
 end;
 
+procedure CheckHostPrefixedThreadHelperSet(
+  const ASource,
+  ABaseSource,
+  AHostLabel,
+  AHostPrefix: string);
+begin
+  CheckTokenPresent(ASource, AHostPrefix + '_errno_location',
+    AHostLabel + ' ffi must expose a host-prefixed errno binding');
+  CheckTokenPresent(ASource, AHostPrefix + '_errno_value',
+    AHostLabel + ' ffi must expose a host-prefixed errno value helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_thread_self_token_u64',
+    AHostLabel + ' ffi must expose a host-prefixed thread self token helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_native_thread_id_u64',
+    AHostLabel + ' ffi must expose a host-prefixed native thread id helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_cpu_count_i32',
+    AHostLabel + ' ffi must expose a host-prefixed CPU count helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_create_handle',
+    AHostLabel + ' ffi must expose a host-prefixed pthread create helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_join_handle',
+    AHostLabel + ' ffi must expose a host-prefixed pthread join helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_detach_handle',
+    AHostLabel + ' ffi must expose a host-prefixed pthread detach helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_create',
+    AHostLabel + ' ffi must expose a host-prefixed pthread state create helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_join',
+    AHostLabel + ' ffi must expose a host-prefixed pthread state join helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_detach',
+    AHostLabel + ' ffi must expose a host-prefixed pthread state detach helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_yield',
+    AHostLabel + ' ffi must expose a host-prefixed pthread yield helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sleep_ns',
+    AHostLabel + ' ffi must expose a host-prefixed pthread sleep helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_create',
+    AHostLabel + ' ffi must expose a host-prefixed pthread TLS create helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_destroy',
+    AHostLabel + ' ffi must expose a host-prefixed pthread TLS destroy helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_set',
+    AHostLabel + ' ffi must expose a host-prefixed pthread TLS set helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_get',
+    AHostLabel + ' ffi must expose a host-prefixed pthread TLS get helper');
+  CheckTokenAbsent(ASource, 'function platform_errno_location',
+    AHostLabel + ' ffi must not expose unified-looking errno binding names');
+  CheckTokenAbsent(ASource, 'function platform_posix_errno_value',
+    AHostLabel + ' ffi must not expose unified-looking errno value helper names');
+  CheckTokenAbsent(ASource, 'function platform_thread_self_token_u64',
+    AHostLabel + ' ffi must not expose unified-looking thread token helper names');
+  CheckTokenAbsent(ASource, 'function platform_native_thread_id_u64',
+    AHostLabel + ' ffi must not expose unified-looking native thread id helper names');
+  CheckTokenAbsent(ASource, 'function platform_cpu_count_i32',
+    AHostLabel + ' ffi must not expose unified-looking CPU helper names');
+  CheckTokenAbsent(ASource, 'function platform_pthread_',
+    AHostLabel + ' ffi must not expose unified-looking platform_pthread helper names');
+  CheckTokenPresent(ABaseSource, 'platform_pthread_token_size',
+    AHostLabel + ' base must expose pthread token storage size');
+  CheckTokenPresent(ABaseSource, 'tplatformpthreadtokenalign',
+    AHostLabel + ' base must expose pthread token align carrier type');
+  CheckTokenPresent(ABaseSource, 'pplatformpthreadstate',
+    AHostLabel + ' base must expose pthread state pointer type');
+  CheckTokenPresent(ABaseSource, 'tplatformpthreadstate',
+    AHostLabel + ' base must expose pthread state carrier type');
+  CheckSharedPosixThreadDelegation(ASource, AHostLabel + '.ffi');
+end;
+
+procedure CheckThreadConsumerHostHelpers(
+  const ASource,
+  AHostLabel,
+  AHostPrefix: string);
+begin
+  CheckTokenPresent(ASource, AHostPrefix + '_thread_self_token_u64',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned thread self token helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_native_thread_id_u64',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned native thread id helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_cpu_count_i32',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned CPU count helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_create',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread state create helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_join',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread state join helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_detach',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread state detach helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_yield',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread yield helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sleep_ns',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread sleep helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_create',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread TLS create helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_destroy',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread TLS destroy helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_set',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread TLS set helper');
+  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_get',
+    'platform.thread ' + AHostLabel + ' branch must consume host-owned pthread TLS get helper');
+end;
+
 procedure TestPlatformThreadUsesHostThreadIdFFI;
 var
   LThreadBasePath: string;
@@ -267,183 +361,19 @@ begin
     'android.ffi must bind the Android native thread id symbol');
   CheckTokenPresent(LAndroidSource, 'platform_posix_eintr',
     'android.ffi must expose Android EINTR for retryable nanosleep');
-  CheckTokenPresent(LAndroidSource, 'platform_errno_location',
-    'android.ffi must expose Android errno binding for retryable nanosleep');
-  CheckTokenPresent(LAndroidSource, 'platform_posix_errno_value',
-    'android.ffi must expose Android errno value helper for retryable nanosleep');
-  CheckTokenPresent(LAndroidSource, 'platform_thread_self_token_u64',
-    'android.ffi must expose Android thread self token helper');
-  CheckTokenPresent(LAndroidSource, 'platform_native_thread_id_u64',
-    'android.ffi must expose Android native thread id helper');
-  CheckTokenPresent(LAndroidSource, 'platform_cpu_count_i32',
-    'android.ffi must expose Android CPU count helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_create_handle',
-    'android.ffi must expose Android pthread create helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_join_handle',
-    'android.ffi must expose Android pthread join helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_detach_handle',
-    'android.ffi must expose Android pthread detach helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_create',
-    'android.ffi must expose Android pthread state create helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_join',
-    'android.ffi must expose Android pthread state join helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_state_detach',
-    'android.ffi must expose Android pthread state detach helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_yield',
-    'android.ffi must expose Android pthread yield helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_sleep_ns',
-    'android.ffi must expose Android pthread sleep helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_create',
-    'android.ffi must expose Android pthread TLS create helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_destroy',
-    'android.ffi must expose Android pthread TLS destroy helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_set',
-    'android.ffi must expose Android pthread TLS set helper');
-  CheckTokenPresent(LAndroidSource, 'platform_pthread_tls_get',
-    'android.ffi must expose Android pthread TLS get helper');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_token_size',
-    'android.base must expose Android pthread token storage size');
-  CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadtokenalign',
-    'android.base must expose Android pthread token align carrier type');
-  CheckTokenPresent(LAndroidBaseSource, 'pplatformpthreadstate',
-    'android.base must expose Android pthread state pointer type');
-  CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadstate',
-    'android.base must expose Android pthread state carrier type');
-  CheckSharedPosixThreadDelegation(LAndroidSource, 'android.ffi');
+  CheckHostPrefixedThreadHelperSet(LAndroidSource, LAndroidBaseSource, 'android', 'android');
 
   CheckTokenPresent(LDarwinSource, 'pthread_threadid_np',
     'darwin.ffi must expose macOS native thread id ABI');
   CheckTokenPresent(LDarwinSource, 'platform_posix_eintr',
     'darwin.ffi must expose Darwin EINTR for retryable nanosleep');
-  CheckTokenPresent(LDarwinSource, 'platform_errno_location',
-    'darwin.ffi must expose Darwin errno binding for retryable nanosleep');
-  CheckTokenPresent(LDarwinSource, 'platform_posix_errno_value',
-    'darwin.ffi must expose Darwin errno value helper for retryable nanosleep');
-  CheckTokenPresent(LDarwinSource, 'platform_thread_self_token_u64',
-    'darwin.ffi must expose Darwin thread self token helper');
-  CheckTokenPresent(LDarwinSource, 'platform_native_thread_id_u64',
-    'darwin.ffi must expose Darwin native thread id helper');
-  CheckTokenPresent(LDarwinSource, 'platform_cpu_count_i32',
-    'darwin.ffi must expose Darwin CPU count helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_create_handle',
-    'darwin.ffi must expose Darwin pthread create helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_join_handle',
-    'darwin.ffi must expose Darwin pthread join helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_detach_handle',
-    'darwin.ffi must expose Darwin pthread detach helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_create',
-    'darwin.ffi must expose Darwin pthread state create helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_join',
-    'darwin.ffi must expose Darwin pthread state join helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_state_detach',
-    'darwin.ffi must expose Darwin pthread state detach helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_yield',
-    'darwin.ffi must expose Darwin pthread yield helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_sleep_ns',
-    'darwin.ffi must expose Darwin pthread sleep helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_create',
-    'darwin.ffi must expose Darwin pthread TLS create helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_destroy',
-    'darwin.ffi must expose Darwin pthread TLS destroy helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_set',
-    'darwin.ffi must expose Darwin pthread TLS set helper');
-  CheckTokenPresent(LDarwinSource, 'platform_pthread_tls_get',
-    'darwin.ffi must expose Darwin pthread TLS get helper');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_token_size',
-    'darwin.base must expose Darwin pthread token storage size');
-  CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadtokenalign',
-    'darwin.base must expose Darwin pthread token align carrier type');
-  CheckTokenPresent(LDarwinBaseSource, 'pplatformpthreadstate',
-    'darwin.base must expose Darwin pthread state pointer type');
-  CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadstate',
-    'darwin.base must expose Darwin pthread state carrier type');
-  CheckSharedPosixThreadDelegation(LDarwinSource, 'darwin.ffi');
+  CheckHostPrefixedThreadHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin', 'darwin');
   CheckTokenPresent(LFreeBSDSource, 'pthread_getthreadid_np',
     'freebsd.ffi must expose FreeBSD native thread id ABI');
   CheckTokenPresent(LFreeBSDSource, 'platform_posix_eintr',
     'freebsd.ffi must expose FreeBSD EINTR for retryable nanosleep');
-  CheckTokenPresent(LFreeBSDSource, 'platform_errno_location',
-    'freebsd.ffi must expose FreeBSD errno binding for retryable nanosleep');
-  CheckTokenPresent(LFreeBSDSource, 'platform_posix_errno_value',
-    'freebsd.ffi must expose FreeBSD errno value helper for retryable nanosleep');
-  CheckTokenPresent(LFreeBSDSource, 'platform_thread_self_token_u64',
-    'freebsd.ffi must expose FreeBSD thread self token helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_native_thread_id_u64',
-    'freebsd.ffi must expose FreeBSD native thread id helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_cpu_count_i32',
-    'freebsd.ffi must expose FreeBSD CPU count helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_create_handle',
-    'freebsd.ffi must expose FreeBSD pthread create helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_join_handle',
-    'freebsd.ffi must expose FreeBSD pthread join helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_detach_handle',
-    'freebsd.ffi must expose FreeBSD pthread detach helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_create',
-    'freebsd.ffi must expose FreeBSD pthread state create helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_join',
-    'freebsd.ffi must expose FreeBSD pthread state join helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_state_detach',
-    'freebsd.ffi must expose FreeBSD pthread state detach helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_yield',
-    'freebsd.ffi must expose FreeBSD pthread yield helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_sleep_ns',
-    'freebsd.ffi must expose FreeBSD pthread sleep helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_create',
-    'freebsd.ffi must expose FreeBSD pthread TLS create helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_destroy',
-    'freebsd.ffi must expose FreeBSD pthread TLS destroy helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_set',
-    'freebsd.ffi must expose FreeBSD pthread TLS set helper');
-  CheckTokenPresent(LFreeBSDSource, 'platform_pthread_tls_get',
-    'freebsd.ffi must expose FreeBSD pthread TLS get helper');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_token_size',
-    'freebsd.base must expose FreeBSD pthread token storage size');
-  CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadtokenalign',
-    'freebsd.base must expose FreeBSD pthread token align carrier type');
-  CheckTokenPresent(LFreeBSDBaseSource, 'pplatformpthreadstate',
-    'freebsd.base must expose FreeBSD pthread state pointer type');
-  CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadstate',
-    'freebsd.base must expose FreeBSD pthread state carrier type');
-  CheckSharedPosixThreadDelegation(LFreeBSDSource, 'freebsd.ffi');
-  CheckTokenPresent(LUnixSource, 'platform_thread_self_token_u64',
-    'unix.ffi must expose generic Unix thread self token helper');
-  CheckTokenPresent(LUnixSource, 'platform_native_thread_id_u64',
-    'unix.ffi must expose generic Unix native thread id helper');
-  CheckTokenPresent(LUnixSource, 'platform_cpu_count_i32',
-    'unix.ffi must expose generic Unix CPU count helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_create_handle',
-    'unix.ffi must expose generic Unix pthread create helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_join_handle',
-    'unix.ffi must expose generic Unix pthread join helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_detach_handle',
-    'unix.ffi must expose generic Unix pthread detach helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_state_create',
-    'unix.ffi must expose generic Unix pthread state create helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_state_join',
-    'unix.ffi must expose generic Unix pthread state join helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_state_detach',
-    'unix.ffi must expose generic Unix pthread state detach helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_yield',
-    'unix.ffi must expose generic Unix pthread yield helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_sleep_ns',
-    'unix.ffi must expose generic Unix pthread sleep helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_tls_create',
-    'unix.ffi must expose generic Unix pthread TLS create helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_tls_destroy',
-    'unix.ffi must expose generic Unix pthread TLS destroy helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_tls_set',
-    'unix.ffi must expose generic Unix pthread TLS set helper');
-  CheckTokenPresent(LUnixSource, 'platform_pthread_tls_get',
-    'unix.ffi must expose generic Unix pthread TLS get helper');
-  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_token_size',
-    'unix.base must expose generic Unix pthread token storage size');
-  CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadtokenalign',
-    'unix.base must expose generic Unix pthread token align carrier type');
-  CheckTokenPresent(LUnixBaseSource, 'pplatformpthreadstate',
-    'unix.base must expose generic Unix pthread state pointer type');
-  CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadstate',
-    'unix.base must expose generic Unix pthread state carrier type');
-  CheckSharedPosixThreadDelegation(LUnixSource, 'unix.ffi');
+  CheckHostPrefixedThreadHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd', 'freebsd');
+  CheckHostPrefixedThreadHelperSet(LUnixSource, LUnixBaseSource, 'generic Unix', 'unix');
   CheckTokenPresent(LPosixSource, 'platform_posix_pthread_state_create',
     'posix.ffi must expose shared POSIX pthread state create helper');
   CheckTokenPresent(LPosixSource, 'platform_posix_pthread_state_join',
@@ -503,30 +433,11 @@ begin
 
   CheckTokenPresent(LThreadSource, 'function platform_thread_id',
     'platform.thread must continue to expose the thread id contract');
-  CheckTokenPresent(LThreadSource, 'platform_thread_self_token_u64',
-    'platform.thread must use host-owned thread self token helper');
-  CheckTokenPresent(LThreadSource, 'platform_native_thread_id_u64',
-    'platform.thread must use host-owned native thread id helper');
-  CheckTokenPresent(LThreadSource, 'platform_cpu_count_i32',
-    'platform.thread must use host-owned CPU count helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_state_create',
-    'platform.thread must consume host-owned pthread state create helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_state_join',
-    'platform.thread must consume host-owned pthread state join helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_state_detach',
-    'platform.thread must consume host-owned pthread state detach helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_yield',
-    'platform.thread must consume host-owned pthread yield helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_sleep_ns',
-    'platform.thread must consume host-owned pthread sleep helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_tls_create',
-    'platform.thread must consume host-owned pthread TLS create helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_tls_destroy',
-    'platform.thread must consume host-owned pthread TLS destroy helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_tls_set',
-    'platform.thread must consume host-owned pthread TLS set helper');
-  CheckTokenPresent(LThreadSource, 'platform_pthread_tls_get',
-    'platform.thread must consume host-owned pthread TLS get helper');
+  CheckThreadConsumerHostHelpers(LThreadSource, 'Linux', 'linux');
+  CheckThreadConsumerHostHelpers(LThreadSource, 'Android', 'android');
+  CheckThreadConsumerHostHelpers(LThreadSource, 'Darwin', 'darwin');
+  CheckThreadConsumerHostHelpers(LThreadSource, 'FreeBSD', 'freebsd');
+  CheckThreadConsumerHostHelpers(LThreadSource, 'generic Unix', 'unix');
   CheckTokenPresent(LThreadSource, 'pplatformpthreadstate',
     'platform.thread must consume host-owned pthread state carrier');
   Check(Pos('platform_posix_eintr', LThreadSource) = 0,

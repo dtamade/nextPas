@@ -254,12 +254,12 @@ begin
     'Linux ffi must own native gettid binding');
 
   CheckHostBaseTokens(LAndroidBase, 'Android', '0', '1', '97', '1', '1');
-  CheckPosixHostFfiTokens(LAndroidFfi, 'Android', 'platform');
+  CheckPosixHostFfiTokens(LAndroidFfi, 'Android', 'android');
   CheckTokenPresent(LAndroidFfi, 'gettid',
     'Android ffi must own native gettid binding');
 
   CheckHostBaseTokens(LDarwinBase, 'Darwin', '0', '1', '58', '0', '0');
-  CheckPosixHostFfiTokens(LDarwinFfi, 'Darwin', 'platform');
+  CheckPosixHostFfiTokens(LDarwinFfi, 'Darwin', 'darwin');
   CheckTokenPresent(LDarwinBase, 'mach_timebase_info_data_t',
     'Darwin base must own mach timebase record');
   CheckTokenPresent(LDarwinFfi, 'mach_absolute_time',
@@ -270,13 +270,13 @@ begin
     'Darwin ffi must return host ENOTSUP for unsupported timedlock');
 
   CheckHostBaseTokens(LFreeBSDBase, 'FreeBSD', '0', '4', '58', '1', '1');
-  CheckPosixHostFfiTokens(LFreeBSDFfi, 'FreeBSD', 'platform');
+  CheckPosixHostFfiTokens(LFreeBSDFfi, 'FreeBSD', 'freebsd');
   CheckTokenPresent(LFreeBSDFfi, 'pthread_getthreadid_np',
     'FreeBSD ffi must own native thread id binding');
 
   CheckHostBaseTokens(LUnixBase, 'generic Unix', '0', '1', '-1', '1', '0');
-  CheckPosixHostFfiTokens(LUnixFfi, 'generic Unix', 'platform');
-  CheckTokenPresent(LUnixFfi, 'result := platform_thread_self_token_u64;',
+  CheckPosixHostFfiTokens(LUnixFfi, 'generic Unix', 'unix');
+  CheckTokenPresent(LUnixFfi, 'result := unix_thread_self_token_u64;',
     'generic Unix ffi must document native thread id fallback');
   CheckTokenPresent(LUnixFfi, 'platform_posix_sysconf_positive_i32(platform_sysconf_nprocessors_onln)',
     'generic Unix ffi must route CPU count through explicit fallback sysconf token');

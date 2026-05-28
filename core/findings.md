@@ -1,5 +1,26 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 14 remaining host helper naming cleanup
+
+- Wave 13 fixed Linux-owned pthread/clock/errno/thread/cpu helper names, but the
+  same unified-looking helper-name leak remains in Android, Darwin, FreeBSD, and
+  generic Unix host FFI owners.
+- Wave 14 should rename these host-owned helpers to `android_*`, `darwin_*`,
+  `freebsd_*`, and `unix_*` while preserving shared `platform_posix_*` names in
+  `nextpas.core.platform.posix.ffi` and public `platform_*` names in
+  `platform.time`, `platform.sync`, and `platform.thread`.
+- The same owner-name rule applies to Windows host-owned clock helper
+  projections. QPC/FILETIME helpers belong to `nextpas.core.platform.windows.ffi`
+  and should use `windows_clock_*`, while public `platform.time` names remain in
+  the unified contract.
+- This is a nextPas owner-boundary correction only. FPC raw API definitions,
+  constants, records, external symbol names, and calling conventions remain the
+  correctness authority and should not be runtime-probed by nextPas tests.
+- The current wave deliberately does not rename older file/path/env/dl helpers
+  that also still carry `platform_*` names in host FFI units. That family should
+  be handled as a separate cleanup wave after the thread/sync/time helper
+  surface is no longer misleading.
+
 ## 2026-05-28: Wave 13 Linux host helper naming cleanup
 
 - User review correctly flagged that Linux host FFI helpers named

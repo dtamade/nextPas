@@ -162,10 +162,18 @@ begin
   CheckPosixClockHelperSet(LLinuxSource, 'linux.ffi', True, 'linux');
   CheckTokenAbsent(LLinuxSource, 'function platform_clock_',
     'linux.ffi must not expose unified-looking platform_clock helper names');
-  CheckPosixClockHelperSet(LAndroidSource, 'android.ffi', True);
-  CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi', True);
-  CheckPosixClockHelperSet(LUnixSource, 'unix.ffi', True);
-  CheckPosixClockHelperSet(LDarwinSource, 'darwin.ffi', False);
+  CheckPosixClockHelperSet(LAndroidSource, 'android.ffi', True, 'android');
+  CheckTokenAbsent(LAndroidSource, 'function platform_clock_',
+    'android.ffi must not expose unified-looking platform_clock helper names');
+  CheckPosixClockHelperSet(LFreeBSDSource, 'freebsd.ffi', True, 'freebsd');
+  CheckTokenAbsent(LFreeBSDSource, 'function platform_clock_',
+    'freebsd.ffi must not expose unified-looking platform_clock helper names');
+  CheckPosixClockHelperSet(LUnixSource, 'unix.ffi', True, 'unix');
+  CheckTokenAbsent(LUnixSource, 'function platform_clock_',
+    'unix.ffi must not expose unified-looking platform_clock helper names');
+  CheckPosixClockHelperSet(LDarwinSource, 'darwin.ffi', False, 'darwin');
+  CheckTokenAbsent(LDarwinSource, 'function platform_clock_',
+    'darwin.ffi must not expose unified-looking platform_clock helper names');
 
   CheckTokenPresent(LDarwinSource, 'mach_absolute_time',
     'darwin.ffi must expose mach_absolute_time for platform.time');
@@ -203,11 +211,11 @@ begin
     'windows.ffi must own the FILETIME unix epoch offset token for platform.time');
   CheckTokenPresent(LWindowsSource, 'windows_filetime_nanoseconds_per_tick',
     'windows.ffi must own the FILETIME tick size token for platform.time');
-  CheckTokenPresent(LWindowsSource, 'platform_clock_monotonic_ns_u64',
+  CheckTokenPresent(LWindowsSource, 'windows_clock_monotonic_ns_u64',
     'windows.ffi must expose host-owned monotonic nanosecond helper for platform.time');
-  CheckTokenPresent(LWindowsSource, 'platform_clock_realtime_ns_u64',
+  CheckTokenPresent(LWindowsSource, 'windows_clock_realtime_ns_u64',
     'windows.ffi must expose host-owned realtime nanosecond helper for platform.time');
-  CheckTokenPresent(LWindowsSource, 'platform_clock_monotonic_resolution_ns_u64',
+  CheckTokenPresent(LWindowsSource, 'windows_clock_monotonic_resolution_ns_u64',
     'windows.ffi must expose host-owned monotonic resolution nanosecond helper for platform.time');
 
   CheckTokenPresent(LTimeBaseSource, 'tplatformtimenanoseconds',
@@ -258,18 +266,36 @@ begin
     'platform.time.host must bind Windows clock APIs through windows.ffi');
   CheckTokenPresent(LTimeHostSource, 'nextpas.core.platform.windows.math',
     'platform.time.host must use helper-only windows.math for pure QPC math on non-Windows hosts');
-  CheckTokenPresent(LTimeHostSource, 'platform_clock_monotonic_ns_u64',
-    'platform.time.host must consume host-owned monotonic nanosecond helper');
-  CheckTokenPresent(LTimeHostSource, 'platform_clock_realtime_ns_u64',
-    'platform.time.host must consume host-owned realtime nanosecond helper');
-  CheckTokenPresent(LTimeHostSource, 'platform_clock_monotonic_resolution_ns_u64',
-    'platform.time.host must consume host-owned monotonic resolution nanosecond helper');
   CheckTokenPresent(LTimeHostSource, 'linux_clock_monotonic_ns_u64',
     'platform.time.host Linux branch must consume Linux-owned monotonic nanosecond helper');
   CheckTokenPresent(LTimeHostSource, 'linux_clock_realtime_ns_u64',
     'platform.time.host Linux branch must consume Linux-owned realtime nanosecond helper');
   CheckTokenPresent(LTimeHostSource, 'linux_clock_monotonic_resolution_ns_u64',
     'platform.time.host Linux branch must consume Linux-owned monotonic resolution helper');
+  CheckTokenPresent(LTimeHostSource, 'android_clock_monotonic_ns_u64',
+    'platform.time.host Android branch must consume Android-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'android_clock_realtime_ns_u64',
+    'platform.time.host Android branch must consume Android-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'android_clock_monotonic_resolution_ns_u64',
+    'platform.time.host Android branch must consume Android-owned monotonic resolution helper');
+  CheckTokenPresent(LTimeHostSource, 'darwin_clock_monotonic_ns_u64',
+    'platform.time.host Darwin branch must consume Darwin-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'darwin_clock_realtime_ns_u64',
+    'platform.time.host Darwin branch must consume Darwin-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'darwin_clock_monotonic_resolution_ns_u64',
+    'platform.time.host Darwin branch must consume Darwin-owned monotonic resolution helper');
+  CheckTokenPresent(LTimeHostSource, 'freebsd_clock_monotonic_ns_u64',
+    'platform.time.host FreeBSD branch must consume FreeBSD-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'freebsd_clock_realtime_ns_u64',
+    'platform.time.host FreeBSD branch must consume FreeBSD-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'freebsd_clock_monotonic_resolution_ns_u64',
+    'platform.time.host FreeBSD branch must consume FreeBSD-owned monotonic resolution helper');
+  CheckTokenPresent(LTimeHostSource, 'unix_clock_monotonic_ns_u64',
+    'platform.time.host generic Unix branch must consume generic Unix-owned monotonic nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'unix_clock_realtime_ns_u64',
+    'platform.time.host generic Unix branch must consume generic Unix-owned realtime nanosecond helper');
+  CheckTokenPresent(LTimeHostSource, 'unix_clock_monotonic_resolution_ns_u64',
+    'platform.time.host generic Unix branch must consume generic Unix-owned monotonic resolution helper');
   CheckTokenPresent(LTimeHostSource, 'windows_qpc_to_ns',
     'platform.time.host must consume Windows QPC nanosecond conversion helper through windows.ffi');
   CheckTokenPresent(LTimeHostSource, 'windows_qpc_resolution_ns',
@@ -278,12 +304,28 @@ begin
     'platform.time.host must consume shared POSIX timespec conversion helper through posix.math');
   Check(Pos('{$ifdef nextpas_unix}', LTimeHostSource) < Pos('nextpas.core.platform.posix.ffi', LTimeHostSource),
     'platform.time.host must only pull posix.ffi inside the Unix host-ffi branch');
-  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_ns_u64;') = 1,
-    'platform.time.host must keep a single host-ffi monotonic body');
-  Check(CountToken(LTimeHostSource, 'result := platform_clock_realtime_ns_u64;') = 1,
-    'platform.time.host must keep a single host-ffi realtime body');
-  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_resolution_ns_u64;') = 1,
-    'platform.time.host must keep a single host-ffi monotonic-resolution body');
+  Check(CountToken(LTimeHostSource, 'result := linux_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single Linux host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := android_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single Android host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := darwin_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single Darwin host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := freebsd_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single FreeBSD host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := unix_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single generic Unix host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := windows_clock_monotonic_ns_u64;') = 1,
+    'platform.time.host must keep a single Windows host-ffi monotonic branch');
+  Check(CountToken(LTimeHostSource, 'result := windows_clock_realtime_ns_u64;') = 1,
+    'platform.time.host must keep a single Windows host-ffi realtime branch');
+  Check(CountToken(LTimeHostSource, 'result := windows_clock_monotonic_resolution_ns_u64;') = 1,
+    'platform.time.host must keep a single Windows host-ffi monotonic-resolution branch');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_ns_u64;') = 0,
+    'platform.time.host must not consume unified-looking POSIX host clock helper names');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_realtime_ns_u64;') = 0,
+    'platform.time.host must not consume unified-looking POSIX host clock helper names');
+  Check(CountToken(LTimeHostSource, 'result := platform_clock_monotonic_resolution_ns_u64;') = 0,
+    'platform.time.host must not consume unified-looking POSIX host clock helper names');
   Check(Pos('mach_absolute_time(', LTimeHostSource) = 0,
     'platform.time.host must not call mach_absolute_time directly in the consumer');
   Check(Pos('mach_timebase_info(', LTimeHostSource) = 0,

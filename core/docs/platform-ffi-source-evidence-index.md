@@ -44,6 +44,28 @@ abstractions that consume them.
 
 ## Declaration Evidence Classes
 
+### Platform Host ABI Completeness Wave 14: remaining host helper owner names
+
+Wave 14 does not import a new raw OS API family. It finishes the owner-name
+cleanup for the host-owned pthread, clock, errno, native thread id, and CPU
+count helper projections that Wave 13 started on Linux. The raw ABI evidence
+remains the same FPC source already cited for clock, errno, pthread
+lifecycle/TLS/sync, native thread id, CPU count, and Windows clock APIs.
+
+- Android, Darwin, FreeBSD, and generic Unix host `ffi` units now expose
+  host-owned helper projections with the `android_*`, `darwin_*`, `freebsd_*`,
+  and `unix_*` prefixes.
+- Windows host clock helper projections now use the `windows_clock_*` prefix
+  instead of the unified-looking `platform_clock_*` fallback name.
+- Shared POSIX skeletons remain `platform_posix_*` because their owner is
+  `nextpas.core.platform.posix.ffi`, not a concrete host.
+- `platform.time.host`, `platform.sync`, and `platform.thread` consume
+  host-prefixed helpers while preserving the unified public `platform_*`
+  contract names in their own public API.
+- Older file/path/env/dl raw helper names that still use `platform_*` are
+  recorded as a separate later cleanup family so this wave stays scoped to the
+  thread/sync/time helper surface.
+
 ### Platform Host ABI Completeness Wave 13: Linux host helper owner names
 
 Wave 13 does not import a new raw OS API family. It corrects Linux host-owned
@@ -61,9 +83,8 @@ errno, pthread lifecycle/TLS/sync, native thread id, and CPU count.
 - `platform.time.host`, `platform.sync`, and `platform.thread` consume the
   Linux-prefixed helpers on the Linux branch while preserving the unified public
   `platform_*` contract names in their own public API.
-- Android, Darwin, FreeBSD, and generic Unix still carry historical
-  unified-looking helper names for the same families. That is recorded as a
-  follow-up owner-name cleanup, not as desired shape for new imports.
+- Wave 14 extends the same owner-name cleanup to Android, Darwin, FreeBSD,
+  generic Unix, and the Windows clock helper fallback.
 
 ### Platform Host ABI Completeness Wave 11: POSIX signal-control raw ABI
 
