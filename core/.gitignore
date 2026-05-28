@@ -21,3 +21,9 @@ Thumbs.db
 GPATH
 GRTAGS
 GTAGS
+
+# Benchmark build artifacts
+**/target/
+**/compare_go/bench_sort_go
+**/compare_fpcrtl/bench_sort_fpcrtl
+benchmarks/**/bench_sort
