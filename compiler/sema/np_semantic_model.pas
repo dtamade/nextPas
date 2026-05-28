@@ -256,6 +256,8 @@ type
     procedure SetTypeMeta(const ATypeId: LongInt; const AMeta: TTypeMetadata);
     function GetTypeMeta(const ATypeId: LongInt;
       out AMeta: TTypeMetadata): Boolean;
+    function GetTypeMetaByName(const ATypeName: string;
+      out AMeta: TTypeMetadata): Boolean;
     function GetFieldMetaByName(const ATypeId: LongInt;
       const AFieldName: string; out AField: TFieldMeta): Boolean;
     function GetVmtSlotByName(const ATypeId: LongInt;
@@ -1011,6 +1013,20 @@ begin
   Result := False;
   for I := 0 to Length(FTypeMetadataEntries) - 1 do
     if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      AMeta := FTypeMetadataEntries[I];
+      Exit(True);
+    end;
+end;
+
+function TSemanticModel.GetTypeMetaByName(const ATypeName: string;
+  out AMeta: TTypeMetadata): Boolean;
+var
+  I: LongInt;
+begin
+  Result := False;
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if SameText(FTypes[FTypeMetadataEntries[I].TypeId - 1].Name, ATypeName) then
     begin
       AMeta := FTypeMetadataEntries[I];
       Exit(True);

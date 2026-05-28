@@ -2778,14 +2778,23 @@ var
   I, J: LongInt;
   Funcs: array of string;
   FuncName, ParentClass: string;
+  Meta: TTypeMetadata;
 begin
   for J := 0 to FModule.VmtGlobalCount - 1 do
     if FModule.VmtGlobalAt(J).ClassName = AClassName then
       Exit;
-  if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
-    VmtCount := 0;
-  if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
-    ParentClass := '';
+  if FSemaModel.GetTypeMetaByName(AClassName, Meta) then
+  begin
+    VmtCount := Meta.VmtCount;
+    ParentClass := Meta.ParentClassName;
+  end
+  else
+  begin
+    if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
+      VmtCount := 0;
+    if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
+      ParentClass := '';
+  end;
   SetLength(Funcs, VmtCount + 1);
   if ParentClass <> '' then
   begin
@@ -2796,7 +2805,10 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if not FSemaModel.LookupStringConstValue(
+    if FSemaModel.GetTypeMetaByName(AClassName, Meta) and
+      (I < Length(Meta.VmtSlots)) then
+      FuncName := Meta.VmtSlots[I].FuncQualName
+    else if not FSemaModel.LookupStringConstValue(
       AClassName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
     Funcs[I + 1] := FuncName;
@@ -2812,6 +2824,7 @@ var
   Funcs: array of string;
   ObjPtr, ZeroVal, SlotPtr: THIRValueId;
   Instr: THIRInstr;
+  Meta: TTypeMetadata;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -2825,11 +2838,18 @@ begin
     ClsName := ANode.Operand;
   end;
 
-  if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
-    VmtCount := 0;
-
-  if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
-    ParentClass := '';
+  if FSemaModel.GetTypeMetaByName(ClsName, Meta) then
+  begin
+    VmtCount := Meta.VmtCount;
+    ParentClass := Meta.ParentClassName;
+  end
+  else
+  begin
+    if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
+      VmtCount := 0;
+    if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
+      ParentClass := '';
+  end;
 
   SetLength(Funcs, VmtCount + 1);
   if ParentClass <> '' then
@@ -2838,30 +2858,53 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if not FSemaModel.LookupStringConstValue(
+    if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
+      (I < Length(Meta.VmtSlots)) then
+      FuncName := Meta.VmtSlots[I].FuncQualName
+    else if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
     Funcs[I + 1] := FuncName;
   end;
   FModule.AddVmtGlobal(ClsName, Funcs);
 
-  if (ParentClass <> '') and
-    FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
+  if (ParentClass <> '') then
   begin
-    SetLength(Funcs, VmtCount + 1);
-    if FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', FuncName) and
-      (FuncName <> '') then
-      Funcs[0] := FuncName + '.vmt'
-    else
-      Funcs[0] := '';
-    for I := 0 to VmtCount - 1 do
+    if FSemaModel.GetTypeMetaByName(ParentClass, Meta) then
     begin
-      if not FSemaModel.LookupStringConstValue(
-        ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
-        FuncName := '';
-      Funcs[I + 1] := FuncName;
+      VmtCount := Meta.VmtCount;
+      SetLength(Funcs, VmtCount + 1);
+      if Meta.ParentClassName <> '' then
+        Funcs[0] := Meta.ParentClassName + '.vmt'
+      else
+        Funcs[0] := '';
+      for I := 0 to VmtCount - 1 do
+      begin
+        if I < Length(Meta.VmtSlots) then
+          FuncName := Meta.VmtSlots[I].FuncQualName
+        else
+          FuncName := '';
+        Funcs[I + 1] := FuncName;
+      end;
+      FModule.AddVmtGlobal(ParentClass, Funcs);
+    end
+    else if FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
+    begin
+      SetLength(Funcs, VmtCount + 1);
+      if FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', FuncName) and
+        (FuncName <> '') then
+        Funcs[0] := FuncName + '.vmt'
+      else
+        Funcs[0] := '';
+      for I := 0 to VmtCount - 1 do
+      begin
+        if not FSemaModel.LookupStringConstValue(
+          ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
+          FuncName := '';
+        Funcs[I + 1] := FuncName;
+      end;
+      FModule.AddVmtGlobal(ParentClass, Funcs);
     end;
-    FModule.AddVmtGlobal(ParentClass, Funcs);
   end;
 
   ObjPtr := FindAlloca(VarName);
