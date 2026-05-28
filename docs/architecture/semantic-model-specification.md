@@ -405,6 +405,12 @@ candidate collection
     project-source owner unit 中零参内建标量/字符串 function result；例如
     `procedure TWorker.Run; begin Pick(True); end;` 或 `Pick(Flag);` 面对
     `Pick(Value: Integer)`，该路径不会注册失败 `member-call` binding
+  - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
+    imported owner class parent chain 找到 inherited 单一 target，arity 已匹配、stable
+    argument signature 与 target param signature 明确不兼容的场景；stable evidence 包含
+    literal/纯表达式，以及同一 project-source owner unit 中零参内建标量/字符串 function
+    result；例如 `procedure TWorker.Run; begin Touch(True); end;` 或 `Touch(Flag);` 面对
+    inherited `Touch(Value: Integer)`，该路径不会注册失败 `member-call` binding
 - `sema.no-matching-overload`
   - 也用于 class method body 内 bare implicit-self method call 找到 current class root-owned
     同名同 arity多候选，但 stable argument signature 与全部 target param signature 都不兼容的场景

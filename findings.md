@@ -10,6 +10,23 @@
 
 ## Research Findings
 
+- Batch 188 继续 imported unit method body inherited implicit-self same-unit function-result evidence
+  面：root `uses Worker;`，imported `Worker.pas` 中 `TBaseWorker.Touch(Value: Integer)`、
+  `TWorker = class(TBaseWorker)` 与 `function Flag: Boolean;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Touch(Flag); end;` 必须失败为 `sema.type-mismatch`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 188 focused semantic probe 直接 GREEN，证明 Batch 181-184 的 inherited implicit-self
+  parent-chain lookup 与 Batch 185-187 的 same-owner project-source function-result stable evidence
+  已自然组合；本批不需要修改 analyzer。
+- Batch 188 新增
+  `tests/fixtures/imported_unit_body_inherited_implicit_self_function_result_type_mismatch` 与
+  `imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check`，final envelope 新增
+  `importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass`。
+- Batch 188 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-inherited-implicit-self-function-result-type-mismatch-check=pass`、
+  `importedUnitBodyInheritedImplicitSelfFunctionResultTypeMismatchCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 187 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
   `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
   `TWorker.Pick(Value: LongInt)` 与 `function Count: Integer;` 同属 `project-source` owner unit，

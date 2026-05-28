@@ -220,6 +220,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   找到 inherited bare implicit-self target 后的 arity miss。
 - `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 沿 parent chain
   找到 inherited bare implicit-self target 后的 stable literal mismatch。
+- `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 沿 parent chain
+  找到 inherited bare implicit-self target 后的 same-unit function-result mismatch。
 - `sema.no-matching-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
   找到 inherited bare implicit-self overload set 后的 stable literal no-match。
 - `sema.ambiguous-overload` 已覆盖 imported `project-source` unit method body 沿 parent chain
