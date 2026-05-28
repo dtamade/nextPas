@@ -10,6 +10,11 @@
 
 ## Research Findings
 
+- Batch 209 re-rank 结论：Batch 181 已打开 imported `project-source` unit method body inherited
+  implicit-self wrong-argument-count；补同形 installed-source deferred guard。
+- Batch 209 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
+- Batch 209 official proof：
+  `CheckInstalledSourceUnitBodyInheritedImplicitSelfBareMethodWrongArgumentCountStaysDeferred`。
 - Batch 208 re-rank 结论：Batch 177 已打开 imported `project-source` unit method body bare
   implicit-self wrong-argument-count；补同形 installed-source deferred guard。
 - Batch 208 focused semantic 直接 GREEN；现有 installed-source provenance guard 已覆盖。
