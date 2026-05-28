@@ -109,26 +109,8 @@ const
   PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
   PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
 
-  ESysEAGAIN = 35;
-  ESysEBUSY = 16;
-  ESysEINTR = 4;
-  ESysEINVAL = 22;
-  ESysEOPNOTSUPP = 45;
-  ESysETIMEDOUT = 60;
-
   WNOHANG = Int32(1);
   WUNTRACED = Int32(2);
-
-  SIGHUP = Int32(1);
-  SIGINT = Int32(2);
-  SIGKILL = Int32(9);
-  SIGTERM = Int32(15);
-  SIGCHLD = Int32(20);
-  SA_SIGINFO = Int32($040);
-  SA_RESTART = Int32($002);
-  SIG_BLOCK = Int32(1);
-  SIG_UNBLOCK = Int32(2);
-  SIG_SETMASK = Int32(3);
 
   RTLD_LAZY = Int32(1);
   RTLD_NOW = Int32(2);
@@ -138,10 +120,14 @@ const
   O_RDONLY = Int32(0);
   O_WRONLY = Int32(1);
   O_RDWR = Int32(2);
-  O_CREAT = Int32($100);
-  O_EXCL = Int32($400);
-  O_TRUNC = Int32($200);
+  O_CREAT = Int32($200);
+  O_EXCL = Int32($800);
+  O_NOCTTY = Int32($20000);
+  O_TRUNC = Int32($400);
   O_APPEND = Int32($8);
+  O_NONBLOCK = Int32($4);
+  O_DIRECTORY = Int32($100000);
+  O_CLOEXEC = Int32($1000000);
 
   SEEK_SET = Int32(0);
   SEEK_CUR = Int32(1);
@@ -158,6 +144,12 @@ const
   X_OK = Int32(1);
   W_OK = Int32(2);
   R_OK = Int32(4);
+
+{ errno constants - full table }
+{$I nextpas.core.platform.darwin.base.errno.inc}
+
+{ signal constants - full table }
+{$I nextpas.core.platform.darwin.base.signal.inc}
 
 implementation
 
