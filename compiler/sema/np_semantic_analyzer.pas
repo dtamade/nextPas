@@ -281,6 +281,8 @@ type
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure AppendWhereConstraint(const ATypeId: LongInt;
       const AWhereSpec: string);
+    function CheckSingleConstraint(const AArgType: string;
+      const AConstraint: string): Boolean;
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -4061,6 +4063,80 @@ begin
   FModel.AppendTypeConstraint(ATypeId, ParamName, Constraint);
 end;
 
+function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
+  const AConstraint: string): Boolean;
+var
+  SizeVal: Int64;
+  IntfList: string;
+  SubConstraints: array of string;
+  I, J: LongInt;
+  SC: string;
+begin
+  Result := True;
+  SetLength(SubConstraints, 0);
+  I := 1;
+  while I <= Length(AConstraint) do
+  begin
+    J := I;
+    while (J <= Length(AConstraint)) and (AConstraint[J] <> '|') do
+      Inc(J);
+    SetLength(SubConstraints, Length(SubConstraints) + 1);
+    SubConstraints[High(SubConstraints)] := Trim(Copy(AConstraint, I, J - I));
+    I := J + 1;
+  end;
+  for I := 0 to High(SubConstraints) do
+  begin
+    SC := SubConstraints[I];
+    if SC = '' then
+      Continue;
+    if SameText(SC, 'class') then
+    begin
+      if FModel.LookupConstValue(AArgType + '$record', SizeVal) or
+        (not FModel.LookupConstValue(AArgType + '$size', SizeVal)) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + AArgType + ' does not satisfy constraint "class"');
+        Result := False;
+        Exit;
+      end;
+    end
+    else if SameText(SC, 'record') then
+    begin
+      if not FModel.LookupConstValue(AArgType + '$record', SizeVal) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + AArgType + ' does not satisfy constraint "record"');
+        Result := False;
+        Exit;
+      end;
+    end
+    else
+    begin
+      if not FModel.LookupConstValue(AArgType + '$size', SizeVal) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + AArgType + ' does not satisfy interface constraint "' +
+          SC + '" (must be a class type)');
+        Result := False;
+        Exit;
+      end;
+      if not FModel.LookupStringConstValue(AArgType + '$interfaces', IntfList) then
+        IntfList := '';
+      if (IntfList = '') or (Pos(SC, IntfList) = 0) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + AArgType + ' does not implement interface "' + SC + '"');
+        Result := False;
+        Exit;
+      end;
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
@@ -4345,16 +4421,22 @@ begin
         if TypeChild.ChildCount > 0 then
         begin
           if TypeChild.ChildAt(0).NodeKind = gnkIdentifier then
+          begin
             ParentTypeId := ResolveTypeIdForOwner(
               TypeChild.ChildAt(0).Text,
               AOwnerUnitId
             );
+            if (ParentTypeId > 0) and
+              (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
+              ParentTypeId := 0;
+          end;
         end
         else
           ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
         if ParentTypeId > 0 then
           FModel.SetTypeParent(TypeId, ParentTypeId);
-        if not FModel.LookupConstValue(Child.Text + '$size', SizeVal) then
+        if (not SameText(TypeChild.Text, 'interface')) and
+          (not FModel.LookupConstValue(Child.Text + '$size', SizeVal)) then
           FModel.AddConstValue(Child.Text + '$size', 8);
         InterfaceList := '';
         for K := 0 to TypeChild.ChildCount - 1 do
@@ -4372,7 +4454,8 @@ begin
         end;
         if InterfaceList <> '' then
           FModel.AddStringConstValue(Child.Text + '$interfaces', InterfaceList);
-        ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
+        if not SameText(TypeChild.Text, 'interface') then
+          ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
       end
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then
@@ -4505,38 +4588,8 @@ begin
   begin
     if (Constraints[I] = '') or (I > High(ArgTypes)) then
       Continue;
-    if SameText(Constraints[I], 'class') then
-    begin
-      if FModel.LookupConstValue(ArgTypes[I] + '$record', SizeVal) or
-        (not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal)) then
-      begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + ArgTypes[I] + ' does not satisfy constraint "class"');
-        Exit;
-      end;
-    end
-    else if SameText(Constraints[I], 'record') then
-    begin
-      if not FModel.LookupConstValue(ArgTypes[I] + '$record', SizeVal) then
-      begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + ArgTypes[I] + ' does not satisfy constraint "record"');
-        Exit;
-      end;
-    end
-    else
-    begin
-      if not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal) then
-      begin
-        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
-          FRootFileId, 0,
-          'type ' + ArgTypes[I] + ' does not satisfy interface constraint "' +
-          Constraints[I] + '" (must be a class type)');
-        Exit;
-      end;
-    end;
+    if not CheckSingleConstraint(ArgTypes[I], Constraints[I]) then
+      Exit;
   end;
 
   InstanceName := FModel.TypeAt(AInstanceTypeId - 1).Name;

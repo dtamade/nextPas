@@ -2178,6 +2178,19 @@ begin
                     begin
                       SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
                       Inc(ACursor);
+                      while (ACursor < ALexer.TokenCount) and
+                        (CurrentToken(ALexer, ACursor).Kind = tkComma) do
+                      begin
+                        Inc(ACursor);
+                        if (ACursor < ALexer.TokenCount) and
+                          (CurrentToken(ALexer, ACursor).Kind in
+                            [tkIdentifier, tkClassKeyword, tkRecordKeyword]) then
+                        begin
+                          SpecArgs := SpecArgs + '|' +
+                            CurrentToken(ALexer, ACursor).Lexeme;
+                          Inc(ACursor);
+                        end;
+                      end;
                     end;
                   end;
                   ElementNode := TGreenNode.Create(gnkIdentifier,
