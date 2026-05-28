@@ -22,19 +22,31 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-linux-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: fpc-trunk-linux-x86_64-v3
 
-      - name: Build FPC trunk
+      - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
         run: |
-          mkdir -p ~/fpc-trunk
-          wget -q "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-x86_64-linux" -O ~/fpc-trunk/fpcup
-          chmod +x ~/fpc-trunk/fpcup
-          ~/fpc-trunk/fpcup --installdir=~/fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | tail -30
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git ~/fpc-src
+          cd ~/fpc-src
+          make all FPCDIR=$(pwd) PP=$(which ppcx64) OPT="-O2"
+          mkdir -p ~/fpc-trunk/bin ~/fpc-trunk/lib
+          make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppcx64 PREFIX=~/fpc-trunk
+          ls ~/fpc-trunk/bin/ || true
+          find ~/fpc-trunk -name ppcx64 -o -name fpc | head -5
 
       - name: Setup PATH
         run: |
-          echo "$HOME/fpc-trunk/fpc/bin/x86_64-linux" >> $GITHUB_PATH
+          FPC_BIN=$(find ~/fpc-trunk -name fpc -type f | head -1)
+          if [ -n "$FPC_BIN" ]; then
+            echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
+            PPCDIR=$(find ~/fpc-trunk -name ppcx64 -type f | head -1)
+            if [ -n "$PPCDIR" ]; then
+              echo "$(dirname $PPCDIR)" >> $GITHUB_PATH
+            fi
+          else
+            echo "FPC trunk build failed, using system FPC"
+          fi
 
       - name: Verify FPC
         run: fpc -iV
@@ -55,21 +67,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/fpc-trunk
-          key: fpc-trunk-macos-aarch64-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: fpc-trunk-macos-aarch64-v3
 
-      - name: Build FPC trunk
+      - name: Build FPC trunk from source
         if: steps.cache-fpc.outputs.cache-hit != 'true'
         run: |
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git ~/fpc-src
+          cd ~/fpc-src
+          PP=$(find /usr/local/lib/fpc /opt/homebrew/lib/fpc -name 'ppca64' -o -name 'ppcaarch64' 2>/dev/null | head -1)
+          if [ -z "$PP" ]; then PP=$(which ppca64 2>/dev/null || which ppcaarch64 2>/dev/null); fi
+          echo "Bootstrap compiler: $PP"
+          make all FPCDIR=$(pwd) PP="$PP" OPT="-O2"
           mkdir -p ~/fpc-trunk
-          wget -q "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-aarch64-darwin" -O ~/fpc-trunk/fpcup
-          chmod +x ~/fpc-trunk/fpcup
-          ~/fpc-trunk/fpcup --installdir=~/fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | tail -30
+          make install FPCDIR=$(pwd) PP=$(pwd)/compiler/ppca64 PREFIX=~/fpc-trunk
 
       - name: Setup PATH
         run: |
-          FPC_BIN=$(find ~/fpc-trunk/fpc/bin -name fpc -type f 2>/dev/null | head -1)
+          FPC_BIN=$(find ~/fpc-trunk -name fpc -type f | head -1)
           if [ -n "$FPC_BIN" ]; then
             echo "$(dirname $FPC_BIN)" >> $GITHUB_PATH
+          fi
+          PPC_BIN=$(find ~/fpc-trunk -name 'ppca64' -o -name 'ppcaarch64' | head -1)
+          if [ -n "$PPC_BIN" ]; then
+            echo "$(dirname $PPC_BIN)" >> $GITHUB_PATH
           fi
 
       - name: Verify FPC
@@ -103,22 +123,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\fpc-trunk
-          key: fpc-trunk-windows-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: fpc-trunk-windows-x86_64-v3
 
       - name: Install bootstrap and build FPC trunk
         if: steps.cache-fpc.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           choco install freepascal --yes --no-progress
-          New-Item -ItemType Directory -Force -Path C:\fpc-trunk
-          Invoke-WebRequest -Uri "https://github.com/LongDirtyAnimAlf/Reiniero-fpcup/releases/download/v2.4.0i/fpcup-x86_64-win64.exe" -OutFile "C:\fpc-trunk\fpcup.exe"
-          & C:\fpc-trunk\fpcup.exe --installdir=C:\fpc-trunk --fpcBranch=main --only=FPC --verbose 2>&1 | Select-Object -Last 30
+          git clone --depth 1 --branch main https://gitlab.com/freepascal.org/fpc/source.git C:\fpc-src
+          cd C:\fpc-src
+          $env:PATH = "C:\FPC\3.2.2\bin\i386-win32;$env:PATH"
+          make all FPCDIR=. PP=ppcrossx64.exe OPT="-O2" OS_TARGET=win64 CPU_TARGET=x86_64 2>&1 | Select-Object -Last 10
+          New-Item -ItemType Directory -Force -Path C:\fpc-trunk\bin
+          make install FPCDIR=. PREFIX=C:\fpc-trunk OS_TARGET=win64 CPU_TARGET=x86_64 2>&1 | Select-Object -Last 5
 
       - name: Setup PATH
         shell: bash
         run: |
-          echo "C:/fpc-trunk/fpc/bin/x86_64-win64" >> $GITHUB_PATH
-          echo "C:/fpc-trunk/fpc/bin/i386-win32" >> $GITHUB_PATH
+          echo "C:/fpc-trunk/bin" >> $GITHUB_PATH
+          find "C:/fpc-trunk" -name "*.exe" 2>/dev/null | head -5 || true
 
       - name: Verify FPC
         run: fpc -iV
