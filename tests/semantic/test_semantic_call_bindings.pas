@@ -3430,6 +3430,16 @@ begin
       end;
     if not FoundSig then
       Fail('nested-generic-method-not-found');
+    FoundSig := False;
+    for I := 0 to Model.BindingCount - 1 do
+      if SameText(Model.BindingAt(I).Name, 'Wrap') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+      begin
+        FoundSig := True;
+        Break;
+      end;
+    if not FoundSig then
+      Fail('nested-generic-wrap-not-bound');
   finally
     Model.Free;
     Analyzer.Free;
@@ -3454,6 +3464,7 @@ var
   UnitGraph: TUnitGraph;
   ChildTypeId, ParentTypeId: LongInt;
   ParentName: string;
+  FoundSig: Boolean;
 begin
   SourceText :=
     'program GenericParentChain;' + LineEnding +
@@ -3513,6 +3524,16 @@ begin
     ParentName := Model.TypeAt(ParentTypeId - 1).Name;
     if not SameText(ParentName, 'TBase<Integer>') then
       Fail('generic-parent-chain-wrong-parent:' + ParentName);
+    FoundSig := False;
+    for I := 0 to Model.BindingCount - 1 do
+      if SameText(Model.BindingAt(I).Name, 'DoChild') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+      begin
+        FoundSig := True;
+        Break;
+      end;
+    if not FoundSig then
+      Fail('generic-parent-chain-dochild-not-bound');
   finally
     Model.Free;
     Analyzer.Free;
