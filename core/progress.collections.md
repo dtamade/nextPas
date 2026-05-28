@@ -54,6 +54,8 @@
 - Verified the Vec pop alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 - Started the next Vec tail-observation semantics batch. `TryPeek(var array, 0)` already succeeds and `PeekRange(0)` already returns `nil`; changed `TryPeekCopy(Pointer, 0)` to succeed as the same zero-count no-op while keeping `nil` invalid for non-zero counts.
 - Verified the Vec TryPeek zero-count batch with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the next Vec tail-extraction zero-count batch. `TryPop(var array, 0)` already succeeds; changed `TryPop(Pointer, 0)` to succeed without touching the destination pointer, while keeping `nil` invalid for non-zero counts.
+- Verified the Vec TryPop pointer zero-count batch with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

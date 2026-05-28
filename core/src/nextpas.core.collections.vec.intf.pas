@@ -538,7 +538,8 @@ type
      *
      * @remark
      *   Try 方法保证永不抛异常，会检查所有参数的有效性
-     *   如果 aDst 为 nil 或 aCount 超出容器元素数量，返回 False
+     *   如果 aCount = 0，返回 True 且不访问 aDst
+     *   如果 aCount > 0 且 aDst 为 nil，或 aCount 超出容器元素数量，返回 False
      *}
     function TryPop(aDst: Pointer; aCount: SizeUInt): Boolean; overload;
 

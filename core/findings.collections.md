@@ -154,3 +154,4 @@
 - `Stack`, `Queue`, `Deque`, and `VecDeque` have their own `Pop(out): Boolean` contracts. Removing the `TVec` alias does not imply changing those container families in the same batch.
 - `TVec.TryPeekCopy(Pointer, 0)` should mirror the existing dynamic-array `TryPeek(Array, 0)` behavior and succeed as a no-op. A nil pointer remains invalid when `Count > 0`.
 - `TVec.PeekRange(0)` should continue returning `nil`, because it returns a borrowed internal range pointer and no element range exists for zero count.
+- `TVec.TryPop(Pointer, 0)` should mirror dynamic-array `TryPop(Array, 0)` and return `True` without reading `aDst` or mutating the vector. A nil destination remains invalid when `Count > 0`.

@@ -12,7 +12,14 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec TryPeek Zero Count
+### Current Micro Batch: Vec TryPop Pointer Zero Count
+
+- [x] Make `TVec.TryPop(Pointer, 0)` a successful no-op.
+- [x] Keep `TVec.TryPop(nil, Count > 0)` returning `False`.
+- [x] Keep dynamic-array `TVec.TryPop(Array, 0)` behavior unchanged.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec TryPeek Zero Count
 
 - [x] Make `TVec.TryPeekCopy(Pointer, 0)` a successful no-op.
 - [x] Keep `TVec.TryPeekCopy(nil, Count > 0)` returning `False`.

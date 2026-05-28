@@ -1391,7 +1391,10 @@ var
   LIndex: SizeUInt;
 begin
   // Try 方法完整参数检查：确保永不抛异常
-  Result := (aCount > 0) and (FCount >= aCount) and (aDst <> nil);
+  if aCount = 0 then
+    exit(True);
+
+  Result := (FCount >= aCount) and (aDst <> nil);
 
   if Result then
   begin
