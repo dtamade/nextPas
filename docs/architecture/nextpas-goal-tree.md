@@ -404,6 +404,8 @@ P1：补 compiler semantic correctness。
 
 - 继续推进 G1.4 / G1.5 / G1.6。
 - 近期优先做 source-owned、稳定事实明确的 call/member diagnostics。
+- **泛型系统（G1.7）**：按 `docs/architecture/generics-design.md` 分层推进，G1 基础泛型是当前最高价值目标。
+- 已完成：default parameters、visibility enforcement、structured diagnostics。
 
 P2：巩固 workspace/package/query。
 
