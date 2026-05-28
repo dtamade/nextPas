@@ -55,9 +55,9 @@ Choose the host base/ffi owner before writing a declaration.
   numbers, error-code values, and capability tokens in
   `nextpas.core.platform.<host>.base`.
 - Put `cdecl`, `stdcall`, syscall, libc, pthread, kernel32, mach, and other
-  external declarations in `nextpas.core.platform.<host>.ffi`.
+  raw external declarations in `nextpas.core.platform.<host>.ffi`.
 - Put genuinely shared POSIX ABI shapes in `nextpas.core.platform.posix.base`.
-- Put genuinely shared POSIX external declarations and thin POSIX glue in
+- Put genuinely shared POSIX raw external declarations in
   `nextpas.core.platform.posix.ffi`.
 - Put pure arithmetic helpers in `nextpas.core.platform.posix.math` or
   `nextpas.core.platform.windows.math`.
@@ -66,6 +66,9 @@ Choose the host base/ffi owner before writing a declaration.
 contracts. They consume host base/ffi owners and should not create
 `platform.time.ffi`, `platform.sync.ffi`, or `platform.thread.ffi` unless a
 future design shows the foreign ABI is independent of every host owner.
+They own the wrapping policy for their domains: errno/result mapping, timeout
+math, native-thread-id fallback, wait/wake mismatch checks, pthread lifecycle
+state handling, and Windows handle/state cleanup.
 
 ## Phase 3: integration guard
 
@@ -79,6 +82,8 @@ Source-surface guards for raw ABI import waves may check that:
 
 - Evidence docs name the source family.
 - Feature-specific ffi files stay absent unless explicitly approved.
+- Host/shared `.ffi` units stay raw-only: no `inline` helpers, no implementation
+  helper bodies, no synthetic projections, and no convenience wrappers.
 - `build/verify_local.sh` requires the new files and emits a final envelope
   token.
 - The wave does not add production `uses` clauses for FPC platform units.
@@ -95,9 +100,9 @@ Only after the red gate fails correctly should production code change. Keep the
 green import narrow:
 
 - Add the minimum base constants, record layouts, aliases, and capability tokens.
-- Add the raw ffi declarations copied from FPC. Add host-owned helper
-  projections only when an existing unified consumer already needs that
-  projection and the helper does not become a hidden public contract.
+- Add only the raw ffi declarations copied from FPC or the documented OS SDK
+  fallback. Do not add helper projections, wrapper functions, errno readers,
+  timeout conversions, retry loops, or stateful convenience APIs to `.ffi`.
 - Update `docs/platform-host-ffi-gap-matrix.md` to show the new owned surface or
   to remove a known gap.
 - If a unified contract consumes the API, update only that contract's focused

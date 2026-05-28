@@ -93,14 +93,14 @@ procedure CheckPosixEnvironmentOwnerTokens(
   const AFfi,
   AHostName: string);
 begin
-  CheckTokenPresent(AFfi, 'function platform_environment_get',
-    AHostName + ' ffi must expose environment get helper');
-  CheckTokenPresent(AFfi, 'function platform_environment_set',
-    AHostName + ' ffi must expose environment set helper');
-  CheckTokenPresent(AFfi, 'function platform_environment_unset',
-    AHostName + ' ffi must expose environment unset helper');
-  CheckTokenPresent(AFfi, 'function platform_environment_put',
-    AHostName + ' ffi must expose environment put helper');
+  CheckTokenAbsent(AFfi, 'function platform_environment_get',
+    AHostName + ' ffi must not expose environment get helper');
+  CheckTokenAbsent(AFfi, 'function platform_environment_set',
+    AHostName + ' ffi must not expose environment set helper');
+  CheckTokenAbsent(AFfi, 'function platform_environment_unset',
+    AHostName + ' ffi must not expose environment unset helper');
+  CheckTokenAbsent(AFfi, 'function platform_environment_put',
+    AHostName + ' ffi must not expose environment put helper');
 end;
 
 procedure CheckWave5DocumentTokens(const ADoc: string);
@@ -153,14 +153,14 @@ begin
     'posix.ffi must own POSIX unsetenv binding');
   CheckTokenPresent(LPosixFfi, 'function putenv',
     'posix.ffi must own POSIX putenv binding');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_environment_get',
-    'posix.ffi must expose shared environment get helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_environment_set',
-    'posix.ffi must expose shared environment set helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_environment_unset',
-    'posix.ffi must expose shared environment unset helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_environment_put',
-    'posix.ffi must expose shared environment put helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_environment_get',
+    'posix.ffi must not expose shared environment get helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_environment_set',
+    'posix.ffi must not expose shared environment set helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_environment_unset',
+    'posix.ffi must not expose shared environment unset helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_environment_put',
+    'posix.ffi must not expose shared environment put helper');
 
   CheckPosixEnvironmentOwnerTokens(LLinuxFfi, 'Linux');
   CheckPosixEnvironmentOwnerTokens(LAndroidFfi, 'Android');
@@ -195,12 +195,12 @@ begin
     'windows.ffi must own ExpandEnvironmentStringsA binding');
   CheckTokenPresent(LWindowsFfi, 'function expandenvironmentstringsw',
     'windows.ffi must own ExpandEnvironmentStringsW binding');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_environment_variable_a',
-    'windows.ffi must expose ANSI environment get helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_set_environment_variable_w',
-    'windows.ffi must expose wide environment set helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_expand_environment_strings_w',
-    'windows.ffi must expose wide environment expansion helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_environment_variable_a',
+    'windows.ffi must not expose ANSI environment get helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_set_environment_variable_w',
+    'windows.ffi must not expose wide environment set helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_expand_environment_strings_w',
+    'windows.ffi must not expose wide environment expansion helper');
 end;
 
 procedure TestHostAbiWave5EnvironmentEvidenceDocumented;

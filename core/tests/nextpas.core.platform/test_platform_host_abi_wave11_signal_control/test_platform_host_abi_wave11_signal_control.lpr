@@ -190,20 +190,24 @@ begin
     'linux.base must own Linux rt_sigaction syscall number');
   CheckTokenPresent(LLinuxBase, 'linux_syscall_rt_sigprocmask',
     'linux.base must own Linux rt_sigprocmask syscall number');
-  CheckTokenPresent(LLinuxFfi, 'function linux_rt_sigaction',
-    'linux.ffi must own Linux rt_sigaction syscall projection');
-  CheckTokenPresent(LLinuxFfi, 'function linux_rt_sigprocmask',
-    'linux.ffi must own Linux rt_sigprocmask syscall projection');
+  CheckTokenPresent(LLinuxFfi, 'function linux_syscall',
+    'linux.ffi must own raw syscall binding for Linux signal control');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_rt_sigaction',
+    'linux.ffi must not expose Linux rt_sigaction syscall projection helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_rt_sigprocmask',
+    'linux.ffi must not expose Linux rt_sigprocmask syscall projection helper');
 
   CheckSignalBaseTokens(LAndroidBase, 'Android');
   CheckTokenPresent(LAndroidBase, 'android_syscall_rt_sigaction',
     'android.base must own Android rt_sigaction syscall number');
   CheckTokenPresent(LAndroidBase, 'android_syscall_rt_sigprocmask',
     'android.base must own Android rt_sigprocmask syscall number');
-  CheckTokenPresent(LAndroidFfi, 'function android_rt_sigaction',
-    'android.ffi must own Android rt_sigaction syscall projection');
-  CheckTokenPresent(LAndroidFfi, 'function android_rt_sigprocmask',
-    'android.ffi must own Android rt_sigprocmask syscall projection');
+  CheckTokenPresent(LAndroidFfi, 'function android_syscall',
+    'android.ffi must own raw syscall binding for Android signal control');
+  CheckTokenAbsent(LAndroidFfi, 'function android_rt_sigaction',
+    'android.ffi must not expose Android rt_sigaction syscall projection helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_rt_sigprocmask',
+    'android.ffi must not expose Android rt_sigprocmask syscall projection helper');
 end;
 
 procedure TestDarwinAndFreeBSDSignalControlOwners;

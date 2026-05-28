@@ -160,12 +160,14 @@ begin
     'linux.base must own AT_EMPTY_PATH');
   CheckTokenPresent(LLinuxBase, 'linux_syscall_statx',
     'linux.base must own Linux statx syscall number token');
-  CheckTokenPresent(LLinuxFfi, 'function linux_statx',
-    'linux.ffi must expose Linux statx syscall helper');
-  CheckTokenPresent(LLinuxFfi, 'function linux_statx_path_basic',
-    'linux.ffi must expose Linux path statx helper');
-  CheckTokenPresent(LLinuxFfi, 'function linux_statx_fd_basic',
-    'linux.ffi must expose Linux fd statx helper');
+  CheckTokenPresent(LLinuxFfi, 'function linux_syscall',
+    'linux.ffi must own raw syscall binding for statx');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_statx',
+    'linux.ffi must not expose Linux statx syscall helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_statx_path_basic',
+    'linux.ffi must not expose Linux path statx helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_statx_fd_basic',
+    'linux.ffi must not expose Linux fd statx helper');
 
   CheckTokenPresent(LWindowsBase, 'get_fileex_info_levels',
     'windows.base must own GET_FILEEX_INFO_LEVELS');
@@ -185,12 +187,12 @@ begin
     'windows.ffi must own GetFileAttributesExW binding');
   CheckTokenPresent(LWindowsFfi, 'function getfileinformationbyhandle',
     'windows.ffi must own GetFileInformationByHandle binding');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_file_attributes_ex_a',
-    'windows.ffi must expose ANSI file attribute helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_file_attributes_ex_w',
-    'windows.ffi must expose wide file attribute helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_file_information_by_handle',
-    'windows.ffi must expose handle information helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_file_attributes_ex_a',
+    'windows.ffi must not expose ANSI file attribute helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_file_attributes_ex_w',
+    'windows.ffi must not expose wide file attribute helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_file_information_by_handle',
+    'windows.ffi must not expose handle information helper');
 end;
 
 procedure TestHostAbiWave3StatEvidenceDocumented;

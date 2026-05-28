@@ -227,6 +227,12 @@ begin
         Inc(LFfiCount);
         CheckTokenPresent(LSource, 'external ''',
           'platform ffi unit must own external declarations: ' + LSearch.Name);
+        CheckTokenAbsent(LSource, ' inline',
+          'platform ffi unit must not contain inline helper declarations or implementations: ' + LSearch.Name);
+        CheckTokenAbsent(LSource, 'implementation' + #10 + 'uses',
+          'platform ffi unit implementation must not import helper dependencies: ' + LSearch.Name);
+        CheckTokenAbsent(LSource, 'begin' + #10,
+          'platform ffi unit must stay raw ABI declarations only, without helper bodies: ' + LSearch.Name);
       end
       else
       begin

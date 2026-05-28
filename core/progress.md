@@ -2,6 +2,67 @@
 
 ## 2026-05-28
 
+- Started Wave 15 from `main@0f213de` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
+  on branch `codex/platform-ffi-raw-boundary`.
+- User correction: previous Wave 13/14 helper-name cleanup did not fix the real
+  architecture problem. `.ffi` units must not contain helper/projection/wrapper
+  logic at all. Host/shared `.ffi` files are raw external declarations only.
+- Reframed `task_plan.md` and `findings.md` around the raw-only FFI boundary:
+  `base` owns ABI data definitions, `ffi` owns raw external declarations, and
+  `platform.sync/time/thread` directly consume `base + ffi` as unified platform
+  function layers. No extra host `impl` layer should be created.
+- Confirmed the rejected old Wave 15 worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave15-helper-names`
+  is dirty with host-helper rename edits and must not be continued or merged as
+  the source of truth.
+- RED result:
+  `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
+  failed as expected because `nextpas.core.platform.linux.ffi.pas` still
+  contains `inline` helper declarations / implementation bodies. This proves
+  the new guard catches the architectural violation the user reported.
+- Wave 15 implementation moved the rejected helper/projection/wrapper logic out
+  of production `.ffi` units and into the unified platform function layers:
+  `platform.time.host`, `platform.sync`, and `platform.thread`.
+- Production host/shared `.ffi` files now keep raw `external` declarations only
+  across POSIX, Linux, Android, Darwin, FreeBSD, generic Unix, and Windows.
+  Empty `implementation/end.` unit endings remain, but there are no helper
+  bodies or inline helper declarations.
+- Source-surface tests and docs were updated so they enforce the new owner
+  boundary: host/shared `.base` owns constants/records/tokens, host/shared
+  `.ffi` owns raw declarations, and time/sync/thread own unified wrapping
+  semantics. The tests also reject feature-specific `.ffi` units for
+  `platform.time`, `platform.sync`, and `platform.thread`.
+- Focused/source verification completed before the official full gate:
+  - `git diff --check`: pass.
+  - Manual raw-only scan found no `inline` declarations or `begin` bodies in
+    `src/nextpas.core.platform*.ffi.pas`.
+  - Manual no-FPC-platform scan found no production platform `uses` dependency
+    on FPC `Linux`, `UnixType`, `PThreads`, `BaseUnix`, `Syscall`, or
+    `Windows` units.
+  - Manual L0-boundary scan found no `TStopwatch`, `TDuration`, `TInstant`,
+    Timer, thread pool, channel, future, scheduler, monitor, or semaphore leak
+    in platform production files; occurrences are only boundary docs/tests.
+- Full pre-merge official verification passed:
+  `bash build/verify_local.sh` exited 0 with `verify-local=pass` and
+  `human-summary=local verification passed`.
+- The official envelope included pass tokens for
+  `corePlatformTimeHostFfiSurfaceCheck`,
+  `corePlatformThreadHostFfiSurfaceCheck`,
+  `corePlatformSyncHostFfiSurfaceCheck`,
+  `corePlatformFfiOwnerBoundaryCheck`,
+  `corePlatformFfiPartitionSurfaceCheck`,
+  `corePlatformHostGapMatrixCheck`,
+  `corePlatformFfiSourceEvidenceIndexCheck`,
+  `corePlatformFfiImportWorkflowCheck`,
+  `corePlatformSimulatedHostCompileMatrixCheck`, all Wave 1-11 host ABI gates,
+  time/thread/sync examples, and time/thread/sync benchmarks.
+- Note: one earlier typo command was run in the previous session:
+  `make -C tests/nextpas.core.platform/thread/test_platform_thread clean test`.
+  It failed because that path is invalid. The correct
+  `tests/nextpas.core.platform.thread/test_platform_thread` route was rerun and
+  passed before the official verification envelope.
+
 - Started Wave 14 from `main@dcf3fd3` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`
   on branch `codex/platform-host-ffi-wave14-posix-names`.

@@ -1,5 +1,46 @@
 # nextpas.core platform findings
 
+## 2026-05-28: Wave 15 FFI raw-only correction
+
+- User review rejected the Wave 13/14 direction of keeping helper/projection
+  logic in host `.ffi` units under host-prefixed names. That still mixes raw ABI
+  declarations with platform wrapper semantics.
+- Correct boundary:
+  - `nextpas.core.platform.<host>.base`: constants, records, opaque ABI storage,
+    scalar aliases, syscall numbers, errno values, and capability tokens.
+  - `nextpas.core.platform.<host>.ffi`: raw `external` declarations only.
+  - `nextpas.core.platform.sync/time/thread`: unified platform function layers
+    that directly wrap host/shared `base + ffi`.
+- No `nextpas.core.platform.<host>.impl` layer should be introduced for this
+  correction. It would duplicate the role of the unified platform function
+  layers and make the platform stack thicker without adding ownership clarity.
+- Existing helpers such as `linux_pthread_mutex_init`,
+  `darwin_clock_realtime_ns_u64`, `windows_mutex_lock`,
+  `platform_posix_clock_ns_u64`, `platform_posix_file_open`, and
+  `windows_process_id_u64` are not raw FFI declarations. They must leave `.ffi`
+  units. If they are needed by `platform.sync/time/thread`, the wrapper logic
+  belongs directly in those modules; if no unified public function layer exists
+  yet, only the raw system declaration should remain.
+- Wave 15 implementation follows that boundary:
+  `posix/linux/android/darwin/freebsd/unix/windows.ffi` now keep raw external
+  declarations only. Their remaining `implementation` sections are empty Pascal
+  unit endings, not helper bodies.
+- `platform.time.host`, `platform.sync`, and `platform.thread` now own the
+  wrapper logic that used to leak into `.ffi`: clock conversion and fallback,
+  pthread mutex/rwlock/condvar setup and errno/result mapping, futex wait/wake,
+  Windows SRW/condvar/wait-address handling, thread lifecycle/TLS/yield/sleep,
+  native id, and CPU-count handling.
+- Source-surface tests were converted from "host helper exists in ffi" to
+  "raw binding exists in ffi, wrapper is owned by the unified platform function
+  layer, old helper names are absent." This is the right test shape because raw
+  OS APIs imported from FPC source are evidence-backed ABI inventory, not
+  nextPas runtime behavior.
+- A manual raw-only scan found no `inline` declarations or `begin` bodies in
+  production `nextpas.core.platform*.ffi.pas` files. Searches for
+  `TStopwatch`, `TDuration`, `TInstant`, Timer, thread pool, channel, future,
+  and scheduler in platform production files found no L1/L2 abstraction leak;
+  occurrences remain only in docs/tests that define the boundary.
+
 ## 2026-05-28: Wave 14 remaining host helper naming cleanup
 
 - Wave 13 fixed Linux-owned pthread/clock/errno/thread/cpu helper names, but the

@@ -138,12 +138,12 @@ begin
     'linux.ffi must own __lxstat binding');
   CheckTokenPresent(LLinuxFfi, 'function linux_fxstat',
     'linux.ffi must own __fxstat binding');
-  CheckTokenPresent(LLinuxFfi, 'function linux_stat_path',
-    'linux.ffi must expose Linux stat path helper');
-  CheckTokenPresent(LLinuxFfi, 'function linux_lstat_path',
-    'linux.ffi must expose Linux lstat path helper');
-  CheckTokenPresent(LLinuxFfi, 'function linux_fstat_fd',
-    'linux.ffi must expose Linux fstat fd helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_stat_path',
+    'linux.ffi must not expose Linux stat path helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_lstat_path',
+    'linux.ffi must not expose Linux lstat path helper');
+  CheckTokenAbsent(LLinuxFfi, 'function linux_fstat_fd',
+    'linux.ffi must not expose Linux fstat fd helper');
 end;
 
 procedure TestSharedPosixStatStillDeferred;

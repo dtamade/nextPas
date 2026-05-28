@@ -63,16 +63,22 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.math
   {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
   , nextpas.core.platform.linux.ffi
   {$ELSEIF defined(NEXTPAS_MACOS)}
+  , nextpas.core.platform.darwin.base
   , nextpas.core.platform.darwin.ffi
   {$ELSEIF defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.android.base
   , nextpas.core.platform.android.ffi
   {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  , nextpas.core.platform.freebsd.base
   , nextpas.core.platform.freebsd.ffi
   {$ELSE}
+  , nextpas.core.platform.unix.base
   , nextpas.core.platform.unix.ffi
   {$ENDIF}
   ;
@@ -80,6 +86,7 @@ uses
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 {$ENDIF}
 
@@ -124,381 +131,194 @@ function platform_sync_host_pthread_sync_result(
   const AUnsupportedResult: Int32;
   const ATimeoutResult: Int32): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_sync_result(
-    AError,
-    AAgainResult,
-    ABusyResult,
-    AInvalidResult,
-    AUnsupportedResult,
-    ATimeoutResult);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_sync_result(
-    AError,
-    AAgainResult,
-    ABusyResult,
-    AInvalidResult,
-    AUnsupportedResult,
-    ATimeoutResult);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_sync_result(
-    AError,
-    AAgainResult,
-    ABusyResult,
-    AInvalidResult,
-    AUnsupportedResult,
-    ATimeoutResult);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_sync_result(
-    AError,
-    AAgainResult,
-    ABusyResult,
-    AInvalidResult,
-    AUnsupportedResult,
-    ATimeoutResult);
-  {$ELSE}
-  Result := unix_pthread_sync_result(
-    AError,
-    AAgainResult,
-    ABusyResult,
-    AInvalidResult,
-    AUnsupportedResult,
-    ATimeoutResult);
-  {$ENDIF}
+  if AError = 0 then
+    Result := 0
+  else if AError = PLATFORM_POSIX_EAGAIN then
+    Result := AAgainResult
+  else if AError = PLATFORM_POSIX_EBUSY then
+    Result := ABusyResult
+  else if AError = PLATFORM_POSIX_EINVAL then
+    Result := AInvalidResult
+  else if AError = PLATFORM_POSIX_ENOTSUP then
+    Result := AUnsupportedResult
+  else if AError = PLATFORM_POSIX_ETIMEDOUT then
+    Result := ATimeoutResult
+  else
+    Result := AError;
 end;
 
 function platform_sync_host_pthread_mutex_init_platform_kind(AMutex: Pointer; const AKind: Int32): Int32; inline;
+var
+  LAttr: pthread_mutexattr_t;
+  LHostKind: Int32;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_mutex_init_platform_kind(AMutex, AKind);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_mutex_init_platform_kind(AMutex, AKind);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_mutex_init_platform_kind(AMutex, AKind);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_mutex_init_platform_kind(AMutex, AKind);
-  {$ELSE}
-  Result := unix_pthread_mutex_init_platform_kind(AMutex, AKind);
-  {$ENDIF}
+  case AKind of
+    PLATFORM_MUTEX_NORMAL:
+      LHostKind := PLATFORM_PTHREAD_MUTEX_NORMAL_KIND;
+    PLATFORM_MUTEX_RECURSIVE:
+      LHostKind := PLATFORM_PTHREAD_MUTEX_RECURSIVE_KIND;
+  else
+    LHostKind := PLATFORM_PTHREAD_MUTEX_ERRORCHECK_KIND;
+  end;
+
+  Result := pthread_mutexattr_init(@LAttr);
+  if Result <> 0 then
+    Exit;
+  try
+    Result := pthread_mutexattr_settype(@LAttr, LHostKind);
+    if Result <> 0 then
+      Exit;
+    Result := pthread_mutex_init(AMutex, @LAttr);
+  finally
+    pthread_mutexattr_destroy(@LAttr);
+  end;
 end;
 
 function platform_sync_host_pthread_condvar_init(ACondVar: Pointer): Int32; inline;
+var
+  LAttr: pthread_condattr_t;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_init(ACondVar);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_init(ACondVar);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_init(ACondVar);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_init(ACondVar);
-  {$ELSE}
-  Result := unix_pthread_condvar_init(ACondVar);
-  {$ENDIF}
+  Result := pthread_condattr_init(@LAttr);
+  if Result <> 0 then
+    Exit;
+  try
+    {$IFDEF NEXTPAS_MACOS}
+    Result := pthread_cond_init(ACondVar, @LAttr);
+    {$ELSE}
+    if PLATFORM_PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
+    begin
+      {$IFDEF NEXTPAS_LINUX}
+      Result := linux_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      {$ELSEIF defined(NEXTPAS_ANDROID)}
+      Result := android_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      {$ELSEIF defined(NEXTPAS_FREEBSD)}
+      Result := freebsd_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      {$ELSE}
+      Result := unix_pthread_condattr_setclock(@LAttr, PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID);
+      {$ENDIF}
+      if Result <> 0 then
+        Exit;
+    end;
+    Result := pthread_cond_init(ACondVar, @LAttr);
+    {$ENDIF}
+  finally
+    pthread_condattr_destroy(@LAttr);
+  end;
 end;
 
 function platform_sync_host_pthread_condvar_timedwait_abs(ACondVar: Pointer; AMutex: Pointer; ADeadline: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
-  {$ELSE}
-  Result := unix_pthread_condvar_timedwait_abs(ACondVar, AMutex, ADeadline);
-  {$ENDIF}
+  Result := pthread_cond_timedwait(ACondVar, AMutex, PTimeSpec(ADeadline));
 end;
 
 procedure platform_sync_host_pthread_yield; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  linux_pthread_yield;
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  android_pthread_yield;
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  darwin_pthread_yield;
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  freebsd_pthread_yield;
-  {$ELSE}
-  unix_pthread_yield;
-  {$ENDIF}
+  sched_yield;
 end;
 
 function platform_sync_host_pthread_mutex_destroy(AMutex: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_mutex_destroy(AMutex);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_mutex_destroy(AMutex);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_mutex_destroy(AMutex);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_mutex_destroy(AMutex);
-  {$ELSE}
-  Result := unix_pthread_mutex_destroy(AMutex);
-  {$ENDIF}
+  Result := pthread_mutex_destroy(AMutex);
 end;
 
 function platform_sync_host_pthread_mutex_lock(AMutex: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_mutex_lock(AMutex);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_mutex_lock(AMutex);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_mutex_lock(AMutex);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_mutex_lock(AMutex);
-  {$ELSE}
-  Result := unix_pthread_mutex_lock(AMutex);
-  {$ENDIF}
+  Result := pthread_mutex_lock(AMutex);
 end;
 
 function platform_sync_host_pthread_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_mutex_trylock(AMutex);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_mutex_trylock(AMutex);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_mutex_trylock(AMutex);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_mutex_trylock(AMutex);
-  {$ELSE}
-  Result := unix_pthread_mutex_trylock(AMutex);
-  {$ENDIF}
+  Result := pthread_mutex_trylock(AMutex);
 end;
 
 function platform_sync_host_pthread_mutex_unlock(AMutex: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_mutex_unlock(AMutex);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_mutex_unlock(AMutex);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_mutex_unlock(AMutex);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_mutex_unlock(AMutex);
-  {$ELSE}
-  Result := unix_pthread_mutex_unlock(AMutex);
-  {$ENDIF}
+  Result := pthread_mutex_unlock(AMutex);
 end;
 
 function platform_sync_host_pthread_rwlock_init(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_init(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_init(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_init(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_init(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_init(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_init(ARwLock, nil);
 end;
 
 function platform_sync_host_pthread_rwlock_destroy(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_destroy(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_destroy(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_destroy(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_destroy(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_destroy(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_destroy(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_rdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_rdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_rdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_rdlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_rdlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_rdlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_tryrdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_tryrdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_tryrdlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_tryrdlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_tryrdlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_tryrdlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_wrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_wrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_wrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_wrlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_wrlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_wrlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_trywrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_trywrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_trywrlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_trywrlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_trywrlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_trywrlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_rdunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_rdunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_rdunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_rdunlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_rdunlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_unlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_rwlock_wrunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_rwlock_wrunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_rwlock_wrunlock(ARwLock);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_rwlock_wrunlock(ARwLock);
-  {$ELSE}
-  Result := unix_pthread_rwlock_wrunlock(ARwLock);
-  {$ENDIF}
+  Result := pthread_rwlock_unlock(ARwLock);
 end;
 
 function platform_sync_host_pthread_condvar_destroy(ACondVar: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_destroy(ACondVar);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_destroy(ACondVar);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_destroy(ACondVar);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_destroy(ACondVar);
-  {$ELSE}
-  Result := unix_pthread_condvar_destroy(ACondVar);
-  {$ENDIF}
+  Result := pthread_cond_destroy(ACondVar);
 end;
 
 function platform_sync_host_pthread_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_wait(ACondVar, AMutex);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_wait(ACondVar, AMutex);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_wait(ACondVar, AMutex);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_wait(ACondVar, AMutex);
-  {$ELSE}
-  Result := unix_pthread_condvar_wait(ACondVar, AMutex);
-  {$ENDIF}
+  Result := pthread_cond_wait(ACondVar, AMutex);
 end;
 
 function platform_sync_host_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
-  {$ELSE}
-  Result := unix_pthread_timeout_deadline_after_ns(ANanoseconds, ADeadline);
-  {$ENDIF}
+  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @ADeadline) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  platform_posix_timespec_add_ns(ADeadline, ANanoseconds);
+  Result := 0;
 end;
 
 function platform_sync_host_pthread_timeout_remaining_ns_u64(
   const ADeadline: PTimeSpec;
   out ARemainingNs: UInt64): Int32; inline;
+var
+  LNow: timespec;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
-  {$ELSE}
-  Result := unix_pthread_timeout_remaining_ns_u64(ADeadline, ARemainingNs);
-  {$ENDIF}
+  ARemainingNs := 0;
+  if ADeadline = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if clock_gettime(PLATFORM_PTHREAD_TIMEOUT_CLOCK_ID, @LNow) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  ARemainingNs := platform_posix_timespec_remaining_ns_u64(ADeadline, @LNow);
+  Result := 0;
 end;
 
 function platform_sync_host_pthread_condvar_signal(ACondVar: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_signal(ACondVar);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_signal(ACondVar);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_signal(ACondVar);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_signal(ACondVar);
-  {$ELSE}
-  Result := unix_pthread_condvar_signal(ACondVar);
-  {$ENDIF}
+  Result := pthread_cond_signal(ACondVar);
 end;
 
 function platform_sync_host_pthread_condvar_broadcast(ACondVar: Pointer): Int32; inline;
 begin
-  {$IFDEF NEXTPAS_LINUX}
-  Result := linux_pthread_condvar_broadcast(ACondVar);
-  {$ELSEIF defined(NEXTPAS_ANDROID)}
-  Result := android_pthread_condvar_broadcast(ACondVar);
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := darwin_pthread_condvar_broadcast(ACondVar);
-  {$ELSEIF defined(NEXTPAS_FREEBSD)}
-  Result := freebsd_pthread_condvar_broadcast(ACondVar);
-  {$ELSE}
-  Result := unix_pthread_condvar_broadcast(ACondVar);
-  {$ENDIF}
+  Result := pthread_cond_broadcast(ACondVar);
 end;
 
 function platform_posix_map_error(const ACode: Int32): Int32; inline;
@@ -879,13 +699,73 @@ end;
 {$IFNDEF NEXTPAS_PLATFORM_SYNC_FORCE_POSIX_WAIT_FALLBACK}
 { Address-wait (futex on Linux) }
 
+function platform_linux_errno_value: Int32; inline;
+begin
+  Result := linux_errno_location^;
+end;
+
+function platform_linux_futex_wait_i32(
+  AAddr: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64): Int32;
+var
+  LRet: PtrInt;
+  LTimeout: timespec;
+begin
+  if ATimeoutNs < 0 then
+    LRet := linux_syscall(
+      LINUX_SYSCALL_FUTEX,
+      PtrUInt(AAddr),
+      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
+      PtrUInt(UInt32(AExpected)),
+      PtrUInt(0),
+      PtrUInt(0),
+      PtrUInt(0))
+  else
+  begin
+    LTimeout.tv_sec := ATimeoutNs div 1000000000;
+    LTimeout.tv_nsec := ATimeoutNs mod 1000000000;
+    LRet := linux_syscall(
+      LINUX_SYSCALL_FUTEX,
+      PtrUInt(AAddr),
+      PtrUInt(FUTEX_WAIT or FUTEX_PRIVATE_FLAG),
+      PtrUInt(UInt32(AExpected)),
+      PtrUInt(@LTimeout),
+      PtrUInt(0),
+      PtrUInt(0));
+  end;
+
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_linux_errno_value;
+end;
+
+function platform_linux_futex_wake_i32(AAddr: PInt32; const ACount: Int32): Int32;
+var
+  LRet: PtrInt;
+begin
+  LRet := linux_syscall(
+    LINUX_SYSCALL_FUTEX,
+    PtrUInt(AAddr),
+    PtrUInt(FUTEX_WAKE or FUTEX_PRIVATE_FLAG),
+    PtrUInt(ACount),
+    PtrUInt(0),
+    PtrUInt(0),
+    PtrUInt(0));
+  if LRet >= 0 then
+    Result := 0
+  else
+    Result := platform_linux_errno_value;
+end;
+
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 begin
   Result := platform_sync_validate_wait_address(AAddr, AExpected);
   if Result <> 0 then
     Exit;
 
-  Result := linux_futex_wait_i32(AAddr, AExpected, ATimeoutNs);
+  Result := platform_linux_futex_wait_i32(AAddr, AExpected, ATimeoutNs);
   if Result = 0 then
     Result := 0
   else
@@ -898,7 +778,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := linux_futex_wake_one_i32(AAddr);
+  Result := platform_linux_futex_wake_i32(AAddr, 1);
   if Result = 0 then
     Result := 0
   else
@@ -911,7 +791,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := linux_futex_wake_all_i32(AAddr);
+  Result := platform_linux_futex_wake_i32(AAddr, High(Int32));
   if Result = 0 then
     Result := 0
   else
@@ -959,32 +839,226 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
+function platform_sync_windows_last_error_i32: Int32; inline;
+begin
+  Result := Int32(GetLastError);
+end;
+
+function platform_sync_windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
+var
+  LMilliseconds: UInt64;
+begin
+  if ATimeoutNs < 0 then
+    Exit(INFINITE);
+  if ATimeoutNs = 0 then
+    Exit(0);
+
+  LMilliseconds := UInt64(ATimeoutNs) div 1000000;
+  if (UInt64(ATimeoutNs) mod 1000000) <> 0 then
+    Inc(LMilliseconds);
+
+  if LMilliseconds >= UInt64(INFINITE) then
+    Result := INFINITE - 1
+  else
+    Result := DWORD(LMilliseconds);
+end;
+
+function platform_sync_windows_timeout_result(const AError: Int32; const ATimeoutResult: Int32): Int32; inline;
+begin
+  if DWORD(AError) = ERROR_TIMEOUT then
+    Result := ATimeoutResult
+  else
+    Result := AError;
+end;
+
+function platform_sync_windows_mutex_init(AMutex: Pointer): Int32; inline;
+begin
+  InitializeSRWLock(AMutex);
+  Result := 0;
+end;
+
+function platform_sync_windows_mutex_destroy(AMutex: Pointer): Int32; inline;
+begin
+  Result := 0;
+end;
+
+function platform_sync_windows_mutex_lock(AMutex: Pointer): Int32; inline;
+begin
+  AcquireSRWLockExclusive(AMutex);
+  Result := 0;
+end;
+
+function platform_sync_windows_mutex_trylock(AMutex: Pointer): Int32; inline;
+begin
+  if TryAcquireSRWLockExclusive(AMutex) then
+    Result := 0
+  else
+    Result := PLATFORM_ERR_BUSY;
+end;
+
+function platform_sync_windows_mutex_unlock(AMutex: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockExclusive(AMutex);
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_init(ARwLock: Pointer): Int32; inline;
+begin
+  InitializeSRWLock(ARwLock);
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_destroy(ARwLock: Pointer): Int32; inline;
+begin
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_rdlock(ARwLock: Pointer): Int32; inline;
+begin
+  AcquireSRWLockShared(ARwLock);
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
+begin
+  if TryAcquireSRWLockShared(ARwLock) then
+    Result := 0
+  else
+    Result := PLATFORM_ERR_BUSY;
+end;
+
+function platform_sync_windows_rwlock_rdunlock(ARwLock: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockShared(ARwLock);
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_wrlock(ARwLock: Pointer): Int32; inline;
+begin
+  AcquireSRWLockExclusive(ARwLock);
+  Result := 0;
+end;
+
+function platform_sync_windows_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
+begin
+  if TryAcquireSRWLockExclusive(ARwLock) then
+    Result := 0
+  else
+    Result := PLATFORM_ERR_BUSY;
+end;
+
+function platform_sync_windows_rwlock_wrunlock(ARwLock: Pointer): Int32; inline;
+begin
+  ReleaseSRWLockExclusive(ARwLock);
+  Result := 0;
+end;
+
+function platform_sync_windows_condvar_init(ACondVar: Pointer): Int32; inline;
+begin
+  InitializeConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function platform_sync_windows_condvar_destroy(ACondVar: Pointer): Int32; inline;
+begin
+  Result := 0;
+end;
+
+function platform_sync_windows_condvar_wait(ACondVar: Pointer; AMutex: Pointer): Int32; inline;
+begin
+  if SleepConditionVariableSRW(ACondVar, AMutex, INFINITE, 0) then
+    Result := 0
+  else
+    Result := platform_sync_windows_last_error_i32;
+end;
+
+function platform_sync_windows_condvar_timedwait(
+  ACondVar: Pointer;
+  AMutex: Pointer;
+  const ATimeoutNs: Int64): Int32; inline;
+begin
+  if SleepConditionVariableSRW(
+    ACondVar,
+    AMutex,
+    platform_sync_windows_timeout_ns_to_ms(ATimeoutNs),
+    0) then
+    Result := 0
+  else
+    Result := platform_sync_windows_timeout_result(
+      platform_sync_windows_last_error_i32,
+      PLATFORM_ERR_TIMEOUT);
+end;
+
+function platform_sync_windows_condvar_signal(ACondVar: Pointer): Int32; inline;
+begin
+  WakeConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function platform_sync_windows_condvar_broadcast(ACondVar: Pointer): Int32; inline;
+begin
+  WakeAllConditionVariable(ACondVar);
+  Result := 0;
+end;
+
+function platform_sync_windows_wait_address_i32(
+  AAddr: PInt32;
+  const AExpected: Int32;
+  const ATimeoutNs: Int64): Int32; inline;
+var
+  LExpected: Int32;
+begin
+  LExpected := AExpected;
+  if WaitOnAddress(
+    AAddr,
+    @LExpected,
+    SizeOf(LExpected),
+    platform_sync_windows_timeout_ns_to_ms(ATimeoutNs)) then
+    Result := 0
+  else
+    Result := platform_sync_windows_timeout_result(
+      platform_sync_windows_last_error_i32,
+      PLATFORM_ERR_TIMEOUT);
+end;
+
+function platform_sync_windows_wake_address_one(AAddr: PInt32): Int32; inline;
+begin
+  WakeByAddressSingle(AAddr);
+  Result := 0;
+end;
+
+function platform_sync_windows_wake_address_all(AAddr: PInt32): Int32; inline;
+begin
+  WakeByAddressAll(AAddr);
+  Result := 0;
+end;
+
 { Mutex - SRWLOCK based (exclusive only for mutex semantics) }
 
 function platform_mutex_init(var AMutex: TPlatformMutex; const AKind: Int32): Int32;
 begin
   FillChar(AMutex, SizeOf(AMutex), 0);
-  Result := windows_mutex_init(@AMutex.FOpaque[0]);
+  Result := platform_sync_windows_mutex_init(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_destroy(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := windows_mutex_destroy(@AMutex.FOpaque[0]);
+  Result := platform_sync_windows_mutex_destroy(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_lock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := windows_mutex_lock(@AMutex.FOpaque[0]);
+  Result := platform_sync_windows_mutex_lock(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_trylock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := windows_mutex_trylock_busy_result(@AMutex.FOpaque[0], PLATFORM_ERR_BUSY);
+  Result := platform_sync_windows_mutex_trylock(@AMutex.FOpaque[0]);
 end;
 
 function platform_mutex_unlock(var AMutex: TPlatformMutex): Int32;
 begin
-  Result := windows_mutex_unlock(@AMutex.FOpaque[0]);
+  Result := platform_sync_windows_mutex_unlock(@AMutex.FOpaque[0]);
 end;
 
 { RWLock - SRWLOCK }
@@ -992,42 +1066,42 @@ end;
 function platform_rwlock_init(var ARwLock: TPlatformRwLock): Int32;
 begin
   FillChar(ARwLock, SizeOf(ARwLock), 0);
-  Result := windows_rwlock_init(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_init(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_destroy(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_destroy(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_destroy(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_rdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_rdlock(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_rdlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_tryrdlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_tryrdlock_busy_result(@ARwLock.FOpaque[0], PLATFORM_ERR_BUSY);
+  Result := platform_sync_windows_rwlock_tryrdlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_wrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_wrlock(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_wrlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_trywrlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_trywrlock_busy_result(@ARwLock.FOpaque[0], PLATFORM_ERR_BUSY);
+  Result := platform_sync_windows_rwlock_trywrlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_rdunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_rdunlock(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_rdunlock(@ARwLock.FOpaque[0]);
 end;
 
 function platform_rwlock_wrunlock(var ARwLock: TPlatformRwLock): Int32;
 begin
-  Result := windows_rwlock_wrunlock(@ARwLock.FOpaque[0]);
+  Result := platform_sync_windows_rwlock_wrunlock(@ARwLock.FOpaque[0]);
 end;
 
 { CondVar - CONDITION_VARIABLE }
@@ -1035,33 +1109,33 @@ end;
 function platform_condvar_init(var ACondVar: TPlatformCondVar): Int32;
 begin
   FillChar(ACondVar, SizeOf(ACondVar), 0);
-  Result := windows_condvar_init(@ACondVar.FOpaque[0]);
+  Result := platform_sync_windows_condvar_init(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_destroy(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := windows_condvar_destroy(@ACondVar.FOpaque[0]);
+  Result := platform_sync_windows_condvar_destroy(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex): Int32;
 begin
-  Result := windows_condvar_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]);
+  Result := platform_sync_windows_condvar_wait(@ACondVar.FOpaque[0], @AMutex.FOpaque[0]);
 end;
 
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
 begin
-  Result := windows_condvar_timedwait_timeout_result(
-    @ACondVar.FOpaque[0], @AMutex.FOpaque[0], ATimeoutNs, PLATFORM_ERR_TIMEOUT);
+  Result := platform_sync_windows_condvar_timedwait(
+    @ACondVar.FOpaque[0], @AMutex.FOpaque[0], ATimeoutNs);
 end;
 
 function platform_condvar_signal(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := windows_condvar_signal(@ACondVar.FOpaque[0]);
+  Result := platform_sync_windows_condvar_signal(@ACondVar.FOpaque[0]);
 end;
 
 function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
 begin
-  Result := windows_condvar_broadcast(@ACondVar.FOpaque[0]);
+  Result := platform_sync_windows_condvar_broadcast(@ACondVar.FOpaque[0]);
 end;
 
 { Address-wait (Windows address-wait primitive) }
@@ -1072,8 +1146,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := windows_wait_address_i32_timeout_result(
-    AAddr, AExpected, ATimeoutNs, PLATFORM_ERR_TIMEOUT);
+  Result := platform_sync_windows_wait_address_i32(AAddr, AExpected, ATimeoutNs);
 end;
 
 function platform_wake_address_one(AAddr: PInt32): Int32;
@@ -1082,7 +1155,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := windows_wake_address_single(AAddr);
+  Result := platform_sync_windows_wake_address_one(AAddr);
 end;
 
 function platform_wake_address_all(AAddr: PInt32): Int32;
@@ -1091,7 +1164,7 @@ begin
   if Result <> 0 then
     Exit;
 
-  Result := windows_wake_address_all(AAddr);
+  Result := platform_sync_windows_wake_address_all(AAddr);
 end;
 
 {$ENDIF}

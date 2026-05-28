@@ -110,16 +110,16 @@ begin
   CheckTokenPresent(ABase, 'platform_seek_end = int32(2)',
     AHostName + ' base must own SEEK_END');
 
-  CheckTokenPresent(AFfi, 'function platform_file_read',
-    AHostName + ' ffi must expose delegated read helper');
-  CheckTokenPresent(AFfi, 'function platform_file_write',
-    AHostName + ' ffi must expose delegated write helper');
-  CheckTokenPresent(AFfi, 'function platform_file_seek',
-    AHostName + ' ffi must expose delegated seek helper');
-  CheckTokenPresent(AFfi, 'function platform_file_sync',
-    AHostName + ' ffi must expose delegated fsync helper');
-  CheckTokenPresent(AFfi, 'function platform_file_truncate',
-    AHostName + ' ffi must expose delegated ftruncate helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_read',
+    AHostName + ' ffi must not expose delegated read helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_write',
+    AHostName + ' ffi must not expose delegated write helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_seek',
+    AHostName + ' ffi must not expose delegated seek helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_sync',
+    AHostName + ' ffi must not expose delegated fsync helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_truncate',
+    AHostName + ' ffi must not expose delegated ftruncate helper');
 end;
 
 procedure TestHostAbiWave8PosixFileIoSourceTokens;
@@ -169,16 +169,16 @@ begin
     'posix.ffi must own fsync binding');
   CheckTokenPresent(LPosixFfi, 'function ftruncate',
     'posix.ffi must own ftruncate binding');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_read',
-    'posix.ffi must expose shared POSIX read helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_write',
-    'posix.ffi must expose shared POSIX write helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_seek',
-    'posix.ffi must expose shared POSIX seek helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_sync',
-    'posix.ffi must expose shared POSIX fsync helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_truncate',
-    'posix.ffi must expose shared POSIX ftruncate helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_read',
+    'posix.ffi must not expose shared POSIX read helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_write',
+    'posix.ffi must not expose shared POSIX write helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_seek',
+    'posix.ffi must not expose shared POSIX seek helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_sync',
+    'posix.ffi must not expose shared POSIX fsync helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_truncate',
+    'posix.ffi must not expose shared POSIX ftruncate helper');
 
   CheckPosixHostFileIoTokens(LLinuxBase, LLinuxFfi, 'Linux');
   CheckPosixHostFileIoTokens(LAndroidBase, LAndroidFfi, 'Android');
@@ -224,18 +224,18 @@ begin
     'windows.ffi must own GetFileSizeEx binding');
   CheckTokenPresent(LWindowsFfi, 'function setfilepointerex',
     'windows.ffi must own SetFilePointerEx binding');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_file_size',
-    'windows.ffi must expose thin GetFileSize helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_file_size_ex',
-    'windows.ffi must expose thin GetFileSizeEx helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_set_file_pointer',
-    'windows.ffi must expose thin SetFilePointer helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_set_file_pointer_ex',
-    'windows.ffi must expose thin SetFilePointerEx helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_flush_file_buffers',
-    'windows.ffi must expose thin FlushFileBuffers helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_set_end_of_file',
-    'windows.ffi must expose thin SetEndOfFile helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_file_size',
+    'windows.ffi must not expose thin GetFileSize helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_file_size_ex',
+    'windows.ffi must not expose thin GetFileSizeEx helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_set_file_pointer',
+    'windows.ffi must not expose thin SetFilePointer helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_set_file_pointer_ex',
+    'windows.ffi must not expose thin SetFilePointerEx helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_flush_file_buffers',
+    'windows.ffi must not expose thin FlushFileBuffers helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_set_end_of_file',
+    'windows.ffi must not expose thin SetEndOfFile helper');
 end;
 
 procedure CheckWave8DocumentTokens(const ADoc: string);

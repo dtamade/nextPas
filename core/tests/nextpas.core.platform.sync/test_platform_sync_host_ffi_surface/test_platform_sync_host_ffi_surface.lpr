@@ -11,26 +11,20 @@ const
   SYNC_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.base.pas';
   SYNC_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.sync.pas';
   SYNC_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.sync.pas';
+  POSIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.posix.ffi.pas';
+  POSIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.posix.ffi.pas';
   LINUX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.base.pas';
   LINUX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.base.pas';
   LINUX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.linux.ffi.pas';
   LINUX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.linux.ffi.pas';
   DARWIN_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.base.pas';
   DARWIN_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.base.pas';
-  DARWIN_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.darwin.ffi.pas';
-  DARWIN_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.darwin.ffi.pas';
   ANDROID_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.base.pas';
   ANDROID_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.base.pas';
-  ANDROID_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.android.ffi.pas';
-  ANDROID_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.android.ffi.pas';
   FREEBSD_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.base.pas';
   FREEBSD_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.base.pas';
-  FREEBSD_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.freebsd.ffi.pas';
-  FREEBSD_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.freebsd.ffi.pas';
   UNIX_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.base.pas';
   UNIX_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.base.pas';
-  UNIX_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.unix.ffi.pas';
-  UNIX_FFI_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.unix.ffi.pas';
   WINDOWS_BASE_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.base.pas';
   WINDOWS_BASE_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.platform.windows.base.pas';
   WINDOWS_FFI_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.platform.windows.ffi.pas';
@@ -77,659 +71,143 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
 end;
 
-function CountTokenOccurrences(const ASource, AToken: string): Integer;
-var
-  LOffset: SizeInt;
-  LPosition: SizeInt;
-  LNeedle: string;
+procedure CheckRawFFIUnit(const ASource, ALabel: string);
 begin
-  Result := 0;
-  LOffset := 1;
-  LNeedle := LowerCase(AToken);
-  while LOffset <= Length(ASource) do
-  begin
-    LPosition := Pos(LNeedle, Copy(ASource, LOffset, MaxInt));
-    if LPosition = 0 then
-      Exit;
-    Inc(Result);
-    Inc(LOffset, LPosition + Length(LNeedle) - 1);
-  end;
+  CheckTokenPresent(ASource, 'external ''',
+    ALabel + ' must expose raw external declarations');
+  CheckTokenAbsent(ASource, ' inline',
+    ALabel + ' must not expose inline helpers');
+  CheckTokenAbsent(ASource, 'begin' + #10,
+    ALabel + ' must not contain helper bodies');
 end;
 
-procedure CheckPosixSyncHelperSet(const ASource, ABaseSource, AHostLabel, AHostPrefix: string);
+procedure CheckPThreadStorageBase(const ASource, AHostLabel: string);
 begin
-  CheckTokenPresent(ASource, 'platform_posix_errno_value_from_location',
-    AHostLabel + ' must delegate errno-value load to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_sync_result_from_error',
-    AHostLabel + ' must delegate POSIX sync error classification to shared posix.ffi skeleton');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sync_result',
-    AHostLabel + ' must expose host-owned POSIX sync result helper');
-  CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_size',
-    AHostLabel + ' base must expose pthread mutex storage size for sync');
-  CheckTokenPresent(ABaseSource, 'platform_pthread_rwlock_size',
-    AHostLabel + ' base must expose pthread rwlock storage size for sync');
-  CheckTokenPresent(ABaseSource, 'platform_pthread_condvar_size',
-    AHostLabel + ' base must expose pthread condvar storage size for sync');
-  CheckTokenPresent(ABaseSource, 'platform_pthread_mutex_timedlock_supported',
-    AHostLabel + ' base must expose pthread mutex timed-lock capability for future sync contracts');
-  CheckTokenPresent(ABaseSource, 'tplatformpthreadmutexalign',
-    AHostLabel + ' base must expose pthread mutex align carrier type for sync');
-  CheckTokenPresent(ABaseSource, 'tplatformpthreadrwlockalign',
-    AHostLabel + ' base must expose pthread rwlock align carrier type for sync');
-  CheckTokenPresent(ABaseSource, 'tplatformpthreadcondvaralign',
-    AHostLabel + ' base must expose pthread condvar align carrier type for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_clock_now',
-    AHostLabel + ' must expose pthread timeout clock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_deadline_after_ns',
-    AHostLabel + ' must expose pthread timeout deadline helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_remaining_ns_u64',
-    AHostLabel + ' must expose pthread timeout remaining helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init',
-    AHostLabel + ' must expose pthread mutex init helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init_platform_kind',
-    AHostLabel + ' must expose pthread mutex init helper for public kind contract');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_kind',
-    AHostLabel + ' must delegate pthread mutex attr-init glue to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_init_public_kind',
-    AHostLabel + ' must delegate public mutex kind projection to shared posix.ffi');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_destroy',
-    AHostLabel + ' must expose pthread mutex destroy helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_lock',
-    AHostLabel + ' must expose pthread mutex lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_trylock',
-    AHostLabel + ' must expose pthread mutex trylock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_timedlock_abs',
-    AHostLabel + ' must expose pthread mutex timed-lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_unlock',
-    AHostLabel + ' must expose pthread mutex unlock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_init',
-    AHostLabel + ' must expose pthread rwlock init helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_destroy',
-    AHostLabel + ' must expose pthread rwlock destroy helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdlock',
-    AHostLabel + ' must expose pthread rwlock read-lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_tryrdlock',
-    AHostLabel + ' must expose pthread rwlock try-read-lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrlock',
-    AHostLabel + ' must expose pthread rwlock write-lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_trywrlock',
-    AHostLabel + ' must expose pthread rwlock try-write-lock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdunlock',
-    AHostLabel + ' must expose pthread rwlock read-unlock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrunlock',
-    AHostLabel + ' must expose pthread rwlock write-unlock helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_init',
-    AHostLabel + ' must expose pthread condvar init helper for sync');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_init_with_clock',
-    AHostLabel + ' must delegate pthread condvar attr-init glue to shared posix.ffi');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_destroy',
-    AHostLabel + ' must expose pthread condvar destroy helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_wait',
-    AHostLabel + ' must expose pthread condvar wait helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_timedwait_abs',
-    AHostLabel + ' must expose pthread condvar timedwait helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_signal',
-    AHostLabel + ' must expose pthread condvar signal helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_broadcast',
-    AHostLabel + ' must expose pthread condvar broadcast helper for sync');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condattr_setclock',
-    AHostLabel + ' must expose pthread condattr clock binding or stub');
-  CheckTokenAbsent(ASource, 'function platform_errno_location',
-    AHostLabel + ' must not expose unified-looking errno binding names');
-  CheckTokenAbsent(ASource, 'function platform_posix_errno_value',
-    AHostLabel + ' must not expose unified-looking errno value helper names');
-  CheckTokenAbsent(ASource, 'function platform_pthread_',
-    AHostLabel + ' must not expose unified-looking platform_pthread helper names');
-  CheckTokenAbsent(ASource, 'function platform_clock_',
-    AHostLabel + ' must not expose unified-looking platform_clock helper names');
-  CheckTokenPresent(ASource, 'platform_posix_clock_now',
-    AHostLabel + ' must delegate timeout clock reads to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_clock_deadline_after_ns',
-    AHostLabel + ' must delegate timeout deadline creation to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_clock_deadline_remaining_ns_u64',
-    AHostLabel + ' must delegate timeout remaining checks to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_destroy',
-    AHostLabel + ' must delegate pthread mutex destroy to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_lock',
-    AHostLabel + ' must delegate pthread mutex lock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_trylock',
-    AHostLabel + ' must delegate pthread mutex trylock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_mutex_unlock',
-    AHostLabel + ' must delegate pthread mutex unlock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_init',
-    AHostLabel + ' must delegate pthread rwlock init to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_destroy',
-    AHostLabel + ' must delegate pthread rwlock destroy to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_rdlock',
-    AHostLabel + ' must delegate pthread rwlock read-lock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_tryrdlock',
-    AHostLabel + ' must delegate pthread rwlock try-read-lock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_wrlock',
-    AHostLabel + ' must delegate pthread rwlock write-lock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_trywrlock',
-    AHostLabel + ' must delegate pthread rwlock try-write-lock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_rwlock_unlock',
-    AHostLabel + ' must delegate pthread rwlock unlock to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_destroy',
-    AHostLabel + ' must delegate pthread condvar destroy to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_wait',
-    AHostLabel + ' must delegate pthread condvar wait to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_timedwait_abs',
-    AHostLabel + ' must delegate pthread condvar timedwait to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_signal',
-    AHostLabel + ' must delegate pthread condvar signal to shared posix.ffi');
-  CheckTokenPresent(ASource, 'platform_posix_pthread_condvar_broadcast',
-    AHostLabel + ' must delegate pthread condvar broadcast to shared posix.ffi');
-  Check(Pos('pthread_mutexattr_init(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread mutexattr init glue after shared posix ownerization');
-  Check(Pos('pthread_mutexattr_settype(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread mutexattr settype glue after shared posix ownerization');
-  Check(Pos('pthread_mutexattr_destroy(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread mutexattr destroy glue after shared posix ownerization');
-  Check(Pos('pthread_condattr_init(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread condattr init glue after shared posix ownerization');
-  Check(Pos('pthread_condattr_destroy(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread condattr destroy glue after shared posix ownerization');
-  Check(Pos('pthread_cond_init(', ASource) = 0,
-    AHostLabel + ' must not keep raw pthread condvar init glue after shared posix ownerization');
-  Check(Pos('result := platform_errno_location^;', ASource) = 0,
-    AHostLabel + ' must not keep a local errno-value load body after shared posix ownerization');
-  Check(Pos('case akind of', ASource) = 0,
-    AHostLabel + ' must not keep a local public mutex kind mapping body after shared posix ownerization');
+  CheckTokenPresent(ASource, 'platform_pthread_mutex_size',
+    AHostLabel + ' base must own pthread mutex storage size');
+  CheckTokenPresent(ASource, 'platform_pthread_rwlock_size',
+    AHostLabel + ' base must own pthread rwlock storage size');
+  CheckTokenPresent(ASource, 'platform_pthread_condvar_size',
+    AHostLabel + ' base must own pthread condvar storage size');
+  CheckTokenPresent(ASource, 'platform_posix_etimedout',
+    AHostLabel + ' base must own POSIX timeout error token');
 end;
 
-procedure CheckSyncConsumerHostHelpers(
-  const ASource,
-  AHostLabel,
-  AHostPrefix: string);
-begin
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sync_result',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned POSIX sync result helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init_platform_kind',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex public-kind helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_deadline_after_ns',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread timeout deadline helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_timeout_remaining_ns_u64',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread timeout remaining helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_init',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex init helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_destroy',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex destroy helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_lock',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex lock helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_trylock',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex trylock helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_unlock',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread mutex unlock helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_init',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock init helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_destroy',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock destroy helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_rdlock',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock read-lock helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_rwlock_wrlock',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread rwlock write-lock helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_init',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar init helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_timedwait_abs',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar timedwait helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_signal',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar signal helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_condvar_broadcast',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread condvar broadcast helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_yield',
-    'platform.sync ' + AHostLabel + ' branch must consume host-owned pthread yield helper');
-end;
-
-procedure TestPlatformSyncUsesHostFFISurface;
+procedure TestPlatformSyncRawFFIBoundary;
 var
   LSyncBaseSource: string;
   LSyncSource: string;
+  LPosixFfiSource: string;
   LLinuxBaseSource: string;
-  LLinuxSource: string;
+  LLinuxFfiSource: string;
   LDarwinBaseSource: string;
-  LDarwinSource: string;
   LAndroidBaseSource: string;
-  LAndroidSource: string;
   LFreeBSDBaseSource: string;
-  LFreeBSDSource: string;
   LUnixBaseSource: string;
-  LUnixSource: string;
   LWindowsBaseSource: string;
-  LWindowsSource: string;
+  LWindowsFfiSource: string;
 begin
   LSyncBaseSource := ReadSourceFile(ResolveSourcePath(SYNC_BASE_SOURCE_PATH_FROM_TEST, SYNC_BASE_SOURCE_PATH_FROM_ROOT));
   LSyncSource := ReadSourceFile(ResolveSourcePath(SYNC_SOURCE_PATH_FROM_TEST, SYNC_SOURCE_PATH_FROM_ROOT));
+  LPosixFfiSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
   LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
-  LLinuxSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LLinuxFfiSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
   LDarwinBaseSource := ReadSourceFile(ResolveSourcePath(DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT));
-  LDarwinSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
   LAndroidBaseSource := ReadSourceFile(ResolveSourcePath(ANDROID_BASE_SOURCE_PATH_FROM_TEST, ANDROID_BASE_SOURCE_PATH_FROM_ROOT));
-  LAndroidSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
   LFreeBSDBaseSource := ReadSourceFile(ResolveSourcePath(FREEBSD_BASE_SOURCE_PATH_FROM_TEST, FREEBSD_BASE_SOURCE_PATH_FROM_ROOT));
-  LFreeBSDSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
   LUnixBaseSource := ReadSourceFile(ResolveSourcePath(UNIX_BASE_SOURCE_PATH_FROM_TEST, UNIX_BASE_SOURCE_PATH_FROM_ROOT));
-  LUnixSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
   LWindowsBaseSource := ReadSourceFile(ResolveSourcePath(WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT));
-  LWindowsSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsFfiSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
-  CheckTokenPresent(LLinuxSource, 'function linux_syscall',
-    'linux.ffi must expose the Linux futex syscall binding');
-  CheckTokenPresent(LLinuxSource, 'linux_syscall_futex',
-    'linux.ffi must expose the Linux futex syscall number');
-  CheckTokenPresent(LLinuxSource, 'futex_wait',
-    'linux.ffi must expose FUTEX_WAIT');
-  CheckTokenPresent(LLinuxSource, 'futex_wake',
-    'linux.ffi must expose FUTEX_WAKE');
-  CheckTokenPresent(LLinuxSource, 'linux_errno_value',
-    'linux.ffi must expose Linux-owned errno value helper for sync');
-  CheckTokenAbsent(LLinuxSource, 'function platform_posix_errno_value',
-    'linux.ffi must not expose unified-looking errno value helper names');
-  CheckTokenPresent(LLinuxSource, 'linux_futex_wait_i32',
-    'linux.ffi must expose Linux futex wait helper for sync');
-  CheckTokenPresent(LLinuxSource, 'linux_futex_wake_one_i32',
-    'linux.ffi must expose Linux futex wake-one helper for sync');
-  CheckTokenPresent(LLinuxSource, 'linux_futex_wake_all_i32',
-    'linux.ffi must expose Linux futex wake-all helper for sync');
-  CheckPosixSyncHelperSet(LLinuxSource, LLinuxBaseSource, 'linux', 'linux');
-  CheckTokenPresent(LLinuxSource, 'platform_posix_pthread_mutex_timedlock_abs',
-    'linux.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
-
-  CheckTokenPresent(LDarwinSource, 'darwin_errno_value',
-    'darwin.ffi must expose Darwin errno value helper for sync');
-  CheckPosixSyncHelperSet(LDarwinSource, LDarwinBaseSource, 'darwin', 'darwin');
-  CheckTokenPresent(LDarwinSource, 'platform_posix_enotsup',
-    'darwin.ffi must keep unsupported pthread mutex timed-lock as a host-owned ENOTSUP stub');
-  CheckTokenPresent(LAndroidSource, 'android_errno_value',
-    'android.ffi must expose Android errno value helper for sync');
-  CheckPosixSyncHelperSet(LAndroidSource, LAndroidBaseSource, 'android', 'android');
-  CheckTokenPresent(LAndroidSource, 'platform_posix_pthread_mutex_timedlock_abs',
-    'android.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
-  CheckTokenPresent(LFreeBSDSource, 'freebsd_errno_value',
-    'freebsd.ffi must expose FreeBSD errno value helper for sync');
-  CheckPosixSyncHelperSet(LFreeBSDSource, LFreeBSDBaseSource, 'freebsd', 'freebsd');
-  CheckTokenPresent(LFreeBSDSource, 'platform_posix_pthread_mutex_timedlock_abs',
-    'freebsd.ffi must delegate supported pthread mutex timed-lock ABI to shared posix.ffi');
-  CheckTokenPresent(LUnixSource, 'unix_errno_value',
-    'unix.ffi must expose generic Unix errno value helper for sync');
-  CheckPosixSyncHelperSet(LUnixSource, LUnixBaseSource, 'unix', 'unix');
-  CheckTokenPresent(LUnixSource, 'platform_posix_enotsup',
-    'unix.ffi must keep unknown pthread mutex timed-lock capability as a host-owned ENOTSUP stub');
-
-  CheckTokenPresent(LWindowsSource, 'waitonaddress',
-    'windows.ffi must expose WaitOnAddress');
-  CheckTokenPresent(LWindowsSource, 'wakebyaddresssingle',
-    'windows.ffi must expose WakeByAddressSingle');
-  CheckTokenPresent(LWindowsSource, 'wakebyaddressall',
-    'windows.ffi must expose WakeByAddressAll');
-  CheckTokenPresent(LWindowsSource, 'getlasterror',
-    'windows.ffi must expose GetLastError for sync error mapping');
-  CheckTokenPresent(LWindowsSource, 'windows_timeout_ns_to_ms',
-    'windows.ffi must expose Windows wait timeout conversion policy');
-  CheckTokenPresent(LWindowsSource, 'windows_last_error_i32',
-    'windows.ffi must expose Windows last-error conversion helper');
-  CheckTokenPresent(LWindowsSource, 'windows_last_error_is_timeout',
-    'windows.ffi must expose Windows timeout-result semantics');
-  CheckTokenPresent(LWindowsSource, 'windows_error_i32_is_timeout',
-    'windows.ffi must expose an Int32 timeout classifier helper');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_init',
-    'windows.ffi must expose Windows mutex init helper');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_lock',
-    'windows.ffi must expose Windows mutex lock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_trylock',
-    'windows.ffi must expose Windows mutex trylock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_trylock_busy_result',
-    'windows.ffi must expose Windows mutex trylock helper that maps busy semantics for sync');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_unlock',
-    'windows.ffi must expose Windows mutex unlock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_mutex_destroy',
-    'windows.ffi must expose Windows mutex destroy helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_init',
-    'windows.ffi must expose Windows rwlock init helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_rdlock',
-    'windows.ffi must expose Windows rwlock read-lock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_tryrdlock',
-    'windows.ffi must expose Windows rwlock try-read-lock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_tryrdlock_busy_result',
-    'windows.ffi must expose Windows rwlock try-read-lock helper that maps busy semantics for sync');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_wrlock',
-    'windows.ffi must expose Windows rwlock write-lock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_trywrlock',
-    'windows.ffi must expose Windows rwlock try-write-lock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_trywrlock_busy_result',
-    'windows.ffi must expose Windows rwlock try-write-lock helper that maps busy semantics for sync');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_rdunlock',
-    'windows.ffi must expose Windows rwlock read-unlock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_wrunlock',
-    'windows.ffi must expose Windows rwlock write-unlock helper');
-  CheckTokenPresent(LWindowsSource, 'windows_rwlock_destroy',
-    'windows.ffi must expose Windows rwlock destroy helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_init',
-    'windows.ffi must expose Windows condvar init helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_wait',
-    'windows.ffi must expose Windows condvar wait helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_ms',
-    'windows.ffi must expose Windows condvar timedwait helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_ns',
-    'windows.ffi must expose Windows condvar timedwait helper with ns timeout input');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_timedwait_timeout_result',
-    'windows.ffi must expose Windows condvar timedwait helper that maps timeout semantics for sync');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_signal',
-    'windows.ffi must expose Windows condvar signal helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_broadcast',
-    'windows.ffi must expose Windows condvar broadcast helper');
-  CheckTokenPresent(LWindowsSource, 'windows_condvar_destroy',
-    'windows.ffi must expose Windows condvar destroy helper');
-  CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32',
-    'windows.ffi must expose Windows wait-address helper');
-  CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_ns',
-    'windows.ffi must expose Windows wait-address helper with ns timeout input');
-  CheckTokenPresent(LWindowsSource, 'windows_wait_address_i32_timeout_result',
-    'windows.ffi must expose Windows wait-address helper that maps timeout semantics for sync');
-  CheckTokenPresent(LWindowsSource, 'windows_wake_address_single',
-    'windows.ffi must expose Windows wake-address-single helper');
-  CheckTokenPresent(LWindowsSource, 'windows_wake_address_all',
-    'windows.ffi must expose Windows wake-address-all helper');
-  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_mutex_size',
-    'windows.base must expose Windows mutex storage size for sync');
-  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_rwlock_size',
-    'windows.base must expose Windows rwlock storage size for sync');
-  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_condvar_size',
-    'windows.base must expose Windows condvar storage size for sync');
-  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsmutexalign',
-    'windows.base must expose Windows mutex align carrier type for sync');
-  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsrwlockalign',
-    'windows.base must expose Windows rwlock align carrier type for sync');
-  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowscondvaralign',
-    'windows.base must expose Windows condvar align carrier type for sync');
-
-  CheckTokenPresent(LSyncBaseSource, 'tplatformmutexalign',
-    'platform.sync.base must own public mutex align carrier type');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlockalign',
-    'platform.sync.base must own public rwlock align carrier type');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvaralign',
-    'platform.sync.base must own public condvar align carrier type');
-  CheckTokenPresent(LSyncBaseSource, 'platform_mutex_size',
-    'platform.sync.base must own public mutex opaque size token');
-  CheckTokenPresent(LSyncBaseSource, 'platform_rwlock_size',
-    'platform.sync.base must own public rwlock opaque size token');
-  CheckTokenPresent(LSyncBaseSource, 'platform_condvar_size',
-    'platform.sync.base must own public condvar opaque size token');
   CheckTokenPresent(LSyncBaseSource, 'tplatformmutex = record',
     'platform.sync.base must own public mutex opaque record');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlock = record',
-    'platform.sync.base must own public rwlock opaque record');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvar = record',
-    'platform.sync.base must own public condvar opaque record');
   CheckTokenPresent(LSyncBaseSource, 'platform_mutex_errorcheck',
-    'platform.sync.base must own public mutex kind constants');
+    'platform.sync.base must own public mutex kind tokens');
   CheckTokenPresent(LSyncBaseSource, 'platform_err_timeout',
-    'platform.sync.base must own public sync error constants');
+    'platform.sync.base must own public sync timeout error');
   CheckTokenPresent(LSyncSource, 'nextpas.core.platform.sync.base',
-    'platform.sync must re-export public sync carrier types/constants from base');
-  CheckTokenPresent(LSyncSource, 'tplatformmutex = nextpas.core.platform.sync.base.tplatformmutex',
-    'platform.sync must re-export TPlatformMutex from platform.sync.base');
-  CheckTokenPresent(LSyncSource, 'platform_err_timeout = nextpas.core.platform.sync.base.platform_err_timeout',
-    'platform.sync must re-export public error constants from platform.sync.base');
-  Check(Pos('tplatformmutex = record', LSyncSource) = 0,
-    'platform.sync must not keep public mutex opaque record after base extraction');
-  Check(Pos('platform_mutex_size   =', LSyncSource) = 0,
-    'platform.sync must not keep public opaque size constants after base extraction');
+    'platform.sync must re-export public sync base');
 
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.linux.ffi',
-    'platform.sync must use linux.ffi for Linux futex bindings');
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.windows.ffi',
-    'platform.sync must use windows.ffi for Windows wait-address bindings');
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.android.ffi',
-    'platform.sync must use android.ffi for Android host-owned errno/clock ids');
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.darwin.ffi',
-    'platform.sync must use darwin.ffi for Darwin host-owned errno/clock ids');
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.freebsd.ffi',
-    'platform.sync must use freebsd.ffi for FreeBSD host-owned errno/clock ids');
-  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.unix.ffi',
-    'platform.sync must use unix.ffi for generic Unix host-owned errno/clock ids');
+  CheckRawFFIUnit(LPosixFfiSource, 'posix.ffi');
+  CheckTokenPresent(LPosixFfiSource, 'pthread_mutex_init',
+    'posix.ffi must own raw pthread mutex declarations');
+  CheckTokenPresent(LPosixFfiSource, 'pthread_rwlock_init',
+    'posix.ffi must own raw pthread rwlock declarations');
+  CheckTokenPresent(LPosixFfiSource, 'pthread_cond_timedwait',
+    'posix.ffi must own raw pthread condvar declarations');
+  CheckTokenAbsent(LPosixFfiSource, 'platform_posix_pthread_',
+    'posix.ffi must not own POSIX pthread wrapper helpers');
+  CheckTokenAbsent(LPosixFfiSource, 'platform_posix_clock_',
+    'posix.ffi must not own POSIX clock wrapper helpers');
 
-  CheckSyncConsumerHostHelpers(LSyncSource, 'Linux', 'linux');
-  CheckSyncConsumerHostHelpers(LSyncSource, 'Android', 'android');
-  CheckSyncConsumerHostHelpers(LSyncSource, 'Darwin', 'darwin');
-  CheckSyncConsumerHostHelpers(LSyncSource, 'FreeBSD', 'freebsd');
-  CheckSyncConsumerHostHelpers(LSyncSource, 'generic Unix', 'unix');
-  CheckTokenPresent(LSyncSource, 'linux_futex_wait_i32',
-    'platform.sync must consume Linux futex wait helper through linux.ffi');
-  CheckTokenPresent(LSyncSource, 'linux_futex_wake_one_i32',
-    'platform.sync must consume Linux futex wake-one helper through linux.ffi');
-  CheckTokenPresent(LSyncSource, 'linux_futex_wake_all_i32',
-    'platform.sync must consume Linux futex wake-all helper through linux.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_init',
-    'platform.sync must consume Windows mutex init helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_lock',
-    'platform.sync must consume Windows mutex lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_trylock_busy_result',
-    'platform.sync must consume Windows mutex trylock busy-result helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_unlock',
-    'platform.sync must consume Windows mutex unlock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_mutex_destroy',
-    'platform.sync must consume Windows mutex destroy helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_init',
-    'platform.sync must consume Windows rwlock init helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_rdlock',
-    'platform.sync must consume Windows rwlock read-lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_tryrdlock_busy_result',
-    'platform.sync must consume Windows rwlock try-read-lock busy-result helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_wrlock',
-    'platform.sync must consume Windows rwlock write-lock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_trywrlock_busy_result',
-    'platform.sync must consume Windows rwlock try-write-lock busy-result helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_rdunlock',
-    'platform.sync must consume Windows rwlock read-unlock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_wrunlock',
-    'platform.sync must consume Windows rwlock write-unlock helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_rwlock_destroy',
-    'platform.sync must consume Windows rwlock destroy helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_init',
-    'platform.sync must consume Windows condvar init helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_wait',
-    'platform.sync must consume Windows condvar wait helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_timedwait_timeout_result',
-    'platform.sync must consume Windows condvar timedwait timeout-mapping helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_signal',
-    'platform.sync must consume Windows condvar signal helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_broadcast',
-    'platform.sync must consume Windows condvar broadcast helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_condvar_destroy',
-    'platform.sync must consume Windows condvar destroy helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_wait_address_i32_timeout_result',
-    'platform.sync must consume Windows wait-address timeout-mapping helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_wake_address_single',
-    'platform.sync must consume Windows wake-address-single helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'windows_wake_address_all',
-    'platform.sync must consume Windows wake-address-all helper through windows.ffi');
-  CheckTokenPresent(LSyncSource, 'platform_sync_validate_address',
-    'platform.sync must validate public wait-address pointers before host wait/wake helpers');
+  CheckPThreadStorageBase(LLinuxBaseSource, 'linux');
+  CheckPThreadStorageBase(LDarwinBaseSource, 'darwin');
+  CheckPThreadStorageBase(LAndroidBaseSource, 'android');
+  CheckPThreadStorageBase(LFreeBSDBaseSource, 'freebsd');
+  CheckPThreadStorageBase(LUnixBaseSource, 'unix');
+
+  CheckRawFFIUnit(LLinuxFfiSource, 'linux.ffi');
+  CheckTokenPresent(LLinuxFfiSource, 'function linux_syscall',
+    'linux.ffi must own raw syscall binding');
+  CheckTokenPresent(LLinuxBaseSource, 'linux_syscall_futex',
+    'linux.base must own futex syscall number');
+  CheckTokenPresent(LLinuxBaseSource, 'futex_wait',
+    'linux.base must own FUTEX_WAIT token');
+  CheckTokenPresent(LLinuxBaseSource, 'futex_wake',
+    'linux.base must own FUTEX_WAKE token');
+  CheckTokenAbsent(LLinuxFfiSource, 'linux_futex_wait_i32',
+    'linux.ffi must not own futex wrapper helpers');
+  CheckTokenAbsent(LLinuxFfiSource, 'linux_errno_value',
+    'linux.ffi must not own errno value helper');
+
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_mutex_size',
+    'windows.base must own Windows mutex storage size');
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_rwlock_size',
+    'windows.base must own Windows rwlock storage size');
+  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_condvar_size',
+    'windows.base must own Windows condvar storage size');
+  CheckTokenPresent(LWindowsBaseSource, 'error_timeout',
+    'windows.base must own Windows timeout token');
+  CheckRawFFIUnit(LWindowsFfiSource, 'windows.ffi');
+  CheckTokenPresent(LWindowsFfiSource, 'initializesrwlock',
+    'windows.ffi must own raw SRWLOCK declarations');
+  CheckTokenPresent(LWindowsFfiSource, 'sleepconditionvariablesrw',
+    'windows.ffi must own raw condition-variable declaration');
+  CheckTokenPresent(LWindowsFfiSource, 'waitonaddress',
+    'windows.ffi must own raw WaitOnAddress declaration');
+  CheckTokenAbsent(LWindowsFfiSource, 'windows_mutex_',
+    'windows.ffi must not own sync wrapper helpers');
+  CheckTokenAbsent(LWindowsFfiSource, 'windows_wait_address_i32',
+    'windows.ffi must not own wait-address wrapper helpers');
+
+  CheckTokenPresent(LSyncSource, 'nextpas.core.platform.posix.ffi',
+    'platform.sync must consume raw POSIX ffi');
+  CheckTokenPresent(LSyncSource, 'pthread_mutexattr_init',
+    'platform.sync must own pthread mutex initialization wrapper logic');
+  CheckTokenPresent(LSyncSource, 'pthread_condattr_init',
+    'platform.sync must own pthread condvar initialization wrapper logic');
+  CheckTokenPresent(LSyncSource, 'pthread_rwlock_unlock',
+    'platform.sync must own pthread rwlock unlock wrapping');
+  CheckTokenPresent(LSyncSource, 'linux_syscall(',
+    'platform.sync must own Linux futex syscall wrapping');
+  CheckTokenPresent(LSyncSource, 'platform_linux_futex_wait_i32',
+    'platform.sync must own Linux futex wait wrapper');
+  CheckTokenPresent(LSyncSource, 'initializesrwlock',
+    'platform.sync must own Windows SRWLOCK wrapper logic');
+  CheckTokenPresent(LSyncSource, 'sleepconditionvariablesrw',
+    'platform.sync must own Windows condvar wrapper logic');
+  CheckTokenPresent(LSyncSource, 'waitonaddress',
+    'platform.sync must own Windows wait-address wrapper logic');
   CheckTokenPresent(LSyncSource, 'platform_sync_validate_wait_address',
-    'platform.sync must own public wait-address nil/mismatch validation before host wait helpers');
-  Check(CountTokenOccurrences(
-      LSyncSource,
-      'result := platform_sync_validate_wait_address(aaddr, aexpected);') >= 3,
-    'platform.sync must consume wait-address public precheck in Linux, POSIX fallback, and Windows wait paths');
-  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_mutex_size',
-    'platform.sync.base must consume host-owned pthread mutex storage size');
-  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_rwlock_size',
-    'platform.sync.base must consume host-owned pthread rwlock storage size');
-  CheckTokenPresent(LSyncBaseSource, 'platform_pthread_condvar_size',
-    'platform.sync.base must consume host-owned pthread condvar storage size');
-  CheckTokenPresent(LSyncBaseSource, 'platform_windows_mutex_size',
-    'platform.sync.base must consume host-owned Windows mutex storage size');
-  CheckTokenPresent(LSyncBaseSource, 'platform_windows_rwlock_size',
-    'platform.sync.base must consume host-owned Windows rwlock storage size');
-  CheckTokenPresent(LSyncBaseSource, 'platform_windows_condvar_size',
-    'platform.sync.base must consume host-owned Windows condvar storage size');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformmutexalign',
-    'platform.sync.base must consume host-owned mutex align carrier type');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformrwlockalign',
-    'platform.sync.base must consume host-owned rwlock align carrier type');
-  CheckTokenPresent(LSyncBaseSource, 'tplatformcondvaralign',
-    'platform.sync.base must consume host-owned condvar align carrier type');
-  Check(Pos('platform_posix_errno_value', LSyncSource) = 0,
-    'platform.sync must not keep raw errno helper usage in the Unix consumer');
-  Check(Pos('platform_errno_location^', LSyncSource) = 0,
-    'platform.sync must not dereference errno storage directly in the consumer');
-  CheckTokenAbsent(LSyncSource, 'platform_posix_eagain',
-    'platform.sync must not keep host POSIX EAGAIN token in the Unix consumer');
-  CheckTokenAbsent(LSyncSource, 'platform_posix_ebusy',
-    'platform.sync must not keep host POSIX EBUSY token in the Unix consumer');
-  CheckTokenAbsent(LSyncSource, 'platform_posix_einval',
-    'platform.sync must not keep host POSIX EINVAL token in the Unix consumer');
-  CheckTokenAbsent(LSyncSource, 'platform_posix_enotsup',
-    'platform.sync must not keep host POSIX ENOTSUP token in the Unix consumer');
-  CheckTokenAbsent(LSyncSource, 'platform_posix_etimedout',
-    'platform.sync must not keep host POSIX ETIMEDOUT token in the Unix consumer');
-  Check(Pos('function platform_posix_mutex_kind', LSyncSource) = 0,
-    'platform.sync must not keep a local pthread mutex kind mapper in the Unix consumer');
-  Check(Pos('platform_pthread_mutex_normal_kind', LSyncSource) = 0,
-    'platform.sync must not keep raw pthread mutex normal numbering in the Unix consumer');
-  Check(Pos('platform_pthread_mutex_recursive_kind', LSyncSource) = 0,
-    'platform.sync must not keep raw pthread mutex recursive numbering in the Unix consumer');
-  Check(Pos('platform_pthread_mutex_errorcheck_kind', LSyncSource) = 0,
-    'platform.sync must not keep raw pthread mutex errorcheck numbering in the Unix consumer');
-  Check(Pos('procedure platform_posix_add_timeout', LSyncSource) = 0,
-    'platform.sync must not keep local POSIX timespec deadline arithmetic');
-  Check(Pos('function platform_posix_timespec_to_ns', LSyncSource) = 0,
-    'platform.sync must not keep local POSIX timespec-to-ns arithmetic');
-  Check(Pos('function platform_posix_remaining_ns', LSyncSource) = 0,
-    'platform.sync must not keep local POSIX remaining-time arithmetic');
-  Check(Pos('function platform_posix_now(', LSyncSource) = 0,
-    'platform.sync must not keep a local pthread timeout-clock read helper');
-  Check(Pos('getlasterror', LSyncSource) = 0,
-    'platform.sync must not call GetLastError directly in the Windows consumer');
-  Check(Pos('error_timeout', LSyncSource) = 0,
-    'platform.sync must not keep a raw Windows timeout-result token');
-  Check(Pos('function platform_timeout_ns_to_ms', LSyncSource) = 0,
-    'platform.sync must not keep a local Windows timeout conversion helper');
-  Check(Pos('windows_timeout_ns_to_ms', LSyncSource) = 0,
-    'platform.sync must not keep the raw Windows timeout-ms helper in the consumer');
-  Check(Pos('windows_last_error_is_timeout', LSyncSource) = 0,
-    'platform.sync must not keep the raw Windows DWORD timeout classifier in the consumer');
-  Check(Pos('windows_error_i32_is_timeout', LSyncSource) = 0,
-    'platform.sync must not keep the Int32 Windows timeout classifier in the consumer');
-  Check(Pos('windows_condvar_timedwait_ns', LSyncSource) = 0,
-    'platform.sync must not keep the raw Windows condvar timedwait helper in the consumer');
-  Check(Pos('windows_wait_address_i32_timeout_ns', LSyncSource) = 0,
-    'platform.sync must not keep the raw Windows wait-address timeout helper in the consumer');
-  Check(Pos('if windows_mutex_trylock(', LSyncSource) = 0,
-    'platform.sync must not keep local Windows mutex trylock busy mapping in the consumer');
-  Check(Pos('if windows_rwlock_tryrdlock(', LSyncSource) = 0,
-    'platform.sync must not keep local Windows rwlock try-read busy mapping in the consumer');
-  Check(Pos('if windows_rwlock_trywrlock(', LSyncSource) = 0,
-    'platform.sync must not keep local Windows rwlock try-write busy mapping in the consumer');
-  Check(Pos(': dword', LSyncSource) = 0,
-    'platform.sync must not keep raw DWORD temporaries in the Windows consumer');
-  Check(Pos('linux_syscall', LSyncSource) = 0,
-    'platform.sync must not call linux_syscall directly in the Linux consumer');
-  Check(Pos('futex_wait or futex_private_flag', LSyncSource) = 0,
-    'platform.sync must not assemble raw FUTEX_WAIT operations in the Linux consumer');
-  Check(Pos('futex_wake or futex_private_flag', LSyncSource) = 0,
-    'platform.sync must not assemble raw FUTEX_WAKE operations in the Linux consumer');
-  Check(Pos('clock_gettime(', LSyncSource) = 0,
-    'platform.sync must not call clock_gettime directly in the Unix consumer');
-  Check(Pos('platform_posix_timespec_add_ns', LSyncSource) = 0,
-    'platform.sync must not build timeout deadlines from shared POSIX arithmetic in the consumer');
-  Check(Pos('platform_posix_timespec_remaining_ns_u64', LSyncSource) = 0,
-    'platform.sync must not compute timeout remaining time from shared POSIX arithmetic in the consumer');
-  Check(Pos('platform_pthread_timeout_clock_now', LSyncSource) = 0,
-    'platform.sync must not read the pthread timeout clock directly in the consumer');
-  Check(Pos('pthread_mutexattr_init(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutexattr_init directly in the Unix consumer');
-  Check(Pos('pthread_mutexattr_settype(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutexattr_settype directly in the Unix consumer');
-  Check(Pos('pthread_mutexattr_destroy(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutexattr_destroy directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_mutex_init(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutex_init directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_mutex_destroy(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutex_destroy directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_mutex_lock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutex_lock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_mutex_trylock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutex_trylock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_mutex_unlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_mutex_unlock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_init(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_init directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_destroy(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_destroy directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_rdlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_rdlock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_tryrdlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_tryrdlock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_wrlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_wrlock directly in the Unix consumer');
-  Check(Pos('platform_posix_map_error(pthread_rwlock_trywrlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_trywrlock directly in the Unix consumer');
-  Check(Pos('pthread_rwlock_unlock(', LSyncSource) = 0,
-    'platform.sync must not call pthread_rwlock_unlock directly in the Unix consumer');
-  Check(Pos('pthread_condattr_init(', LSyncSource) = 0,
-    'platform.sync must not call pthread_condattr_init directly in the Unix consumer');
-  Check(Pos('pthread_condattr_destroy(', LSyncSource) = 0,
-    'platform.sync must not call pthread_condattr_destroy directly in the Unix consumer');
-  Check(Pos('platform_pthread_condattr_setclock(', LSyncSource) = 0,
-    'platform.sync must not call pthread condattr setclock binding directly in the Unix consumer');
-  Check(Pos('pthread_cond_init(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_init directly in the Unix consumer');
-  Check(Pos('pthread_cond_destroy(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_destroy directly in the Unix consumer');
-  Check(Pos('pthread_cond_wait(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_wait directly in the Unix consumer');
-  Check(Pos('pthread_cond_timedwait(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_timedwait directly in the Unix consumer');
-  Check(Pos('pthread_cond_signal(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_signal directly in the Unix consumer');
-  Check(Pos('pthread_cond_broadcast(', LSyncSource) = 0,
-    'platform.sync must not call pthread_cond_broadcast directly in the Unix consumer');
-  Check(Pos('sched_yield', LSyncSource) = 0,
-    'platform.sync must not call sched_yield directly in the Unix consumer');
-  Check(Pos('sizeof(pthread_mutex_t)', LSyncSource) = 0,
-    'platform.sync must not size raw pthread_mutex_t storage in the Unix consumer');
-  Check(Pos('sizeof(pthread_rwlock_t)', LSyncSource) = 0,
-    'platform.sync must not size raw pthread_rwlock_t storage in the Unix consumer');
-  Check(Pos('sizeof(pthread_cond_t)', LSyncSource) = 0,
-    'platform.sync must not size raw pthread_cond_t storage in the Unix consumer');
-  Check(Pos('sizeof(srwlock)', LSyncSource) = 0,
-    'platform.sync must not size raw SRWLOCK storage in the Windows consumer');
-  Check(Pos('sizeof(condition_variable)', LSyncSource) = 0,
-    'platform.sync must not size raw CONDITION_VARIABLE storage in the Windows consumer');
-  Check(Pos('falign: uint64', LSyncSource) = 0,
-    'platform.sync must not keep a generic UInt64 align fallback in the consumer');
-  Check(Pos('initializesrwlock', LSyncSource) = 0,
-    'platform.sync must not call InitializeSRWLock directly in the Windows consumer');
-  Check(Pos('acquiresrwlockexclusive', LSyncSource) = 0,
-    'platform.sync must not call AcquireSRWLockExclusive directly in the Windows consumer');
-  Check(Pos('tryacquiresrwlockexclusive', LSyncSource) = 0,
-    'platform.sync must not call TryAcquireSRWLockExclusive directly in the Windows consumer');
-  Check(Pos('releasesrwlockexclusive', LSyncSource) = 0,
-    'platform.sync must not call ReleaseSRWLockExclusive directly in the Windows consumer');
-  Check(Pos('acquiresrwlockshared', LSyncSource) = 0,
-    'platform.sync must not call AcquireSRWLockShared directly in the Windows consumer');
-  Check(Pos('tryacquiresrwlockshared', LSyncSource) = 0,
-    'platform.sync must not call TryAcquireSRWLockShared directly in the Windows consumer');
-  Check(Pos('releasesrwlockshared', LSyncSource) = 0,
-    'platform.sync must not call ReleaseSRWLockShared directly in the Windows consumer');
-  Check(Pos('sleepconditionvariablesrw', LSyncSource) = 0,
-    'platform.sync must not call SleepConditionVariableSRW directly in the Windows consumer');
-  Check(Pos('wakeconditionvariable', LSyncSource) = 0,
-    'platform.sync must not call WakeConditionVariable directly in the Windows consumer');
-  Check(Pos('wakeallconditionvariable', LSyncSource) = 0,
-    'platform.sync must not call WakeAllConditionVariable directly in the Windows consumer');
-  Check(Pos('waitonaddress', LSyncSource) = 0,
-    'platform.sync must not call WaitOnAddress directly in the Windows consumer');
-  Check(Pos('wakebyaddresssingle', LSyncSource) = 0,
-    'platform.sync must not call WakeByAddressSingle directly in the Windows consumer');
-  Check(Pos('wakebyaddressall', LSyncSource) = 0,
-    'platform.sync must not call WakeByAddressAll directly in the Windows consumer');
+    'platform.sync must validate public wait-address inputs before raw API calls');
+  CheckTokenAbsent(LSyncSource, 'result := windows_mutex_init',
+    'platform.sync must not call removed windows.ffi mutex helpers');
+  CheckTokenAbsent(LSyncSource, 'result := linux_futex_wait_i32',
+    'platform.sync must not call removed linux.ffi futex helpers');
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.platform.sync.host_ffi_surface');
-  T.Run('platform.sync uses host ffi surface', @TestPlatformSyncUsesHostFFISurface);
+  T.Run('platform.sync keeps raw ffi below unified wrappers', @TestPlatformSyncRawFFIBoundary);
   T.Summary;
 end.

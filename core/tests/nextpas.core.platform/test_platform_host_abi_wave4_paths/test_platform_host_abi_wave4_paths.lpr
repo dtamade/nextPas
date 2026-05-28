@@ -113,20 +113,20 @@ begin
   CheckTokenPresent(ABase, 'platform_access_read = int32(4)',
     AHostName + ' base must own R_OK');
 
-  CheckTokenPresent(AFfi, 'function platform_directory_create',
-    AHostName + ' ffi must expose directory create helper');
-  CheckTokenPresent(AFfi, 'function platform_directory_remove',
-    AHostName + ' ffi must expose directory remove helper');
-  CheckTokenPresent(AFfi, 'function platform_path_unlink',
-    AHostName + ' ffi must expose path unlink helper');
-  CheckTokenPresent(AFfi, 'function platform_path_rename',
-    AHostName + ' ffi must expose path rename helper');
-  CheckTokenPresent(AFfi, 'function platform_path_access',
-    AHostName + ' ffi must expose path access helper');
-  CheckTokenPresent(AFfi, 'function platform_path_get_current_directory',
-    AHostName + ' ffi must expose get-current-directory helper');
-  CheckTokenPresent(AFfi, 'function platform_path_set_current_directory',
-    AHostName + ' ffi must expose set-current-directory helper');
+  CheckTokenAbsent(AFfi, 'function platform_directory_create',
+    AHostName + ' ffi must not expose directory create helper');
+  CheckTokenAbsent(AFfi, 'function platform_directory_remove',
+    AHostName + ' ffi must not expose directory remove helper');
+  CheckTokenAbsent(AFfi, 'function platform_path_unlink',
+    AHostName + ' ffi must not expose path unlink helper');
+  CheckTokenAbsent(AFfi, 'function platform_path_rename',
+    AHostName + ' ffi must not expose path rename helper');
+  CheckTokenAbsent(AFfi, 'function platform_path_access',
+    AHostName + ' ffi must not expose path access helper');
+  CheckTokenAbsent(AFfi, 'function platform_path_get_current_directory',
+    AHostName + ' ffi must not expose get-current-directory helper');
+  CheckTokenAbsent(AFfi, 'function platform_path_set_current_directory',
+    AHostName + ' ffi must not expose set-current-directory helper');
 end;
 
 procedure CheckWave4DocumentTokens(const ADoc: string);
@@ -191,10 +191,10 @@ begin
     'posix.ffi must own POSIX getcwd binding');
   CheckTokenPresent(LPosixFfi, 'function chdir',
     'posix.ffi must own POSIX chdir binding');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_directory_create',
-    'posix.ffi must expose shared directory create helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_path_get_current_directory',
-    'posix.ffi must expose shared get-current-directory helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_directory_create',
+    'posix.ffi must not expose shared directory create helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_path_get_current_directory',
+    'posix.ffi must not expose shared get-current-directory helper');
 
   CheckPosixPathOwnerTokens(LLinuxBase, LLinuxFfi, 'Linux');
   CheckPosixPathOwnerTokens(LAndroidBase, LAndroidFfi, 'Android');
@@ -248,10 +248,10 @@ begin
     'windows.ffi must own GetFullPathNameA binding');
   CheckTokenPresent(LWindowsFfi, 'function getfullpathnamew',
     'windows.ffi must own GetFullPathNameW binding');
-  CheckTokenPresent(LWindowsFfi, 'function windows_create_directory_a',
-    'windows.ffi must expose ANSI CreateDirectory helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_get_full_path_name_w',
-    'windows.ffi must expose wide GetFullPathName helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_create_directory_a',
+    'windows.ffi must not expose ANSI CreateDirectory helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_get_full_path_name_w',
+    'windows.ffi must not expose wide GetFullPathName helper');
 end;
 
 procedure TestHostAbiWave4PathEvidenceDocumented;

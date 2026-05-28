@@ -164,12 +164,12 @@ begin
     'darwin.ffi must use Darwin lstat$INODE64 symbol');
   CheckTokenPresent(LDarwinFfi, 'name ''fstat$inode64''',
     'darwin.ffi must use Darwin fstat$INODE64 symbol');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_stat_path',
-    'darwin.ffi must expose Darwin stat path helper');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_lstat_path',
-    'darwin.ffi must expose Darwin lstat path helper');
-  CheckTokenPresent(LDarwinFfi, 'function darwin_fstat_fd',
-    'darwin.ffi must expose Darwin fstat fd helper');
+  CheckTokenAbsent(LDarwinFfi, 'function darwin_stat_path',
+    'darwin.ffi must not expose Darwin stat path helper');
+  CheckTokenAbsent(LDarwinFfi, 'function darwin_lstat_path',
+    'darwin.ffi must not expose Darwin lstat path helper');
+  CheckTokenAbsent(LDarwinFfi, 'function darwin_fstat_fd',
+    'darwin.ffi must not expose Darwin fstat fd helper');
 end;
 
 procedure TestFreeBSDStatHostOwnerTokens;
@@ -209,12 +209,12 @@ begin
     'freebsd.ffi must use FreeBSD lstat symbol');
   CheckTokenPresent(LFreeBSDFfi, 'name ''fstat''',
     'freebsd.ffi must use FreeBSD fstat symbol');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_stat_path',
-    'freebsd.ffi must expose FreeBSD stat path helper');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_lstat_path',
-    'freebsd.ffi must expose FreeBSD lstat path helper');
-  CheckTokenPresent(LFreeBSDFfi, 'function freebsd_fstat_fd',
-    'freebsd.ffi must expose FreeBSD fstat fd helper');
+  CheckTokenAbsent(LFreeBSDFfi, 'function freebsd_stat_path',
+    'freebsd.ffi must not expose FreeBSD stat path helper');
+  CheckTokenAbsent(LFreeBSDFfi, 'function freebsd_lstat_path',
+    'freebsd.ffi must not expose FreeBSD lstat path helper');
+  CheckTokenAbsent(LFreeBSDFfi, 'function freebsd_fstat_fd',
+    'freebsd.ffi must not expose FreeBSD fstat fd helper');
 end;
 
 procedure TestAndroidStatHostOwnerTokens;
@@ -248,16 +248,16 @@ begin
 
   CheckTokenPresent(LAndroidFfi, 'function android_syscall',
     'android.ffi must own Android syscall binding');
-  CheckTokenPresent(LAndroidFfi, 'function android_newfstatat',
-    'android.ffi must expose Android newfstatat helper');
-  CheckTokenPresent(LAndroidFfi, 'function android_fstat',
-    'android.ffi must expose Android fstat helper');
-  CheckTokenPresent(LAndroidFfi, 'function android_stat_path',
-    'android.ffi must expose Android stat path helper');
-  CheckTokenPresent(LAndroidFfi, 'function android_lstat_path',
-    'android.ffi must expose Android lstat path helper');
-  CheckTokenPresent(LAndroidFfi, 'function android_fstat_fd',
-    'android.ffi must expose Android fstat fd helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_newfstatat',
+    'android.ffi must not expose Android newfstatat helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_fstat',
+    'android.ffi must not expose Android fstat helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_stat_path',
+    'android.ffi must not expose Android stat path helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_lstat_path',
+    'android.ffi must not expose Android lstat path helper');
+  CheckTokenAbsent(LAndroidFfi, 'function android_fstat_fd',
+    'android.ffi must not expose Android fstat fd helper');
   CheckTokenAbsent(LAndroidFfi, '__xstat',
     'android.ffi must not use Linux glibc __xstat wrappers');
   CheckTokenAbsent(LAndroidFfi, '__lxstat',
@@ -369,11 +369,11 @@ begin
     PLATFORM_THREAD_PATH_FROM_ROOT,
     'platform.thread must exist'));
 
-  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'darwin_stat_path',
+  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'function darwin_stat',
     'platform.time/sync/thread must not consume Wave 10 Darwin stat raw ABI');
-  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'freebsd_stat_path',
+  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'function freebsd_stat',
     'platform.time/sync/thread must not consume Wave 10 FreeBSD stat raw ABI');
-  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'android_stat_path',
+  CheckTokenAbsent(LPlatformTime + LPlatformSync + LPlatformThread, 'android_syscall_newfstatat',
     'platform.time/sync/thread must not consume Wave 10 Android stat raw ABI');
 end;
 

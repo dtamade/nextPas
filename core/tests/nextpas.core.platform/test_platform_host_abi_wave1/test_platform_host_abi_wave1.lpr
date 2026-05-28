@@ -115,28 +115,28 @@ begin
   CheckTokenPresent(ABase, 'platform_rtld_global = int32(' + ARtldGlobal + ')',
     AHostName + ' base must own RTLD_GLOBAL');
 
-  CheckTokenPresent(AFfi, 'function ' + AHostPrefix + '_process_id',
-    AHostName + ' ffi must expose host-owned process id helper');
-  CheckTokenPresent(AFfi, 'function ' + AHostPrefix + '_parent_process_id',
-    AHostName + ' ffi must expose host-owned parent process id helper');
+  CheckTokenAbsent(AFfi, 'function ' + AHostPrefix + '_process_id',
+    AHostName + ' ffi must not expose process id helper');
+  CheckTokenAbsent(AFfi, 'function ' + AHostPrefix + '_parent_process_id',
+    AHostName + ' ffi must not expose parent process id helper');
   CheckTokenAbsent(AFfi, 'function platform_process_id',
     AHostName + ' ffi must not expose unified-looking process id helper');
   CheckTokenAbsent(AFfi, 'function platform_parent_process_id',
     AHostName + ' ffi must not expose unified-looking parent process id helper');
-  CheckTokenPresent(AFfi, 'function platform_mmap',
-    AHostName + ' ffi must expose mmap helper');
-  CheckTokenPresent(AFfi, 'function platform_munmap',
-    AHostName + ' ffi must expose munmap helper');
-  CheckTokenPresent(AFfi, 'function platform_mprotect',
-    AHostName + ' ffi must expose mprotect helper');
-  CheckTokenPresent(AFfi, 'function platform_dlopen',
-    AHostName + ' ffi must expose dynamic loader open helper');
-  CheckTokenPresent(AFfi, 'function platform_dlsym',
-    AHostName + ' ffi must expose dynamic loader symbol helper');
-  CheckTokenPresent(AFfi, 'function platform_dlclose',
-    AHostName + ' ffi must expose dynamic loader close helper');
-  CheckTokenPresent(AFfi, 'function platform_dlerror',
-    AHostName + ' ffi must expose dynamic loader error helper');
+  CheckTokenAbsent(AFfi, 'function platform_mmap',
+    AHostName + ' ffi must not expose mmap helper');
+  CheckTokenAbsent(AFfi, 'function platform_munmap',
+    AHostName + ' ffi must not expose munmap helper');
+  CheckTokenAbsent(AFfi, 'function platform_mprotect',
+    AHostName + ' ffi must not expose mprotect helper');
+  CheckTokenAbsent(AFfi, 'function platform_dlopen',
+    AHostName + ' ffi must not expose dynamic loader open helper');
+  CheckTokenAbsent(AFfi, 'function platform_dlsym',
+    AHostName + ' ffi must not expose dynamic loader symbol helper');
+  CheckTokenAbsent(AFfi, 'function platform_dlclose',
+    AHostName + ' ffi must not expose dynamic loader close helper');
+  CheckTokenAbsent(AFfi, 'function platform_dlerror',
+    AHostName + ' ffi must not expose dynamic loader error helper');
   CheckTokenPresent(AFfi, 'function dlopen',
     AHostName + ' ffi must own dlopen binding');
   CheckTokenPresent(AFfi, 'function dlsym',
@@ -223,8 +223,8 @@ begin
     'posix.base must own MAP_PRIVATE');
   CheckTokenPresent(LPosixBase, 'platform_posix_map_failed',
     'posix.base must own MAP_FAILED');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_mmap_failed',
-    'posix.ffi must own MAP_FAILED helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_mmap_failed',
+    'posix.ffi must not own MAP_FAILED helper');
   CheckTokenPresent(LPosixFfi, 'function getpid',
     'posix.ffi must own shared getpid binding');
   CheckTokenPresent(LPosixFfi, 'function getppid',

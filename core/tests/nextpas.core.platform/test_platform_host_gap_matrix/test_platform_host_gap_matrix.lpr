@@ -131,7 +131,7 @@ begin
     'host gap matrix doc must record unsupported mutex timedlock gaps');
   CheckTokenPresent(ADoc, 'platform_sysconf_nprocessors_onln = -1',
     'host gap matrix doc must record generic Unix CPU-count fallback gap');
-  CheckTokenPresent(ADoc, 'platform_posix_thread_self_token_u64',
+  CheckTokenPresent(ADoc, 'pthread_self',
     'host gap matrix doc must record generic Unix native thread-id fallback');
   CheckTokenPresent(ADoc, 'waitonaddress',
     'host gap matrix doc must record Windows wait-address ownership');
@@ -177,24 +177,24 @@ procedure CheckPosixHostFfiTokens(
 begin
   CheckTokenPresent(ASource, AHostPrefix + '_errno_location',
     AHostName + ' ffi must own errno binding');
-  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_ns_u64',
-    AHostName + ' ffi must expose platform clock monotonic helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_clock_realtime_ns_u64',
-    AHostName + ' ffi must expose platform clock realtime helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_clock_monotonic_resolution_ns_u64',
-    AHostName + ' ffi must expose platform clock resolution helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_native_thread_id_u64',
-    AHostName + ' ffi must expose native thread id helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_cpu_count_i32',
-    AHostName + ' ffi must expose CPU count helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_state_create',
-    AHostName + ' ffi must expose thread state create helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_tls_create',
-    AHostName + ' ffi must expose TLS create helper');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_mutex_timedlock_abs',
-    AHostName + ' ffi must expose mutex timedlock helper or unsupported stub');
-  CheckTokenPresent(ASource, AHostPrefix + '_pthread_sync_result',
-    AHostName + ' ffi must own pthread error classification wrapper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_clock_monotonic_ns_u64',
+    AHostName + ' ffi must not expose platform clock monotonic helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_clock_realtime_ns_u64',
+    AHostName + ' ffi must not expose platform clock realtime helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_clock_monotonic_resolution_ns_u64',
+    AHostName + ' ffi must not expose platform clock resolution helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_native_thread_id_u64',
+    AHostName + ' ffi must not expose native thread id helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_cpu_count_i32',
+    AHostName + ' ffi must not expose CPU count helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_pthread_state_create',
+    AHostName + ' ffi must not expose thread state create helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_pthread_tls_create',
+    AHostName + ' ffi must not expose TLS create helper');
+  CheckTokenAbsent(ASource, AHostPrefix + '_pthread_mutex_timedlock_abs',
+    AHostName + ' ffi must not expose mutex timedlock helper or unsupported stub');
+  CheckTokenAbsent(ASource, AHostPrefix + '_pthread_sync_result',
+    AHostName + ' ffi must not own pthread error classification wrapper');
 end;
 
 procedure TestHostGapMatrixDocument;
@@ -248,8 +248,8 @@ begin
     'Linux ffi must not expose unified-looking platform_clock helper names');
   CheckTokenPresent(LLinuxFfi, 'linux_syscall',
     'Linux ffi must own syscall binding');
-  CheckTokenPresent(LLinuxFfi, 'linux_futex_wait_i32',
-    'Linux ffi must own futex wait helper');
+  CheckTokenAbsent(LLinuxFfi, 'linux_futex_wait_i32',
+    'Linux ffi must not own futex wait helper');
   CheckTokenPresent(LLinuxFfi, 'gettid',
     'Linux ffi must own native gettid binding');
 
@@ -266,8 +266,8 @@ begin
     'Darwin ffi must own mach absolute time binding');
   CheckTokenPresent(LDarwinFfi, 'pthread_threadid_np',
     'Darwin ffi must own native thread id binding');
-  CheckTokenPresent(LDarwinFfi, 'platform_posix_enotsup',
-    'Darwin ffi must return host ENOTSUP for unsupported timedlock');
+  CheckTokenAbsent(LDarwinFfi, 'platform_posix_enotsup',
+    'Darwin ffi must not return host ENOTSUP from helper code');
 
   CheckHostBaseTokens(LFreeBSDBase, 'FreeBSD', '0', '4', '58', '1', '1');
   CheckPosixHostFfiTokens(LFreeBSDFfi, 'FreeBSD', 'freebsd');
@@ -276,12 +276,12 @@ begin
 
   CheckHostBaseTokens(LUnixBase, 'generic Unix', '0', '1', '-1', '1', '0');
   CheckPosixHostFfiTokens(LUnixFfi, 'generic Unix', 'unix');
-  CheckTokenPresent(LUnixFfi, 'result := unix_thread_self_token_u64;',
-    'generic Unix ffi must document native thread id fallback');
-  CheckTokenPresent(LUnixFfi, 'platform_posix_sysconf_positive_i32(platform_sysconf_nprocessors_onln)',
-    'generic Unix ffi must route CPU count through explicit fallback sysconf token');
-  CheckTokenPresent(LUnixFfi, 'platform_posix_enotsup',
-    'generic Unix ffi must return host ENOTSUP for unsupported timedlock');
+  CheckTokenAbsent(LUnixFfi, 'result := unix_thread_self_token_u64;',
+    'generic Unix ffi must not document native thread id fallback in helper code');
+  CheckTokenAbsent(LUnixFfi, 'platform_posix_sysconf_positive_i32(platform_sysconf_nprocessors_onln)',
+    'generic Unix ffi must not route CPU count through helper code');
+  CheckTokenAbsent(LUnixFfi, 'platform_posix_enotsup',
+    'generic Unix ffi must not return host ENOTSUP from helper code');
 
   CheckTokenPresent(LWindowsBase, 'srwlock',
     'Windows base must own SRWLOCK shape');

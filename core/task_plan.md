@@ -9,17 +9,18 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 14 is closed on `main@7c50af6`. The feature commit was
-  rebased onto the latest main, fast-forward merged, post-merge
-  `bash build/verify_local.sh` passed, and the temporary worktree / branch were
-  removed.
+- Current status: Wave 15 is active from latest `main@0f213de` in worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
+  on branch `codex/platform-ffi-raw-boundary`.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Last closed wave: Platform Host ABI Completeness Wave 14, remaining
-  thread/sync/time host FFI helper ownership-name cleanup. This wave corrected
-  Android, Darwin, FreeBSD, generic Unix, and Windows clock `platform_*`
-  host-owned helper names for pthread, clock, errno, native thread id, and CPU
-  count before the next broad FPC raw API import wave.
+- Last closed wave: Platform Host ABI Completeness Wave 14 on `main@7c50af6`.
+- Active correction: Wave 15 reverses the earlier "host FFI helper projection"
+  direction. Host/shared `.ffi` units are raw external ABI declaration owners
+  only. All inline helper/projection/wrapper logic must move into the unified
+  platform function layers such as `platform.time`, `platform.sync`, and
+  `platform.thread`, or wait for a future unified function layer such as
+  `platform.file`, `platform.path`, `platform.env`, or `platform.process`.
 
 ## Architecture Rules
 
@@ -27,13 +28,13 @@ the integration boundary.
   as `Linux`, `UnixType`, `BaseUnix`, `PThreads`, `Syscall`, or `Windows`.
 - Host `base` units own constants, record shapes, opaque carriers, scalar
   aliases, syscall numbers, error-code values, and capability tokens.
-- Host `ffi` units own raw external declarations and host-owned thin ABI
-  projections.
-- Host-owned helper projections must use their owning host prefix such as
-  `linux_*`, `android_*`, `darwin_*`, `freebsd_*`, `unix_*`, or `windows_*`.
-  Shared POSIX helper projections keep the `platform_posix_*` prefix because
-  their owner is `nextpas.core.platform.posix.ffi`. Unified-looking
-  `platform_*` names belong to public platform contracts, not host FFI helpers.
+- Host/shared `ffi` units own raw external declarations only. They must not
+  contain `inline` helper/projection/wrapper functions, synthetic convenience
+  APIs, errno mapping, timeout arithmetic, allocation/state wrappers, or public
+  platform semantics.
+- `platform.time`, `platform.sync`, and `platform.thread` are unified platform
+  function layers. They directly consume host/shared `base` + `ffi` raw APIs and
+  own the cross-platform semantic wrapping for their domain.
 - Shared POSIX ABI shapes belong in `nextpas.core.platform.posix.base`; shared
   POSIX pure arithmetic helpers belong in `nextpas.core.platform.posix.math`;
   shared POSIX external declarations belong in `nextpas.core.platform.posix.ffi`.
@@ -56,6 +57,46 @@ the integration boundary.
 - Runtime behavior tests belong to unified nextPas public contracts only.
 
 ## Current Phase
+
+### Wave 15: FFI raw-only boundary correction
+
+Status: pre-merge implementation and verification are complete in worktree
+`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`;
+commit / main merge / post-merge verification are still pending.
+
+- [x] Stop the rejected Wave 15 helper-name direction and start a clean
+  worktree from latest `main`.
+- [x] Reconfirm user rule: `platform.<host>.base` owns ABI data definitions;
+  `platform.<host>.ffi` owns raw external declarations only; `platform.time`,
+  `platform.sync`, and `platform.thread` are the direct unified platform
+  function wrappers.
+- [x] Add RED source-surface guard that rejects any `inline` helper or
+  implementation body in `nextpas.core.platform*.ffi.pas`.
+- [x] Remove helper/projection implementations from `posix.ffi`, host `.ffi`,
+  and `windows.ffi` while preserving raw external declarations.
+- [x] Move currently required time/sync/thread wrapper logic into
+  `platform.time.host`, `platform.sync`, and `platform.thread`.
+- [x] Update source-surface tests and docs that still describe helper
+  projections as the desired FFI shape.
+- [x] Run focused checks, `make -C core test`, examples, benchmarks, and
+  `bash build/verify_local.sh`.
+- [ ] Commit, merge to `main`, post-merge verify, and clean temporary worktree /
+  stale rejected Wave 15 helper-name branch.
+
+#### Wave 15 Verification Boundary
+
+- This is an architecture-boundary correction, not runtime proof of raw OS APIs.
+- The guard proves nextPas ownership discipline: `.ffi` is raw declaration only,
+  non-FFI unified platform function layers own wrapping logic, and behavior tests
+  continue to exercise public platform contracts.
+- Fresh official verification for this pre-merge state passed:
+  `bash build/verify_local.sh` ended with `verify-local=pass` and
+  `human-summary=local verification passed`. The envelope included
+  `corePlatformTimeHostFfiSurfaceCheck`, `corePlatformThreadHostFfiSurfaceCheck`,
+  `corePlatformSyncHostFfiSurfaceCheck`,
+  `corePlatformFfiOwnerBoundaryCheck`,
+  `corePlatformFfiPartitionSurfaceCheck`,
+  `corePlatformSimulatedHostCompileMatrixCheck`, examples, and benchmarks.
 
 ### Wave 14: remaining host FFI helper ownership-name cleanup
 

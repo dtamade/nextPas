@@ -130,14 +130,14 @@ begin
   CheckTokenPresent(ABase, 'platform_fcntl_fd_cloexec = int32(1)',
     AHostName + ' base must own FD_CLOEXEC');
 
-  CheckTokenPresent(AFfi, 'function platform_file_open',
-    AHostName + ' ffi must expose platform_file_open helper');
-  CheckTokenPresent(AFfi, 'function platform_file_close',
-    AHostName + ' ffi must expose platform_file_close helper');
-  CheckTokenPresent(AFfi, 'function platform_file_fcntl',
-    AHostName + ' ffi must expose platform_file_fcntl helper');
-  CheckTokenPresent(AFfi, 'function platform_file_fcntl_i32',
-    AHostName + ' ffi must expose platform_file_fcntl_i32 helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_open',
+    AHostName + ' ffi must not expose platform_file_open helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_close',
+    AHostName + ' ffi must not expose platform_file_close helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_fcntl',
+    AHostName + ' ffi must not expose platform_file_fcntl helper');
+  CheckTokenAbsent(AFfi, 'function platform_file_fcntl_i32',
+    AHostName + ' ffi must not expose platform_file_fcntl_i32 helper');
 end;
 
 procedure CheckWave2DocumentTokens(const ADoc: string);
@@ -198,14 +198,14 @@ begin
     'posix.base must own shared POSIX file descriptor scalar');
   CheckTokenPresent(LPosixBase, 'platform_file_mode_default',
     'posix.base must own a default file create mode token');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_open',
-    'posix.ffi must expose shared POSIX open helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_close',
-    'posix.ffi must expose shared POSIX close helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_fcntl',
-    'posix.ffi must expose shared POSIX fcntl helper');
-  CheckTokenPresent(LPosixFfi, 'function platform_posix_fcntl_i32',
-    'posix.ffi must expose shared POSIX fcntl helper with integer argument');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_open',
+    'posix.ffi must not expose shared POSIX open helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_close',
+    'posix.ffi must not expose shared POSIX close helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_fcntl',
+    'posix.ffi must not expose shared POSIX fcntl helper');
+  CheckTokenAbsent(LPosixFfi, 'function platform_posix_fcntl_i32',
+    'posix.ffi must not expose shared POSIX fcntl helper with integer argument');
   CheckTokenPresent(LPosixFfi, 'function open',
     'posix.ffi must own open binding');
   CheckTokenPresent(LPosixFfi, 'function close',
@@ -241,16 +241,16 @@ begin
     'Windows ffi must own ReadFile binding');
   CheckTokenPresent(LWindowsFfi, 'function writefile',
     'Windows ffi must own WriteFile binding');
-  CheckTokenPresent(LWindowsFfi, 'function windows_create_file_a',
-    'Windows ffi must expose ANSI CreateFile helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_create_file_w',
-    'Windows ffi must expose wide CreateFile helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_read_file',
-    'Windows ffi must expose read helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_write_file',
-    'Windows ffi must expose write helper');
-  CheckTokenPresent(LWindowsFfi, 'function windows_file_close_handle',
-    'Windows ffi must expose file close helper using existing CloseHandle owner');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_create_file_a',
+    'Windows ffi must not expose ANSI CreateFile helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_create_file_w',
+    'Windows ffi must not expose wide CreateFile helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_read_file',
+    'Windows ffi must not expose read helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_write_file',
+    'Windows ffi must not expose write helper');
+  CheckTokenAbsent(LWindowsFfi, 'function windows_file_close_handle',
+    'Windows ffi must not expose file close helper');
 end;
 
 procedure TestHostAbiWave2FileEvidenceDocumented;

@@ -67,15 +67,6 @@ begin
   Result := APathFromTest;
 end;
 
-function ResolveRequiredSourcePath(
-  const APathFromTest,
-  APathFromRoot,
-  AMessage: string): string;
-begin
-  Result := ResolveSourcePath(APathFromTest, APathFromRoot);
-  Check(FileExists(Result), AMessage + ': ' + Result);
-end;
-
 procedure CheckTokenPresent(const ASource, AToken, AMessage: string);
 begin
   Check(Pos(LowerCase(AToken), ASource) > 0, AMessage + ': ' + AToken);
@@ -86,261 +77,101 @@ begin
   Check(Pos(LowerCase(AToken), ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckRawFFIUnit(const ASource, ALabel: string);
+begin
+  CheckTokenPresent(ASource, 'external ''',
+    ALabel + ' must own raw external declarations');
+  CheckTokenAbsent(ASource, ' inline',
+    ALabel + ' must not own inline helper declarations');
+  CheckTokenAbsent(ASource, 'implementation' + #10 + 'uses',
+    ALabel + ' must not own implementation helper imports');
+  CheckTokenAbsent(ASource, 'begin' + #10,
+    ALabel + ' must not own helper bodies');
+end;
+
+procedure CheckHostPartition(
+  const ABaseSource,
+  AFfiSource,
+  AHostLabel,
+  ABaseToken,
+  AFfiToken: string);
+begin
+  CheckTokenPresent(ABaseSource, ABaseToken,
+    AHostLabel + ' base must own host ABI data token');
+  CheckTokenPresent(AFfiSource, AFfiToken,
+    AHostLabel + ' ffi must own host raw external token');
+  CheckRawFFIUnit(AFfiSource, AHostLabel + '.ffi');
+end;
+
 procedure TestPlatformFFIPartition;
 var
   LPosixBaseSource: string;
-  LPosixSource: string;
+  LPosixFfiSource: string;
   LLinuxBaseSource: string;
-  LLinuxSource: string;
+  LLinuxFfiSource: string;
   LDarwinBaseSource: string;
-  LDarwinSource: string;
+  LDarwinFfiSource: string;
   LAndroidBaseSource: string;
-  LAndroidSource: string;
+  LAndroidFfiSource: string;
   LFreeBSDBaseSource: string;
-  LFreeBSDSource: string;
+  LFreeBSDFfiSource: string;
   LUnixBaseSource: string;
-  LUnixSource: string;
+  LUnixFfiSource: string;
   LWindowsBaseSource: string;
-  LWindowsSource: string;
+  LWindowsFfiSource: string;
 begin
-  LPosixBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    POSIX_BASE_SOURCE_PATH_FROM_TEST, POSIX_BASE_SOURCE_PATH_FROM_ROOT,
-    'posix.base file must exist as the shared POSIX ABI shape owner'));
-  LPosixSource := ReadSourceFile(ResolveRequiredSourcePath(
-    POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT,
-    'posix.ffi file must exist as the shared POSIX external owner'));
-  LLinuxBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT,
-    'linux.base file must exist as the Linux host truth owner'));
-  LLinuxSource := ReadSourceFile(ResolveRequiredSourcePath(
-    LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT,
-    'linux.ffi file must exist as the Linux external owner'));
-  LDarwinBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT,
-    'darwin.base file must exist as the Darwin host truth owner'));
-  LDarwinSource := ReadSourceFile(ResolveRequiredSourcePath(
-    DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT,
-    'darwin.ffi file must exist as the Darwin external owner'));
-  LAndroidBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    ANDROID_BASE_SOURCE_PATH_FROM_TEST, ANDROID_BASE_SOURCE_PATH_FROM_ROOT,
-    'android.base file must exist as the Android host truth owner'));
-  LAndroidSource := ReadSourceFile(ResolveRequiredSourcePath(
-    ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT,
-    'android.ffi file must exist as the Android external owner'));
-  LFreeBSDBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    FREEBSD_BASE_SOURCE_PATH_FROM_TEST, FREEBSD_BASE_SOURCE_PATH_FROM_ROOT,
-    'freebsd.base file must exist as the FreeBSD host truth owner'));
-  LFreeBSDSource := ReadSourceFile(ResolveRequiredSourcePath(
-    FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT,
-    'freebsd.ffi file must exist as the FreeBSD external owner'));
-  LUnixBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    UNIX_BASE_SOURCE_PATH_FROM_TEST, UNIX_BASE_SOURCE_PATH_FROM_ROOT,
-    'unix.base file must exist as the generic Unix host truth owner'));
-  LUnixSource := ReadSourceFile(ResolveRequiredSourcePath(
-    UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT,
-    'unix.ffi file must exist as the generic Unix external owner'));
-  LWindowsBaseSource := ReadSourceFile(ResolveRequiredSourcePath(
-    WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT,
-    'windows.base file must exist as the Windows host truth owner'));
-  LWindowsSource := ReadSourceFile(ResolveRequiredSourcePath(
-    WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT,
-    'windows.ffi file must exist as the Windows external owner'));
-
-  CheckTokenPresent(LPosixSource, 'nextpas.core.platform.posix.base',
-    'posix.ffi must consume posix.base');
-  CheckTokenPresent(LLinuxSource, 'nextpas.core.platform.linux.base',
-    'linux.ffi must consume linux.base');
-  CheckTokenPresent(LDarwinSource, 'nextpas.core.platform.darwin.base',
-    'darwin.ffi must consume darwin.base');
-  CheckTokenPresent(LAndroidSource, 'nextpas.core.platform.android.base',
-    'android.ffi must consume android.base');
-  CheckTokenPresent(LFreeBSDSource, 'nextpas.core.platform.freebsd.base',
-    'freebsd.ffi must consume freebsd.base');
-  CheckTokenPresent(LUnixSource, 'nextpas.core.platform.unix.base',
-    'unix.ffi must consume unix.base');
-  CheckTokenPresent(LWindowsSource, 'nextpas.core.platform.windows.base',
-    'windows.ffi must consume windows.base');
+  LPosixBaseSource := ReadSourceFile(ResolveSourcePath(POSIX_BASE_SOURCE_PATH_FROM_TEST, POSIX_BASE_SOURCE_PATH_FROM_ROOT));
+  LPosixFfiSource := ReadSourceFile(ResolveSourcePath(POSIX_FFI_SOURCE_PATH_FROM_TEST, POSIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LLinuxBaseSource := ReadSourceFile(ResolveSourcePath(LINUX_BASE_SOURCE_PATH_FROM_TEST, LINUX_BASE_SOURCE_PATH_FROM_ROOT));
+  LLinuxFfiSource := ReadSourceFile(ResolveSourcePath(LINUX_FFI_SOURCE_PATH_FROM_TEST, LINUX_FFI_SOURCE_PATH_FROM_ROOT));
+  LDarwinBaseSource := ReadSourceFile(ResolveSourcePath(DARWIN_BASE_SOURCE_PATH_FROM_TEST, DARWIN_BASE_SOURCE_PATH_FROM_ROOT));
+  LDarwinFfiSource := ReadSourceFile(ResolveSourcePath(DARWIN_FFI_SOURCE_PATH_FROM_TEST, DARWIN_FFI_SOURCE_PATH_FROM_ROOT));
+  LAndroidBaseSource := ReadSourceFile(ResolveSourcePath(ANDROID_BASE_SOURCE_PATH_FROM_TEST, ANDROID_BASE_SOURCE_PATH_FROM_ROOT));
+  LAndroidFfiSource := ReadSourceFile(ResolveSourcePath(ANDROID_FFI_SOURCE_PATH_FROM_TEST, ANDROID_FFI_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDBaseSource := ReadSourceFile(ResolveSourcePath(FREEBSD_BASE_SOURCE_PATH_FROM_TEST, FREEBSD_BASE_SOURCE_PATH_FROM_ROOT));
+  LFreeBSDFfiSource := ReadSourceFile(ResolveSourcePath(FREEBSD_FFI_SOURCE_PATH_FROM_TEST, FREEBSD_FFI_SOURCE_PATH_FROM_ROOT));
+  LUnixBaseSource := ReadSourceFile(ResolveSourcePath(UNIX_BASE_SOURCE_PATH_FROM_TEST, UNIX_BASE_SOURCE_PATH_FROM_ROOT));
+  LUnixFfiSource := ReadSourceFile(ResolveSourcePath(UNIX_FFI_SOURCE_PATH_FROM_TEST, UNIX_FFI_SOURCE_PATH_FROM_ROOT));
+  LWindowsBaseSource := ReadSourceFile(ResolveSourcePath(WINDOWS_BASE_SOURCE_PATH_FROM_TEST, WINDOWS_BASE_SOURCE_PATH_FROM_ROOT));
+  LWindowsFfiSource := ReadSourceFile(ResolveSourcePath(WINDOWS_FFI_SOURCE_PATH_FROM_TEST, WINDOWS_FFI_SOURCE_PATH_FROM_ROOT));
 
   CheckTokenPresent(LPosixBaseSource, 'timespec',
-    'posix.base must own shared POSIX timespec shape');
-  CheckTokenPresent(LPosixBaseSource, 'pthread_t',
-    'posix.base must own shared POSIX pthread token shape');
+    'posix.base must own shared POSIX record shapes');
   CheckTokenPresent(LPosixBaseSource, 'pthread_mutex_t',
-    'posix.base must own shared POSIX pthread mutex shape');
-  CheckTokenPresent(LPosixSource, 'clock_gettime',
-    'posix.ffi must continue to own shared POSIX function declarations');
-  CheckTokenPresent(LPosixSource, 'pthread_create',
-    'posix.ffi must continue to own shared pthread function declarations');
-  CheckTokenAbsent(LPosixSource, 'posix_eagain',
-    'posix.ffi must not keep per-host errno constants after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, '_sc_nprocessors_onln',
-    'posix.ffi must not keep per-host sysconf ids after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, 'function posix_errno_location',
-    'posix.ffi must not keep per-host errno symbol bindings after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, 'pthread_mutex_normal',
-    'posix.ffi must not keep per-host pthread mutex kind numbering after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, 'pthread_mutex_recursive',
-    'posix.ffi must not keep per-host pthread mutex recursive numbering after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, 'pthread_mutex_errorcheck',
-    'posix.ffi must not keep per-host pthread mutex errorcheck numbering after ffi partitioning');
-  CheckTokenAbsent(LPosixSource, 'function pthread_condattr_setclock',
-    'posix.ffi must not keep host-specific pthread condattr clock capability after ffi partitioning');
+    'posix.base must own shared pthread opaque shapes');
+  CheckRawFFIUnit(LPosixFfiSource, 'posix.ffi');
+  CheckTokenPresent(LPosixFfiSource, 'clock_gettime',
+    'posix.ffi must own shared POSIX clock external declaration');
+  CheckTokenPresent(LPosixFfiSource, 'pthread_create',
+    'posix.ffi must own shared POSIX pthread external declaration');
+  CheckTokenAbsent(LPosixFfiSource, 'platform_posix_pthread_',
+    'posix.ffi must not own shared POSIX pthread wrappers');
 
-  CheckTokenPresent(LLinuxBaseSource, 'platform_clock_monotonic_id',
-    'linux.base must expose Linux clock ids');
-  CheckTokenPresent(LLinuxBaseSource, 'platform_posix_etimedout',
-    'linux.base must expose Linux errno constants');
+  CheckHostPartition(LLinuxBaseSource, LLinuxFfiSource, 'linux',
+    'linux_syscall_futex', 'function linux_syscall');
+  CheckHostPartition(LDarwinBaseSource, LDarwinFfiSource, 'darwin',
+    'mach_timebase_info_data_t', 'mach_absolute_time');
+  CheckHostPartition(LAndroidBaseSource, LAndroidFfiSource, 'android',
+    'platform_clock_monotonic_id', 'function gettid');
+  CheckHostPartition(LFreeBSDBaseSource, LFreeBSDFfiSource, 'freebsd',
+    'platform_clock_monotonic_id', 'pthread_getthreadid_np');
+  CheckHostPartition(LUnixBaseSource, LUnixFfiSource, 'unix',
+    'platform_clock_monotonic_id', 'function unix_errno_location');
+  CheckHostPartition(LWindowsBaseSource, LWindowsFfiSource, 'windows',
+    'windows_filetime_unix_epoch_offset_100ns', 'queryperformancecounter');
+
   CheckTokenPresent(LLinuxBaseSource, 'platform_posix_eintr',
-    'linux.base must expose Linux EINTR for retryable sleep semantics');
-  CheckTokenPresent(LLinuxBaseSource, 'tplatformpthreadtokenalign',
-    'linux.base must expose Linux pthread token align carrier');
-  CheckTokenPresent(LLinuxSource, 'function linux_errno_location',
-    'linux.ffi must expose Linux-owned errno binding');
-  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_mutex_normal_kind',
-    'linux.base must expose Linux pthread mutex kind numbering');
-  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_condattr_setclock_supported',
-    'linux.base must expose Linux pthread condattr clock capability');
-  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_mutex_timedlock_supported',
-    'linux.base must expose Linux pthread mutex timed-lock capability');
-  CheckTokenPresent(LLinuxSource, 'function linux_pthread_condattr_setclock',
-    'linux.ffi must expose Linux-owned pthread condattr clock binding');
-  CheckTokenAbsent(LLinuxSource, 'function platform_errno_location',
-    'linux.ffi must not expose unified-looking errno helper names');
-  CheckTokenAbsent(LLinuxSource, 'function platform_pthread_',
-    'linux.ffi must not expose unified-looking pthread helper names');
-  CheckTokenAbsent(LLinuxSource, 'function platform_clock_',
-    'linux.ffi must not expose unified-looking clock helper names');
-  CheckTokenPresent(LLinuxBaseSource, 'platform_pthread_timeout_clock_id',
-    'linux.base must expose Linux pthread timeout clock policy');
-
-  CheckTokenPresent(LDarwinBaseSource, 'platform_clock_monotonic_id',
-    'darwin.base must expose Darwin clock ids');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_posix_etimedout',
-    'darwin.base must expose Darwin errno constants');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_posix_eintr',
-    'darwin.base must expose Darwin EINTR for retryable sleep semantics');
-  CheckTokenPresent(LDarwinBaseSource, 'mach_timebase_info_data_t',
-    'darwin.base must expose Darwin mach timebase record');
-  CheckTokenPresent(LDarwinBaseSource, 'tplatformpthreadtokenalign',
-    'darwin.base must expose Darwin pthread token align carrier');
-  CheckTokenPresent(LDarwinSource, 'function darwin_errno_location',
-    'darwin.ffi must expose Darwin errno binding');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_mutex_normal_kind',
-    'darwin.base must expose Darwin pthread mutex kind numbering');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_condattr_setclock_supported',
-    'darwin.base must expose Darwin pthread condattr clock capability');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_mutex_timedlock_supported',
-    'darwin.base must expose Darwin pthread mutex timed-lock capability');
-  CheckTokenPresent(LDarwinSource, 'function darwin_pthread_condattr_setclock',
-    'darwin.ffi must expose Darwin pthread condattr clock binding or stub');
-  CheckTokenAbsent(LDarwinSource, 'function platform_errno_location',
-    'darwin.ffi must not expose unified-looking errno helper names');
-  CheckTokenAbsent(LDarwinSource, 'function platform_pthread_',
-    'darwin.ffi must not expose unified-looking pthread helper names');
-  CheckTokenAbsent(LDarwinSource, 'function platform_clock_',
-    'darwin.ffi must not expose unified-looking clock helper names');
-  CheckTokenPresent(LDarwinBaseSource, 'platform_pthread_timeout_clock_id',
-    'darwin.base must expose Darwin pthread timeout clock policy');
-
-  CheckTokenPresent(LAndroidBaseSource, 'platform_clock_monotonic_id',
-    'android.base must expose Android clock ids');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_posix_etimedout',
-    'android.base must expose Android errno constants');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_posix_eintr',
-    'android.base must expose Android EINTR for retryable sleep semantics');
-  CheckTokenPresent(LAndroidBaseSource, 'tplatformpthreadtokenalign',
-    'android.base must expose Android pthread token align carrier');
-  CheckTokenPresent(LAndroidSource, 'function android_errno_location',
-    'android.ffi must expose Android errno binding');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_mutex_normal_kind',
-    'android.base must expose Android pthread mutex kind numbering');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_condattr_setclock_supported',
-    'android.base must expose Android pthread condattr clock capability');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_mutex_timedlock_supported',
-    'android.base must expose Android pthread mutex timed-lock capability');
-  CheckTokenPresent(LAndroidSource, 'function android_pthread_condattr_setclock',
-    'android.ffi must expose Android pthread condattr clock binding');
-  CheckTokenAbsent(LAndroidSource, 'function platform_errno_location',
-    'android.ffi must not expose unified-looking errno helper names');
-  CheckTokenAbsent(LAndroidSource, 'function platform_pthread_',
-    'android.ffi must not expose unified-looking pthread helper names');
-  CheckTokenAbsent(LAndroidSource, 'function platform_clock_',
-    'android.ffi must not expose unified-looking clock helper names');
-  CheckTokenPresent(LAndroidBaseSource, 'platform_pthread_timeout_clock_id',
-    'android.base must expose Android pthread timeout clock policy');
-
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_clock_monotonic_id',
-    'freebsd.base must expose FreeBSD clock ids');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_posix_etimedout',
-    'freebsd.base must expose FreeBSD errno constants');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_posix_eintr',
-    'freebsd.base must expose FreeBSD EINTR for retryable sleep semantics');
-  CheckTokenPresent(LFreeBSDBaseSource, 'tplatformpthreadtokenalign',
-    'freebsd.base must expose FreeBSD pthread token align carrier');
-  CheckTokenPresent(LFreeBSDSource, 'function freebsd_errno_location',
-    'freebsd.ffi must expose FreeBSD errno binding');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_mutex_normal_kind',
-    'freebsd.base must expose FreeBSD pthread mutex kind numbering');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_condattr_setclock_supported',
-    'freebsd.base must expose FreeBSD pthread condattr clock capability');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_mutex_timedlock_supported',
-    'freebsd.base must expose FreeBSD pthread mutex timed-lock capability');
-  CheckTokenPresent(LFreeBSDSource, 'function freebsd_pthread_condattr_setclock',
-    'freebsd.ffi must expose FreeBSD pthread condattr clock binding');
-  CheckTokenAbsent(LFreeBSDSource, 'function platform_errno_location',
-    'freebsd.ffi must not expose unified-looking errno helper names');
-  CheckTokenAbsent(LFreeBSDSource, 'function platform_pthread_',
-    'freebsd.ffi must not expose unified-looking pthread helper names');
-  CheckTokenAbsent(LFreeBSDSource, 'function platform_clock_',
-    'freebsd.ffi must not expose unified-looking clock helper names');
-  CheckTokenPresent(LFreeBSDBaseSource, 'platform_pthread_timeout_clock_id',
-    'freebsd.base must expose FreeBSD pthread timeout clock policy');
-
-  CheckTokenPresent(LUnixBaseSource, 'platform_clock_monotonic_id',
-    'unix.base must expose generic Unix clock ids');
-  CheckTokenPresent(LUnixBaseSource, 'platform_posix_etimedout',
-    'unix.base must expose generic Unix errno constants');
-  CheckTokenPresent(LUnixBaseSource, 'platform_posix_eintr',
-    'unix.base must expose generic Unix EINTR for retryable sleep semantics');
-  CheckTokenPresent(LUnixBaseSource, 'tplatformpthreadtokenalign',
-    'unix.base must expose generic Unix pthread token align carrier');
-  CheckTokenPresent(LUnixSource, 'function unix_errno_location',
-    'unix.ffi must expose generic Unix errno binding');
-  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_mutex_normal_kind',
-    'unix.base must expose generic Unix pthread mutex kind numbering');
-  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_condattr_setclock_supported',
-    'unix.base must expose generic Unix pthread condattr clock capability');
-  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_mutex_timedlock_supported',
-    'unix.base must expose generic Unix pthread mutex timed-lock capability');
-  CheckTokenPresent(LUnixSource, 'function unix_pthread_condattr_setclock',
-    'unix.ffi must expose generic Unix pthread condattr clock binding');
-  CheckTokenAbsent(LUnixSource, 'function platform_errno_location',
-    'unix.ffi must not expose unified-looking errno helper names');
-  CheckTokenAbsent(LUnixSource, 'function platform_pthread_',
-    'unix.ffi must not expose unified-looking pthread helper names');
-  CheckTokenAbsent(LUnixSource, 'function platform_clock_',
-    'unix.ffi must not expose unified-looking clock helper names');
-  CheckTokenPresent(LUnixBaseSource, 'platform_pthread_timeout_clock_id',
-    'unix.base must expose generic Unix pthread timeout clock policy');
-
-  CheckTokenPresent(LWindowsBaseSource, 'dword',
-    'windows.base must expose Windows DWORD ABI scalar');
-  CheckTokenPresent(LWindowsBaseSource, 'handle',
-    'windows.base must expose Windows HANDLE ABI scalar');
-  CheckTokenPresent(LWindowsBaseSource, 'filetime',
-    'windows.base must expose Windows FILETIME record');
-  CheckTokenPresent(LWindowsBaseSource, 'system_info',
-    'windows.base must expose Windows SYSTEM_INFO record');
-  CheckTokenPresent(LWindowsBaseSource, 'tplatformwindowsthreadstate',
-    'windows.base must expose Windows thread state carrier');
-  CheckTokenPresent(LWindowsBaseSource, 'platform_windows_mutex_size',
-    'windows.base must expose Windows sync storage size token');
-  CheckTokenPresent(LWindowsBaseSource, 'windows_filetime_unix_epoch_offset_100ns',
-    'windows.base must expose Windows FILETIME epoch token');
+    'linux.base must own Linux POSIX errno tokens');
+  CheckTokenPresent(LWindowsBaseSource, 'wait_object_0',
+    'windows.base must own Windows wait result tokens');
+  CheckTokenAbsent(LLinuxFfiSource, 'linux_errno_value',
+    'linux.ffi must not own errno value helper');
+  CheckTokenAbsent(LWindowsFfiSource, 'windows_last_error_i32',
+    'windows.ffi must not own last-error helper');
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.platform.ffi_partition_surface');
-  T.Run('platform ffi is partitioned by host', @TestPlatformFFIPartition);
+  T.Run('platform ffi is partitioned by host as raw declarations', @TestPlatformFFIPartition);
   T.Summary;
 end.
