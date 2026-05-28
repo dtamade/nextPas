@@ -102,11 +102,11 @@
 
 ## Next
 
-- Collections module is stable. Architecture review, interface cleanup, and identity consolidation are complete.
-- Implementation tuning audit found no actionable duplicated algorithm bodies:
-  - TVec delegates to internal TArray (already shared)
-  - TVecDeque has structurally independent algorithms (ring-buffer index translation)
-  - Tree containers use TRBTreeCore (already shared)
-- Remaining potential work:
-  - Performance benchmarking of hot paths (needs measurement-driven decisions)
-  - `FAFAFA_*` macro cleanup in non-collections modules (out of scope for this thread)
+- Collections module correctness fixes complete. All known bugs fixed.
+- heaptrc verification: all 10 suites zero leaks.
+- Next immediate work:
+  1. Write comprehensive VecDeque tests (Insert/RemoveAt/SwapRemoveAt/PushFront/Sort/Rotate paths)
+  2. Write tests for zero-coverage containers (LruCache, BitSet, List, ForwardList, LinkedHashMap)
+  3. Integrate heaptrc into Makefiles as standard `-gh` flag
+  4. Then Phase 3 performance optimization (introsort, partition fix, load factor, rotate O(1))
+- fafafa.core has 52000+ lines of collections tests but they're FPCUnit format + old API names (Remove→RemoveAt, RemoveSwap→SwapRemoveAt). Conversion script created at scripts/convert_vecdeque_tests.py but manual adaptation still needed for API name changes and structural differences.
