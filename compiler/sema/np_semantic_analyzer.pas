@@ -3888,6 +3888,7 @@ var
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
   ClsName, ParentName, ConstName, FieldName: string;
+  CurrentVisibility: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
   ParentTypeId: LongInt;
@@ -3973,11 +3974,17 @@ begin
     end;
     FModel.AddStringConstValue(ClsName + '$parent_class', ParentName);
   end;
+  CurrentVisibility := 'public';
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if Child.NodeKind = gnkVisibilityLabel then
+    begin
+      CurrentVisibility := LowerCase(Child.Text);
+      Continue;
+    end;
     if Child.NodeKind = gnkClassField then
     begin
       FieldTypeId := 0;
@@ -3990,6 +3997,7 @@ begin
       FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
         Child.ByteOffset);
       FModel.SetSymbolScope(FModel.SymbolCount, ClassScopeId);
+      FModel.SetSymbolVisibility(FModel.SymbolCount, CurrentVisibility);
       FModel.AddConstValue(
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
@@ -4041,6 +4049,7 @@ begin
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
           FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
           FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+          FModel.SetSymbolVisibility(SymbolId, CurrentVisibility);
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin
