@@ -9,8 +9,8 @@ unit np_semantic_analyzer;
 interface
 
 uses
-  np_ast_facade, np_diagnostics_sink, np_source_database, np_unit_graph,
-  np_semantic_model, np_green_tree, np_lexer;
+  np_ast_facade, np_base_types, np_diagnostics_sink, np_source_database,
+  np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
 
 type
   TProcedureBodyEntry = record
@@ -37,7 +37,6 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
-    FImportedUnitTrees: array of TGreenTree;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
@@ -56,6 +55,7 @@ type
     FVarParamNames: array of string;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
+    FImportedUnitTrees: array of TGreenTree;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
@@ -63,6 +63,7 @@ type
     procedure RegisterRecordVar(const AName, ATypeName: string);
     procedure RegisterVarParam(const AName: string);
     procedure RegisterPtrReturnFunc(const AName, AClassName: string);
+    procedure RegisterImportedUnitTree(const ATree: TGreenTree);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
@@ -94,6 +95,10 @@ type
       out AResolutionFailureKind: string;
       out ABody: TGreenNode;
       out ADecl: TGreenNode; out AOwnerUnitId: string): Boolean;
+    function OwnerUnitAllowsProjectSourceDiagnostic(
+      const AOwnerUnitId: string
+    ): Boolean;
+    function HasInstalledSourceImports: Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
@@ -110,6 +115,7 @@ type
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
+    function BareCallCalleeName(const ACallNode: TGreenNode): string;
     function IsWrappedCallChild(
       const AParent: TGreenNode;
       const AChild: TGreenNode
@@ -125,7 +131,8 @@ type
     function TypeIdForVariable(const AName: string): LongInt;
     function TypeIdForMemberReceiver(
       const AName: string;
-      const ACurrentMethodClass: string
+      const ACurrentMethodClass: string;
+      const ACurrentOwnerUnitId: string
     ): LongInt;
     function TypeSymbolForTypeId(
       const ATypeId: LongInt;
@@ -143,9 +150,13 @@ type
       const ACallNode: TGreenNode;
       out ASignature: string
     ): Boolean;
-    function ExpressionTypeFactIsStable(const ANode: TGreenNode): Boolean;
+    function ExpressionTypeFactIsStable(
+      const ANode: TGreenNode;
+      const ACurrentOwnerUnitId: string
+    ): Boolean;
     function CallArgumentSignatureIsStable(
-      const ACallNode: TGreenNode
+      const ACallNode: TGreenNode;
+      const ACurrentOwnerUnitId: string
     ): Boolean;
     function MethodSymbolIdForExactClassTypeMember(
       const AClassTypeId: LongInt;
@@ -154,8 +165,10 @@ type
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
+      const AAllowNoMatchingOverloadDiagnostic: Boolean;
       out AMethodNameFound: Boolean;
-      out AResolutionFailureKind: string
+      out AResolutionFailureKind: string;
+      out ACandidates: TOverloadCandidateArray
     ): LongInt;
     function MethodSymbolIdForClassTypeMember(
       const AClassTypeId: LongInt;
@@ -164,11 +177,23 @@ type
       const AArgSignature: string;
       const AHasArgSignature: Boolean;
       const AHasTypeMismatchEvidence: Boolean;
-      out AResolutionFailureKind: string
+      out AResolutionFailureKind: string;
+      out ACandidates: TOverloadCandidateArray
     ): LongInt;
     function TryRegisterMemberCallBinding(
       const ACallNode: TGreenNode;
       const ACurrentMethodClass: string;
+      const ACurrentOwnerUnitId: string;
+      out AResolutionFailureKind: string;
+      out AFailureName: string;
+      out AFailureOffset: LongInt;
+      out AActualArgCount: LongInt;
+      out ACandidates: TOverloadCandidateArray
+    ): Boolean;
+    function TryRegisterImplicitSelfBareMethodCallBinding(
+      const ACallNode: TGreenNode;
+      const ACurrentMethodClass: string;
+      const ACurrentOwnerUnitId: string;
       out AResolutionFailureKind: string;
       out AFailureName: string;
       out AFailureOffset: LongInt
@@ -185,7 +210,8 @@ type
     procedure SeedCallBindings;
     procedure SeedCallBindingsInNode(
       const ANode: TGreenNode;
-      const ACurrentMethodClass: string
+      const ACurrentMethodClass: string;
+      const ACurrentOwnerUnitId: string
     );
     function DuplicateImportName: string;
     procedure EmitSemaError(
@@ -274,7 +300,6 @@ type
     procedure SeedHaltCalls;
     procedure PreRegisterFunctionReturnTypes;
     procedure SeedFunctionBodies;
-    procedure RetainImportedUnitTree(const ATree: TGreenTree);
     procedure SeedImportedUnitBodies;
   public
     constructor Create(
@@ -546,6 +571,17 @@ begin
   FPtrReturnTypes[NextIndex] := AClassName;
 end;
 
+procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree);
+var
+  NextIndex: SizeInt;
+begin
+  if ATree = nil then
+    Exit;
+  NextIndex := Length(FImportedUnitTrees);
+  SetLength(FImportedUnitTrees, NextIndex + 1);
+  FImportedUnitTrees[NextIndex] := ATree;
+end;
+
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
 var
   Idx: LongInt;
@@ -660,10 +696,8 @@ destructor TSemanticAnalyzer.Destroy;
 var
   Index: LongInt;
 begin
-  SetLength(FProcedureBodies, 0);
   for Index := 0 to Length(FImportedUnitTrees) - 1 do
     FImportedUnitTrees[Index].Free;
-  SetLength(FImportedUnitTrees, 0);
   FModel.Free;
   inherited Destroy;
 end;
@@ -865,18 +899,6 @@ begin
   FProcedureBodies[NextIndex].ScopeId := FCurrentScopeId;
 end;
 
-procedure TSemanticAnalyzer.RetainImportedUnitTree(const ATree: TGreenTree);
-var
-  NextIndex: SizeInt;
-begin
-  if ATree = nil then
-    Exit;
-
-  NextIndex := Length(FImportedUnitTrees);
-  SetLength(FImportedUnitTrees, NextIndex + 1);
-  FImportedUnitTrees[NextIndex] := ATree;
-end;
-
 function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
   const ADecl: TGreenNode
 ): LongInt;
@@ -966,9 +988,12 @@ function TSemanticAnalyzer.LookupCallBindingDeclaration(
 ): Boolean;
 var
   Index: LongInt;
+  ImportedDiagnosticMatchCount: LongInt;
   ImportedMatchCount: LongInt;
   ImportedMatchIndex: LongInt;
+  ImportedDiagnosticNameCount: LongInt;
   ImportedNameCount: LongInt;
+  ImportedDiagnosticSignatureMatchCount: LongInt;
   ImportedSignatureMatchCount: LongInt;
   ImportedSignatureMatchIndex: LongInt;
   KnownSymbolId: LongInt;
@@ -983,8 +1008,11 @@ begin
   ADecl := nil;
   AOwnerUnitId := '';
   AResolutionFailureKind := '';
+  ImportedDiagnosticMatchCount := 0;
   ImportedMatchCount := 0;
   ImportedMatchIndex := -1;
+  ImportedDiagnosticNameCount := 0;
+  ImportedDiagnosticSignatureMatchCount := 0;
   ImportedNameCount := 0;
   ImportedSignatureMatchCount := 0;
   ImportedSignatureMatchIndex := -1;
@@ -1020,10 +1048,18 @@ begin
       else
       begin
         Inc(ImportedNameCount);
+        if OwnerUnitAllowsProjectSourceDiagnostic(
+          FProcedureBodies[Index].OwnerUnitId
+        ) then
+          Inc(ImportedDiagnosticNameCount);
         if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
         begin
           ImportedMatchIndex := Index;
           Inc(ImportedMatchCount);
+          if OwnerUnitAllowsProjectSourceDiagnostic(
+            FProcedureBodies[Index].OwnerUnitId
+          ) then
+            Inc(ImportedDiagnosticMatchCount);
           if AHasArgSignature and
             DeclParamSignatureMatchesArgs(
               FProcedureBodies[Index].Decl,
@@ -1033,6 +1069,10 @@ begin
           begin
             ImportedSignatureMatchIndex := Index;
             Inc(ImportedSignatureMatchCount);
+            if OwnerUnitAllowsProjectSourceDiagnostic(
+              FProcedureBodies[Index].OwnerUnitId
+            ) then
+              Inc(ImportedDiagnosticSignatureMatchCount);
           end;
         end;
       end;
@@ -1061,7 +1101,11 @@ begin
       Exit(False);
     end
     else if RootSignatureMatchCount = 0 then
+    begin
+      if AHasTypeMismatchEvidence then
+        AResolutionFailureKind := 'no-matching-overload';
       Exit(False);
+    end;
 
     ABody := FProcedureBodies[RootSignatureMatchIndex].Body;
     ADecl := FProcedureBodies[RootSignatureMatchIndex].Decl;
@@ -1080,27 +1124,51 @@ begin
     KnownSymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
     if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
       (FModel.FindTypeByName(AName) = 0) and
-      (not IsBuiltinProcedure(AName)) then
+      (not IsBuiltinProcedure(AName)) and
+      (not HasInstalledSourceImports) then
       AResolutionFailureKind := 'unknown-callable';
     Exit(False);
   end;
 
   if ImportedMatchCount = 0 then
   begin
-    if ImportedNameCount > 0 then
+    if ImportedDiagnosticNameCount > 0 then
       AResolutionFailureKind := 'wrong-argument-count';
     Exit(False);
   end;
 
   if ImportedMatchCount = 1 then
+  begin
+    if AHasArgSignature and
+      (not DeclParamSignatureMatchesArgs(
+        FProcedureBodies[ImportedMatchIndex].Decl,
+        AArgSignature,
+        AArgCount
+      )) then
+    begin
+      if AHasTypeMismatchEvidence and
+        OwnerUnitAllowsProjectSourceDiagnostic(
+          FProcedureBodies[ImportedMatchIndex].OwnerUnitId
+        ) then
+        AResolutionFailureKind := 'type-mismatch';
+      Exit(False);
+    end;
     ImportedSignatureMatchIndex := ImportedMatchIndex
+  end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
-    AResolutionFailureKind := 'ambiguous-overload';
+    if ((not AHasArgSignature) and (ImportedDiagnosticMatchCount > 1)) or
+      (ImportedDiagnosticSignatureMatchCount > 1) then
+      AResolutionFailureKind := 'ambiguous-overload';
     Exit(False);
   end
   else if ImportedSignatureMatchCount = 0 then
+  begin
+    if AHasTypeMismatchEvidence and
+      (ImportedDiagnosticMatchCount = ImportedMatchCount) then
+      AResolutionFailureKind := 'no-matching-overload';
     Exit(False);
+  end;
 
   ABody := FProcedureBodies[ImportedSignatureMatchIndex].Body;
   ADecl := FProcedureBodies[ImportedSignatureMatchIndex].Decl;
@@ -1108,10 +1176,40 @@ begin
   Result := True;
 end;
 
-function TSemanticAnalyzer.ExpressionTypeFactIsStable(
-  const ANode: TGreenNode
+function TSemanticAnalyzer.OwnerUnitAllowsProjectSourceDiagnostic(
+  const AOwnerUnitId: string
 ): Boolean;
 var
+  ResolvedUnit: TResolvedUnit;
+begin
+  Result := False;
+  if Trim(AOwnerUnitId) = '' then
+    Exit;
+  if not FUnitGraph.FindUnit(AOwnerUnitId, ResolvedUnit) then
+    Exit;
+  Result := SameText(ResolvedUnit.OriginClass, 'project-source');
+end;
+
+function TSemanticAnalyzer.HasInstalledSourceImports: Boolean;
+var
+  Index: LongInt;
+  ResolvedUnit: TResolvedUnit;
+begin
+  Result := False;
+  for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+  begin
+    ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
+    if SameText(ResolvedUnit.OriginClass, 'installed-source') then
+      Exit(True);
+  end;
+end;
+
+function TSemanticAnalyzer.ExpressionTypeFactIsStable(
+  const ANode: TGreenNode;
+  const ACurrentOwnerUnitId: string
+): Boolean;
+var
+  CurrentOwnerUnitId: string;
   Index: LongInt;
   RootOwnerUnitId: string;
   Sym: TSemanticSymbol;
@@ -1120,6 +1218,9 @@ begin
   Result := False;
   if ANode = nil then
     Exit;
+
+  CurrentOwnerUnitId := NormalizeUnitIdentity(ACurrentOwnerUnitId);
+  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
 
   case ANode.NodeKind of
     gnkIntegerLiteral, gnkRealLiteral, gnkStringLiteral, gnkCharLiteral:
@@ -1134,9 +1235,15 @@ begin
         Sym := FModel.SymbolAt(SymId - 1);
         if SameText(Sym.Kind, 'function') then
         begin
-          RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
           Exit((Sym.ParamCount = 0) and
-            SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+            (
+              SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+              (
+                (CurrentOwnerUnitId <> '') and
+                SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
+                OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
+              )
+            ) and
             TypeIdHasStableScalarFact(Sym.TypeId));
         end
         else if (not SameText(Sym.Kind, 'variable')) and
@@ -1150,15 +1257,24 @@ begin
         if SymId <= 0 then
           Exit(False);
         Sym := FModel.SymbolAt(SymId - 1);
-        RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
         Exit(SameText(Sym.Kind, 'function') and (Sym.ParamCount = 0) and
-          SameText(Sym.OwnerUnitId, RootOwnerUnitId) and
+          (
+            SameText(Sym.OwnerUnitId, RootOwnerUnitId) or
+            (
+              (CurrentOwnerUnitId <> '') and
+              SameText(Sym.OwnerUnitId, CurrentOwnerUnitId) and
+              OwnerUnitAllowsProjectSourceDiagnostic(Sym.OwnerUnitId)
+            )
+          ) and
           (ANode.ChildCount <= 1) and TypeIdHasStableScalarFact(Sym.TypeId));
       end;
     gnkBinaryExpression, gnkUnaryExpression:
       begin
         for Index := 0 to ANode.ChildCount - 1 do
-          if not ExpressionTypeFactIsStable(ANode.ChildAt(Index)) then
+          if not ExpressionTypeFactIsStable(
+            ANode.ChildAt(Index),
+            CurrentOwnerUnitId
+          ) then
             Exit(False);
         Exit(True);
       end;
@@ -1166,7 +1282,8 @@ begin
 end;
 
 function TSemanticAnalyzer.CallArgumentSignatureIsStable(
-  const ACallNode: TGreenNode
+  const ACallNode: TGreenNode;
+  const ACurrentOwnerUnitId: string
 ): Boolean;
 var
   ArgRoot: TGreenNode;
@@ -1187,7 +1304,10 @@ begin
     Exit(True);
 
   for Index := 1 to ArgRoot.ChildCount - 1 do
-    if not ExpressionTypeFactIsStable(ArgRoot.ChildAt(Index)) then
+    if not ExpressionTypeFactIsStable(
+      ArgRoot.ChildAt(Index),
+      ACurrentOwnerUnitId
+    ) then
       Exit(False);
   Result := True;
 end;
@@ -1221,6 +1341,36 @@ begin
 
     Result := ACallNode.ChildCount;
   end;
+end;
+
+function TSemanticAnalyzer.BareCallCalleeName(
+  const ACallNode: TGreenNode
+): string;
+var
+  CalleeNode: TGreenNode;
+  InnerCallNode: TGreenNode;
+begin
+  Result := '';
+  if ACallNode = nil then
+    Exit;
+  if ACallNode.ChildCount = 0 then
+    Exit(ACallNode.Text);
+
+  CalleeNode := ACallNode.ChildAt(0);
+  if (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier) then
+    Exit(CalleeNode.Text);
+
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (CalleeNode <> nil) and (CalleeNode.NodeKind = gnkFunctionCall) then
+  begin
+    InnerCallNode := CalleeNode;
+    if (InnerCallNode.ChildCount > 0) and
+      (InnerCallNode.ChildAt(0) <> nil) and
+      (InnerCallNode.ChildAt(0).NodeKind = gnkIdentifier) then
+      Exit(InnerCallNode.ChildAt(0).Text);
+  end;
+
+  Result := ACallNode.Text;
 end;
 
 function TSemanticAnalyzer.IsWrappedCallChild(
@@ -1359,14 +1509,15 @@ end;
 
 function TSemanticAnalyzer.TypeIdForMemberReceiver(
   const AName: string;
-  const ACurrentMethodClass: string
+  const ACurrentMethodClass: string;
+  const ACurrentOwnerUnitId: string
 ): LongInt;
 begin
   Result := 0;
   if SameText(AName, 'Self') and (ACurrentMethodClass <> '') then
     Exit(ResolveTypeIdForOwner(
       ACurrentMethodClass,
-      NormalizeUnitIdentity(FUnitGraph.RootName)
+      ACurrentOwnerUnitId
     ));
 
   Result := TypeIdForVariable(AName);
@@ -1560,8 +1711,10 @@ function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
+  const AAllowNoMatchingOverloadDiagnostic: Boolean;
   out AMethodNameFound: Boolean;
-  out AResolutionFailureKind: string
+  out AResolutionFailureKind: string;
+  out ACandidates: TOverloadCandidateArray
 ): LongInt;
 var
   BodyCandidateCount: LongInt;
@@ -1588,6 +1741,7 @@ begin
   SignatureSymbolId := 0;
   SymbolMatchCount := 0;
   SignatureMatchCount := 0;
+  SetLength(ACandidates, 0);
   for Index := 0 to FModel.SymbolCount - 1 do
   begin
     Symbol := FModel.SymbolAt(Index);
@@ -1596,12 +1750,24 @@ begin
       SameText(Symbol.OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       AMethodNameFound := True;
-      if Symbol.ParamCount = AArgCount then
+      SetLength(ACandidates, Length(ACandidates) + 1);
+      ACandidates[High(ACandidates)].Name := Symbol.Name;
+      ACandidates[High(ACandidates)].ParamCount := Symbol.ParamCount;
+      ACandidates[High(ACandidates)].ParamSignature := Symbol.ParamSignature;
+      ACandidates[High(ACandidates)].DeclByteOffset := Symbol.ByteOffset;
+      if (AArgCount < Symbol.MinParamCount) or (AArgCount > Symbol.ParamCount) then
+        ACandidates[High(ACandidates)].MismatchReason := 'param-count'
+      else if AHasArgSignature and
+        (not SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature)) then
+        ACandidates[High(ACandidates)].MismatchReason := 'type-mismatch'
+      else
+        ACandidates[High(ACandidates)].MismatchReason := '';
+      if (AArgCount >= Symbol.MinParamCount) and (AArgCount <= Symbol.ParamCount) then
       begin
         Inc(SymbolMatchCount);
         SymbolId := Symbol.SymbolId;
         if AHasArgSignature and
-          SameText(Symbol.ParamSignature, AArgSignature) then
+          SameText(Copy(Symbol.ParamSignature, 1, Length(AArgSignature)), AArgSignature) then
         begin
           Inc(SignatureMatchCount);
           SignatureSymbolId := Symbol.SymbolId;
@@ -1611,17 +1777,27 @@ begin
   end;
   if SymbolMatchCount = 0 then
   begin
-    if AMethodNameFound then
+    if AMethodNameFound and (
+      SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)
+    ) then
       AResolutionFailureKind := 'wrong-argument-count';
     Exit;
   end;
   if AHasTypeMismatchEvidence and
-    SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) and
     (SymbolMatchCount = 1) and AHasArgSignature and
     (SignatureMatchCount = 0) then
   begin
-    AResolutionFailureKind := 'type-mismatch';
-    Exit;
+    if SameText(
+      TypeSymbol.OwnerUnitId,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+    begin
+      AResolutionFailureKind := 'type-mismatch';
+      Exit;
+    end;
   end;
   if SymbolMatchCount > 1 then
   begin
@@ -1629,11 +1805,23 @@ begin
       SymbolId := SignatureSymbolId
     else if (not AHasArgSignature) or (SignatureMatchCount > 1) then
     begin
-      AResolutionFailureKind := 'ambiguous-overload';
+      if SameText(
+        TypeSymbol.OwnerUnitId,
+        NormalizeUnitIdentity(FUnitGraph.RootName)
+      ) or OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId) then
+        AResolutionFailureKind := 'ambiguous-overload';
       Exit;
     end
     else if SignatureMatchCount = 0 then
+    begin
+      if AAllowNoMatchingOverloadDiagnostic and AHasTypeMismatchEvidence and
+        (
+          SameText(TypeSymbol.OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) or
+          OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)
+        ) then
+        AResolutionFailureKind := 'no-matching-overload';
       Exit;
+    end;
   end;
   if SymbolId <= 0 then
     Exit;
@@ -1645,7 +1833,7 @@ begin
       SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin
       Inc(BodyCandidateCount);
-      if (CountDeclParams(FProcedureBodies[Index].Decl) = AArgCount) and
+      if (DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount)) and
         ((not AHasArgSignature) or
          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
         Inc(BodyMatchCount);
@@ -1675,12 +1863,14 @@ function TSemanticAnalyzer.MethodSymbolIdForClassTypeMember(
   const AArgSignature: string;
   const AHasArgSignature: Boolean;
   const AHasTypeMismatchEvidence: Boolean;
-  out AResolutionFailureKind: string
+  out AResolutionFailureKind: string;
+  out ACandidates: TOverloadCandidateArray
 ): LongInt;
 var
   CurrentTypeId: LongInt;
   Depth: LongInt;
   MethodNameFound: Boolean;
+  TypeSymbol: TSemanticSymbol;
 begin
   Result := 0;
   AResolutionFailureKind := '';
@@ -1691,7 +1881,18 @@ begin
   while (CurrentTypeId > 0) and (Depth < 32) do
   begin
     if ClassTypeHasKnownNonMethodMember(CurrentTypeId, AMemberName) then
+    begin
+      if TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) and
+        (
+          SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or
+          OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)
+        ) then
+        AResolutionFailureKind := 'invalid-call-shape';
       Exit;
+    end;
 
     Result := MethodSymbolIdForExactClassTypeMember(
       CurrentTypeId,
@@ -1700,8 +1901,19 @@ begin
       AArgSignature,
       AHasArgSignature,
       AHasTypeMismatchEvidence,
+      (Depth = 0) or (
+        TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) and
+        (
+          SameText(
+            TypeSymbol.OwnerUnitId,
+            NormalizeUnitIdentity(FUnitGraph.RootName)
+          ) or
+          OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)
+        )
+      ),
       MethodNameFound,
-      AResolutionFailureKind
+      AResolutionFailureKind,
+      ACandidates
     );
     if Result > 0 then
       Exit;
@@ -1716,19 +1928,30 @@ begin
   end;
   if IsDeferredSystemObjectMember(AMemberName) then
     Exit;
+  if TypeSymbolForTypeId(AClassTypeId, TypeSymbol) and
+    (not SameText(
+      TypeSymbol.OwnerUnitId,
+      NormalizeUnitIdentity(FUnitGraph.RootName)
+    )) and
+    (not OwnerUnitAllowsProjectSourceDiagnostic(TypeSymbol.OwnerUnitId)) then
+    Exit;
   AResolutionFailureKind := 'unknown-member';
 end;
 
 function TSemanticAnalyzer.TryRegisterMemberCallBinding(
   const ACallNode: TGreenNode;
   const ACurrentMethodClass: string;
+  const ACurrentOwnerUnitId: string;
   out AResolutionFailureKind: string;
   out AFailureName: string;
-  out AFailureOffset: LongInt
+  out AFailureOffset: LongInt;
+  out AActualArgCount: LongInt;
+  out ACandidates: TOverloadCandidateArray
 ): Boolean;
 var
   ArgCount: LongInt;
   ArgSignature: string;
+  Candidates: TOverloadCandidateArray;
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
   MemberName: string;
@@ -1741,6 +1964,7 @@ begin
   AResolutionFailureKind := '';
   AFailureName := '';
   AFailureOffset := 0;
+  AActualArgCount := 0;
   if not ExtractDirectMemberCall(
     ACallNode,
     ReceiverName,
@@ -1749,17 +1973,19 @@ begin
     ArgCount
   ) then
     Exit;
+  AActualArgCount := ArgCount;
   AFailureName := MemberName;
   AFailureOffset := MemberOffset;
   ReceiverTypeId := TypeIdForMemberReceiver(
     ReceiverName,
-    ACurrentMethodClass
+    ACurrentMethodClass,
+    ACurrentOwnerUnitId
   );
   if ReceiverTypeId <= 0 then
     Exit;
   HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
   HasTypeMismatchEvidence := HasArgSignature and
-    CallArgumentSignatureIsStable(ACallNode);
+    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
 
   TargetSymbolId := MethodSymbolIdForClassTypeMember(
     ReceiverTypeId,
@@ -1768,16 +1994,105 @@ begin
     ArgSignature,
     HasArgSignature,
     HasTypeMismatchEvidence,
-    AResolutionFailureKind
+    AResolutionFailureKind,
+    Candidates
+  );
+  ACandidates := Candidates;
+  if TargetSymbolId <= 0 then
+    Exit;
+
+  if (ACurrentMethodClass = '') or
+    (not SameText(ACurrentMethodClass,
+      FModel.TypeAt(ReceiverTypeId - 1).Name)) then
+  begin
+    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'private') and
+      (not SameText(FModel.SymbolAt(TargetSymbolId - 1).OwnerUnitId,
+        ACurrentOwnerUnitId)) then
+    begin
+      AResolutionFailureKind := 'inaccessible-member';
+      Exit;
+    end;
+    if SameText(FModel.SymbolAt(TargetSymbolId - 1).Visibility, 'protected') and
+      (not SameText(FModel.SymbolAt(TargetSymbolId - 1).OwnerUnitId,
+        ACurrentOwnerUnitId)) then
+    begin
+      AResolutionFailureKind := 'inaccessible-member';
+      Exit;
+    end;
+  end;
+
+  FModel.AddBinding(
+    'member-call',
+    MemberName,
+    ACurrentOwnerUnitId,
+    MemberOffset,
+    TargetSymbolId
+  );
+  Result := True;
+end;
+
+function TSemanticAnalyzer.TryRegisterImplicitSelfBareMethodCallBinding(
+  const ACallNode: TGreenNode;
+  const ACurrentMethodClass: string;
+  const ACurrentOwnerUnitId: string;
+  out AResolutionFailureKind: string;
+  out AFailureName: string;
+  out AFailureOffset: LongInt
+): Boolean;
+var
+  ArgCount: LongInt;
+  ArgSignature: string;
+  CallName: string;
+  HasArgSignature: Boolean;
+  HasTypeMismatchEvidence: Boolean;
+  ImplicitCandidates: TOverloadCandidateArray;
+  ReceiverTypeId: LongInt;
+  TargetSymbolId: LongInt;
+begin
+  Result := False;
+  AResolutionFailureKind := '';
+  AFailureName := '';
+  AFailureOffset := 0;
+  if (ACurrentMethodClass = '') or (ACallNode = nil) or
+    not (ACallNode.NodeKind in [gnkProcedureCallStatement, gnkFunctionCall]) then
+    Exit;
+
+  CallName := BareCallCalleeName(ACallNode);
+  if CallName = '' then
+    Exit;
+  AFailureName := CallName;
+  AFailureOffset := ACallNode.ByteOffset;
+
+  ReceiverTypeId := TypeIdForMemberReceiver(
+    'Self',
+    ACurrentMethodClass,
+    ACurrentOwnerUnitId
+  );
+  if ReceiverTypeId <= 0 then
+    Exit;
+
+  ArgCount := CallArgumentCount(ACallNode);
+  HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
+  TargetSymbolId := MethodSymbolIdForClassTypeMember(
+    ReceiverTypeId,
+    CallName,
+    ArgCount,
+    ArgSignature,
+    HasArgSignature,
+    HasTypeMismatchEvidence,
+    AResolutionFailureKind,
+    ImplicitCandidates
   );
   if TargetSymbolId <= 0 then
     Exit;
 
   FModel.AddBinding(
     'member-call',
-    MemberName,
-    NormalizeUnitIdentity(FUnitGraph.RootName),
-    MemberOffset,
+    CallName,
+    ACurrentOwnerUnitId,
+    ACallNode.ByteOffset,
     TargetSymbolId
   );
   Result := True;
@@ -1940,6 +2255,7 @@ begin
     ADecl.ByteOffset
   );
   FModel.SetSymbolParamCount(Result, ParamCount);
+  FModel.SetSymbolMinParamCount(Result, CountRequiredDeclParams(ADecl));
   FModel.SetSymbolParamSignature(Result, ParamSignature);
   FModel.SetSymbolScope(Result, EnsureUnitScope(AOwnerUnitId));
 end;
@@ -1970,7 +2286,8 @@ end;
 
 procedure TSemanticAnalyzer.SeedCallBindingsInNode(
   const ANode: TGreenNode;
-  const ACurrentMethodClass: string
+  const ACurrentMethodClass: string;
+  const ACurrentOwnerUnitId: string
 );
 var
   ArgIndex: LongInt;
@@ -1981,11 +2298,15 @@ var
   DeclNode: TGreenNode;
   HasArgSignature: Boolean;
   HasTypeMismatchEvidence: Boolean;
+  ImplicitSelfBound: Boolean;
   Index: LongInt;
   MemberFailureName: string;
   MemberFailureOffset: LongInt;
+  MemberActualArgCount: LongInt;
+  MemberCandidates: TOverloadCandidateArray;
+  Payload: TDiagnosticPayload;
   MethodClass: string;
-  OwnerUnitId: string;
+  CallableOwnerUnitId: string;
   QualifiedPos: LongInt;
   ResolutionFailureKind: string;
   SavedScopeId: LongInt;
@@ -2012,39 +2333,82 @@ begin
       if (not TryRegisterMemberCallBinding(
         ANode,
         MethodClass,
+        ACurrentOwnerUnitId,
         ResolutionFailureKind,
         MemberFailureName,
-        MemberFailureOffset
+        MemberFailureOffset,
+        MemberActualArgCount,
+        MemberCandidates
       )) and SameText(ResolutionFailureKind, 'ambiguous-overload') then
-        EmitSemaError(
-          'sema.ambiguous-overload',
+      begin
+        Payload.Kind := dpkOverloadCandidates;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.ambiguous-overload', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
           'ambiguous overload for "' + MemberFailureName + '"',
-          MemberFailureOffset
-        )
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
-        EmitSemaError(
-          'sema.wrong-argument-count',
+      begin
+        Payload.Kind := dpkWrongArgumentCount;
+        Payload.ActualCount := MemberActualArgCount;
+        Payload.ExpectedCount := 0;
+        if Length(MemberCandidates) > 0 then
+          Payload.ExpectedCount := MemberCandidates[0].ParamCount;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.wrong-argument-count', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
           'wrong number of arguments for "' + MemberFailureName + '"',
-          MemberFailureOffset
-        )
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'type-mismatch') then
         EmitSemaError(
           'sema.type-mismatch',
           'argument type mismatch for "' + MemberFailureName + '"',
           MemberFailureOffset
         )
+      else if SameText(ResolutionFailureKind, 'no-matching-overload') then
+      begin
+        Payload.Kind := dpkOverloadCandidates;
+        Payload.Candidates := MemberCandidates;
+        FDiagnostics.EmitErrorWithPayload(
+          'sema.no-matching-overload', 'sema',
+          BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
+          'no matching overload for "' + MemberFailureName + '"',
+          Payload);
+        FModel.MarkFailure;
+      end
       else if SameText(ResolutionFailureKind, 'unknown-member') then
         EmitSemaError(
           'sema.unknown-member',
           'unknown member "' + MemberFailureName + '"',
           MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'invalid-call-shape') then
+        EmitSemaError(
+          'sema.invalid-call-shape',
+          'member "' + MemberFailureName + '" is not callable',
+          MemberFailureOffset
+        )
+      else if SameText(ResolutionFailureKind, 'inaccessible-member') then
+        EmitSemaError(
+          'sema.inaccessible-member',
+          'cannot access private member "' + MemberFailureName + '"',
+          MemberFailureOffset
         );
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
+      MemberFailureName := ANode.Text;
+      MemberFailureOffset := ANode.ByteOffset;
       HasArgSignature := CallArgumentSignature(ANode, ArgSignature);
       HasTypeMismatchEvidence := HasArgSignature and
-        CallArgumentSignatureIsStable(ANode);
+        CallArgumentSignatureIsStable(ANode, ACurrentOwnerUnitId);
+      ImplicitSelfBound := False;
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
@@ -2054,34 +2418,72 @@ begin
         ResolutionFailureKind,
         BodyNode,
         DeclNode,
-        OwnerUnitId
+        CallableOwnerUnitId
       ) then
-        RegisterCallBinding(ANode, DeclNode, OwnerUnitId)
-      else if SameText(ResolutionFailureKind, 'ambiguous-overload') then
-        EmitSemaError(
-          'sema.ambiguous-overload',
-          'ambiguous overload for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
-        EmitSemaError(
-          'sema.wrong-argument-count',
-          'wrong number of arguments for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'type-mismatch') then
-        EmitSemaError(
-          'sema.type-mismatch',
-          'argument type mismatch for "' + ANode.Text + '"',
-          ANode.ByteOffset
-        )
-      else if SameText(ResolutionFailureKind, 'unknown-callable') and
-        (MethodClass = '') then
-        EmitSemaError(
-          'sema.unknown-callable',
-          'unknown callable "' + ANode.Text + '"',
-          ANode.ByteOffset
-        );
+        RegisterCallBinding(ANode, DeclNode, CallableOwnerUnitId)
+      else
+      begin
+        if (MethodClass <> '') and
+          SameText(ResolutionFailureKind, 'unknown-callable') then
+          ImplicitSelfBound := TryRegisterImplicitSelfBareMethodCallBinding(
+            ANode,
+            MethodClass,
+            ACurrentOwnerUnitId,
+            ResolutionFailureKind,
+            MemberFailureName,
+            MemberFailureOffset
+          );
+        if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'ambiguous-overload') then
+          EmitSemaError(
+            'sema.ambiguous-overload',
+            'ambiguous overload for "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'wrong-argument-count') then
+          EmitSemaError(
+            'sema.wrong-argument-count',
+            'wrong number of arguments for "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'type-mismatch') then
+          EmitSemaError(
+            'sema.type-mismatch',
+            'argument type mismatch for "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'no-matching-overload') then
+          EmitSemaError(
+            'sema.no-matching-overload',
+            'no matching overload for "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'unknown-member') then
+          EmitSemaError(
+            'sema.unknown-member',
+            'unknown member "' + MemberFailureName + '"',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'invalid-call-shape') then
+          EmitSemaError(
+            'sema.invalid-call-shape',
+            'member "' + MemberFailureName + '" is not callable',
+            MemberFailureOffset
+          )
+        else if (not ImplicitSelfBound) and
+          SameText(ResolutionFailureKind, 'unknown-callable') and
+          (MethodClass = '') then
+          EmitSemaError(
+            'sema.unknown-callable',
+            'unknown callable "' + ANode.Text + '"',
+            ANode.ByteOffset
+          );
+      end;
     end;
   end;
 
@@ -2093,21 +2495,39 @@ begin
     if IsWrappedCallChild(ANode, Child) then
     begin
       for ArgIndex := 1 to Child.ChildCount - 1 do
-        SeedCallBindingsInNode(Child.ChildAt(ArgIndex), MethodClass);
+        SeedCallBindingsInNode(
+          Child.ChildAt(ArgIndex),
+          MethodClass,
+          ACurrentOwnerUnitId
+        );
       Continue;
     end;
     if Child <> nil then
-      SeedCallBindingsInNode(Child, MethodClass);
+      SeedCallBindingsInNode(Child, MethodClass, ACurrentOwnerUnitId);
   end;
   FCurrentScopeId := SavedScopeId;
 end;
 
 procedure TSemanticAnalyzer.SeedCallBindings;
+var
+  Index: LongInt;
+  RootOwnerUnitId: string;
 begin
   if (FRootAst = nil) or (FRootAst.RootNode = nil) then
     Exit;
 
-  SeedCallBindingsInNode(FRootAst.RootNode, '');
+  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+  SeedCallBindingsInNode(FRootAst.RootNode, '', RootOwnerUnitId);
+  for Index := 0 to Length(FProcedureBodies) - 1 do
+    if (Pos('.', FProcedureBodies[Index].Name) > 0) and
+      OwnerUnitAllowsProjectSourceDiagnostic(
+        FProcedureBodies[Index].OwnerUnitId
+      ) then
+      SeedCallBindingsInNode(
+        FProcedureBodies[Index].Decl,
+        '',
+        FProcedureBodies[Index].OwnerUnitId
+      );
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
@@ -2296,8 +2716,14 @@ procedure TSemanticAnalyzer.EmitSemaError(
   const AMessage: string;
   const AByteOffset: LongInt
 );
+var
+  EmptyPayload: TDiagnosticPayload;
 begin
-  FDiagnostics.EmitError(ACode, 'sema', FRootFileId, AByteOffset, AMessage);
+  EmptyPayload.Kind := dpkNone;
+  FDiagnostics.EmitErrorWithPayload(
+    ACode, 'sema',
+    BuildCoreSourceSpan(FRootFileId, AByteOffset, 0),
+    AMessage, EmptyPayload);
   FModel.MarkFailure;
 end;
 
@@ -3403,6 +3829,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
   FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
@@ -3467,6 +3894,7 @@ begin
   end;
 
   FModel.SetSymbolParamCount(SymbolId, ParamCount);
+  FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
   FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(ANode));
   FCurrentScopeId := SavedScopeId;
 end;
@@ -3545,6 +3973,7 @@ var
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
   ClsName, ParentName, ConstName, FieldName: string;
+  CurrentVisibility: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
   ParentTypeId: LongInt;
@@ -3630,11 +4059,17 @@ begin
     end;
     FModel.AddStringConstValue(ClsName + '$parent_class', ParentName);
   end;
+  CurrentVisibility := 'public';
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if Child.NodeKind = gnkVisibilityLabel then
+    begin
+      CurrentVisibility := LowerCase(Child.Text);
+      Continue;
+    end;
     if Child.NodeKind = gnkClassField then
     begin
       FieldTypeId := 0;
@@ -3647,6 +4082,7 @@ begin
       FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
         Child.ByteOffset);
       FModel.SetSymbolScope(FModel.SymbolCount, ClassScopeId);
+      FModel.SetSymbolVisibility(FModel.SymbolCount, CurrentVisibility);
       FModel.AddConstValue(
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
@@ -3696,7 +4132,9 @@ begin
             ClsName + '.' + NameNode.Text,
             'method', AOwnerUnitId, ATypeId, Child.ByteOffset);
           FModel.SetSymbolParamCount(SymbolId, CountDeclParams(Child));
+          FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(Child));
           FModel.SetSymbolParamSignature(SymbolId, GetParamSignature(Child));
+          FModel.SetSymbolVisibility(SymbolId, CurrentVisibility);
           FModel.SetSymbolScope(SymbolId, ClassScopeId);
           if Pos(';virtual', Child.Text) > 0 then
           begin
@@ -6877,6 +7315,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       ANode.ByteOffset
     );
     FModel.SetSymbolParamCount(SymbolId, ParamCount);
+    FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
     FModel.SetSymbolParamSignature(SymbolId, ParamSignature);
 
     if AUnitScopeId > 0 then
@@ -6919,15 +7358,23 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       else if (Child.NodeKind = gnkProcedureDecl) or
         (Child.NodeKind = gnkFunctionDecl) then
       begin
-        SeedImportedCallableSymbol(Child, AOwnerUnitId, 0);
-        for BodyIdx := 0 to Child.ChildCount - 1 do
-        begin
-          BodyChild := Child.ChildAt(BodyIdx);
-          if (BodyChild <> nil) and (BodyChild.NodeKind = gnkBeginBlock) then
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          SeedImportedCallableSymbol(Child, AOwnerUnitId, UnitScopeId);
+          for BodyIdx := 0 to Child.ChildCount - 1 do
           begin
-            RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
-            Break;
+            BodyChild := Child.ChildAt(BodyIdx);
+            if (BodyChild <> nil) and (BodyChild.NodeKind = gnkBeginBlock) then
+            begin
+              RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+              Break;
+            end;
           end;
+        finally
+          FCurrentScopeId := SavedScopeId;
         end;
       end
       else if (Child.NodeKind = gnkInterfaceSection) or
@@ -6943,7 +7390,6 @@ var
   SourceText, Line: string;
   UnitLexer: TLexerResult;
   UnitTree: TGreenTree;
-  UnitTreeRetained: Boolean;
   F: Text;
   SourcePath: string;
   TmpDiag: TDiagnosticsSink;
@@ -6979,28 +7425,18 @@ begin
       Close(F);
       UnitLexer := TLexerResult.Create(SourceText);
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
-      UnitTreeRetained := False;
-      try
-        if (UnitTree <> nil) and UnitTree.IsValid and
-          (UnitTree.RootNode <> nil) then
-        begin
-          OwnerUnitId := ResolvedUnit.UnitId;
-          if OwnerUnitId = '' then
-            OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
-          RetainImportedUnitTree(UnitTree);
-          UnitTreeRetained := True;
-          RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
-        end
-        else if UnitTree <> nil then
-        begin
-          UnitTree.Free;
-          UnitTree := nil;
-        end;
-      finally
-        UnitLexer.Free;
-        if (UnitTree <> nil) and not UnitTreeRetained then
-          UnitTree.Free;
-      end;
+      if (UnitTree <> nil) and UnitTree.IsValid and
+        (UnitTree.RootNode <> nil) then
+      begin
+        OwnerUnitId := ResolvedUnit.UnitId;
+        if OwnerUnitId = '' then
+          OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
+        RegisterImportedUnitTree(UnitTree);
+        RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
+      end
+      else if UnitTree <> nil then
+        UnitTree.Free;
+      UnitLexer.Free;
     end;
   finally
     TmpDiag.Free;

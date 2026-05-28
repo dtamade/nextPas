@@ -30,6 +30,33 @@ type
 
   TSuggestedFixArray = array of TSuggestedFix;
 
+  TOverloadCandidate = record
+    Name: string;
+    ParamSignature: string;
+    ParamCount: LongInt;
+    DeclByteOffset: LongInt;
+    MismatchReason: string;
+  end;
+
+  TOverloadCandidateArray = array of TOverloadCandidate;
+
+  TDiagnosticPayloadKind = (
+    dpkNone,
+    dpkTypeMismatch,
+    dpkWrongArgumentCount,
+    dpkOverloadCandidates
+  );
+
+  TDiagnosticPayload = record
+    Kind: TDiagnosticPayloadKind;
+    ExpectedType: string;
+    ActualType: string;
+    ArgIndex: LongInt;
+    ExpectedCount: LongInt;
+    ActualCount: LongInt;
+    Candidates: TOverloadCandidateArray;
+  end;
+
   TDiagnosticRecord = record
     Id: string;
     Code: string;
@@ -39,6 +66,7 @@ type
     MessageText: string;
     RelatedInformation: TRelatedInformationArray;
     SuggestedFixes: TSuggestedFixArray;
+    Payload: TDiagnosticPayload;
     BindingId: string;
     ProfileId: string;
     StepId: string;
@@ -79,6 +107,13 @@ type
       const APhase: string;
       const APrimarySpan: TCoreSourceSpan;
       const AMessageText: string
+    );
+    procedure EmitErrorWithPayload(
+      const ACode: string;
+      const APhase: string;
+      const APrimarySpan: TCoreSourceSpan;
+      const AMessageText: string;
+      const APayload: TDiagnosticPayload
     );
     procedure EmitToolchainError(
       const ACode: string;
@@ -210,6 +245,20 @@ procedure TDiagnosticsSink.EmitErrorAtSpan(
   const AMessageText: string
 );
 var
+  EmptyPayload: TDiagnosticPayload;
+begin
+  EmptyPayload.Kind := dpkNone;
+  EmitErrorWithPayload(ACode, APhase, APrimarySpan, AMessageText, EmptyPayload);
+end;
+
+procedure TDiagnosticsSink.EmitErrorWithPayload(
+  const ACode: string;
+  const APhase: string;
+  const APrimarySpan: TCoreSourceSpan;
+  const AMessageText: string;
+  const APayload: TDiagnosticPayload
+);
+var
   NextIndex: SizeInt;
 begin
   NextIndex := Length(FDiagnostics);
@@ -220,6 +269,7 @@ begin
   FDiagnostics[NextIndex].Severity := 'error';
   FDiagnostics[NextIndex].PrimarySpan := APrimarySpan;
   FDiagnostics[NextIndex].MessageText := AMessageText;
+  FDiagnostics[NextIndex].Payload := APayload;
   Inc(FErrorCount);
 end;
 
@@ -401,6 +451,9 @@ end;
 function TDiagnosticsSink.DiagnosticsJson: string;
 var
   ArtifactFields: string;
+  CandidateArray: string;
+  CandidateFields: string;
+  CI: SizeInt;
   FixArray: string;
   FixFields: string;
   FI: SizeInt;
@@ -409,6 +462,7 @@ var
   RelatedArray: string;
   RI: SizeInt;
   RIFields: string;
+  StructuredFields: string;
 begin
   if Length(FDiagnostics) = 0 then
     Exit('[]');
@@ -512,6 +566,50 @@ begin
       'message',
       JsonString(FDiagnostics[Index].MessageText)
     );
+    if FDiagnostics[Index].Payload.Kind <> dpkNone then
+    begin
+      StructuredFields := '';
+      case FDiagnostics[Index].Payload.Kind of
+        dpkWrongArgumentCount:
+        begin
+          AppendJsonField(StructuredFields, 'kind', JsonString('wrong-argument-count'));
+          AppendJsonField(StructuredFields, 'expectedCount',
+            IntToStr(FDiagnostics[Index].Payload.ExpectedCount));
+          AppendJsonField(StructuredFields, 'actualCount',
+            IntToStr(FDiagnostics[Index].Payload.ActualCount));
+        end;
+        dpkTypeMismatch:
+        begin
+          AppendJsonField(StructuredFields, 'kind', JsonString('type-mismatch'));
+          AppendJsonField(StructuredFields, 'expectedType',
+            JsonString(FDiagnostics[Index].Payload.ExpectedType));
+          AppendJsonField(StructuredFields, 'actualType',
+            JsonString(FDiagnostics[Index].Payload.ActualType));
+          AppendJsonField(StructuredFields, 'argIndex',
+            IntToStr(FDiagnostics[Index].Payload.ArgIndex));
+        end;
+        dpkOverloadCandidates:
+        begin
+          AppendJsonField(StructuredFields, 'kind', JsonString('overload-candidates'));
+          CandidateArray := '';
+          for CI := 0 to High(FDiagnostics[Index].Payload.Candidates) do
+          begin
+            if CI > 0 then
+              CandidateArray := CandidateArray + ',';
+            CandidateFields := '';
+            AppendJsonField(CandidateFields, 'name',
+              JsonString(FDiagnostics[Index].Payload.Candidates[CI].Name));
+            AppendJsonField(CandidateFields, 'paramCount',
+              IntToStr(FDiagnostics[Index].Payload.Candidates[CI].ParamCount));
+            AppendJsonField(CandidateFields, 'mismatchReason',
+              JsonString(FDiagnostics[Index].Payload.Candidates[CI].MismatchReason));
+            CandidateArray := CandidateArray + '{' + CandidateFields + '}';
+          end;
+          AppendJsonField(StructuredFields, 'candidates', '[' + CandidateArray + ']');
+        end;
+      end;
+      AppendJsonField(DiagnosticFields, 'structured', '{' + StructuredFields + '}');
+    end;
     if Length(FDiagnostics[Index].RelatedInformation) > 0 then
     begin
       RelatedArray := '';
