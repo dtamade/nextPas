@@ -75,6 +75,23 @@ begin
       GSink := GSink + GVec.Get(i);
 end;
 
+procedure BenchGetPtr(aIters: Int64);
+var
+  it: Int64;
+  i: Integer;
+  LP: PInteger;
+  LSum: Int64;
+begin
+  LP := GVec.GetMemory;
+  for it := 1 to aIters do
+  begin
+    LSum := 0;
+    for i := 0 to N - 1 do
+      LSum := LSum + LP[i];
+    GSink := GSink + LSum;
+  end;
+end;
+
 procedure BenchInsertMiddle(aIters: Int64);
 var
   LV: TIntVec;
@@ -148,6 +165,7 @@ begin
     B.Run('Vec.Push+Reserve/N=100000', @BenchPushPrealloc);
     B.Run('Vec.Pop/N=100000', @BenchPop);
     B.Run('Vec.Get/N=100000', @BenchGet);
+    B.Run('Vec.Get(Memory ptr)/N=100000', @BenchGetPtr);
     B.Run('Vec.Iterate/N=100000', @BenchIterate);
     B.Run('Vec.Insert(mid)/N=1000', @BenchInsertMiddle);
     B.Run('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle);
