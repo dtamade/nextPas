@@ -10,6 +10,22 @@
 
 ## Research Findings
 
+- Batch 202 re-rank 结论：Batch 191 已打开 imported `project-source` unit method body bare
+  implicit-self same-unit function-result wrong-argument-count；按“矩阵双拍”，当前最高价值是补同形
+  installed-source deferred guard，避免 incomplete installed/helper/RTL unit-body truth 被提前误报成
+  ordinary `sema.wrong-argument-count`。
+- Batch 202 focused semantic 直接 GREEN，输出 `semantic-call-bindings-status=pass`；现有
+  installed-source provenance guard 已覆盖 imported `installed-source` unit method body 内 bare
+  implicit-self same-unit function-result arity miss。本批不修改 analyzer。
+- Batch 202 official proof 保持在 `tests/semantic/test_semantic_call_bindings.pas` 的
+  `CheckInstalledSourceUnitBodyImplicitSelfBareMethodFunctionResultWrongArgumentCountStaysDeferred`；
+  不新增 stage0 fixture，因为普通 sibling fixture 会被当作 project/root source，不适合伪造
+  installed-source provenance。
+- Batch 202 focused heaptrc 复检后确认：`SeedImportedUnitBodies` 解析出来的 imported unit parse tree
+  需要由 `TSemanticAnalyzer` 统一 owning；把 `TGreenTree` 纳入 analyzer 生命周期后，
+  `test_semantic_call_bindings` 的 `-gl -gh` 运行不再保留新的 imported-unit body tree leak。
+- 用户新增质量门槛已同步到目标树口径：public API / interface work 没有单元测试、接口覆盖与
+  内存泄漏验证时不得宣布完成；本批不新增 public API，只新增 semantic guard。
 - Batch 201 re-rank 结论：Batch 196 已打开 imported `project-source` unit method body inherited
   bare implicit-self known property invalid-call-shape；按“矩阵双拍”，当前最高价值是补同形
   installed-source inherited known property deferred guard，闭合 inherited field/property 的

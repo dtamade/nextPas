@@ -55,6 +55,7 @@ type
     FVarParamNames: array of string;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
+    FImportedUnitTrees: array of TGreenTree;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
@@ -62,6 +63,7 @@ type
     procedure RegisterRecordVar(const AName, ATypeName: string);
     procedure RegisterVarParam(const AName: string);
     procedure RegisterPtrReturnFunc(const AName, AClassName: string);
+    procedure RegisterImportedUnitTree(const ATree: TGreenTree);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
@@ -565,6 +567,17 @@ begin
   FPtrReturnTypes[NextIndex] := AClassName;
 end;
 
+procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree);
+var
+  NextIndex: SizeInt;
+begin
+  if ATree = nil then
+    Exit;
+  NextIndex := Length(FImportedUnitTrees);
+  SetLength(FImportedUnitTrees, NextIndex + 1);
+  FImportedUnitTrees[NextIndex] := ATree;
+end;
+
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
 var
   Idx: LongInt;
@@ -676,7 +689,11 @@ begin
 end;
 
 destructor TSemanticAnalyzer.Destroy;
+var
+  Index: LongInt;
 begin
+  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+    FImportedUnitTrees[Index].Free;
   FModel.Free;
   inherited Destroy;
 end;
@@ -7315,6 +7332,7 @@ begin
         OwnerUnitId := ResolvedUnit.UnitId;
         if OwnerUnitId = '' then
           OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
+        RegisterImportedUnitTree(UnitTree);
         RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
       end
       else if UnitTree <> nil then

@@ -22,6 +22,7 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 优雅：每层有清楚 owner、truth object、projection、promotion gate 和诚实非目标。
 - 可维护：新增能力优先复用现有 session/model/tooling，不把逻辑复制到 driver 或 shell。
 - 高性能：数据结构、增量分析、代码生成和工具调用能支撑真实项目，不只支撑 smoke fixture。
+- 可验证：公开 API / interface 没有对应单元测试、接口覆盖与内存泄漏验证时，不宣布完成。
 
 ## 当前全局位置
 
@@ -66,12 +67,16 @@ nextPas 要成为 Pascal 世界的现代开发平台：
 - 所有主线能力都有目标节点、owner、truth object、projection 与 promotion gate。
 - `task_plan.md`、`progress.md`、`findings.md` 只记录当前事实，不包装未完成能力。
 - `build/verify_local.sh` 是本地权威 verification gate。
+- public API / interface work 必须有对应单元测试；目标口径是接口行为覆盖 100%。
+- 涉及 API / runtime / resource ownership 的批次必须纳入内存泄漏验证，未验证只能标为未收口。
 - 每个真实改动批次都小步提交，commit 能独立回滚。
 - 工作树污染、生成物、临时证据和 stale docs 不进入提交。
 
 当前状态：
 
 - `verify_local` 已成为主门。
+- public API 覆盖和 leak verification 作为质量门槛已写入目标树；后续凡是 API/interface
+  批次必须在 `/plan` 中写明单测覆盖与 leak evidence。
 - 持续记录已存在，但最近路线图顶部状态有过 Batch 状态漂移。
 - 当前新增本目标树，后续批次必须绑定目标节点。
 
@@ -196,6 +201,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   official gate。
 - imported `project-source` unit method body 的 bare implicit-self same-unit function-result
   wrong-argument-count 已进入 official gate。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  wrong-argument-count 继续 deferred，并由 semantic harness 固定防误报。
 - imported `project-source` unit method body 的 inherited bare implicit-self wrong-argument-count 已进入
   official gate。
 - imported `project-source` unit method body 的 inherited bare implicit-self type-mismatch 已进入
@@ -262,6 +269,8 @@ nextPas 要成为 Pascal 世界的现代开发平台：
   implicit-self arity miss。
 - `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 的 bare
   implicit-self same-unit function-result arity miss。
+- imported `installed-source` unit method body 的 bare implicit-self same-unit function-result
+  arity miss 继续 deferred，不提前发 `sema.wrong-argument-count`。
 - `sema.wrong-argument-count` 已覆盖 imported `project-source` unit method body 沿 parent chain
   找到 inherited bare implicit-self target 后的 arity miss。
 - `sema.type-mismatch` 已覆盖 imported `project-source` unit method body 沿 parent chain

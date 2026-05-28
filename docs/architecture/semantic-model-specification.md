@@ -105,7 +105,8 @@ nextPas 推荐把语义分析结果收敛成三类核心产物：
   `sema.wrong-argument-count`。
   imported `installed-source` single-target
   type mismatch（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
-  single-target arity miss（包括 direct/inherited member-call root-owned function-result arity miss）、bare callable ambiguity、
+  single-target arity miss（包括 direct/inherited member-call root-owned function-result arity miss，以及
+  imported unit method body bare implicit-self same-unit function-result arity miss）、bare callable ambiguity、
   bare callable no-match（包括 root-owned 零参内建标量/字符串 function result 作为 argument evidence 的场景）、
   direct/inherited member-call overload-set no-match/ambiguity（即使 argument evidence 是 root-owned
   零参内建标量/字符串 function result）、
@@ -394,6 +395,11 @@ candidate collection
     imported owner class 的 method name，但没有任何 arity-compatible target 的场景；该路径不会注册失败
     `member-call` binding，且接受同一 project-source owner unit 中零参内建标量/字符串
     function result 作为 argument evidence
+  - 同形状 imported `installed-source` unit method body 内 bare implicit-self method call，
+    即使 argument evidence 是同一 installed-source owner unit 中零参内建标量/字符串
+    function result，也继续保守 deferred，不提前发 ordinary `sema.wrong-argument-count`；这条
+    guard 只用 `semantic-call-bindings-check` 的 focused harness 固定，不用普通 sibling
+    stage0 fixture 伪造 provenance
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿 parent
     chain 找到 inherited method name，但没有任何 arity-compatible target 的场景；该路径同样不会注册失败
     `member-call` binding，且接受同一 project-source owner unit 中零参内建标量/字符串
