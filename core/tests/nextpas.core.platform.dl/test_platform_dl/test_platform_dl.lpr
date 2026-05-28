@@ -104,6 +104,39 @@ begin
   platform_dl_close(Lib);
 end;
 
+procedure TestLoadSelf;
+var
+  Lib: TPlatformLibrary;
+begin
+  Check(platform_dl_open(nil, PLATFORM_DL_LAZY, Lib) = 0, 'open nil = self');
+  Check(Lib.Handle <> nil, 'self handle not nil');
+  platform_dl_close(Lib);
+end;
+
+procedure TestErrorSmallBuffer;
+var
+  Lib: TPlatformLibrary;
+  Buf: array[0..3] of AnsiChar;
+  R: Int32;
+begin
+  platform_dl_open('/nonexistent_lib_xyz.so', PLATFORM_DL_LAZY, Lib);
+  R := platform_dl_error(@Buf[0], 4);
+  Check(R >= 0, 'small buffer does not crash');
+  Check(Buf[3] = #0, 'null terminated');
+end;
+
+procedure TestResolveMultiple;
+var
+  Lib: TPlatformLibrary;
+  A1, A2: Pointer;
+begin
+  Check(platform_dl_open(LIBC_PATH, PLATFORM_DL_LAZY, Lib) = 0, 'open');
+  Check(platform_dl_sym(Lib, 'strlen', A1) = 0, 'resolve 1');
+  Check(platform_dl_sym(Lib, 'strlen', A2) = 0, 'resolve 2');
+  Check(A1 = A2, 'same address');
+  platform_dl_close(Lib);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.dl');
   T.Run('load libc', @TestLoadLibc);
@@ -114,5 +147,8 @@ begin
   T.Run('nil handle sym', @TestNilHandleSym);
   T.Run('dl_error after failure', @TestDlError);
   T.Run('GLOBAL flag', @TestGlobalFlag);
+  T.Run('load self (nil path)', @TestLoadSelf);
+  T.Run('error small buffer', @TestErrorSmallBuffer);
+  T.Run('resolve same sym twice', @TestResolveMultiple);
   T.Summary;
 end.

@@ -89,6 +89,53 @@ begin
   platform_file_unlink(TEST_PATH);
 end;
 
+procedure TestLargeFile;
+var
+  H: TPlatformFileHandle;
+  M: TPlatformMappedFile;
+  LBuf: array[0..4095] of Byte;
+  LWritten: PtrUInt;
+  I: Int32;
+begin
+  FillChar(LBuf, 4096, $CD);
+  platform_file_open('/tmp/nextpas_test_mmap_large.dat', fomWriteOnly, fcmCreateAlways, H);
+  for I := 1 to 64 do
+    platform_file_write(H, @LBuf[0], 4096, LWritten);
+  platform_file_close(H);
+  Check(platform_mmap_file('/tmp/nextpas_test_mmap_large.dat', M) = 0, 'mmap 256KB');
+  Check(M.Size = 64 * 4096, 'size = 256KB');
+  Check(PByte(M.Addr)^ = $CD, 'first byte');
+  Check(PByte(PtrUInt(M.Addr) + M.Size - 1)^ = $CD, 'last byte');
+  platform_mmap_close(M);
+  platform_file_unlink('/tmp/nextpas_test_mmap_large.dat');
+end;
+
+procedure TestContentIntegrity;
+var
+  H: TPlatformFileHandle;
+  M: TPlatformMappedFile;
+  LWritten: PtrUInt;
+  I: Int32;
+  LData: array[0..255] of Byte;
+begin
+  for I := 0 to 255 do
+    LData[I] := Byte(I);
+  platform_file_open('/tmp/nextpas_test_mmap_integrity.dat', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, @LData[0], 256, LWritten);
+  platform_file_close(H);
+  Check(platform_mmap_file('/tmp/nextpas_test_mmap_integrity.dat', M) = 0, 'mmap');
+  Check(M.Size = 256, 'size 256');
+  for I := 0 to 255 do
+    if PByte(PtrUInt(M.Addr) + PtrUInt(I))^ <> Byte(I) then
+    begin
+      Check(False, 'byte mismatch');
+      Break;
+    end;
+  Check(True, 'all 256 bytes match');
+  platform_mmap_close(M);
+  platform_file_unlink('/tmp/nextpas_test_mmap_integrity.dat');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.mmap');
   T.Run('map file + verify content', @TestMapFile);
@@ -96,6 +143,8 @@ begin
   T.Run('map empty file', @TestMapEmptyFile);
   T.Run('double close', @TestDoubleClose);
   T.Run('read last byte', @TestLargeRead);
+  T.Run('large file (256KB)', @TestLargeFile);
+  T.Run('content integrity (256 bytes)', @TestContentIntegrity);
   T.Summary;
   Cleanup;
 end.
