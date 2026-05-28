@@ -144,3 +144,9 @@
 - `TArray<T>` and `TVec<T>` already implement the checked `Overwrite(Index, Collection, Count)` overload, so the interface should expose it instead of forcing callers to use the unchecked form for partial collection overwrite.
 - `Ensure` must not be mechanically renamed to `EnsureCapacity` yet. Current `TArray.Ensure` and `TVec.Ensure` call `Resize` and change logical `Count`, while `TVec.EnsureCapacity` only guarantees backing capacity. The final name and ownership require a separate interface decision.
 - The checked partial collection `Overwrite` doc block must not include the `Unchecked` convention text. Checked/unchecked overload pairs should keep their public docs visibly separated so the safe API contract is not weakened by copied warning text.
+
+## 2026-05-28: Vec compatibility alias cleanup
+
+- Exact scans found no remaining `FindIF`, `FindIFNot`, `CountIF`, `ReplaceIF`, `UnChecked`, or `SizeUint` symbols in collections source/tests.
+- `TVec.TrimToSize` was only a Java compatibility alias for `ShrinkToFit`. Because nextpas.core has no published compatibility burden, the alias should be removed rather than carried as a stale public concrete-class method.
+- `TVecDeque.TrimToSize(aNewSize)` is a different logical-length trimming helper used by deque split/trim flows. It should not be changed in the `TVec` capacity-alias cleanup batch.

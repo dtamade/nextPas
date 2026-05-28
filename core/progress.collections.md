@@ -47,6 +47,9 @@
 - Verified this batch with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
 - Started the next micro batch as an interface-doc cleanup only: removed stale `Unchecked` warning text from the checked partial collection `Overwrite` doc block in `IArray<T>`, keeping method declarations and implementations unchanged.
 - Verified the doc-boundary cleanup with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the next naming cleanup batch. Exact scans found no remaining `FindIF` / `CountIF` / `ReplaceIF` / `UnChecked` / `SizeUint` residues in collections source/tests, so the actionable cleanup is the copied `TVec.TrimToSize` Java compatibility alias.
+- Removed `TVec.TrimToSize`; callers should use `ShrinkToFit`. Left `TVecDeque.TrimToSize(aNewSize)` unchanged because it trims logical length and is not the same capacity-shrink alias.
+- Verified the alias cleanup with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

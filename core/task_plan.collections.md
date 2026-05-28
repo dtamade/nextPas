@@ -12,7 +12,14 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: IArray Checked/Unchecked Doc Boundary Cleanup
+### Current Micro Batch: Vec TrimToSize Alias Removal
+
+- [x] Confirm `FindIF` / `CountIF` / `ReplaceIF` / `UnChecked` / `SizeUint` naming residues are already absent.
+- [x] Remove the copied `TVec.TrimToSize` Java compatibility alias and keep `ShrinkToFit` as the single capacity-shrink API.
+- [x] Leave `TVecDeque.TrimToSize(aNewSize)` untouched because it trims logical length and is not the same capacity alias.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: IArray Checked/Unchecked Doc Boundary Cleanup
 
 - [x] Remove stale `Unchecked` warning text from checked `IArray<T>.Overwrite(Index, Collection, Count)` docs.
 - [x] Keep method declarations and implementations unchanged.

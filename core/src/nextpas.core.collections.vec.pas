@@ -464,8 +464,6 @@ type
     procedure Shrink;
     procedure ShrinkTo(aCapacity: SizeUInt);
     procedure ShrinkToFit;
-    // Java 兼容别名：TrimToSize -> ShrinkToFit
-    procedure TrimToSize; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     procedure FreeBuffer;
     procedure EnableAlignedGrowth(aAlignElements: SizeUInt = 64);
@@ -1326,11 +1324,6 @@ begin
 
   if CapBytes > ThresholdBytes then
     SetCapacity(FCount);
-end;
-
-procedure TVec.TrimToSize;
-begin
-  ShrinkToFit;
 end;
 
 procedure TVec.FreeBuffer;
