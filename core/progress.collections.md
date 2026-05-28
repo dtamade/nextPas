@@ -61,11 +61,13 @@
 - Started the Vec advanced range-contract batch. Reviewed `Drain`, `DrainRange`, `SplitOff`, and `Splice`: `SplitOff(Index)` accepts `Index <= Count`, `Splice(Index, RemoveCount, Insert)` accepts `Index <= Count` and clips oversized remove counts, while `Drain(Start, Count)` needed a zero-count fix and overflow-safe clipping.
 - Changed `TVec.Drain` and `TVecDeque.Drain` so `Count = 0` returns an empty Vec without touching the source, and non-zero count clipping uses `Count > FCount - Start` instead of `Start + Count > FCount`.
 - Verified the Vec advanced range-contract batch with `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
+- Consolidated empty `DrainRange` behavior in `TVec` and `TVecDeque`: `End <= Start` still returns an empty iterator and leaves the source unchanged, but now reuses `Drain(Start, 0)` so the empty result inherits allocator and grow-strategy semantics instead of creating a default vector.
+- Verified the DrainRange empty-range consolidation with `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 
-- Continue the naming cleanup implementation one batch at a time.
-- Next interface-tuning batch: continue reviewing Vec and array-family method naming/ownership after the try indexed extraction gap.
-- Continue the structural audit across remaining containers.
+- Continue the Vec/Array naming cleanup implementation one batch at a time.
+- Next likely interface-tuning batch: `Unchecked` spelling cleanup, done mechanically across interface declarations, implementations, docs/comments, and tests/examples.
+- Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

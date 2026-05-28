@@ -2204,7 +2204,7 @@ begin
   // 空范围特殊处理
   if LCount = 0 then
   begin
-    LDrained := specialize TVec<T>.Create;
+    LDrained := Drain(aStart, 0);
     Result.Init(LDrained);
     Exit;
   end;

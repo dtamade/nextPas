@@ -12,7 +12,14 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec Drain Range Contract
+### Completed Micro Batch: DrainRange Empty Range Consolidation
+
+- [x] Make `TVec<T>.DrainRange(EmptyRange)` reuse `Drain(Start, 0)` so empty iterators inherit the same allocator/grow-strategy semantics as `Drain`.
+- [x] Make `TVecDeque<T>.DrainRange(EmptyRange)` follow the same rule.
+- [x] Record the half-open empty-range contract: `End <= Start` returns an empty iterator and does not touch the source.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec Drain Range Contract
 
 - [x] Audit `Drain`, `SplitOff`, and `Splice` range semantics in `TVec<T>`.
 - [x] Fix `TVec<T>.Drain(AnyStart, 0)` to return an empty vector without touching the source.
