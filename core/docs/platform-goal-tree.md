@@ -133,7 +133,8 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.console (终端检测: isatty/GetConsoleMode, ANSI 启用, 5 tests)
 - [x] platform.error (错误码转字符串: strerror/FormatMessage, 5 tests)
 - [x] platform.path (路径操作: join/dirname/basename/ext/normalize, 10 tests)
-- [x] 每个模块无内存泄漏验证 (heaptrc: 16 modules, 0 leaks)
+- [x] platform.fs (文件系统便利: exists/is_file/is_dir/size/temp_dir, 6 tests)
+- [x] 每个模块无内存泄漏验证 (heaptrc: 17 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
 - [ ] Windows aarch64 支持
