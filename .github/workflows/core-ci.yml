@@ -91,20 +91,26 @@ jobs:
           if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
 
       - name: Verify FPC
-        run: fpc -iV
-
-      - name: Run tests (best-effort)
         run: |
-          TOTAL=0; PASSED=0; SKIPPED=0
+          fpc -iV
+          fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
+        run: |
+          TOTAL=0; PASSED=0; SKIPPED=0; FIRST_FAIL=""
           while IFS= read -r mk; do
             dir=$(dirname "$mk")
             TOTAL=$((TOTAL + 1))
-            if make -C "$dir" test >/dev/null 2>&1; then
+            if make -C "$dir" test 2>&1 | tail -5 | grep -q "passed"; then
               PASSED=$((PASSED + 1))
               echo "PASS: $dir"
             else
               SKIPPED=$((SKIPPED + 1))
-              echo "SKIP: $dir"
+              if [ -z "$FIRST_FAIL" ]; then
+                FIRST_FAIL="$dir"
+                echo "SKIP: $dir (first failure details below)"
+                make -C "$dir" test 2>&1 | tail -20
+              else
+                echo "SKIP: $dir"
+              fi
             fi
           done < <(find tests -mindepth 2 -name Makefile | sort)
           echo ""
