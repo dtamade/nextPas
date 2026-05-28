@@ -14510,6 +14510,79 @@ begin
   end;
 end;
 
+procedure CheckRealFPCPatternStringListBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program RealFPCStringList;' + LineEnding +
+    'type' + LineEnding +
+    '  TStringList = class' + LineEnding +
+    '  private' + LineEnding +
+    '    FCount: Integer;' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor Create;' + LineEnding +
+    '    procedure Add(S: string);' + LineEnding +
+    '    procedure Clear;' + LineEnding +
+    '  end;' + LineEnding +
+    'constructor TStringList.Create;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStringList.Add(S: string);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'procedure TStringList.Clear;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  List: TStringList;' + LineEnding +
+    'begin' + LineEnding +
+    '  List := TStringList.Create;' + LineEnding +
+    '  List.Add(' + #39 + 'hello' + #39 + ');' + LineEnding +
+    '  List.Add(' + #39 + 'world' + #39 + ');' + LineEnding +
+    '  List.Clear;' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('real-fpc-stringlist-diagnostic:' + Diagnostics.LastDiagnosticCode +
+        ':' + Diagnostics.LastDiagnosticMessage);
+    if Model = nil then
+      Fail('missing-real-fpc-stringlist-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-real-fpc-stringlist-model-status:' + Model.Status);
+    if Model.BindingCount < 3 then
+      Fail('unexpected-real-fpc-stringlist-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
@@ -14726,6 +14799,7 @@ begin
     CheckPublicMemberAccessAllowed;
     CheckProtectedSubclassSelfAccessAllowed;
     CheckProtectedExternalAccessDiagnostic;
+    CheckRealFPCPatternStringListBinding;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
