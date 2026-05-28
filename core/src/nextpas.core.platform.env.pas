@@ -30,7 +30,7 @@ begin
     Exit(2); // ENOENT
   while LVal[ALen] <> #0 do
     Inc(ALen);
-  if ABuf <> nil then
+  if (ABuf <> nil) and (ABufLen > 0) then
   begin
     I := ALen;
     if I >= ABufLen then

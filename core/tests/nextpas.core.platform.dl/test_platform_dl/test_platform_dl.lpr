@@ -19,6 +19,9 @@ const
 {$IFDEF NEXTPAS_FREEBSD}
   LIBC_PATH = 'libc.so.7';
 {$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  LIBC_PATH = 'kernel32.dll';
+{$ENDIF}
 
 procedure TestLoadLibc;
 var

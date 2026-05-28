@@ -77,6 +77,16 @@ begin
   Check(not platform_env_exists('NEXTPAS_NONEXISTENT_XYZ_999'), 'non-existent = false');
 end;
 
+procedure TestGetLengthOnly;
+var
+  Len: Int32;
+begin
+  platform_env_set('NEXTPAS_TEST_LEN', 'abc');
+  Check(platform_env_get('NEXTPAS_TEST_LEN', nil, 0, Len) = 0, 'nil buf ok');
+  Check(Len = 3, 'len = 3');
+  platform_env_unset('NEXTPAS_TEST_LEN');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.env');
   T.Run('get PATH', @TestGetPath);
@@ -86,5 +96,6 @@ begin
   T.Run('set empty value', @TestSetEmpty);
   T.Run('buffer too small', @TestBufferTooSmall);
   T.Run('exists false', @TestExistsFalse);
+  T.Run('get length only (nil buf)', @TestGetLengthOnly);
   T.Summary;
 end.

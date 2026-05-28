@@ -59,19 +59,11 @@ end;
 
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
-var
-  LErrno: Int32;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
   ALib.Handle := dlopen(APath, MapFlags(AFlags));
   if ALib.Handle = nil then
-  begin
-    LErrno := platform_get_errno;
-    if LErrno <> 0 then
-      Result := LErrno
-    else
-      Result := 2; // ENOENT - library not found
-  end
+    Result := 2 // caller uses platform_dl_error for details
   else
     Result := 0;
 end;
