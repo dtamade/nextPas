@@ -194,6 +194,38 @@ begin
   Check(R.ExitCode = 0, 'exit 0');
 end;
 
+procedure TestRun;
+var
+  LArgv: array[0..2] of PAnsiChar;
+  LBuf: array[0..255] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+begin
+  LArgv[0] := '/bin/echo';
+  LArgv[1] := 'world';
+  LArgv[2] := nil;
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_process_run('/bin/echo', @LArgv[0], nil, @LBuf[0], 256, LOutLen, LExitCode) = 0, 'run ok');
+  Check(LExitCode = 0, 'exit 0');
+  Check(LOutLen >= 5, 'output >= 5');
+  Check(LBuf[0] = 'w', 'output[0] = w');
+end;
+
+procedure TestRunCwd;
+var
+  LArgv: array[0..2] of PAnsiChar;
+  LBuf: array[0..1023] of AnsiChar;
+  LOutLen, LExitCode: Int32;
+begin
+  LArgv[0] := '/bin/pwd';
+  LArgv[1] := nil;
+  LArgv[2] := nil;
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_process_run('/bin/pwd', @LArgv[0], '/tmp', @LBuf[0], 1024, LOutLen, LExitCode) = 0, 'run cwd ok');
+  Check(LExitCode = 0, 'exit 0');
+  Check(LOutLen >= 4, 'output >= 4');
+  Check((LBuf[0] = '/') and (LBuf[1] = 't') and (LBuf[2] = 'm') and (LBuf[3] = 'p'), 'cwd is /tmp');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.process');
   T.Run('spawn /bin/true', @TestSpawnTrue);
@@ -206,5 +238,7 @@ begin
   T.Run('piped: capture stdout', @TestSpawnPipedStdout);
   T.Run('piped: capture stderr', @TestSpawnPipedStderr);
   T.Run('piped: write stdin', @TestSpawnPipedStdin);
+  T.Run('run: capture output', @TestRun);
+  T.Run('run: working directory', @TestRunCwd);
   T.Summary;
 end.

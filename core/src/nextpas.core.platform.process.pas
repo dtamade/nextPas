@@ -17,6 +17,9 @@ function platform_process_spawn_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
 function platform_process_spawn_piped_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
+function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
+  out AOutLen: Int32; out AExitCode: Int32): Int32;
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
@@ -267,6 +270,38 @@ function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin
   Result := AProc.Pid;
 end;
+
+function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
+  out AOutLen: Int32; out AExitCode: Int32): Int32;
+var
+  LProc: TPlatformProcess;
+  LPipes: TPlatformProcessPipes;
+  LResult: TPlatformProcessResult;
+  LN: PtrInt;
+  LTotal: Int32;
+begin
+  AOutLen := 0;
+  AExitCode := -1;
+  Result := platform_process_spawn_piped_cwd(APath, AArgv, nil, ACwd, LProc, LPipes);
+  if Result <> 0 then
+    Exit;
+  close(LPipes.StdinWrite);
+  close(LPipes.StderrRead);
+  LTotal := 0;
+  repeat
+    LN := read(LPipes.StdoutRead, @AOutBuf[LTotal], AOutBufLen - LTotal);
+    if LN > 0 then
+      Inc(LTotal, Int32(LN));
+  until (LN <= 0) or (LTotal >= AOutBufLen);
+  close(LPipes.StdoutRead);
+  if LTotal < AOutBufLen then
+    AOutBuf[LTotal] := #0;
+  AOutLen := LTotal;
+  Result := platform_process_wait(LProc, LResult);
+  if Result = 0 then
+    AExitCode := LResult.ExitCode;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -439,6 +474,41 @@ begin
   APipes.StderrRead := Int32(PtrUInt(LStderrRd));
   Result := 0;
 end;
+
+function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32;
+  out AOutLen: Int32; out AExitCode: Int32): Int32;
+var
+  LProc: TPlatformProcess;
+  LPipes: TPlatformProcessPipes;
+  LResult: TPlatformProcessResult;
+  LRead: DWORD;
+  LTotal: Int32;
+begin
+  AOutLen := 0;
+  AExitCode := -1;
+  Result := platform_process_spawn_piped_cwd(APath, AArgv, nil, ACwd, LProc, LPipes);
+  if Result <> 0 then
+    Exit;
+  CloseHandle(HANDLE(PtrUInt(LPipes.StdinWrite)));
+  CloseHandle(HANDLE(PtrUInt(LPipes.StderrRead)));
+  LTotal := 0;
+  repeat
+    LRead := 0;
+    if not ReadFile(HANDLE(PtrUInt(LPipes.StdoutRead)), @AOutBuf[LTotal],
+      DWORD(AOutBufLen - LTotal), @LRead, nil) then
+      Break;
+    if LRead = 0 then Break;
+    Inc(LTotal, Int32(LRead));
+  until LTotal >= AOutBufLen;
+  CloseHandle(HANDLE(PtrUInt(LPipes.StdoutRead)));
+  if LTotal < AOutBufLen then
+    AOutBuf[LTotal] := #0;
+  AOutLen := LTotal;
+  Result := platform_process_wait(LProc, LResult);
+  if Result = 0 then
+    AExitCode := LResult.ExitCode;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -458,6 +528,8 @@ function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
+function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
+begin AOutLen := 0; AExitCode := -1; Result := -1; end;
 {$ENDIF}
 
 end.
