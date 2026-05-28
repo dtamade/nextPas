@@ -6640,6 +6640,8 @@ end;
 procedure TVecDeque.WriteExact(aIndex: SizeUInt; const aCollection: TCollection; aStartIndex: SizeUInt);
 var
   LCount: SizeUInt;
+  LIter: TPtrIter;
+  LSkipped, LCopied: SizeUInt;
 begin
   if aCollection = nil then
     raise EArgumentNil.Create('TVecDeque.WriteExact: aCollection is nil');
@@ -6652,7 +6654,18 @@ begin
       [aIndex, aIndex + LCount - 1, FCount - 1]);
   if LCount = 0 then
     Exit;
-  OverwriteUnchecked(aIndex, aCollection, LCount);
+
+  LIter := aCollection.PtrIter;
+  LSkipped := 0;
+  while (LSkipped < aStartIndex) and LIter.MoveNext do
+    Inc(LSkipped);
+
+  LCopied := 0;
+  while (LCopied < LCount) and LIter.MoveNext do
+  begin
+    FBuffer.PutUnchecked(GetPhysicalIndex(aIndex + LCopied), PElement(LIter.GetCurrent)^);
+    Inc(LCopied);
+  end;
 end;
 
 // Push 系列方法实现
