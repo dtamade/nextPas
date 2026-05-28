@@ -12,7 +12,16 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
-### Current Micro Batch: Vec Remove Helper Contract Docs
+### Current Micro Batch: Vec Drain Range Contract
+
+- [x] Audit `Drain`, `SplitOff`, and `Splice` range semantics in `TVec<T>`.
+- [x] Fix `TVec<T>.Drain(AnyStart, 0)` to return an empty vector without touching the source.
+- [x] Fix `TVecDeque<T>.Drain(AnyStart, 0)` consistently because it shares the same copied advanced sequence API.
+- [x] Avoid unsigned overflow in non-zero `Drain` count clipping.
+- [x] Document `Drain` and `Splice` clipping/zero-count behavior on `IVec<T>`.
+- [x] Verify focused collections tests and full `make test`.
+
+### Completed Micro Batch: Vec Remove Helper Contract Docs
 
 - [x] Confirm `RemoveCopyAt` / `RemoveArrayAt` / `SwapRemoveCopyAt` / `SwapRemoveArrayAt` already treat `aCount = 0` as no-op.
 - [x] Remove stale `SizeUInt` "count < 0" warnings from `IVec<T>` delete/remove docs.

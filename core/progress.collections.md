@@ -58,6 +58,9 @@
 - Verified the Vec TryPop pointer zero-count batch with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
 - Started the Vec remove-helper contract-doc batch. The implementation already treats zero-count remove/swap-remove helper calls as no-ops, so this batch keeps code unchanged and cleans stale `SizeUInt` negative-count docs while recording nil-destination and range semantics.
 - Verified the Vec remove-helper contract-doc batch with `git diff --check`, focused `test_vec` / `test_facade`, and full `make test`; all completed with zero failures.
+- Started the Vec advanced range-contract batch. Reviewed `Drain`, `DrainRange`, `SplitOff`, and `Splice`: `SplitOff(Index)` accepts `Index <= Count`, `Splice(Index, RemoveCount, Insert)` accepts `Index <= Count` and clips oversized remove counts, while `Drain(Start, Count)` needed a zero-count fix and overflow-safe clipping.
+- Changed `TVec.Drain` and `TVecDeque.Drain` so `Count = 0` returns an empty Vec without touching the source, and non-zero count clipping uses `Count > FCount - Start` instead of `Start + Count > FCount`.
+- Verified the Vec advanced range-contract batch with `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 

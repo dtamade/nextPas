@@ -1001,6 +1001,9 @@ type
      *   这是高性能的范围删除操作
      *   比逐个删除更高效，因为只需要一次内存移动
      *   返回的向量包含被删除的元素，可用于撤销操作
+     *   如果 aCount = 0，返回空向量且不修改原向量
+     *   如果 aStart 有效但 aCount 超出尾部，移除范围会裁剪到 Count
+     *   如果 aCount > 0 且 aStart >= Count，会抛出 EOutOfRange
      *}
     function Drain(aStart, aCount: SizeUInt): specialize IVec<T>;
 
@@ -1032,6 +1035,8 @@ type
      * @remark
      *   类似 Rust 的 Vec::splice 和 JavaScript 的 Array.splice
      *   如果 aRemoveCount = 0，相当于纯插入
+     *   如果 aIndex 有效但 aRemoveCount 超出尾部，移除范围会裁剪到 Count
+     *   如果 aIndex > Count 会抛出 EOutOfRange
      *   如果 aInsert 为空，相当于纯删除
      *   如果两者都非空，则先删除后插入
      *}

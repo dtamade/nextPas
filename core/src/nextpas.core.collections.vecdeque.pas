@@ -8783,13 +8783,29 @@ var
   LResult: specialize TVec<T>;
   i: SizeUInt;
 begin
+  if aCount = 0 then
+  begin
+    LResult := specialize TVec<T>.Create(0, GetAllocator, nil);
+    try
+      LResult.SetGrowStrategy(GetGrowStrategy);
+      Result := LResult;
+    except
+      LResult.Free;
+      raise;
+    end;
+    exit;
+  end;
+
   if aStart >= FCount then
     raise EOutOfRange.Create('Drain: start index out of range');
-  if aStart + aCount > FCount then
+
+  if aCount > FCount - aStart then
     aCount := FCount - aStart;
 
   LResult := specialize TVec<T>.Create(aCount, GetAllocator, nil);
   try
+    LResult.SetGrowStrategy(GetGrowStrategy);
+
     for i := 0 to aCount - 1 do
       LResult.PushUnchecked(GetUnchecked(aStart + i));
 

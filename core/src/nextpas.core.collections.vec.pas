@@ -2145,10 +2145,24 @@ var
   LResult: specialize TVec<T>;
   i: SizeUInt;
 begin
+  if aCount = 0 then
+  begin
+    LResult := specialize TVec<T>.Create(0, GetAllocator, nil);
+    try
+      LResult.SetGrowStrategy(GetGrowStrategy);
+      Result := LResult;
+    except
+      LResult.Free;
+      raise;
+    end;
+    exit;
+  end;
+
   // 边界检查
   if aStart >= FCount then
     raise EOutOfRange.Create('TVec.Drain: start index out of range');
-  if aStart + aCount > FCount then
+
+  if aCount > FCount - aStart then
     aCount := FCount - aStart;
 
   // 创建结果向量并复制要删除的元素
