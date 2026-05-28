@@ -43,6 +43,7 @@ type
       SymbolId: LongInt;
       GenericName: string;
       MethodShortName: string;
+      OwnerUnitId: string;
       ParamNames: array of string;
       ArgTypes: array of string;
     end;
@@ -3663,6 +3664,7 @@ begin
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedImportedUnitBodies;
   SeedDeclarations;
+  CompletePendingSignatures;
   AssignScopesToSymbols;
   SeedCallBindings;
   CheckDuplicateDeclarations;
@@ -3687,10 +3689,7 @@ begin
   if FDiagnostics.HasErrors then
     FModel.MarkFailure
   else
-  begin
-    CompletePendingSignatures;
     FModel.MarkReady;
-  end;
 end;
 
 function TSemanticAnalyzer.DetachModel: TSemanticModel;
@@ -4249,12 +4248,21 @@ begin
     Decl := nil;
     for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
     begin
-      if SameText(FProcedureBodies[BodyIdx].Name, QualName) then
+      if SameText(FProcedureBodies[BodyIdx].Name, QualName) and
+        SameText(FProcedureBodies[BodyIdx].OwnerUnitId,
+          FPendingSignatures[I].OwnerUnitId) then
       begin
         Decl := FProcedureBodies[BodyIdx].Decl;
         Break;
       end;
     end;
+    if Decl = nil then
+      for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+        if SameText(FProcedureBodies[BodyIdx].Name, QualName) then
+        begin
+          Decl := FProcedureBodies[BodyIdx].Decl;
+          Break;
+        end;
     if Decl <> nil then
     begin
       SubstSig := GetSubstitutedParamSignature(Decl,
@@ -4792,6 +4800,7 @@ begin
           FPendingSignatures[BodyIdx].SymbolId := NewSymbolId;
           FPendingSignatures[BodyIdx].GenericName := GenericName;
           FPendingSignatures[BodyIdx].MethodShortName := MethodShortName;
+          FPendingSignatures[BodyIdx].OwnerUnitId := AOwnerUnitId;
           SetLength(FPendingSignatures[BodyIdx].ParamNames, Length(ParamNames));
           for BodyIdx := 0 to High(ParamNames) do
             FPendingSignatures[High(FPendingSignatures)].ParamNames[BodyIdx] := ParamNames[BodyIdx];

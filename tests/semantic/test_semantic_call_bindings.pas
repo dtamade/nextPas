@@ -3547,6 +3547,59 @@ begin
   end;
 end;
 
+procedure CheckGenericSpecializeBeforeBody;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program SpecBeforeBody;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    '  TIntBox = specialize TBox<Integer>;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'var' + LineEnding +
+    '  B: TIntBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  B.Put(' + #39 + 'wrong' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('specialize-before-body-expected-type-mismatch');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15891,6 +15944,7 @@ begin
     CheckGenericConstructorBinding;
     CheckNestedGenericInstantiation;
     CheckGenericParentChainInstantiation;
+    CheckGenericSpecializeBeforeBody;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
