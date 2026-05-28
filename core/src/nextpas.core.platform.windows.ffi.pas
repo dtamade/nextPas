@@ -117,6 +117,10 @@ function CreateFileMappingA(hFile: HANDLE; lpAttributes: LPSECURITY_ATTRIBUTES; 
 function MapViewOfFile(hFileMappingObject: HANDLE; dwDesiredAccess: DWORD; dwFileOffsetHigh: DWORD; dwFileOffsetLow: DWORD; dwNumberOfBytesToMap: PtrUInt): Pointer; stdcall; external 'kernel32' name 'MapViewOfFile';
 function UnmapViewOfFile(lpBaseAddress: Pointer): WINBOOL; stdcall; external 'kernel32' name 'UnmapViewOfFile';
 function GetFileSize(hFile: HANDLE; lpFileSizeHigh: LPDWORD): DWORD; stdcall; external 'kernel32' name 'GetFileSize';
+function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: LPSECURITY_ATTRIBUTES; nSize: DWORD): WINBOOL; stdcall; external 'kernel32' name 'CreatePipe';
+function SetHandleInformation(hObject: HANDLE; dwMask: DWORD; dwFlags: DWORD): WINBOOL; stdcall; external 'kernel32' name 'SetHandleInformation';
+function DuplicateHandle(hSourceProcessHandle: HANDLE; hSourceHandle: HANDLE; hTargetProcessHandle: HANDLE; lpTargetHandle: PHANDLE; dwDesiredAccess: DWORD; bInheritHandle: WINBOOL; dwOptions: DWORD): WINBOOL; stdcall; external 'kernel32' name 'DuplicateHandle';
+function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurrentProcess';
 
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}
