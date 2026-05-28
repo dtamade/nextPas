@@ -226,6 +226,41 @@ begin
   platform_file_unlink('/tmp/nextpas_test_excl.txt');
 end;
 
+procedure TestLockExclusive;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+begin
+  Check(platform_file_open('/tmp/nextpas_lock_test.tmp', fomReadWrite, fcmCreateAlways, H) = 0, 'open');
+  platform_file_write(H, PAnsiChar('data'), 4, LWritten);
+  Check(platform_file_lock(H, True) = 0, 'lock exclusive');
+  Check(platform_file_unlock(H) = 0, 'unlock');
+  Check(platform_file_lock(H, False) = 0, 'lock shared');
+  Check(platform_file_unlock(H) = 0, 'unlock shared');
+  platform_file_close(H);
+  platform_file_unlink('/tmp/nextpas_lock_test.tmp');
+end;
+
+procedure TestTrylockConflict;
+var
+  H1, H2: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  R: Int32;
+begin
+  Check(platform_file_open('/tmp/nextpas_trylock.tmp', fomReadWrite, fcmCreateAlways, H1) = 0, 'open 1');
+  platform_file_write(H1, PAnsiChar('x'), 1, LWritten);
+  Check(platform_file_lock(H1, True) = 0, 'lock exclusive');
+  Check(platform_file_open('/tmp/nextpas_trylock.tmp', fomReadOnly, fcmOpenExisting, H2) = 0, 'open 2');
+  R := platform_file_trylock(H2, True);
+  Check(R <> 0, 'trylock on locked file fails');
+  platform_file_unlock(H1);
+  Check(platform_file_trylock(H2, True) = 0, 'trylock after unlock succeeds');
+  platform_file_unlock(H2);
+  platform_file_close(H2);
+  platform_file_close(H1);
+  platform_file_unlink('/tmp/nextpas_trylock.tmp');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -242,5 +277,7 @@ begin
   T.Run('symlink stat', @TestSymlink);
   T.Run('permission error', @TestPermissionError);
   T.Run('create exclusive', @TestCreateExclusive);
+  T.Run('file lock exclusive', @TestLockExclusive);
+  T.Run('file trylock conflict', @TestTrylockConflict);
   T.Summary;
 end.
