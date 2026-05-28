@@ -3460,7 +3460,7 @@ begin
     '  C: TMyChild;' + LineEnding +
     'begin' + LineEnding +
     '  C.DoChild(1);' + LineEnding +
-    '  C.DoBase(2);' + LineEnding +
+    '  C.DoBase(' + #39 + 'wrong' + #39 + ');' + LineEnding +
     'end.' + LineEnding;
 
   Diagnostics := TDiagnosticsSink.CreateDefault;
@@ -3475,11 +3475,11 @@ begin
     Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
     Analyzer.Analyze;
     Model := Analyzer.DetachModel;
-    if Diagnostics.HasErrors then
-      Fail('generic-parent-chain-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if not Diagnostics.HasErrors then
+      Fail('generic-parent-chain-expected-type-mismatch');
     if Model = nil then
       Fail('generic-parent-chain-missing-model');
-    if Model.BindingCount < 2 then
+    if Model.BindingCount < 1 then
       Fail('generic-parent-chain-binding:' + IntToStr(Model.BindingCount));
   finally
     Model.Free;

@@ -4659,19 +4659,20 @@ begin
   begin
     for I := 0 to High(ParamNames) do
     begin
-      J := Pos(ParamNames[I], SubstSig);
-      while J > 0 do
+      J := 1;
+      while J <= Length(SubstSig) - Length(ParamNames[I]) + 1 do
       begin
-        if ((J = 1) or not (SubstSig[J-1] in ['A'..'Z','a'..'z','0'..'9','_'])) and
+        if SameText(Copy(SubstSig, J, Length(ParamNames[I])), ParamNames[I]) and
+          ((J = 1) or not (SubstSig[J-1] in ['A'..'Z','a'..'z','0'..'9','_'])) and
           ((J + Length(ParamNames[I]) - 1 = Length(SubstSig)) or
            not (SubstSig[J + Length(ParamNames[I])] in ['A'..'Z','a'..'z','0'..'9','_'])) then
         begin
           SubstSig := Copy(SubstSig, 1, J - 1) + ArgTypes[I] +
             Copy(SubstSig, J + Length(ParamNames[I]), MaxInt);
-        end;
-        J := Pos(ParamNames[I], SubstSig);
-        if J <= Length(ArgTypes[I]) then
-          Break;
+          J := J + Length(ArgTypes[I]);
+        end
+        else
+          Inc(J);
       end;
     end;
     GtPos := ResolveOrInstantiateInlineGeneric(SubstSig, AOwnerUnitId);
