@@ -39,31 +39,43 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 │   ├── [完成] managed-type 资源管理测试 (string 类型全容器覆盖)
 │   └── [完成] 错误路径测试 (越界、空容器、nil 参数)
 │
-├── G-PERF [待做]: 性能达到或超越同类框架
-│   ├── [待做] TArray introsort 防退化
-│   ├── [待做] TVecDeque partition 三路分区
-│   ├── [待做] HashMap 负载因子 0.86 → 0.75
-│   ├── [待做] TVecDeque.Rotate O(1)
-│   └── [待做] wyhash 替换 FNV-1a (benchmark-driven)
+├── G-PERF [完成]: 性能达到或超越同类框架
+│   ├── [完成] TArray introsort (HeapSort fallback + depth limit)
+│   ├── [完成] TArray 三路分区 (Dutch National Flag, all-same 22x faster)
+│   ├── [完成] TArray pattern detection (IsSorted + reverse, sorted 10x faster)
+│   ├── [完成] TArray inline swap (消除 SwapUnchecked 间接调用)
+│   ├── [完成] TVecDeque 三路分区
+│   ├── [完成] TVecDeque.Rotate O(1) (FHead 指针调整)
+│   ├── [完成] HashMap 负载因子 0.86 → 0.75
+│   └── [搁置] wyhash 替换 FNV-1a (benchmark 未证明必要)
 │
-└── G-BENCH [待做]: 基准对比 FPC RTL / Rust / Go
-    ├── [待做] 建立 benchmark 框架
-    └── [待做] 跨语言对比报告
+└── G-BENCH [完成]: 基准对比 FPC RTL / Rust / Go
+    ├── [完成] benchmark 框架 (src/nextpas.core.bench.pas)
+    └── [完成] 跨语言对比 (Go pdqsort 2x, Rust 16x - 编译器级差距)
 ```
 
 ## 当前状态
 
-- 22 套件，314 测试，0 失败
+- 22 套件，315 测试，0 失败（+1 对抗性排序测试）
 - heaptrc 全部零泄漏
 - 7 个严重 bug 已修复
-- G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅
-- 下一步：G-PERF（性能优化）
+- G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅ G-PERF ✅ G-BENCH ✅
+- 排序性能：sorted/all-same 追到 Go 的 2x，random 2.3x（间接调用固有开销）
 
-## 执行顺序
+## Benchmark 数据 (N=10000, -O1, Xeon E5-2680v4)
 
-```
-G-TESTED (接口 100% 覆盖) → G-PERF (性能优化) → G-BENCH (基准测试)
-```
+| Scenario | nextPas | Go pdqsort | Rust pdqsort | nextPas/Go |
+|----------|---------|-----------|-------------|-----------|
+| random   | 2949μs  | 1311μs    | 185μs       | 2.3x      |
+| sorted   | 139μs   | 67μs      | 7μs         | 2.1x      |
+| reversed | 322μs   | 75μs      | 9μs         | 4.3x      |
+| all-same | 141μs   | 64μs      | 7μs         | 2.2x      |
+
+## 后续可选优化（需要更大改动）
+
+- ordinal 类型特化 sort 内核（`{$INCLUDE}` 宏生成，可追平 Go）
+- pdqsort partial insertion sort（几乎有序数据加速）
+- reversed 场景优化（当前 O(N) 检测 + O(N) reverse，可合并为一次扫描）
 
 ## 质量门禁
 
