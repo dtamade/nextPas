@@ -132,6 +132,8 @@ type
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
     procedure SetTypeParams(const ATypeId: LongInt; const AParamListNode: TGreenNode);
     procedure SetTypeInstantiatedFrom(const ATypeId: LongInt; const AFromTypeId: LongInt);
+    procedure AppendTypeConstraint(const ATypeId: LongInt;
+      const AParamName: string; const AConstraint: string);
     function IsTypeDescendantOf(const ATypeId: LongInt;
       const AAncestorTypeId: LongInt): Boolean;
     function AddScope(const AKind: TScopeKind; const AName: string;
@@ -337,6 +339,63 @@ begin
   Idx := ATypeId - 1;
   if (Idx >= 0) and (Idx < Length(FTypes)) then
     FTypes[Idx].InstantiatedFrom := AFromTypeId;
+end;
+
+procedure TSemanticModel.AppendTypeConstraint(const ATypeId: LongInt;
+  const AParamName: string; const AConstraint: string);
+var
+  Idx, ParamIdx, CommaCount: LongInt;
+  Params: string;
+  Parts: array of string;
+  I, J: LongInt;
+begin
+  Idx := ATypeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypes)) then
+    Exit;
+  Params := FTypes[Idx].TypeParams;
+  ParamIdx := -1;
+  CommaCount := 0;
+  I := 1;
+  while I <= Length(Params) do
+  begin
+    J := I;
+    while (J <= Length(Params)) and (Params[J] <> ',') do
+      Inc(J);
+    if SameText(Trim(Copy(Params, I, J - I)), AParamName) then
+    begin
+      ParamIdx := CommaCount;
+      Break;
+    end;
+    Inc(CommaCount);
+    I := J + 1;
+  end;
+  if ParamIdx < 0 then
+    Exit;
+  SetLength(Parts, 0);
+  I := 1;
+  while I <= Length(FTypes[Idx].TypeConstraints) do
+  begin
+    J := I;
+    while (J <= Length(FTypes[Idx].TypeConstraints)) and
+      (FTypes[Idx].TypeConstraints[J] <> ',') do
+      Inc(J);
+    SetLength(Parts, Length(Parts) + 1);
+    Parts[High(Parts)] := Copy(FTypes[Idx].TypeConstraints, I, J - I);
+    I := J + 1;
+  end;
+  while Length(Parts) <= ParamIdx do
+  begin
+    SetLength(Parts, Length(Parts) + 1);
+    Parts[High(Parts)] := '';
+  end;
+  Parts[ParamIdx] := AConstraint;
+  FTypes[Idx].TypeConstraints := '';
+  for I := 0 to High(Parts) do
+  begin
+    if I > 0 then
+      FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + ',';
+    FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + Parts[I];
+  end;
 end;
 
 function TSemanticModel.IsTypeDescendantOf(const ATypeId: LongInt;

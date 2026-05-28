@@ -279,6 +279,8 @@ type
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure ProcessClassFields(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
+    procedure AppendWhereConstraint(const ATypeId: LongInt;
+      const AWhereSpec: string);
     procedure WalkDeclarations(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure WalkAssignmentStatements(const ANode: TGreenNode);
@@ -4039,6 +4041,20 @@ begin
   FModel.AddConstValue(RecName + '$record', 1);
 end;
 
+procedure TSemanticAnalyzer.AppendWhereConstraint(const ATypeId: LongInt;
+  const AWhereSpec: string);
+var
+  ColonPos: LongInt;
+  ParamName, Constraint: string;
+begin
+  ColonPos := Pos(':', AWhereSpec);
+  if ColonPos <= 0 then
+    Exit;
+  ParamName := Copy(AWhereSpec, 1, ColonPos - 1);
+  Constraint := Copy(AWhereSpec, ColonPos + 1, MaxInt);
+  FModel.AppendTypeConstraint(ATypeId, ParamName, Constraint);
+end;
+
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
@@ -4140,6 +4156,11 @@ begin
     Child := ANode.ChildAt(I);
     if Child = nil then
       Continue;
+    if (Child.NodeKind = gnkIdentifier) and (Pos('where:', Child.Text) = 1) then
+    begin
+      AppendWhereConstraint(ATypeId, Copy(Child.Text, 7, MaxInt));
+      Continue;
+    end;
     if Child.NodeKind = gnkVisibilityLabel then
     begin
       CurrentVisibility := LowerCase(Child.Text);
@@ -4466,6 +4487,17 @@ begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
           FRootFileId, 0,
           'type ' + ArgTypes[I] + ' does not satisfy constraint "record"');
+        Exit;
+      end;
+    end
+    else
+    begin
+      if not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + ArgTypes[I] + ' does not satisfy interface constraint "' +
+          Constraints[I] + '" (must be a class type)');
         Exit;
       end;
     end;

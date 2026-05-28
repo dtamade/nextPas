@@ -3065,6 +3065,186 @@ begin
   end;
 end;
 
+procedure CheckGenericInterfaceConstraintSatisfied;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericIfaceOk;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IComparable = interface' + LineEnding +
+    '  end;' + LineEnding +
+    '  TMyObj = class(IComparable)' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TSorted<T: IComparable> = class' + LineEnding +
+    '    procedure Add(const Item: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TSorted.Add(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TMySorted = specialize TSorted<TMyObj>;' + LineEnding +
+    'var' + LineEnding +
+    '  S: TMySorted;' + LineEnding +
+    'begin' + LineEnding +
+    '  S.Add(nil);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-iface-constraint-ok-unexpected:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model.BindingCount < 1 then
+      Fail('generic-iface-constraint-ok-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericInterfaceConstraintViolation;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericIfaceFail;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IComparable = interface' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic TSorted<T: IComparable> = class' + LineEnding +
+    '    procedure Add(const Item: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TSorted.Add(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntSorted = specialize TSorted<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  S: TIntSorted;' + LineEnding +
+    'begin' + LineEnding +
+    '  S.Add(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-iface-constraint-violation-expected-diagnostic');
+    if Diagnostics.LastDiagnosticCode <> 'sema.constraint-violation' then
+      Fail('generic-iface-constraint-violation-wrong-code:' +
+        Diagnostics.LastDiagnosticCode);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericWhereClauseConstraint;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericWhereClause;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  TFoo = class' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic THolder<T> = class' + LineEnding +
+    '    where T: class;' + LineEnding +
+    '    procedure Hold(const Item: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure THolder.Hold(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TFooHolder = specialize THolder<TFoo>;' + LineEnding +
+    '  TIntHolder = specialize THolder<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  H: TFooHolder;' + LineEnding +
+    'begin' + LineEnding +
+    '  H.Hold(nil);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-where-clause-expected-diagnostic');
+    if Diagnostics.LastDiagnosticCode <> 'sema.constraint-violation' then
+      Fail('generic-where-clause-wrong-code:' + Diagnostics.LastDiagnosticCode);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15402,6 +15582,9 @@ begin
     CheckGenericConstraintClassSatisfied;
     CheckGenericConstraintClassViolation;
     CheckGenericConstraintNoConstraintAcceptsAll;
+    CheckGenericInterfaceConstraintSatisfied;
+    CheckGenericInterfaceConstraintViolation;
+    CheckGenericWhereClauseConstraint;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

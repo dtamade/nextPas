@@ -2158,6 +2158,36 @@ begin
                 end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
               end
+              else if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                (LowerCase(CurrentToken(ALexer, ACursor).Lexeme) = 'where') then
+              begin
+                Inc(ACursor);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                begin
+                  SpecArgs := CurrentToken(ALexer, ACursor).Lexeme;
+                  Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                  begin
+                    Inc(ACursor);
+                    SpecArgs := SpecArgs + ':';
+                    if (ACursor < ALexer.TokenCount) and
+                      (CurrentToken(ALexer, ACursor).Kind in
+                        [tkIdentifier, tkClassKeyword, tkRecordKeyword]) then
+                    begin
+                      SpecArgs := SpecArgs + CurrentToken(ALexer, ACursor).Lexeme;
+                      Inc(ACursor);
+                    end;
+                  end;
+                  ElementNode := TGreenNode.Create(gnkIdentifier,
+                    CurrentToken(ALexer, ACursor - 1).ByteOffset, 0,
+                    'where:' + SpecArgs);
+                  TypeNode.AppendChild(ElementNode);
+                  Inc(ATree.FNodeCount);
+                end;
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+              end
               else if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
               begin
                 ElementNode := TGreenNode.Create(gnkClassField,
