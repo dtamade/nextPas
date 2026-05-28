@@ -165,6 +165,8 @@ type
     function TypeMetaVmtSlot(const ATypeName, AMethodName: string): Int64;
     function TypeMetaRetPtr(const ATypeName, AMethodName: string): Boolean;
     function TypeMetaParentClass(const ATypeName: string): string;
+    function TypeMetaVmtCount(const ATypeName: string): Int64;
+    function TypeMetaInterfaces(const ATypeName: string): string;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
     function TypeIdHasStableScalarFact(const ATypeId: LongInt): Boolean;
     function CallArgumentSignature(
@@ -1803,6 +1805,23 @@ begin
   if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.ParentClassName <> '') then
     Exit(Meta.ParentClassName);
   if not FModel.LookupStringConstValue(ATypeName + '$parent_class', Result) then
+    Result := '';
+end;
+
+function TSemanticAnalyzer.TypeMetaVmtCount(const ATypeName: string): Int64;
+var Meta: TTypeMetadata; V: Int64;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) then Exit(Meta.VmtCount);
+  if FModel.LookupConstValue(ATypeName + '$vmt_count', V) then Exit(V);
+  Result := -1;
+end;
+
+function TSemanticAnalyzer.TypeMetaInterfaces(const ATypeName: string): string;
+var Meta: TTypeMetadata;
+begin
+  if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Interfaces <> '') then
+    Exit(Meta.Interfaces);
+  if not FModel.LookupStringConstValue(ATypeName + '$interfaces', Result) then
     Result := '';
 end;
 
@@ -4406,8 +4425,7 @@ begin
         Result := False;
         Exit;
       end;
-      if not FModel.LookupStringConstValue(AArgType + '$interfaces', IntfList) then
-        IntfList := '';
+      IntfList := TypeMetaInterfaces(AArgType);
       if (IntfList = '') or (Pos(',' + SC + ',', ',' + IntfList + ',') = 0) then
       begin
         FDiagnostics.EmitError('sema.constraint-violation', 'sema',
@@ -4626,7 +4644,8 @@ begin
         end;
       end;
     end;
-    if FModel.LookupConstValue(ParentName + '$vmt_count', ParentFieldVal) then
+    ParentFieldVal := TypeMetaVmtCount(ParentName);
+    if ParentFieldVal >= 0 then
     begin
       FModel.AddConstValue(ClsName + '$vmt_count', ParentFieldVal);
       for J := 0 to FModel.ConstValueCount - 1 do
@@ -5228,7 +5247,8 @@ begin
     FModel.AddConstValue(InstanceName + '$size', SizeVal)
   else
     FModel.AddConstValue(InstanceName + '$size', 8);
-  if FModel.LookupConstValue(GenericName + '$vmt_count', SizeVal) then
+  SizeVal := TypeMetaVmtCount(GenericName);
+  if SizeVal >= 0 then
   begin
     FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal);
     for I := 0 to SizeVal - 1 do
@@ -6125,10 +6145,11 @@ begin
     (ANode.ChildAt(1) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-    FModel.LookupConstValue(
-      FCurrentMethodClass + '.' + ANode.ChildAt(0).Text + '.' +
-      ANode.ChildAt(1).Text + '$idx', Folded) then
+    (TypeMetaFieldIndex(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text,
+      ANode.ChildAt(1).Text) >= 0) then
   begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text,
+      ANode.ChildAt(1).Text);
     ABlob := 'field self ' + IntToStr(Folded) + #10;
     Exit(True);
   end;
@@ -6699,8 +6720,7 @@ begin
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, Operand
             );
-            if FModel.LookupConstValue(
-              Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+            if TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0 then
               FModel.AddTypedHirNode('vmt-store-runtime',
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 FuncName + #9 + Arg.ChildAt(0).ChildAt(0).Text);
@@ -6715,8 +6735,7 @@ begin
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, Operand
             );
-            if FModel.LookupConstValue(
-              Arg.ChildAt(0).ChildAt(0).Text + '$vmt_count', Value) then
+            if TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0 then
               FModel.AddTypedHirNode('vmt-store-runtime',
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
@@ -6757,8 +6776,7 @@ begin
           FModel.AddTypedHirNode(
             'class-new-runtime', IntToStr(Value), 0, 0, Operand
           );
-          if FModel.LookupConstValue(
-            Arg.ChildAt(0).Text + '$vmt_count', Value) then
+          if TypeMetaVmtCount(Arg.ChildAt(0).Text) > 0 then
             FModel.AddTypedHirNode('vmt-store-runtime',
               Arg.ChildAt(0).Text, 0, 0,
               Decoded + #9 + Arg.ChildAt(0).Text);
