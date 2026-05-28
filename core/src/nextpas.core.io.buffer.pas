@@ -149,7 +149,7 @@ var
 begin
   LSrc := @ABuf;
   LRemaining := ACount;
-  Result := ACount;
+  Result := 0;
 
   while LRemaining > 0 do
   begin
@@ -158,20 +158,20 @@ begin
     begin
       Move(LSrc^, FBuf[FBufPos], LRemaining);
       Inc(FBufPos, LRemaining);
+      Inc(Result, LRemaining);
       Break;
     end;
 
-    // Fill buffer and flush
     if LSpace > 0 then
     begin
       Move(LSrc^, FBuf[FBufPos], LSpace);
       Inc(LSrc, LSpace);
       Dec(LRemaining, LSpace);
+      Inc(Result, LSpace);
       FBufPos := FBufCap;
     end;
     FlushBuffer;
 
-    // Large writes bypass buffer
     if LRemaining >= FBufCap then
     begin
       while LRemaining > 0 do
@@ -181,6 +181,7 @@ begin
           Exit;
         Inc(LSrc, LCopy);
         Dec(LRemaining, LCopy);
+        Inc(Result, LCopy);
       end;
       Break;
     end;
