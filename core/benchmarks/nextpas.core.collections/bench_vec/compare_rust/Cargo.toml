@@ -1,0 +1,8 @@
+[package]
+name = "bench_vec_rust"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bench_vec"
+path = "src/main.rs"

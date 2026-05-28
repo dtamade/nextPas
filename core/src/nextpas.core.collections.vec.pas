@@ -1433,7 +1433,7 @@ begin
     raise EEmptyCollection.Create('TVec.Pop: failed to pop (empty)');
   Dec(FCount);
   Result := FBuf.GetUnchecked(FCount);
-  if GetIsManagedType then
+  if System.IsManagedType(T) then
     GetElementManager.FinalizeManagedElementsUnchecked(FBuf.GetPtrUnchecked(FCount), 1);
 end;
 
