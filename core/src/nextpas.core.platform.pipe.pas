@@ -123,7 +123,7 @@ end;
 
 function platform_dup2(AOldFd: Int32; ANewFd: Int32): Int32;
 begin
-  Result := Int32(GetLastError);
+  Result := -1; // not implemented on Windows
 end;
 {$ENDIF}
 

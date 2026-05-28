@@ -164,11 +164,32 @@ begin
 end;
 
 function platform_dl_error(ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LErr: DWORD;
+  LLen: DWORD;
+  I: Int32;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  ABuf[0] := #0;
-  Result := Int32(GetLastError);
+  LErr := GetLastError;
+  if LErr = 0 then
+  begin
+    ABuf[0] := #0;
+    Exit(0);
+  end;
+  LLen := FormatMessageA(
+    FORMAT_MESSAGE_FROM_SYSTEM or FORMAT_MESSAGE_IGNORE_INSERTS,
+    nil, LErr, 0, ABuf, DWORD(ABufLen), nil);
+  if LLen = 0 then
+  begin
+    ABuf[0] := #0;
+    Exit(Int32(LErr));
+  end;
+  I := Int32(LLen);
+  while (I > 0) and ((ABuf[I-1] = #13) or (ABuf[I-1] = #10)) do
+    Dec(I);
+  ABuf[I] := #0;
+  Result := I;
 end;
 {$ENDIF}
 

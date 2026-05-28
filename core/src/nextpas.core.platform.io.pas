@@ -261,7 +261,7 @@ end;
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
 begin
   FillChar(APoller, SizeOf(APoller), 0);
-  Result := 0;
+  Result := -1; // WSAPoll-based poller not yet implemented
 end;
 
 function platform_poller_close(var APoller: TPlatformPoller): Int32;
@@ -279,18 +279,18 @@ end;
 function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 begin
-  Result := Int32(WSAGetLastError);
+  Result := -1;
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: Int32;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 begin
-  Result := Int32(WSAGetLastError);
+  Result := -1;
 end;
 
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: Int32): Int32;
 begin
-  Result := Int32(WSAGetLastError);
+  Result := -1;
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
@@ -298,7 +298,7 @@ function platform_poller_wait(var APoller: TPlatformPoller;
   out ACount: Int32): Int32;
 begin
   ACount := 0;
-  Result := Int32(WSAGetLastError);
+  Result := -1;
 end;
 {$ENDIF}
 

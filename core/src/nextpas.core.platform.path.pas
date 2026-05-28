@@ -282,7 +282,7 @@ var
   LLen, I, LOut, LStart: Int32;
   LTmp: array[0..1023] of AnsiChar;
   LParts: array[0..127] of record Pos, Len: Int32; end;
-  LPartCount, J: Int32;
+  LPartCount, J, LPrefixLen: Int32;
   LAbsolute: Boolean;
 begin
   LLen := StrLen(APath);
@@ -291,8 +291,22 @@ begin
 
   LAbsolute := platform_path_is_absolute(APath);
   LPartCount := 0;
-  I := 0;
-  if LAbsolute then I := 1;
+  LPrefixLen := 0;
+
+  if LAbsolute then
+  begin
+  {$IFDEF NEXTPAS_WINDOWS}
+    if (LLen >= 3) and (APath[1] = ':') and IsSep(APath[2]) then
+      LPrefixLen := 3
+    else if (LLen >= 2) and IsSep(APath[0]) and IsSep(APath[1]) then
+      LPrefixLen := 2
+    else
+      LPrefixLen := 1;
+  {$ELSE}
+    LPrefixLen := 1;
+  {$ENDIF}
+  end;
+  I := LPrefixLen;
 
   while I < LLen do
   begin
@@ -310,6 +324,7 @@ begin
         Dec(LPartCount)
       else if not LAbsolute then
       begin
+        if LPartCount >= 128 then Break;
         LParts[LPartCount].Pos := LStart;
         LParts[LPartCount].Len := 2;
         Inc(LPartCount);
@@ -317,6 +332,7 @@ begin
     end
     else
     begin
+      if LPartCount >= 128 then Break;
       LParts[LPartCount].Pos := LStart;
       LParts[LPartCount].Len := I - LStart;
       Inc(LPartCount);
@@ -326,19 +342,28 @@ begin
   LOut := 0;
   if LAbsolute then
   begin
-    LTmp[0] := PLATFORM_PATH_SEP;
-    LOut := 1;
-  end;
-  for J := 0 to LPartCount - 1 do
-  begin
-    if (J > 0) or (LAbsolute and (LPartCount > 0) and (J = 0)) then
+    if LPrefixLen <= 1020 then
     begin
+      Move(APath^, LTmp[0], LPrefixLen);
+      LOut := LPrefixLen;
+    {$IFDEF NEXTPAS_WINDOWS}
       if (LOut > 0) and not IsSep(LTmp[LOut-1]) then
       begin
         LTmp[LOut] := PLATFORM_PATH_SEP;
         Inc(LOut);
       end;
+    {$ENDIF}
     end;
+  end;
+  for J := 0 to LPartCount - 1 do
+  begin
+    if LOut >= 1020 then Break;
+    if (J > 0) or (LAbsolute and (J = 0) and (LOut > 0) and not IsSep(LTmp[LOut-1])) then
+    begin
+      LTmp[LOut] := PLATFORM_PATH_SEP;
+      Inc(LOut);
+    end;
+    if LOut + LParts[J].Len > 1023 then Break;
     Move(APath[LParts[J].Pos], LTmp[LOut], LParts[J].Len);
     Inc(LOut, LParts[J].Len);
   end;
