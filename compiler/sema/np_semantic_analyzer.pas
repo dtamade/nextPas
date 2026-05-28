@@ -4430,7 +4430,8 @@ begin
               (not FModel.LookupConstValue(TypeChild.ChildAt(0).Text + '$size', SizeVal)) then
               ParentTypeId := 0;
             if (ParentTypeId = 0) and (Pos('<', TypeChild.ChildAt(0).Text) > 0) then
-              FModel.AddStringConstValue(Child.Text + '$generic_parent',
+              FModel.AddStringConstValue(
+                AOwnerUnitId + '.' + Child.Text + '$generic_parent',
                 TypeChild.ChildAt(0).Text);
           end;
         end
@@ -4515,20 +4516,34 @@ begin
   ArgStr := Copy(ASpecText, LtPos + 1, GtPos - LtPos - 1);
 
   GenericTypeId := 0;
-  for I := 0 to FModel.TypeCount - 1 do
+  for I := 0 to FModel.SymbolCount - 1 do
   begin
-    GenericType := FModel.TypeAt(I);
-    if SameText(GenericType.Name, GenericName) and
-      (GenericType.TypeParams <> '') then
+    if SameText(FModel.SymbolAt(I).Name, GenericName) and
+      SameText(FModel.SymbolAt(I).Kind, 'type') and
+      SameText(FModel.SymbolAt(I).OwnerUnitId, AOwnerUnitId) then
     begin
-      GenericTypeId := GenericType.TypeId;
-      ParamStr := GenericType.TypeParams;
-      ConstraintStr := GenericType.TypeConstraints;
+      GenericTypeId := FModel.SymbolAt(I).TypeId;
       Break;
     end;
   end;
   if GenericTypeId <= 0 then
+  begin
+    for I := 0 to FModel.TypeCount - 1 do
+    begin
+      GenericType := FModel.TypeAt(I);
+      if SameText(GenericType.Name, GenericName) and
+        (GenericType.TypeParams <> '') then
+      begin
+        GenericTypeId := GenericType.TypeId;
+        Break;
+      end;
+    end;
+  end;
+  if GenericTypeId <= 0 then
     Exit;
+  GenericType := FModel.TypeAt(GenericTypeId - 1);
+  ParamStr := GenericType.TypeParams;
+  ConstraintStr := GenericType.TypeConstraints;
   if AInstanceTypeId <= 0 then
     Exit;
   FModel.SetTypeInstantiatedFrom(AInstanceTypeId, GenericTypeId);
@@ -4655,7 +4670,7 @@ begin
   end;
   FModel.SetTypeParent(AInstanceTypeId,
     FModel.TypeAt(GenericTypeId - 1).ParentTypeId);
-  if FModel.LookupStringConstValue(GenericName + '$generic_parent', SubstSig) then
+  if FModel.LookupStringConstValue(AOwnerUnitId + '.' + GenericName + '$generic_parent', SubstSig) then
   begin
     for I := 0 to High(ParamNames) do
     begin
@@ -4746,7 +4761,7 @@ begin
   if LtPos <= 0 then
     Exit;
 
-  CacheKey := LowerCase(ASpecText);
+  CacheKey := LowerCase(AOwnerUnitId + '#' + ASpecText);
   for I := 0 to Length(FGenericCacheKeys) - 1 do
     if FGenericCacheKeys[I] = CacheKey then
     begin

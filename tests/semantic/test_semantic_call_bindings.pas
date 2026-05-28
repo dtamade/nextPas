@@ -3368,11 +3368,13 @@ var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
   Diagnostics: TDiagnosticsSink;
+  I: LongInt;
   Lexer: TLexerResult;
   Model: TSemanticModel;
   SourceText: string;
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
+  FoundSig: Boolean;
 begin
   SourceText :=
     'program NestedGeneric;' + LineEnding +
@@ -3416,6 +3418,18 @@ begin
       Fail('nested-generic-missing-model');
     if Model.BindingCount < 1 then
       Fail('nested-generic-binding:' + IntToStr(Model.BindingCount));
+    FoundSig := False;
+    for I := 0 to Model.SymbolCount - 1 do
+      if SameText(Model.SymbolAt(I).Name, 'TBoxWrapper.Wrap') and
+        SameText(Model.SymbolAt(I).Kind, 'method') then
+      begin
+        if Model.SymbolAt(I).ParamSignature = 'p' then
+          FoundSig := True
+        else
+          Fail('nested-generic-wrong-sig:' + Model.SymbolAt(I).ParamSignature);
+      end;
+    if not FoundSig then
+      Fail('nested-generic-method-not-found');
   finally
     Model.Free;
     Analyzer.Free;
@@ -3432,11 +3446,14 @@ var
   Analyzer: TSemanticAnalyzer;
   Ast: TAstFacade;
   Diagnostics: TDiagnosticsSink;
+  I: LongInt;
   Lexer: TLexerResult;
   Model: TSemanticModel;
   SourceText: string;
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
+  ChildTypeId, ParentTypeId: LongInt;
+  ParentName: string;
 begin
   SourceText :=
     'program GenericParentChain;' + LineEnding +
@@ -3481,6 +3498,21 @@ begin
       Fail('generic-parent-chain-missing-model');
     if Model.BindingCount < 1 then
       Fail('generic-parent-chain-binding:' + IntToStr(Model.BindingCount));
+    ChildTypeId := 0;
+    for I := 0 to Model.TypeCount - 1 do
+      if SameText(Model.TypeAt(I).Name, 'TMyChild') then
+      begin
+        ChildTypeId := Model.TypeAt(I).TypeId;
+        ParentTypeId := Model.TypeAt(I).ParentTypeId;
+        Break;
+      end;
+    if ChildTypeId = 0 then
+      Fail('generic-parent-chain-type-not-found');
+    if ParentTypeId <= 0 then
+      Fail('generic-parent-chain-no-parent');
+    ParentName := Model.TypeAt(ParentTypeId - 1).Name;
+    if not SameText(ParentName, 'TBase<Integer>') then
+      Fail('generic-parent-chain-wrong-parent:' + ParentName);
   finally
     Model.Free;
     Analyzer.Free;
