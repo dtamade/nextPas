@@ -16,6 +16,8 @@ const
 
 function platform_path_join(const ABase, AChild: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_join3(const A, B, C: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_dirname(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_basename(const APath: PAnsiChar;
@@ -137,6 +139,15 @@ begin
     ABuf[LPos] := #0;
     Result := LTotal;
   end;
+end;
+
+function platform_path_join3(const A, B, C: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LTmp: array[0..1023] of AnsiChar;
+begin
+  platform_path_join(A, B, @LTmp[0], 1024);
+  Result := platform_path_join(@LTmp[0], C, ABuf, ABufLen);
 end;
 
 function platform_path_dirname(const APath: PAnsiChar;

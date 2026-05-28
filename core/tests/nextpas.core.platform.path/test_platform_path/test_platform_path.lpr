@@ -197,6 +197,16 @@ begin
   Check(R = -1, 'non-existent returns -1');
 end;
 
+procedure TestJoin3;
+var
+  Buf: array[0..255] of AnsiChar;
+begin
+  platform_path_join3('build', 'units', 'system.ppu', @Buf[0], 256);
+  Check(BufEq(@Buf[0], 'build/units/system.ppu'), 'join3 basic');
+  platform_path_join3('/opt', 'fpc', 'bin', @Buf[0], 256);
+  Check(BufEq(@Buf[0], '/opt/fpc/bin'), 'join3 absolute');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.path');
   T.Run('join basic', @TestJoinBasic);
@@ -217,5 +227,6 @@ begin
   T.Run('resolve absolute', @TestResolveAbsolute);
   T.Run('resolve relative', @TestResolveRelative);
   T.Run('resolve non-existent', @TestResolveNonExistent);
+  T.Run('join3', @TestJoin3);
   T.Summary;
 end.
