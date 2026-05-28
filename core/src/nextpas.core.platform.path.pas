@@ -31,8 +31,15 @@ function platform_path_change_ext(const APath, ANewExt: PAnsiChar;
 function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
 function platform_path_normalize(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_resolve(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
 
 implementation
+
+{$IFDEF NEXTPAS_UNIX}
+uses
+  nextpas.core.platform.posix.ffi;
+{$ENDIF}
 
 function IsSep(C: AnsiChar): Boolean; inline;
 begin
@@ -396,5 +403,47 @@ begin
   LTmp[LOut] := #0;
   Result := CopyToBuf(@LTmp[0], LOut, ABuf, ABufLen);
 end;
+
+{$IFDEF NEXTPAS_UNIX}
+function platform_path_resolve(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LResolved: array[0..4095] of AnsiChar;
+  LResult: PAnsiChar;
+  LLen, I: Int32;
+begin
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LResult := nextpas.core.platform.posix.ffi.realpath(APath, @LResolved[0]);
+  if LResult = nil then
+    Exit(-1);
+  LLen := 0;
+  while LResolved[LLen] <> #0 do Inc(LLen);
+  I := LLen;
+  if I >= ABufLen then I := ABufLen - 1;
+  if I > 0 then Move(LResolved[0], ABuf^, I);
+  ABuf[I] := #0;
+  Result := LLen;
+end;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_WINDOWS}
+function platform_path_resolve(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+begin
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  Result := -1; // TODO: GetFullPathNameA
+end;
+{$ENDIF}
+
+{$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+function platform_path_resolve(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+begin
+  if ABuf <> nil then ABuf[0] := #0;
+  Result := -1;
+end;
+{$ENDIF}
 
 end.

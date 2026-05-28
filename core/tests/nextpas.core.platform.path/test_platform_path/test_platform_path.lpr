@@ -168,6 +168,35 @@ begin
   Check(BufEq(@Buf[0], '/'), 'dirname / = /');
 end;
 
+procedure TestResolveAbsolute;
+var
+  Buf: array[0..511] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_resolve('/tmp', @Buf[0], 512);
+  Check(R > 0, 'resolve /tmp');
+  Check(Buf[0] = '/', 'absolute');
+end;
+
+procedure TestResolveRelative;
+var
+  Buf: array[0..511] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_resolve('.', @Buf[0], 512);
+  Check(R > 0, 'resolve .');
+  Check(Buf[0] = '/', 'result is absolute');
+end;
+
+procedure TestResolveNonExistent;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  R := platform_path_resolve('/nonexistent_xyz_path_999', @Buf[0], 256);
+  Check(R = -1, 'non-existent returns -1');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.path');
   T.Run('join basic', @TestJoinBasic);
@@ -185,5 +214,8 @@ begin
   T.Run('join absolute child', @TestJoinAbsoluteChild);
   T.Run('normalize relative ..', @TestNormalizeRelativeDotDot);
   T.Run('dirname root', @TestDirnameRoot);
+  T.Run('resolve absolute', @TestResolveAbsolute);
+  T.Run('resolve relative', @TestResolveRelative);
+  T.Run('resolve non-existent', @TestResolveNonExistent);
   T.Summary;
 end.

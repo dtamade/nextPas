@@ -139,6 +139,7 @@ function tcsendbreak(fd: cint; duration: cint): cint; cdecl; external 'c' name '
 function isatty(fd: cint): cint; cdecl; external 'c' name 'isatty';
 function ioctl(fd: cint; request: culong; args: Pointer): cint; cdecl; varargs; external 'c' name 'ioctl';
 function strerror(errnum: cint): PAnsiChar; cdecl; external 'c' name 'strerror';
+function realpath(path: PAnsiChar; resolved_path: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'realpath';
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function fpstat(path: PAnsiChar; buf: Pointer): cint; cdecl; external 'c' name 'stat';
