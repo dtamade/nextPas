@@ -227,6 +227,7 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: IAllocator = nil): specialize ITreeMap<K,V>;
 // 注意：MakeTreeSet 移除了 aCapacity 和 aCompare 参数，因为 TTreeSet 当前不支持这些参数
 generic function MakeTreeSet<T>(aAllocator: IAllocator = nil): specialize ITreeSet<T>;
+generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: IAllocator = nil): specialize IRBTreeMap<K,V>;
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
 generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
 generic function MakeTrie<V>: specialize ITrie<V>;
@@ -807,6 +808,14 @@ begin
     Result := specialize TTreeSet<T>.Create(aAllocator)
   else
     Result := specialize TTreeSet<T>.Create;
+end;
+
+generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: IAllocator = nil): specialize IRBTreeMap<K,V>;
+begin
+  if aAllocator <> nil then
+    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer, aAllocator)
+  else
+    Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer);
 end;
 
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;

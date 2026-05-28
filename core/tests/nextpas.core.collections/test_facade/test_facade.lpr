@@ -18,10 +18,16 @@ begin
   Result := 0;
 end;
 
+function CompareIntWithData(const A, B: Integer; AData: Pointer): SizeInt;
+begin
+  Result := CompareInt(A, B);
+end;
+
 procedure TestFacadeFactoriesReturnPublicInterfaces;
 var
   LSkipValue: string;
   LTrieValue: Integer;
+  LMapValue: string;
 begin
   with specialize MakeVec<Integer> do
   begin
@@ -69,6 +75,17 @@ begin
     Check(TryGetValue('one', LTrieValue), 'trie try get');
     CheckEqual(Int64(11), Int64(LTrieValue), 'trie value');
     CheckEqual(Int64(11), Int64(Get('one')), 'trie checked get');
+  end;
+
+  with specialize MakeRBTreeMap<Integer, string>(@CompareIntWithData) do
+  begin
+    Check(Add(1, 'one'), 'rb map add');
+    Check(not Add(1, 'uno'), 'rb map duplicate add');
+    Check(not AddOrAssign(1, 'uno'), 'rb map update reports false');
+    Check(TryGetValue(1, LMapValue), 'rb map try get');
+    CheckEqual('uno', LMapValue, 'rb map value');
+    Put(1, 'eins');
+    CheckEqual('eins', Get(1), 'rb map checked get');
   end;
 end;
 

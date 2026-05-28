@@ -54,10 +54,12 @@ type
     destructor Destroy; override;
 
     // 基本操作
-    function InsertOrAssign(const AKey: K; const AValue: V): Boolean; // True=插入，False=更新
-    function TryAdd(const AKey: K; const AValue: V): Boolean;       // 仅在不存在时插入
-    function TryUpdate(const AKey: K; const AValue: V): Boolean;    // 仅在存在时更新
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
+    function Get(const AKey: K): V;
+    function Add(const AKey: K; const AValue: V): Boolean;         // 仅在不存在时插入
+    function AddOrAssign(const AKey: K; const AValue: V): Boolean; // True=插入，False=更新
+    procedure Put(const AKey: K; const AValue: V);
+    function TryUpdate(const AKey: K; const AValue: V): Boolean;   // 仅在存在时更新
     function ContainsKey(const AKey: K): Boolean;
     function Remove(const AKey: K): Boolean;
     function Extract(const AKey: K; out OutEntry: TEntry): Boolean; // 移除并返回条目
@@ -129,7 +131,7 @@ begin
   inherited Destroy;
 end;
 
-function TRBTreeMap.InsertOrAssign(const AKey: K; const AValue: V): Boolean;
+function TRBTreeMap.AddOrAssign(const AKey: K; const AValue: V): Boolean;
 var
   E: TEntry; N: TRBNode; C: SizeInt;
 begin
@@ -149,7 +151,7 @@ begin
   Result := FTree.InsertUnique(E);
 end;
 
-function TRBTreeMap.TryAdd(const AKey: K; const AValue: V): Boolean;
+function TRBTreeMap.Add(const AKey: K; const AValue: V): Boolean;
 var E: TEntry; N: TRBNode; C: SizeInt;
 begin
   E.Key := AKey; E.Value := AValue;
@@ -211,6 +213,17 @@ begin
   Result := False;
 end;
 
+function TRBTreeMap.Get(const AKey: K): V;
+begin
+  if not TryGetValue(AKey, Result) then
+    raise EInvalidOperation.Create('TRBTreeMap.Get: key not found');
+end;
+
+procedure TRBTreeMap.Put(const AKey: K; const AValue: V);
+begin
+  AddOrAssign(AKey, AValue);
+end;
+
 function TRBTreeMap.ContainsKey(const AKey: K): Boolean;
 var tmp: V; begin Exit(TryGetValue(AKey, tmp)); end;
 
@@ -243,7 +256,7 @@ begin
   P := aSrc;
   for I := 0 to aElementCount - 1 do
   begin
-    InsertOrAssign(P^.Key, P^.Value);
+    AddOrAssign(P^.Key, P^.Value);
     Inc(P);
   end;
 end;

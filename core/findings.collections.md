@@ -204,3 +204,16 @@
 - `MakeSkipList` exposes both default construction and custom comparer construction. The facade declares a same-signature `TSkipListCompareFunc<K>` rather than aliasing the child-unit generic type, to avoid the known FPC open-generic re-export/identity pitfalls.
 - `LruCache.Get(Key, out Value): Boolean` is deliberately not changed in this batch. It is a cache hit/miss operation that increments hit/miss counters and moves successful keys to MRU position, so missing keys are a normal cache outcome rather than an exceptional key-required map lookup.
 - `orderedmap.rb` is a separate RB-tree adapter line with `InsertOrAssign` / `TryAdd` / `TryUpdate` vocabulary. It should be reviewed in its own ordered-map batch instead of being folded into the SkipList/Trie cleanup.
+
+## 2026-05-28: RBTreeMap map vocabulary alignment
+
+- `orderedmap.rb` is a real ordered key/value map adapter over `TRBTreeCore`, so it should expose the same normal map vocabulary as HashMap, TreeMap, SkipList, and Trie.
+- `IRBTreeMap<K,V>` now exposes `TryGetValue`, checked `Get`, absent-only `Add`, reporting `AddOrAssign`, status-free `Put`, and existing-only `TryUpdate`.
+- `TryUpdate(Key, Value): Boolean` remains because "only update when already present" is a separate operation that is useful and not a confusing duplicate of `Put`.
+- `InsertOrAssign` and `TryAdd` were removed from the public surface because they duplicate the agreed `AddOrAssign` / `Add` vocabulary.
+- `MakeRBTreeMap` is now exposed from the collections facade because `TRBTreeMap` is a working public implementation and needs an interface-first factory.
+
+## 2026-05-28: collections verification environment
+
+- The required local FPC 3.3.1 compiler is available at `/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`.
+- The active shell may not include that directory on `PATH`, so focused collections verification should prepend `/opt/fpcupdeluxe/fpc/bin/x86_64-linux` before running `make`.

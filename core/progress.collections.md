@@ -76,11 +76,16 @@
 - Added facade `MakeSkipList` and `MakeTrie` factories and a minimal facade contract probe for the new factories and vocabulary.
 - Verification: `git diff --check` passed, `test_facade` passed, and all focused `tests/nextpas.core.collections/*` suites passed.
 - Full `make test` is currently blocked by unrelated platform WIP: `tests/nextpas.core.platform/test_platform_host_abi_wave2_files` fails because `posix.base must own shared POSIX file descriptor scalar: tplatformfiledescriptor = int32`. This batch did not touch platform files.
+- Reviewed `orderedmap.rb` as its own ordered-map adapter batch. Replaced public `InsertOrAssign` / `TryAdd` vocabulary with `AddOrAssign` / `Add`, added checked `Get` and status-free `Put`, kept `TryUpdate`, and exposed `MakeRBTreeMap` from the facade.
+- Added a minimal facade contract probe for `MakeRBTreeMap` and the RBTreeMap map vocabulary.
+- Verification: bare `make` initially failed because the active shell did not have FPC on `PATH`; reran with `/opt/fpcupdeluxe/fpc/bin/x86_64-linux` so the required FPC 3.3.1 compiler was used.
+- Verification: all focused `tests/nextpas.core.collections/*` suites passed.
+- Full `make test` is currently blocked by unrelated platform WIP: `tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface` fails because linux base must own `platform_pthread_mutex_size`. This batch did not touch platform files.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: review `orderedmap.rb` vocabulary against TreeMap/HashMap, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
+- Next likely interface-tuning batch: inspect remaining concrete-class-only historical aliases in queue/deque/list families, or continue the facade public-surface map for public implementations without `MakeXxx` factories.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

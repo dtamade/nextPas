@@ -127,7 +127,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Fix `TRedBlackTree.Put` to return True for newly inserted keys and False for updates.
 - [x] Keep range/floor/ceiling APIs unchanged.
 
-### Current Micro Batch: SkipList / Trie Map Vocabulary
+### Completed Micro Batch: SkipList / Trie Map Vocabulary
 
 - [x] Review `SkipList`, `Trie`, `LruCache`, and `orderedmap.rb` key/value API semantics before editing.
 - [x] Align `ISkipList<K,V>` / `TSkipList<K,V>` with `TryGetValue`, checked `Get`, `Add`, `AddOrAssign`, and procedure `Put`.
@@ -136,6 +136,17 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Keep `LruCache.Get(out)` unchanged in this batch because it is a cache hit/miss operation that mutates recency and statistics.
 - [x] Verify focused collections tests.
 - [x] Record full-suite blocker from unrelated platform WIP.
+
+### Completed Micro Batch: RBTreeMap Map Vocabulary
+
+- [x] Review `orderedmap.rb` against the established HashMap/TreeMap/SkipList/Trie vocabulary.
+- [x] Replace public `InsertOrAssign` with `AddOrAssign`.
+- [x] Replace public `TryAdd` with absent-only `Add`.
+- [x] Add checked `Get(Key): Value` and status-free `Put(Key, Value)`.
+- [x] Keep `TryUpdate(Key, Value): Boolean` because existing-only update is a distinct ordered-map capability.
+- [x] Add facade `MakeRBTreeMap` factory so `TRBTreeMap` has an interface-first constructor.
+- [x] Verify focused collections tests.
+- [x] Record full-suite blocker from unrelated platform WIP if it still applies.
 
 ### Phase 1: Structural Ownership
 
@@ -184,6 +195,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - HashMap-family `Get(Key)` is checked lookup and returns `Value`; absence is exceptional. `TryGetValue(Key, out Value)` remains the non-throwing lookup. `Put(Key, Value)` writes without reporting insert/update; `AddOrAssign(Key, Value): Boolean` remains the API that reports whether the key was newly inserted.
 - TreeMap follows the same map vocabulary as HashMap: `TryGetValue` is non-throwing lookup, `Get` is checked lookup, `Put` writes without a status result, `Add` inserts only when absent, and `AddOrAssign` reports `True` for inserted and `False` for updated. Ordered range/floor/ceiling APIs keep their existing Boolean found/not-found shape because they are search queries, not key-required map indexing.
 - SkipList and Trie are key/value containers and follow the same normal key lookup/write vocabulary as HashMap and TreeMap. LruCache is a cache, not a plain map: `Get(out)` currently means hit/miss lookup plus recency/statistics update, so it should not be renamed or made checked as part of map vocabulary cleanup.
+- RBTreeMap is an ordered key/value map adapter and should use the same normal map vocabulary. Its `TryUpdate` method may remain because "update only if present" is a distinct operation rather than a duplicate of `Put` or `AddOrAssign`.
 
 ## Verification Commands
 

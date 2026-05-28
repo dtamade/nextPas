@@ -16,10 +16,12 @@ type
    *}
   generic IRBTreeMap<K, V> = interface
     ['{E5F6A7B8-C9D0-1234-EF01-567890ABCDEF}']
-    function InsertOrAssign(const AKey: K; const AValue: V): Boolean;
-    function TryAdd(const AKey: K; const AValue: V): Boolean;
-    function TryUpdate(const AKey: K; const AValue: V): Boolean;
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
+    function Get(const AKey: K): V;
+    function Add(const AKey: K; const AValue: V): Boolean;
+    function AddOrAssign(const AKey: K; const AValue: V): Boolean;
+    procedure Put(const AKey: K; const AValue: V);
+    function TryUpdate(const AKey: K; const AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
     function Remove(const AKey: K): Boolean;
     procedure Clear;
