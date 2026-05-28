@@ -5,6 +5,8 @@ unit nextpas.core.platform.error;
 interface
 
 function platform_error_message(ACode: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+procedure platform_fatal(const AMsg: PAnsiChar);
+procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
 implementation
 
@@ -74,5 +76,72 @@ begin
   Result := -1;
 end;
 {$ENDIF}
+
+procedure WriteStderr(const S: PAnsiChar; ALen: Int32);
+begin
+{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.ffi.write(2, S, ALen);
+{$ELSE}
+  // fallback: use System.Write
+  System.Write(StdErr, S);
+{$ENDIF}
+end;
+
+procedure platform_fatal(const AMsg: PAnsiChar);
+var
+  LLen: Int32;
+begin
+  WriteStderr('fatal: ', 7);
+  if AMsg <> nil then
+  begin
+    LLen := 0;
+    while AMsg[LLen] <> #0 do Inc(LLen);
+    if LLen > 0 then
+      WriteStderr(AMsg, LLen);
+  end;
+  WriteStderr(PAnsiChar(#10), 1);
+  System.Halt(1);
+end;
+
+procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
+var
+  LLen: Int32;
+  LBuf: array[0..15] of AnsiChar;
+  LCodeLen, I: Int32;
+  LVal: UInt32;
+begin
+  WriteStderr('fatal: ', 7);
+  if AMsg <> nil then
+  begin
+    LLen := 0;
+    while AMsg[LLen] <> #0 do Inc(LLen);
+    if LLen > 0 then
+      WriteStderr(AMsg, LLen);
+  end;
+  WriteStderr(' (code ', 7);
+  if ACode < 0 then
+  begin
+    WriteStderr('-', 1);
+    LVal := UInt32(-ACode);
+  end
+  else
+    LVal := UInt32(ACode);
+  LCodeLen := 0;
+  repeat
+    LBuf[LCodeLen] := AnsiChar(Ord('0') + (LVal mod 10));
+    LVal := LVal div 10;
+    Inc(LCodeLen);
+  until LVal = 0;
+  // reverse
+  for I := 0 to (LCodeLen div 2) - 1 do
+  begin
+    LBuf[15] := LBuf[I];
+    LBuf[I] := LBuf[LCodeLen - 1 - I];
+    LBuf[LCodeLen - 1 - I] := LBuf[15];
+  end;
+  WriteStderr(@LBuf[0], LCodeLen);
+  WriteStderr(')'#10, 2);
+  System.Halt(ACode and $FF);
+end;
 
 end.
