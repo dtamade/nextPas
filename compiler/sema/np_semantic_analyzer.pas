@@ -4318,6 +4318,7 @@ var
   DotPos, IdxPos: LongInt;
   ParentTypeId: LongInt;
   SymbolId: LongInt;
+  Meta: TTypeMetadata;
 begin
   if ANode = nil then
     Exit;
@@ -4539,7 +4540,57 @@ begin
     ClsName + '$size',
     FieldIndex * 8);
   if not FModel.LookupConstValue(ClsName + '$vmt_count', ParentFieldVal) then
+  begin
     FModel.AddConstValue(ClsName + '$vmt_count', 0);
+    ParentFieldVal := 0;
+  end;
+  Meta.TypeId := ATypeId;
+  Meta.Size := FieldIndex * 8;
+  Meta.IsRecord := False;
+  Meta.VmtCount := ParentFieldVal;
+  Meta.ParentClassId := FModel.TypeAt(ATypeId - 1).ParentTypeId;
+  Meta.ParentClassName := ParentName;
+  Meta.Interfaces := '';
+  Meta.ArrElemSize := 0;
+  Meta.ArrElemType := '';
+  SetLength(Meta.Fields, 0);
+  SetLength(Meta.VmtSlots, 0);
+  SetLength(Meta.RetPtrMethods, 0);
+  SetLength(Meta.Properties, 0);
+  for I := 0 to FModel.ConstValueCount - 1 do
+  begin
+    ConstName := FModel.ConstValueNameAt(I);
+    if (Pos(ClsName + '.', ConstName) = 1) and (Pos('$idx', ConstName) > 0) then
+    begin
+      DotPos := Pos('.', ConstName);
+      IdxPos := Pos('$idx', ConstName);
+      FieldName := Copy(ConstName, DotPos + 1, IdxPos - DotPos - 1);
+      SetLength(Meta.Fields, Length(Meta.Fields) + 1);
+      Meta.Fields[High(Meta.Fields)].Name := FieldName;
+      Meta.Fields[High(Meta.Fields)].Index := FModel.ConstValueAt(I);
+      Meta.Fields[High(Meta.Fields)].IsString :=
+        FModel.LookupConstValue(ClsName + '.' + FieldName + '$str', ParentFieldVal);
+      Meta.Fields[High(Meta.Fields)].IsPointer :=
+        FModel.LookupConstValue(ClsName + '.' + FieldName + '$ptr', ParentFieldVal);
+      Meta.Fields[High(Meta.Fields)].TypeId := 0;
+    end;
+  end;
+  for I := 0 to Meta.VmtCount - 1 do
+  begin
+    if FModel.LookupStringConstValue(ClsName + '$vmt_func_' + IntToStr(I), FieldName) then
+    begin
+      SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
+      Meta.VmtSlots[High(Meta.VmtSlots)].SlotIndex := I;
+      Meta.VmtSlots[High(Meta.VmtSlots)].FuncQualName := FieldName;
+      DotPos := Pos('.', FieldName);
+      if DotPos > 0 then
+        Meta.VmtSlots[High(Meta.VmtSlots)].MethodName :=
+          Copy(FieldName, DotPos + 1, MaxInt)
+      else
+        Meta.VmtSlots[High(Meta.VmtSlots)].MethodName := FieldName;
+    end;
+  end;
+  FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
