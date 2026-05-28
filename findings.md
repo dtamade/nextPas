@@ -10,6 +10,21 @@
 
 ## Research Findings
 
+- Batch 187 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
+  `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
+  `TWorker.Pick(Value: LongInt)` 与 `function Count: Integer;` 同属 `project-source` owner unit，
+  `procedure TWorker.Run; begin Pick(Count); end;` 必须失败为 `sema.ambiguous-overload`，
+  semantic model 为 `failure`，且不注册失败 `member-call` binding。
+- Batch 187 focused semantic probe 直接 GREEN，证明 Batch 185 的 same-owner project-source
+  function-result stable evidence 已自然覆盖 imported method body implicit-self overload-set ambiguity；本批不需要修改 analyzer。
+- Batch 187 新增 `tests/fixtures/imported_unit_body_implicit_self_function_result_ambiguous_overload` 与
+  `imported-unit-body-implicit-self-function-result-ambiguous-overload-check`，final envelope 新增
+  `importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`。
+- Batch 187 fresh `bash build/verify_local.sh` 已输出
+  `imported-unit-body-implicit-self-function-result-ambiguous-overload-check=pass`、
+  `importedUnitBodyImplicitSelfFunctionResultAmbiguousOverloadCheck":"pass`、
+  `semantic-call-bindings-check=pass`、`semanticCallBindingsCheck":"pass`、`verify-local=pass` 与
+  `human-summary=local verification passed`；本批没有修改 analyzer，也没有修改 `core/`。
 - Batch 186 继续 imported unit method body implicit-self same-unit function-result evidence 面：root
   `uses Worker;`，imported `Worker.pas` 中 `TWorker.Pick(Value: Integer)` /
   `TWorker.Pick(Value: AnsiString)` 与 `function Flag: Boolean;` 同属 `project-source` owner unit，

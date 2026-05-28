@@ -431,7 +431,9 @@ candidate collection
     同名同 arity多候选，但 compact signature collision 后无法唯一选择 target method 的场景
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 找到
     imported owner class 的同名同 arity多候选，但 compact signature collision 后无法唯一选择
-    target method 的场景；例如 `procedure TWorker.Run; begin Pick(1); end;` 同时面对
+    target method 的场景；stable evidence 包含 literal/纯表达式，以及同一 project-source
+    owner unit 中零参内建标量/字符串 function result；例如
+    `procedure TWorker.Run; begin Pick(1); end;` 或 `Pick(Count);` 同时面对
     `Pick(Integer)` 与 `Pick(LongInt)`，该路径不会注册失败 `member-call` binding
   - 也用于 imported `project-source` unit method body 内 bare implicit-self method call 沿
     imported owner class parent chain 找到 inherited 同名同 arity多候选，但 compact signature
