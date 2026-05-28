@@ -9,12 +9,13 @@ the integration boundary.
 
 ## Active Scope
 
-- Current status: Wave 15 is active from latest `main@0f213de` in worktree
+- Current status: Wave 15 is merged to `main@6d3d17f` and post-merge
+  verification passed. The temporary worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
-  on branch `codex/platform-ffi-raw-boundary`.
+  is ready for cleanup.
 - Goal tree anchors: `G3` core/runtime/framework, `G7` FPC compatibility and
   ecosystem migration, `G0` quality discipline.
-- Last closed wave: Platform Host ABI Completeness Wave 14 on `main@7c50af6`.
+- Last closed wave: Platform Host ABI Completeness Wave 15 on `main@6d3d17f`.
 - Active correction: Wave 15 reverses the earlier "host FFI helper projection"
   direction. Host/shared `.ffi` units are raw external ABI declaration owners
   only. All inline helper/projection/wrapper logic must move into the unified
@@ -60,9 +61,7 @@ the integration boundary.
 
 ### Wave 15: FFI raw-only boundary correction
 
-Status: pre-merge implementation and verification are complete in worktree
-`/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`;
-commit / main merge / post-merge verification are still pending.
+Status: merged to `main@6d3d17f`; post-merge verification passed.
 
 - [x] Stop the rejected Wave 15 helper-name direction and start a clean
   worktree from latest `main`.
@@ -80,8 +79,10 @@ commit / main merge / post-merge verification are still pending.
   projections as the desired FFI shape.
 - [x] Run focused checks, `make -C core test`, examples, benchmarks, and
   `bash build/verify_local.sh`.
-- [ ] Commit, merge to `main`, post-merge verify, and clean temporary worktree /
-  stale rejected Wave 15 helper-name branch.
+- [x] Commit, merge to `main`, and run post-merge verification.
+- [ ] Clean the merged temporary worktree / branch. The stale rejected
+  `platform-host-ffi-wave15-helper-names` worktree remains a separate cleanup
+  decision because it is dirty and must not be merged.
 
 #### Wave 15 Verification Boundary
 
@@ -97,6 +98,13 @@ commit / main merge / post-merge verification are still pending.
   `corePlatformFfiOwnerBoundaryCheck`,
   `corePlatformFfiPartitionSurfaceCheck`,
   `corePlatformSimulatedHostCompileMatrixCheck`, examples, and benchmarks.
+- Post-merge official verification on `main@6d3d17f` passed:
+  `bash build/verify_local.sh` ended with `verify-local=pass` and
+  `human-summary=local verification passed`. The final envelope included the
+  time/thread/sync raw-FFI surface checks, no-FPC/L0 checks, Win64 compile
+  checks, examples, benchmarks, source evidence/import workflow checks, host gap
+  matrix, host ABI Wave 1-11 checks, facade surface, and simulated host compile
+  matrix.
 
 ### Wave 14: remaining host FFI helper ownership-name cleanup
 

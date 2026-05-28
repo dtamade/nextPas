@@ -40,6 +40,14 @@
   `TStopwatch`, `TDuration`, `TInstant`, Timer, thread pool, channel, future,
   and scheduler in platform production files found no L1/L2 abstraction leak;
   occurrences remain only in docs/tests that define the boundary.
+- Wave 15 closed the code path on `main@6d3d17f`:
+  post-merge `bash build/verify_local.sh` passed with `verify-local=pass` and
+  `human-summary=local verification passed`. The temporary
+  `platform-ffi-raw-boundary` worktree is clean and can be removed after this
+  closeout record is committed.
+- The rejected `platform-host-ffi-wave15-helper-names` worktree remains dirty
+  by design and must not be treated as a valid continuation source. It belongs
+  to the abandoned helper-name direction that the user rejected.
 
 ## 2026-05-28: Wave 14 remaining host helper naming cleanup
 

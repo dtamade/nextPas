@@ -62,6 +62,32 @@
   It failed because that path is invalid. The correct
   `tests/nextpas.core.platform.thread/test_platform_thread` route was rerun and
   passed before the official verification envelope.
+- Wave 15 was rebased onto latest `main@b28f67d` and fast-forward merged as
+  `main@6d3d17f` with commit `6d3d17f platform: enforce raw-only ffi
+  boundary`.
+- Post-merge verification on `main@6d3d17f` passed:
+  `bash build/verify_local.sh` exited 0 with `verify-local=pass` and
+  `human-summary=local verification passed`.
+- The post-merge final envelope included the expected platform route checks:
+  `corePlatformTimeHostFfiSurfaceCheck`,
+  `corePlatformThreadHostFfiSurfaceCheck`,
+  `corePlatformSyncHostFfiSurfaceCheck`,
+  `corePlatformFfiOwnerBoundaryCheck`,
+  `corePlatformFfiPartitionSurfaceCheck`,
+  `corePlatformHostGapMatrixCheck`,
+  `corePlatformFfiSourceEvidenceIndexCheck`,
+  `corePlatformFfiImportWorkflowCheck`,
+  `corePlatformHostAbiWave1Check` through
+  `corePlatformHostAbiWave11SignalControlCheck`,
+  `corePlatformFacadeSurfaceCheck`, and
+  `corePlatformSimulatedHostCompileMatrixCheck`.
+- Current cleanup note: the merged worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-ffi-raw-boundary`
+  is clean and ready to remove. The rejected dirty worktree
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave15-helper-names`
+  remains unmerged and should be handled separately.
+- Main checkout still has untracked `GPATH`, `GRTAGS`, and `GTAGS`. They are
+  not Wave 15 platform deliverables and were not staged.
 
 - Started Wave 14 from `main@dcf3fd3` in worktree
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-ffi-wave14-posix-names`
