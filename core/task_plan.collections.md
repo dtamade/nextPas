@@ -12,6 +12,13 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 
 ## Current Phase
 
+### Completed Micro Batch: IArray Ensure Contract Docs
+
+- [x] Correct `IArray<T>.Ensure` docs to match current implementation: it grows logical `Count` to at least the requested value and initializes new elements.
+- [x] Do not rename `Ensure` or change `TArray<T>` / `TVec<T>` behavior in this batch.
+- [x] Refresh planning notes so already-completed `Unchecked` cleanup is not listed as the next batch.
+- [x] Verify focused collections tests and full `make test`.
+
 ### Completed Micro Batch: DrainRange Empty Range Consolidation
 
 - [x] Make `TVec<T>.DrainRange(EmptyRange)` reuse `Drain(Start, 0)` so empty iterators inherit the same allocator/grow-strategy semantics as `Drain`.
@@ -127,7 +134,7 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - `IVec<T>` owns growable sequence operations: `Insert` inserts before an index while preserving order; `Push` appends at the tail; `Pop` removes from the tail; `Peek` observes the tail without mutation; `Delete` discards by index while preserving order; `DeleteSwap` discards by index without preserving order; indexed extraction should use `RemoveAt`/`TryRemoveAt`, while order-unstable extraction should use an explicit swap-removal spelling such as `SwapRemoveAt`. Keep `Drain`, `SplitOff`, `Splice`, `Retain`, `Filter`, `Any`, `All`, `Dedup`, and `DedupBy` as natural vector sequence capabilities.
 - Zero-count batch operations should be successful no-ops where no element pointer is semantically required. Pointer-returning borrowed-range APIs such as `PeekRange(0)` may return `nil` because there is no borrowed element range.
 - Array-like indexed APIs use two access tiers: checked `Get(Index)`/`Put(Index, Value)` that throw on invalid indexes, and explicitly unsafe `GetUnchecked`/`PutUnchecked` for performance-sensitive code. Do not add `TryGet` to the base array/indexed-access contract; callers that need a non-throwing branch should check `Count` before indexing.
-- Unsafe fast-path methods use `Unchecked` as one word, for example `GetUnchecked`, `PutUnchecked`, `ReadUnchecked`, and `SortUnchecked`. Current copied `UnChecked` spellings are transitional and should be renamed as a complete interface-tuning batch.
+- Unsafe fast-path methods use `Unchecked` as one word, for example `GetUnchecked`, `PutUnchecked`, `ReadUnchecked`, and `SortUnchecked`. The copied `UnChecked` spellings have already been renamed in collections source; calls into `nextpas.core.mem.utils.CopyUnChecked` are outside collections ownership.
 - Naming cleanup must be done as complete mechanical batches rather than piecemeal edits: `UnChecked` -> `Unchecked`, `OverWrite` -> `Overwrite`, `FindIF`/`FindIFNot` -> `FindIf`/`FindIfNot`, `CountIF` -> `CountIf`, `ReplaceIF` -> `ReplaceIf`, `SizeUint` -> `SizeUInt`, and spacing such as `aIndex:SizeUInt` -> `aIndex: SizeUInt`. Update interface declarations, implementation methods, docs/comments, factories/tests/examples that reference the public names, and then run compile verification.
 - Sequence mutation APIs distinguish discard and extraction. `Delete(Index)` deletes by position and discards the element. Final indexed sequence APIs use `RemoveAt(Index): T` and `TryRemoveAt(Index, out Element): Boolean` for positional extraction. Do not keep `Remove(Index)` as a public indexed-extraction synonym: the framework is unreleased and has no compatibility burden, so stale duplicate names should be removed during interface tuning. Value-based `Remove(Value)` belongs only to containers that explicitly support value lookup/removal semantics.
 - `Vec` exposes `TryRemoveAt` and `TrySwapRemoveAt` because indexed extraction is a core contiguous-vector operation. `Deque` / `VecDeque` should not receive a symmetric `TrySwapRemoveAt` in this batch: their ring-buffer indexing semantics are weaker, and adding the API would imply a stronger Vec-like positional contract than we currently want.

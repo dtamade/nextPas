@@ -63,11 +63,14 @@
 - Verified the Vec advanced range-contract batch with `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
 - Consolidated empty `DrainRange` behavior in `TVec` and `TVecDeque`: `End <= Start` still returns an empty iterator and leaves the source unchanged, but now reuses `Drain(Start, 0)` so the empty result inherits allocator and grow-strategy semantics instead of creating a default vector.
 - Verified the DrainRange empty-range consolidation with `git diff --check`, focused `test_vec` / `test_deque` / `test_facade`, and full `make test`; all completed with zero failures.
+- Scanned the current collections source and confirmed the earlier naming cleanups are already done: no remaining collections-owned `UnChecked`, `OverWrite`, `FindIF`, `CountIF`, `ReplaceIF`, or `SizeUint` symbols remain. The remaining `CopyUnChecked` calls belong to `nextpas.core.mem.utils`, outside this collections-only batch.
+- Started the `IArray.Ensure` contract-doc batch. Current `TArray.Ensure` and `TVec.Ensure` call `Resize` when `Count` is smaller, so the public `IArray<T>.Ensure` docs now describe logical count growth instead of pure capacity reservation. No implementation or interface name changed in this batch.
+- Verified the `IArray.Ensure` contract-doc batch with `git diff --check`, focused `test_vec` / `test_contracts` / `test_facade`, and full `make test`; all completed with zero failures.
 
 ## Next
 
 - Continue the Vec/Array naming cleanup implementation one batch at a time.
-- Next likely interface-tuning batch: `Unchecked` spelling cleanup, done mechanically across interface declarations, implementations, docs/comments, and tests/examples.
+- Next likely interface-tuning batch: decide whether `IArray.Ensure` should ultimately be renamed/re-owned, or whether a separate indexed-sequence/growable-capacity interface should absorb clearer capacity APIs.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

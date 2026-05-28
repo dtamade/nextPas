@@ -157,14 +157,16 @@ type
     {**
      * Ensure
      *
-     * @desc 确保容器内部容量至少能容纳指定数量的元素.
+     * @desc 确保容器逻辑长度至少达到指定元素数量.
      *
      * @params
-     *   aCount 需要确保的最小容量 (以元素数量计).
+     *   aCount 需要确保的最小逻辑元素数量.
      *
      * @remark
-     *   这是一个性能优化工具, 用于在大量添加元素前一次性分配足够内存,
-     *   避免连续的、小规模的内存重分配.
+     *   若当前 Count 小于 `aCount`, 会调用 Resize(aCount), 因此会改变逻辑长度,
+     *   并初始化新增元素. 若当前 Count 已经大于或等于 `aCount`, 不执行任何操作.
+     *   这不是纯容量预留 API; 需要只确保容量时应使用具体 growable 容器提供的
+     *   EnsureCapacity/Reserve 系列能力.
      *
      * @exceptions
      *   EOutOfMemory  内存分配失败.

@@ -81,7 +81,7 @@
 - Preserve the distinct size/capacity vocabulary rather than flattening it.
 - `Resize(NewSize)` changes logical `Count`. Growing initializes new elements; shrinking finalizes/discards tail elements. Capacity growth follows the container's normal policy.
 - `EnsureCapacity(Capacity)` ensures an absolute capacity and does not change `Count`.
-- Existing `IArray<T>.Ensure(Count)` currently means ensuring absolute element capacity. During naming cleanup, prefer `EnsureCapacity` for this meaning because plain `Ensure` is too easy to confuse with `Reserve`.
+- Existing `IArray<T>.Ensure(Count)` currently means ensuring logical element count, not capacity: `TArray.Ensure` and `TVec.Ensure` call `Resize(Count)` when the current count is smaller, so new elements are initialized and `Count` changes.
 - `Reserve(Additional)` is a growable-vector operation: it ensures room for `Count + Additional` elements and follows the normal growth strategy.
 - `ReserveExact(Additional)` is the exact-capacity counterpart of `Reserve`: it ensures room for `Count + Additional` elements without applying the growth strategy.
 - `ResizeExact(NewSize)` changes logical `Count` and sets capacity exactly to `NewSize`.
@@ -144,6 +144,7 @@
 - `TArray<T>` and `TVec<T>` already implement the checked `Overwrite(Index, Collection, Count)` overload, so the interface should expose it instead of forcing callers to use the unchecked form for partial collection overwrite.
 - `Ensure` must not be mechanically renamed to `EnsureCapacity` yet. Current `TArray.Ensure` and `TVec.Ensure` call `Resize` and change logical `Count`, while `TVec.EnsureCapacity` only guarantees backing capacity. The final name and ownership require a separate interface decision.
 - The checked partial collection `Overwrite` doc block must not include the `Unchecked` convention text. Checked/unchecked overload pairs should keep their public docs visibly separated so the safe API contract is not weakened by copied warning text.
+- `IArray<T>.Ensure` public docs must describe the current count-growing behavior, not a pure capacity reservation contract. This keeps the current copied behavior explicit while the final name/ownership decision remains open.
 
 ## 2026-05-28: Vec compatibility alias cleanup
 
