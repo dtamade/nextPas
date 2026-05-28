@@ -148,6 +148,15 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - [x] Verify focused collections tests.
 - [x] Record full-suite blocker from unrelated platform WIP if it still applies.
 
+### Current Micro Batch: Facade Factory Public Surface Map
+
+- [x] Review remaining working public implementations that still expose factory entry points only in child implementation units.
+- [x] Add facade `MakeCircularBuffer` for `TCircularBuffer`.
+- [x] Add facade `MakePriorityQueue` for `TPriorityQueue`.
+- [x] Add minimal facade contract probes for the new factories.
+- [x] Verify focused collections tests.
+- [x] Record full-suite blocker from unrelated platform WIP if it still applies.
+
 ### Phase 1: Structural Ownership
 
 - [x] Move shared abstract/growth ownership into `collections.base`.
@@ -196,6 +205,8 @@ Stabilize the `collections` module copied from `fafafa.core`, then refactor it i
 - TreeMap follows the same map vocabulary as HashMap: `TryGetValue` is non-throwing lookup, `Get` is checked lookup, `Put` writes without a status result, `Add` inserts only when absent, and `AddOrAssign` reports `True` for inserted and `False` for updated. Ordered range/floor/ceiling APIs keep their existing Boolean found/not-found shape because they are search queries, not key-required map indexing.
 - SkipList and Trie are key/value containers and follow the same normal key lookup/write vocabulary as HashMap and TreeMap. LruCache is a cache, not a plain map: `Get(out)` currently means hit/miss lookup plus recency/statistics update, so it should not be renamed or made checked as part of map vocabulary cleanup.
 - RBTreeMap is an ordered key/value map adapter and should use the same normal map vocabulary. Its `TryUpdate` method may remain because "update only if present" is a distinct operation rather than a duplicate of `Put` or `AddOrAssign`.
+- Facade public-surface hardening should prioritize unambiguous working implementations first. `CircularBuffer` and `PriorityQueue` are clean additions to the `MakeXxx` facade family.
+- `stack.pas` still exposes `MakeArrayStack` and `MakeLinkedStack` inside the implementation unit, but `TLinkedStack` currently uses the same `TVecDeque` backend as `TArrayStack`. Do not promote that naming more broadly until stack implementation identity is reviewed.
 
 ## Verification Commands
 

@@ -23,11 +23,18 @@ begin
   Result := CompareInt(A, B);
 end;
 
+function CompareIntDescWithData(const A, B: Integer; AData: Pointer): SizeInt;
+begin
+  Result := CompareInt(B, A);
+end;
+
 procedure TestFacadeFactoriesReturnPublicInterfaces;
 var
   LSkipValue: string;
   LTrieValue: Integer;
   LMapValue: string;
+  LQueueValue: Integer;
+  LBufferValue: Integer;
 begin
   with specialize MakeVec<Integer> do
   begin
@@ -86,6 +93,25 @@ begin
     CheckEqual('uno', LMapValue, 'rb map value');
     Put(1, 'eins');
     CheckEqual('eins', Get(1), 'rb map checked get');
+  end;
+
+  with specialize MakeCircularBuffer<Integer>(2, False) do
+  begin
+    Check(Push(10), 'circular buffer first push');
+    Check(Push(20), 'circular buffer second push');
+    Check(not Push(30), 'circular buffer full push rejected');
+    Check(TryPeek(LBufferValue), 'circular buffer try peek');
+    CheckEqual(Int64(10), Int64(LBufferValue), 'circular buffer peek value');
+  end;
+
+  with specialize MakePriorityQueue<Integer>(@CompareIntDescWithData) do
+  begin
+    Push(1);
+    Push(3);
+    Push(2);
+    Check(TryPeek(LQueueValue), 'priority queue try peek');
+    CheckEqual(Int64(3), Int64(LQueueValue), 'priority queue peek value');
+    CheckEqual(Int64(3), Int64(Pop), 'priority queue pop value');
   end;
 end;
 

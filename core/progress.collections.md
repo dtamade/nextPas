@@ -81,11 +81,14 @@
 - Verification: bare `make` initially failed because the active shell did not have FPC on `PATH`; reran with `/opt/fpcupdeluxe/fpc/bin/x86_64-linux` so the required FPC 3.3.1 compiler was used.
 - Verification: all focused `tests/nextpas.core.collections/*` suites passed.
 - Full `make test` is currently blocked by unrelated platform WIP: `tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface` fails because linux base must own `platform_pthread_mutex_size`. This batch did not touch platform files.
+- Continued the facade public-surface map and added top-level `MakeCircularBuffer` and `MakePriorityQueue` to `nextpas.core.collections`, so those working implementations now have interface-first entry points at the facade layer.
+- Extended `test_facade` with minimal public-surface probes for `MakeCircularBuffer` and `MakePriorityQueue`.
+- Recorded that `MakeArrayStack` / `MakeLinkedStack` remain child-unit-only for now because `TLinkedStack` currently shares the same `TVecDeque` backend as `TArrayStack`; that naming/identity issue should be reviewed before broader facade promotion.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: inspect remaining concrete-class-only historical aliases in queue/deque/list families, or continue the facade public-surface map for public implementations without `MakeXxx` factories.
+- Next likely interface-tuning batch: review `stack` implementation identity and decide whether `ArrayStack` / `LinkedStack` should both remain, be renamed, or gain distinct backends before facade promotion.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.

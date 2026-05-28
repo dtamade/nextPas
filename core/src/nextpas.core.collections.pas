@@ -240,6 +240,10 @@ generic function MakeLruCache<K,V>(aMaxSize: SizeUInt = 100; aAllocator: IAlloca
 // ==== LinkedHashMap (Insertion-order preserving hash map) ====
 generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize ILinkedHashMap<K,V>;
 
+// ==== CircularBuffer / PriorityQueue ====
+generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean = True): specialize ICircularBuffer<T>;
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt = PRIORITYQUEUE_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): specialize IPriorityQueue<T>;
+
 // ==== BitSet (Efficient bit set) ====
 function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): IBitSet;
 //
@@ -850,6 +854,18 @@ begin
     Result := specialize TLinkedHashMap<K,V>.Create(aCapacity, aAllocator)
   else
     Result := specialize TLinkedHashMap<K,V>.Create(aCapacity);
+end;
+
+// ==== CircularBuffer / PriorityQueue factories ====
+
+generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean): specialize ICircularBuffer<T>;
+begin
+  Result := specialize TCircularBuffer<T>.Create(aCapacity, aOverwriteOldest);
+end;
+
+generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: IAllocator): specialize IPriorityQueue<T>;
+begin
+  Result := specialize TPriorityQueue<T>.Create(aComparer, aCapacity, aAllocator);
 end;
 
 // ==== BitSet factories ====

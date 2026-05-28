@@ -217,3 +217,9 @@
 
 - The required local FPC 3.3.1 compiler is available at `/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`.
 - The active shell may not include that directory on `PATH`, so focused collections verification should prepend `/opt/fpcupdeluxe/fpc/bin/x86_64-linux` before running `make`.
+
+## 2026-05-28: facade factory public-surface map
+
+- `TCircularBuffer<T>` and `TPriorityQueue<T>` are working public implementations already aggregated by `nextpas.core.collections`, but they were missing facade-level `MakeXxx` factories.
+- `MakeCircularBuffer` and `MakePriorityQueue` are clean additions to the interface-first facade because their constructor semantics are stable and their interface types are already part of the public facade.
+- `stack.pas` also exposes child-unit `MakeArrayStack` and `MakeLinkedStack`, but `TLinkedStack<T>` currently uses the same `TVecDeque<T>` backend as `TArrayStack<T>`. That naming/implementation mismatch should be reviewed before promoting these factories through the top-level facade.
