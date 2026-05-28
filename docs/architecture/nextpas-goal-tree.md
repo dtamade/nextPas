@@ -404,7 +404,10 @@ P1：补 compiler semantic correctness。
 
 - 继续推进 G1.4 / G1.5 / G1.6。
 - 近期优先做 source-owned、稳定事实明确的 call/member diagnostics。
-- **泛型系统（G1.7）**：按 `docs/architecture/generics-design.md` 分层推进，G1 基础泛型是当前最高价值目标。
+- **泛型系统（G1.7）**：按 `docs/architecture/generics-design.md` 分层推进。
+- G1 基础泛型已完成：Delphi 风格 `TBox<Integer>` 语法、真正的类型参数替换、
+  多类型参数、类型不匹配诊断、多方法泛型、默认参数交互、继承方法绑定。
+  7 个测试覆盖。下一步：G2 约束组合 + where 子句。
 - 已完成：default parameters、visibility enforcement、structured diagnostics。
 
 P2：巩固 workspace/package/query。
