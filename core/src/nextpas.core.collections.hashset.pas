@@ -17,7 +17,7 @@ uses
 
 type
   {**
-   * THashSet<K>
+   * THashSet<T>
    *
    * @desc 哈希集合实现，内部基于 THashMap<K, Byte>
    *
@@ -45,12 +45,12 @@ type
    * @see IHashSet 接口定义
    * @see TTreeSet 有序集合替代方案
    *}
-  generic THashSet<K> = class(specialize TGenericCollection<K>, specialize IHashSet<K>)
+  generic THashSet<T> = class(specialize TGenericCollection<T>, specialize IHashSet<T>)
   private
     type
       {** 内部映射类型：K -> Byte（Byte 仅作占位） *}
-      TInternalMap = specialize THashMap<K, Byte>;
-      PK = ^K;
+      TInternalMap = specialize THashMap<T, Byte>;
+      PT = ^T;
     var
       FMap: TInternalMap;
   protected
@@ -78,7 +78,7 @@ type
      *   aEquals     自定义相等比较函数（可选）
      *   aAllocator  自定义内存分配器（可选）
      *}
-    constructor Create(aCapacity: SizeUInt = 0; aHash: specialize TKeyHashFunc<K> = nil; aEquals: specialize TKeyEqualsFunc<K> = nil; aAllocator: IAllocator = nil);
+    constructor Create(aCapacity: SizeUInt = 0; aHash: specialize TKeyHashFunc<T> = nil; aEquals: specialize TKeyEqualsFunc<T> = nil; aAllocator: IAllocator = nil);
 
     {**
      * Destroy
@@ -92,19 +92,19 @@ type
     procedure Reserve(aCapacity: SizeUInt);
 
     // IGenericCollection
-    function GetEnumerator: specialize TIter<K>;
-    function Iter: specialize TIter<K>;
+    function GetEnumerator: specialize TIter<T>;
+    function Iter: specialize TIter<T>;
     function GetElementSize: SizeUInt; inline;
 
     // 基本操作
-    function Add(const AKey: K): Boolean;
-    function Contains(const AKey: K): Boolean; overload;
-    function Contains(const AKey: K; aEquals: specialize TEqualsFunc<K>; aData: Pointer): Boolean; overload;
-    function Contains(const AKey: K; aEquals: specialize TEqualsMethod<K>; aData: Pointer): Boolean; overload;
+    function Add(const AValue: T): Boolean;
+    function Contains(const AValue: T): Boolean; overload;
+    function Contains(const AValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function Contains(const AValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Contains(const AKey: K; aEquals: specialize TEqualsRefFunc<K>): Boolean; overload;
+    function Contains(const AValue: T; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
     {$ENDIF}
-    function Remove(const AKey: K): Boolean;
+    function Remove(const AValue: T): Boolean;
 
     // Set operations - 集合运算
     {**
@@ -113,7 +113,7 @@ type
      * @param Other 另一个集合
      * @return THashSet 新的并集集合（调用者负责释放）
      *}
-    function Union(const Other: specialize THashSet<K>): specialize THashSet<K>;
+    function Union(const Other: specialize THashSet<T>): specialize THashSet<T>;
 
     {**
      * Intersection - 交集
@@ -121,7 +121,7 @@ type
      * @param Other 另一个集合
      * @return THashSet 新的交集集合（调用者负责释放）
      *}
-    function Intersection(const Other: specialize THashSet<K>): specialize THashSet<K>;
+    function Intersection(const Other: specialize THashSet<T>): specialize THashSet<T>;
 
     {**
      * Difference - 差集
@@ -129,7 +129,7 @@ type
      * @param Other 另一个集合
      * @return THashSet 新的差集集合（调用者负责释放）
      *}
-    function Difference(const Other: specialize THashSet<K>): specialize THashSet<K>;
+    function Difference(const Other: specialize THashSet<T>): specialize THashSet<T>;
 
     {**
      * SymmetricDifference - 对称差集
@@ -137,7 +137,7 @@ type
      * @param Other 另一个集合
      * @return THashSet 新的对称差集集合（调用者负责释放）
      *}
-    function SymmetricDifference(const Other: specialize THashSet<K>): specialize THashSet<K>;
+    function SymmetricDifference(const Other: specialize THashSet<T>): specialize THashSet<T>;
 
     {**
      * IsSubsetOf - 子集判断
@@ -145,7 +145,7 @@ type
      * @param Other 另一个集合
      * @return Boolean 如果当前集合的所有元素都存在于 Other 中返回 True
      *}
-    function IsSubsetOf(const Other: specialize THashSet<K>): Boolean;
+    function IsSubsetOf(const Other: specialize THashSet<T>): Boolean;
 
     {**
      * IsSupersetOf - 超集判断
@@ -153,7 +153,7 @@ type
      * @param Other 另一个集合
      * @return Boolean 如果 Other 的所有元素都存在于当前集合中返回 True
      *}
-    function IsSupersetOf(const Other: specialize THashSet<K>): Boolean;
+    function IsSupersetOf(const Other: specialize THashSet<T>): Boolean;
 
     {**
      * IsDisjoint - 不相交判断
@@ -161,14 +161,14 @@ type
      * @param Other 另一个集合
      * @return Boolean 如果两个集合没有共同元素返回 True
      *}
-    function IsDisjoint(const Other: specialize THashSet<K>): Boolean;
+    function IsDisjoint(const Other: specialize THashSet<T>): Boolean;
   end;
 
 implementation
 
-{ THashSet<K> }
+{ THashSet<T> }
 
-constructor THashSet.Create(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: IAllocator);
+constructor THashSet.Create(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<T>; aEquals: specialize TKeyEqualsFunc<T>; aAllocator: IAllocator);
 begin
   inherited Create(aAllocator);
   FMap := TInternalMap.Create(aCapacity, aHash, aEquals, aAllocator);
@@ -200,19 +200,19 @@ begin
   FMap.Reserve(aCapacity);
 end;
 
-function THashSet.GetEnumerator: specialize TIter<K>;
+function THashSet.GetEnumerator: specialize TIter<T>;
 begin
   Result := inherited GetEnumerator;
 end;
 
-function THashSet.Iter: specialize TIter<K>;
+function THashSet.Iter: specialize TIter<T>;
 begin
   Result := inherited Iter;
 end;
 
 function THashSet.GetElementSize: SizeUInt;
 begin
-  Result := SizeOf(K);
+  Result := SizeOf(T);
 end;
 
 procedure THashSet.DoZero();
@@ -240,7 +240,7 @@ procedure THashSet.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
 var
   LCopied: SizeUInt;
   LIter: TPtrIter;
-  PDst: PK;
+  PDst: PT;
 begin
   if (aDst = nil) or (aCount = 0) or (GetCount = 0) then Exit;
 
@@ -251,7 +251,7 @@ begin
   // PtrIter 返回指向 TMapEntry<K, Byte> 的指针；Key 是第一字段。
   while LIter.MoveNext and (LCopied < aCount) do
   begin
-    PDst^ := PK(LIter.GetCurrent)^;
+    PDst^ := PT(LIter.GetCurrent)^;
     Inc(PDst);
     Inc(LCopied);
   end;
@@ -260,29 +260,29 @@ end;
 procedure THashSet.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
 var
   I: SizeUInt;
-  PKey: ^K;
+  PElem: ^T;
 begin
   if (aSrc = nil) or (aElementCount = 0) then Exit;
 
-  PKey := aSrc;
+  PElem := aSrc;
   for I := 0 to aElementCount - 1 do
   begin
-    Add(PKey^);
-    Inc(PKey);
+    Add(PElem^);
+    Inc(PElem);
   end;
 end;
 
 procedure THashSet.AppendToUnchecked(const aDst: TCollection);
 var
-  LDstSet: specialize THashSet<K>;
-  LMapIter: specialize TIter<specialize TMapEntry<K, Byte>>;
-  LEntry: specialize TMapEntry<K, Byte>;
+  LDstSet: specialize THashSet<T>;
+  LMapIter: specialize TIter<specialize TMapEntry<T, Byte>>;
+  LEntry: specialize TMapEntry<T, Byte>;
 begin
   if aDst = nil then Exit;
 
-  if aDst is specialize THashSet<K> then
+  if aDst is specialize THashSet<T> then
   begin
-    LDstSet := specialize THashSet<K>(aDst);
+    LDstSet := specialize THashSet<T>(aDst);
     LMapIter := FMap.Iter;
     while LMapIter.MoveNext do
     begin
@@ -294,43 +294,43 @@ begin
     raise EInvalidOperation.Create('THashSet.AppendToUnchecked: cannot append to incompatible container type');
 end;
 
-function THashSet.Add(const AKey: K): Boolean;
+function THashSet.Add(const AValue: T): Boolean;
 begin
-  Result := FMap.Add(AKey, 1);
+  Result := FMap.Add(AValue, 1);
 end;
 
-function THashSet.Contains(const AKey: K): Boolean;
+function THashSet.Contains(const AValue: T): Boolean;
 begin
-  Result := FMap.ContainsKey(AKey);
+  Result := FMap.ContainsKey(AValue);
 end;
 
-function THashSet.Contains(const AKey: K; aEquals: specialize TEqualsFunc<K>; aData: Pointer): Boolean;
+function THashSet.Contains(const AValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean;
 begin
-  Result := inherited Contains(AKey, aEquals, aData);
+  Result := inherited Contains(AValue, aEquals, aData);
 end;
 
-function THashSet.Contains(const AKey: K; aEquals: specialize TEqualsMethod<K>; aData: Pointer): Boolean;
+function THashSet.Contains(const AValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean;
 begin
-  Result := inherited Contains(AKey, aEquals, aData);
+  Result := inherited Contains(AValue, aEquals, aData);
 end;
 
 {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-function THashSet.Contains(const AKey: K; aEquals: specialize TEqualsRefFunc<K>): Boolean;
+function THashSet.Contains(const AValue: T; aEquals: specialize TEqualsRefFunc<T>): Boolean;
 begin
-  Result := inherited Contains(AKey, aEquals);
+  Result := inherited Contains(AValue, aEquals);
 end;
 {$ENDIF}
 
-function THashSet.Remove(const AKey: K): Boolean;
+function THashSet.Remove(const AValue: T): Boolean;
 begin
-  Result := FMap.Remove(AKey);
+  Result := FMap.Remove(AValue);
 end;
 
-function THashSet.Union(const Other: specialize THashSet<K>): specialize THashSet<K>;
+function THashSet.Union(const Other: specialize THashSet<T>): specialize THashSet<T>;
 var
-  Element: K;
+  Element: T;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := specialize THashSet<T>.Create;
 
   for Element in Self do
     Result.Add(Element);
@@ -339,33 +339,33 @@ begin
     Result.Add(Element);
 end;
 
-function THashSet.Intersection(const Other: specialize THashSet<K>): specialize THashSet<K>;
+function THashSet.Intersection(const Other: specialize THashSet<T>): specialize THashSet<T>;
 var
-  Element: K;
+  Element: T;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := specialize THashSet<T>.Create;
 
   for Element in Self do
     if Other.Contains(Element) then
       Result.Add(Element);
 end;
 
-function THashSet.Difference(const Other: specialize THashSet<K>): specialize THashSet<K>;
+function THashSet.Difference(const Other: specialize THashSet<T>): specialize THashSet<T>;
 var
-  Element: K;
+  Element: T;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := specialize THashSet<T>.Create;
 
   for Element in Self do
     if not Other.Contains(Element) then
       Result.Add(Element);
 end;
 
-function THashSet.SymmetricDifference(const Other: specialize THashSet<K>): specialize THashSet<K>;
+function THashSet.SymmetricDifference(const Other: specialize THashSet<T>): specialize THashSet<T>;
 var
-  Element: K;
+  Element: T;
 begin
-  Result := specialize THashSet<K>.Create;
+  Result := specialize THashSet<T>.Create;
 
   for Element in Self do
     if not Other.Contains(Element) then
@@ -376,9 +376,9 @@ begin
       Result.Add(Element);
 end;
 
-function THashSet.IsSubsetOf(const Other: specialize THashSet<K>): Boolean;
+function THashSet.IsSubsetOf(const Other: specialize THashSet<T>): Boolean;
 var
-  Element: K;
+  Element: T;
 begin
   if GetCount = 0 then
     Exit(True);
@@ -393,15 +393,15 @@ begin
   Result := True;
 end;
 
-function THashSet.IsSupersetOf(const Other: specialize THashSet<K>): Boolean;
+function THashSet.IsSupersetOf(const Other: specialize THashSet<T>): Boolean;
 begin
   Result := Other.IsSubsetOf(Self);
 end;
 
-function THashSet.IsDisjoint(const Other: specialize THashSet<K>): Boolean;
+function THashSet.IsDisjoint(const Other: specialize THashSet<T>): Boolean;
 var
-  Element: K;
-  Smaller, Larger: specialize THashSet<K>;
+  Element: T;
+  Smaller, Larger: specialize THashSet<T>;
 begin
   if (GetCount = 0) or (Other.GetCount = 0) then
     Exit(True);

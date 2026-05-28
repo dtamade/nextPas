@@ -216,7 +216,7 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 // ==== HashMap / HashSet (OA default) ====
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
-  generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
+  generic function MakeHashSet<T>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<T>;
 {$ENDIF}
 
 // ==== TreeMap / TreeSet (Ordered containers) ====
@@ -791,9 +791,9 @@ begin
   Result := specialize THashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
-generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
+generic function MakeHashSet<T>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<T>;
 begin
-  Result := specialize THashSet<K>.Create(aCapacity, nil, nil, aAllocator);
+  Result := specialize THashSet<T>.Create(aCapacity, nil, nil, aAllocator);
 end;
 {$ENDIF}
 
