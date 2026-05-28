@@ -9010,6 +9010,98 @@ begin
   end;
 end;
 
+procedure CheckInstalledSourceUnitBodyImplicitSelfKnownPropertyInvalidCallShapeStaysDeferred;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  UnitPath: string;
+begin
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-semantic-installed-unit-body-implicit-self-known-property-invalid-call-shape-' +
+    IntToStr(Random(MaxInt));
+  UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
+  RootSourceText :=
+    'program InstalledUnitBodyImplicitSelfKnownPropertyInvalidCallShape;' + LineEnding +
+    'uses Worker;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    UnitPath,
+    'unit Worker;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TWorker = class' + LineEnding +
+    '  private' + LineEnding +
+    '    FValue: Integer;' + LineEnding +
+    '  public' + LineEnding +
+    '    property Value: Integer read FValue write FValue;' + LineEnding +
+    '    procedure Run;' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'procedure TWorker.Run;' + LineEnding +
+    'begin' + LineEnding +
+    '  Value(1);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(RootSourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit(
+        'InstalledUnitBodyImplicitSelfKnownPropertyInvalidCallShape',
+        '',
+        ruoRootSource,
+        '',
+        'program',
+        1
+      )
+    );
+    UnitGraph.AddResolvedUnit(
+      BuildResolvedUnit('Worker', UnitPath, ruoInstalledSource, '', 'unit', 2)
+    );
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('unexpected-installed-unit-body-implicit-self-known-property-invalid-call-shape-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('missing-installed-unit-body-implicit-self-known-property-invalid-call-shape-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-installed-unit-body-implicit-self-known-property-invalid-call-shape-model-status:' +
+        Model.Status);
+    if Model.BindingCount <> 0 then
+      Fail('unexpected-installed-unit-body-implicit-self-known-property-invalid-call-shape-binding-count:' +
+        IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckImportedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeDiagnostic;
 var
   Analyzer: TSemanticAnalyzer;
@@ -12322,6 +12414,7 @@ begin
     CheckImportedUnitBodyInheritedImplicitSelfBareMethodUnknownMemberDiagnostic;
     CheckImportedUnitBodyImplicitSelfKnownFieldInvalidCallShapeDiagnostic;
     CheckImportedUnitBodyImplicitSelfKnownPropertyInvalidCallShapeDiagnostic;
+    CheckInstalledSourceUnitBodyImplicitSelfKnownPropertyInvalidCallShapeStaysDeferred;
     CheckImportedUnitBodyInheritedImplicitSelfKnownFieldInvalidCallShapeDiagnostic;
     CheckImportedUnitBodyInheritedImplicitSelfKnownPropertyInvalidCallShapeDiagnostic;
     CheckImportedUnitBodyImplicitSelfBareMethodWrongArgumentCountDiagnostic;
