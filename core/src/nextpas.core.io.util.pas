@@ -20,6 +20,11 @@ function IoNopCloser(const AInner: IReader): IReadCloser;
 function IoDiscard: IWriter;
 function IoNullReader: IReader;
 
+function IoCopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64;
+procedure IoReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt);
+function IoWriteString(const ADst: IWriter; const AStr: string): SizeUInt;
+function IoSectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader;
+
 implementation
 
 uses
@@ -343,6 +348,102 @@ end;
 function IoNullReader: IReader;
 begin
   Result := TNullReader.Create;
+end;
+
+{ IoCopyBuffer }
+
+function IoCopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64;
+var
+  LBuf: PByte;
+  LRead, LWritten, LTotal: SizeUInt;
+begin
+  Result := 0;
+  LBuf := @ABuf;
+  repeat
+    LRead := ASrc.Read(LBuf^, ABufSize);
+    if LRead = 0 then
+      Break;
+    LTotal := 0;
+    while LTotal < LRead do
+    begin
+      LWritten := ADst.Write(LBuf[LTotal], LRead - LTotal);
+      if LWritten = 0 then
+        raise EIOError.Create('IoCopyBuffer: write returned 0');
+      Inc(LTotal, LWritten);
+    end;
+    Inc(Result, Int64(LRead));
+  until False;
+end;
+
+{ IoReadAtLeast }
+
+procedure IoReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt);
+var
+  LDst: PByte;
+  LTotal, LRead: SizeUInt;
+begin
+  LDst := @ABuf;
+  LTotal := 0;
+  while LTotal < AMin do
+  begin
+    LRead := ASrc.Read(LDst[LTotal], ACount - LTotal);
+    if LRead = 0 then
+      raise EIOError.Create('IoReadAtLeast: unexpected EOF');
+    Inc(LTotal, LRead);
+  end;
+end;
+
+{ IoWriteString }
+
+function IoWriteString(const ADst: IWriter; const AStr: string): SizeUInt;
+begin
+  if Length(AStr) = 0 then
+    Exit(0);
+  Result := ADst.Write(AStr[1], SizeUInt(Length(AStr)));
+end;
+
+{ TSectionReader }
+
+type
+  TSectionReader = class(TInterfacedObject, IReader)
+  private
+    FInner: IReaderAt;
+    FOffset: Int64;
+    FLimit: Int64;
+    FPos: Int64;
+  public
+    constructor Create(const AInner: IReaderAt; const AOffset, ALimit: Int64);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TSectionReader.Create(const AInner: IReaderAt; const AOffset, ALimit: Int64);
+begin
+  inherited Create;
+  FInner := AInner;
+  FOffset := AOffset;
+  FLimit := ALimit;
+  FPos := 0;
+end;
+
+function TSectionReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: Int64;
+  LToRead: SizeUInt;
+begin
+  LRemaining := FLimit - FPos;
+  if LRemaining <= 0 then
+    Exit(0);
+  if Int64(ACount) > LRemaining then
+    LToRead := SizeUInt(LRemaining)
+  else
+    LToRead := ACount;
+  Result := FInner.ReadAt(ABuf, LToRead, FOffset + FPos);
+  Inc(FPos, Int64(Result));
+end;
+
+function IoSectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader;
+begin
+  Result := TSectionReader.Create(AInner, AOffset, ALimit);
 end;
 
 end.

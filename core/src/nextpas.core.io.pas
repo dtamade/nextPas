@@ -29,6 +29,10 @@ type
   IByteReader = nextpas.core.io.intf.IByteReader;
   IByteWriter = nextpas.core.io.intf.IByteWriter;
   IStringWriter = nextpas.core.io.intf.IStringWriter;
+  IReadWriteSeeker = nextpas.core.io.intf.IReadWriteSeeker;
+  IReaderFrom = nextpas.core.io.intf.IReaderFrom;
+  IWriterTo = nextpas.core.io.intf.IWriterTo;
+  IByteScanner = nextpas.core.io.intf.IByteScanner;
 
 { Stream factories }
 function BytesStream(const AInitialCapacity: SizeUInt = 256): IStream; inline;
@@ -50,6 +54,10 @@ function MultiWriter(const AWriters: array of IWriter): IWriter;
 function NopCloser(const AInner: IReader): IReadCloser; inline;
 function Discard: IWriter; inline;
 function NullReader: IReader; inline;
+function CopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64; inline;
+procedure ReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt); inline;
+function WriteString(const ADst: IWriter; const AStr: string): SizeUInt; inline;
+function SectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader; inline;
 
 implementation
 
@@ -126,6 +134,26 @@ end;
 function NullReader: IReader;
 begin
   Result := nextpas.core.io.util.IoNullReader;
+end;
+
+function CopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const ABufSize: SizeUInt): Int64;
+begin
+  Result := nextpas.core.io.util.IoCopyBuffer(ADst, ASrc, ABuf, ABufSize);
+end;
+
+procedure ReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt);
+begin
+  nextpas.core.io.util.IoReadAtLeast(ASrc, ABuf, ACount, AMin);
+end;
+
+function WriteString(const ADst: IWriter; const AStr: string): SizeUInt;
+begin
+  Result := nextpas.core.io.util.IoWriteString(ADst, AStr);
+end;
+
+function SectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader;
+begin
+  Result := nextpas.core.io.util.IoSectionReader(AInner, AOffset, ALimit);
 end;
 
 end.

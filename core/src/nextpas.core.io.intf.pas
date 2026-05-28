@@ -91,6 +91,27 @@ type
     function WriteString(const AStr: string): SizeUInt;
   end;
 
+  IReadWriteSeeker = interface(IReader)
+    ['{F1A2B3C4-D5E6-7890-ABCD-100000000014}']
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+  end;
+
+  IReaderFrom = interface
+    ['{F1A2B3C4-D5E6-7890-ABCD-100000000040}']
+    function ReadFrom(const ASrc: IReader): Int64;
+  end;
+
+  IWriterTo = interface
+    ['{F1A2B3C4-D5E6-7890-ABCD-100000000041}']
+    function WriteTo(const ADst: IWriter): Int64;
+  end;
+
+  IByteScanner = interface(IByteReader)
+    ['{F1A2B3C4-D5E6-7890-ABCD-100000000033}']
+    procedure UnreadByte;
+  end;
+
 implementation
 
 end.
