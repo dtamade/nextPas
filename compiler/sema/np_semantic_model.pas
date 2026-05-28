@@ -28,6 +28,7 @@ type
     Kind: string;
     ParentTypeId: LongInt;
     TypeParams: string;
+    TypeConstraints: string;
     InstantiatedFrom: LongInt;
   end;
 
@@ -288,8 +289,8 @@ end;
 procedure TSemanticModel.SetTypeParams(const ATypeId: LongInt;
   const AParamListNode: TGreenNode);
 var
-  Idx, I: LongInt;
-  Params: string;
+  Idx, I, ColonPos: LongInt;
+  Params, Constraints, ParamText, ParamName, Constraint: string;
 begin
   Idx := ATypeId - 1;
   if (Idx < 0) or (Idx >= Length(FTypes)) then
@@ -297,17 +298,35 @@ begin
   if AParamListNode = nil then
     Exit;
   Params := '';
+  Constraints := '';
   for I := 0 to AParamListNode.ChildCount - 1 do
   begin
     if (AParamListNode.ChildAt(I) <> nil) and
       (AParamListNode.ChildAt(I).NodeKind = gnkIdentifier) then
     begin
+      ParamText := AParamListNode.ChildAt(I).Text;
+      ColonPos := Pos(':', ParamText);
+      if ColonPos > 0 then
+      begin
+        ParamName := Copy(ParamText, 1, ColonPos - 1);
+        Constraint := Copy(ParamText, ColonPos + 1, MaxInt);
+      end
+      else
+      begin
+        ParamName := ParamText;
+        Constraint := '';
+      end;
       if Params <> '' then
+      begin
         Params := Params + ',';
-      Params := Params + AParamListNode.ChildAt(I).Text;
+        Constraints := Constraints + ',';
+      end;
+      Params := Params + ParamName;
+      Constraints := Constraints + Constraint;
     end;
   end;
   FTypes[Idx].TypeParams := Params;
+  FTypes[Idx].TypeConstraints := Constraints;
 end;
 
 procedure TSemanticModel.SetTypeInstantiatedFrom(const ATypeId: LongInt;

@@ -2889,6 +2889,182 @@ begin
   end;
 end;
 
+procedure CheckGenericConstraintClassSatisfied;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericConstraintClassOk;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  TFoo = class' + LineEnding +
+    '  end;' + LineEnding +
+    '  generic THolder<T: class> = class' + LineEnding +
+    '    procedure Hold(const Item: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure THolder.Hold(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TFooHolder = specialize THolder<TFoo>;' + LineEnding +
+    'var' + LineEnding +
+    '  H: TFooHolder;' + LineEnding +
+    'begin' + LineEnding +
+    '  H.Hold(nil);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-constraint-class-ok-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model.BindingCount < 1 then
+      Fail('generic-constraint-class-ok-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericConstraintClassViolation;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericConstraintClassFail;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic THolder<T: class> = class' + LineEnding +
+    '    procedure Hold(const Item: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure THolder.Hold(const Item: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntHolder = specialize THolder<Integer>;' + LineEnding +
+    'var' + LineEnding +
+    '  H: TIntHolder;' + LineEnding +
+    'begin' + LineEnding +
+    '  H.Hold(1);' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('generic-constraint-class-violation-expected-diagnostic');
+    if Diagnostics.LastDiagnosticCode <> 'sema.constraint-violation' then
+      Fail('generic-constraint-class-violation-wrong-code:' +
+        Diagnostics.LastDiagnosticCode);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckGenericConstraintNoConstraintAcceptsAll;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program GenericNoConstraint;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  generic TBox<T> = class' + LineEnding +
+    '    procedure Put(const Value: T);' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBox.Put(const Value: T);' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'type' + LineEnding +
+    '  TIntBox = specialize TBox<Integer>;' + LineEnding +
+    '  TStrBox = specialize TBox<String>;' + LineEnding +
+    'var' + LineEnding +
+    '  IB: TIntBox;' + LineEnding +
+    '  SB: TStrBox;' + LineEnding +
+    'begin' + LineEnding +
+    '  IB.Put(1);' + LineEnding +
+    '  SB.Put(' + #39 + 'hi' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('generic-no-constraint-unexpected-diagnostic:' +
+        Diagnostics.LastDiagnosticCode);
+    if Model.BindingCount < 2 then
+      Fail('generic-no-constraint-binding:' + IntToStr(Model.BindingCount));
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -15223,6 +15399,9 @@ begin
     CheckGenericMultipleMethodsBinding;
     CheckGenericDefaultParamInteraction;
     CheckGenericInheritedMethodBinding;
+    CheckGenericConstraintClassSatisfied;
+    CheckGenericConstraintClassViolation;
+    CheckGenericConstraintNoConstraintAcceptsAll;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally

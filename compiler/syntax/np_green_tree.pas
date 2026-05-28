@@ -1802,6 +1802,7 @@ var
   TypeParamNode: TGreenNode;
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
+  SpecArgs: string;
 begin
   Section := TGreenNode.Create(gnkTypeSection,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -1837,13 +1838,27 @@ begin
       begin
         if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
         begin
+          SpecArgs := CurrentToken(ALexer, ACursor).Lexeme;
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+          begin
+            Inc(ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind in
+                [tkIdentifier, tkClassKeyword, tkRecordKeyword]) then
+            begin
+              SpecArgs := SpecArgs + ':' + CurrentToken(ALexer, ACursor).Lexeme;
+              Inc(ACursor);
+            end;
+          end;
           ElementNode := TGreenNode.Create(gnkIdentifier,
-            CurrentToken(ALexer, ACursor).ByteOffset, 0,
-            CurrentToken(ALexer, ACursor).Lexeme);
+            CurrentToken(ALexer, ACursor - 1).ByteOffset, 0, SpecArgs);
           TypeParamNode.AppendChild(ElementNode);
           Inc(ATree.FNodeCount);
-        end;
-        Inc(ACursor);
+        end
+        else
+          Inc(ACursor);
       end;
       MatchTokenSilent(ALexer, ACursor, tkGreaterThan);
       Decl.AppendChild(TypeParamNode);

@@ -37,6 +37,8 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
+    FGenericCacheKeys: array of string;
+    FGenericCacheTypeIds: array of LongInt;
     FInliningStack: array of string;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
@@ -4347,9 +4349,10 @@ var
   Symbol: TSemanticSymbol;
   NewSymbolId: LongInt;
   QualPrefix: string;
-  ArgStr, ParamStr: string;
+  ArgStr, ParamStr, ConstraintStr: string;
   ArgTypes: array of string;
   ParamNames: array of string;
+  Constraints: array of string;
   MethodShortName: string;
   SubstSig: string;
   Decl: TGreenNode;
@@ -4387,6 +4390,7 @@ begin
     begin
       GenericTypeId := GenericType.TypeId;
       ParamStr := GenericType.TypeParams;
+      ConstraintStr := GenericType.TypeConstraints;
       Break;
     end;
   end;
@@ -4427,6 +4431,44 @@ begin
     SetLength(ParamNames, Length(ParamNames) + 1);
     ParamNames[High(ParamNames)] := Trim(Copy(ParamStr, I, J - I));
     I := J + 1;
+  end;
+
+  SetLength(Constraints, 0);
+  I := 1;
+  while I <= Length(ConstraintStr) do
+  begin
+    J := I;
+    while (J <= Length(ConstraintStr)) and (ConstraintStr[J] <> ',') do
+      Inc(J);
+    SetLength(Constraints, Length(Constraints) + 1);
+    Constraints[High(Constraints)] := Trim(Copy(ConstraintStr, I, J - I));
+    I := J + 1;
+  end;
+
+  for I := 0 to High(Constraints) do
+  begin
+    if (Constraints[I] = '') or (I > High(ArgTypes)) then
+      Continue;
+    if SameText(Constraints[I], 'class') then
+    begin
+      if not FModel.LookupConstValue(ArgTypes[I] + '$size', SizeVal) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + ArgTypes[I] + ' does not satisfy constraint "class"');
+        Exit;
+      end;
+    end
+    else if SameText(Constraints[I], 'record') then
+    begin
+      if not FModel.LookupConstValue(ArgTypes[I] + '$record', SizeVal) then
+      begin
+        FDiagnostics.EmitError('sema.constraint-violation', 'sema',
+          FRootFileId, 0,
+          'type ' + ArgTypes[I] + ' does not satisfy constraint "record"');
+        Exit;
+      end;
+    end;
   end;
 
   InstanceName := FModel.TypeAt(AInstanceTypeId - 1).Name;
@@ -4481,11 +4523,21 @@ var
   GenericType: TSemanticType;
   GenericTypeId: LongInt;
   NewTypeId: LongInt;
+  CacheKey: string;
 begin
   Result := 0;
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
     Exit;
+
+  CacheKey := LowerCase(ASpecText);
+  for I := 0 to Length(FGenericCacheKeys) - 1 do
+    if FGenericCacheKeys[I] = CacheKey then
+    begin
+      Result := FGenericCacheTypeIds[I];
+      Exit;
+    end;
+
   GenericName := Copy(ASpecText, 1, LtPos - 1);
   GenericTypeId := 0;
   for I := 0 to FModel.TypeCount - 1 do
@@ -4503,6 +4555,12 @@ begin
   NewTypeId := FModel.AddType(ASpecText, 'declared');
   FModel.AddSymbol(ASpecText, 'type', AOwnerUnitId, NewTypeId, 0);
   InstantiateGenericType(NewTypeId, ASpecText, AOwnerUnitId);
+
+  SetLength(FGenericCacheKeys, Length(FGenericCacheKeys) + 1);
+  FGenericCacheKeys[High(FGenericCacheKeys)] := CacheKey;
+  SetLength(FGenericCacheTypeIds, Length(FGenericCacheTypeIds) + 1);
+  FGenericCacheTypeIds[High(FGenericCacheTypeIds)] := NewTypeId;
+
   Result := NewTypeId;
 end;
 
