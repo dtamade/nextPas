@@ -6,36 +6,53 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.bytes.base,
-  nextpas.core.bytes.intf,
-  nextpas.core.bytes.buffer,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.builder;
 
 type
-  TEndian = nextpas.core.bytes.base.TEndian;
-  TByteOrder = nextpas.core.bytes.base.TByteOrder;
-  IByteBuffer = nextpas.core.bytes.intf.IByteBuffer;
-  IByteBuilder = nextpas.core.bytes.intf.IByteBuilder;
+  TEndianness = nextpas.core.bytes.base.TEndianness;
+  TBytesBuilder = nextpas.core.bytes.builder.TBytesBuilder;
 
-function ByteBuffer(const ACapacity: SizeUInt = 256): IByteBuffer; inline;
-function ByteBufferFrom(const AData: TBytes): IByteBuffer; inline;
-function ByteBuilder(const AInitialCapacity: SizeUInt = 256): IByteBuilder; inline;
+function BytesEqual(const A, B: TBytes): Boolean; inline;
+function BytesCompare(const A, B: TBytes): Integer; inline;
+function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
+function BytesConcat(const A, B: TBytes): TBytes; inline;
+function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
+function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
 implementation
 
-function ByteBuffer(const ACapacity: SizeUInt): IByteBuffer;
+function BytesEqual(const A, B: TBytes): Boolean;
 begin
-  Result := nextpas.core.bytes.buffer.CreateByteBuffer(ACapacity);
+  Result := nextpas.core.bytes.ops.BytesEqual(A, B);
 end;
 
-function ByteBufferFrom(const AData: TBytes): IByteBuffer;
+function BytesCompare(const A, B: TBytes): Integer;
 begin
-  Result := nextpas.core.bytes.buffer.CreateByteBufferFrom(AData);
+  Result := nextpas.core.bytes.ops.BytesCompare(A, B);
 end;
 
-function ByteBuilder(const AInitialCapacity: SizeUInt): IByteBuilder;
+function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt;
 begin
-  Result := nextpas.core.bytes.builder.CreateByteBuilder(AInitialCapacity);
+  Result := nextpas.core.bytes.ops.BytesIndexOf(AData, ANeedle);
+end;
+
+function BytesConcat(const A, B: TBytes): TBytes;
+begin
+  Result := nextpas.core.bytes.ops.BytesConcat(A, B);
+end;
+
+function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
+begin
+  Result := nextpas.core.bytes.ops.BytesStartsWith(AData, APrefix);
+end;
+
+function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
+begin
+  Result := nextpas.core.bytes.ops.BytesEndsWith(AData, ASuffix);
 end;
 
 end.
