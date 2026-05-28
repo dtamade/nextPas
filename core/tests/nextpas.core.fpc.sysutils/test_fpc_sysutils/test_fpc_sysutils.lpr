@@ -4,6 +4,8 @@ program test_fpc_sysutils;
 
 uses
   nextpas.core.fpc.sysutils,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base,
   nextpas.core.testing;
 
 var
@@ -157,6 +159,40 @@ begin
   Check(QuotedStr('') = '''''', 'empty');
 end;
 
+procedure TestFindFirst;
+var
+  SR: TSearchRec;
+  LCount: Integer;
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+begin
+  ForceDirectories('/tmp/nextpas_find_test');
+  platform_file_open('/tmp/nextpas_find_test/a.pas', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('x'), 1, W);
+  platform_file_close(H);
+  platform_file_open('/tmp/nextpas_find_test/b.pas', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('y'), 1, W);
+  platform_file_close(H);
+  platform_file_open('/tmp/nextpas_find_test/c.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('z'), 1, W);
+  platform_file_close(H);
+
+  LCount := 0;
+  if FindFirst('/tmp/nextpas_find_test/*.pas', faAnyFile, SR) = 0 then
+  begin
+    repeat
+      Inc(LCount);
+    until FindNext(SR) <> 0;
+    FindClose(SR);
+  end;
+  Check(LCount = 2, 'found 2 .pas files');
+
+  platform_file_unlink('/tmp/nextpas_find_test/a.pas');
+  platform_file_unlink('/tmp/nextpas_find_test/b.pas');
+  platform_file_unlink('/tmp/nextpas_find_test/c.txt');
+  platform_file_rmdir('/tmp/nextpas_find_test');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.fpc.sysutils');
   T.Run('IntToStr', @TestIntToStr);
@@ -178,5 +214,6 @@ begin
   T.Run('BoolToStr', @TestBoolToStr);
   T.Run('IsValidIdent', @TestIsValidIdent);
   T.Run('QuotedStr', @TestQuotedStr);
+  T.Run('FindFirst/Next/Close', @TestFindFirst);
   T.Summary;
 end.

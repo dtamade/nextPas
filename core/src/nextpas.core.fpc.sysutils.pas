@@ -36,6 +36,17 @@ const
   fmOpenWrite      = $0001;
   fmOpenReadWrite  = $0002;
 
+type
+  TSearchRec = record
+    Time: Int64;
+    Size: Int64;
+    Attr: Longint;
+    Name: string;
+    FindHandle: Pointer;
+    Pattern: string;
+    SearchPath: string;
+  end;
+
 { --- String Functions --- }
 
 function UpperCase(const S: string): string;
@@ -99,6 +110,12 @@ function AnsiCompareText(const S1, S2: string): Integer;
 function AnsiCompareStr(const S1, S2: string): Integer;
 function AnsiSameText(const S1, S2: string): Boolean;
 function GetLastOSError: Integer;
+
+{ --- Directory Search (P2) --- }
+
+function FindFirst(const Path: string; Attr: Longint; out Rslt: TSearchRec): Longint;
+function FindNext(var Rslt: TSearchRec): Longint;
+procedure FindClose(var Rslt: TSearchRec);
 
 implementation
 
@@ -551,6 +568,135 @@ begin
 {$ELSE}
   Result := 0;
 {$ENDIF}
+end;
+
+{ --- Directory Search (P2) --- }
+
+function GlobMatch(const AName, APattern: string): Boolean;
+var
+  NI, PI, NLen, PLen: Integer;
+  NSave, PSave: Integer;
+begin
+  NLen := Length(AName);
+  PLen := Length(APattern);
+  NI := 1; PI := 1;
+  NSave := 0; PSave := 0;
+  while NI <= NLen do
+  begin
+    if (PI <= PLen) and (APattern[PI] = '*') then
+    begin
+      PSave := PI;
+      NSave := NI;
+      Inc(PI);
+    end
+    else if (PI <= PLen) and ((APattern[PI] = '?') or
+      (UpCase(APattern[PI]) = UpCase(AName[NI]))) then
+    begin
+      Inc(NI);
+      Inc(PI);
+    end
+    else if PSave <> 0 then
+    begin
+      PI := PSave + 1;
+      Inc(NSave);
+      NI := NSave;
+    end
+    else
+      Exit(False);
+  end;
+  while (PI <= PLen) and (APattern[PI] = '*') do
+    Inc(PI);
+  Result := PI > PLen;
+end;
+
+type
+  PSearchState = ^TSearchState;
+  TSearchState = record
+    DirHandle: TPlatformDirHandle;
+    Open: Boolean;
+  end;
+
+function FindFirst(const Path: string; Attr: Longint; out Rslt: TSearchRec): Longint;
+var
+  LDir: string;
+  LState: PSearchState;
+  LLastSep, I: Integer;
+begin
+  FillChar(Rslt, SizeOf(Rslt), 0);
+  LLastSep := 0;
+  for I := Length(Path) downto 1 do
+    if (Path[I] = '/') or (Path[I] = '\') then
+    begin
+      LLastSep := I;
+      Break;
+    end;
+  if LLastSep > 0 then
+  begin
+    LDir := Copy(Path, 1, LLastSep);
+    Rslt.Pattern := Copy(Path, LLastSep + 1, Length(Path) - LLastSep);
+  end
+  else
+  begin
+    LDir := './';
+    Rslt.Pattern := Path;
+  end;
+  Rslt.SearchPath := LDir;
+
+  New(LState);
+  if platform_dir_open(PAnsiChar(LDir), LState^.DirHandle) <> 0 then
+  begin
+    Dispose(LState);
+    Rslt.FindHandle := nil;
+    Exit(-1);
+  end;
+  LState^.Open := True;
+  Rslt.FindHandle := LState;
+  Result := FindNext(Rslt);
+end;
+
+function FindNext(var Rslt: TSearchRec): Longint;
+var
+  LState: PSearchState;
+  LEntry: TPlatformDirEntry;
+  LR: Int32;
+  LStat: TPlatformFileStat;
+  LFullPath: string;
+begin
+  LState := PSearchState(Rslt.FindHandle);
+  if (LState = nil) or (not LState^.Open) then
+    Exit(-1);
+  while True do
+  begin
+    LR := platform_dir_read(LState^.DirHandle, LEntry);
+    if LR <> 0 then
+      Exit(-1);
+    Rslt.Name := PAnsiChar(@LEntry.Name[0]);
+    if not GlobMatch(Rslt.Name, Rslt.Pattern) then
+      Continue;
+    Rslt.Attr := 0;
+    if LEntry.FileType = ftDirectory then
+      Rslt.Attr := Rslt.Attr or faDirectory;
+    LFullPath := Rslt.SearchPath + Rslt.Name;
+    if platform_file_stat(PAnsiChar(LFullPath), LStat) = 0 then
+      Rslt.Size := LStat.Size
+    else
+      Rslt.Size := 0;
+    Exit(0);
+  end;
+end;
+
+procedure FindClose(var Rslt: TSearchRec);
+var
+  LState: PSearchState;
+begin
+  LState := PSearchState(Rslt.FindHandle);
+  if LState <> nil then
+  begin
+    if LState^.Open then
+      platform_dir_close(LState^.DirHandle);
+    Dispose(LState);
+    Rslt.FindHandle := nil;
+  end;
 end;
 
 end.
