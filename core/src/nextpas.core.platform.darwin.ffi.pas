@@ -40,6 +40,28 @@ function dlclose(Lib: Pointer): Int32; cdecl; external 'c' name 'dlclose';
 function dlerror: PAnsiChar; cdecl; external 'c' name 'dlerror';
 function kqueue: Int32; cdecl; external 'c' name 'kqueue';
 function kevent(kq: Int32; changelist: PKEvent; nchanges: Int32; eventlist: PKEvent; nevents: Int32; timeout: Pointer): Int32; cdecl; external 'c' name 'kevent';
+function pipe(pipefd: Pointer): Int32; cdecl; external 'c' name 'pipe';
+function dup2(oldfd: Int32; newfd: Int32): Int32; cdecl; external 'c' name 'dup2';
+function readlink(path: PAnsiChar; buf: PAnsiChar; bufsiz: PtrUInt): PtrInt; cdecl; external 'c' name 'readlink';
+function symlink(target: PAnsiChar; linkpath: PAnsiChar): Int32; cdecl; external 'c' name 'symlink';
+function chmod(path: PAnsiChar; mode: UInt32): Int32; cdecl; external 'c' name 'chmod';
+function chown(path: PAnsiChar; owner: UInt32; group: UInt32): Int32; cdecl; external 'c' name 'chown';
+function getuid: UInt32; cdecl; external 'c' name 'getuid';
+function geteuid: UInt32; cdecl; external 'c' name 'geteuid';
+function getgid: UInt32; cdecl; external 'c' name 'getgid';
+function getegid: UInt32; cdecl; external 'c' name 'getegid';
+function poll(fds: Pointer; nfds: UInt32; timeout: Int32): Int32; cdecl; external 'c' name 'poll';
+function socket(domain: Int32; xtype: Int32; protocol: Int32): Int32; cdecl; external 'c' name 'socket';
+function bind(sockfd: Int32; addr: Pointer; addrlen: UInt32): Int32; cdecl; external 'c' name 'bind';
+function listen(sockfd: Int32; backlog: Int32): Int32; cdecl; external 'c' name 'listen';
+function accept(sockfd: Int32; addr: Pointer; addrlen: Pointer): Int32; cdecl; external 'c' name 'accept';
+function connect(sockfd: Int32; addr: Pointer; addrlen: UInt32): Int32; cdecl; external 'c' name 'connect';
+function send(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32): PtrInt; cdecl; external 'c' name 'send';
+function recv(sockfd: Int32; buf: Pointer; len: PtrUInt; flags: Int32): PtrInt; cdecl; external 'c' name 'recv';
+function shutdown(sockfd: Int32; how: Int32): Int32; cdecl; external 'c' name 'shutdown';
+function getaddrinfo(node: PAnsiChar; service: PAnsiChar; hints: Pointer; res: Pointer): Int32; cdecl; external 'c' name 'getaddrinfo';
+procedure freeaddrinfo(res: Pointer); cdecl; external 'c' name 'freeaddrinfo';
+function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUInt; serv: PAnsiChar; servlen: PtrUInt; flags: Int32): Int32; cdecl; external 'c' name 'getnameinfo';
 
 implementation
 

@@ -154,6 +154,9 @@ const
 { kqueue types and constants }
 {$I nextpas.core.platform.darwin.base.kqueue.inc}
 
+{ socket constants - Darwin-specific values }
+{$I nextpas.core.platform.darwin.base.socket.inc}
+
 implementation
 
 end.
