@@ -332,16 +332,11 @@ type
     function Add(const aElement: T): SizeUInt;
 
     { IQueue<T> 队列接口实现 }
-    procedure Enqueue(const aElement: T); overload;
-    procedure Enqueue(const aElements: array of T); overload;
-    procedure Enqueue(const aSrc: Pointer; aElementCount: SizeUInt); overload;
     procedure Push(const aElement: T); overload;
     procedure Push(const aElements: array of T); overload;
     procedure Push(const aSrc: Pointer; aElementCount: SizeUInt); overload;
-    function Dequeue: T; overload;
     function Pop: T; overload;
     function Peek: T; overload;
-    function Dequeue(var aElement: T): Boolean; overload;
     function Pop(out aElement: T): Boolean; overload;
     function Peek(out aElement: T): Boolean; overload;  // ✅ 统一为 out 参数
     function TryPeek(out aElement: T): Boolean; overload; // 新 IQueue 兼容
@@ -2819,24 +2814,9 @@ end;
 
 { IQueue<T> 队列接口实现 }
 
-procedure TVecDeque.Enqueue(const aElement: T);
-begin
-  PushBack(aElement);
-end;
-
 procedure TVecDeque.Push(const aElement: T);
 begin
   PushBack(aElement);
-end;
-
-function TVecDeque.Dequeue: T;
-begin
-  Result := PopFront;
-end;
-
-function TVecDeque.Dequeue(var aElement: T): Boolean;
-begin
-  Result := PopFront(aElement);
 end;
 
 function TVecDeque.Pop(out aElement: T): Boolean;
@@ -7974,20 +7954,6 @@ begin
 end;
 
 // 所有并行方法实现已移除，使用标准方法替代
-
-{ IQueue<T> 接口实现 - 缺失的方法 }
-
-procedure TVecDeque.Enqueue(const aElements: array of T);
-begin
-  PushBack(aElements);
-end;
-
-procedure TVecDeque.Enqueue(const aSrc: Pointer; aElementCount: SizeUInt);
-begin
-  PushBack(aSrc, aElementCount);
-end;
-
-
 
 function TVecDeque.Front: T;
 begin

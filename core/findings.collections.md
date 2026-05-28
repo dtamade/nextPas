@@ -170,3 +170,9 @@
 - `Enqueue` / `Dequeue` duplicate the same PriorityQueue semantics and should not remain as compatibility aliases because `nextpas.core` is not published yet.
 - `Pop` removes the current highest-priority element according to the queue comparer; `Peek` observes the current highest-priority element without removal.
 - `TryPop` and `TryPeek` return `False` on an empty queue. Checked `Pop` and `Peek` raise `EEmptyCollection` on an empty queue, matching existing `Vec` / `Stack` / `Deque` checked extraction style.
+
+## 2026-05-28: VecDeque queue alias cleanup
+
+- `IQueue<T>`, `IDeque<T>`, and `IVecDeque<T>` already expose the queue contract through `Push`, `Pop`, `TryPeek`, and `Peek`; they do not require `Enqueue` / `Dequeue`.
+- `TVecDeque<T>.Enqueue` / `Dequeue` were concrete-class aliases over `PushBack` / `PopFront`, duplicating the public queue vocabulary without adding capability.
+- Because `nextpas.core` has no published compatibility burden, concrete `VecDeque` should not retain these Java-style aliases. Keep `Push` / `Pop` as the default queue entry/exit API and `PushFront` / `PushBack` / `PopFront` / `PopBack` for explicit deque direction.

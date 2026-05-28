@@ -69,11 +69,12 @@
 - Continued interface-first review and corrected the stored Vec extraction decision: `Vec.Remove(Index)` may remain as indexed extraction when documented in Vec context; `RemoveAt` remains the explicit positional extraction name.
 - Removed `IPriorityQueue<T>.Enqueue` / `Dequeue` and aligned PriorityQueue with the framework `Push` / `TryPop` / checked `Pop` / `TryPeek` / checked `Peek` vocabulary. Capacity behavior and factory shape were left unchanged.
 - Verified the PriorityQueue push/pop naming batch with `git diff --check`, focused `test_facade` / `test_queue`, and full `make test`; all completed with zero failures.
+- Removed concrete `TVecDeque<T>.Enqueue` / `Dequeue` aliases. The real public interface contracts already use `Push` / `Pop` / `Peek` / `TryPeek`, and explicit deque direction remains available through `PushFront` / `PushBack` / `PopFront` / `PopBack`.
 
 ## Next
 
 - Continue container-family interface review one batch at a time.
-- Next likely interface-tuning batch: continue Map family `Get` / `Put` / `TryGetValue` / `AddOrAssign` alignment or review remaining Queue/Deque historical aliases.
+- Next likely interface-tuning batch: continue Map family `Get` / `Put` / `TryGetValue` / `AddOrAssign` alignment, or inspect remaining concrete-class-only historical aliases in queue/deque/list families.
 - Continue the structural audit across remaining containers after the Vec/Array surface is steadier.
 - Build a full facade public-surface map before deciding how to handle open generic interface visibility.
 - Keep implementation tuning until after interface and architecture review are agreed.
