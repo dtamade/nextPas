@@ -4,6 +4,7 @@ program test_vec;
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec;
@@ -13,6 +14,11 @@ type
   TIntVec = specialize TVec<Integer>;
   IStrVec = specialize IVec<string>;
   TStrVec = specialize TVec<string>;
+
+function IsEven(const V: Integer; Data: Pointer): Boolean;
+begin
+  Result := (V mod 2) = 0;
+end;
 
 var
   T: TTestRunner;
@@ -344,6 +350,145 @@ begin
   end;
 end;
 
+procedure TestTryPop;
+var
+  LV: TIntVec;
+  LVal: Integer;
+begin
+  LV := TIntVec.Create;
+  try
+    Check(not LV.TryPop(LVal), 'try pop on empty');
+    LV.Push([1, 2, 3]);
+    Check(LV.TryPop(LVal), 'try pop');
+    CheckEqual(Int64(3), Int64(LVal), 'popped value');
+    CheckEqual(Int64(2), Int64(LV.Count), 'count after pop');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestTrySwapRemoveAt;
+var
+  LV: TIntVec;
+  LVal: Integer;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([10, 20, 30, 40]);
+    Check(LV.TrySwapRemoveAt(1, LVal), 'try swap remove');
+    CheckEqual(Int64(20), Int64(LVal), 'removed value');
+    CheckEqual(Int64(3), Int64(LV.Count), 'count');
+    Check(not LV.TrySwapRemoveAt(99, LVal), 'invalid index');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestFilter;
+var
+  LV: TIntVec;
+  LFiltered: IIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3, 4, 5, 6]);
+    LFiltered := LV.Filter(@IsEven, nil);
+    CheckEqual(Int64(3), Int64(LFiltered.Count), 'filtered count');
+    CheckEqual(Int64(2), Int64(LFiltered.Get(0)), 'filtered[0]');
+    CheckEqual(Int64(4), Int64(LFiltered.Get(1)), 'filtered[1]');
+    CheckEqual(Int64(6), Int64(LFiltered.Get(2)), 'filtered[2]');
+    CheckEqual(Int64(6), Int64(LV.Count), 'source unchanged');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestRetain;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3, 4, 5, 6]);
+    LV.Retain(@IsEven, nil);
+    CheckEqual(Int64(3), Int64(LV.Count), 'retained count');
+    CheckEqual(Int64(2), Int64(LV.Get(0)), 'retained[0]');
+    CheckEqual(Int64(4), Int64(LV.Get(1)), 'retained[1]');
+    CheckEqual(Int64(6), Int64(LV.Get(2)), 'retained[2]');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestAnyAll;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([2, 4, 6]);
+    Check(LV.All(@IsEven, nil), 'all even');
+    Check(LV.Any(@IsEven, nil), 'any even');
+    LV.Push(3);
+    Check(not LV.All(@IsEven, nil), 'not all even after odd');
+    Check(LV.Any(@IsEven, nil), 'still any even');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestDedup;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 1, 2, 2, 2, 3, 3, 1]);
+    LV.Dedup;
+    CheckEqual(Int64(4), Int64(LV.Count), 'dedup adjacent');
+    CheckEqual(Int64(1), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(2), Int64(LV.Get(1)), '[1]');
+    CheckEqual(Int64(3), Int64(LV.Get(2)), '[2]');
+    CheckEqual(Int64(1), Int64(LV.Get(3)), '[3] non-adjacent dup kept');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestSplice;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3, 4, 5]);
+    LV.Splice(1, 2, [10, 20, 30]);
+    CheckEqual(Int64(6), Int64(LV.Count), 'count after splice');
+    CheckEqual(Int64(1), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(10), Int64(LV.Get(1)), '[1] inserted');
+    CheckEqual(Int64(20), Int64(LV.Get(2)), '[2] inserted');
+    CheckEqual(Int64(30), Int64(LV.Get(3)), '[3] inserted');
+    CheckEqual(Int64(4), Int64(LV.Get(4)), '[4] shifted');
+    CheckEqual(Int64(5), Int64(LV.Get(5)), '[5] shifted');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestEnsureCapacity;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.EnsureCapacity(50);
+    Check(LV.GetCapacity >= 50, 'capacity ensured');
+    CheckEqual(Int64(0), Int64(LV.Count), 'count unchanged');
+  finally
+    LV.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.vec');
   T.Run('Create', @TestCreate);
@@ -369,5 +514,13 @@ begin
   T.Run('ShrinkToFit', @TestShrinkToFit);
   T.Run('Truncate', @TestTruncate);
   T.Run('First/Last', @TestFirstLast);
+  T.Run('TryPop', @TestTryPop);
+  T.Run('TrySwapRemoveAt', @TestTrySwapRemoveAt);
+  T.Run('Filter', @TestFilter);
+  T.Run('Retain', @TestRetain);
+  T.Run('Any/All', @TestAnyAll);
+  T.Run('Dedup', @TestDedup);
+  T.Run('Splice', @TestSplice);
+  T.Run('EnsureCapacity', @TestEnsureCapacity);
   T.Summary;
 end.
