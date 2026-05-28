@@ -105,7 +105,7 @@ function platform_socket_create(AFamily: TPlatformAddressFamily;
 begin
   ASock.Value := socket(MapFamily(AFamily), MapSockType(AType), MapProtocol(AProto));
   if ASock.Value < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -113,11 +113,11 @@ end;
 function platform_socket_close(var ASock: TPlatformSocket): Int32;
 begin
   if ASock.Value < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   if close(ASock.Value) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
   ASock.Value := -1;
 end;
 
@@ -127,7 +127,7 @@ begin
   if bind(ASock.Value, @AAddr.Storage, socklen_t(AAddr.Len)) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_socket_listen(const ASock: TPlatformSocket; ABacklog: Int32): Int32;
@@ -135,7 +135,7 @@ begin
   if listen(ASock.Value, ABacklog) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_socket_accept(const ASock: TPlatformSocket;
@@ -147,7 +147,7 @@ begin
   LLen := SizeOf(AAddr.Storage);
   AClient.Value := accept(ASock.Value, @AAddr.Storage, @LLen);
   if AClient.Value < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
   begin
     AAddr.Len := Int32(LLen);
@@ -161,7 +161,7 @@ begin
   if connect(ASock.Value, @AAddr.Storage, socklen_t(AAddr.Len)) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_socket_send(const ASock: TPlatformSocket;
@@ -173,7 +173,7 @@ begin
   if LResult < 0 then
   begin
     ASent := 0;
-    Result := -1;
+    Result := platform_get_errno;
   end
   else
   begin
@@ -191,7 +191,7 @@ begin
   if LResult < 0 then
   begin
     ARecvd := 0;
-    Result := -1;
+    Result := platform_get_errno;
   end
   else
   begin
@@ -213,7 +213,7 @@ begin
   if shutdown(ASock.Value, LHow) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_socket_setopt_int(const ASock: TPlatformSocket;
@@ -222,7 +222,7 @@ begin
   if setsockopt(ASock.Value, ALevel, AOptName, @AValue, SizeOf(AValue)) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_socket_fd(const ASock: TPlatformSocket): Int32;

@@ -50,7 +50,7 @@ begin
   FillChar(APoller, SizeOf(APoller), 0);
   APoller.EpollFd := epoll_create1(EPOLL_CLOEXEC);
   if APoller.EpollFd < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -64,7 +64,7 @@ begin
     Result := 0;
   end
   else
-    Result := -1;
+    Result := 9; { EBADF }
 end;
 
 function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32;
@@ -78,7 +78,7 @@ begin
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_ADD, AFd, @LEv) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: Int32;
@@ -92,7 +92,7 @@ begin
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_MOD, AFd, @LEv) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: Int32): Int32;
@@ -100,7 +100,7 @@ begin
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_DEL, AFd, nil) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_poller_wait(var APoller: TPlatformPoller;
@@ -115,7 +115,7 @@ begin
   if LMax > 64 then LMax := 64;
   LN := epoll_wait(APoller.EpollFd, @LEvents[0], LMax, ATimeoutMs);
   if LN < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   for LI := 0 to LN - 1 do
   begin
     AEntries[LI].Fd := 0;
@@ -144,7 +144,7 @@ begin
   FillChar(APoller, SizeOf(APoller), 0);
   APoller.KqueueFd := kqueue;
   if APoller.KqueueFd < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -158,7 +158,7 @@ begin
     Result := 0;
   end
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32;
@@ -188,7 +188,7 @@ begin
   end;
   if LCount = 0 then Exit(0);
   if kevent(APoller.KqueueFd, @LChanges[0], LCount, nil, 0, nil) < 0 then
-    Result := -1
+    Result := platform_get_errno
   else
     Result := 0;
 end;
@@ -237,7 +237,7 @@ begin
   end;
   LN := kevent(APoller.KqueueFd, nil, 0, @LEvents[0], LMax, LTimeoutPtr);
   if LN < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   for LI := 0 to LN - 1 do
   begin
     AEntries[LI].Fd := Int32(LEvents[LI].Ident);

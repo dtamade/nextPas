@@ -38,7 +38,7 @@ begin
   FillChar(AProc, SizeOf(AProc), 0);
   LPid := fork;
   if LPid < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   if LPid = 0 then
   begin
     if AEnvp <> nil then
@@ -79,7 +79,7 @@ begin
   LStatus := 0;
   LRet := waitpid(AProc.Pid, @LStatus, 0);
   if LRet < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   Result := DecodeStatus(LStatus, AResult);
 end;
 
@@ -93,7 +93,7 @@ begin
   LStatus := 0;
   LRet := waitpid(AProc.Pid, @LStatus, WNOHANG);
   if LRet < 0 then
-    Exit(-1);
+    Exit(platform_get_errno);
   if LRet = 0 then
   begin
     AResult.Status := psRunning;
@@ -107,7 +107,7 @@ begin
   if kill(AProc.Pid, 9) = 0 then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_errno;
 end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
