@@ -8,7 +8,8 @@ uses
   SysUtils, TypInfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.hashmap.base;
+  nextpas.core.collections.hashmap.base,
+  nextpas.core.simd;
 
 const
   CTRL_EMPTY   = Byte($FF);
@@ -17,12 +18,12 @@ const
   MIN_CAPACITY = 16;
 
 type
-  TGroupMask = UInt32;
+  TGroupMask = nextpas.core.simd.TMask16;
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
-function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
+function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmpty(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
 type
   generic TSwissTable<K, V> = class
@@ -76,73 +77,40 @@ type
 
 implementation
 
-{$IFDEF CPUX86_64}
-{$ASMMODE INTEL}
-{$ENDIF}
-
 uses
   nextpas.core.collections.hashmap;
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer;
 begin
-  if mask = 0 then Exit(-1);
-  {$IFDEF CPUX86_64}
-  Result := BsfDWord(mask);
-  {$ELSE}
-  Result := BsfWord(mask);
-  {$ENDIF}
+  Result := nextpas.core.simd.Mask16FirstSet(mask);
 end;
 
-{$IFDEF CPUX86_64}
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask; assembler; nostackframe;
-asm
-  movd xmm0, esi
-  punpcklbw xmm0, xmm0
-  pshuflw xmm0, xmm0, 0
-  punpcklqdq xmm0, xmm0
-  movdqu xmm1, [rdi]
-  pcmpeqb xmm0, xmm1
-  pmovmskb eax, xmm0
-end;
-
-function SwissMatchEmpty(ACtrl: PByte): TGroupMask; assembler; nostackframe;
-asm
-  pcmpeqd xmm0, xmm0
-  movdqu xmm1, [rdi]
-  pcmpeqb xmm0, xmm1
-  pmovmskb eax, xmm0
-end;
-
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask; assembler; nostackframe;
-asm
-  movdqu xmm0, [rdi]
-  pmovmskb eax, xmm0
-end;
-{$ELSE}
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
-var i: Integer;
+var
+  LCtrl, LSplat: TVecU8x16;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] = AH2 then Result := Result or TGroupMask(1 shl i);
+  Move(ACtrl^, LCtrl, 16);
+  FillChar(LSplat, 16, AH2);
+  Result := VecU8x16CmpEq(LCtrl, LSplat);
 end;
 
 function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
-var i: Integer;
+var
+  LCtrl, LSplat: TVecU8x16;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] = CTRL_EMPTY then Result := Result or TGroupMask(1 shl i);
+  Move(ACtrl^, LCtrl, 16);
+  FillChar(LSplat, 16, CTRL_EMPTY);
+  Result := VecU8x16CmpEq(LCtrl, LSplat);
 end;
 
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
-var i: Integer;
+var
+  LCtrl, LSplat: TVecU8x16;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] >= $80 then Result := Result or TGroupMask(1 shl i);
+  Move(ACtrl^, LCtrl, 16);
+  FillChar(LSplat, 16, $80);
+  Result := VecU8x16CmpEq(VecU8x16And(LCtrl, LSplat), LSplat);
 end;
-{$ENDIF}
 
 { TSwissTable<K,V> - Core helpers }
 
