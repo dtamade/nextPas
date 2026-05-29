@@ -1,33 +1,52 @@
 // === TMask16 Operations (AVX-512 Optimized) ===
 
 function AVX512Mask16All(mask: TMask16): Boolean; assembler; nostackframe;
-// RDI = mask (16-bit)
 asm
+  {$IFDEF UNIX}
   cmp     di, $FFFF
+  {$ELSE}
+  cmp     cx, $FFFF
+  {$ENDIF}
   sete    al
 end;
 
 function AVX512Mask16Any(mask: TMask16): Boolean; assembler; nostackframe;
 asm
+  {$IFDEF UNIX}
   test    di, di
+  {$ELSE}
+  test    cx, cx
+  {$ENDIF}
   setne   al
 end;
 
 function AVX512Mask16None(mask: TMask16): Boolean; assembler; nostackframe;
 asm
+  {$IFDEF UNIX}
   test    di, di
+  {$ELSE}
+  test    cx, cx
+  {$ENDIF}
   sete    al
 end;
 
 function AVX512Mask16PopCount(mask: TMask16): Integer; assembler; nostackframe;
 asm
+  {$IFDEF UNIX}
   movzx   eax, di
+  {$ELSE}
+  movzx   eax, cx
+  {$ENDIF}
   popcnt  eax, eax
 end;
 
 function AVX512Mask16FirstSet(mask: TMask16): Integer; assembler; nostackframe;
 asm
+  {$IFDEF UNIX}
   movzx   eax, di
+  {$ELSE}
+  movzx   eax, cx
+  {$ENDIF}
   test    eax, eax
   jz      @none
   bsf     eax, eax
