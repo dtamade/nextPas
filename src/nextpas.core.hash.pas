@@ -22,6 +22,7 @@ uses
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.md5,
+  nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
   nextpas.core.hash.sha512;
 
@@ -29,16 +30,19 @@ type
   THashAlgorithm = nextpas.core.hash.base.THashAlgorithm;
   IHasher = nextpas.core.hash.intf.IHasher;
   TMD5Digest = nextpas.core.hash.base.TMD5Digest;
+  TSHA1Digest = nextpas.core.hash.base.TSHA1Digest;
   TSHA256Digest = nextpas.core.hash.base.TSHA256Digest;
   TSHA384Digest = nextpas.core.hash.base.TSHA384Digest;
   TSHA512Digest = nextpas.core.hash.base.TSHA512Digest;
 
 function NewMD5: IHasher; inline;
+function NewSHA1: IHasher; inline;
 function NewSHA256: IHasher; inline;
 function NewSHA384: IHasher; inline;
 function NewSHA512: IHasher; inline;
 
 function SHA256Of(const ABuf; ALen: SizeUInt): TSHA256Digest;
+function SHA1Of(const ABuf; ALen: SizeUInt): TSHA1Digest;
 function SHA384Of(const ABuf; ALen: SizeUInt): TSHA384Digest;
 function SHA512Of(const ABuf; ALen: SizeUInt): TSHA512Digest;
 function MD5Of(const ABuf; ALen: SizeUInt): TMD5Digest;
@@ -50,6 +54,11 @@ implementation
 function NewMD5: IHasher;
 begin
   Result := nextpas.core.hash.md5.NewMD5;
+end;
+
+function NewSHA1: IHasher;
+begin
+  Result := nextpas.core.hash.sha1.NewSHA1;
 end;
 
 function NewSHA256: IHasher;
@@ -73,6 +82,14 @@ begin
   LH := nextpas.core.hash.sha256.NewSHA256;
   if ALen > 0 then LH.Write(ABuf, ALen);
   LH.Sum(Result, SHA256_DIGEST_SIZE);
+end;
+
+function SHA1Of(const ABuf; ALen: SizeUInt): TSHA1Digest;
+var LH: IHasher;
+begin
+  LH := nextpas.core.hash.sha1.NewSHA1;
+  if ALen > 0 then LH.Write(ABuf, ALen);
+  LH.Sum(Result, SHA1_DIGEST_SIZE);
 end;
 
 function SHA384Of(const ABuf; ALen: SizeUInt): TSHA384Digest;

@@ -5,7 +5,6 @@ unit nextpas.core.hash.md5;
 { nextpas.core.hash.md5 — MD5 实现 (RFC 1321)
 
   注意：MD5 已不安全，仅用于兼容性场景（校验和、遗留协议）。
-  不应用于密码学用途。
 }
 
 interface
@@ -23,7 +22,6 @@ type
     FBuf: array[0..63] of Byte;
     FBufLen: SizeUInt;
     FTotalLen: UInt64;
-    procedure ProcessBlock(ABlock: PByte);
   public
     constructor Create;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -44,13 +42,13 @@ begin
 end;
 
 const
-  S: array[0..63] of Byte = (
+  SHIFT: array[0..63] of Byte = (
     7,12,17,22, 7,12,17,22, 7,12,17,22, 7,12,17,22,
     5, 9,14,20, 5, 9,14,20, 5, 9,14,20, 5, 9,14,20,
     4,11,16,23, 4,11,16,23, 4,11,16,23, 4,11,16,23,
     6,10,15,21, 6,10,15,21, 6,10,15,21, 6,10,15,21
   );
-  T: array[0..63] of UInt32 = (
+  KT: array[0..63] of UInt32 = (
     $d76aa478, $e8c7b756, $242070db, $c1bdceee,
     $f57c0faf, $4787c62a, $a8304613, $fd469501,
     $698098d8, $8b44f7af, $ffff5bb1, $895cd7be,
@@ -69,31 +67,14 @@ const
     $f7537e82, $bd3af235, $2ad7d2bb, $eb86d391
   );
 
-constructor TMD5Hasher.Create;
-begin
-  inherited Create;
-  Reset;
-end;
-
-procedure TMD5Hasher.Reset;
-begin
-  FA := $67452301;
-  FB := $efcdab89;
-  FC := $98badcfe;
-  FD := $10325476;
-  FBufLen := 0;
-  FTotalLen := 0;
-end;
-
-procedure TMD5Hasher.ProcessBlock(ABlock: PByte);
+procedure MD5ProcessBlock(ABlock: PByte; var AA, AB, AC, AD: UInt32);
 var
   M: array[0..15] of UInt32;
   A, B, C, D, F: UInt32;
   G, I: Integer;
 begin
   Move(ABlock^, M[0], 64);
-
-  A := FA; B := FB; C := FC; D := FD;
+  A := AA; B := AB; C := AC; D := AD;
 
   for I := 0 to 63 do
   begin
@@ -103,12 +84,26 @@ begin
       2: begin F := B xor C xor D;                G := (3*I + 5) mod 16; end;
       3: begin F := C xor (B or (not D));          G := (7*I) mod 16; end;
     end;
-    F := F + A + T[I] + M[G];
+    F := F + A + KT[I] + M[G];
     A := D; D := C; C := B;
-    B := B + RL(F, S[I]);
+    B := B + RL(F, SHIFT[I]);
   end;
 
-  Inc(FA, A); Inc(FB, B); Inc(FC, C); Inc(FD, D);
+  Inc(AA, A); Inc(AB, B); Inc(AC, C); Inc(AD, D);
+end;
+
+constructor TMD5Hasher.Create;
+begin
+  inherited Create;
+  Reset;
+end;
+
+procedure TMD5Hasher.Reset;
+begin
+  FA := $67452301; FB := $efcdab89;
+  FC := $98badcfe; FD := $10325476;
+  FBufLen := 0;
+  FTotalLen := 0;
 end;
 
 function TMD5Hasher.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -131,14 +126,14 @@ begin
     Dec(LRemaining, LCopy);
     if FBufLen = MD5_BLOCK_SIZE then
     begin
-      ProcessBlock(@FBuf[0]);
+      MD5ProcessBlock(@FBuf[0], FA, FB, FC, FD);
       FBufLen := 0;
     end;
   end;
 
   while LRemaining >= MD5_BLOCK_SIZE do
   begin
-    ProcessBlock(LSrc);
+    MD5ProcessBlock(LSrc, FA, FB, FC, FD);
     Inc(LSrc, MD5_BLOCK_SIZE);
     Dec(LRemaining, MD5_BLOCK_SIZE);
   end;
@@ -169,18 +164,12 @@ begin
   if LBufLen > 56 then
   begin
     while LBufLen < 64 do begin LBuf[LBufLen] := 0; Inc(LBufLen); end;
-    // Process on local state
-    Move(LBuf[0], FBuf[0], 64);
-    FA := LA; FB := LB; FC := LC; FD := LD;
-    ProcessBlock(@LBuf[0]);
-    LA := FA; LB := FB; LC := LC; LD := FD;
-    FA := LA; FB := LB; FC := LC; FD := LD;
+    MD5ProcessBlock(@LBuf[0], LA, LB, LC, LD);
     LBufLen := 0;
   end;
 
   while LBufLen < 56 do begin LBuf[LBufLen] := 0; Inc(LBufLen); end;
 
-  // Length in bits, little-endian
   LBuf[56] := Byte(LTotalBits);
   LBuf[57] := Byte(LTotalBits shr 8);
   LBuf[58] := Byte(LTotalBits shr 16);
@@ -190,22 +179,17 @@ begin
   LBuf[62] := Byte(LTotalBits shr 48);
   LBuf[63] := Byte(LTotalBits shr 56);
 
-  // Temporarily use instance state for ProcessBlock, then restore
-  FA := LA; FB := LB; FC := LC; FD := LD;
-  ProcessBlock(@LBuf[0]);
+  MD5ProcessBlock(@LBuf[0], LA, LB, LC, LD);
 
   LDst := @ADst;
-  LDst[0] := Byte(FA); LDst[1] := Byte(FA shr 8);
-  LDst[2] := Byte(FA shr 16); LDst[3] := Byte(FA shr 24);
-  LDst[4] := Byte(FB); LDst[5] := Byte(FB shr 8);
-  LDst[6] := Byte(FB shr 16); LDst[7] := Byte(FB shr 24);
-  LDst[8] := Byte(FC); LDst[9] := Byte(FC shr 8);
-  LDst[10] := Byte(FC shr 16); LDst[11] := Byte(FC shr 24);
-  LDst[12] := Byte(FD); LDst[13] := Byte(FD shr 8);
-  LDst[14] := Byte(FD shr 16); LDst[15] := Byte(FD shr 24);
-
-  // Restore original state
-  FA := LA; FB := LB; FC := LC; FD := LD;
+  LDst[0] := Byte(LA); LDst[1] := Byte(LA shr 8);
+  LDst[2] := Byte(LA shr 16); LDst[3] := Byte(LA shr 24);
+  LDst[4] := Byte(LB); LDst[5] := Byte(LB shr 8);
+  LDst[6] := Byte(LB shr 16); LDst[7] := Byte(LB shr 24);
+  LDst[8] := Byte(LC); LDst[9] := Byte(LC shr 8);
+  LDst[10] := Byte(LC shr 16); LDst[11] := Byte(LC shr 24);
+  LDst[12] := Byte(LD); LDst[13] := Byte(LD shr 8);
+  LDst[14] := Byte(LD shr 16); LDst[15] := Byte(LD shr 24);
 end;
 
 function TMD5Hasher.SumBytes: TBytes;
