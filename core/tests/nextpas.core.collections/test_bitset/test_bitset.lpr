@@ -142,6 +142,19 @@ begin
   CheckEqual(Int64(1), Int64(LB.Cardinality), 'cardinality 1');
 end;
 
+procedure TestBitSetOutOfRange;
+var
+  LB: IBitSet;
+begin
+  LB := MakeBitSet(64);
+  // BitSet auto-grows: SetBit beyond capacity expands, does not raise
+  LB.SetBit(64);
+  Check(LB.Test(64), 'auto-grow SetBit');
+  LB.SetBit(1000);
+  Check(LB.Test(1000), 'auto-grow large index');
+  Check(not LB.Test(999), 'adjacent still clear');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.bitset');
   T.Run('Set and Test', @TestSetAndTest);
@@ -154,5 +167,6 @@ begin
   T.Run('XorWith', @TestXorWith);
   T.Run('NotBits', @TestNotBits);
   T.Run('Large index', @TestLargeIndex);
+  T.Run('Out of range', @TestBitSetOutOfRange);
   T.Summary;
 end.

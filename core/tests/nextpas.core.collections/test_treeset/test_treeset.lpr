@@ -142,11 +142,41 @@ begin
   CheckEqual(Int64(2), Int64(LSet.Count), 'count after remove');
 end;
 
+procedure TestTreeSetEmptyBoundary;
+var
+  LSet: IIntTreeSet;
+  LVal: Integer;
+begin
+  LSet := specialize MakeTreeSet<Integer>;
+  Check(not LSet.Min(LVal), 'Min on empty');
+  Check(not LSet.Max(LVal), 'Max on empty');
+  Check(not LSet.LowerBound(42, LVal), 'LowerBound on empty');
+  Check(not LSet.UpperBound(42, LVal), 'UpperBound on empty');
+  CheckEqual(Int64(0), Int64(LSet.Count), 'count 0');
+end;
+
+procedure TestTreeSetClear;
+var
+  LSet: IIntTreeSet;
+  i: Integer;
+begin
+  LSet := specialize MakeTreeSet<Integer>;
+  for i := 0 to 99 do LSet.Add(i);
+  CheckEqual(Int64(100), Int64(LSet.Count), 'count before clear');
+  LSet.Clear;
+  CheckEqual(Int64(0), Int64(LSet.Count), 'count after clear');
+  Check(not LSet.Contains(50), 'not contains after clear');
+  LSet.Add(999);
+  CheckEqual(Int64(1), Int64(LSet.Count), 'usable after clear');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.treeset');
   T.Run('TreeSet basic add/contains', @TestTreeSetBasic);
   T.Run('TreeSet remove', @TestTreeSetRemove);
   T.Run('TreeSet Min/Max', @TestTreeSetMinMax);
+  T.Run('TreeSet empty boundary', @TestTreeSetEmptyBoundary);
+  T.Run('TreeSet clear', @TestTreeSetClear);
   T.Run('TreeSet LowerBound/UpperBound', @TestTreeSetBounds);
   T.Run('TreeSet Union', @TestTreeSetUnion);
   T.Run('TreeSet Intersect', @TestTreeSetIntersect);
