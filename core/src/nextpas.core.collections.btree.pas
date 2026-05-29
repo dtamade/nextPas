@@ -27,6 +27,7 @@ type
     TNode = record
       Count: Int32;
       IsLeaf: Boolean;
+      Size: SizeUInt;
       Keys: array[0..BTREE_MAX_KEYS - 1] of K;
       Values: array[0..BTREE_MAX_KEYS - 1] of V;
       Children: array[0..BTREE_MAX_KEYS] of PNode;
@@ -133,6 +134,7 @@ begin
   New(Result);
   Result^.Count := 0;
   Result^.IsLeaf := AIsLeaf;
+  Result^.Size := 0;
   FillChar(Result^.Children, SizeOf(Result^.Children), 0);
 end;
 
@@ -244,6 +246,7 @@ procedure TBTreeMap.SplitChild(AParent: PNode; AChildIndex: Int32);
 var
   LFull, LNew: PNode;
   LMidIdx, i: Int32;
+  LNewSize: SizeUInt;
 begin
   LFull := AParent^.Children[AChildIndex];
   LMidIdx := BTREE_ORDER - 1;
@@ -259,6 +262,13 @@ begin
     for i := 0 to LNew^.Count do
       LNew^.Children[i] := LFull^.Children[LMidIdx + 1 + i];
 
+  // Compute LNew.Size
+  LNewSize := SizeUInt(LNew^.Count);
+  if not LNew^.IsLeaf then
+    for i := 0 to LNew^.Count do
+      LNewSize := LNewSize + LNew^.Children[i]^.Size;
+  LNew^.Size := LNewSize;
+
   // shift parent keys/children right
   for i := AParent^.Count - 1 downto AChildIndex do
   begin
@@ -273,7 +283,9 @@ begin
   AParent^.Children[AChildIndex + 1] := LNew;
   Inc(AParent^.Count);
 
+  // Update LFull.Size (lost the right half + mid key)
   LFull^.Count := LMidIdx;
+  LFull^.Size := LFull^.Size - LNew^.Size - 1;
 end;
 
 { Insert }
@@ -307,6 +319,7 @@ begin
     ANode^.Keys[i + 1] := AKey;
     ANode^.Values[i + 1] := AValue;
     Inc(ANode^.Count);
+    Inc(ANode^.Size);
     Inc(FCount);
   end
   else
@@ -347,6 +360,7 @@ begin
         if cmp > 0 then Inc(i);
       end;
     end;
+    Inc(ANode^.Size);
     InsertNonFull(ANode^.Children[i], AKey, AValue);
   end;
 end;
@@ -363,6 +377,7 @@ begin
     FRoot^.Keys[0] := AKey;
     FRoot^.Values[0] := AValue;
     FRoot^.Count := 1;
+    FRoot^.Size := 1;
     FCount := 1;
     Exit;
   end;
@@ -386,6 +401,7 @@ begin
   begin
     LNewRoot := NewNode(False);
     LNewRoot^.Children[0] := FRoot;
+    LNewRoot^.Size := FRoot^.Size;
     FRoot := LNewRoot;
     SplitChild(FRoot, 0);
   end;
@@ -395,11 +411,16 @@ end;
 { Remove — simplified: mark as not implemented for now }
 
 function TBTreeMap.Remove(const AKey: K): Boolean;
-var LOld: PNode;
+var LOld: PNode; LOldCount: SizeUInt;
 begin
   if FRoot = nil then Exit(False);
+  LOldCount := FCount;
   RemoveFromNode(FRoot, AKey);
-  if FRoot^.Count = 0 then
+  if FCount = LOldCount then Exit(False);
+  // Rebuild Size after structural changes
+  if FRoot <> nil then
+    SubtreeSize(FRoot);
+  if (FRoot <> nil) and (FRoot^.Count = 0) then
   begin
     if FRoot^.IsLeaf then
     begin
@@ -731,6 +752,7 @@ begin
   if not ANode^.IsLeaf then
     for i := 0 to ANode^.Count do
       Result := Result + SubtreeSize(ANode^.Children[i]);
+  ANode^.Size := Result;
 end;
 
 function TBTreeMap.Rank(const AKey: K): SizeUInt;
@@ -746,13 +768,13 @@ begin
     begin
       if not LNode^.IsLeaf then
         for i := 0 to LIdx - 1 do
-          Result := Result + SubtreeSize(LNode^.Children[i]);
+          Result := Result + LNode^.Children[i]^.Size;
       Result := Result + SizeUInt(LIdx);
       Exit;
     end;
     if not LNode^.IsLeaf then
       for i := 0 to LIdx - 1 do
-        Result := Result + SubtreeSize(LNode^.Children[i]);
+        Result := Result + LNode^.Children[i]^.Size;
     Result := Result + SizeUInt(LIdx);
     if LNode^.IsLeaf then Exit;
     LNode := LNode^.Children[LIdx];
@@ -779,7 +801,7 @@ begin
     end;
     for i := 0 to LNode^.Count - 1 do
     begin
-      LChildSize := SubtreeSize(LNode^.Children[i]);
+      LChildSize := LNode^.Children[i]^.Size;
       if ARank < LChildSize then
       begin
         LNode := LNode^.Children[i];
