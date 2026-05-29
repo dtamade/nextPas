@@ -45,6 +45,7 @@ type
   public type
     THash = specialize TKeyHashFunc<K>;
     TEquals = specialize TKeyEqualsFunc<K>;
+    TRetainFunc = function(const AKey: K; const AValue: V): Boolean;
     PSlot = ^TSlot;
     TSlot = record
       Key: K;
@@ -84,6 +85,7 @@ type
     procedure Put(const AKey: K; const AValue: V); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function Get(const AKey: K): V;
     procedure Clear;
+    procedure Retain(AFunc: TRetainFunc);
     function GetCount: SizeUInt;
 
     property Count: SizeUInt read FCount;
@@ -612,6 +614,25 @@ begin
   FCapacity := 0;
   FGroupCount := 0;
   FGrowthLeft := 0;
+end;
+
+procedure TSwissTable.Retain(AFunc: TRetainFunc);
+var i: SizeUInt;
+begin
+  if FCapacity = 0 then Exit;
+  for i := 0 to FCapacity - 1 do
+  begin
+    if FCtrl[i] < $80 then
+    begin
+      if not AFunc(FSlots[i].Key, FSlots[i].Value) then
+      begin
+        if System.IsManagedType(K) then Finalize(FSlots[i].Key);
+        if System.IsManagedType(V) then Finalize(FSlots[i].Value);
+        SetCtrl(i, CTRL_DELETED);
+        Dec(FCount);
+      end;
+    end;
+  end;
 end;
 
 function TSwissTable.GetCount: SizeUInt;
