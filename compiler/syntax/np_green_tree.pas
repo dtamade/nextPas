@@ -1951,6 +1951,7 @@ begin
             SkipDirectives(ALexer, ACursor);
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
             begin
               if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
@@ -2016,6 +2017,7 @@ begin
                 I := 0;
                 while (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
                   (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
                 begin
                   if CurrentToken(ALexer, ACursor).Kind = tkLParen then Inc(I)
