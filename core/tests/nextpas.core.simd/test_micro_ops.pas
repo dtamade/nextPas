@@ -5,7 +5,7 @@ program test_micro_ops;
 
 uses
   SysUtils, Unix, BaseUnix,
-  nextpas.core.simd.micro;
+  nextpas.core.simd.vec16;
 
 function GetTimeNs: Int64;
 var LTs: TTimeVal;
@@ -22,47 +22,57 @@ var
   LIters: Integer;
   LNsPerCall: Double;
 begin
-  WriteLn('=== Micro-ops Test ===');
+  WriteLn('=== Vec16 Primitives Test ===');
 
-  // Setup: data = [0..15], search for value 7
   for LI := 0 to 15 do LData[LI] := LI;
 
-  // Correctness
-  LMask := MicroCmpEqU8x16(@LData[0], 7);
+  // Vec16CmpEq
+  LMask := Vec16CmpEq(@LData[0], 7);
   WriteLn('CmpEq(data, 7) mask = $', IntToHex(LMask, 4), ' (expect $0080)');
   if LMask <> $0080 then begin WriteLn('FAIL'); Halt(1); end;
 
-  LMask := MicroCmpEqU8x16(@LData[0], 0);
+  LMask := Vec16CmpEq(@LData[0], 0);
   WriteLn('CmpEq(data, 0) mask = $', IntToHex(LMask, 4), ' (expect $0001)');
   if LMask <> $0001 then begin WriteLn('FAIL'); Halt(1); end;
 
-  LMask := MicroCmpEqU8x16(@LData[0], 255);
+  LMask := Vec16CmpEq(@LData[0], 255);
   WriteLn('CmpEq(data, 255) mask = $', IntToHex(LMask, 4), ' (expect $0000)');
   if LMask <> $0000 then begin WriteLn('FAIL'); Halt(1); end;
 
-  WriteLn('Ctz($0080) = ', MicroCtz16($0080), ' (expect 7)');
-  if MicroCtz16($0080) <> 7 then begin WriteLn('FAIL'); Halt(1); end;
+  // Vec16Ctz
+  WriteLn('Ctz($0080) = ', Vec16Ctz($0080), ' (expect 7)');
+  if Vec16Ctz($0080) <> 7 then begin WriteLn('FAIL'); Halt(1); end;
 
-  WriteLn('Popcnt($F0F0) = ', MicroPopcnt16($F0F0), ' (expect 8)');
-  if MicroPopcnt16($F0F0) <> 8 then begin WriteLn('FAIL'); Halt(1); end;
+  WriteLn('Ctz($0000) = ', Vec16Ctz($0000), ' (expect -1)');
+  if Vec16Ctz($0000) <> -1 then begin WriteLn('FAIL'); Halt(1); end;
 
-  WriteLn('ContainsByte(data, 7) = ', MicroContainsByte(@LData[0], 7), ' (expect TRUE)');
-  if not MicroContainsByte(@LData[0], 7) then begin WriteLn('FAIL'); Halt(1); end;
+  // Vec16Popcnt
+  WriteLn('Popcnt($F0F0) = ', Vec16Popcnt($F0F0), ' (expect 8)');
+  if Vec16Popcnt($F0F0) <> 8 then begin WriteLn('FAIL'); Halt(1); end;
+
+  // Vec16CmpLtU
+  LMask := Vec16CmpLtU(@LData[0], 5);
+  WriteLn('CmpLtU(data, 5) mask = $', IntToHex(LMask, 4), ' (expect $001F)');
+  if LMask <> $001F then begin WriteLn('FAIL'); Halt(1); end;
+
+  // Vec16CmpGtU
+  LMask := Vec16CmpGtU(@LData[0], 12);
+  WriteLn('CmpGtU(data, 12) mask = $', IntToHex(LMask, 4), ' (expect $E000)');
+  if LMask <> $E000 then begin WriteLn('FAIL'); Halt(1); end;
+
+  // Vec16CmpRange
+  LMask := Vec16CmpRange(@LData[0], 3, 7);
+  WriteLn('CmpRange(data, 3, 7) mask = $', IntToHex(LMask, 4), ' (expect $00F8)');
+  if LMask <> $00F8 then begin WriteLn('FAIL'); Halt(1); end;
 
   // Benchmark
   LIters := 10000000;
   LT0 := GetTimeNs;
   for LI := 0 to LIters - 1 do
-    LMask := MicroCmpEqU8x16(@LData[0], Byte(LI and 15));
+    LMask := Vec16CmpEq(@LData[0], Byte(LI and 15));
   LNsPerCall := (GetTimeNs - LT0) / LIters;
   WriteLn;
-  WriteLn(Format('MicroCmpEqU8x16 (inline): %.1f ns/call (%d M calls)', [LNsPerCall, LIters div 1000000]));
-
-  LT0 := GetTimeNs;
-  for LI := 0 to LIters - 1 do
-    LMask := MicroCmpEqU8x16_Asm(@LData[0], Byte(LI and 15));
-  LNsPerCall := (GetTimeNs - LT0) / LIters;
-  WriteLn(Format('MicroCmpEqU8x16_Asm:     %.1f ns/call (%d M calls)', [LNsPerCall, LIters div 1000000]));
+  WriteLn(Format('Vec16CmpEq: %.1f ns/call (%d M calls)', [LNsPerCall, LIters div 1000000]));
 
   WriteLn;
   WriteLn('ALL PASS');
