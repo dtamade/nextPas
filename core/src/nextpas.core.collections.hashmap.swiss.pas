@@ -242,7 +242,8 @@ begin
   end;
 
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
-  FillChar(FSlots^, LSlotSize, 0);
+  if System.IsManagedType(K) or System.IsManagedType(V) then
+    FillChar(FSlots^, LSlotSize, 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
 end;
 
