@@ -516,11 +516,16 @@ procedure EmitSyntaxError(
   const AToken: TToken;
   const AExpected: string
 );
+var
+  EffectiveFileId: TSourceFileId;
 begin
+  EffectiveFileId := ARootFileId;
+  if AToken.FileId <> 0 then
+    EffectiveFileId := AToken.FileId;
   ADiagnostics.EmitError(
     'parser.syntax-error',
     'syntax',
-    ARootFileId,
+    EffectiveFileId,
     AToken.ByteOffset,
     BuildExpectedButFoundMessage(AExpected, AToken)
   );

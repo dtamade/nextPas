@@ -172,6 +172,7 @@ type
   TToken = record
     Kind: TTokenKind;
     Lexeme: string;
+    FileId: TCoreId;
     ByteOffset: LongInt;
     Line: LongInt;
     Column: LongInt;
@@ -821,6 +822,7 @@ begin
   end;
   FTokens[NextIndex].Kind := AKind;
   FTokens[NextIndex].Lexeme := ALexeme;
+  FTokens[NextIndex].FileId := FFileId;
   FTokens[NextIndex].ByteOffset := AByteOffset;
   FTokens[NextIndex].Line := ALine;
   FTokens[NextIndex].Column := AColumn;
