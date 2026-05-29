@@ -8527,15 +8527,15 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := UnitScopeId;
         try
           SeedImportedCallableSymbol(Child, AOwnerUnitId, UnitScopeId);
+          BodyChild := nil;
           for BodyIdx := 0 to Child.ChildCount - 1 do
-          begin
-            BodyChild := Child.ChildAt(BodyIdx);
-            if (BodyChild <> nil) and (BodyChild.NodeKind = gnkBeginBlock) then
+            if (Child.ChildAt(BodyIdx) <> nil) and
+              (Child.ChildAt(BodyIdx).NodeKind = gnkBeginBlock) then
             begin
-              RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+              BodyChild := Child.ChildAt(BodyIdx);
               Break;
             end;
-          end;
+          RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
         finally
           FCurrentScopeId := SavedScopeId;
         end;
