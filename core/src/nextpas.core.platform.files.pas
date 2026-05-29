@@ -1042,9 +1042,15 @@ begin
 end;
 
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
+var
+  LFlags: DWORD;
+  LStat: TPlatformFileStat;
 begin
-  Result := Int32(GetLastError);
-  if not CreateSymbolicLinkA(ALinkPath, ATarget, 0) then
+  LFlags := 0;
+  if platform_file_stat(ATarget, LStat) = 0 then
+    if LStat.FileType = ftDirectory then
+      LFlags := 1;
+  if not CreateSymbolicLinkA(ALinkPath, ATarget, LFlags) then
     Result := Int32(GetLastError)
   else
     Result := 0;
@@ -1054,6 +1060,7 @@ function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen
 var
   LHandle: HANDLE;
   LBytesReturned: DWORD;
+  LStart: Int32;
 begin
   ALen := 0;
   if (ABuf = nil) or (ABufLen <= 0) then
@@ -1067,7 +1074,19 @@ begin
   if (LBytesReturned = 0) or (Int32(LBytesReturned) >= ABufLen) then
     Exit(Int32(GetLastError));
   ABuf[LBytesReturned] := #0;
+  LStart := 0;
+  if (LBytesReturned >= 4) and (ABuf[0] = '\') and (ABuf[1] = '\') and
+     (ABuf[2] = '?') and (ABuf[3] = '\') then
+    LStart := 4;
+  if LStart > 0 then
+  begin
+    Move(ABuf[LStart], ABuf[0], Int32(LBytesReturned) - LStart);
+    LBytesReturned := LBytesReturned - DWORD(LStart);
+    ABuf[LBytesReturned] := #0;
+  end;
   ALen := Int32(LBytesReturned);
+  Result := 0;
+end;
   Result := 0;
 end;
 

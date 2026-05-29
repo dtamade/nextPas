@@ -3,6 +3,7 @@ program test_platform_fs_walk;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
@@ -327,6 +328,26 @@ begin
   platform_file_rmdir(DIR);
 end;
 
+procedure TestWalkCycleProtection;
+const
+  DIR = '/tmp/nextpas_walk_cycle';
+begin
+  platform_file_unlink(DIR + '/loop');
+  platform_file_rmdir(DIR);
+
+  platform_file_mkdir(DIR, 493);
+  platform_file_symlink(DIR, DIR + '/loop');
+
+  GCount := 0;
+  Check(platform_fs_walk(DIR, @CountCallback, nil, True) = PLATFORM_WALK_COMPLETED,
+    'walk cycle terminates');
+  Check(GCount < 300, 'cycle bounded by max depth (count=' + IntToStr(GCount) + ')');
+  Check(GCount >= 2, 'at least root + loop visited');
+
+  platform_file_unlink(DIR + '/loop');
+  platform_file_rmdir(DIR);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs.walk');
   T.Run('walk counts all', @TestWalkCountsAll);
@@ -341,5 +362,6 @@ begin
   T.Run('walk symlink no-follow', @TestWalkSymlinkNoFollow);
   T.Run('walk symlink follow', @TestWalkSymlinkFollow);
   T.Run('walk dangling symlink', @TestWalkDanglingSymlink);
+  T.Run('walk cycle protection', @TestWalkCycleProtection);
   T.Summary;
 end.

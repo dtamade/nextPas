@@ -31,6 +31,7 @@ const
   PLATFORM_WALK_COMPLETED = 0;
   PLATFORM_WALK_STOPPED   = 1;
   PLATFORM_WALK_BADARGS   = -1;
+  PLATFORM_WALK_MAX_DEPTH = 256;
 
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
@@ -387,10 +388,7 @@ begin
     begin
       if platform_file_stat(APathBuf, LStat) = 0 then
         Exit(LStat.FileType);
-      AErrCode := platform_file_lstat(APathBuf, LStat);
-      if AErrCode <> 0 then
-        Exit(ftUnknown);
-      Exit(LStat.FileType);
+      Exit(ftSymlink);
     end;
     Exit(ADirType);
   end;
@@ -417,6 +415,9 @@ var
   LR, LErrCode: Int32;
   LChildType: TPlatformFileType;
 begin
+  if ADepth >= PLATFORM_WALK_MAX_DEPTH then
+    Exit(PLATFORM_WALK_COMPLETED);
+
   LR := platform_dir_open(APathBuf, LHandle);
   if LR <> 0 then
   begin
@@ -445,7 +446,11 @@ begin
     if LChildLen >= 4095 then
       Continue;
 
+  {$IFDEF NEXTPAS_WINDOWS}
+    APathBuf[APathLen] := '\';
+  {$ELSE}
     APathBuf[APathLen] := '/';
+  {$ENDIF}
     Move(LDirEntry.Name[0], APathBuf[APathLen + 1], LNameLen);
     APathBuf[LChildLen] := #0;
 
@@ -511,7 +516,7 @@ begin
     LPathBuf[LRootLen] := ARoot[LRootLen];
     Inc(LRootLen);
   end;
-  while (LRootLen > 1) and (LPathBuf[LRootLen - 1] = '/') do
+  while (LRootLen > 1) and ((LPathBuf[LRootLen - 1] = '/') or (LPathBuf[LRootLen - 1] = '\')) do
     Dec(LRootLen);
   LPathBuf[LRootLen] := #0;
 
