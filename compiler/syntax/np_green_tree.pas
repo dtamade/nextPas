@@ -536,6 +536,27 @@ begin
   Inc(ACursor);
 end;
 
+function IsCallingDirective(const ALexeme: string): Boolean;
+var
+  L: string;
+begin
+  L := LowerCase(ALexeme);
+  Result := (L = 'inline') or (L = 'overload') or (L = 'cdecl') or
+    (L = 'stdcall') or (L = 'register') or (L = 'pascal') or
+    (L = 'safecall') or (L = 'static') or (L = 'virtual') or
+    (L = 'override') or (L = 'abstract') or (L = 'reintroduce') or
+    (L = 'export') or (L = 'far') or (L = 'near') or
+    (L = 'nostackframe') or (L = 'assembler') or (L = 'compilerproc') or
+    (L = 'platform') or (L = 'deprecated') or (L = 'experimental') or
+    (L = 'unimplemented') or (L = 'library') or (L = 'interrupt');
+end;
+
+function IsDirectiveToken(AKind: TTokenKind): Boolean;
+begin
+  Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
+    tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword];
+end;
+
 procedure SkipDirectives(const ALexer: TLexerResult; var ACursor: LongInt);
 begin
   while (ACursor < ALexer.TokenCount) and
@@ -2596,6 +2617,14 @@ begin
   Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
+    (NameToken.Kind = tkStar) and
+    (CurrentToken(ALexer, ACursor).Kind = tkStar) then
+  begin
+    Node.FText := '**';
+    Inc(ACursor);
+  end;
+
+  if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkDot) then
   begin
     Inc(ACursor);
@@ -2610,6 +2639,15 @@ begin
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
 
   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+
+  while (ACursor < ALexer.TokenCount) and
+    (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+  begin
+    Inc(ACursor);
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+  end;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
@@ -2711,6 +2749,14 @@ begin
   Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
+    (NameToken.Kind = tkStar) and
+    (CurrentToken(ALexer, ACursor).Kind = tkStar) then
+  begin
+    Node.FText := '**';
+    Inc(ACursor);
+  end;
+
+  if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkDot) then
   begin
     Inc(ACursor);
@@ -2725,6 +2771,12 @@ begin
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
 
   if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+    (ACursor + 1 < ALexer.TokenCount) and
+    (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
+    Inc(ACursor);
+
+  if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkColon) then
   begin
     Inc(ACursor);
@@ -2737,6 +2789,15 @@ begin
   end;
 
   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+
+  while (ACursor < ALexer.TokenCount) and
+    (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+  begin
+    Inc(ACursor);
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+  end;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
