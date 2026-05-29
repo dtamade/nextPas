@@ -2610,34 +2610,30 @@ begin
   asm
     mov rax, pB
     xor ecx, ecx
-    // broadcast 'A' and 'Z' for range check
-    // unsigned range: byte - 'A' <= 'Z' - 'A' means byte in ['A'..'Z']
-    mov edx, 65           // 'A'
+    mov edx, 65
     movd xmm3, edx
     punpcklbw xmm3, xmm3
     pshuflw xmm3, xmm3, 0
-    punpcklqdq xmm3, xmm3  // xmm3 = broadcast('A')
-    mov edx, 25           // 'Z' - 'A'
+    punpcklqdq xmm3, xmm3
+    mov edx, 25
     movd xmm4, edx
     punpcklbw xmm4, xmm4
     pshuflw xmm4, xmm4, 0
-    punpcklqdq xmm4, xmm4  // xmm4 = broadcast(25)
+    punpcklqdq xmm4, xmm4
     mov edx, 32
     movd xmm5, edx
     punpcklbw xmm5, xmm5
     pshuflw xmm5, xmm5, 0
-    punpcklqdq xmm5, xmm5  // xmm5 = broadcast(32)
+    punpcklqdq xmm5, xmm5
   @loop16:
     movdqu xmm0, [rax + rcx]
     movdqa xmm1, xmm0
-    psubb xmm1, xmm3       // xmm1 = data - 'A' (unsigned)
-    // unsigned <= 25: use saturating sub then check zero
-    movdqa xmm2, xmm4
-    pmaxub xmm2, xmm1      // max(25, data-'A')
-    pcmpeqb xmm2, xmm1     // data-'A' == max(25, data-'A') means data-'A' <= 25
-    // xmm2 = mask where byte in ['A'..'Z']
-    pand xmm2, xmm5        // mask & 32
-    paddb xmm0, xmm2       // data + (32 where uppercase)
+    psubb xmm1, xmm3
+    movdqa xmm2, xmm1
+    pminub xmm2, xmm4
+    pcmpeqb xmm2, xmm1
+    pand xmm2, xmm5
+    paddb xmm0, xmm2
     movdqu [rax + rcx], xmm0
     add ecx, 16
     cmp ecx, dword [LCount16]
@@ -2666,30 +2662,30 @@ begin
   asm
     mov rax, pB
     xor ecx, ecx
-    mov edx, 97           // 'a'
+    mov edx, 97
     movd xmm3, edx
     punpcklbw xmm3, xmm3
     pshuflw xmm3, xmm3, 0
-    punpcklqdq xmm3, xmm3  // xmm3 = broadcast('a')
-    mov edx, 25           // 'z' - 'a'
+    punpcklqdq xmm3, xmm3
+    mov edx, 25
     movd xmm4, edx
     punpcklbw xmm4, xmm4
     pshuflw xmm4, xmm4, 0
-    punpcklqdq xmm4, xmm4  // xmm4 = broadcast(25)
+    punpcklqdq xmm4, xmm4
     mov edx, 32
     movd xmm5, edx
     punpcklbw xmm5, xmm5
     pshuflw xmm5, xmm5, 0
-    punpcklqdq xmm5, xmm5  // xmm5 = broadcast(32)
+    punpcklqdq xmm5, xmm5
   @loop16:
     movdqu xmm0, [rax + rcx]
     movdqa xmm1, xmm0
-    psubb xmm1, xmm3       // xmm1 = data - 'a'
-    movdqa xmm2, xmm4
-    pmaxub xmm2, xmm1
-    pcmpeqb xmm2, xmm1     // mask where byte in ['a'..'z']
-    pand xmm2, xmm5        // mask & 32
-    psubb xmm0, xmm2       // data - (32 where lowercase)
+    psubb xmm1, xmm3
+    movdqa xmm2, xmm1
+    pminub xmm2, xmm4
+    pcmpeqb xmm2, xmm1
+    pand xmm2, xmm5
+    psubb xmm0, xmm2
     movdqu [rax + rcx], xmm0
     add ecx, 16
     cmp ecx, dword [LCount16]

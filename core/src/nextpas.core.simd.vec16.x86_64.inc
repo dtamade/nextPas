@@ -85,7 +85,33 @@ end;
 
 function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16; inline;
 begin
-  Result := Vec16CmpGtU(AData, ALo - 1) and (not Vec16CmpGtU(AData, AHi));
+  Result := 0;
+  asm
+    mov rax, AData
+    movdqu xmm0, [rax]
+    // range check: (data - ALo) <= (AHi - ALo) unsigned
+    movzx edx, ALo
+    movd xmm1, edx
+    punpcklbw xmm1, xmm1
+    pshuflw xmm1, xmm1, 0
+    punpcklqdq xmm1, xmm1   // xmm1 = broadcast(ALo)
+    movdqa xmm2, xmm0
+    psubb xmm2, xmm1        // xmm2 = data - ALo (wrapping)
+    // broadcast (AHi - ALo)
+    movzx edx, AHi
+    movzx ecx, ALo
+    sub edx, ecx             // edx = AHi - ALo
+    movd xmm3, edx
+    punpcklbw xmm3, xmm3
+    pshuflw xmm3, xmm3, 0
+    punpcklqdq xmm3, xmm3   // xmm3 = broadcast(AHi - ALo)
+    // unsigned (data-ALo) <= (AHi-ALo): pminub(data-ALo, limit) == data-ALo
+    movdqa xmm4, xmm2       // copy data-ALo
+    pminub xmm4, xmm3       // min(data-ALo, limit)
+    pcmpeqb xmm4, xmm2      // min == data-ALo means data-ALo <= limit
+    pmovmskb eax, xmm4
+    mov Result, ax
+  end;
 end;
 
 function Vec16Ctz(AMask: TMask16): Int32; inline;
