@@ -27,7 +27,9 @@ type
     FSendCond: TPlatformCondVar;
     FRecvCond: TPlatformCondVar;
     FHandshakeItem: T;
-    FHandshakeDone: Boolean;
+    FHandshakeReady: Boolean;
+    FSendTicket: Int64;
+    FConsumedTicket: Int64;
   public
     constructor Create(const ACapacity: Integer);
     destructor Destroy; override;
@@ -58,7 +60,9 @@ begin
   FClosed := False;
   FSendWaiting := 0;
   FRecvWaiting := 0;
-  FHandshakeDone := False;
+  FHandshakeReady := False;
+  FSendTicket := 0;
+  FConsumedTicket := 0;
 
   platform_mutex_init(FMutex);
   platform_condvar_init(FSendCond);
@@ -74,6 +78,8 @@ begin
 end;
 
 procedure TChannel.Send(const AValue: T);
+var
+  LMyTicket: Int64;
 begin
   platform_mutex_lock(FMutex);
 
@@ -85,19 +91,21 @@ begin
 
   if FUnbuffered then
   begin
-    { Wait until handshake slot is free (previous sender consumed). }
-    while FHandshakeDone and (not FClosed) do
+    { Wait until handshake slot is free (previous value consumed). }
+    while FHandshakeReady and (not FClosed) do
       platform_condvar_wait(FSendCond, FMutex);
     if FClosed then
     begin
       platform_mutex_unlock(FMutex);
       Exit;
     end;
+    LMyTicket := FSendTicket;
+    Inc(FSendTicket);
     FHandshakeItem := AValue;
-    FHandshakeDone := True;
+    FHandshakeReady := True;
     platform_condvar_signal(FRecvCond);
-    { Wait until receiver consumes our value. }
-    while FHandshakeDone and (not FClosed) do
+    { Wait until MY value is consumed (ticket matched). }
+    while (FConsumedTicket <= LMyTicket) and (not FClosed) do
       platform_condvar_wait(FSendCond, FMutex);
     platform_mutex_unlock(FMutex);
     Exit;
@@ -127,10 +135,10 @@ begin
   if FUnbuffered then
   begin
     Inc(FRecvWaiting);
-    while (not FHandshakeDone) and (not FClosed) do
+    while (not FHandshakeReady) and (not FClosed) do
       platform_condvar_wait(FRecvCond, FMutex);
     Dec(FRecvWaiting);
-    if (not FHandshakeDone) and FClosed then
+    if (not FHandshakeReady) and FClosed then
     begin
       platform_mutex_unlock(FMutex);
       Result := False;
@@ -138,7 +146,8 @@ begin
     end;
     AValue := FHandshakeItem;
     FHandshakeItem := Default(T);
-    FHandshakeDone := False;
+    FHandshakeReady := False;
+    Inc(FConsumedTicket);
     platform_condvar_broadcast(FSendCond);
     platform_mutex_unlock(FMutex);
     Result := True;
@@ -166,6 +175,8 @@ begin
 end;
 
 function TChannel.TrySend(const AValue: T): Boolean;
+var
+  LMyTicket: Int64;
 begin
   platform_mutex_lock(FMutex);
   if FClosed then
@@ -175,15 +186,17 @@ begin
   end;
   if FUnbuffered then
   begin
-    if (FRecvWaiting = 0) or FHandshakeDone then
+    if (FRecvWaiting = 0) or FHandshakeReady then
     begin
       platform_mutex_unlock(FMutex);
       Exit(False);
     end;
+    LMyTicket := FSendTicket;
+    Inc(FSendTicket);
     FHandshakeItem := AValue;
-    FHandshakeDone := True;
+    FHandshakeReady := True;
     platform_condvar_signal(FRecvCond);
-    while FHandshakeDone and (not FClosed) do
+    while (FConsumedTicket <= LMyTicket) and (not FClosed) do
       platform_condvar_wait(FSendCond, FMutex);
     platform_mutex_unlock(FMutex);
     Result := True;
@@ -207,14 +220,15 @@ begin
   platform_mutex_lock(FMutex);
   if FUnbuffered then
   begin
-    if not FHandshakeDone then
+    if not FHandshakeReady then
     begin
       platform_mutex_unlock(FMutex);
       Exit(False);
     end;
     AValue := FHandshakeItem;
     FHandshakeItem := Default(T);
-    FHandshakeDone := False;
+    FHandshakeReady := False;
+    Inc(FConsumedTicket);
     platform_condvar_broadcast(FSendCond);
     platform_mutex_unlock(FMutex);
     Result := True;
