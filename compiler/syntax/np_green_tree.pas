@@ -2145,12 +2145,19 @@ begin
               end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword,
-                 tkConstructorKeyword, tkDestructorKeyword] then
+                 tkConstructorKeyword, tkDestructorKeyword,
+                 tkGenericKeyword, tkClassKeyword] then
               begin
                 ElementNode := TGreenNode.Create(gnkClassMethod,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   TokenKindName(CurrentToken(ALexer, ACursor).Kind));
                 Inc(ACursor);
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind in
+                    [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
+                     tkConstructorKeyword, tkDestructorKeyword,
+                     tkGenericKeyword, tkOperatorKeyword]) do
+                  Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                 begin
@@ -2159,6 +2166,15 @@ begin
                     CurrentToken(ALexer, ACursor).Lexeme));
                   Inc(ATree.FNodeCount);
                   Inc(ACursor);
+                end;
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+                begin
+                  while (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                    Inc(ACursor);
+                  if ACursor < ALexer.TokenCount then Inc(ACursor);
                 end;
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
@@ -2181,9 +2197,12 @@ begin
                 end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind in
+                  (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+                   (CurrentToken(ALexer, ACursor).Kind in
                     [tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword,
-                     tkOverloadKeyword]) do
+                     tkOverloadKeyword]) or
+                   ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                    IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
                 begin
                   if CurrentToken(ALexer, ACursor).Kind = tkVirtualKeyword then
                     ElementNode.FText := ElementNode.FText + ';virtual'
