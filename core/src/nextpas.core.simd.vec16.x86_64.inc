@@ -35,25 +35,19 @@ function Vec16CmpLtU(AData: PByte; AThreshold: Byte): TMask16; inline;
 begin
   Result := 0;
   asm
-    movzx eax, AThreshold
-    movd xmm0, eax
+    mov rax, AData
+    movdqu xmm1, [rax]       // xmm1 = data
+    movzx edx, AThreshold
+    movd xmm0, edx
     punpcklbw xmm0, xmm0
     pshuflw xmm0, xmm0, 0
-    punpcklqdq xmm0, xmm0
-    mov rax, AData
-    movdqu xmm1, [rax]
-    // unsigned lt: data < threshold ≡ maxu(threshold, data) != data
-    // simpler: subtract 128 from both, then signed compare
-    // SSE2 has no unsigned compare; use: (data XOR 0x80) < (threshold XOR 0x80) via pcmpgtb
-    movdqa xmm2, xmm0       // xmm2 = threshold broadcast
-    movdqa xmm3, xmm1       // xmm3 = data
-    // flip sign bits for unsigned comparison
-    pcmpeqd xmm4, xmm4      // xmm4 = all 1s
-    psllw xmm4, 7
-    packsswb xmm4, xmm4     // xmm4 = 0x80 broadcast
-    pxor xmm2, xmm4         // threshold ^ 0x80
-    pxor xmm3, xmm4         // data ^ 0x80
-    pcmpgtb xmm2, xmm3      // (threshold^0x80) > (data^0x80) ≡ data < threshold (unsigned)
+    punpcklqdq xmm0, xmm0    // xmm0 = broadcast(threshold)
+    // data < threshold ≡ max(data, threshold) != data
+    movdqa xmm2, xmm1        // copy data
+    pmaxub xmm2, xmm0        // max(data, threshold)
+    pcmpeqb xmm2, xmm1       // max == data → data >= threshold
+    pcmpeqd xmm3, xmm3       // all ones
+    pxor xmm2, xmm3          // invert → data < threshold
     pmovmskb eax, xmm2
     mov Result, ax
   end;
@@ -63,21 +57,19 @@ function Vec16CmpGtU(AData: PByte; AThreshold: Byte): TMask16; inline;
 begin
   Result := 0;
   asm
-    movzx eax, AThreshold
-    movd xmm0, eax
+    mov rax, AData
+    movdqu xmm1, [rax]       // xmm1 = data
+    movzx edx, AThreshold
+    movd xmm0, edx
     punpcklbw xmm0, xmm0
     pshuflw xmm0, xmm0, 0
-    punpcklqdq xmm0, xmm0
-    mov rax, AData
-    movdqu xmm1, [rax]
-    // data > threshold (unsigned): flip sign bits, then signed gt
-    pcmpeqd xmm4, xmm4
-    psllw xmm4, 7
-    packsswb xmm4, xmm4     // xmm4 = 0x80
-    movdqa xmm2, xmm1       // data
-    pxor xmm2, xmm4         // data ^ 0x80
-    pxor xmm0, xmm4         // threshold ^ 0x80
-    pcmpgtb xmm2, xmm0      // (data^0x80) > (threshold^0x80)
+    punpcklqdq xmm0, xmm0    // xmm0 = broadcast(threshold)
+    // data > threshold ≡ max(data, threshold) != threshold
+    movdqa xmm2, xmm1        // copy data
+    pmaxub xmm2, xmm0        // max(data, threshold)
+    pcmpeqb xmm2, xmm0       // max == threshold → data <= threshold
+    pcmpeqd xmm3, xmm3       // all ones
+    pxor xmm2, xmm3          // invert → data > threshold
     pmovmskb eax, xmm2
     mov Result, ax
   end;
@@ -85,6 +77,7 @@ end;
 
 function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16; inline;
 begin
+  if ALo > AHi then begin Result := 0; Exit; end;
   Result := 0;
   asm
     mov rax, AData
@@ -144,16 +137,20 @@ procedure Vec16AddWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 15 do
     if (AMask and (1 shl i)) <> 0 then
       AData[i] := AData[i] + ADelta;
+  {$POP}
 end;
 
 procedure Vec16SubWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 15 do
     if (AMask and (1 shl i)) <> 0 then
       AData[i] := AData[i] - ADelta;
+  {$POP}
 end;

@@ -45,6 +45,7 @@ function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16; inline;
 var
   i: Integer;
 begin
+  if ALo > AHi then begin Result := 0; Exit; end;
   Result := 0;
   for i := 0 to 15 do
     if (AData[i] >= ALo) and (AData[i] <= AHi) then
@@ -76,16 +77,20 @@ procedure Vec16AddWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 15 do
     if (AMask and (1 shl i)) <> 0 then
       AData[i] := AData[i] + ADelta;
+  {$POP}
 end;
 
 procedure Vec16SubWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 15 do
     if (AMask and (1 shl i)) <> 0 then
       AData[i] := AData[i] - ADelta;
+  {$POP}
 end;

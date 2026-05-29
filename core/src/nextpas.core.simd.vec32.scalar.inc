@@ -44,6 +44,7 @@ function Vec32CmpRange(AData: PByte; ALo, AHi: Byte): TMask32; inline;
 var
   i: Integer;
 begin
+  if ALo > AHi then begin Result := 0; Exit; end;
   Result := 0;
   for i := 0 to 31 do
     if (AData[i] >= ALo) and (AData[i] <= AHi) then
@@ -77,16 +78,20 @@ procedure Vec32AddWhere(AData: PByte; AMask: TMask32; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 31 do
     if (AMask and (DWord(1) shl i)) <> 0 then
       AData[i] := AData[i] + ADelta;
+  {$POP}
 end;
 
 procedure Vec32SubWhere(AData: PByte; AMask: TMask32; ADelta: Byte); inline;
 var
   i: Integer;
 begin
+  {$PUSH}{$R-}{$Q-}
   for i := 0 to 31 do
     if (AMask and (DWord(1) shl i)) <> 0 then
       AData[i] := AData[i] - ADelta;
+  {$POP}
 end;
