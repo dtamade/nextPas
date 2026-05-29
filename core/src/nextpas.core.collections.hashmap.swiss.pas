@@ -10,18 +10,33 @@ uses
   nextpas.core.mem.allocator,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
+  {$IFDEF HAS_AVX2}
+  nextpas.core.simd.vec32;
+  {$ELSE}
   nextpas.core.simd.vec16;
+  {$ENDIF}
 
 const
   CTRL_EMPTY   = Byte($FF);
   CTRL_DELETED = Byte($80);
+  {$IFDEF HAS_AVX2}
+  GROUP_SIZE   = 32;
+  {$ELSE}
   GROUP_SIZE   = 16;
-  MIN_CAPACITY = 16;
+  {$ENDIF}
+  MIN_CAPACITY = GROUP_SIZE;
 
-function GroupMaskFirstSet(mask: TMask16): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchEmpty(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+type
+  {$IFDEF HAS_AVX2}
+  TSwissMask = TMask32;
+  {$ELSE}
+  TSwissMask = TMask16;
+  {$ENDIF}
+
+function SwissCtz(AMask: TSwissMask): Int32; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchH2(ACtrl: PByte; AH2: Byte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmpty(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmptyOrDeleted(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
 type
   generic TSwissTable<K, V> = class
@@ -46,9 +61,9 @@ type
 
     function KeyHash(const AKey: K): UInt32;
     function KeysEqual(const L, R: K): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchGroup(ACtrl: PByte; AH2: Byte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchEmpty(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchEmptyOrDeleted(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchGroup(ACtrl: PByte; AH2: Byte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchEmpty(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchEmptyOrDeleted(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
     function FindInsertSlot(AHash: UInt32): SizeUInt;
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -78,24 +93,40 @@ implementation
 uses
   nextpas.core.collections.hashmap;
 
-function GroupMaskFirstSet(mask: TMask16): Integer;
+function SwissCtz(AMask: TSwissMask): Int32;
 begin
-  Result := Vec16Ctz(mask);
+  {$IFDEF HAS_AVX2}
+  Result := Vec32Ctz(AMask);
+  {$ELSE}
+  Result := Vec16Ctz(TMask16(AMask));
+  {$ENDIF}
 end;
 
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TMask16;
+function SwissMatchH2(ACtrl: PByte; AH2: Byte): TSwissMask;
 begin
+  {$IFDEF HAS_AVX2}
+  Result := Vec32CmpEq(ACtrl, AH2);
+  {$ELSE}
   Result := Vec16CmpEq(ACtrl, AH2);
+  {$ENDIF}
 end;
 
-function SwissMatchEmpty(ACtrl: PByte): TMask16;
+function SwissMatchEmpty(ACtrl: PByte): TSwissMask;
 begin
+  {$IFDEF HAS_AVX2}
+  Result := Vec32CmpEq(ACtrl, CTRL_EMPTY);
+  {$ELSE}
   Result := Vec16CmpEq(ACtrl, CTRL_EMPTY);
+  {$ENDIF}
 end;
 
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TMask16;
+function SwissMatchEmptyOrDeleted(ACtrl: PByte): TSwissMask;
 begin
+  {$IFDEF HAS_AVX2}
+  Result := Vec32CmpGtU(ACtrl, $7F);
+  {$ELSE}
   Result := Vec16CmpGtU(ACtrl, $7F);
+  {$ENDIF}
 end;
 
 { TSwissTable<K,V> - Core helpers }
@@ -157,17 +188,17 @@ begin
   Result := L = R;
 end;
 
-function TSwissTable.MatchGroup(ACtrl: PByte; AH2: Byte): TMask16;
+function TSwissTable.MatchGroup(ACtrl: PByte; AH2: Byte): TSwissMask;
 begin
   Result := SwissMatchH2(ACtrl, AH2);
 end;
 
-function TSwissTable.MatchEmpty(ACtrl: PByte): TMask16;
+function TSwissTable.MatchEmpty(ACtrl: PByte): TSwissMask;
 begin
   Result := SwissMatchEmpty(ACtrl);
 end;
 
-function TSwissTable.MatchEmptyOrDeleted(ACtrl: PByte): TMask16;
+function TSwissTable.MatchEmptyOrDeleted(ACtrl: PByte): TSwissMask;
 begin
   Result := SwissMatchEmptyOrDeleted(ACtrl);
 end;
@@ -240,7 +271,7 @@ function TSwissTable.FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUIn
 var
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TSwissMask;
   LBit: Integer;
 begin
   if FCapacity = 0 then begin AIndex := 0; Exit(False); end;
@@ -252,10 +283,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    LMask := SwissMatchH2(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := Vec16Ctz(LMask);
+      LBit := SwissCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -265,10 +296,10 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := SwissMatchEmpty(@FCtrl[LBase]);
     if LEmptyMask <> 0 then
     begin
-      AIndex := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
+      AIndex := LBase + SizeUInt(SwissCtz(LEmptyMask));
       Exit(False);
     end;
 
@@ -280,17 +311,17 @@ end;
 function TSwissTable.FindInsertSlot(AHash: UInt32): SizeUInt;
 var
   LGroupIdx, LProbeOfs: SizeUInt;
-  LMask: TMask16;
+  LMask: TSwissMask;
 begin
   LGroupIdx := (AHash shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
 
   while True do
   begin
-    LMask := Vec16CmpGtU(@FCtrl[LGroupIdx * GROUP_SIZE], $7F);
+    LMask := SwissMatchEmptyOrDeleted(@FCtrl[LGroupIdx * GROUP_SIZE]);
     if LMask <> 0 then
     begin
-      Result := LGroupIdx * GROUP_SIZE + SizeUInt(Vec16Ctz(LMask));
+      Result := LGroupIdx * GROUP_SIZE + SizeUInt(SwissCtz(LMask));
       Exit;
     end;
     Inc(LProbeOfs);
@@ -393,7 +424,7 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TSwissMask;
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
@@ -408,10 +439,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    LMask := SwissMatchH2(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := Vec16Ctz(LMask);
+      LBit := SwissCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -420,7 +451,7 @@ begin
       end;
       LMask := LMask and (LMask - 1);
     end;
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := SwissMatchEmpty(@FCtrl[LBase]);
     if LEmptyMask <> 0 then Exit(False);
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
@@ -432,7 +463,7 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TSwissMask;
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
@@ -446,15 +477,15 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    LMask := SwissMatchH2(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := Vec16Ctz(LMask);
+      LBit := SwissCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then Exit(True);
       LMask := LMask and (LMask - 1);
     end;
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := SwissMatchEmpty(@FCtrl[LBase]);
     if LEmptyMask <> 0 then Exit(False);
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
@@ -466,7 +497,7 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LInsertIdx, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TSwissMask;
   LBit: Integer;
   LFoundInsert: Boolean;
 begin
@@ -486,10 +517,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    LMask := SwissMatchH2(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := Vec16Ctz(LMask);
+      LBit := SwissCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -501,22 +532,22 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := SwissMatchEmpty(@FCtrl[LBase]);
     if LEmptyMask <> 0 then
     begin
       // empty 槽位既是探测链终点，也是首选插入点
       if not LFoundInsert then
-        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
+        LInsertIdx := LBase + SizeUInt(SwissCtz(LEmptyMask));
       Break;
     end;
 
     // 整组无 empty：检查 deleted 槽位作为插入点（仅首次记录）
     if not LFoundInsert then
     begin
-      LMask := Vec16CmpGtU(@FCtrl[LBase], $7F);
+      LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
       if LMask <> 0 then
       begin
-        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LMask));
+        LInsertIdx := LBase + SizeUInt(SwissCtz(LMask));
         LFoundInsert := True;
       end;
     end;
