@@ -361,6 +361,39 @@ uses
 type
   TStringArray = array of string;
 
+  TCachedSymbolEntry = record
+    Name: string;
+    Kind: string;
+    OwnerUnitId: string;
+    ParamCount: LongInt;
+    MinParamCount: LongInt;
+    ParamSignature: string;
+    TypeId: LongInt;
+    ByteOffset: LongInt;
+  end;
+
+  TCachedUnitSymbols = record
+    SourcePath: string;
+    FileAge: LongInt;
+    Symbols: array of TCachedSymbolEntry;
+    SymbolCount: LongInt;
+  end;
+
+var
+  GImportedUnitCache: array of TCachedUnitSymbols;
+  GImportedUnitCacheCount: LongInt = 0;
+
+function FindCachedUnit(const APath: string; AAge: LongInt): LongInt;
+var
+  I: LongInt;
+begin
+  for I := 0 to GImportedUnitCacheCount - 1 do
+    if SameText(GImportedUnitCache[I].SourcePath, APath) and
+      (GImportedUnitCache[I].FileAge = AAge) then
+      Exit(I);
+  Result := -1;
+end;
+
 function ContainsString(
   const AItems: TStringArray;
   const AValue: string
@@ -8559,6 +8592,10 @@ var
   PP: TPreprocessor;
   PPDefines: TDefineTable;
   IncResolver: TFileIncludeResolver;
+  CacheIdx: LongInt;
+  Age: LongInt;
+  SymBefore, SymAfter, J, NextCache: LongInt;
+  Sym: TSemanticSymbol;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -8574,6 +8611,29 @@ begin
         Continue;
       if not FileExists(SourcePath) then
         Continue;
+
+      OwnerUnitId := ResolvedUnit.UnitId;
+      if OwnerUnitId = '' then
+        OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
+
+      Age := FileAge(SourcePath);
+      CacheIdx := -1;
+      if SameText(ResolvedUnit.OriginClass, 'installed-source') then
+        CacheIdx := FindCachedUnit(SourcePath, Age);
+      if CacheIdx >= 0 then
+      begin
+        for J := 0 to GImportedUnitCache[CacheIdx].SymbolCount - 1 do
+          with GImportedUnitCache[CacheIdx].Symbols[J] do
+          begin
+            FModel.AddSymbol(Name, Kind, OwnerUnitId, TypeId, ByteOffset);
+            FModel.SetSymbolParamCount(FModel.SymbolCount, ParamCount);
+            FModel.SetSymbolMinParamCount(FModel.SymbolCount, MinParamCount);
+            FModel.SetSymbolParamSignature(FModel.SymbolCount, ParamSignature);
+            FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
+          end;
+        Continue;
+      end;
+
       Assign(F, SourcePath);
       {$I-}
       Reset(F);
@@ -8609,18 +8669,46 @@ begin
       finally
         PP.Free;
       end;
+
+      SymBefore := FModel.SymbolCount;
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
       if (UnitTree <> nil) and (UnitTree.RootNode <> nil) then
       begin
-        OwnerUnitId := ResolvedUnit.UnitId;
-        if OwnerUnitId = '' then
-          OwnerUnitId := NormalizeUnitIdentity(ResolvedUnit.CanonicalName);
         RegisterImportedUnitTree(UnitTree);
         RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
       end
       else if UnitTree <> nil then
         UnitTree.Free;
       UnitLexer.Free;
+      SymAfter := FModel.SymbolCount;
+
+      if (SymAfter > SymBefore) and
+        SameText(ResolvedUnit.OriginClass, 'installed-source') then
+      begin
+        if GImportedUnitCacheCount >= Length(GImportedUnitCache) then
+          SetLength(GImportedUnitCache, GImportedUnitCacheCount + 16);
+        NextCache := GImportedUnitCacheCount;
+        Inc(GImportedUnitCacheCount);
+        GImportedUnitCache[NextCache].SourcePath := SourcePath;
+        GImportedUnitCache[NextCache].FileAge := Age;
+        GImportedUnitCache[NextCache].SymbolCount := SymAfter - SymBefore;
+        SetLength(GImportedUnitCache[NextCache].Symbols, SymAfter - SymBefore);
+        for J := SymBefore to SymAfter - 1 do
+        begin
+          Sym := FModel.SymbolAt(J);
+          with GImportedUnitCache[NextCache].Symbols[J - SymBefore] do
+          begin
+            Name := Sym.Name;
+            Kind := Sym.Kind;
+            OwnerUnitId := Sym.OwnerUnitId;
+            ParamCount := Sym.ParamCount;
+            MinParamCount := Sym.MinParamCount;
+            ParamSignature := Sym.ParamSignature;
+            TypeId := Sym.TypeId;
+            ByteOffset := Sym.ByteOffset;
+          end;
+        end;
+      end;
     end;
   finally
     TmpDiag.Free;
