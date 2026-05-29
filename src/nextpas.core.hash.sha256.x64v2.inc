@@ -51,37 +51,7 @@ asm
   pshufb %xmm0, %xmm1
   movdqu %xmm1, 48(%rsp)
 
-  // Expand W[16..63] — scalar, fully unrolled in groups of 16
-  // sigma1(x) = ROR17(x) ^ ROR19(x) ^ SHR10(x)
-  // sigma0(x) = ROR7(x) ^ ROR18(x) ^ SHR3(x)
-  // W[i] = sigma1(W[i-2]) + W[i-7] + sigma0(W[i-15]) + W[i-16]
-
-  // Unrolled W expansion using a loop (still fast, not the bottleneck)
-  movl $16, %ecx
-.Lv2_expand:
-  movl -8(%rsp, %rcx, 4), %eax
-  movl %eax, %edx
-  rorl $17, %edx
-  movl %eax, %ebx
-  rorl $19, %ebx
-  xorl %ebx, %edx
-  shrl $10, %eax
-  xorl %eax, %edx
-  addl -28(%rsp, %rcx, 4), %edx
-  movl -60(%rsp, %rcx, 4), %eax
-  movl %eax, %ebx
-  rorl $7, %ebx
-  movl %eax, %ebp
-  rorl $18, %ebp
-  xorl %ebp, %ebx
-  shrl $3, %eax
-  xorl %eax, %ebx
-  addl %ebx, %edx
-  addl -64(%rsp, %rcx, 4), %edx
-  movl %edx, (%rsp, %rcx, 4)
-  incl %ecx
-  cmpl $64, %ecx
-  jl .Lv2_expand
+  // W[16..63] computed inline during rounds (interleaved for OoO overlap)
 
   // Load state
   movl 0(%r15), %eax
