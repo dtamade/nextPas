@@ -371,6 +371,102 @@ begin
   LD.Free;
 end;
 
+{ Additional coverage tests }
+
+procedure TestSpscCapacity;
+var
+  LQ: TIntSpsc;
+begin
+  LQ := TIntSpsc.Create(16);
+  CheckEqual(Int64(16), Int64(LQ.Capacity), 'capacity');
+  Check(LQ.IsEmpty, 'empty');
+  Check(not LQ.IsFull, 'not full');
+  LQ.TryEnqueue(1);
+  Check(not LQ.IsEmpty, 'not empty');
+  LQ.Free;
+end;
+
+procedure TestMpmcBatch;
+var
+  LQ: TIntMpmc;
+  LIn: array[0..3] of Integer;
+  LOut: array[0..3] of Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntMpmc.Create(8);
+  LIn[0] := 5; LIn[1] := 6; LIn[2] := 7; LIn[3] := 8;
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(4), Int64(LN), 'mpmc batch enq');
+  LN := LQ.DequeueBatch(LOut, 4);
+  CheckEqual(Int64(4), Int64(LN), 'mpmc batch deq');
+  CheckEqual(Int64(5), Int64(LOut[0]));
+  CheckEqual(Int64(8), Int64(LOut[3]));
+  LQ.Free;
+end;
+
+procedure TestMpmcCapacity;
+var
+  LQ: TIntMpmc;
+begin
+  LQ := TIntMpmc.Create(8);
+  CheckEqual(Int64(8), Int64(LQ.Capacity));
+  Check(LQ.IsEmpty, 'empty');
+  Check(not LQ.IsFull, 'not full');
+  LQ.Free;
+end;
+
+var
+  GMpscWaitQ: TIntMpsc;
+
+function MpscWaitProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(5000000);
+  for LI := 1 to 5 do
+    GMpscWaitQ.Enqueue(LI);
+  GMpscWaitQ.Close;
+end;
+
+procedure TestMpscDequeueWait;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LV, LSum: Integer;
+begin
+  GMpscWaitQ := TIntMpsc.Create;
+  LSum := 0;
+  platform_thread_create(LHandle, @MpscWaitProducer, nil);
+  while GMpscWaitQ.DequeueWait(LV) do
+    Inc(LSum, LV);
+  platform_thread_join(LHandle, LRetVal);
+  CheckEqual(Int64(15), Int64(LSum), '1+2+3+4+5');
+  GMpscWaitQ.Free;
+end;
+
+procedure TestMpscDequeueTimeout;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  Check(not LQ.DequeueTimeout(LV, 1000000), 'timeout 1ms on empty');
+  LQ.Enqueue(42);
+  Check(LQ.DequeueTimeout(LV, 1000000), 'immediate');
+  CheckEqual(Int64(42), Int64(LV));
+  LQ.Free;
+end;
+
+procedure TestDequeCapacity;
+var
+  LD: TIntDeque;
+begin
+  LD := TIntDeque.Create(32);
+  CheckEqual(Int64(32), Int64(LD.Capacity));
+  LD.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.lockfree');
   T.Run('SPSC basic', @TestSpscBasic);
@@ -388,5 +484,12 @@ begin
   T.Run('MPSC basic', @TestMpscBasic);
   T.Run('MPSC multi-producer', @TestMpscMultiProducer);
   T.Run('Deque basic', @TestDequeBasic);
+  T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
+  T.Run('MPMC batch', @TestMpmcBatch);
+  T.Run('MPMC capacity/empty/full', @TestMpmcCapacity);
+  T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
+  T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
+  T.Run('Deque capacity', @TestDequeCapacity);
+
   T.Summary;
 end.

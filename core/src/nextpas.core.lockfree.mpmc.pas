@@ -32,8 +32,13 @@ type
     function DequeueWait(out AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    function EnqueueBatch(const AValues: array of T): PtrUInt;
+    function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    function Capacity: PtrUInt;
     function ApproxCount: PtrUInt;
   end;
 
@@ -250,6 +255,54 @@ begin
     Result := PtrUInt(LEnq - LDeq)
   else
     Result := 0;
+end;
+
+function TMpmcQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
+var
+  LI: PtrUInt;
+begin
+  Result := 0;
+  for LI := 0 to PtrUInt(High(AValues)) do
+  begin
+    if not TryEnqueue(AValues[LI]) then
+      Exit;
+    Inc(Result);
+  end;
+  if Result > 0 then
+    LockFreeWakeData(@FDataEpoch);
+end;
+
+function TMpmcQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+var
+  LI, LCount: PtrUInt;
+begin
+  LCount := AMaxCount;
+  if LCount > PtrUInt(Length(AValues)) then
+    LCount := PtrUInt(Length(AValues));
+  Result := 0;
+  for LI := 0 to LCount - 1 do
+  begin
+    if not TryDequeue(AValues[LI]) then
+      Exit;
+    Inc(Result);
+  end;
+  if Result > 0 then
+    LockFreeWakeSpace(@FSpaceEpoch);
+end;
+
+function TMpmcQueue.IsEmpty: Boolean;
+begin
+  Result := ApproxCount = 0;
+end;
+
+function TMpmcQueue.IsFull: Boolean;
+begin
+  Result := ApproxCount >= FCapacity;
+end;
+
+function TMpmcQueue.Capacity: PtrUInt;
+begin
+  Result := FCapacity;
 end;
 
 end.

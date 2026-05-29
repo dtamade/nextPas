@@ -34,6 +34,9 @@ type
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    function Capacity: PtrUInt;
     function ApproxCount: PtrUInt;
   end;
 
@@ -279,6 +282,21 @@ begin
     Result := PtrUInt(LTail - LHead)
   else
     Result := 0;
+end;
+
+function TSpscQueue.IsEmpty: Boolean;
+begin
+  Result := ApproxCount = 0;
+end;
+
+function TSpscQueue.IsFull: Boolean;
+begin
+  Result := ApproxCount >= FCapacity;
+end;
+
+function TSpscQueue.Capacity: PtrUInt;
+begin
+  Result := FCapacity;
 end;
 
 end.

@@ -18,11 +18,14 @@ type
     FTail: PNode;
     FStub: TNode;
     FClosed: Int32;
+    FDataEpoch: Int32;
   public
     constructor Create;
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
     function TryDequeue(out AValue: T): Boolean;
+    function DequeueWait(out AValue: T): Boolean;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -31,7 +34,9 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.wait,
+  nextpas.core.time.base;
 
 constructor TMpscQueue.Create;
 begin
@@ -40,6 +45,7 @@ begin
   FHead := @FStub;
   FTail := @FStub;
   FClosed := 0;
+  FDataEpoch := 0;
 end;
 
 destructor TMpscQueue.Destroy;
@@ -58,8 +64,8 @@ begin
   LNode^.Value := AValue;
   LNode^.Next := nil;
   LPrev := PNode(PtrUInt(AtomicExchange64(Int64(PtrUInt(FHead)), Int64(PtrUInt(LNode)), moAcqRel)));
-  { Release: make LNode visible before linking. }
   AtomicStore64(Int64(PtrUInt(LPrev^.Next)), Int64(PtrUInt(LNode)), moRelease);
+  LockFreeWakeData(@FDataEpoch);
 end;
 
 function TMpscQueue.TryDequeue(out AValue: T): Boolean;
@@ -102,9 +108,50 @@ begin
   Result := False;
 end;
 
+function TMpscQueue.DequeueWait(out AValue: T): Boolean;
+var
+  LEpoch: Int32;
+begin
+  if TryDequeue(AValue) then
+    Exit(True);
+  while True do
+  begin
+    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    if TryDequeue(AValue) then
+      Exit(True);
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(TryDequeue(AValue));
+    LockFreeWaitData(@FDataEpoch, LEpoch, -1);
+  end;
+end;
+
+function TMpscQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+var
+  LEpoch: Int32;
+  LStart: TInstant;
+  LRemaining: Int64;
+begin
+  if TryDequeue(AValue) then
+    Exit(True);
+  LStart := TInstant.Now;
+  while True do
+  begin
+    LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
+    if LRemaining <= 0 then
+      Exit(TryDequeue(AValue));
+    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    if TryDequeue(AValue) then
+      Exit(True);
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(TryDequeue(AValue));
+    LockFreeWaitData(@FDataEpoch, LEpoch, LRemaining);
+  end;
+end;
+
 procedure TMpscQueue.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+  LockFreeWakeData(@FDataEpoch);
 end;
 
 function TMpscQueue.IsClosed: Boolean;

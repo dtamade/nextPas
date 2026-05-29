@@ -25,6 +25,7 @@ type
     function TrySteal(out AValue: T): Boolean;
     function IsEmpty: Boolean;
     function ApproxCount: PtrUInt;
+    function Capacity: PtrUInt;
   end;
 
 implementation
@@ -118,6 +119,11 @@ begin
     Result := PtrUInt(LBottom - LTop)
   else
     Result := 0;
+end;
+
+function TWorkStealingDeque.Capacity: PtrUInt;
+begin
+  Result := FCapacity;
 end;
 
 end.
