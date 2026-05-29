@@ -6,13 +6,9 @@ unit np_preprocessor;
 interface
 
 uses
-  np_base_types;
+  np_base_types, np_lexer;
 
 type
-  { Case-insensitive symbol table for {$define}/{$undef}.
-    Names are normalized to upper-case (FPC define names are
-    case-insensitive). Each entry may carry an optional value
-    (for {$define X := value} macros and {$if} value reads). }
   TDefineEntry = record
     Name: string;
     Value: string;
@@ -34,6 +30,38 @@ type
     function ValueOf(const AName: string): string;
     procedure Clear;
     function Count: LongInt;
+  end;
+
+  TConditionalFrame = record
+    ParentActive: Boolean;
+    AnyBranchTaken: Boolean;
+    CurrentActive: Boolean;
+    SeenElse: Boolean;
+  end;
+
+  TPreprocessor = class
+  private
+    FDefines: TDefineTable;
+    FOwnsDefines: Boolean;
+    FStack: array of TConditionalFrame;
+    FStackCount: LongInt;
+    FOutputTokens: array of TToken;
+    FOutputCount: LongInt;
+    function IsActive: Boolean;
+    procedure PushFrame(ACondition: Boolean);
+    procedure HandleElse;
+    procedure HandleElseIf(ACondition: Boolean);
+    procedure HandleEndIf;
+    procedure EmitToken(const AToken: TToken);
+    function ParseDirectiveName(const ALexeme: string;
+      out ADirective, AArg: string): Boolean;
+    function EvalSimpleCondition(const AArg: string): Boolean;
+  public
+    constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean);
+    destructor Destroy; override;
+    procedure Process(const ALexer: TLexerResult);
+    function OutputTokenCount: LongInt;
+    function OutputTokenAt(const AIndex: LongInt): TToken;
   end;
 
 implementation
@@ -148,6 +176,205 @@ end;
 function TDefineTable.Count: LongInt;
 begin
   Result := FCount;
+end;
+
+{ TPreprocessor }
+
+constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean);
+begin
+  inherited Create;
+  FDefines := ADefines;
+  FOwnsDefines := AOwnsDefines;
+  FStackCount := 0;
+  SetLength(FStack, 0);
+  FOutputCount := 0;
+  SetLength(FOutputTokens, 0);
+end;
+
+destructor TPreprocessor.Destroy;
+begin
+  if FOwnsDefines then
+    FDefines.Free;
+  inherited Destroy;
+end;
+
+function TPreprocessor.IsActive: Boolean;
+begin
+  if FStackCount = 0 then
+    Exit(True);
+  Result := FStack[FStackCount - 1].CurrentActive;
+end;
+
+procedure TPreprocessor.PushFrame(ACondition: Boolean);
+var
+  Frame: TConditionalFrame;
+begin
+  Frame.ParentActive := IsActive;
+  Frame.AnyBranchTaken := Frame.ParentActive and ACondition;
+  Frame.CurrentActive := Frame.ParentActive and ACondition;
+  Frame.SeenElse := False;
+  if FStackCount >= Length(FStack) then
+    SetLength(FStack, FStackCount + 16);
+  FStack[FStackCount] := Frame;
+  Inc(FStackCount);
+end;
+
+procedure TPreprocessor.HandleElse;
+begin
+  if FStackCount = 0 then Exit;
+  with FStack[FStackCount - 1] do
+  begin
+    if SeenElse then Exit;
+    SeenElse := True;
+    CurrentActive := ParentActive and (not AnyBranchTaken);
+  end;
+end;
+
+procedure TPreprocessor.HandleElseIf(ACondition: Boolean);
+begin
+  if FStackCount = 0 then Exit;
+  with FStack[FStackCount - 1] do
+  begin
+    if SeenElse then Exit;
+    if ParentActive and ACondition and (not AnyBranchTaken) then
+    begin
+      CurrentActive := True;
+      AnyBranchTaken := True;
+    end
+    else
+      CurrentActive := False;
+  end;
+end;
+
+procedure TPreprocessor.HandleEndIf;
+begin
+  if FStackCount > 0 then
+    Dec(FStackCount);
+end;
+
+procedure TPreprocessor.EmitToken(const AToken: TToken);
+begin
+  if FOutputCount >= Length(FOutputTokens) then
+    SetLength(FOutputTokens, FOutputCount + 256);
+  FOutputTokens[FOutputCount] := AToken;
+  Inc(FOutputCount);
+end;
+
+function TPreprocessor.ParseDirectiveName(const ALexeme: string;
+  out ADirective, AArg: string): Boolean;
+var
+  Content: string;
+  SpacePos: LongInt;
+begin
+  Result := False;
+  ADirective := '';
+  AArg := '';
+  if Length(ALexeme) < 3 then Exit;
+  if (ALexeme[1] = '{') and (ALexeme[2] = '$') then
+    Content := Copy(ALexeme, 3, Length(ALexeme) - 3)
+  else if (Length(ALexeme) >= 4) and (ALexeme[1] = '(') and
+    (ALexeme[2] = '*') and (ALexeme[3] = '$') then
+    Content := Copy(ALexeme, 4, Length(ALexeme) - 5)
+  else
+    Exit;
+  Content := Trim(Content);
+  if Content = '' then Exit;
+  SpacePos := Pos(' ', Content);
+  if SpacePos > 0 then
+  begin
+    ADirective := LowerCase(Copy(Content, 1, SpacePos - 1));
+    AArg := Trim(Copy(Content, SpacePos + 1, Length(Content)));
+  end
+  else
+    ADirective := LowerCase(Content);
+  Result := True;
+end;
+
+function TPreprocessor.EvalSimpleCondition(const AArg: string): Boolean;
+var
+  Inner: string;
+  P: LongInt;
+begin
+  if (Length(AArg) > 9) and (LowerCase(Copy(AArg, 1, 8)) = 'defined(') then
+  begin
+    P := Pos(')', AArg);
+    if P > 9 then
+      Inner := Trim(Copy(AArg, 9, P - 9))
+    else
+      Inner := Trim(Copy(AArg, 9, Length(AArg) - 8));
+    Result := FDefines.IsDefined(Inner);
+  end
+  else
+    Result := FDefines.IsDefined(AArg);
+end;
+
+procedure TPreprocessor.Process(const ALexer: TLexerResult);
+var
+  I: LongInt;
+  Tok: TToken;
+  Dir, Arg: string;
+begin
+  FOutputCount := 0;
+  FStackCount := 0;
+  for I := 0 to ALexer.TokenCount - 1 do
+  begin
+    Tok := ALexer.TokenAt(I);
+    if Tok.Kind = tkCompilerDirective then
+    begin
+      if not ParseDirectiveName(Tok.Lexeme, Dir, Arg) then
+      begin
+        if IsActive then
+          EmitToken(Tok);
+        Continue;
+      end;
+      if Dir = 'ifdef' then
+        PushFrame(EvalSimpleCondition(Arg))
+      else if Dir = 'ifndef' then
+        PushFrame(not EvalSimpleCondition(Arg))
+      else if Dir = 'else' then
+        HandleElse
+      else if Dir = 'elseif' then
+        HandleElseIf(EvalSimpleCondition(Arg))
+      else if (Dir = 'endif') or (Dir = 'ifend') then
+        HandleEndIf
+      else if Dir = 'define' then
+      begin
+        if IsActive then
+          FDefines.Define(Arg);
+      end
+      else if Dir = 'undef' then
+      begin
+        if IsActive then
+          FDefines.Undef(Arg);
+      end
+      else
+      begin
+        if IsActive then
+          EmitToken(Tok);
+      end;
+    end
+    else
+    begin
+      if IsActive then
+        EmitToken(Tok);
+    end;
+  end;
+end;
+
+function TPreprocessor.OutputTokenCount: LongInt;
+begin
+  Result := FOutputCount;
+end;
+
+function TPreprocessor.OutputTokenAt(const AIndex: LongInt): TToken;
+begin
+  if (AIndex >= 0) and (AIndex < FOutputCount) then
+    Result := FOutputTokens[AIndex]
+  else
+  begin
+    FillChar(Result, SizeOf(Result), 0);
+    Result.Kind := tkEOF;
+  end;
 end;
 
 end.
