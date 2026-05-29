@@ -1459,6 +1459,21 @@ begin
           NameNode.FText := NameNode.FText + SpecArgs;
         end;
 
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkDot) do
+        begin
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+          begin
+            NameNode.FText := NameNode.FText + '.' +
+              CurrentToken(ALexer, ACursor).Lexeme;
+            Inc(ACursor);
+          end
+          else
+            Break;
+        end;
+
         Result := NameNode;
       end;
     tkStringKeyword, tkFileKeyword:
@@ -2094,6 +2109,25 @@ begin
               end;
               MatchTokenSilent(ALexer, ACursor, tkRParen);
             end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+            begin
+              // Forward class declaration: class; or class(parent);
+            end
+            else if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkOfKeyword) then
+            begin
+              Inc(ACursor);
+              ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
+                ARootFileId);
+              if ElementNode <> nil then
+              begin
+                TypeNode.AppendChild(ElementNode);
+                Inc(ATree.FNodeCount);
+              end;
+            end
+            else
+            begin
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
@@ -2352,6 +2386,7 @@ begin
                 Inc(ACursor);
             end;
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+            end;
           end;
         tkInterfaceKeyword:
           begin
