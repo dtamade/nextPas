@@ -1,6 +1,7 @@
 unit np_hir_builder;
 
 {$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
 
 interface
 
@@ -129,6 +130,71 @@ implementation
 
 uses
   SysUtils;
+
+type
+  TExprStack = record
+    Values: array of THIRValueId;
+    Types: array of THIRTypeId;
+    Count: LongInt;
+    procedure Init;
+    procedure Push(AVal: THIRValueId);
+    procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
+    function Pop: THIRValueId;
+    function PopTyped(out AType: THIRTypeId): THIRValueId;
+    function PeekType: THIRTypeId;
+  end;
+
+procedure TExprStack.Init;
+begin
+  Count := 0;
+  SetLength(Values, 0);
+  SetLength(Types, 0);
+end;
+
+procedure TExprStack.Push(AVal: THIRValueId);
+begin
+  if Count >= Length(Values) then
+  begin
+    SetLength(Values, Count + 16);
+    SetLength(Types, Count + 16);
+  end;
+  Values[Count] := AVal;
+  Types[Count] := 0;
+  Inc(Count);
+end;
+
+procedure TExprStack.PushTyped(AVal: THIRValueId; AType: THIRTypeId);
+begin
+  if Count >= Length(Values) then
+  begin
+    SetLength(Values, Count + 16);
+    SetLength(Types, Count + 16);
+  end;
+  Values[Count] := AVal;
+  Types[Count] := AType;
+  Inc(Count);
+end;
+
+function TExprStack.Pop: THIRValueId;
+begin
+  if Count = 0 then Exit(0);
+  Dec(Count);
+  Result := Values[Count];
+end;
+
+function TExprStack.PopTyped(out AType: THIRTypeId): THIRValueId;
+begin
+  if Count = 0 then begin AType := 0; Exit(0); end;
+  Dec(Count);
+  Result := Values[Count];
+  AType := Types[Count];
+end;
+
+function TExprStack.PeekType: THIRTypeId;
+begin
+  if Count = 0 then Exit(0);
+  Result := Types[Count - 1];
+end;
 
 var
   GIntType: THIRTypeId = 0;
@@ -419,9 +485,7 @@ end;
 
 function THIRBuilder.ParseIntBlob(const ABlob: string): THIRValueId;
 var
-  Stack: array of THIRValueId;
-  StackTypes: array of THIRTypeId;
-  StackCount: LongInt;
+  S: TExprStack;
   Lines: array of string;
   LineCount, I, SpacePos: LongInt;
   Line, Token, Arg: string;
@@ -438,42 +502,9 @@ var
   RecName: string;
   FieldIdx, ValCode: LongInt;
   IdxVal: THIRValueId;
-
-  procedure Push(AVal: THIRValueId);
-  begin
-    if StackCount >= Length(Stack) then
-    begin
-      SetLength(Stack, StackCount + 16);
-      SetLength(StackTypes, StackCount + 16);
-    end;
-    Stack[StackCount] := AVal;
-    StackTypes[StackCount] := 0;
-    Inc(StackCount);
-  end;
-
-  procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
-  begin
-    if StackCount >= Length(Stack) then
-    begin
-      SetLength(Stack, StackCount + 16);
-      SetLength(StackTypes, StackCount + 16);
-    end;
-    Stack[StackCount] := AVal;
-    StackTypes[StackCount] := AType;
-    Inc(StackCount);
-  end;
-
-  function Pop: THIRValueId;
-  begin
-    if StackCount = 0 then Exit(0);
-    Dec(StackCount);
-    Result := Stack[StackCount];
-  end;
-
 begin
   Result := 0;
-  StackCount := 0;
-  SetLength(Stack, 0);
+  S.Init;
 
   SetLength(Lines, 0);
   LineCount := 0;
@@ -525,7 +556,7 @@ begin
       Instr.TypeId := GetIntType;
       Instr.IntrinsicName := 'const:' + Arg;
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'null' then
     begin
@@ -535,7 +566,7 @@ begin
       Instr.TypeId := GetPtrType;
       Instr.IntrinsicName := 'null';
       EmitInstr(Instr);
-      PushTyped(Instr.ResultId, GetPtrType);
+      S.PushTyped(Instr.ResultId, GetPtrType);
     end
     else if Token = 'var' then
     begin
@@ -550,12 +581,12 @@ begin
         if IsVarParamAlloca(Arg) then
         begin
           V := EmitLoad(GetPtrType, V);
-          Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(GetIntType, V));
         end
         else if FindAllocaType(Arg) = GetPtrType then
-          PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+          S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
         else
-          Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(GetIntType, V));
       end
       else if FSemaModel.LookupConstValue(Arg, ConstVal) then
       begin
@@ -565,7 +596,7 @@ begin
         Instr.TypeId := GetIntType;
         Instr.IntrinsicName := 'const:' + IntToStr(ConstVal);
         EmitInstr(Instr);
-        Push(Instr.ResultId);
+        S.Push(Instr.ResultId);
       end
       else
       begin
@@ -575,7 +606,7 @@ begin
         Instr.TypeId := GetIntType;
         Instr.CallTarget := Arg;
         EmitInstr(Instr);
-        Push(Instr.ResultId);
+        S.Push(Instr.ResultId);
       end;
     end
     else if Token = 'varref' then
@@ -584,20 +615,20 @@ begin
       if V <> 0 then
       begin
         if IsVarParamAlloca(Arg) then
-          PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+          S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
         else
-          PushTyped(V, GetPtrType);
+          S.PushTyped(V, GetPtrType);
       end;
     end
     else if Token = 'recvar' then
     begin
       V := FindAlloca(Arg);
       if V <> 0 then
-        PushTyped(V, GetPtrType);
+        S.PushTyped(V, GetPtrType);
     end
     else if Token = 'is' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       EnsureVmtForClass(Arg);
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -625,12 +656,12 @@ begin
       Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
       Instr.CallTarget := Arg;
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'arr_load' then
     begin
-      Rhs := Pop;
-      V := Pop;
+      Rhs := S.Pop;
+      V := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
@@ -640,11 +671,11 @@ begin
       Instr.Operands[0] := MakeOperand(V);
       Instr.Operands[1] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(EmitLoad(GetIntType, Instr.ResultId));
+      S.Push(EmitLoad(GetIntType, Instr.ResultId));
     end
     else if Token = 'strcharload' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       V := FindAlloca(Arg + '$ptr');
       if V <> 0 then
       begin
@@ -683,7 +714,7 @@ begin
         SetLength(Instr.Operands, 1);
         Instr.Operands[0] := MakeOperand(V);
         EmitInstr(Instr);
-        Push(Instr.ResultId);
+        S.Push(Instr.ResultId);
       end;
     end
     else if Token = 'rload' then
@@ -719,39 +750,39 @@ begin
             Instr.Operands[1] := MakeOperand(IdxVal);
             EmitInstr(Instr);
 
-            Push(EmitLoad(GetIntType, Instr.ResultId));
+            S.Push(EmitLoad(GetIntType, Instr.ResultId));
           end;
         end;
       end;
     end
     else if Token = 'add' then
     begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikAdd, GetIntType, Lhs, Rhs));
+      Rhs := S.Pop; Lhs := S.Pop;
+      S.Push(EmitBinOp(hikAdd, GetIntType, Lhs, Rhs));
     end
     else if Token = 'sub' then
     begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikSub, GetIntType, Lhs, Rhs));
+      Rhs := S.Pop; Lhs := S.Pop;
+      S.Push(EmitBinOp(hikSub, GetIntType, Lhs, Rhs));
     end
     else if Token = 'mul' then
     begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikMul, GetIntType, Lhs, Rhs));
+      Rhs := S.Pop; Lhs := S.Pop;
+      S.Push(EmitBinOp(hikMul, GetIntType, Lhs, Rhs));
     end
     else if Token = 'div' then
     begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikDiv, GetIntType, Lhs, Rhs));
+      Rhs := S.Pop; Lhs := S.Pop;
+      S.Push(EmitBinOp(hikDiv, GetIntType, Lhs, Rhs));
     end
     else if Token = 'mod' then
     begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikMod, GetIntType, Lhs, Rhs));
+      Rhs := S.Pop; Lhs := S.Pop;
+      S.Push(EmitBinOp(hikMod, GetIntType, Lhs, Rhs));
     end
     else if Token = 'neg' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikNeg;
@@ -759,11 +790,11 @@ begin
       SetLength(Instr.Operands, 1);
       Instr.Operands[0] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'abs' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
@@ -772,32 +803,32 @@ begin
       SetLength(Instr.Operands, 1);
       Instr.Operands[0] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'cmp' then
     begin
       CmpRhsType := 0;
-      if StackCount > 0 then CmpRhsType := StackTypes[StackCount - 1];
-      Rhs := Pop;
+      if S.Count > 0 then CmpRhsType := S.Types[S.Count - 1];
+      Rhs := S.Pop;
       CmpLhsType := 0;
-      if StackCount > 0 then CmpLhsType := StackTypes[StackCount - 1];
-      Lhs := Pop;
+      if S.Count > 0 then CmpLhsType := S.Types[S.Count - 1];
+      Lhs := S.Pop;
       if Arg = 'eq' then
-        Push(EmitCmpOp(hikCmpEq, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
+        S.Push(EmitCmpOp(hikCmpEq, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'ne' then
-        Push(EmitCmpOp(hikCmpNe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
+        S.Push(EmitCmpOp(hikCmpNe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'slt' then
-        Push(EmitCmpOp(hikCmpLt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
+        S.Push(EmitCmpOp(hikCmpLt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sle' then
-        Push(EmitCmpOp(hikCmpLe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
+        S.Push(EmitCmpOp(hikCmpLe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sgt' then
-        Push(EmitCmpOp(hikCmpGt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
+        S.Push(EmitCmpOp(hikCmpGt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
       else if Arg = 'sge' then
-        Push(EmitCmpOp(hikCmpGe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType));
+        S.Push(EmitCmpOp(hikCmpGe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType));
     end
     else if Token = 'zext' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikZext;
@@ -805,7 +836,7 @@ begin
       SetLength(Instr.Operands, 1);
       Instr.Operands[0] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'call' then
     begin
@@ -824,9 +855,9 @@ begin
       SetLength(CallArgTypes, ArgCount);
       for J := ArgCount - 1 downto 0 do
       begin
-        Dec(StackCount);
-        CallArgs[J] := Stack[StackCount];
-        CallArgTypes[J] := StackTypes[StackCount];
+        Dec(S.Count);
+        CallArgs[J] := S.Values[S.Count];
+        CallArgTypes[J] := S.Types[S.Count];
       end;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
@@ -853,18 +884,18 @@ begin
       end;
       EmitInstr(Instr);
       if FModule.Types.GetType(Instr.TypeId).Kind = htkPointer then
-        PushTyped(Instr.ResultId, Instr.TypeId)
+        S.PushTyped(Instr.ResultId, Instr.TypeId)
       else
-        Push(Instr.ResultId);
+        S.Push(Instr.ResultId);
     end
     else if Token = 'strvar' then
     begin
       V := FindAlloca(Arg + '$ptr');
       if V <> 0 then
-        PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
+        S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
       V := FindAlloca(Arg + '$len');
       if V <> 0 then
-        Push(EmitLoad(GetIntType, V));
+        S.Push(EmitLoad(GetIntType, V));
     end
     else if Token = 'strlit' then
     begin
@@ -875,21 +906,21 @@ begin
       Instr.IntrinsicName := 'str_const';
       Instr.CallTarget := Arg;
       EmitInstr(Instr);
-      PushTyped(Instr.ResultId, GetPtrType);
+      S.PushTyped(Instr.ResultId, GetPtrType);
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikLoad;
       Instr.TypeId := GetIntType;
       Instr.IntrinsicName := 'const:' + IntToStr(Length(Arg) - 2);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'strcmp' then
     begin
-      Rhs := Pop;
-      V := Pop;
-      SlotIdx := Pop;
-      ExtraArgCount := Pop;
+      Rhs := S.Pop;
+      V := S.Pop;
+      SlotIdx := S.Pop;
+      ExtraArgCount := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
@@ -902,14 +933,14 @@ begin
       Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
       Instr.Operands[3] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'strpos' then
     begin
-      Rhs := Pop;
-      V := Pop;
-      SlotIdx := Pop;
-      ExtraArgCount := Pop;
+      Rhs := S.Pop;
+      V := S.Pop;
+      SlotIdx := S.Pop;
+      ExtraArgCount := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
@@ -921,11 +952,11 @@ begin
       Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
       Instr.Operands[3] := MakeOperand(Rhs);
       EmitInstr(Instr);
-      Push(Instr.ResultId);
+      S.Push(Instr.ResultId);
     end
     else if Token = 'arrload' then
     begin
-      Rhs := Pop;
+      Rhs := S.Pop;
       V := FindAlloca(Arg + '$ptr');
       if V <> 0 then
       begin
@@ -950,7 +981,7 @@ begin
           Instr.Operands[1] := MakeOperand(Rhs);
           EmitInstr(Instr);
           V := Instr.ResultId;
-          Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(GetIntType, V));
         end
         else
         begin
@@ -964,11 +995,11 @@ begin
           Instr.Operands[1] := MakeOperand(Rhs);
           EmitInstr(Instr);
           V := Instr.ResultId;
-          Push(EmitLoad(GetIntType, V));
+          S.Push(EmitLoad(GetIntType, V));
         end;
       end
       else
-        Push(Rhs);
+        S.Push(Rhs);
     end
     else if Token = 'field' then
     begin
@@ -1009,9 +1040,9 @@ begin
         Instr.Operands[1] := MakeOperand(Rhs);
         EmitInstr(Instr);
         if Pos(' p', Arg) > 0 then
-          PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
+          S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
         else
-          Push(EmitLoad(GetIntType, Instr.ResultId));
+          S.Push(EmitLoad(GetIntType, Instr.ResultId));
       end;
     end
     else if Token = 'vcall' then
@@ -1038,13 +1069,13 @@ begin
       SetLength(VcallArgTypes, ExtraArgCount);
       for VcallI := ExtraArgCount - 1 downto 0 do
       begin
-        if StackCount > 0 then
-          VcallArgTypes[VcallI] := StackTypes[StackCount - 1]
+        if S.Count > 0 then
+          VcallArgTypes[VcallI] := S.Types[S.Count - 1]
         else
           VcallArgTypes[VcallI] := 0;
-        VcallArgs[VcallI] := Pop;
+        VcallArgs[VcallI] := S.Pop;
       end;
-      Rhs := Pop;
+      Rhs := S.Pop;
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikLoad;
@@ -1098,14 +1129,14 @@ begin
       end;
       EmitInstr(Instr);
       if CmpLhsType = GetPtrType then
-        PushTyped(Instr.ResultId, GetPtrType)
+        S.PushTyped(Instr.ResultId, GetPtrType)
       else
-        Push(Instr.ResultId);
+        S.Push(Instr.ResultId);
     end;
   end;
 
-  if StackCount > 0 then
-    Result := Pop;
+  if S.Count > 0 then
+    Result := S.Pop;
 end;
 
 procedure THIRBuilder.ProcessVarDecl(const ANode: TTypedHirNode);
