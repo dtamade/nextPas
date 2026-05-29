@@ -1846,10 +1846,13 @@ begin
   Inc(ATree.FNodeCount);
   Inc(ACursor);
 
-  while (ACursor < ALexer.TokenCount) and
-    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
-     (CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword)) do
+  while True do
   begin
+    SkipDirectives(ALexer, ACursor);
+    if (ACursor >= ALexer.TokenCount) or
+      ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
+       (CurrentToken(ALexer, ACursor).Kind <> tkGenericKeyword)) then
+      Break;
     if CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword then
       Inc(ACursor);
     if (ACursor >= ALexer.TokenCount) or
@@ -1987,15 +1990,14 @@ begin
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
             Inc(ACursor);
-            if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
             begin
-              IndexNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
-              if IndexNode <> nil then
-              begin
-                TypeNode.AppendChild(IndexNode);
-                Inc(ATree.FNodeCount);
-              end;
+              Inc(ACursor);
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
               MatchTokenSilent(ALexer, ACursor, tkRBracket);
             end;
             if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
