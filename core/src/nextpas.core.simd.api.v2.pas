@@ -10,9 +10,9 @@ uses
   SysUtils,
   nextpas.core.simd;
 
-function GetBoundPublicApiV2: PFafafaSimdPublicApiV2; inline;
+function GetBoundPublicApiV2: PNextPasSimdPublicApiV2; inline;
 function GetSnapshotGeneration: UInt64; inline;
-function GetSnapshotFlags: TFafafaSimdPublicApiV2Flags; inline;
+function GetSnapshotFlags: TNextPasSimdPublicApiV2Flags; inline;
 function SupportsDirectDataPlane: Boolean; inline;
 
 function MemEqual(aA, aB: Pointer; aLen: SizeUInt): LongBool; {$IFDEF SIMD_AGGRESSIVE_INLINE}inline;{$ENDIF}
@@ -33,21 +33,21 @@ function BitsetPopCount(aP: Pointer; aByteLen: SizeUInt): SizeUInt; {$IFDEF SIMD
 
 implementation
 
-function RequireBoundApiV2: PFafafaSimdPublicApiV2; inline;
+function RequireBoundApiV2: PNextPasSimdPublicApiV2; inline;
 begin
   Result := GetSimdPublicApiV2;
   if Result = nil then
     raise Exception.Create('SIMD public API v2 snapshot is unavailable');
 end;
 
-function GetBoundPublicApiV2: PFafafaSimdPublicApiV2; inline;
+function GetBoundPublicApiV2: PNextPasSimdPublicApiV2; inline;
 begin
   Result := GetSimdPublicApiV2;
 end;
 
 function GetSnapshotGeneration: UInt64; inline;
 var
-  LApi: PFafafaSimdPublicApiV2;
+  LApi: PNextPasSimdPublicApiV2;
 begin
   LApi := GetBoundPublicApiV2;
   if LApi = nil then
@@ -55,9 +55,9 @@ begin
   Result := LApi^.SnapshotGeneration;
 end;
 
-function GetSnapshotFlags: TFafafaSimdPublicApiV2Flags; inline;
+function GetSnapshotFlags: TNextPasSimdPublicApiV2Flags; inline;
 var
-  LApi: PFafafaSimdPublicApiV2;
+  LApi: PNextPasSimdPublicApiV2;
 begin
   LApi := GetBoundPublicApiV2;
   if LApi = nil then
