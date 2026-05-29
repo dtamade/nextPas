@@ -277,6 +277,56 @@ begin
   Check(LCS.Token.WaitCancellation(1000000), 'immediate after cancel');
 end;
 
+{ Channel timeout tests }
+
+procedure TestChannelSendTimeout;
+var
+  LCh: IIntChannel;
+begin
+  LCh := TIntChannel.Create(1);
+  LCh.Send(1);
+  Check(not LCh.SendTimeout(2, 1000000), 'timeout on full (1ms)');
+  LCh.Close;
+end;
+
+procedure TestChannelReceiveTimeout;
+var
+  LCh: IIntChannel;
+  LVal: Integer;
+begin
+  LCh := TIntChannel.Create(1);
+  Check(not LCh.ReceiveTimeout(LVal, 1000000), 'timeout on empty (1ms)');
+  LCh.Send(42);
+  Check(LCh.ReceiveTimeout(LVal, 1000000), 'immediate when available');
+  CheckEqual(Int64(42), Int64(LVal));
+  LCh.Close;
+end;
+
+{ FutureVoid + WhenAll tests }
+
+procedure TestFutureVoid;
+var
+  LF: IFutureVoid;
+begin
+  LF := CreateFutureVoid;
+  Check(not LF.IsDone, 'not done');
+  FutureVoidComplete(LF);
+  Check(LF.IsDone, 'done');
+  LF.Wait;
+end;
+
+procedure TestWhenAll;
+var
+  LF1, LF2, LAll: IFutureVoid;
+begin
+  LF1 := CreateFutureVoid;
+  LF2 := CreateFutureVoid;
+  FutureVoidComplete(LF1);
+  FutureVoidComplete(LF2);
+  LAll := WhenAll([LF1, LF2]);
+  Check(LAll.IsDone, 'all done');
+end;
+
 var
   GAllPassed: Boolean = False;
 
@@ -309,6 +359,10 @@ begin
   T.Run('Cancellation basic', @TestCancellationBasic);
   T.Run('Cancellation throw', @TestCancellationThrow);
   T.Run('Cancellation wait', @TestCancellationWait);
+  T.Run('Channel send timeout', @TestChannelSendTimeout);
+  T.Run('Channel receive timeout', @TestChannelReceiveTimeout);
+  T.Run('FutureVoid basic', @TestFutureVoid);
+  T.Run('WhenAll', @TestWhenAll);
   GAllPassed := T.AllPassed;
   T.Summary;
   {$IFDEF UNIX}
