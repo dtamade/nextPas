@@ -1,0 +1,153 @@
+program test_btreemap;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  SysUtils,
+  nextpas.core.testing,
+  nextpas.core.collections.btree;
+
+type
+  TIntBTree = specialize TBTreeMap<Integer, Integer>;
+  TStrBTree = specialize TBTreeMap<string, Integer>;
+
+function CmpInt(const A, B: Integer; aData: Pointer): SizeInt;
+begin
+  Result := SizeInt(A) - SizeInt(B);
+end;
+
+function CmpStr(const A, B: string; aData: Pointer): SizeInt;
+begin
+  if A < B then Result := -1
+  else if A > B then Result := 1
+  else Result := 0;
+end;
+
+var
+  T: TTestRunner;
+
+procedure TestPutGet;
+var M: TIntBTree; v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(5, 50); M.Put(1, 10); M.Put(9, 90); M.Put(3, 30);
+    CheckEqual(Int64(4), Int64(M.Count), 'count');
+    Check(M.TryGetValue(1, v), 'get 1'); CheckEqual(Int64(10), Int64(v), 'val 1');
+    Check(M.TryGetValue(9, v), 'get 9'); CheckEqual(Int64(90), Int64(v), 'val 9');
+    Check(not M.TryGetValue(99, v), 'miss');
+  finally M.Free; end;
+end;
+
+procedure TestUpdate;
+var M: TIntBTree; v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(1, 10); M.Put(1, 99);
+    CheckEqual(Int64(1), Int64(M.Count), 'count');
+    Check(M.TryGetValue(1, v), 'get'); CheckEqual(Int64(99), Int64(v), 'updated');
+  finally M.Free; end;
+end;
+
+procedure TestRemove;
+var M: TIntBTree;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(1, 10); M.Put(2, 20); M.Put(3, 30); M.Put(4, 40); M.Put(5, 50);
+    M.Remove(3);
+    CheckEqual(Int64(4), Int64(M.Count), 'count after remove');
+    Check(not M.ContainsKey(3), 'not contains 3');
+    Check(M.ContainsKey(1), 'still 1');
+    Check(M.ContainsKey(5), 'still 5');
+  finally M.Free; end;
+end;
+
+procedure TestMinMax;
+var M: TIntBTree; k, v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(50, 500); M.Put(10, 100); M.Put(90, 900); M.Put(30, 300);
+    Check(M.Min(k, v), 'min'); CheckEqual(Int64(10), Int64(k), 'min key');
+    Check(M.Max(k, v), 'max'); CheckEqual(Int64(90), Int64(k), 'max key');
+  finally M.Free; end;
+end;
+
+procedure TestGrow;
+var M: TIntBTree; i, v: Integer; ok: Boolean;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 9999 do M.Put(i, i * 2);
+    CheckEqual(Int64(10000), Int64(M.Count), 'count');
+    ok := True;
+    for i := 0 to 9999 do
+      if not M.TryGetValue(i, v) or (v <> i * 2) then ok := False;
+    Check(ok, 'all values');
+  finally M.Free; end;
+end;
+
+procedure TestRemoveStress;
+var M: TIntBTree; i: Integer; ok: Boolean;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 999 do M.Put(i, i);
+    for i := 0 to 499 do M.Remove(i * 2);
+    CheckEqual(Int64(500), Int64(M.Count), 'count after remove');
+    ok := True;
+    for i := 0 to 499 do
+      if not M.ContainsKey(i * 2 + 1) then ok := False;
+    Check(ok, 'odd keys remain');
+    ok := True;
+    for i := 0 to 499 do
+      if M.ContainsKey(i * 2) then ok := False;
+    Check(ok, 'even keys gone');
+  finally M.Free; end;
+end;
+
+procedure TestStringKey;
+var M: TStrBTree; i, v: Integer; ok: Boolean;
+begin
+  M := TStrBTree.Create(@CmpStr);
+  try
+    for i := 0 to 99 do M.Put('key' + IntToStr(i), i);
+    CheckEqual(Int64(100), Int64(M.Count), 'count');
+    ok := True;
+    for i := 0 to 99 do
+      if not M.TryGetValue('key' + IntToStr(i), v) or (v <> i) then ok := False;
+    Check(ok, 'string keys correct');
+    M.Remove('key50');
+    Check(not M.ContainsKey('key50'), 'removed');
+    CheckEqual(Int64(99), Int64(M.Count), 'count after remove');
+  finally M.Free; end;
+end;
+
+procedure TestClear;
+var M: TIntBTree;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(1, 1); M.Put(2, 2); M.Put(3, 3);
+    M.Clear;
+    CheckEqual(Int64(0), Int64(M.Count), 'count after clear');
+    Check(not M.ContainsKey(1), 'not contains');
+    M.Put(99, 99);
+    CheckEqual(Int64(1), Int64(M.Count), 'usable after clear');
+  finally M.Free; end;
+end;
+
+begin
+  T := TTestRunner.Create('nextpas.core.collections.btreemap');
+  T.Run('Put/Get', @TestPutGet);
+  T.Run('Update', @TestUpdate);
+  T.Run('Remove', @TestRemove);
+  T.Run('Min/Max', @TestMinMax);
+  T.Run('Grow (10000)', @TestGrow);
+  T.Run('Remove stress (1000)', @TestRemoveStress);
+  T.Run('String key', @TestStringKey);
+  T.Run('Clear', @TestClear);
+  T.Summary;
+end.
