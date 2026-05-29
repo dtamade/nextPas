@@ -16,9 +16,15 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.platform.thread,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.thread
+{$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.base
+  , nextpas.core.platform.posix.ffi
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  , nextpas.core.platform.windows.ffi
+{$ENDIF}
+  ;
 
 var
   GHasRDTSCP: Int32 = -1;
@@ -93,8 +99,26 @@ procedure CalibrateResolution;
 var
   LStart, LEnd: UInt64;
   LRefStart, LRefEnd: UInt64;
+{$IFDEF NEXTPAS_UNIX}
   LTs: timespec;
+{$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+  LCounter: Int64;
+  LFreq: Int64;
+{$ENDIF}
   LOld: Int32;
+
+  function GetRefNs: UInt64;
+  begin
+  {$IFDEF NEXTPAS_WINDOWS}
+    QueryPerformanceCounter(LCounter);
+    Result := UInt64((LCounter * 1000000000) div LFreq);
+  {$ELSE}
+    clock_gettime(1{CLOCK_MONOTONIC}, @LTs);
+    Result := UInt64(LTs.tv_sec) * 1000000000 + UInt64(LTs.tv_nsec);
+  {$ENDIF}
+  end;
+
 begin
   LOld := AtomicCompareExchange32(GCalibrated, 0, 1, moAcqRel);
   if LOld <> 0 then
@@ -103,13 +127,14 @@ begin
       CpuPause;
     Exit;
   end;
-  clock_gettime(1{CLOCK_MONOTONIC}, @LTs);
-  LRefStart := UInt64(LTs.tv_sec) * 1000000000 + UInt64(LTs.tv_nsec);
+{$IFDEF NEXTPAS_WINDOWS}
+  QueryPerformanceFrequency(LFreq);
+{$ENDIF}
+  LRefStart := GetRefNs;
   LStart := ReadTSC;
   platform_thread_sleep_ns(10000000);
   LEnd := ReadTSC;
-  clock_gettime(1, @LTs);
-  LRefEnd := UInt64(LTs.tv_sec) * 1000000000 + UInt64(LTs.tv_nsec);
+  LRefEnd := GetRefNs;
   if (LRefEnd > LRefStart) and (LEnd > LStart) then
     GResolutionHz := ((LEnd - LStart) * 1000000000) div (LRefEnd - LRefStart)
   else

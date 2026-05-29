@@ -61,7 +61,7 @@ end;
 
 function IsAvailable: Boolean;
 begin
-{$IFDEF CPUAARCH64}
+{$IF defined(CPUAARCH64) and defined(NEXTPAS_USE_ARCH_TIMER)}
   Result := True;
 {$ELSE}
   Result := False;

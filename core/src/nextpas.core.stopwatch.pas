@@ -224,7 +224,10 @@ end;
 procedure TStopwatch.ClearLaps;
 begin
   SetLength(FLaps, 0);
-  FLastLapTick := 0;
+  if FRunning then
+    FLastLapTick := FTick.Tick
+  else
+    FLastLapTick := 0;
 end;
 
 function TStopwatch.ToString: string;
