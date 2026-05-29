@@ -120,6 +120,7 @@ begin
       if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
       begin
         AValue := FSlots[LIdx].Value;
+        FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
         LockFreeWakeSpace(@FSpaceEpoch);
         Result := True;

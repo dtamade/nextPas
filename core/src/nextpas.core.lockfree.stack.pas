@@ -39,7 +39,7 @@ uses
 
 function TLockFreeStack.PackTagIdx(AIdx: Int32; ATag: UInt32): Int64; inline;
 begin
-  Result := Int64(AIdx) or (Int64(ATag) shl 32);
+  Result := Int64(UInt32(AIdx)) or (Int64(ATag) shl 32);
 end;
 
 function TLockFreeStack.UnpackIdx(ATagged: Int64): Int32; inline;
@@ -105,6 +105,7 @@ begin
   until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
 
   AValue := FSlots[LIdx].Value;
+  FSlots[LIdx].Value := Default(T);
 
   repeat
     LOldFree := AtomicLoad64(FFreeHead, moAcquire);
