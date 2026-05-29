@@ -17,6 +17,12 @@ uses
   nextpas.core.collections.forward_list.intf,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashset,
+  nextpas.core.collections.linkedhashmap,
+  nextpas.core.collections.linkedhashset,
+  nextpas.core.collections.multimap,
+  nextpas.core.collections.multiset,
+  nextpas.core.collections.circularbuffer,
   nextpas.core.collections.lrucache.intf,
   nextpas.core.collections.tree_set.intf;
 
@@ -250,6 +256,114 @@ begin
   end;
 end;
 
+procedure TestHashSetString;
+var
+  LS: specialize THashSet<string>;
+  i: Integer;
+begin
+  LS := specialize THashSet<string>.Create;
+  try
+    for i := 0 to 99 do LS.Add('item' + IntToStr(i));
+    Check(LS.Contains('item50'), 'contains');
+    Check(not LS.Contains('nope'), 'miss');
+    LS.Remove('item50');
+    Check(not LS.Contains('item50'), 'removed');
+    CheckEqual(Int64(99), Int64(LS.Count), 'count');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestLinkedHashMapString;
+var
+  LM: specialize TLinkedHashMap<string, string>;
+  LV: string;
+begin
+  LM := specialize TLinkedHashMap<string, string>.Create;
+  try
+    LM.Put('a', 'alpha');
+    LM.Put('b', 'beta');
+    LM.Put('c', 'gamma');
+    Check(LM.TryGetValue('b', LV), 'get b');
+    CheckEqual('beta', LV, 'val b');
+    LM.Remove('b');
+    Check(not LM.ContainsKey('b'), 'removed');
+    CheckEqual(Int64(2), Int64(LM.GetCount), 'count');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestLinkedHashSetString;
+var
+  LS: specialize TLinkedHashSet<string>;
+  i: Integer;
+begin
+  LS := specialize TLinkedHashSet<string>.Create;
+  try
+    for i := 0 to 49 do LS.Add('s' + IntToStr(i));
+    Check(LS.Contains('s25'), 'contains');
+    LS.Remove('s25');
+    Check(not LS.Contains('s25'), 'removed');
+    CheckEqual(Int64(49), Int64(LS.GetCount), 'count');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestMultiMapString;
+var
+  LM: specialize TMultiMap<string, string>;
+begin
+  LM := specialize TMultiMap<string, string>.Create;
+  try
+    LM.Add('key', 'val1');
+    LM.Add('key', 'val2');
+    LM.Add('other', 'val3');
+    CheckEqual(Int64(3), Int64(LM.TotalCount), 'count');
+    Check(LM.Contains('key'), 'contains key');
+    LM.Remove('key', 'val1');
+    CheckEqual(Int64(2), Int64(LM.TotalCount), 'after remove');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMultiSetString;
+var
+  LS: specialize TMultiSet<string>;
+begin
+  LS := specialize TMultiSet<string>.Create;
+  try
+    LS.Add('hello');
+    LS.Add('hello');
+    LS.Add('world');
+    CheckEqual(Int64(3), Int64(LS.TotalCount), 'total count');
+    CheckEqual(Int64(2), Int64(LS.CountOf('hello')), 'hello count');
+    LS.Remove('hello');
+    CheckEqual(Int64(2), Int64(LS.TotalCount), 'after remove');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestCircularBufferString;
+var
+  LB: specialize TCircularBuffer<string>;
+  LV: string;
+begin
+  LB := specialize TCircularBuffer<string>.Create(4);
+  try
+    LB.Push('a'); LB.Push('b'); LB.Push('c'); LB.Push('d');
+    LB.Push('e');
+    Check(LB.TryPop(LV), 'pop');
+    CheckEqual('b', LV, 'oldest after overwrite');
+    CheckEqual(Int64(3), Int64(LB.Count), 'count');
+  finally
+    LB.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.managed_types');
   T.Run('Vec string push/pop/drain', @TestVecStringPushPopDrain);
@@ -264,5 +378,11 @@ begin
   T.Run('LruCache string', @TestLruCacheString);
   T.Run('TreeSet string', @TestTreeSetString);
   T.Run('Vec string grow stress (1000)', @TestVecStringGrowStress);
+  T.Run('HashSet string', @TestHashSetString);
+  T.Run('LinkedHashMap string', @TestLinkedHashMapString);
+  T.Run('LinkedHashSet string', @TestLinkedHashSetString);
+  T.Run('MultiMap string', @TestMultiMapString);
+  T.Run('MultiSet string', @TestMultiSetString);
+  T.Run('CircularBuffer string', @TestCircularBufferString);
   T.Summary;
 end.
