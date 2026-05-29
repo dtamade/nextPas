@@ -407,6 +407,49 @@ begin
   Check(LE.WaitTimeout(1000000), 'immediate on set');
 end;
 
+procedure TestFutexMutexGuard;
+var
+  LM: IMutex;
+  LG: ILockGuard;
+begin
+  LM := FutexMutex;
+  LG := LM.Lock;
+  Check(not LM.TryAcquire, 'locked by guard');
+  LG := nil;
+  Check(LM.TryAcquire, 'released after guard nil');
+  LM.Release;
+end;
+
+procedure TestRWLockTryAcquire;
+var
+  LRW: IRWLock;
+begin
+  LRW := RWLock;
+  Check(LRW.TryAcquireRead, 'try read ok');
+  Check(LRW.TryAcquireRead, 'try read ok (shared)');
+  Check(not LRW.TryAcquireWrite, 'try write fails while read held');
+  LRW.ReleaseRead;
+  LRW.ReleaseRead;
+  Check(LRW.TryAcquireWrite, 'try write ok after reads released');
+  Check(not LRW.TryAcquireRead, 'try read fails while write held');
+  LRW.ReleaseWrite;
+  Check(LRW.TryAcquireRead, 'try read ok after write released');
+  LRW.ReleaseRead;
+end;
+
+procedure TestCondVarBroadcast;
+var
+  LCond: ICondVar;
+  LMutex: IMutex;
+begin
+  LCond := CondVar;
+  LMutex := Mutex;
+  LCond.Broadcast;
+  LMutex.Acquire;
+  Check(not LCond.WaitTimeout(LMutex, 1000000), 'timeout (no signal)');
+  LMutex.Release;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.sync');
   T.Run('Mutex basic', @TestMutexBasic);
@@ -415,10 +458,15 @@ begin
   T.Run('FutexMutex basic', @TestFutexMutexBasic);
   T.Run('FutexMutex tryacquire', @TestFutexMutexTryAcquire);
   T.Run('FutexMutex contention', @TestFutexMutexContention);
+
+  T.Run('FutexMutex guard', @TestFutexMutexGuard);
+
   T.Run('RWLock basic', @TestRWLockBasic);
   T.Run('RWLock guard (RAII)', @TestRWLockGuard);
+  T.Run('RWLock try acquire', @TestRWLockTryAcquire);
   T.Run('WaitGroup basic', @TestWaitGroupBasic);
   T.Run('WaitGroup multiple', @TestWaitGroupMultiple);
+  T.Run('CondVar broadcast', @TestCondVarBroadcast);
   T.Run('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
 
   T.Run('Once basic', @TestOnceBasic);
