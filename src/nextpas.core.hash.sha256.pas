@@ -119,12 +119,14 @@ end;
 
 {$IFDEF CPUX86_64}
 {$I nextpas.core.hash.sha256.x64.inc}
+{$I nextpas.core.hash.sha256.x64v2.inc}
 {$I nextpas.core.hash.sha256.shani.inc}
 {$ENDIF}
 
 {$IFDEF CPUX86_64}
 var
   GHasSHANI: Boolean = False;
+  GHasSSSE3: Boolean = False;
   GDispatchInitialized: Boolean = False;
 
 procedure InitSHA256Dispatch;
@@ -134,6 +136,13 @@ begin
   if GDispatchInitialized then
     Exit;
   LEax := 0; LEbx := 0; LEcx := 0; LEdx := 0;
+  asm
+    movl $1, %eax
+    cpuid
+    movl %ecx, LEcx
+  end ['eax', 'ebx', 'ecx', 'edx'];
+  GHasSSSE3 := (LEcx and (1 shl 9)) <> 0;
+  LEbx := 0;
   asm
     movl $7, %eax
     xorl %ecx, %ecx
@@ -150,6 +159,8 @@ begin
   {$IFDEF CPUX86_64}
   if GHasSHANI then
     ProcessBlockSHANI(ABlock, @FH[0])
+  else if GHasSSSE3 then
+    ProcessBlockX64V2(ABlock, @FH[0])
   else
     ProcessBlockX64(ABlock, @FH[0]);
   {$ELSE}
@@ -225,6 +236,8 @@ begin
     {$IFDEF CPUX86_64}
     if GHasSHANI then
       ProcessBlockSHANI(@LBuf[0], @LH[0])
+    else if GHasSSSE3 then
+      ProcessBlockX64V2(@LBuf[0], @LH[0])
     else
       ProcessBlockX64(@LBuf[0], @LH[0]);
     {$ELSE}
@@ -251,6 +264,8 @@ begin
   {$IFDEF CPUX86_64}
   if GHasSHANI then
     ProcessBlockSHANI(@LBuf[0], @LH[0])
+  else if GHasSSSE3 then
+    ProcessBlockX64V2(@LBuf[0], @LH[0])
   else
     ProcessBlockX64(@LBuf[0], @LH[0]);
   {$ELSE}
