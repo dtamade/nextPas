@@ -97,6 +97,17 @@ function GetEnvironmentVariable(const EnvVar: string): string;
 procedure Sleep(Milliseconds: Cardinal);
 function GetTempDir: string;
 
+{ --- Float/String Conversion --- }
+
+type
+  TFloatFormat = (ffGeneral, ffExponent, ffFixed, ffNumber, ffCurrency);
+
+function FloatToStr(Value: Double): string;
+function FloatToStrF(Value: Double; Format: TFloatFormat; Precision, Digits: Integer): string;
+function StrToFloat(const S: string): Double;
+function TryStrToFloat(const S: string; out Value: Double): Boolean;
+function StrToFloatDef(const S: string; Default: Double): Double;
+
 { --- Exception Classes --- }
 
 type
@@ -588,6 +599,55 @@ begin
 {$ELSE}
   Result := 0;
 {$ENDIF}
+end;
+
+{ --- Float/String Conversion --- }
+
+function FloatToStr(Value: Double): string;
+var Buf: array[0..63] of AnsiChar;
+    LLen: Int32;
+begin
+  LLen := platform_fmt_float(Value, 15, @Buf[0], 64);
+  while (LLen > 1) and (Buf[LLen - 1] = '0') and (Buf[LLen - 2] <> '.') do
+    Dec(LLen);
+  Buf[LLen] := #0;
+  Result := PAnsiChar(@Buf[0]);
+end;
+
+function FloatToStrF(Value: Double; Format: TFloatFormat; Precision, Digits: Integer): string;
+var Buf: array[0..63] of AnsiChar;
+begin
+  case Format of
+    ffFixed, ffNumber:
+      platform_fmt_float(Value, Digits, @Buf[0], 64);
+    ffGeneral:
+    begin
+      platform_fmt_float(Value, Precision, @Buf[0], 64);
+    end;
+  else
+    platform_fmt_float(Value, 6, @Buf[0], 64);
+  end;
+  Result := PAnsiChar(@Buf[0]);
+end;
+
+function TryStrToFloat(const S: string; out Value: Double): Boolean;
+var
+  LCode: Integer;
+begin
+  System.Val(S, Value, LCode);
+  Result := LCode = 0;
+end;
+
+function StrToFloat(const S: string): Double;
+begin
+  if not TryStrToFloat(S, Result) then
+    RunError(106);
+end;
+
+function StrToFloatDef(const S: string; Default: Double): Double;
+begin
+  if not TryStrToFloat(S, Result) then
+    Result := Default;
 end;
 
 { --- Exception Classes --- }

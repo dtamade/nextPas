@@ -7,6 +7,7 @@ interface
 function platform_fmt_int(AValue: Int64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fmt_uint(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fmt_hex(AValue: UInt64; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 
@@ -135,6 +136,78 @@ begin
   Result := LLen;
 end;
 
+function platform_fmt_float(AValue: Double; ADecimals: Int32; ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LNeg: Boolean;
+  LIntPart: UInt64;
+  LFracPart: UInt64;
+  LMul: UInt64;
+  LPos, LIntLen, I: Int32;
+  LIntBuf: array[0..31] of AnsiChar;
+  LFracBuf: array[0..31] of AnsiChar;
+  LAbsVal: Double;
+begin
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  if ADecimals < 0 then ADecimals := 0;
+  if ADecimals > 18 then ADecimals := 18;
+
+  LNeg := AValue < 0;
+  if LNeg then LAbsVal := -AValue else LAbsVal := AValue;
+
+  LMul := 1;
+  for I := 1 to ADecimals do
+    LMul := LMul * 10;
+
+  LIntPart := Trunc(LAbsVal);
+  LFracPart := Round((LAbsVal - LIntPart) * LMul);
+  if LFracPart >= LMul then
+  begin
+    Inc(LIntPart);
+    LFracPart := 0;
+  end;
+
+  platform_fmt_uint(LIntPart, @LIntBuf[0], 32);
+  LIntLen := 0;
+  while LIntBuf[LIntLen] <> #0 do Inc(LIntLen);
+
+  LPos := 0;
+  if LNeg then
+  begin
+    if LPos >= ABufLen - 1 then begin ABuf[0] := #0; Exit(-1); end;
+    ABuf[LPos] := '-'; Inc(LPos);
+  end;
+  for I := 0 to LIntLen - 1 do
+  begin
+    if LPos >= ABufLen - 1 then Break;
+    ABuf[LPos] := LIntBuf[I]; Inc(LPos);
+  end;
+
+  if ADecimals > 0 then
+  begin
+    if LPos >= ABufLen - 1 then begin ABuf[LPos] := #0; Exit(LPos); end;
+    ABuf[LPos] := '.'; Inc(LPos);
+
+    platform_fmt_uint(LFracPart, @LFracBuf[0], 32);
+    LIntLen := 0;
+    while LFracBuf[LIntLen] <> #0 do Inc(LIntLen);
+
+    for I := LIntLen to ADecimals - 1 do
+    begin
+      if LPos >= ABufLen - 1 then Break;
+      ABuf[LPos] := '0'; Inc(LPos);
+    end;
+    for I := 0 to LIntLen - 1 do
+    begin
+      if LPos >= ABufLen - 1 then Break;
+      ABuf[LPos] := LFracBuf[I]; Inc(LPos);
+    end;
+  end;
+
+  ABuf[LPos] := #0;
+  Result := LPos;
+end;
+
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
@@ -237,6 +310,25 @@ begin
                 Inc(LOut);
                 Inc(LSrc);
               end;
+            Inc(LArgIdx);
+          end;
+          Inc(I);
+        end;
+        'f': begin
+          if LArgIdx <= High(AArgs) then
+          begin
+            case AArgs[LArgIdx].VType of
+              vtExtended: platform_fmt_float(AArgs[LArgIdx].VExtended^, 6, @LTmp[0], 32);
+            else
+              LTmp[0] := '?'; LTmp[1] := #0;
+            end;
+            LTmpLen := 0;
+            while (LTmp[LTmpLen] <> #0) and (LOut < ABufLen - 1) do
+            begin
+              ABuf[LOut] := LTmp[LTmpLen];
+              Inc(LOut);
+              Inc(LTmpLen);
+            end;
             Inc(LArgIdx);
           end;
           Inc(I);

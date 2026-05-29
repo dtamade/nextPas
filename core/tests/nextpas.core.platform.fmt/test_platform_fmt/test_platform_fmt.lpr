@@ -199,6 +199,30 @@ begin
   Check(platform_str_ends_with('x', 1, '', 0), 'empty suffix');
 end;
 
+procedure TestFmtFloat;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_float(3.14159, 2, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '3.14'), '3.14');
+  platform_fmt_float(0.0, 1, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '0.0'), '0.0');
+  platform_fmt_float(-42.5, 1, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '-42.5'), '-42.5');
+  platform_fmt_float(1.0, 3, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '1.000'), '1.000');
+  platform_fmt_float(99.999, 2, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '100.00'), '99.999 rounds to 100.00');
+  platform_fmt_float(0.1, 0, @Buf[0], 64);
+  Check(BufEq(@Buf[0], '0'), '0 decimals');
+end;
+
+procedure TestFmtBufFloat;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_buf('time: %f sec', [Double(1.5)], @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'time: 1.500000 sec'), 'fmt_buf %f');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fmt');
   T.Run('int positive', @TestIntPositive);
@@ -220,5 +244,7 @@ begin
   T.Run('str_equal_nocase', @TestStrEqualNocase);
   T.Run('str_find', @TestStrFind);
   T.Run('str_starts_ends', @TestStrStartsEnds);
+  T.Run('fmt_float', @TestFmtFloat);
+  T.Run('fmt_buf %f', @TestFmtBufFloat);
   T.Summary;
 end.
