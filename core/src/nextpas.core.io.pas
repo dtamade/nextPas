@@ -11,7 +11,8 @@ uses
   nextpas.core.io.memory,
   nextpas.core.io.buffer,
   nextpas.core.io.util,
-  nextpas.core.io.pipe;
+  nextpas.core.io.pipe,
+  nextpas.core.io.scanner;
 
 type
   TSeekOrigin = nextpas.core.io.base.TSeekOrigin;
@@ -66,6 +67,13 @@ type
   IPipeWriter = nextpas.core.io.pipe.IPipeWriter;
 
 procedure Pipe(out AReader: IPipeReader; out AWriter: IPipeWriter); inline;
+
+{ Scanner }
+type
+  IScanner = nextpas.core.io.scanner.IScanner;
+  TSplitFunc = nextpas.core.io.scanner.TSplitFunc;
+
+function Scanner(const AInner: IReader; const ASplit: TSplitFunc = nil): IScanner; inline;
 
 implementation
 
@@ -167,6 +175,11 @@ end;
 procedure Pipe(out AReader: IPipeReader; out AWriter: IPipeWriter);
 begin
   nextpas.core.io.pipe.CreatePipe(AReader, AWriter);
+end;
+
+function Scanner(const AInner: IReader; const ASplit: TSplitFunc): IScanner;
+begin
+  Result := nextpas.core.io.scanner.CreateScanner(AInner, ASplit);
 end;
 
 end.

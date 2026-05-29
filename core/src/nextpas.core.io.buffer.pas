@@ -61,6 +61,8 @@ end;
 constructor TBufferedReader.Create(const AInner: IReader; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if ABufSize = 0 then
+    raise EArgumentError.Create('TBufferedReader: buffer size must be > 0');
   FInner := AInner;
   SetLength(FBuf, ABufSize);
   FBufPos := 0;
@@ -77,7 +79,17 @@ begin
   LRemaining := ACount;
   Result := 0;
 
-  // Serve from buffer first
+  if FHasLast then
+  begin
+    LDst^ := FLastByte;
+    FHasLast := False;
+    Inc(LDst);
+    Dec(LRemaining);
+    Inc(Result);
+    if LRemaining = 0 then
+      Exit;
+  end;
+
   if FBufLen > FBufPos then
   begin
     LFromBuf := FBufLen - FBufPos;
@@ -143,6 +155,8 @@ end;
 constructor TBufferedWriter.Create(const AInner: IWriter; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if ABufSize = 0 then
+    raise EArgumentError.Create('TBufferedWriter: buffer size must be > 0');
   FInner := AInner;
   SetLength(FBuf, ABufSize);
   FBufPos := 0;

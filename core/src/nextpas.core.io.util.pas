@@ -39,7 +39,13 @@ function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 var
   LBuf: array[0..COPY_BUF_SIZE - 1] of Byte;
   LRead, LWritten, LTotal: SizeUInt;
+  LReaderFrom: IReaderFrom;
+  LWriterTo: IWriterTo;
 begin
+  if Supports(ADst, IReaderFrom, LReaderFrom) then
+    Exit(LReaderFrom.ReadFrom(ASrc));
+  if Supports(ASrc, IWriterTo, LWriterTo) then
+    Exit(LWriterTo.WriteTo(ADst));
   Result := 0;
   repeat
     LRead := ASrc.Read(LBuf[0], COPY_BUF_SIZE);
@@ -382,6 +388,8 @@ var
   LDst: PByte;
   LTotal, LRead: SizeUInt;
 begin
+  if AMin > ACount then
+    raise EArgumentError.Create('IoReadAtLeast: AMin > ACount');
   LDst := @ABuf;
   LTotal := 0;
   while LTotal < AMin do

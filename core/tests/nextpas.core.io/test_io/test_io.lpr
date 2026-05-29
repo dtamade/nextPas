@@ -5,12 +5,14 @@ program test_io;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.io.buffer,
   nextpas.core.io.util,
   nextpas.core.io.pipe,
+  nextpas.core.io.scanner,
   nextpas.core.io;
 
 var
@@ -568,6 +570,76 @@ begin
   CheckEqual(SizeUInt(0), LR.Read(LBuf[0], 10), 'EOF');
 end;
 
+procedure TestUnreadByteThenRead;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LBuf: array[0..3] of Byte;
+  LN: SizeUInt;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10, 20, 30, 40));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  LBS.ReadByte;
+  LBS.UnreadByte;
+  LN := LR.Read(LBuf[0], 4);
+  CheckEqual(SizeUInt(4), LN, 'read 4 after unread');
+  CheckEqual(Byte(10), LBuf[0], 'unread byte served first');
+  CheckEqual(Byte(20), LBuf[1]);
+  CheckEqual(Byte(30), LBuf[2]);
+  CheckEqual(Byte(40), LBuf[3]);
+end;
+
+procedure TestBufReaderZeroSize;
+var
+  LS: IStream;
+  LGotException: Boolean;
+begin
+  LS := BytesStream(16);
+  LGotException := False;
+  try
+    CreateBufferedReader(LS as IReader, 0);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'zero buf size raises');
+end;
+
+procedure TestBufWriterZeroSize;
+var
+  LS: IStream;
+  LGotException: Boolean;
+begin
+  LS := BytesStream(16);
+  LGotException := False;
+  try
+    CreateBufferedWriter(LS as IWriter, 0);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'zero buf size raises');
+end;
+
+procedure TestReadAtLeastMinGtCount;
+var
+  LS: IStream;
+  LBuf: array[0..3] of Byte;
+  LGotException: Boolean;
+begin
+  LS := BytesStreamFrom(TBytes.Create(1, 2, 3, 4, 5));
+  LGotException := False;
+  try
+    IoReadAtLeast(LS as IReader, LBuf[0], 4, 10);
+  except
+    on E: EArgumentError do
+      LGotException := True;
+  end;
+  Check(LGotException, 'AMin > ACount raises');
+end;
+
 procedure TestPipeLargeData;
 var
   LR: IPipeReader;
@@ -592,6 +664,63 @@ begin
   CheckEqual(Byte(0), LOut[0]);
   CheckEqual(Byte(255), LOut[255]);
   LR.Close;
+end;
+
+{ Scanner tests }
+
+procedure TestScannerLines;
+var
+  LS: IStream;
+  LScan: IScanner;
+begin
+  LS := BytesStreamFrom(TBytes.Create(
+    Ord('h'), Ord('i'), 10,
+    Ord('b'), Ord('y'), Ord('e'), 10));
+  LScan := CreateScanner(LS as IReader, nil);
+  Check(LScan.Scan, 'scan line 1');
+  CheckEqual('hi', LScan.Text, 'line 1');
+  Check(LScan.Scan, 'scan line 2');
+  CheckEqual('bye', LScan.Text, 'line 2');
+  Check(not LScan.Scan, 'no more');
+end;
+
+procedure TestScannerCRLF;
+var
+  LS: IStream;
+  LScan: IScanner;
+begin
+  LS := BytesStreamFrom(TBytes.Create(
+    Ord('a'), 13, 10,
+    Ord('b'), 13, 10));
+  LScan := CreateScanner(LS as IReader, nil);
+  Check(LScan.Scan, 'scan 1');
+  CheckEqual('a', LScan.Text, 'strip CR');
+  Check(LScan.Scan, 'scan 2');
+  CheckEqual('b', LScan.Text, 'strip CR 2');
+  Check(not LScan.Scan, 'done');
+end;
+
+procedure TestScannerNoTrailingNewline;
+var
+  LS: IStream;
+  LScan: IScanner;
+begin
+  LS := BytesStreamFrom(TBytes.Create(
+    Ord('x'), Ord('y'), Ord('z')));
+  LScan := CreateScanner(LS as IReader, nil);
+  Check(LScan.Scan, 'scan last line');
+  CheckEqual('xyz', LScan.Text, 'no trailing newline');
+  Check(not LScan.Scan, 'done');
+end;
+
+procedure TestScannerEmpty;
+var
+  LS: IStream;
+  LScan: IScanner;
+begin
+  LS := BytesStreamFrom(nil);
+  LScan := CreateScanner(LS as IReader, nil);
+  Check(not LScan.Scan, 'empty input');
 end;
 
 begin
@@ -626,6 +755,11 @@ begin
   T.Run('ReadAtLeast', @TestReadAtLeast);
   T.Run('CopyBuffer', @TestCopyBuffer);
 
+  T.Run('UnreadByte then Read', @TestUnreadByteThenRead);
+  T.Run('BufReader zero size', @TestBufReaderZeroSize);
+  T.Run('BufWriter zero size', @TestBufWriterZeroSize);
+  T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
+
   T.Run('Pipe basic', @TestPipeBasic);
   T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
   T.Run('Pipe large data', @TestPipeLargeData);
@@ -636,6 +770,11 @@ begin
   T.Run('ByteScanner', @TestByteScanner);
   T.Run('StringWriter', @TestStringWriter);
   T.Run('SectionReader', @TestSectionReader);
+
+  T.Run('Scanner lines', @TestScannerLines);
+  T.Run('Scanner CRLF', @TestScannerCRLF);
+  T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
+  T.Run('Scanner empty', @TestScannerEmpty);
 
   T.Summary;
 end.
