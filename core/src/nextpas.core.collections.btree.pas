@@ -51,6 +51,7 @@ type
     FCount: SizeUInt;
     FCompare: TCompareFunc;
     FCompareData: Pointer;
+    FSizeDirty: Boolean;
 
     function NewNode(AIsLeaf: Boolean): PNode;
     procedure FreeNode(ANode: PNode);
@@ -201,6 +202,7 @@ begin
   FCompareData := ACompareData;
   FRoot := nil;
   FCount := 0;
+  FSizeDirty := False;
 end;
 
 destructor TBTreeMap.Destroy;
@@ -417,9 +419,7 @@ begin
   LOldCount := FCount;
   RemoveFromNode(FRoot, AKey);
   if FCount = LOldCount then Exit(False);
-  // Rebuild Size after structural changes
-  if FRoot <> nil then
-    SubtreeSize(FRoot);
+  FSizeDirty := True;
   if (FRoot <> nil) and (FRoot^.Count = 0) then
   begin
     if FRoot^.IsLeaf then
@@ -760,6 +760,11 @@ var
   LNode: PNode;
   LIdx, i: Int32;
 begin
+  if FSizeDirty and (FRoot <> nil) then
+  begin
+    SubtreeSize(FRoot);
+    FSizeDirty := False;
+  end;
   Result := 0;
   LNode := FRoot;
   while LNode <> nil do
@@ -790,6 +795,11 @@ var
   LChildSize: SizeUInt;
 begin
   if ARank >= FCount then Exit(False);
+  if FSizeDirty and (FRoot <> nil) then
+  begin
+    SubtreeSize(FRoot);
+    FSizeDirty := False;
+  end;
   LNode := FRoot;
   while LNode <> nil do
   begin
