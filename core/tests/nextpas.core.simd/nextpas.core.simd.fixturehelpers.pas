@@ -1,6 +1,5 @@
 unit nextpas.core.simd.fixturehelpers;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 interface

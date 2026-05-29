@@ -76,6 +76,7 @@ type
   TPlatformDirHandle = record
   {$IFDEF NEXTPAS_WINDOWS}
     FindHandle: HANDLE;
+    FindData: WIN32_FIND_DATAA;
     First: Boolean;
     Finished: Boolean;
   {$ELSE}

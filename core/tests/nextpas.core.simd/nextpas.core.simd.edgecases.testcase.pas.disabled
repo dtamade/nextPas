@@ -1,0 +1,580 @@
+unit nextpas.core.simd.edgecases.testcase;
+
+{$I ../../src/nextpas.core.settings.inc}
+{$CODEPAGE UTF8}
+
+// Keep parity with the original testcase compilation behavior.
+{$R-}{$Q-}
+
+interface
+
+uses
+  Math,
+  Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.utils,
+  nextpas.core.simd.ops,
+  nextpas.core.simd.scalar,
+  nextpas.core.simd.memutils;
+
+type
+
+
+  // 边界条件测试 - NaN, 无穷大, 溢出, 对齐
+  TTestCase_EdgeCases = class(TScalarBackendStatefulTestCase)
+  private
+    FSavedExceptionMask: TFPUExceptionMask;
+  protected
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    // NaN 处理测试
+    procedure Test_VecF32x4_Add_WithNaN;
+    procedure Test_VecF32x4_Mul_WithNaN;
+    procedure Test_VecF32x4_Compare_WithNaN;
+    procedure Test_SortNet4_F32_WithNaN;
+    procedure Test_SortNet4_F32_WithNaN_Descending;
+    
+    // Infinity 处理测试
+    procedure Test_VecF32x4_Add_WithInfinity;
+    procedure Test_VecF32x4_Mul_InfinityByZero;
+    procedure Test_VecF32x4_Div_ByZero;
+    procedure Test_VecF32x4_Div_InfinityByInfinity;
+    
+    // 整数边界测试
+    procedure Test_VecI32x4_Add_MaxValue;
+    procedure Test_VecI32x4_Sub_MinValue;
+    procedure Test_PrefixSum_I32_Overflow;
+    
+    // 极端对齐场景（MemEqual / SumBytes 在非对齐上的行为）
+    procedure Test_MemEqual_Unaligned_1Byte;
+    procedure Test_MemEqual_Unaligned_15Bytes;
+    procedure Test_MemFindByte_CrossPage;
+    procedure Test_SumBytes_OddSizes;
+
+    // 索引边界语义（utils）
+    procedure Test_Utils_VecF32x4Extract_IndexSaturation;
+    procedure Test_Utils_VecF32x4Insert_IndexSaturation;
+    procedure Test_Utils_MaskF32x4Test_IndexSaturation_NoException;
+
+    // 索引边界语义（facade / dispatch）
+    procedure Test_Facade_VecF32x4Extract_IndexSaturation;
+    procedure Test_Facade_VecF32x4Insert_IndexSaturation;
+    
+    // 数学函数边界
+    procedure Test_VecF32x4_Log_Zero;
+    procedure Test_VecF32x4_Log_Negative;
+    procedure Test_VecF32x4_Sqrt_Negative;
+    procedure Test_VecF32x4_Asin_OutOfRange;
+  end;
+
+implementation
+
+{ TTestCase_EdgeCases }
+
+procedure TTestCase_EdgeCases.SetUp;
+begin
+  FSavedExceptionMask := GetExceptionMask;
+  inherited SetUp;
+
+  // Save current FPU exception mask and mask all FP exceptions
+  // This allows testing NaN, Infinity, division by zero without triggering exceptions
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+end;
+
+procedure TTestCase_EdgeCases.TearDown;
+begin
+  // Restore original FPU exception mask
+  SetExceptionMask(FSavedExceptionMask);
+  inherited TearDown;
+end;
+
+// === NaN 处理测试 ===
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Add_WithNaN;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := 1.0; a.f[1] := NaN; a.f[2] := 3.0; a.f[3] := NaN;
+  b.f[0] := 2.0; b.f[1] := 2.0; b.f[2] := NaN; b.f[3] := NaN;
+  
+  r := a + b;
+  
+  AssertEquals('Normal + Normal', 3.0, r.f[0], 0.0001);
+  AssertTrue('NaN + Normal is NaN', IsNaN(r.f[1]));
+  AssertTrue('Normal + NaN is NaN', IsNaN(r.f[2]));
+  AssertTrue('NaN + NaN is NaN', IsNaN(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Mul_WithNaN;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := 2.0; a.f[1] := NaN; a.f[2] := 0.0; a.f[3] := NaN;
+  b.f[0] := 3.0; b.f[1] := 3.0; b.f[2] := NaN; b.f[3] := 0.0;
+  
+  r := a * b;
+  
+  AssertEquals('Normal * Normal', 6.0, r.f[0], 0.0001);
+  AssertTrue('NaN * Normal is NaN', IsNaN(r.f[1]));
+  AssertTrue('0 * NaN is NaN', IsNaN(r.f[2]));
+  AssertTrue('NaN * 0 is NaN', IsNaN(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Compare_WithNaN;
+var
+  a, b: TVecF32x4;
+begin
+  a.f[0] := NaN; a.f[1] := 1.0; a.f[2] := NaN; a.f[3] := 1.0;
+  b.f[0] := 1.0; b.f[1] := NaN; b.f[2] := NaN; b.f[3] := 1.0;
+  
+  // NaN comparisons should always be false (IEEE 754)
+  AssertFalse('NaN > Normal is false', a.f[0] > b.f[0]);
+  AssertFalse('Normal > NaN is false', a.f[1] > b.f[1]);
+  AssertFalse('NaN = NaN is false', a.f[2] = b.f[2]);
+  AssertTrue('Normal = Normal is true', a.f[3] = b.f[3]);
+end;
+
+procedure TTestCase_EdgeCases.Test_SortNet4_F32_WithNaN;
+var
+  a, r: TVecF32x4;
+begin
+  // 约定：升序排序时，NaN 放在末尾；非 NaN 部分保持有序
+  a.f[0] := 3.0; a.f[1] := NaN; a.f[2] := 1.0; a.f[3] := 2.0;
+  
+  r := SortNet4F32(a, True);
+  
+  AssertEquals('Sorted lane 0', 1.0, r.f[0], 0.0001);
+  AssertEquals('Sorted lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Sorted lane 2', 3.0, r.f[2], 0.0001);
+  AssertTrue('NaN should be placed at the tail', IsNaN(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_SortNet4_F32_WithNaN_Descending;
+var
+  a, r: TVecF32x4;
+begin
+  // 约定：降序排序时，NaN 仍放在末尾；非 NaN 部分保持降序
+  a.f[0] := 3.0; a.f[1] := NaN; a.f[2] := 1.0; a.f[3] := 2.0;
+
+  r := SortNet4F32(a, False);
+
+  AssertEquals('Sorted lane 0 (desc)', 3.0, r.f[0], 0.0001);
+  AssertEquals('Sorted lane 1 (desc)', 2.0, r.f[1], 0.0001);
+  AssertEquals('Sorted lane 2 (desc)', 1.0, r.f[2], 0.0001);
+  AssertTrue('NaN should be placed at the tail (desc)', IsNaN(r.f[3]));
+end;
+
+// === Infinity 处理测试 ===
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Add_WithInfinity;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := Infinity; a.f[1] := -Infinity; a.f[2] := Infinity; a.f[3] := 1.0;
+  b.f[0] := 1.0;       b.f[1] := 1.0;        b.f[2] := -Infinity; b.f[3] := Infinity;
+  
+  r := a + b;
+  
+  AssertTrue('+Inf + 1 = +Inf', IsInfinite(r.f[0]) and (r.f[0] > 0));
+  AssertTrue('-Inf + 1 = -Inf', IsInfinite(r.f[1]) and (r.f[1] < 0));
+  AssertTrue('+Inf + -Inf = NaN', IsNaN(r.f[2]));
+  AssertTrue('1 + Inf = +Inf', IsInfinite(r.f[3]) and (r.f[3] > 0));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Mul_InfinityByZero;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := Infinity; a.f[1] := -Infinity; a.f[2] := 0.0; a.f[3] := Infinity;
+  b.f[0] := 0.0;       b.f[1] := 0.0;        b.f[2] := Infinity; b.f[3] := 2.0;
+  
+  r := a * b;
+  
+  AssertTrue('Inf * 0 = NaN', IsNaN(r.f[0]));
+  AssertTrue('-Inf * 0 = NaN', IsNaN(r.f[1]));
+  AssertTrue('0 * Inf = NaN', IsNaN(r.f[2]));
+  AssertTrue('Inf * 2 = Inf', IsInfinite(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Div_ByZero;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := 1.0; a.f[1] := -1.0; a.f[2] := 0.0; a.f[3] := Infinity;
+  b.f[0] := 0.0; b.f[1] := 0.0;  b.f[2] := 0.0; b.f[3] := 0.0;
+  
+  r := a / b;
+  
+  AssertTrue('1/0 = +Inf', IsInfinite(r.f[0]) and (r.f[0] > 0));
+  AssertTrue('-1/0 = -Inf', IsInfinite(r.f[1]) and (r.f[1] < 0));
+  AssertTrue('0/0 = NaN', IsNaN(r.f[2]));
+  AssertTrue('Inf/0 = Inf', IsInfinite(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Div_InfinityByInfinity;
+var
+  a, b, r: TVecF32x4;
+begin
+  a.f[0] := Infinity; a.f[1] := -Infinity; a.f[2] := Infinity; a.f[3] := 1.0;
+  b.f[0] := Infinity; b.f[1] := Infinity;  b.f[2] := -Infinity; b.f[3] := Infinity;
+  
+  r := a / b;
+  
+  AssertTrue('Inf/Inf = NaN', IsNaN(r.f[0]));
+  AssertTrue('-Inf/Inf = NaN', IsNaN(r.f[1]));
+  AssertTrue('Inf/-Inf = NaN', IsNaN(r.f[2]));
+  AssertEquals('1/Inf = 0', 0.0, r.f[3], 0.0001);
+end;
+
+// === 整数边界测试 ===
+
+procedure TTestCase_EdgeCases.Test_VecI32x4_Add_MaxValue;
+var
+  a, b, r: TVecI32x4;
+begin
+  {$PUSH}{$R-}{$Q-}  // Disable range and overflow checking for wraparound test
+  a.i[0] := High(Int32); a.i[1] := High(Int32); a.i[2] := 0; a.i[3] := Low(Int32);
+  b.i[0] := 1;           b.i[1] := High(Int32); b.i[2] := High(Int32); b.i[3] := -1;
+  
+  r := a + b;
+  
+  // 溢出行为（环绕）
+  AssertEquals('MaxInt + 1 overflows', Low(Int32), r.i[0]);
+  AssertEquals('0 + MaxInt', High(Int32), r.i[2]);
+  AssertEquals('MinInt + -1 overflows', High(Int32), r.i[3]);
+  {$POP}
+end;
+
+procedure TTestCase_EdgeCases.Test_VecI32x4_Sub_MinValue;
+var
+  a, b, r: TVecI32x4;
+begin
+  {$PUSH}{$R-}{$Q-}  // Disable range and overflow checking for wraparound test
+  a.i[0] := Low(Int32); a.i[1] := 0; a.i[2] := High(Int32); a.i[3] := Low(Int32);
+  b.i[0] := 1;          b.i[1] := Low(Int32); b.i[2] := -1; b.i[3] := Low(Int32);
+  
+  r := a - b;
+  
+  // 溢出行为（环绕）
+  AssertEquals('MinInt - 1 overflows', High(Int32), r.i[0]);
+  AssertEquals('0 - MinInt overflows', Low(Int32), r.i[1]);
+  AssertEquals('MaxInt - -1 overflows', Low(Int32), r.i[2]);
+  {$POP}
+end;
+
+procedure TTestCase_EdgeCases.Test_PrefixSum_I32_Overflow;
+var
+  a, r: TVecI32x4;
+begin
+  {$PUSH}{$R-}{$Q-}  // Disable range and overflow checking for wraparound test
+  a.i[0] := High(Int32); a.i[1] := 1; a.i[2] := 1; a.i[3] := 1;
+  
+  r := PrefixSumI32x4(a, True);
+  
+  AssertEquals('First element', High(Int32), r.i[0]);
+  AssertEquals('Second element wraps', Low(Int32), r.i[1]);
+  AssertEquals('Third element wraps', Low(Int32) + 1, r.i[2]);
+  AssertEquals('Fourth element wraps', Low(Int32) + 2, r.i[3]);
+  {$POP}
+end;
+
+// === 极端对齐场景 ===
+
+procedure TTestCase_EdgeCases.Test_MemEqual_Unaligned_1Byte;
+var
+  buf1, buf2: array[0..64] of Byte;
+  i: Integer;
+begin
+  for i := 0 to 64 do
+  begin
+    buf1[i] := i mod 256;
+    buf2[i] := i mod 256;
+  end;
+  
+  // 各种偏移测试
+  AssertTrue('Aligned comparison', MemEqual(@buf1[0], @buf2[0], 64));
+  AssertTrue('Offset +1', MemEqual(@buf1[1], @buf2[1], 63));
+  AssertTrue('Offset +2', MemEqual(@buf1[2], @buf2[2], 62));
+  AssertTrue('Offset +3', MemEqual(@buf1[3], @buf2[3], 61));
+  AssertTrue('Offset +7', MemEqual(@buf1[7], @buf2[7], 57));
+end;
+
+procedure TTestCase_EdgeCases.Test_MemEqual_Unaligned_15Bytes;
+var
+  buf1, buf2: array[0..30] of Byte;
+  i: Integer;
+begin
+  for i := 0 to 30 do
+  begin
+    buf1[i] := i;
+    buf2[i] := i;
+  end;
+  
+  // 15 字节（不足一个 SSE 寄存器）
+  AssertTrue('15 bytes from offset 0', MemEqual(@buf1[0], @buf2[0], 15));
+  AssertTrue('15 bytes from offset 1', MemEqual(@buf1[1], @buf2[1], 15));
+  
+  // 修改一个字节
+  buf2[7] := 255;
+  AssertFalse('15 bytes with diff at middle', MemEqual(@buf1[0], @buf2[0], 15));
+end;
+
+procedure TTestCase_EdgeCases.Test_MemFindByte_CrossPage;
+var
+  buf: array[0..8191] of Byte;  // 8KB, 跨页
+  i: Integer;
+begin
+  FillByte(buf[0], 8192, 0);
+  
+  // 在各种位置放置目标字节
+  buf[0] := $FF;
+  AssertEquals('Find at start', 0, MemFindByte(@buf[0], 8192, $FF));
+  
+  buf[0] := 0;
+  buf[4095] := $FF;  // 页边界
+  AssertEquals('Find at page boundary', 4095, MemFindByte(@buf[0], 8192, $FF));
+  
+  buf[4095] := 0;
+  buf[4096] := $FF;  // 下一页开始
+  AssertEquals('Find at next page start', 4096, MemFindByte(@buf[0], 8192, $FF));
+  
+  buf[4096] := 0;
+  buf[8191] := $FF;  // 最后一个字节
+  AssertEquals('Find at last byte', 8191, MemFindByte(@buf[0], 8192, $FF));
+end;
+
+procedure TTestCase_EdgeCases.Test_SumBytes_OddSizes;
+var
+  buf: array[0..255] of Byte;
+  i: Integer;
+  sum: UInt64;
+begin
+  for i := 0 to 255 do
+    buf[i] := 1;
+  
+  // 各种奇数大小
+  sum := SumBytes(@buf[0], 1);
+  AssertEquals('Sum of 1 byte', 1, sum);
+  
+  sum := SumBytes(@buf[0], 7);
+  AssertEquals('Sum of 7 bytes', 7, sum);
+  
+  sum := SumBytes(@buf[0], 15);
+  AssertEquals('Sum of 15 bytes', 15, sum);
+  
+  sum := SumBytes(@buf[0], 31);
+  AssertEquals('Sum of 31 bytes', 31, sum);
+  
+  sum := SumBytes(@buf[0], 33);
+  AssertEquals('Sum of 33 bytes', 33, sum);
+end;
+
+procedure TTestCase_EdgeCases.Test_Utils_VecF32x4Extract_IndexSaturation;
+var
+  a: TVecF32x4;
+begin
+  a.f[0] := 10.0;
+  a.f[1] := 20.0;
+  a.f[2] := 30.0;
+  a.f[3] := 40.0;
+
+  AssertEquals('Extract(-1) should saturate to lane 0', 10.0, nextpas.core.simd.utils.VecF32x4Extract(a, -1), 0.0001);
+  AssertEquals('Extract(-99) should saturate to lane 0', 10.0, nextpas.core.simd.utils.VecF32x4Extract(a, -99), 0.0001);
+  AssertEquals('Extract(0) should read lane 0', 10.0, nextpas.core.simd.utils.VecF32x4Extract(a, 0), 0.0001);
+  AssertEquals('Extract(1) should read lane 1', 20.0, nextpas.core.simd.utils.VecF32x4Extract(a, 1), 0.0001);
+  AssertEquals('Extract(2) should read lane 2', 30.0, nextpas.core.simd.utils.VecF32x4Extract(a, 2), 0.0001);
+  AssertEquals('Extract(3) should read lane 3', 40.0, nextpas.core.simd.utils.VecF32x4Extract(a, 3), 0.0001);
+  AssertEquals('Extract(4) should saturate to lane 3', 40.0, nextpas.core.simd.utils.VecF32x4Extract(a, 4), 0.0001);
+  AssertEquals('Extract(99) should saturate to lane 3', 40.0, nextpas.core.simd.utils.VecF32x4Extract(a, 99), 0.0001);
+end;
+
+procedure TTestCase_EdgeCases.Test_Utils_VecF32x4Insert_IndexSaturation;
+var
+  a, r: TVecF32x4;
+begin
+  a.f[0] := 1.0;
+  a.f[1] := 2.0;
+  a.f[2] := 3.0;
+  a.f[3] := 4.0;
+
+  // Negative index -> lane 0
+  r := nextpas.core.simd.utils.VecF32x4Insert(a, 9.0, -1);
+  AssertEquals('Insert(-1) should write lane 0', 9.0, r.f[0], 0.0001);
+  AssertEquals('Insert(-1) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Insert(-1) should not change lane 2', 3.0, r.f[2], 0.0001);
+  AssertEquals('Insert(-1) should not change lane 3', 4.0, r.f[3], 0.0001);
+
+  // In-range index
+  r := nextpas.core.simd.utils.VecF32x4Insert(a, 9.0, 2);
+  AssertEquals('Insert(2) should not change lane 0', 1.0, r.f[0], 0.0001);
+  AssertEquals('Insert(2) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Insert(2) should write lane 2', 9.0, r.f[2], 0.0001);
+  AssertEquals('Insert(2) should not change lane 3', 4.0, r.f[3], 0.0001);
+
+  // Out-of-range index -> lane 3
+  r := nextpas.core.simd.utils.VecF32x4Insert(a, 9.0, 4);
+  AssertEquals('Insert(4) should not change lane 0', 1.0, r.f[0], 0.0001);
+  AssertEquals('Insert(4) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Insert(4) should not change lane 2', 3.0, r.f[2], 0.0001);
+  AssertEquals('Insert(4) should write lane 3', 9.0, r.f[3], 0.0001);
+end;
+
+procedure TTestCase_EdgeCases.Test_Utils_MaskF32x4Test_IndexSaturation_NoException;
+var
+  m: TMaskF32x4;
+  b: Boolean;
+  idx: Integer;
+begin
+  m := MaskF32x4Set(True, False, True, False);
+
+  // Negative index -> lane 0
+  idx := -1;
+  try
+    b := nextpas.core.simd.utils.MaskF32x4Test(m, idx);
+  except
+    on E: Exception do
+      Fail('MaskF32x4Test(-1) should not raise, but got: ' + E.ClassName + ': ' + E.Message);
+  end;
+  AssertTrue('MaskF32x4Test(-1) should saturate to lane 0', b);
+
+  // Out-of-range index -> lane 3
+  idx := 4;
+  try
+    b := nextpas.core.simd.utils.MaskF32x4Test(m, idx);
+  except
+    on E: Exception do
+      Fail('MaskF32x4Test(4) should not raise, but got: ' + E.ClassName + ': ' + E.Message);
+  end;
+  AssertFalse('MaskF32x4Test(4) should saturate to lane 3', b);
+end;
+
+procedure TTestCase_EdgeCases.Test_Facade_VecF32x4Extract_IndexSaturation;
+var
+  a: TVecF32x4;
+  idx: Integer;
+begin
+  a.f[0] := 10.0;
+  a.f[1] := 20.0;
+  a.f[2] := 30.0;
+  a.f[3] := 40.0;
+
+  // 注意：这里用 runtime 变量，避免 inline 函数在常量越界时触发编译期 range check。
+  idx := -1;
+  AssertEquals('Facade Extract(-1) should saturate to lane 0', 10.0, nextpas.core.simd.VecF32x4Extract(a, idx), 0.0001);
+  idx := -99;
+  AssertEquals('Facade Extract(-99) should saturate to lane 0', 10.0, nextpas.core.simd.VecF32x4Extract(a, idx), 0.0001);
+
+  AssertEquals('Facade Extract(0) should read lane 0', 10.0, nextpas.core.simd.VecF32x4Extract(a, 0), 0.0001);
+  AssertEquals('Facade Extract(1) should read lane 1', 20.0, nextpas.core.simd.VecF32x4Extract(a, 1), 0.0001);
+  AssertEquals('Facade Extract(2) should read lane 2', 30.0, nextpas.core.simd.VecF32x4Extract(a, 2), 0.0001);
+  AssertEquals('Facade Extract(3) should read lane 3', 40.0, nextpas.core.simd.VecF32x4Extract(a, 3), 0.0001);
+
+  idx := 4;
+  AssertEquals('Facade Extract(4) should saturate to lane 3', 40.0, nextpas.core.simd.VecF32x4Extract(a, idx), 0.0001);
+  idx := 99;
+  AssertEquals('Facade Extract(99) should saturate to lane 3', 40.0, nextpas.core.simd.VecF32x4Extract(a, idx), 0.0001);
+end;
+
+procedure TTestCase_EdgeCases.Test_Facade_VecF32x4Insert_IndexSaturation;
+var
+  a, r: TVecF32x4;
+  idx: Integer;
+begin
+  a.f[0] := 1.0;
+  a.f[1] := 2.0;
+  a.f[2] := 3.0;
+  a.f[3] := 4.0;
+
+  // Negative index -> lane 0
+  idx := -1;
+  r := nextpas.core.simd.VecF32x4Insert(a, 9.0, idx);
+  AssertEquals('Facade Insert(-1) should write lane 0', 9.0, r.f[0], 0.0001);
+  AssertEquals('Facade Insert(-1) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Facade Insert(-1) should not change lane 2', 3.0, r.f[2], 0.0001);
+  AssertEquals('Facade Insert(-1) should not change lane 3', 4.0, r.f[3], 0.0001);
+
+  // In-range index
+  r := nextpas.core.simd.VecF32x4Insert(a, 9.0, 2);
+  AssertEquals('Facade Insert(2) should not change lane 0', 1.0, r.f[0], 0.0001);
+  AssertEquals('Facade Insert(2) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Facade Insert(2) should write lane 2', 9.0, r.f[2], 0.0001);
+  AssertEquals('Facade Insert(2) should not change lane 3', 4.0, r.f[3], 0.0001);
+
+  // Out-of-range index -> lane 3
+  idx := 4;
+  r := nextpas.core.simd.VecF32x4Insert(a, 9.0, idx);
+  AssertEquals('Facade Insert(4) should not change lane 0', 1.0, r.f[0], 0.0001);
+  AssertEquals('Facade Insert(4) should not change lane 1', 2.0, r.f[1], 0.0001);
+  AssertEquals('Facade Insert(4) should not change lane 2', 3.0, r.f[2], 0.0001);
+  AssertEquals('Facade Insert(4) should write lane 3', 9.0, r.f[3], 0.0001);
+end;
+
+// === 数学函数边界 ===
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Log_Zero;
+var
+  a, r: TVecF32x4;
+begin
+  a.f[0] := 0.0; a.f[1] := 1.0; a.f[2] := 2.718281828; a.f[3] := 0.0;
+  
+  r := VecF32x4Log(a);
+  
+  AssertTrue('log(0) = -Inf', IsInfinite(r.f[0]) and (r.f[0] < 0));
+  AssertEquals('log(1) = 0', 0.0, r.f[1], 0.0001);
+  AssertEquals('log(e) = 1', 1.0, r.f[2], 0.0001);
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Log_Negative;
+var
+  a, r: TVecF32x4;
+begin
+  a.f[0] := -1.0; a.f[1] := -0.5; a.f[2] := 1.0; a.f[3] := -Infinity;
+  
+  r := VecF32x4Log(a);
+  
+  AssertTrue('log(-1) = NaN', IsNaN(r.f[0]));
+  AssertTrue('log(-0.5) = NaN', IsNaN(r.f[1]));
+  AssertEquals('log(1) = 0', 0.0, r.f[2], 0.0001);
+  AssertTrue('log(-Inf) = NaN', IsNaN(r.f[3]));
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Sqrt_Negative;
+var
+  a, r: TVecF32x4;
+begin
+  a.f[0] := -1.0; a.f[1] := 0.0; a.f[2] := 4.0; a.f[3] := -0.0;
+  
+  r.f[0] := Sqrt(a.f[0]);
+  r.f[1] := Sqrt(a.f[1]);
+  r.f[2] := Sqrt(a.f[2]);
+  r.f[3] := Sqrt(a.f[3]);
+  
+  AssertTrue('sqrt(-1) = NaN', IsNaN(r.f[0]));
+  AssertEquals('sqrt(0) = 0', 0.0, r.f[1], 0.0001);
+  AssertEquals('sqrt(4) = 2', 2.0, r.f[2], 0.0001);
+  AssertEquals('sqrt(-0) = 0', 0.0, r.f[3], 0.0001);
+end;
+
+procedure TTestCase_EdgeCases.Test_VecF32x4_Asin_OutOfRange;
+var
+  a, r: TVecF32x4;
+begin
+  a.f[0] := 2.0;  // 超出范围
+  a.f[1] := -2.0; // 超出范围
+  a.f[2] := 0.5;  // 正常范围
+  a.f[3] := 1.0;  // 边界
+  
+  r := VecF32x4Asin(a);
+  
+  AssertTrue('asin(2) = NaN', IsNaN(r.f[0]));
+  AssertTrue('asin(-2) = NaN', IsNaN(r.f[1]));
+  AssertEquals('asin(0.5)', Pi/6, r.f[2], 0.0001);
+  AssertEquals('asin(1) = pi/2', Pi/2, r.f[3], 0.0001);
+end;
+
+initialization
+  RegisterTest(TTestCase_EdgeCases);
+
+end.

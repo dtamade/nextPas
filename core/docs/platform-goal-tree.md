@@ -2,14 +2,23 @@
 
 ## 定位
 
-nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.core.platform`）是编译器
-自身的运行时平台基座，承担所有 OS/CPU 交互的底层职责。
+nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.core.platform`）是
+**我们自有体系的通用 OS 底座** —— 既是未来自有 system 的地基，也是 sysroot 兼容
+路径的共享底座。承担所有 OS/CPU 交互的底层职责。
 
 设计原则：
-- 对 FPC 代码保持最大兼容（类型、常量、命名）
+- **不对 FPC 兼容。** nextpas 兼容 FPC 项目只通过 sysroot（见 memory:
+  fpc-sysroot-mechanism）。platform 层是我们自己的体系，按"任何 system 都需要的
+  OS 原语"建设，不为 FPC 的类型/常量/命名服务。
 - 禁止 uses FPC 平台/RTL 绑定单元，所有 OS API 自行声明
 - LLVM 处理 codegen/ABI，platform 层只关心 OS API surface 和 struct layout
 - 追求正确性、先进性、优雅性、可维护性与性能
+- 进 platform 的判据：通用 OS 原语（syscall/mmap/线程/时间/文件/信号…）✅；
+  FPC 专属形状（fpc_*、TAnsiRec 偏移、baseunix 命名）❌ → 属 sysroot 侧
+
+> 注：历史上 G1 阶段曾以"FPC ABI 兼容"为 struct 布局的对照基准。这个**对照**仍有
+> 价值（确认 layout 正确，如 TPlatformLinuxStat 与内核 struct 一致），但**目标**
+> 不是兼容 FPC——是 ABI 正确。措辞已校正。
 
 ## Target 矩阵
 
@@ -120,7 +129,7 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.time
 - [x] platform.sync
 - [x] platform.thread
-- [x] platform.files (文件/目录操作, 11 tests)
+- [x] platform.files (文件/目录操作, 17 tests; symlink/readlink, Windows dir backend)
 - [x] platform.io (I/O 多路复用: epoll/kqueue/WSAPoll, 6 tests)
 - [x] platform.net (socket 统一抽象, 5 tests)
 - [x] platform.process (进程管理: fork+execve/CreateProcess, 5 tests)
@@ -133,7 +142,7 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] platform.console (终端检测: isatty/GetConsoleMode, ANSI 启用, 5 tests)
 - [x] platform.error (错误码转字符串: strerror/FormatMessage, 5 tests)
 - [x] platform.path (路径操作: join/dirname/basename/ext/normalize, 10 tests)
-- [x] platform.fs (文件系统便利: exists/is_file/is_dir/size/temp_dir, 6 tests)
+- [x] platform.fs (文件系统便利: exists/is_file/is_dir/size/temp_dir/walk, 12 tests)
 - [x] platform.args (命令行参数: count/get/exe_path, 5 tests)
 - [x] 每个模块无内存泄漏验证 (heaptrc: 18 modules, 0 leaks)
 

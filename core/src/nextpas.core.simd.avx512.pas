@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.backend.priority;
 
@@ -23,7 +24,7 @@ procedure RegisterAVX512Backend;
 
 // Pure logical predicate: returns True iff the CPU has all sub-features required by this backend.
 // NOTE: This does NOT include OS enabling checks (XCR0), which are handled separately via HasAVX512.
-function X86HasAVX512BackendRequiredFeatures(const aX86: TX86Features): Boolean; inline;
+function X86HasAVX512BackendRequiredFeatures(const AX86: TX86Features): Boolean; inline;
 
 // === AVX-512 门面函数声明 ===
 
@@ -48,7 +49,6 @@ procedure ToUpperAscii_AVX512(p: Pointer; len: SizeUInt);
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.avx2; // Fallback for some operations
 
@@ -114,9 +114,9 @@ uses
 
 // === Backend Registration ===
 
-function X86HasAVX512BackendRequiredFeatures(const aX86: TX86Features): Boolean; inline;
+function X86HasAVX512BackendRequiredFeatures(const AX86: TX86Features): Boolean; inline;
 begin
-  Result := nextpas.core.simd.cpuinfo.base.X86HasAVX512BackendRequiredFeatures(aX86);
+  Result := nextpas.core.simd.cpuinfo.base.X86HasAVX512BackendRequiredFeatures(AX86);
 end;
 
 {$I nextpas.core.simd.avx512.register.inc}

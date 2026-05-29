@@ -1,6 +1,7 @@
 unit np_hir_builder;
 
 {$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
 
 interface
 
@@ -8,6 +9,26 @@ uses
   np_semantic_model, np_hir_types, np_hir_model;
 
 type
+  TExprStack = record
+    Values: array of THIRValueId;
+    Types: array of THIRTypeId;
+    Count: LongInt;
+    procedure Init;
+    procedure Push(AVal: THIRValueId);
+    procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
+    function Pop: THIRValueId;
+    function PopTyped(out AType: THIRTypeId): THIRValueId;
+    function PeekType: THIRTypeId;
+  end;
+
+  TAllocaEntry = record
+    Name: string;
+    Value: THIRValueId;
+    TypeId: THIRTypeId;
+    RecordSlots: LongInt;
+    IsVarParam: Boolean;
+  end;
+
   THIRBuilder = class
   private
     FSemaModel: TSemanticModel;
@@ -17,11 +38,8 @@ type
     FBlockTerminated: Boolean;
     FSavedFuncId: THIRFuncId;
     FSavedBlockId: THIRBlockId;
-    FSavedAllocaNames: array of string;
-    FSavedAllocaValues: array of THIRValueId;
-    FSavedAllocaTypes: array of THIRTypeId;
+    FSavedAllocas: array of TAllocaEntry;
     FSavedAllocaCount: LongInt;
-    FSavedVarParamFlags: array of Boolean;
     FSavedBlockNames: array of string;
     FSavedBlockIds: array of THIRBlockId;
     FSavedBlockCount: LongInt;
@@ -34,16 +52,15 @@ type
     FPendingObjectFreeHeapRelease: Boolean;
     FSretValueId: THIRValueId;
 
-    FAllocaNames: array of string;
-    FAllocaValues: array of THIRValueId;
-    FAllocaTypes: array of THIRTypeId;
+    FAllocas: array of TAllocaEntry;
     FAllocaCount: LongInt;
-    FRecordAllocaSlots: array of LongInt;
-    FVarParamFlags: array of Boolean;
 
     FGlobalNames: array of string;
     FGlobalTypes: array of THIRTypeId;
     FGlobalCount: LongInt;
+    FGlobalRefCache: array of string;
+    FGlobalRefValues: array of THIRValueId;
+    FGlobalRefCount: LongInt;
     FInStartFunc: Boolean;
     FEntryBlockId: THIRBlockId;
 
@@ -61,6 +78,7 @@ type
     procedure RegisterAllocaEntry(const AName: string; AValue: THIRValueId;
       AType: THIRTypeId; AIsVarParam: Boolean);
     function FindAlloca(const AName: string): THIRValueId;
+    function FindLocalAlloca(const AName: string): THIRValueId;
     function FindAllocaType(const AName: string): THIRTypeId;
     function IsVarParamAlloca(const AName: string): Boolean;
     function GetIntType: THIRTypeId;
@@ -77,6 +95,27 @@ type
     procedure EmitStore(AType: THIRTypeId; AVal, AAddr: THIRValueId);
 
     function ParseIntBlob(const ABlob: string): THIRValueId;
+    procedure BlobInt(var S: TExprStack; const AArg: string);
+    procedure BlobNull(var S: TExprStack);
+    procedure BlobVar(var S: TExprStack; const AArg: string);
+    procedure BlobVarRef(var S: TExprStack; const AArg: string);
+    procedure BlobRecVar(var S: TExprStack; const AArg: string);
+    procedure BlobIs(var S: TExprStack; const AArg: string);
+    procedure BlobArrLoad(var S: TExprStack);
+    procedure BlobStrCharLoad(var S: TExprStack; const AArg: string);
+    procedure BlobRLoad(var S: TExprStack; const AArg: string);
+    procedure BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
+      const AIntrinsic: string);
+    procedure BlobBinOp(var S: TExprStack; AKind: THIRInstrKind);
+    procedure BlobCmp(var S: TExprStack; const AArg: string);
+    procedure BlobZext(var S: TExprStack);
+    procedure BlobCall(var S: TExprStack; const AArg: string);
+    procedure BlobStrVar(var S: TExprStack; const AArg: string);
+    procedure BlobStrLit(var S: TExprStack; const AArg: string);
+    procedure BlobStrCmpPos(var S: TExprStack; const AArg, AIntrinsic: string);
+    procedure BlobArrLoadVar(var S: TExprStack; const AArg: string);
+    procedure BlobField(var S: TExprStack; const AArg: string);
+    procedure BlobVcall(var S: TExprStack; AArg: string);
     procedure ProcessNode(const ANode: TTypedHirNode);
     procedure ProcessVarDecl(const ANode: TTypedHirNode);
     procedure ProcessAssign(const ANode: TTypedHirNode);
@@ -125,6 +164,58 @@ implementation
 uses
   SysUtils;
 
+procedure TExprStack.Init;
+begin
+  Count := 0;
+  SetLength(Values, 0);
+  SetLength(Types, 0);
+end;
+
+procedure TExprStack.Push(AVal: THIRValueId);
+begin
+  if Count >= Length(Values) then
+  begin
+    SetLength(Values, Count + 16);
+    SetLength(Types, Count + 16);
+  end;
+  Values[Count] := AVal;
+  Types[Count] := 0;
+  Inc(Count);
+end;
+
+procedure TExprStack.PushTyped(AVal: THIRValueId; AType: THIRTypeId);
+begin
+  if Count >= Length(Values) then
+  begin
+    SetLength(Values, Count + 16);
+    SetLength(Types, Count + 16);
+  end;
+  Values[Count] := AVal;
+  Types[Count] := AType;
+  Inc(Count);
+end;
+
+function TExprStack.Pop: THIRValueId;
+begin
+  if Count = 0 then Exit(0);
+  Dec(Count);
+  Result := Values[Count];
+end;
+
+function TExprStack.PopTyped(out AType: THIRTypeId): THIRValueId;
+begin
+  if Count = 0 then begin AType := 0; Exit(0); end;
+  Dec(Count);
+  Result := Values[Count];
+  AType := Types[Count];
+end;
+
+function TExprStack.PeekType: THIRTypeId;
+begin
+  if Count = 0 then Exit(0);
+  Result := Types[Count - 1];
+end;
+
 var
   GIntType: THIRTypeId = 0;
   GBoolType: THIRTypeId = 0;
@@ -154,6 +245,7 @@ begin
   FAllocaCount := 0;
   FBlockCount := 0;
   FGlobalCount := 0;
+  FGlobalRefCount := 0;
   FInStartFunc := True;
   FEntryBlockId := 0;
   FPendingParamCount := 0;
@@ -162,10 +254,7 @@ begin
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
   FPendingObjectFreeHeapRelease := False;
-  SetLength(FAllocaNames, 0);
-  SetLength(FAllocaValues, 0);
-  SetLength(FRecordAllocaSlots, 0);
-  SetLength(FVarParamFlags, 0);
+  SetLength(FAllocas, 0);
   SetLength(FGlobalNames, 0);
   SetLength(FGlobalTypes, 0);
   SetLength(FBlockNames, 0);
@@ -253,39 +342,37 @@ begin
   else
     EmitInstr(Instr);
 
-  if FAllocaCount >= Length(FAllocaNames) then
-  begin
-    SetLength(FAllocaNames, FAllocaCount + 32);
-    SetLength(FAllocaValues, FAllocaCount + 32);
-    SetLength(FAllocaTypes, FAllocaCount + 32);
-    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-    SetLength(FVarParamFlags, FAllocaCount + 32);
-  end;
-  FAllocaNames[FAllocaCount] := AName;
-  FAllocaValues[FAllocaCount] := Instr.ResultId;
-  FAllocaTypes[FAllocaCount] := AType;
-  FRecordAllocaSlots[FAllocaCount] := 0;
-  FVarParamFlags[FAllocaCount] := False;
+  if FAllocaCount >= Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
+  FAllocas[FAllocaCount].Name := AName;
+  FAllocas[FAllocaCount].Value := Instr.ResultId;
+  FAllocas[FAllocaCount].TypeId := AType;
+  FAllocas[FAllocaCount].RecordSlots := 0;
+  FAllocas[FAllocaCount].IsVarParam := False;
   Inc(FAllocaCount);
 end;
 
 procedure THIRBuilder.RegisterAllocaEntry(const AName: string;
   AValue: THIRValueId; AType: THIRTypeId; AIsVarParam: Boolean);
 begin
-  if FAllocaCount >= Length(FAllocaNames) then
-  begin
-    SetLength(FAllocaNames, FAllocaCount + 32);
-    SetLength(FAllocaValues, FAllocaCount + 32);
-    SetLength(FAllocaTypes, FAllocaCount + 32);
-    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-    SetLength(FVarParamFlags, FAllocaCount + 32);
-  end;
-  FAllocaNames[FAllocaCount] := AName;
-  FAllocaValues[FAllocaCount] := AValue;
-  FAllocaTypes[FAllocaCount] := AType;
-  FRecordAllocaSlots[FAllocaCount] := 0;
-  FVarParamFlags[FAllocaCount] := AIsVarParam;
+  if FAllocaCount >= Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
+  FAllocas[FAllocaCount].Name := AName;
+  FAllocas[FAllocaCount].Value := AValue;
+  FAllocas[FAllocaCount].TypeId := AType;
+  FAllocas[FAllocaCount].RecordSlots := 0;
+  FAllocas[FAllocaCount].IsVarParam := AIsVarParam;
   Inc(FAllocaCount);
+end;
+
+function THIRBuilder.FindLocalAlloca(const AName: string): THIRValueId;
+var
+  I: LongInt;
+begin
+  for I := 0 to FAllocaCount - 1 do
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].Value);
+  Result := 0;
 end;
 
 function THIRBuilder.FindAlloca(const AName: string): THIRValueId;
@@ -294,8 +381,11 @@ var
   Instr: THIRInstr;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FAllocaValues[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].Value);
+  for I := 0 to FGlobalRefCount - 1 do
+    if SameText(FGlobalRefCache[I], AName) then
+      Exit(FGlobalRefValues[I]);
   for I := 0 to FGlobalCount - 1 do
     if SameText(FGlobalNames[I], AName) then
     begin
@@ -306,6 +396,14 @@ begin
       Instr.IntrinsicName := 'global_ref';
       Instr.CallTarget := AName;
       EmitInstr(Instr);
+      if FGlobalRefCount >= Length(FGlobalRefCache) then
+      begin
+        SetLength(FGlobalRefCache, FGlobalRefCount + 16);
+        SetLength(FGlobalRefValues, FGlobalRefCount + 16);
+      end;
+      FGlobalRefCache[FGlobalRefCount] := AName;
+      FGlobalRefValues[FGlobalRefCount] := Instr.ResultId;
+      Inc(FGlobalRefCount);
       Exit(Instr.ResultId);
     end;
   Result := 0;
@@ -316,8 +414,8 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FAllocaTypes[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].TypeId);
   Result := 0;
 end;
 
@@ -326,8 +424,8 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FVarParamFlags[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].IsVarParam);
   Result := False;
 end;
 
@@ -405,63 +503,576 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.BlobInt(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + AArg;
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobNull(var S: TExprStack);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'null';
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, GetPtrType);
+end;
+
+procedure THIRBuilder.BlobVar(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V: THIRValueId;
+  ConstVal: Int64;
+begin
+  V := FindAlloca(AArg);
+  if (V = 0) and (Pos('.', AArg) > 0) then
+  begin
+    EnsureAlloca(AArg, GetIntType);
+    V := FindAlloca(AArg);
+  end;
+  if V <> 0 then
+  begin
+    if IsVarParamAlloca(AArg) then
+    begin
+      V := EmitLoad(GetPtrType, V);
+      S.Push(EmitLoad(GetIntType, V));
+    end
+    else if FindAllocaType(AArg) = GetPtrType then
+      S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+    else
+      S.Push(EmitLoad(GetIntType, V));
+  end
+  else if FSemaModel.LookupConstValue(AArg, ConstVal) then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IntToStr(ConstVal);
+    EmitInstr(Instr);
+    S.Push(Instr.ResultId);
+  end
+  else
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikCall;
+    Instr.TypeId := GetIntType;
+    Instr.CallTarget := AArg;
+    EmitInstr(Instr);
+    S.Push(Instr.ResultId);
+  end;
+end;
+
+procedure THIRBuilder.BlobVarRef(var S: TExprStack; const AArg: string);
+var
+  V: THIRValueId;
+begin
+  V := FindAlloca(AArg);
+  if V <> 0 then
+  begin
+    if IsVarParamAlloca(AArg) then
+      S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+    else
+      S.PushTyped(V, GetPtrType);
+  end;
+end;
+
+procedure THIRBuilder.BlobRecVar(var S: TExprStack; const AArg: string);
+var
+  V: THIRValueId;
+begin
+  V := FindAlloca(AArg);
+  if V <> 0 then
+    S.PushTyped(V, GetPtrType);
+end;
+
+procedure THIRBuilder.BlobIs(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+begin
+  Rhs := S.Pop;
+  EnsureVmtForClass(AArg);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:0';
+  EmitInstr(Instr);
+  V := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(Rhs);
+  Instr.Operands[1] := MakeOperand(V);
+  EmitInstr(Instr);
+  V := EmitLoad(GetPtrType, Instr.ResultId);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'is_instance';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
+  Instr.CallTarget := AArg;
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobArrLoad(var S: TExprStack);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+begin
+  Rhs := S.Pop;
+  V := S.Pop;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.BlobStrCharLoad(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs, SlotIdx: THIRValueId;
+begin
+  Rhs := S.Pop;
+  V := FindAlloca(AArg + '$ptr');
+  if V = 0 then Exit;
+  V := EmitLoad(GetPtrType, V);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:1';
+  EmitInstr(Instr);
+  SlotIdx := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikSub;
+  Instr.TypeId := GetIntType;
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(Rhs);
+  Instr.Operands[1] := MakeOperand(SlotIdx);
+  EmitInstr(Instr);
+  Rhs := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i8';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  V := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'load_zext_i8';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeOperand(V);
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobRLoad(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, IdxVal: THIRValueId;
+  RecName: string;
+  FieldIdx, ValCode, SpacePos: LongInt;
+begin
+  SpacePos := Pos(' ', AArg);
+  if SpacePos = 0 then Exit;
+  RecName := Copy(AArg, 1, SpacePos - 1);
+  Val(Copy(AArg, SpacePos + 1, Length(AArg)), FieldIdx, ValCode);
+  if ValCode <> 0 then Exit;
+  V := FindAlloca(RecName);
+  if V = 0 then Exit;
+  if FindAllocaType(RecName) = GetPtrType then
+    V := EmitLoad(GetPtrType, V);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
+  EmitInstr(Instr);
+  IdxVal := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(IdxVal);
+  EmitInstr(Instr);
+  S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
+  const AIntrinsic: string);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := AKind;
+  Instr.TypeId := GetIntType;
+  if AIntrinsic <> '' then
+    Instr.IntrinsicName := AIntrinsic;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeOperand(S.Pop);
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobBinOp(var S: TExprStack; AKind: THIRInstrKind);
+var
+  Lhs, Rhs: THIRValueId;
+begin
+  Rhs := S.Pop;
+  Lhs := S.Pop;
+  S.Push(EmitBinOp(AKind, GetIntType, Lhs, Rhs));
+end;
+
+procedure THIRBuilder.BlobCmp(var S: TExprStack; const AArg: string);
+var
+  Lhs, Rhs: THIRValueId;
+  LhsType, RhsType: THIRTypeId;
+  Kind: THIRInstrKind;
+begin
+  Rhs := S.PopTyped(RhsType);
+  Lhs := S.PopTyped(LhsType);
+  if AArg = 'eq' then Kind := hikCmpEq
+  else if AArg = 'ne' then Kind := hikCmpNe
+  else if AArg = 'slt' then Kind := hikCmpLt
+  else if AArg = 'sle' then Kind := hikCmpLe
+  else if AArg = 'sgt' then Kind := hikCmpGt
+  else if AArg = 'sge' then Kind := hikCmpGe
+  else Exit;
+  S.Push(EmitCmpOp(Kind, GetBoolType, Lhs, Rhs, LhsType, RhsType));
+end;
+
+procedure THIRBuilder.BlobZext(var S: TExprStack);
+begin
+  BlobUnaryOp(S, hikZext, '');
+end;
+
+procedure THIRBuilder.BlobCall(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  CallArgs: array of THIRValueId;
+  CallArgTypes: array of THIRTypeId;
+  Target, Rest: string;
+  ArgCount, J, SpacePos: LongInt;
+begin
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+  begin
+    Target := Copy(AArg, 1, SpacePos - 1);
+    Rest := Copy(AArg, SpacePos + 1, Length(AArg));
+    ArgCount := StrToIntDef(Rest, 0);
+  end
+  else
+  begin
+    Target := AArg;
+    ArgCount := 0;
+  end;
+  SetLength(CallArgs, ArgCount);
+  SetLength(CallArgTypes, ArgCount);
+  for J := ArgCount - 1 downto 0 do
+    CallArgs[J] := S.PopTyped(CallArgTypes[J]);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := FModule.FindFunctionReturnType(Target);
+  if Instr.TypeId = 0 then
+  begin
+    Instr.TypeId := GetIntType;
+    for J := 0 to FFwdFuncCount - 1 do
+      if FFwdFuncNames[J] = Target then
+      begin
+        Instr.TypeId := FFwdFuncRetTypes[J];
+        Break;
+      end;
+  end;
+  Instr.CallTarget := Target;
+  SetLength(Instr.Operands, ArgCount);
+  for J := 0 to ArgCount - 1 do
+  begin
+    if CallArgTypes[J] <> 0 then
+      Instr.Operands[J] := MakeTypedOperand(CallArgs[J], CallArgTypes[J])
+    else
+      Instr.Operands[J] := MakeOperand(CallArgs[J]);
+  end;
+  EmitInstr(Instr);
+  if FModule.Types.GetType(Instr.TypeId).Kind = htkPointer then
+    S.PushTyped(Instr.ResultId, Instr.TypeId)
+  else
+    S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobStrVar(var S: TExprStack; const AArg: string);
+var
+  V: THIRValueId;
+begin
+  V := FindAlloca(AArg + '$ptr');
+  if V <> 0 then
+    S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
+  V := FindAlloca(AArg + '$len');
+  if V <> 0 then
+    S.Push(EmitLoad(GetIntType, V));
+end;
+
+procedure THIRBuilder.BlobStrLit(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'str_const';
+  Instr.CallTarget := AArg;
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, GetPtrType);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(Length(AArg) - 2);
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobStrCmpPos(var S: TExprStack;
+  const AArg, AIntrinsic: string);
+var
+  Instr: THIRInstr;
+  Rhs, V, SlotIdx, ExtraArgCount: THIRValueId;
+begin
+  Rhs := S.Pop;
+  V := S.Pop;
+  SlotIdx := S.Pop;
+  ExtraArgCount := S.Pop;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := AIntrinsic;
+  if AIntrinsic = 'str_cmp' then
+    Instr.CallTarget := AArg;
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
+  Instr.Operands[1] := MakeOperand(SlotIdx);
+  Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
+  Instr.Operands[3] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
+procedure THIRBuilder.BlobArrLoadVar(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+begin
+  Rhs := S.Pop;
+  V := FindAlloca(AArg + '$ptr');
+  if V = 0 then
+  begin
+    S.Push(Rhs);
+    Exit;
+  end;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetPtrType;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeOperand(V);
+  EmitInstr(Instr);
+  V := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.BlobField(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+  Target, Rest: string;
+  FieldIdx, SpacePos: LongInt;
+begin
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+  begin
+    Target := Copy(AArg, 1, SpacePos - 1);
+    Rest := Copy(AArg, SpacePos + 1, Length(AArg));
+    SpacePos := Pos(' ', Rest);
+    if SpacePos > 0 then
+      FieldIdx := StrToIntDef(Copy(Rest, 1, SpacePos - 1), 0)
+    else
+      FieldIdx := StrToIntDef(Rest, 0);
+  end
+  else
+  begin
+    Target := AArg;
+    Rest := '';
+    FieldIdx := 0;
+  end;
+  V := FindAlloca(Target);
+  if V = 0 then Exit;
+  V := EmitLoad(GetPtrType, V);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
+  EmitInstr(Instr);
+  Rhs := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  if Pos(' p', Rest) > 0 then
+    S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
+  else
+    S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.BlobVcall(var S: TExprStack; AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+  VcallArgs: array of THIRValueId;
+  VcallArgTypes: array of THIRTypeId;
+  RetType: THIRTypeId;
+  SlotIdx, ExtraArgCount, VcallI, SpacePos: LongInt;
+begin
+  RetType := GetIntType;
+  if (Length(AArg) > 2) and (AArg[Length(AArg)] = 'p') and
+    (AArg[Length(AArg) - 1] = ' ') then
+  begin
+    RetType := GetPtrType;
+    AArg := Copy(AArg, 1, Length(AArg) - 2);
+  end;
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+  begin
+    SlotIdx := StrToIntDef(Copy(AArg, 1, SpacePos - 1), 0);
+    ExtraArgCount := StrToIntDef(Copy(AArg, SpacePos + 1, Length(AArg)), 0);
+  end
+  else
+  begin
+    SlotIdx := StrToIntDef(AArg, 0);
+    ExtraArgCount := 0;
+  end;
+  SetLength(VcallArgs, ExtraArgCount);
+  SetLength(VcallArgTypes, ExtraArgCount);
+  for VcallI := ExtraArgCount - 1 downto 0 do
+    VcallArgs[VcallI] := S.PopTyped(VcallArgTypes[VcallI]);
+  Rhs := S.Pop;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:0';
+  EmitInstr(Instr);
+  V := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(Rhs);
+  Instr.Operands[1] := MakeOperand(V);
+  EmitInstr(Instr);
+  V := EmitLoad(GetPtrType, Instr.ResultId);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx + 1);
+  EmitInstr(Instr);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Instr.ResultId - 1);
+  EmitInstr(Instr);
+  V := EmitLoad(GetPtrType, Instr.ResultId);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := RetType;
+  Instr.IntrinsicName := 'vcall';
+  SetLength(Instr.Operands, 2 + ExtraArgCount);
+  Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(Rhs, GetPtrType);
+  for VcallI := 0 to ExtraArgCount - 1 do
+  begin
+    if VcallArgTypes[VcallI] <> 0 then
+      Instr.Operands[2 + VcallI] := MakeTypedOperand(VcallArgs[VcallI], VcallArgTypes[VcallI])
+    else
+      Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
+  end;
+  EmitInstr(Instr);
+  if RetType = GetPtrType then
+    S.PushTyped(Instr.ResultId, GetPtrType)
+  else
+    S.Push(Instr.ResultId);
+end;
+
 function THIRBuilder.ParseIntBlob(const ABlob: string): THIRValueId;
 var
-  Stack: array of THIRValueId;
-  StackTypes: array of THIRTypeId;
-  StackCount: LongInt;
+  S: TExprStack;
   Lines: array of string;
   LineCount, I, SpacePos: LongInt;
   Line, Token, Arg: string;
-  Lhs, Rhs, V: THIRValueId;
-  Instr: THIRInstr;
-  ArgCount, J: LongInt;
-  CallArgs: array of THIRValueId;
-  CallArgTypes: array of THIRTypeId;
-  ConstVal: Int64;
-  SlotIdx, ExtraArgCount, VcallI: LongInt;
-  VcallArgs: array of THIRValueId;
-  VcallArgTypes: array of THIRTypeId;
-  CmpLhsType, CmpRhsType: THIRTypeId;
-  RecName: string;
-  FieldIdx, ValCode: LongInt;
-  IdxVal: THIRValueId;
-
-  procedure Push(AVal: THIRValueId);
-  begin
-    if StackCount >= Length(Stack) then
-    begin
-      SetLength(Stack, StackCount + 16);
-      SetLength(StackTypes, StackCount + 16);
-    end;
-    Stack[StackCount] := AVal;
-    StackTypes[StackCount] := 0;
-    Inc(StackCount);
-  end;
-
-  procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
-  begin
-    if StackCount >= Length(Stack) then
-    begin
-      SetLength(Stack, StackCount + 16);
-      SetLength(StackTypes, StackCount + 16);
-    end;
-    Stack[StackCount] := AVal;
-    StackTypes[StackCount] := AType;
-    Inc(StackCount);
-  end;
-
-  function Pop: THIRValueId;
-  begin
-    if StackCount = 0 then Exit(0);
-    Dec(StackCount);
-    Result := Stack[StackCount];
-  end;
-
 begin
   Result := 0;
-  StackCount := 0;
-  SetLength(Stack, 0);
+  S.Init;
 
   SetLength(Lines, 0);
   LineCount := 0;
@@ -505,595 +1116,36 @@ begin
       Arg := '';
     end;
 
-    if Token = 'int' then
-    begin
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:' + Arg;
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'null' then
-    begin
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'null';
-      EmitInstr(Instr);
-      PushTyped(Instr.ResultId, GetPtrType);
-    end
-    else if Token = 'var' then
-    begin
-      V := FindAlloca(Arg);
-      if (V = 0) and (Pos('.', Arg) > 0) then
-      begin
-        EnsureAlloca(Arg, GetIntType);
-        V := FindAlloca(Arg);
-      end;
-      if V <> 0 then
-      begin
-        if IsVarParamAlloca(Arg) then
-        begin
-          V := EmitLoad(GetPtrType, V);
-          Push(EmitLoad(GetIntType, V));
-        end
-        else if FindAllocaType(Arg) = GetPtrType then
-          PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
-        else
-          Push(EmitLoad(GetIntType, V));
-      end
-      else if FSemaModel.LookupConstValue(Arg, ConstVal) then
-      begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikLoad;
-        Instr.TypeId := GetIntType;
-        Instr.IntrinsicName := 'const:' + IntToStr(ConstVal);
-        EmitInstr(Instr);
-        Push(Instr.ResultId);
-      end
-      else
-      begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikCall;
-        Instr.TypeId := GetIntType;
-        Instr.CallTarget := Arg;
-        EmitInstr(Instr);
-        Push(Instr.ResultId);
-      end;
-    end
-    else if Token = 'varref' then
-    begin
-      V := FindAlloca(Arg);
-      if V <> 0 then
-      begin
-        if IsVarParamAlloca(Arg) then
-          PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
-        else
-          PushTyped(V, GetPtrType);
-      end;
-    end
-    else if Token = 'recvar' then
-    begin
-      V := FindAlloca(Arg);
-      if V <> 0 then
-        PushTyped(V, GetPtrType);
-    end
-    else if Token = 'is' then
-    begin
-      Rhs := Pop;
-      EnsureVmtForClass(Arg);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:0';
-      EmitInstr(Instr);
-      V := Instr.ResultId;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'gep_i64';
-      SetLength(Instr.Operands, 2);
-      Instr.Operands[0] := MakeOperand(Rhs);
-      Instr.Operands[1] := MakeOperand(V);
-      EmitInstr(Instr);
-      V := EmitLoad(GetPtrType, Instr.ResultId);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'is_instance';
-      SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
-      Instr.CallTarget := Arg;
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'arr_load' then
-    begin
-      Rhs := Pop;
-      V := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'gep_i64';
-      SetLength(Instr.Operands, 2);
-      Instr.Operands[0] := MakeOperand(V);
-      Instr.Operands[1] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(EmitLoad(GetIntType, Instr.ResultId));
-    end
-    else if Token = 'strcharload' then
-    begin
-      Rhs := Pop;
-      V := FindAlloca(Arg + '$ptr');
-      if V <> 0 then
-      begin
-        V := EmitLoad(GetPtrType, V);
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikLoad;
-        Instr.TypeId := GetIntType;
-        Instr.IntrinsicName := 'const:1';
-        EmitInstr(Instr);
-        SlotIdx := Instr.ResultId;
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikSub;
-        Instr.TypeId := GetIntType;
-        SetLength(Instr.Operands, 2);
-        Instr.Operands[0] := MakeOperand(Rhs);
-        Instr.Operands[1] := MakeOperand(SlotIdx);
-        EmitInstr(Instr);
-        Rhs := Instr.ResultId;
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := GetPtrType;
-        Instr.IntrinsicName := 'gep_i8';
-        SetLength(Instr.Operands, 2);
-        Instr.Operands[0] := MakeOperand(V);
-        Instr.Operands[1] := MakeOperand(Rhs);
-        EmitInstr(Instr);
-        V := Instr.ResultId;
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := GetIntType;
-        Instr.IntrinsicName := 'load_zext_i8';
-        SetLength(Instr.Operands, 1);
-        Instr.Operands[0] := MakeOperand(V);
-        EmitInstr(Instr);
-        Push(Instr.ResultId);
-      end;
-    end
-    else if Token = 'rload' then
-    begin
-      SpacePos := Pos(' ', Arg);
-      if SpacePos > 0 then
-      begin
-        RecName := Copy(Arg, 1, SpacePos - 1);
-        Val(Copy(Arg, SpacePos + 1, Length(Arg)), FieldIdx, ValCode);
-        if ValCode = 0 then
-        begin
-          V := FindAlloca(RecName);
-          if V <> 0 then
-          begin
-            if FindAllocaType(RecName) = GetPtrType then
-              V := EmitLoad(GetPtrType, V);
-
-            FillChar(Instr, SizeOf(Instr), 0);
-            Instr.ResultId := FModule.NewValue;
-            Instr.Kind := hikLoad;
-            Instr.TypeId := GetIntType;
-            Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
-            EmitInstr(Instr);
-            IdxVal := Instr.ResultId;
-
-            FillChar(Instr, SizeOf(Instr), 0);
-            Instr.ResultId := FModule.NewValue;
-            Instr.Kind := hikIntrinsic;
-            Instr.TypeId := GetPtrType;
-            Instr.IntrinsicName := 'gep_i64';
-            SetLength(Instr.Operands, 2);
-            Instr.Operands[0] := MakeOperand(V);
-            Instr.Operands[1] := MakeOperand(IdxVal);
-            EmitInstr(Instr);
-
-            Push(EmitLoad(GetIntType, Instr.ResultId));
-          end;
-        end;
-      end;
-    end
-    else if Token = 'add' then
-    begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikAdd, GetIntType, Lhs, Rhs));
-    end
-    else if Token = 'sub' then
-    begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikSub, GetIntType, Lhs, Rhs));
-    end
-    else if Token = 'mul' then
-    begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikMul, GetIntType, Lhs, Rhs));
-    end
-    else if Token = 'div' then
-    begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikDiv, GetIntType, Lhs, Rhs));
-    end
-    else if Token = 'mod' then
-    begin
-      Rhs := Pop; Lhs := Pop;
-      Push(EmitBinOp(hikMod, GetIntType, Lhs, Rhs));
-    end
-    else if Token = 'neg' then
-    begin
-      Rhs := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikNeg;
-      Instr.TypeId := GetIntType;
-      SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'abs' then
-    begin
-      Rhs := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'abs';
-      SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'cmp' then
-    begin
-      CmpRhsType := 0;
-      if StackCount > 0 then CmpRhsType := StackTypes[StackCount - 1];
-      Rhs := Pop;
-      CmpLhsType := 0;
-      if StackCount > 0 then CmpLhsType := StackTypes[StackCount - 1];
-      Lhs := Pop;
-      if Arg = 'eq' then
-        Push(EmitCmpOp(hikCmpEq, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
-      else if Arg = 'ne' then
-        Push(EmitCmpOp(hikCmpNe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
-      else if Arg = 'slt' then
-        Push(EmitCmpOp(hikCmpLt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
-      else if Arg = 'sle' then
-        Push(EmitCmpOp(hikCmpLe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
-      else if Arg = 'sgt' then
-        Push(EmitCmpOp(hikCmpGt, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType))
-      else if Arg = 'sge' then
-        Push(EmitCmpOp(hikCmpGe, GetBoolType, Lhs, Rhs, CmpLhsType, CmpRhsType));
-    end
-    else if Token = 'zext' then
-    begin
-      Rhs := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikZext;
-      Instr.TypeId := GetIntType;
-      SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'call' then
-    begin
-      SpacePos := Pos(' ', Arg);
-      if SpacePos > 0 then
-      begin
-        Token := Copy(Arg, 1, SpacePos - 1);
-        ArgCount := StrToIntDef(Copy(Arg, SpacePos + 1, Length(Arg)), 0);
-      end
-      else
-      begin
-        Token := Arg;
-        ArgCount := 0;
-      end;
-      SetLength(CallArgs, ArgCount);
-      SetLength(CallArgTypes, ArgCount);
-      for J := ArgCount - 1 downto 0 do
-      begin
-        Dec(StackCount);
-        CallArgs[J] := Stack[StackCount];
-        CallArgTypes[J] := StackTypes[StackCount];
-      end;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikCall;
-      Instr.TypeId := FModule.FindFunctionReturnType(Token);
-      if Instr.TypeId = 0 then
-      begin
-        Instr.TypeId := GetIntType;
-        for J := 0 to FFwdFuncCount - 1 do
-          if FFwdFuncNames[J] = Token then
-          begin
-            Instr.TypeId := FFwdFuncRetTypes[J];
-            Break;
-          end;
-      end;
-      Instr.CallTarget := Token;
-      SetLength(Instr.Operands, ArgCount);
-      for J := 0 to ArgCount - 1 do
-      begin
-        if CallArgTypes[J] <> 0 then
-          Instr.Operands[J] := MakeTypedOperand(CallArgs[J], CallArgTypes[J])
-        else
-          Instr.Operands[J] := MakeOperand(CallArgs[J]);
-      end;
-      EmitInstr(Instr);
-      if FModule.Types.GetType(Instr.TypeId).Kind = htkPointer then
-        PushTyped(Instr.ResultId, Instr.TypeId)
-      else
-        Push(Instr.ResultId);
-    end
-    else if Token = 'strvar' then
-    begin
-      V := FindAlloca(Arg + '$ptr');
-      if V <> 0 then
-        PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
-      V := FindAlloca(Arg + '$len');
-      if V <> 0 then
-        Push(EmitLoad(GetIntType, V));
-    end
-    else if Token = 'strlit' then
-    begin
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'str_const';
-      Instr.CallTarget := Arg;
-      EmitInstr(Instr);
-      PushTyped(Instr.ResultId, GetPtrType);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:' + IntToStr(Length(Arg) - 2);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'strcmp' then
-    begin
-      Rhs := Pop;
-      V := Pop;
-      SlotIdx := Pop;
-      ExtraArgCount := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'str_cmp';
-      Instr.CallTarget := Arg;
-      SetLength(Instr.Operands, 4);
-      Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
-      Instr.Operands[1] := MakeOperand(SlotIdx);
-      Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
-      Instr.Operands[3] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'strpos' then
-    begin
-      Rhs := Pop;
-      V := Pop;
-      SlotIdx := Pop;
-      ExtraArgCount := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'str_pos';
-      SetLength(Instr.Operands, 4);
-      Instr.Operands[0] := MakeTypedOperand(ExtraArgCount, GetPtrType);
-      Instr.Operands[1] := MakeOperand(SlotIdx);
-      Instr.Operands[2] := MakeTypedOperand(V, GetPtrType);
-      Instr.Operands[3] := MakeOperand(Rhs);
-      EmitInstr(Instr);
-      Push(Instr.ResultId);
-    end
-    else if Token = 'arrload' then
-    begin
-      Rhs := Pop;
-      V := FindAlloca(Arg + '$ptr');
-      if V <> 0 then
-      begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikLoad;
-        Instr.TypeId := GetPtrType;
-        SetLength(Instr.Operands, 1);
-        Instr.Operands[0] := MakeOperand(V);
-        EmitInstr(Instr);
-        V := Instr.ResultId;
-
-        if FindAlloca(Arg + '$len') <> 0 then
-        begin
-          FillChar(Instr, SizeOf(Instr), 0);
-          Instr.ResultId := FModule.NewValue;
-          Instr.Kind := hikIntrinsic;
-          Instr.TypeId := GetPtrType;
-          Instr.IntrinsicName := 'gep_i64';
-          SetLength(Instr.Operands, 2);
-          Instr.Operands[0] := MakeOperand(V);
-          Instr.Operands[1] := MakeOperand(Rhs);
-          EmitInstr(Instr);
-          V := Instr.ResultId;
-          Push(EmitLoad(GetIntType, V));
-        end
-        else
-        begin
-          FillChar(Instr, SizeOf(Instr), 0);
-          Instr.ResultId := FModule.NewValue;
-          Instr.Kind := hikIntrinsic;
-          Instr.TypeId := GetPtrType;
-          Instr.IntrinsicName := 'gep_i64';
-          SetLength(Instr.Operands, 2);
-          Instr.Operands[0] := MakeOperand(V);
-          Instr.Operands[1] := MakeOperand(Rhs);
-          EmitInstr(Instr);
-          V := Instr.ResultId;
-          Push(EmitLoad(GetIntType, V));
-        end;
-      end
-      else
-        Push(Rhs);
-    end
-    else if Token = 'field' then
-    begin
-      SpacePos := Pos(' ', Arg);
-      if SpacePos > 0 then
-      begin
-        Token := Copy(Arg, 1, SpacePos - 1);
-        Arg := Copy(Arg, SpacePos + 1, Length(Arg));
-        SpacePos := Pos(' ', Arg);
-        if SpacePos > 0 then
-          ArgCount := StrToIntDef(Copy(Arg, 1, SpacePos - 1), 0)
-        else
-          ArgCount := StrToIntDef(Arg, 0);
-      end
-      else
-      begin
-        Token := Arg;
-        ArgCount := 0;
-      end;
-      V := FindAlloca(Token);
-      if V <> 0 then
-      begin
-        V := EmitLoad(GetPtrType, V);
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikLoad;
-        Instr.TypeId := GetIntType;
-        Instr.IntrinsicName := 'const:' + IntToStr(ArgCount);
-        EmitInstr(Instr);
-        Rhs := Instr.ResultId;
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := GetPtrType;
-        Instr.IntrinsicName := 'gep_i64';
-        SetLength(Instr.Operands, 2);
-        Instr.Operands[0] := MakeOperand(V);
-        Instr.Operands[1] := MakeOperand(Rhs);
-        EmitInstr(Instr);
-        if Pos(' p', Arg) > 0 then
-          PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
-        else
-          Push(EmitLoad(GetIntType, Instr.ResultId));
-      end;
-    end
-    else if Token = 'vcall' then
-    begin
-      CmpLhsType := 0;
-      if (Length(Arg) > 2) and (Arg[Length(Arg)] = 'p') and
-        (Arg[Length(Arg) - 1] = ' ') then
-      begin
-        CmpLhsType := GetPtrType;
-        Arg := Copy(Arg, 1, Length(Arg) - 2);
-      end;
-      SpacePos := Pos(' ', Arg);
-      if SpacePos > 0 then
-      begin
-        SlotIdx := StrToIntDef(Copy(Arg, 1, SpacePos - 1), 0);
-        ExtraArgCount := StrToIntDef(Copy(Arg, SpacePos + 1, Length(Arg)), 0);
-      end
-      else
-      begin
-        SlotIdx := StrToIntDef(Arg, 0);
-        ExtraArgCount := 0;
-      end;
-      SetLength(VcallArgs, ExtraArgCount);
-      SetLength(VcallArgTypes, ExtraArgCount);
-      for VcallI := ExtraArgCount - 1 downto 0 do
-      begin
-        if StackCount > 0 then
-          VcallArgTypes[VcallI] := StackTypes[StackCount - 1]
-        else
-          VcallArgTypes[VcallI] := 0;
-        VcallArgs[VcallI] := Pop;
-      end;
-      Rhs := Pop;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:0';
-      EmitInstr(Instr);
-      V := Instr.ResultId;
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'gep_i64';
-      SetLength(Instr.Operands, 2);
-      Instr.Operands[0] := MakeOperand(Rhs);
-      Instr.Operands[1] := MakeOperand(V);
-      EmitInstr(Instr);
-      V := EmitLoad(GetPtrType, Instr.ResultId);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikLoad;
-      Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx + 1);
-      EmitInstr(Instr);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'gep_i64';
-      SetLength(Instr.Operands, 2);
-      Instr.Operands[0] := MakeOperand(V);
-      Instr.Operands[1] := MakeOperand(Instr.ResultId - 1);
-      EmitInstr(Instr);
-      V := EmitLoad(GetPtrType, Instr.ResultId);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      if CmpLhsType = GetPtrType then
-        Instr.TypeId := GetPtrType
-      else
-        Instr.TypeId := GetIntType;
-      Instr.IntrinsicName := 'vcall';
-      SetLength(Instr.Operands, 2 + ExtraArgCount);
-      Instr.Operands[0] := MakeTypedOperand(V, GetPtrType);
-      Instr.Operands[1] := MakeTypedOperand(Rhs, GetPtrType);
-      for VcallI := 0 to ExtraArgCount - 1 do
-      begin
-        if VcallArgTypes[VcallI] <> 0 then
-          Instr.Operands[2 + VcallI] := MakeTypedOperand(VcallArgs[VcallI], VcallArgTypes[VcallI])
-        else
-          Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
-      end;
-      EmitInstr(Instr);
-      if CmpLhsType = GetPtrType then
-        PushTyped(Instr.ResultId, GetPtrType)
-      else
-        Push(Instr.ResultId);
-    end;
+    if Token = 'int' then BlobInt(S, Arg)
+    else if Token = 'null' then BlobNull(S)
+    else if Token = 'var' then BlobVar(S, Arg)
+    else if Token = 'varref' then BlobVarRef(S, Arg)
+    else if Token = 'recvar' then BlobRecVar(S, Arg)
+    else if Token = 'is' then BlobIs(S, Arg)
+    else if Token = 'arr_load' then BlobArrLoad(S)
+    else if Token = 'strcharload' then BlobStrCharLoad(S, Arg)
+    else if Token = 'rload' then BlobRLoad(S, Arg)
+    else if Token = 'add' then BlobBinOp(S, hikAdd)
+    else if Token = 'sub' then BlobBinOp(S, hikSub)
+    else if Token = 'mul' then BlobBinOp(S, hikMul)
+    else if Token = 'div' then BlobBinOp(S, hikDiv)
+    else if Token = 'mod' then BlobBinOp(S, hikMod)
+    else if Token = 'neg' then BlobUnaryOp(S, hikNeg, '')
+    else if Token = 'abs' then BlobUnaryOp(S, hikIntrinsic, 'abs')
+    else if Token = 'cmp' then BlobCmp(S, Arg)
+    else if Token = 'zext' then BlobZext(S)
+    else if Token = 'call' then BlobCall(S, Arg)
+    else if Token = 'strvar' then BlobStrVar(S, Arg)
+    else if Token = 'strlit' then BlobStrLit(S, Arg)
+    else if Token = 'strcmp' then BlobStrCmpPos(S, Arg, 'str_cmp')
+    else if Token = 'strpos' then BlobStrCmpPos(S, Arg, 'str_pos')
+    else if Token = 'arrload' then BlobArrLoadVar(S, Arg)
+    else if Token = 'field' then BlobField(S, Arg)
+    else if Token = 'vcall' then BlobVcall(S, Arg);
   end;
 
-  if StackCount > 0 then
-    Result := Pop;
+  if S.Count > 0 then
+    Result := S.Pop;
 end;
 
 procedure THIRBuilder.ProcessVarDecl(const ANode: TTypedHirNode);
@@ -1104,7 +1156,7 @@ var
   Arg: string;
   TabPos, Code: LongInt;
 begin
-  if ANode.Kind = 'var-decl-runtime' then
+  if ANode.NodeKind = hnkVarDeclRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1131,14 +1183,6 @@ begin
         Instr.TypeId := GetIntType;
         EmitInstr(Instr);
 
-        if FAllocaCount >= Length(FAllocaNames) then
-        begin
-          SetLength(FAllocaNames, FAllocaCount + 32);
-          SetLength(FAllocaValues, FAllocaCount + 32);
-          SetLength(FAllocaTypes, FAllocaCount + 32);
-          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-          SetLength(FVarParamFlags, FAllocaCount + 32);
-        end;
         RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetIntType, False);
 
         EmitStore(GetIntType, ParamValueId, Instr.ResultId);
@@ -1161,7 +1205,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetIntType);
   end
-  else if ANode.Kind = 'var-decl-str-runtime' then
+  else if ANode.NodeKind = hnkVarDeclStrRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1204,7 +1248,7 @@ begin
       EnsureAlloca(ANode.Operand + '$len', GetIntType);
     end;
   end
-  else if ANode.Kind = 'var-decl-arr-runtime' then
+  else if ANode.NodeKind = hnkVarDeclArrRuntime then
   begin
     if FInStartFunc then
     begin
@@ -1233,7 +1277,7 @@ begin
       EnsureAlloca(ANode.Operand + '$len', GetIntType);
     end;
   end
-  else if ANode.Kind = 'var-decl-ptr-runtime' then
+  else if ANode.NodeKind = hnkVarDeclPtrRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1260,7 +1304,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
-  else if ANode.Kind = 'var-decl-varref-runtime' then
+  else if ANode.NodeKind = hnkVarDeclVarrefRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1282,7 +1326,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
-  else if ANode.Kind = 'var-decl-record-runtime' then
+  else if ANode.NodeKind = hnkVarDeclRecordRuntime then
   begin
     TabPos := Pos(#9, ANode.Operand);
     if TabPos > 0 then
@@ -1299,7 +1343,7 @@ begin
         EmitInstr(Instr);
 
         RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
-        FRecordAllocaSlots[FAllocaCount - 1] := ParamIdx;
+        FAllocas[FAllocaCount - 1].RecordSlots := ParamIdx;
       end;
     end;
   end;
@@ -1525,17 +1569,9 @@ begin
   FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocaNames, FAllocaCount);
-  SetLength(FSavedAllocaValues, FAllocaCount);
-  SetLength(FSavedAllocaTypes, FAllocaCount);
-  SetLength(FSavedVarParamFlags, FAllocaCount);
+  SetLength(FSavedAllocas, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
-  begin
-    FSavedAllocaNames[I] := FAllocaNames[I];
-    FSavedAllocaValues[I] := FAllocaValues[I];
-    FSavedAllocaTypes[I] := FAllocaTypes[I];
-    FSavedVarParamFlags[I] := FVarParamFlags[I];
-  end;
+    FSavedAllocas[I] := FAllocas[I];
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
   SetLength(FSavedBlockIds, FBlockCount);
@@ -1594,6 +1630,7 @@ begin
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
+    FGlobalRefCount := 0;
     FBlockCount := 0;
     FPendingParamCount := 0;
     FPendingParamLlvmIdx := 0;
@@ -1673,6 +1710,7 @@ begin
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
+    FGlobalRefCount := 0;
     FBlockCount := 0;
     if (Length(Rest) > 1) and (Rest[1] = 'r') then
     begin
@@ -1697,13 +1735,10 @@ begin
   FCurrentBlockId := FSavedBlockId;
   FEntryBlockId := FSavedEntryBlockId;
   FAllocaCount := FSavedAllocaCount;
+  if FAllocaCount > Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
   for I := 0 to FSavedAllocaCount - 1 do
-  begin
-    FAllocaNames[I] := FSavedAllocaNames[I];
-    FAllocaValues[I] := FSavedAllocaValues[I];
-    FAllocaTypes[I] := FSavedAllocaTypes[I];
-    FVarParamFlags[I] := FSavedVarParamFlags[I];
-  end;
+    FAllocas[I] := FSavedAllocas[I];
   FBlockCount := FSavedBlockCount;
   for I := 0 to FSavedBlockCount - 1 do
   begin
@@ -2566,17 +2601,9 @@ begin
   FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocaNames, FAllocaCount);
-  SetLength(FSavedAllocaValues, FAllocaCount);
-  SetLength(FSavedAllocaTypes, FAllocaCount);
-  SetLength(FSavedVarParamFlags, FAllocaCount);
+  SetLength(FSavedAllocas, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
-  begin
-    FSavedAllocaNames[I] := FAllocaNames[I];
-    FSavedAllocaValues[I] := FAllocaValues[I];
-    FSavedAllocaTypes[I] := FAllocaTypes[I];
-    FSavedVarParamFlags[I] := FVarParamFlags[I];
-  end;
+    FSavedAllocas[I] := FAllocas[I];
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
   SetLength(FSavedBlockIds, FBlockCount);
@@ -2633,6 +2660,7 @@ begin
   FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
   FAllocaCount := 0;
+  FGlobalRefCount := 0;
   FBlockCount := 0;
 
   ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
@@ -2703,10 +2731,10 @@ begin
     Instr.TypeId := GetPtrType;
     EmitInstr(Instr);
     for I := 0 to FAllocaCount - 1 do
-      if SameText(FAllocaNames[I], VarName) then
+      if SameText(FAllocas[I].Name, VarName) then
       begin
-        FAllocaValues[I] := Instr.ResultId;
-        FAllocaTypes[I] := GetPtrType;
+        FAllocas[I].Value := Instr.ResultId;
+        FAllocas[I].TypeId := GetPtrType;
         Break;
       end;
   end;
@@ -2778,14 +2806,23 @@ var
   I, J: LongInt;
   Funcs: array of string;
   FuncName, ParentClass: string;
+  Meta: TTypeMetadata;
 begin
   for J := 0 to FModule.VmtGlobalCount - 1 do
     if FModule.VmtGlobalAt(J).ClassName = AClassName then
       Exit;
-  if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
-    VmtCount := 0;
-  if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
-    ParentClass := '';
+  if FSemaModel.GetTypeMetaByName(AClassName, Meta) then
+  begin
+    VmtCount := Meta.VmtCount;
+    ParentClass := Meta.ParentClassName;
+  end
+  else
+  begin
+    if not FSemaModel.LookupConstValue(AClassName + '$vmt_count', VmtCount) then
+      VmtCount := 0;
+    if not FSemaModel.LookupStringConstValue(AClassName + '$parent_class', ParentClass) then
+      ParentClass := '';
+  end;
   SetLength(Funcs, VmtCount + 1);
   if ParentClass <> '' then
   begin
@@ -2796,7 +2833,10 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if not FSemaModel.LookupStringConstValue(
+    if FSemaModel.GetTypeMetaByName(AClassName, Meta) and
+      (I < Length(Meta.VmtSlots)) then
+      FuncName := Meta.VmtSlots[I].FuncQualName
+    else if not FSemaModel.LookupStringConstValue(
       AClassName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
     Funcs[I + 1] := FuncName;
@@ -2812,6 +2852,7 @@ var
   Funcs: array of string;
   ObjPtr, ZeroVal, SlotPtr: THIRValueId;
   Instr: THIRInstr;
+  Meta: TTypeMetadata;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -2825,11 +2866,18 @@ begin
     ClsName := ANode.Operand;
   end;
 
-  if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
-    VmtCount := 0;
-
-  if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
-    ParentClass := '';
+  if FSemaModel.GetTypeMetaByName(ClsName, Meta) then
+  begin
+    VmtCount := Meta.VmtCount;
+    ParentClass := Meta.ParentClassName;
+  end
+  else
+  begin
+    if not FSemaModel.LookupConstValue(ClsName + '$vmt_count', VmtCount) then
+      VmtCount := 0;
+    if not FSemaModel.LookupStringConstValue(ClsName + '$parent_class', ParentClass) then
+      ParentClass := '';
+  end;
 
   SetLength(Funcs, VmtCount + 1);
   if ParentClass <> '' then
@@ -2838,30 +2886,53 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if not FSemaModel.LookupStringConstValue(
+    if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
+      (I < Length(Meta.VmtSlots)) then
+      FuncName := Meta.VmtSlots[I].FuncQualName
+    else if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
     Funcs[I + 1] := FuncName;
   end;
   FModule.AddVmtGlobal(ClsName, Funcs);
 
-  if (ParentClass <> '') and
-    FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
+  if (ParentClass <> '') then
   begin
-    SetLength(Funcs, VmtCount + 1);
-    if FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', FuncName) and
-      (FuncName <> '') then
-      Funcs[0] := FuncName + '.vmt'
-    else
-      Funcs[0] := '';
-    for I := 0 to VmtCount - 1 do
+    if FSemaModel.GetTypeMetaByName(ParentClass, Meta) then
     begin
-      if not FSemaModel.LookupStringConstValue(
-        ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
-        FuncName := '';
-      Funcs[I + 1] := FuncName;
+      VmtCount := Meta.VmtCount;
+      SetLength(Funcs, VmtCount + 1);
+      if Meta.ParentClassName <> '' then
+        Funcs[0] := Meta.ParentClassName + '.vmt'
+      else
+        Funcs[0] := '';
+      for I := 0 to VmtCount - 1 do
+      begin
+        if I < Length(Meta.VmtSlots) then
+          FuncName := Meta.VmtSlots[I].FuncQualName
+        else
+          FuncName := '';
+        Funcs[I + 1] := FuncName;
+      end;
+      FModule.AddVmtGlobal(ParentClass, Funcs);
+    end
+    else if FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
+    begin
+      SetLength(Funcs, VmtCount + 1);
+      if FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', FuncName) and
+        (FuncName <> '') then
+        Funcs[0] := FuncName + '.vmt'
+      else
+        Funcs[0] := '';
+      for I := 0 to VmtCount - 1 do
+      begin
+        if not FSemaModel.LookupStringConstValue(
+          ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
+          FuncName := '';
+        Funcs[I + 1] := FuncName;
+      end;
+      FModule.AddVmtGlobal(ParentClass, Funcs);
     end;
-    FModule.AddVmtGlobal(ParentClass, Funcs);
   end;
 
   ObjPtr := FindAlloca(VarName);
@@ -3236,8 +3307,8 @@ end;
 procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);
 begin
   if (FPendingObjectFreeDestroyName <> '') and
-    (ANode.Kind <> 'call-runtime') and
-    (ANode.Kind <> 'object-free-runtime') then
+    (ANode.NodeKind <> hnkCallRuntime) and
+    (ANode.NodeKind <> hnkObjectFreeRuntime) then
   begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
@@ -3245,81 +3316,79 @@ begin
     FPendingObjectFreeHeapRelease := False;
   end;
 
-  if (ANode.Kind = 'var-decl-runtime') or
-     (ANode.Kind = 'var-decl-str-runtime') or
-     (ANode.Kind = 'var-decl-arr-runtime') or
-     (ANode.Kind = 'var-decl-ptr-runtime') or
-     (ANode.Kind = 'var-decl-varref-runtime') or
-     (ANode.Kind = 'var-decl-record-runtime') then
-    ProcessVarDecl(ANode)
-  else if ANode.Kind = 'assign-runtime' then
-    ProcessAssign(ANode)
-  else if ANode.Kind = 'assign-str-runtime' then
-    ProcessAssignStr(ANode)
-  else if ANode.Kind = 'assign-str-copy-runtime' then
-    ProcessAssignStrCopy(ANode)
-  else if ANode.Kind = 'assign-str-call-runtime' then
-    ProcessAssignStrCall(ANode)
-  else if ANode.Kind = 'assign-str-vcall-runtime' then
-    ProcessAssignStrVcall(ANode)
-  else if ANode.Kind = 'assign-str-concat-runtime' then
-    ProcessAssignStrConcat(ANode)
-  else if ANode.Kind = 'halt-call-runtime' then
-    ProcessHaltCall(ANode)
-  else if ANode.Kind = 'halt-call' then
-    ProcessHaltCallConst(ANode)
-  else if ANode.Kind = 'cond-br-runtime' then
-    ProcessCondBr(ANode)
-  else if ANode.Kind = 'switch-runtime' then
-    ProcessSwitch(ANode)
-  else if ANode.Kind = 'br-runtime' then
-    ProcessBr(ANode)
-  else if ANode.Kind = 'block-label-runtime' then
-    ProcessBlockLabel(ANode)
-  else if ANode.Kind = 'function-body-begin' then
-    ProcessFunctionBegin(ANode)
-  else if ANode.Kind = 'function-body-end' then
-    ProcessFunctionEnd(ANode)
-  else if ANode.Kind = 'ret-runtime' then
-    ProcessRetRuntime(ANode)
-  else if ANode.Kind = 'ret-str-runtime' then
-    ProcessRetStrRuntime(ANode)
-  else if ANode.Kind = 'call-runtime' then
-    ProcessCallRuntime(ANode)
-  else if ANode.Kind = 'object-free-runtime' then
-    ProcessObjectFreeRuntime(ANode)
-  else if ANode.Kind = 'int-to-str-runtime' then
-    ProcessIntToStr(ANode)
-  else if ANode.Kind = 'copy-str-runtime' then
-    ProcessCopyStr(ANode)
-  else if ANode.Kind = 'write-int-runtime' then
-    ProcessWriteInt(ANode)
-  else if ANode.Kind = 'write-string-runtime' then
-    ProcessWriteStr(ANode)
-  else if ANode.Kind = 'write-str-var-runtime' then
-    ProcessWriteStrVar(ANode)
-  else if ANode.Kind = 'write-call' then
-    ProcessWriteStr(ANode)
-  else if ANode.Kind = 'setlength-arr-runtime' then
-    ProcessSetLengthArr(ANode)
-  else if ANode.Kind = 'assign-arr-elem-runtime' then
-    ProcessAssignArrElem(ANode)
-  else if ANode.Kind = 'method-body-begin' then
-    ProcessMethodBegin(ANode)
-  else if ANode.Kind = 'class-new-runtime' then
-    ProcessClassNew(ANode)
-  else if ANode.Kind = 'field-store-runtime' then
-    ProcessFieldStore(ANode)
-  else if ANode.Kind = 'record-field-store-runtime' then
-    ProcessRecordFieldStore(ANode)
-  else if ANode.Kind = 'record-copy-runtime' then
-    ProcessRecordCopy(ANode)
-  else if ANode.Kind = 'field-store-str-runtime' then
-    ProcessFieldStoreStr(ANode)
-  else if ANode.Kind = 'assign-str-field-load-runtime' then
-    ProcessAssignStrFieldLoad(ANode)
-  else if ANode.Kind = 'vmt-store-runtime' then
-    ProcessVmtStore(ANode);
+  case ANode.NodeKind of
+    hnkVarDeclRuntime, hnkVarDeclStrRuntime, hnkVarDeclArrRuntime,
+    hnkVarDeclPtrRuntime, hnkVarDeclVarrefRuntime, hnkVarDeclRecordRuntime:
+      ProcessVarDecl(ANode);
+    hnkAssignRuntime:
+      ProcessAssign(ANode);
+    hnkAssignStrRuntime:
+      ProcessAssignStr(ANode);
+    hnkAssignStrCopyRuntime:
+      ProcessAssignStrCopy(ANode);
+    hnkAssignStrCallRuntime:
+      ProcessAssignStrCall(ANode);
+    hnkAssignStrVcallRuntime:
+      ProcessAssignStrVcall(ANode);
+    hnkAssignStrConcatRuntime:
+      ProcessAssignStrConcat(ANode);
+    hnkHaltCallRuntime:
+      ProcessHaltCall(ANode);
+    hnkHaltCall:
+      ProcessHaltCallConst(ANode);
+    hnkCondBrRuntime:
+      ProcessCondBr(ANode);
+    hnkSwitchRuntime:
+      ProcessSwitch(ANode);
+    hnkBrRuntime:
+      ProcessBr(ANode);
+    hnkBlockLabelRuntime:
+      ProcessBlockLabel(ANode);
+    hnkFunctionBodyBegin:
+      ProcessFunctionBegin(ANode);
+    hnkFunctionBodyEnd:
+      ProcessFunctionEnd(ANode);
+    hnkRetRuntime:
+      ProcessRetRuntime(ANode);
+    hnkRetStrRuntime:
+      ProcessRetStrRuntime(ANode);
+    hnkCallRuntime:
+      ProcessCallRuntime(ANode);
+    hnkObjectFreeRuntime:
+      ProcessObjectFreeRuntime(ANode);
+    hnkIntToStrRuntime:
+      ProcessIntToStr(ANode);
+    hnkCopyStrRuntime:
+      ProcessCopyStr(ANode);
+    hnkWriteIntRuntime:
+      ProcessWriteInt(ANode);
+    hnkWriteStringRuntime, hnkWriteCall:
+      ProcessWriteStr(ANode);
+    hnkWriteStrVarRuntime:
+      ProcessWriteStrVar(ANode);
+    hnkSetLengthArrRuntime:
+      ProcessSetLengthArr(ANode);
+    hnkAssignArrElemRuntime:
+      ProcessAssignArrElem(ANode);
+    hnkMethodBodyBegin:
+      ProcessMethodBegin(ANode);
+    hnkClassNewRuntime:
+      ProcessClassNew(ANode);
+    hnkFieldStoreRuntime:
+      ProcessFieldStore(ANode);
+    hnkRecordFieldStoreRuntime:
+      ProcessRecordFieldStore(ANode);
+    hnkRecordCopyRuntime:
+      ProcessRecordCopy(ANode);
+    hnkFieldStoreStrRuntime:
+      ProcessFieldStoreStr(ANode);
+    hnkAssignStrFieldLoadRuntime:
+      ProcessAssignStrFieldLoad(ANode);
+    hnkVmtStoreRuntime:
+      ProcessVmtStore(ANode);
+    hnkUnknown:
+      ;
+  end;
 end;
 
 procedure THIRBuilder.Build;

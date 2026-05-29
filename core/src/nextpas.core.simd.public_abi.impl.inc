@@ -33,10 +33,10 @@ type
     // entry points remain stable cdecl shims that lazily hop through the
     // latest published binding state.
     DataPlane: PSimdDataPlane;
-    Api: TFafafaSimdPublicApi;
-    ApiV2: TFafafaSimdPublicApiV2;
+    Api: TNextPasSimdPublicApi;
+    ApiV2: TNextPasSimdPublicApiV2;
     SnapshotGeneration: UInt64;
-    SnapshotFlags: TFafafaSimdPublicApiV2Flags;
+    SnapshotFlags: TNextPasSimdPublicApiV2Flags;
     Dispatch: PSimdDispatchTable;
     MemEqualBound: TSimdPublicMemEqualFunc;
     MemFindByteBound: TSimdPublicMemFindByteFunc;
@@ -108,7 +108,7 @@ begin
 end;
 
 function BuildSimdBackendAbiFlagsFromSnapshot(const aBackend: TSimdBackend;
-  const aRegistered, aDispatchable, aActive: Boolean): TFafafaSimdAbiFlags;
+  const aRegistered, aDispatchable, aActive: Boolean): TNextPasSimdAbiFlags;
 begin
   Result := 0;
   if IsBackendAvailableOnCPU(aBackend) then
@@ -608,7 +608,7 @@ begin
   aLo := NEXTPAS_SIMD_PUBLIC_ABI_SIGNATURE_LO;
 end;
 
-function TryGetSimdBackendPodInfo(aBackend: TSimdBackend; out aInfo: TFafafaSimdBackendPodInfo): Boolean; cdecl;
+function TryGetSimdBackendPodInfo(aBackend: TSimdBackend; out aInfo: TNextPasSimdBackendPodInfo): Boolean; cdecl;
 var
   LDispatchTable: TSimdDispatchTable;
   LCurrentDispatch: PSimdDispatchTable;
@@ -616,14 +616,14 @@ var
   LDispatchable: Boolean;
   LActive: Boolean;
 
-  procedure FillPodInfoFromDispatch(const aDispatch: PSimdDispatchTable; var aPodInfo: TFafafaSimdBackendPodInfo; out aIsDispatchable: Boolean);
+  procedure FillPodInfoFromDispatch(const aDispatch: PSimdDispatchTable; var aPodInfo: TNextPasSimdBackendPodInfo; out aIsDispatchable: Boolean);
   begin
     aPodInfo.CapabilityBits := SimdCapabilitiesToAbiBits(aDispatch^.BackendInfo.Capabilities);
     aIsDispatchable := aDispatch^.BackendInfo.Available and IsBackendAvailableOnCPU(aDispatch^.Backend);
     aPodInfo.Priority := aDispatch^.BackendInfo.Priority;
   end;
 begin
-  aInfo := Default(TFafafaSimdBackendPodInfo);
+  aInfo := Default(TNextPasSimdBackendPodInfo);
   aInfo.StructSize := SizeOf(aInfo);
   aInfo.BackendId := UInt32(Ord(aBackend));
 
@@ -664,7 +664,7 @@ begin
   Result := GetBackendDescriptionTextPtr(aBackend);
 end;
 
-function GetSimdPublicApi: PFafafaSimdPublicApi; cdecl;
+function GetSimdPublicApi: PNextPasSimdPublicApi; cdecl;
 var
   LState: PSimdPublicApiBindingState;
 begin
@@ -676,7 +676,7 @@ begin
   Result := @LState^.Api;
 end;
 
-function GetSimdPublicApiV2: PFafafaSimdPublicApiV2; cdecl;
+function GetSimdPublicApiV2: PNextPasSimdPublicApiV2; cdecl;
 var
   LState: PSimdPublicApiBindingState;
 begin
@@ -688,34 +688,34 @@ begin
   Result := @LState^.ApiV2;
 end;
 
-function fafafa_simd_abi_version_major: UInt16; cdecl;
+function nextpas_simd_abi_version_major: UInt16; cdecl;
 begin
   Result := GetSimdAbiVersionMajor;
 end;
 
-function fafafa_simd_abi_version_minor: UInt16; cdecl;
+function nextpas_simd_abi_version_minor: UInt16; cdecl;
 begin
   Result := GetSimdAbiVersionMinor;
 end;
 
-procedure fafafa_simd_abi_signature(out aHi, aLo: UInt64); cdecl;
+procedure nextpas_simd_abi_signature(out aHi, aLo: UInt64); cdecl;
 begin
   GetSimdAbiSignature(aHi, aLo);
 end;
 
-function fafafa_simd_get_backend_pod_info(aBackendId: UInt32; out aInfo: TFafafaSimdBackendPodInfo): LongBool; cdecl;
+function nextpas_simd_get_backend_pod_info(aBackendId: UInt32; out aInfo: TNextPasSimdBackendPodInfo): LongBool; cdecl;
 var
   LBackend: TSimdBackend;
 begin
   if not TryAbiBackendId(aBackendId, LBackend) then
   begin
-    aInfo := Default(TFafafaSimdBackendPodInfo);
+    aInfo := Default(TNextPasSimdBackendPodInfo);
     Exit(False);
   end;
   Result := TryGetSimdBackendPodInfo(LBackend, aInfo);
 end;
 
-function fafafa_simd_backend_name(aBackendId: UInt32): PAnsiChar; cdecl;
+function nextpas_simd_backend_name(aBackendId: UInt32): PAnsiChar; cdecl;
 var
   LBackend: TSimdBackend;
 begin
@@ -724,7 +724,7 @@ begin
   Result := GetSimdBackendNamePtr(LBackend);
 end;
 
-function fafafa_simd_backend_description(aBackendId: UInt32): PAnsiChar; cdecl;
+function nextpas_simd_backend_description(aBackendId: UInt32): PAnsiChar; cdecl;
 var
   LBackend: TSimdBackend;
 begin
@@ -733,12 +733,12 @@ begin
   Result := GetSimdBackendDescriptionPtr(LBackend);
 end;
 
-function fafafa_simd_get_public_api: PFafafaSimdPublicApi; cdecl;
+function nextpas_simd_get_public_api: PNextPasSimdPublicApi; cdecl;
 begin
   Result := GetSimdPublicApi;
 end;
 
-function fafafa_simd_get_public_api_v2: PFafafaSimdPublicApiV2; cdecl;
+function nextpas_simd_get_public_api_v2: PNextPasSimdPublicApiV2; cdecl;
 begin
   Result := GetSimdPublicApiV2;
 end;

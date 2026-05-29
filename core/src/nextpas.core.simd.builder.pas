@@ -22,7 +22,6 @@ unit nextpas.core.simd.builder;
 interface
 
 uses
-  SysUtils,
   nextpas.core.simd.base,
   nextpas.core.simd;
 

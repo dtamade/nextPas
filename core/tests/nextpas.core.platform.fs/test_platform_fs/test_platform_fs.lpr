@@ -72,6 +72,108 @@ begin
   Check(platform_fs_is_dir(@Buf[0]), 'temp dir exists');
 end;
 
+procedure TestMktemp;
+var
+  Path: array[0..511] of AnsiChar;
+  Fd: Int32;
+  R: Int32;
+  H: TPlatformFileHandle;
+begin
+  Fd := -1;
+  R := platform_fs_mktemp('nxp_', '.s', @Path[0], 512, Fd);
+  Check(R = 0, 'mktemp succeeds');
+  Check(Fd >= 0, 'fd is valid');
+  Check(platform_fs_exists(@Path[0]), 'temp file exists');
+  H.Value := Fd;
+  platform_file_close(H);
+  platform_file_unlink(@Path[0]);
+end;
+
+procedure TestMktempUnique;
+var
+  Path1, Path2: array[0..511] of AnsiChar;
+  Fd1, Fd2: Int32;
+  I: Int32;
+  Same: Boolean;
+  H: TPlatformFileHandle;
+begin
+  Fd1 := -1; Fd2 := -1;
+  Check(platform_fs_mktemp('u_', '', @Path1[0], 512, Fd1) = 0, 'mktemp 1');
+  Check(platform_fs_mktemp('u_', '', @Path2[0], 512, Fd2) = 0, 'mktemp 2');
+  Same := True;
+  I := 0;
+  while (Path1[I] <> #0) and (Path2[I] <> #0) do
+  begin
+    if Path1[I] <> Path2[I] then begin Same := False; Break; end;
+    Inc(I);
+  end;
+  if Path1[I] <> Path2[I] then Same := False;
+  Check(not Same, 'paths are unique');
+  H.Value := Fd1; platform_file_close(H);
+  H.Value := Fd2; platform_file_close(H);
+  platform_file_unlink(@Path1[0]);
+  platform_file_unlink(@Path2[0]);
+end;
+
+procedure TestMkdirP;
+const
+  DEEP = '/tmp/nextpas_test_mkdir_p/a/b/c';
+begin
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b/c');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p');
+  Check(platform_fs_mkdir_p(DEEP, 493) = 0, 'mkdir_p succeeds');
+  Check(platform_fs_is_dir(DEEP), 'deep dir exists');
+  Check(platform_fs_mkdir_p(DEEP, 493) = 0, 'mkdir_p idempotent');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b/c');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a/b');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p/a');
+  platform_file_rmdir('/tmp/nextpas_test_mkdir_p');
+end;
+
+procedure TestCopyFile;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  Size: Int64;
+begin
+  platform_file_open('/tmp/nextpas_copy_src.txt', fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('hello copy'), 10, W);
+  platform_file_close(H);
+  Check(platform_fs_copy_file('/tmp/nextpas_copy_src.txt', '/tmp/nextpas_copy_dst.txt') = 0, 'copy ok');
+  Check(platform_fs_is_file('/tmp/nextpas_copy_dst.txt'), 'dst exists');
+  Check(platform_fs_file_size('/tmp/nextpas_copy_dst.txt', Size) = 0, 'stat dst');
+  Check(Size = 10, 'dst size = 10');
+  platform_file_unlink('/tmp/nextpas_copy_src.txt');
+  platform_file_unlink('/tmp/nextpas_copy_dst.txt');
+end;
+
+procedure TestWriteAtomic;
+var
+  Size: Int64;
+  H: TPlatformFileHandle;
+  LBuf: array[0..31] of AnsiChar;
+  LRead: PtrUInt;
+const
+  DATA = 'atomic write test';
+  PATH = '/tmp/nextpas_atomic_test.dat';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_fs_write_atomic(PATH, PAnsiChar(DATA), 17) = 0, 'write_atomic ok');
+  Check(platform_fs_is_file(PATH), 'file exists');
+  Check(platform_fs_file_size(PATH, Size) = 0, 'stat');
+  Check(Size = 17, 'size = 17');
+  platform_file_open(PATH, fomReadOnly, fcmOpenExisting, H);
+  platform_file_read(H, @LBuf[0], 17, LRead);
+  platform_file_close(H);
+  Check(LRead = 17, 'read 17 bytes');
+  LBuf[17] := #0;
+  Check(LBuf[0] = 'a', 'content[0]');
+  Check(not platform_fs_exists(PAnsiChar(PATH + '.tmp')), 'tmp cleaned up');
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fs');
   T.Run('exists file', @TestExistsFile);
@@ -80,5 +182,10 @@ begin
   T.Run('is_dir', @TestIsDir);
   T.Run('file_size', @TestFileSize);
   T.Run('temp_dir', @TestTempDir);
+  T.Run('mktemp', @TestMktemp);
+  T.Run('mktemp unique', @TestMktempUnique);
+  T.Run('mkdir_p', @TestMkdirP);
+  T.Run('copy_file', @TestCopyFile);
+  T.Run('write_atomic', @TestWriteAtomic);
   T.Summary;
 end.

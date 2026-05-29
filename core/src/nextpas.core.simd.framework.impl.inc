@@ -33,9 +33,9 @@ begin
   Result := nextpas.core.simd.cpuinfo.GetBestSupportedBackend;
 end;
 
-function IsBackendRegisteredInBinary(aBackend: TSimdBackend): Boolean;
+function IsBackendRegisteredInBinary(ABackend: TSimdBackend): Boolean;
 begin
-  Result := nextpas.core.simd.runtime.IsBackendRegisteredInBinary(aBackend);
+  Result := nextpas.core.simd.runtime.IsBackendRegisteredInBinary(ABackend);
 end;
 
 function GetRegisteredBackendList: TSimdBackendArray;
@@ -58,14 +58,14 @@ begin
   Result := nextpas.core.simd.runtime.GetAvailableBackendList;
 end;
 
-function TrySetCurrentBackend(aBackend: TSimdBackend): Boolean;
+function TrySetCurrentBackend(ABackend: TSimdBackend): Boolean;
 begin
-  Result := nextpas.core.simd.runtime.TrySetCurrentBackend(aBackend);
+  Result := nextpas.core.simd.runtime.TrySetCurrentBackend(ABackend);
 end;
 
-procedure SetCurrentBackend(aBackend: TSimdBackend);
+procedure SetCurrentBackend(ABackend: TSimdBackend);
 begin
-  nextpas.core.simd.runtime.SetCurrentBackend(aBackend);
+  nextpas.core.simd.runtime.SetCurrentBackend(ABackend);
 end;
 
 procedure ResetCurrentBackendSelection;
@@ -73,14 +73,14 @@ begin
   nextpas.core.simd.runtime.ResetCurrentBackendSelection;
 end;
 
-function TryForceBackend(aBackend: TSimdBackend): Boolean;
+function TryForceBackend(ABackend: TSimdBackend): Boolean;
 begin
-  Result := TrySetCurrentBackend(aBackend);
+  Result := TrySetCurrentBackend(ABackend);
 end;
 
-procedure ForceBackend(aBackend: TSimdBackend);
+procedure ForceBackend(ABackend: TSimdBackend);
 begin
-  SetCurrentBackend(aBackend);
+  SetCurrentBackend(ABackend);
 end;
 
 procedure ResetBackendSelection;

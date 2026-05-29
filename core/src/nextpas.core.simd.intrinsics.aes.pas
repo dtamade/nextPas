@@ -36,16 +36,12 @@ function aes_aesimc_si128(const data: TM128): TM128;
 implementation
 
 uses
-  SysUtils;
 
 procedure EnsureExperimentalIntrinsicsEnabled(const aFunctionName: string); inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.CreateFmt(
-    '%s is experimental placeholder semantics. Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.',
-    [aFunctionName]
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
   if aFunctionName = '' then
     ;
   {$ENDIF}

@@ -1,6 +1,5 @@
 program test_simd_boundary;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
@@ -15,7 +14,7 @@ program test_simd_boundary;
  *}
 
 uses
-  SysUtils, nextpas.core.math,
+  SysUtils, Math, nextpas.core.math,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar,

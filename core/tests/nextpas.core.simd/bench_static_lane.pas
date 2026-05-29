@@ -1,6 +1,5 @@
 program bench_static_lane;
 
-{$mode objfpc}
 {$I ../../src/nextpas.core.settings.inc}
 {$INLINE ON}
 

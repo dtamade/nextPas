@@ -58,25 +58,39 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 
 ## 当前状态
 
-- 22 套件，315 测试，0 失败
-- heaptrc 全部零泄漏
+- 23 套件，323+ 测试，0 失败，heaptrc 全部零泄漏
 - G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅ G-PERF ✅ G-BENCH ✅
-- **排序性能超越 Go pdqsort，接近 Rust**
+- **接口已稳定，后续只做性能调优，不改公共 API**
 
-## Benchmark 数据 (N=10000, -O2, Xeon E5-2680v4)
+## 接口稳定声明
 
-| Scenario | nextPas | Go pdqsort | Rust pdqsort | nextPas vs Go |
-|----------|---------|-----------|-------------|---------------|
-| random   | 1022μs  | 1336μs    | 180μs       | **1.3x 快于 Go** |
-| sorted   | 9.5μs   | 68μs      | 7.2μs       | **7.2x 快于 Go** |
-| reversed | 17.8μs  | 83μs      | 8.6μs       | **4.7x 快于 Go** |
-| all-same | 9.6μs   | 58μs      | 7.2μs       | **6.0x 快于 Go** |
+所有容器的公共接口（IVec, IDeque, IHashMap, IHashSet, IList, IForwardList,
+IPriorityQueue, ILruCache, IBitSet, IMultiMap, IMultiSet, ITreeSet, ILinkedHashMap,
+ILinkedHashSet, ICircularBuffer）已冻结。后续优化只在实现层面进行，不影响调用方。
 
-## 后续可选优化（需要更大改动）
+## 性能全景 (N=100000, -O2, Xeon E5-2680v4)
 
-- ordinal 类型特化 sort 内核（`{$INCLUDE}` 宏生成，可追平 Go）
-- pdqsort partial insertion sort（几乎有序数据加速）
-- reversed 场景优化（当前 O(N) 检测 + O(N) reverse，可合并为一次扫描）
+| 容器 | 操作 | nextPas | Go | Rust | vs Go | vs Rust |
+|------|------|---------|-----|------|-------|---------|
+| Vec.Sort | random(N=10k) | 226μs | — | 181μs | — | 1.25x |
+| Vec.Push | grow | 743μs | 1438μs | — | 1.9x 快 | — |
+| HashMap | Get(hit) I32I32 | 2.70ms | 4.52ms | 2.79ms | 1.7x 快 | **1.03x** |
+| HashMap | Put I32I32 | 3.74ms | 8.92ms | 2.77ms | 2.4x 快 | 1.35x |
+| HashSet | Add (Swiss I32) | 4.57ms | 18.7ms | 5.31ms | 4.1x 快 | **0.87x 超越** |
+| VecDeque | Queue | 778μs | 3342μs | 509μs | 4.3x 快 | 1.5x |
+| VecDeque | PushBack | 859μs | 8022μs | 281μs | 9.3x 快 | 3.1x |
+| PriorityQueue | Push | 3286μs | 13562μs | 1549μs | 4.1x 快 | 2.1x |
+| List | PushBack | 4132μs | 28685μs | 2791μs | 6.9x 快 | 1.5x |
+| ForwardList | PushFront | 3159μs | — | — | — | — |
+| LruCache | Get(hit)/1k | 37μs | — | — | — | — |
+
+## 后续优化方向（接口不变，实现层调优）
+
+- HashSet 切 SwissTable 后端（已验证可追平 Rust）
+- VecDeque.PopFront 批量 Drain API（摊销方法调用开销）
+- PriorityQueue 特化版本（固定 min/max-heap，消除函数指针）
+- Vec.Iterate 提供指针迭代器（零开销遍历）
+- 等 nextPas 编译器实现泛型方法内联后，所有容器自动提速
 
 ## 质量门禁
 

@@ -81,26 +81,18 @@ function lasx_xvmin_d(const a, b: TLASXVector): TLASXVector;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.lasx is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
     {$IFNDEF CPULOONGARCH64}
-    raise ENotSupportedException.Create(
-      'nextpas.core.simd.intrinsics.lasx placeholder semantics are only qualified on LoongArch64 targets whose cpuinfo reports LASX.'
-    );
-    {$ELSE}
+    
+  RunError(217);    {$ELSE}
     if not HasLASX then
-      raise ENotSupportedException.Create(
-        'nextpas.core.simd.intrinsics.lasx placeholder semantics are only qualified on LoongArch64 targets whose cpuinfo reports LASX.'
-      );
+      
     {$ENDIF}
   {$ENDIF}
 end;

@@ -1,5 +1,4 @@
 program test_simdgen_parity;
-{$MODE OBJFPC}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

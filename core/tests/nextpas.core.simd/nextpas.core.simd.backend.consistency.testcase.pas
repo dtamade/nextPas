@@ -1,6 +1,5 @@
 unit nextpas.core.simd.backend.consistency.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 interface

@@ -16,6 +16,8 @@ const
 
 function platform_path_join(const ABase, AChild: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_join3(const A, B, C: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_dirname(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_basename(const APath: PAnsiChar;
@@ -32,6 +34,8 @@ function platform_path_is_absolute(const APath: PAnsiChar): Boolean;
 function platform_path_normalize(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 function platform_path_resolve(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_path_ensure_sep(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 
 implementation
@@ -137,6 +141,15 @@ begin
     ABuf[LPos] := #0;
     Result := LTotal;
   end;
+end;
+
+function platform_path_join3(const A, B, C: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LTmp: array[0..1023] of AnsiChar;
+begin
+  platform_path_join(A, B, @LTmp[0], 1024);
+  Result := platform_path_join(@LTmp[0], C, ABuf, ABufLen);
 end;
 
 function platform_path_dirname(const APath: PAnsiChar;
@@ -460,5 +473,33 @@ begin
   Result := -1;
 end;
 {$ENDIF}
+
+function platform_path_ensure_sep(const APath: PAnsiChar;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+var
+  LLen: Int32;
+begin
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LLen := StrLen(APath);
+  if LLen = 0 then
+  begin
+    ABuf[0] := PLATFORM_PATH_SEP;
+    ABuf[1] := #0;
+    Exit(1);
+  end;
+  if IsSep(APath[LLen - 1]) then
+    Exit(CopyToBuf(APath, LLen, ABuf, ABufLen));
+  if LLen + 1 >= ABufLen then
+  begin
+    Move(APath^, ABuf^, ABufLen - 1);
+    ABuf[ABufLen - 1] := #0;
+    Exit(LLen + 1);
+  end;
+  Move(APath^, ABuf^, LLen);
+  ABuf[LLen] := PLATFORM_PATH_SEP;
+  ABuf[LLen + 1] := #0;
+  Result := LLen + 1;
+end;
 
 end.

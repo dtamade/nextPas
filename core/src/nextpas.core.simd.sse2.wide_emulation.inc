@@ -2600,30 +2600,104 @@ end;
 procedure ToLowerAscii_SSE2(p: Pointer; len: SizeUInt);
 var
   pB: PByte;
-  i: SizeUInt;
-  c: Byte;
+  LI, LCount16: SizeUInt;
 begin
   pB := PByte(p);
-  for i := 0 to len - 1 do
+  LI := 0;
+  LCount16 := len and (not SizeUInt(15));
+  {$IFDEF CPUX86_64}
+  if LCount16 > 0 then
+  asm
+    mov rax, pB
+    xor ecx, ecx
+    mov edx, 65
+    movd xmm3, edx
+    punpcklbw xmm3, xmm3
+    pshuflw xmm3, xmm3, 0
+    punpcklqdq xmm3, xmm3
+    mov edx, 25
+    movd xmm4, edx
+    punpcklbw xmm4, xmm4
+    pshuflw xmm4, xmm4, 0
+    punpcklqdq xmm4, xmm4
+    mov edx, 32
+    movd xmm5, edx
+    punpcklbw xmm5, xmm5
+    pshuflw xmm5, xmm5, 0
+    punpcklqdq xmm5, xmm5
+  @loop16:
+    movdqu xmm0, [rax + rcx]
+    movdqa xmm1, xmm0
+    psubb xmm1, xmm3
+    movdqa xmm2, xmm1
+    pminub xmm2, xmm4
+    pcmpeqb xmm2, xmm1
+    pand xmm2, xmm5
+    paddb xmm0, xmm2
+    movdqu [rax + rcx], xmm0
+    add ecx, 16
+    cmp ecx, dword [LCount16]
+    jb @loop16
+    mov LI, rcx
+  end;
+  {$ENDIF}
+  while LI < len do
   begin
-    c := pB[i];
-    if (c >= Ord('A')) and (c <= Ord('Z')) then
-      pB[i] := c + 32;
+    if (pB[LI] >= Ord('A')) and (pB[LI] <= Ord('Z')) then
+      pB[LI] := pB[LI] + 32;
+    Inc(LI);
   end;
 end;
 
 procedure ToUpperAscii_SSE2(p: Pointer; len: SizeUInt);
 var
   pB: PByte;
-  i: SizeUInt;
-  c: Byte;
+  LI, LCount16: SizeUInt;
 begin
   pB := PByte(p);
-  for i := 0 to len - 1 do
+  LI := 0;
+  LCount16 := len and (not SizeUInt(15));
+  {$IFDEF CPUX86_64}
+  if LCount16 > 0 then
+  asm
+    mov rax, pB
+    xor ecx, ecx
+    mov edx, 97
+    movd xmm3, edx
+    punpcklbw xmm3, xmm3
+    pshuflw xmm3, xmm3, 0
+    punpcklqdq xmm3, xmm3
+    mov edx, 25
+    movd xmm4, edx
+    punpcklbw xmm4, xmm4
+    pshuflw xmm4, xmm4, 0
+    punpcklqdq xmm4, xmm4
+    mov edx, 32
+    movd xmm5, edx
+    punpcklbw xmm5, xmm5
+    pshuflw xmm5, xmm5, 0
+    punpcklqdq xmm5, xmm5
+  @loop16:
+    movdqu xmm0, [rax + rcx]
+    movdqa xmm1, xmm0
+    psubb xmm1, xmm3
+    movdqa xmm2, xmm1
+    pminub xmm2, xmm4
+    pcmpeqb xmm2, xmm1
+    pand xmm2, xmm5
+    psubb xmm0, xmm2
+    movdqu [rax + rcx], xmm0
+    add ecx, 16
+    cmp ecx, dword [LCount16]
+    jb @loop16
+    mov LI, rcx
+  end;
+  {$ENDIF}
+  while LI < len do
   begin
-    c := pB[i];
-    if (c >= Ord('a')) and (c <= Ord('z')) then
-      pB[i] := c - 32;
+    if (pB[LI] >= Ord('a')) and (pB[LI] <= Ord('z')) then
+      pB[LI] := pB[LI] - 32;
+    Inc(LI);
   end;
 end;
 

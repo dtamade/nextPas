@@ -1,0 +1,49 @@
+{
+  "_comment": "SIMD mask helper definitions (TMask2/TMask4/TMask8/TMask16)",
+  "category": "mask",
+  "operations": [
+    {
+      "name": "All",
+      "name_pattern": "{type}{op}",
+      "signature": "mask_bool",
+      "scalar_op": "custom",
+      "scalar_body": "Result := (mask and {mask_all}) = {mask_all}",
+      "doc": "True when all valid mask bits are set",
+      "applies_to": ["Mask2", "Mask4", "Mask8", "Mask16"]
+    },
+    {
+      "name": "Any",
+      "name_pattern": "{type}{op}",
+      "signature": "mask_bool",
+      "scalar_op": "custom",
+      "scalar_body": "Result := (mask and {mask_all}) <> 0",
+      "doc": "True when any valid mask bit is set",
+      "applies_to": ["Mask2", "Mask4", "Mask8", "Mask16"]
+    },
+    {
+      "name": "None",
+      "name_pattern": "{type}{op}",
+      "signature": "mask_bool",
+      "scalar_op": "custom",
+      "scalar_body": "Result := (mask and {mask_all}) = 0",
+      "doc": "True when no valid mask bit is set",
+      "applies_to": ["Mask2", "Mask4", "Mask8", "Mask16"]
+    },
+    {
+      "name": "PopCount",
+      "name_pattern": "{type}{op}",
+      "signature": "mask_int",
+      "scalar_op": "custom",
+      "doc": "Count valid mask bits that are set",
+      "applies_to": ["Mask2", "Mask4", "Mask8", "Mask16"]
+    },
+    {
+      "name": "FirstSet",
+      "name_pattern": "{type}{op}",
+      "signature": "mask_int",
+      "scalar_op": "custom",
+      "doc": "Index of the first set valid mask bit, or -1",
+      "applies_to": ["Mask2", "Mask4", "Mask8", "Mask16"]
+    }
+  ]
+}

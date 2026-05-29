@@ -14,7 +14,7 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
-  np_lexer, np_hir_types, np_hir_model, np_hir_builder,
+  np_lexer, np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   np_unit_graph, np_unit_resolver,
@@ -775,9 +775,20 @@ begin
 end;
 
 procedure TCompilationSession.AnalyzeSyntax;
+var
+  RawLexer: TLexerResult;
+  PP: TPreprocessor;
+  Defines: TDefineTable;
 begin
   ResetSyntaxState;
-  FLexerResult := TLexerResult.Create(FSourceDatabase.RootSourceText);
+  RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
+    FDiagnosticsSink, FRootFileId);
+  Defines := TDefineTable.Create;
+  PP := TPreprocessor.Create(Defines, True, nil);
+  PP.Process(RawLexer);
+  FLexerResult := PP.ToLexerResult;
+  PP.Free;
+  RawLexer.Free;
   FGreenTree := ParseGreenTree(FLexerResult, FDiagnosticsSink, FRootFileId);
   FAstFacade := TAstFacade.Create(FGreenTree);
 

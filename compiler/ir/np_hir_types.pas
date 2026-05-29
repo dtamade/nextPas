@@ -31,6 +31,50 @@ type
   THIRStringKind = (skShort, skAnsi, skUnicode);
   THIRCallConv = (ccDefault, ccCDecl, ccStdCall, ccRegister, ccPascal);
 
+  THirNodeKind = (
+    hnkVarDeclRuntime,
+    hnkVarDeclStrRuntime,
+    hnkVarDeclArrRuntime,
+    hnkVarDeclPtrRuntime,
+    hnkVarDeclVarrefRuntime,
+    hnkVarDeclRecordRuntime,
+    hnkAssignRuntime,
+    hnkAssignStrRuntime,
+    hnkAssignStrCopyRuntime,
+    hnkAssignStrCallRuntime,
+    hnkAssignStrVcallRuntime,
+    hnkAssignStrConcatRuntime,
+    hnkHaltCallRuntime,
+    hnkHaltCall,
+    hnkCondBrRuntime,
+    hnkSwitchRuntime,
+    hnkBrRuntime,
+    hnkBlockLabelRuntime,
+    hnkFunctionBodyBegin,
+    hnkFunctionBodyEnd,
+    hnkRetRuntime,
+    hnkRetStrRuntime,
+    hnkCallRuntime,
+    hnkObjectFreeRuntime,
+    hnkIntToStrRuntime,
+    hnkCopyStrRuntime,
+    hnkWriteIntRuntime,
+    hnkWriteStringRuntime,
+    hnkWriteStrVarRuntime,
+    hnkWriteCall,
+    hnkSetLengthArrRuntime,
+    hnkAssignArrElemRuntime,
+    hnkMethodBodyBegin,
+    hnkClassNewRuntime,
+    hnkFieldStoreRuntime,
+    hnkRecordFieldStoreRuntime,
+    hnkRecordCopyRuntime,
+    hnkFieldStoreStrRuntime,
+    hnkAssignStrFieldLoadRuntime,
+    hnkVmtStoreRuntime,
+    hnkUnknown
+  );
+
   THIRFieldEntry = record
     Name: string;
     TypeId: THIRTypeId;
@@ -93,10 +137,60 @@ type
       ARetType: THIRTypeId; AConv: THIRCallConv): THIRTypeId;
   end;
 
+function ParseHirNodeKind(const AKind: string): THirNodeKind;
+
 implementation
 
 uses
   SysUtils;
+
+function ParseHirNodeKind(const AKind: string): THirNodeKind;
+begin
+  case AKind of
+    'var-decl-runtime': Result := hnkVarDeclRuntime;
+    'var-decl-str-runtime': Result := hnkVarDeclStrRuntime;
+    'var-decl-arr-runtime': Result := hnkVarDeclArrRuntime;
+    'var-decl-ptr-runtime': Result := hnkVarDeclPtrRuntime;
+    'var-decl-varref-runtime': Result := hnkVarDeclVarrefRuntime;
+    'var-decl-record-runtime': Result := hnkVarDeclRecordRuntime;
+    'assign-runtime': Result := hnkAssignRuntime;
+    'assign-str-runtime': Result := hnkAssignStrRuntime;
+    'assign-str-copy-runtime': Result := hnkAssignStrCopyRuntime;
+    'assign-str-call-runtime': Result := hnkAssignStrCallRuntime;
+    'assign-str-vcall-runtime': Result := hnkAssignStrVcallRuntime;
+    'assign-str-concat-runtime': Result := hnkAssignStrConcatRuntime;
+    'halt-call-runtime': Result := hnkHaltCallRuntime;
+    'halt-call': Result := hnkHaltCall;
+    'cond-br-runtime': Result := hnkCondBrRuntime;
+    'switch-runtime': Result := hnkSwitchRuntime;
+    'br-runtime': Result := hnkBrRuntime;
+    'block-label-runtime': Result := hnkBlockLabelRuntime;
+    'function-body-begin': Result := hnkFunctionBodyBegin;
+    'function-body-end': Result := hnkFunctionBodyEnd;
+    'ret-runtime': Result := hnkRetRuntime;
+    'ret-str-runtime': Result := hnkRetStrRuntime;
+    'call-runtime': Result := hnkCallRuntime;
+    'object-free-runtime': Result := hnkObjectFreeRuntime;
+    'int-to-str-runtime': Result := hnkIntToStrRuntime;
+    'copy-str-runtime': Result := hnkCopyStrRuntime;
+    'write-int-runtime': Result := hnkWriteIntRuntime;
+    'write-string-runtime': Result := hnkWriteStringRuntime;
+    'write-str-var-runtime': Result := hnkWriteStrVarRuntime;
+    'write-call': Result := hnkWriteCall;
+    'setlength-arr-runtime': Result := hnkSetLengthArrRuntime;
+    'assign-arr-elem-runtime': Result := hnkAssignArrElemRuntime;
+    'method-body-begin': Result := hnkMethodBodyBegin;
+    'class-new-runtime': Result := hnkClassNewRuntime;
+    'field-store-runtime': Result := hnkFieldStoreRuntime;
+    'record-field-store-runtime': Result := hnkRecordFieldStoreRuntime;
+    'record-copy-runtime': Result := hnkRecordCopyRuntime;
+    'field-store-str-runtime': Result := hnkFieldStoreStrRuntime;
+    'assign-str-field-load-runtime': Result := hnkAssignStrFieldLoadRuntime;
+    'vmt-store-runtime': Result := hnkVmtStoreRuntime;
+  else
+    Result := hnkUnknown;
+  end;
+end;
 
 constructor THIRTypeTable.Create;
 begin

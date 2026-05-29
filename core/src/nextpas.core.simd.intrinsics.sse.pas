@@ -131,7 +131,6 @@ procedure sse_setcsr(Value: Integer);
 implementation
 
 uses
-  SysUtils;
 
 // Helper: check whether a floating-point value is NaN.
 function IsNaN(Value: Single): Boolean;

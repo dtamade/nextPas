@@ -6,15 +6,21 @@ uses
   {$IFDEF UNIX}cthreads, BaseUnix, Syscall,{$ENDIF}
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.thread,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
   nextpas.core.thread.channel,
+  nextpas.core.thread.future,
+  nextpas.core.thread.cancel,
   nextpas.core.platform.thread;
 
 type
   TIntChannel = specialize TChannel<Integer>;
   IIntChannel = specialize IChannel<Integer>;
+  TIntFuture = specialize TFuturePromise<Integer>;
+  IIntFuture = specialize IFuture<Integer>;
+  IIntPromise = specialize IPromise<Integer>;
 
 var
   T: TTestRunner;
@@ -133,6 +139,194 @@ begin
   Check(not LCh.Receive(LVal), 'should return false after close + empty');
 end;
 
+{ Channel TrySend/TryReceive }
+
+procedure TestChannelTrySendReceive;
+var
+  LCh: IIntChannel;
+  LVal: Integer;
+begin
+  LCh := TIntChannel.Create(2);
+  Check(LCh.TrySend(10), 'trysend 1');
+  Check(LCh.TrySend(20), 'trysend 2');
+  Check(not LCh.TrySend(30), 'trysend full');
+  Check(LCh.TryReceive(LVal), 'tryrecv 1');
+  CheckEqual(Int64(10), Int64(LVal));
+  Check(LCh.TryReceive(LVal), 'tryrecv 2');
+  CheckEqual(Int64(20), Int64(LVal));
+  Check(not LCh.TryReceive(LVal), 'tryrecv empty');
+  LCh.Close;
+end;
+
+{ Future/Promise }
+
+procedure TestFutureComplete;
+var
+  LFP: TIntFuture;
+  LF: IIntFuture;
+  LP: IIntPromise;
+begin
+  LFP := TIntFuture.Create;
+  LF := LFP;
+  LP := LFP;
+  Check(not LF.IsDone, 'pending');
+  Check(LF.State = fsPending, 'state pending');
+  LP.Complete(42);
+  Check(LF.IsDone, 'done');
+  Check(LF.State = fsCompleted, 'state completed');
+  CheckEqual(Int64(42), Int64(LF.Wait), 'wait returns value');
+  CheckEqual(Int64(42), Int64(LF.Get), 'get returns value');
+end;
+
+procedure TestFutureFail;
+var
+  LFP: TIntFuture;
+  LF: IIntFuture;
+  LP: IIntPromise;
+  LGot: Boolean;
+begin
+  LFP := TIntFuture.Create;
+  LF := LFP;
+  LP := LFP;
+  LP.Fail(EIOError.Create('test error'));
+  Check(LF.State = fsFailed, 'state failed');
+  LGot := False;
+  try
+    LF.Wait;
+  except
+    on E: EIOError do
+      LGot := True;
+  end;
+  Check(LGot, 'wait re-raises');
+end;
+
+procedure TestFutureCancel;
+var
+  LFP: TIntFuture;
+  LF: IIntFuture;
+  LP: IIntPromise;
+  LGot: Boolean;
+begin
+  LFP := TIntFuture.Create;
+  LF := LFP;
+  LP := LFP;
+  LP.Cancel;
+  Check(LF.State = fsCancelled, 'state cancelled');
+  LGot := False;
+  try
+    LF.Wait;
+  except
+    on E: ECancelledError do
+      LGot := True;
+  end;
+  Check(LGot, 'wait throws cancelled');
+end;
+
+procedure TestFutureWaitTimeout;
+var
+  LFP: TIntFuture;
+  LF: IIntFuture;
+  LP: IIntPromise;
+begin
+  LFP := TIntFuture.Create;
+  LF := LFP;
+  LP := LFP;
+  Check(not LF.WaitTimeout(1000000), 'timeout 1ms');
+  LP.Complete(7);
+  Check(LF.WaitTimeout(1000000), 'immediate after complete');
+end;
+
+{ CancellationToken }
+
+procedure TestCancellationBasic;
+var
+  LCS: ICancellationSource;
+  LTok: ICancellationToken;
+begin
+  LCS := CreateCancellationSource;
+  LTok := LCS.Token;
+  Check(not LTok.IsCancelled, 'not cancelled');
+  LCS.Cancel;
+  Check(LTok.IsCancelled, 'cancelled');
+end;
+
+procedure TestCancellationThrow;
+var
+  LCS: ICancellationSource;
+  LGot: Boolean;
+begin
+  LCS := CreateCancellationSource;
+  LCS.Cancel;
+  LGot := False;
+  try
+    LCS.Token.ThrowIfCancelled;
+  except
+    on E: ECancelledError do
+      LGot := True;
+  end;
+  Check(LGot, 'ThrowIfCancelled raises');
+end;
+
+procedure TestCancellationWait;
+var
+  LCS: ICancellationSource;
+begin
+  LCS := CreateCancellationSource;
+  Check(not LCS.Token.WaitCancellation(1000000), 'timeout');
+  LCS.Cancel;
+  Check(LCS.Token.WaitCancellation(1000000), 'immediate after cancel');
+end;
+
+{ Channel timeout tests }
+
+procedure TestChannelSendTimeout;
+var
+  LCh: IIntChannel;
+begin
+  LCh := TIntChannel.Create(1);
+  LCh.Send(1);
+  Check(not LCh.SendTimeout(2, 1000000), 'timeout on full (1ms)');
+  LCh.Close;
+end;
+
+procedure TestChannelReceiveTimeout;
+var
+  LCh: IIntChannel;
+  LVal: Integer;
+begin
+  LCh := TIntChannel.Create(1);
+  Check(not LCh.ReceiveTimeout(LVal, 1000000), 'timeout on empty (1ms)');
+  LCh.Send(42);
+  Check(LCh.ReceiveTimeout(LVal, 1000000), 'immediate when available');
+  CheckEqual(Int64(42), Int64(LVal));
+  LCh.Close;
+end;
+
+{ FutureVoid + WhenAll tests }
+
+procedure TestFutureVoid;
+var
+  LF: IFutureVoid;
+begin
+  LF := CreateFutureVoid;
+  Check(not LF.IsDone, 'not done');
+  FutureVoidComplete(LF);
+  Check(LF.IsDone, 'done');
+  LF.Wait;
+end;
+
+procedure TestWhenAll;
+var
+  LF1, LF2, LAll: IFutureVoid;
+begin
+  LF1 := CreateFutureVoid;
+  LF2 := CreateFutureVoid;
+  FutureVoidComplete(LF1);
+  FutureVoidComplete(LF2);
+  LAll := WhenAll([LF1, LF2]);
+  Check(LAll.IsDone, 'all done');
+end;
+
 var
   GAllPassed: Boolean = False;
 
@@ -157,6 +351,18 @@ begin
   T.Run('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
   T.Run('Channel with thread', @TestChannelWithThread);
   T.Run('Channel close then receive', @TestChannelCloseReceiveFalse);
+  T.Run('Channel TrySend/TryReceive', @TestChannelTrySendReceive);
+  T.Run('Future complete', @TestFutureComplete);
+  T.Run('Future fail', @TestFutureFail);
+  T.Run('Future cancel', @TestFutureCancel);
+  T.Run('Future wait timeout', @TestFutureWaitTimeout);
+  T.Run('Cancellation basic', @TestCancellationBasic);
+  T.Run('Cancellation throw', @TestCancellationThrow);
+  T.Run('Cancellation wait', @TestCancellationWait);
+  T.Run('Channel send timeout', @TestChannelSendTimeout);
+  T.Run('Channel receive timeout', @TestChannelReceiveTimeout);
+  T.Run('FutureVoid basic', @TestFutureVoid);
+  T.Run('WhenAll', @TestWhenAll);
   GAllPassed := T.AllPassed;
   T.Summary;
   {$IFDEF UNIX}

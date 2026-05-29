@@ -170,3 +170,7 @@ type
     cAlternateFileName: array[0..13] of AnsiChar;
   end;
   LPWIN32_FIND_DATAA = ^WIN32_FIND_DATAA;
+
+const
+  LOCKFILE_FAIL_IMMEDIATELY = DWORD(1);
+  LOCKFILE_EXCLUSIVE_LOCK   = DWORD(2);

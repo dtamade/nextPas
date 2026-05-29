@@ -634,17 +634,14 @@ end;
 // A lightweight compiler barrier.
 // - For x86/x86_64, acquire/release for plain load/store doesn't require a CPU fence (TSO),
 //   but we still want to prevent compiler reordering.
-// NOTE: FPC does not inline routines containing inline assembler, so keep this as a tiny
-// out-of-line stub: the *call* itself is the compiler barrier (and there's no CPU fence).
 {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-procedure _compiler_barrier; assembler; nostackframe;
-asm
-  nop
+procedure _compiler_barrier; inline;
+begin
+  asm end;
 end;
 {$ELSE}
 procedure _compiler_barrier; inline;
 begin
-  // Safe fallback if ever used on other platforms.
   ReadBarrier;
 end;
 {$ENDIF}

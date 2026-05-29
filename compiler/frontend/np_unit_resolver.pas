@@ -11,8 +11,8 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
-  np_package_manifest, np_source_database, np_target_facts, np_text_primitives,
-  np_toolchain_profiles, np_unit_graph;
+  np_package_manifest, np_preprocessor, np_source_database, np_target_facts,
+  np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
   TSearchIndexEntry = record
@@ -414,6 +414,44 @@ begin
     end;
   end;
 
+  if FindFirst(
+    IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) + '*.pp',
+    faAnyFile,
+    SearchRec
+  ) = 0 then
+  begin
+    try
+      repeat
+        if (SearchRec.Attr and faDirectory) <> 0 then
+          Continue;
+
+        UnitId := NormalizeUnitIdentity(ChangeFileExt(SearchRec.Name, ''));
+        if UnitId = '' then
+          Continue;
+
+        CandidatePath := NormalizeCorePath(
+          IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) +
+            SearchRec.Name
+        );
+        EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
+        if EntryIndex < 0 then
+        begin
+          Index := Length(FRootIndexes[ARootIndex].Entries);
+          SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
+          FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
+          SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
+          EntryIndex := Index;
+        end;
+        AppendString(
+          FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
+          CandidatePath
+        );
+      until FindNext(SearchRec) <> 0;
+    finally
+      FindClose(SearchRec);
+    end;
+  end;
+
   FRootIndexes[ARootIndex].Status := 'ready';
   FRootIndexes[ARootIndex].LastScanTimestamp := Round(Now * 86400);
 end;
@@ -468,6 +506,8 @@ var
   HasExistingUnit: Boolean;
   DependencyFileId: TSourceFileId;
   DependencyLexer: TLexerResult;
+  DependencyDefines: TDefineTable;
+  DependencyPP: TPreprocessor;
   DependencyGreenTree: TGreenTree;
   DependencyAst: TAstFacade;
   DependencyName: string;
@@ -526,8 +566,20 @@ begin
 
   DependencyFileId := FSourceDatabase.RegisterSource(Candidates[0]);
   DependencyLexer := TLexerResult.Create(
-    FSourceDatabase.SourceTextForFileId(DependencyFileId)
+    FSourceDatabase.SourceTextForFileId(DependencyFileId),
+    FDiagnostics,
+    DependencyFileId
   );
+  DependencyDefines := TDefineTable.Create;
+  DependencyDefines.SeedFPCDefines;
+  DependencyPP := TPreprocessor.Create(DependencyDefines, True, nil);
+  try
+    DependencyPP.Process(DependencyLexer);
+    DependencyLexer.Free;
+    DependencyLexer := DependencyPP.ToLexerResult;
+  finally
+    DependencyPP.Free;
+  end;
   DependencyGreenTree := ParseGreenTree(
     DependencyLexer,
     FDiagnostics,

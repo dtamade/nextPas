@@ -1,6 +1,5 @@
 program nextpas.core.simd.test_domain_full;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

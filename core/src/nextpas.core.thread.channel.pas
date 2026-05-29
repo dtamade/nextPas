@@ -20,31 +20,51 @@ type
     FTail: Integer;
     FCount: Integer;
     FClosed: Boolean;
+    FUnbuffered: Boolean;
+    FSendWaiting: Integer;
+    FRecvWaiting: Integer;
     FMutex: TPlatformMutex;
     FSendCond: TPlatformCondVar;
     FRecvCond: TPlatformCondVar;
+    FHandshakeItem: T;
+    FHandshakeReady: Boolean;
+    FSendTicket: Int64;
+    FConsumedTicket: Int64;
   public
     constructor Create(const ACapacity: Integer);
     destructor Destroy; override;
     procedure Send(const AValue: T);
     function Receive(out AValue: T): Boolean;
+    function TrySend(const AValue: T): Boolean;
+    function TryReceive(out AValue: T): Boolean;
+    function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
     function IsClosed: Boolean;
   end;
 
 implementation
 
-{ TChannel }
-
 constructor TChannel.Create(const ACapacity: Integer);
 begin
   inherited Create;
-  FCapacity := ACapacity;
-  SetLength(FBuffer, ACapacity);
+  FUnbuffered := ACapacity <= 0;
+  if FUnbuffered then
+    FCapacity := 0
+  else
+  begin
+    FCapacity := ACapacity;
+    SetLength(FBuffer, ACapacity);
+  end;
   FHead := 0;
   FTail := 0;
   FCount := 0;
   FClosed := False;
+  FSendWaiting := 0;
+  FRecvWaiting := 0;
+  FHandshakeReady := False;
+  FSendTicket := 0;
+  FConsumedTicket := 0;
 
   platform_mutex_init(FMutex);
   platform_condvar_init(FSendCond);
@@ -60,8 +80,38 @@ begin
 end;
 
 procedure TChannel.Send(const AValue: T);
+var
+  LMyTicket: Int64;
 begin
   platform_mutex_lock(FMutex);
+
+  if FClosed then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit;
+  end;
+
+  if FUnbuffered then
+  begin
+    { Wait until handshake slot is free (previous value consumed). }
+    while FHandshakeReady and (not FClosed) do
+      platform_condvar_wait(FSendCond, FMutex);
+    if FClosed then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit;
+    end;
+    LMyTicket := FSendTicket;
+    Inc(FSendTicket);
+    FHandshakeItem := AValue;
+    FHandshakeReady := True;
+    platform_condvar_signal(FRecvCond);
+    { Wait until MY value is consumed (ticket matched). }
+    while (FConsumedTicket <= LMyTicket) and (not FClosed) do
+      platform_condvar_wait(FSendCond, FMutex);
+    platform_mutex_unlock(FMutex);
+    Exit;
+  end;
 
   while (FCount >= FCapacity) and (not FClosed) do
     platform_condvar_wait(FSendCond, FMutex);
@@ -84,6 +134,28 @@ function TChannel.Receive(out AValue: T): Boolean;
 begin
   platform_mutex_lock(FMutex);
 
+  if FUnbuffered then
+  begin
+    Inc(FRecvWaiting);
+    while (not FHandshakeReady) and (not FClosed) do
+      platform_condvar_wait(FRecvCond, FMutex);
+    Dec(FRecvWaiting);
+    if (not FHandshakeReady) and FClosed then
+    begin
+      platform_mutex_unlock(FMutex);
+      Result := False;
+      Exit;
+    end;
+    AValue := FHandshakeItem;
+    FHandshakeItem := Default(T);
+    FHandshakeReady := False;
+    Inc(FConsumedTicket);
+    platform_condvar_broadcast(FSendCond);
+    platform_mutex_unlock(FMutex);
+    Result := True;
+    Exit;
+  end;
+
   while (FCount = 0) and (not FClosed) do
     platform_condvar_wait(FRecvCond, FMutex);
 
@@ -95,12 +167,188 @@ begin
   end;
 
   AValue := FBuffer[FHead];
+  FBuffer[FHead] := Default(T);
   FHead := (FHead + 1) mod FCapacity;
   Dec(FCount);
   Result := True;
 
   platform_mutex_unlock(FMutex);
   platform_condvar_signal(FSendCond);
+end;
+
+function TChannel.TrySend(const AValue: T): Boolean;
+var
+  LMyTicket: Int64;
+begin
+  platform_mutex_lock(FMutex);
+  if FClosed then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  if FUnbuffered then
+  begin
+    if (FRecvWaiting = 0) or FHandshakeReady then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+    LMyTicket := FSendTicket;
+    Inc(FSendTicket);
+    FHandshakeItem := AValue;
+    FHandshakeReady := True;
+    platform_condvar_signal(FRecvCond);
+    while (FConsumedTicket <= LMyTicket) and (not FClosed) do
+      platform_condvar_wait(FSendCond, FMutex);
+    platform_mutex_unlock(FMutex);
+    Result := True;
+    Exit;
+  end;
+  if FCount >= FCapacity then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  FBuffer[FTail] := AValue;
+  FTail := (FTail + 1) mod FCapacity;
+  Inc(FCount);
+  platform_mutex_unlock(FMutex);
+  platform_condvar_signal(FRecvCond);
+  Result := True;
+end;
+
+function TChannel.TryReceive(out AValue: T): Boolean;
+begin
+  platform_mutex_lock(FMutex);
+  if FUnbuffered then
+  begin
+    if not FHandshakeReady then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+    AValue := FHandshakeItem;
+    FHandshakeItem := Default(T);
+    FHandshakeReady := False;
+    Inc(FConsumedTicket);
+    platform_condvar_broadcast(FSendCond);
+    platform_mutex_unlock(FMutex);
+    Result := True;
+    Exit;
+  end;
+  if FCount = 0 then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  AValue := FBuffer[FHead];
+  FBuffer[FHead] := Default(T);
+  FHead := (FHead + 1) mod FCapacity;
+  Dec(FCount);
+  platform_mutex_unlock(FMutex);
+  platform_condvar_signal(FSendCond);
+  Result := True;
+end;
+
+function TChannel.SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+var
+  LMyTicket: Int64;
+begin
+  platform_mutex_lock(FMutex);
+  if FClosed then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  if FUnbuffered then
+  begin
+    while FHandshakeReady and (not FClosed) do
+      if platform_condvar_timedwait(FSendCond, FMutex, ATimeoutNs) <> 0 then
+      begin
+        platform_mutex_unlock(FMutex);
+        Exit(False);
+      end;
+    if FClosed then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+    LMyTicket := FSendTicket;
+    Inc(FSendTicket);
+    FHandshakeItem := AValue;
+    FHandshakeReady := True;
+    platform_condvar_signal(FRecvCond);
+    while (FConsumedTicket <= LMyTicket) and (not FClosed) do
+      platform_condvar_wait(FSendCond, FMutex);
+    platform_mutex_unlock(FMutex);
+    Result := True;
+    Exit;
+  end;
+  while (FCount >= FCapacity) and (not FClosed) do
+    if platform_condvar_timedwait(FSendCond, FMutex, ATimeoutNs) <> 0 then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+  if FClosed then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  FBuffer[FTail] := AValue;
+  FTail := (FTail + 1) mod FCapacity;
+  Inc(FCount);
+  platform_mutex_unlock(FMutex);
+  platform_condvar_signal(FRecvCond);
+  Result := True;
+end;
+
+function TChannel.ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+begin
+  platform_mutex_lock(FMutex);
+  if FUnbuffered then
+  begin
+    Inc(FRecvWaiting);
+    while (not FHandshakeReady) and (not FClosed) do
+      if platform_condvar_timedwait(FRecvCond, FMutex, ATimeoutNs) <> 0 then
+      begin
+        Dec(FRecvWaiting);
+        platform_mutex_unlock(FMutex);
+        Exit(False);
+      end;
+    Dec(FRecvWaiting);
+    if (not FHandshakeReady) and FClosed then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+    AValue := FHandshakeItem;
+    FHandshakeItem := Default(T);
+    FHandshakeReady := False;
+    Inc(FConsumedTicket);
+    platform_condvar_broadcast(FSendCond);
+    platform_mutex_unlock(FMutex);
+    Result := True;
+    Exit;
+  end;
+  while (FCount = 0) and (not FClosed) do
+    if platform_condvar_timedwait(FRecvCond, FMutex, ATimeoutNs) <> 0 then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit(False);
+    end;
+  if (FCount = 0) and FClosed then
+  begin
+    platform_mutex_unlock(FMutex);
+    Exit(False);
+  end;
+  AValue := FBuffer[FHead];
+  FBuffer[FHead] := Default(T);
+  FHead := (FHead + 1) mod FCapacity;
+  Dec(FCount);
+  platform_mutex_unlock(FMutex);
+  platform_condvar_signal(FSendCond);
+  Result := True;
 end;
 
 procedure TChannel.Close;

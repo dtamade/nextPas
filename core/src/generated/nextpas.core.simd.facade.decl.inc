@@ -1096,12 +1096,22 @@ function VecU8x64CmpLt(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64CmpGt(const a, b: TVecU8x64): TMask64; inline;
 { Element-wise addition of two Single arrays }
 procedure ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
+{ Add a scalar to each element of a Single array }
+procedure ArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
 { Compute aDst = aAlpha * aX + aY for Single arrays }
 procedure ArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt); inline;
+{ Element-wise division of two Single arrays }
+procedure ArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
+{ Element-wise maximum of two Single arrays }
+procedure ArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
+{ Element-wise minimum of two Single arrays }
+procedure ArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 { Element-wise multiplication of two Single arrays }
 procedure ArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 { Multiply a Single array by a scalar }
 procedure ArrayMulScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
+{ Element-wise subtraction of two Single arrays }
+procedure ArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 { Dot product of two Single arrays }
 function ReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single; inline;
 { Find the maximum value in a Single array }

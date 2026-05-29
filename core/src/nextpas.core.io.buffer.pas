@@ -5,7 +5,8 @@ unit nextpas.core.io.buffer;
 interface
 
 uses
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.errors;
 
 const
   DEFAULT_BUFFER_SIZE = 4096;
@@ -16,15 +17,19 @@ function CreateBufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = 
 implementation
 
 type
-  TBufferedReader = class(TInterfacedObject, IReader)
+  TBufferedReader = class(TInterfacedObject, IReader, IByteReader, IByteScanner)
   private
     FInner: IReader;
     FBuf: array of Byte;
     FBufPos: SizeUInt;
     FBufLen: SizeUInt;
+    FLastByte: Byte;
+    FHasLast: Boolean;
   public
     constructor Create(const AInner: IReader; const ABufSize: SizeUInt);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function ReadByte: Byte;
+    procedure UnreadByte;
   end;
 
   TBufferedWriter = class(TInterfacedObject, IWriter, IFlusher)
@@ -56,10 +61,13 @@ end;
 constructor TBufferedReader.Create(const AInner: IReader; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if ABufSize = 0 then
+    raise EArgumentError.Create('TBufferedReader: buffer size must be > 0');
   FInner := AInner;
   SetLength(FBuf, ABufSize);
   FBufPos := 0;
   FBufLen := 0;
+  FHasLast := False;
 end;
 
 function TBufferedReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -67,11 +75,24 @@ var
   LDst: PByte;
   LRemaining, LFromBuf, LDirect: SizeUInt;
 begin
+  if ACount = 0 then
+    Exit(0);
+
   LDst := @ABuf;
   LRemaining := ACount;
   Result := 0;
 
-  // Serve from buffer first
+  if FHasLast then
+  begin
+    LDst^ := FLastByte;
+    FHasLast := False;
+    Inc(LDst);
+    Dec(LRemaining);
+    Inc(Result);
+    if LRemaining = 0 then
+      Exit;
+  end;
+
   if FBufLen > FBufPos then
   begin
     LFromBuf := FBufLen - FBufPos;
@@ -109,11 +130,36 @@ begin
   Inc(Result, LFromBuf);
 end;
 
+function TBufferedReader.ReadByte: Byte;
+var
+  LN: SizeUInt;
+begin
+  if FHasLast then
+  begin
+    Result := FLastByte;
+    FHasLast := False;
+    Exit;
+  end;
+  LN := Read(Result, 1);
+  if LN = 0 then
+    raise EIOError.Create('TBufferedReader.ReadByte: EOF');
+  FLastByte := Result;
+end;
+
+procedure TBufferedReader.UnreadByte;
+begin
+  if FHasLast then
+    raise EInvalidOperationError.Create('TBufferedReader.UnreadByte: already unread');
+  FHasLast := True;
+end;
+
 { TBufferedWriter }
 
 constructor TBufferedWriter.Create(const AInner: IWriter; const ABufSize: SizeUInt);
 begin
   inherited Create;
+  if ABufSize = 0 then
+    raise EArgumentError.Create('TBufferedWriter: buffer size must be > 0');
   FInner := AInner;
   SetLength(FBuf, ABufSize);
   FBufPos := 0;
@@ -149,7 +195,7 @@ var
 begin
   LSrc := @ABuf;
   LRemaining := ACount;
-  Result := ACount;
+  Result := 0;
 
   while LRemaining > 0 do
   begin
@@ -158,20 +204,20 @@ begin
     begin
       Move(LSrc^, FBuf[FBufPos], LRemaining);
       Inc(FBufPos, LRemaining);
+      Inc(Result, LRemaining);
       Break;
     end;
 
-    // Fill buffer and flush
     if LSpace > 0 then
     begin
       Move(LSrc^, FBuf[FBufPos], LSpace);
       Inc(LSrc, LSpace);
       Dec(LRemaining, LSpace);
+      Inc(Result, LSpace);
       FBufPos := FBufCap;
     end;
     FlushBuffer;
 
-    // Large writes bypass buffer
     if LRemaining >= FBufCap then
     begin
       while LRemaining > 0 do
@@ -181,6 +227,7 @@ begin
           Exit;
         Inc(LSrc, LCopy);
         Dec(LRemaining, LCopy);
+        Inc(Result, LCopy);
       end;
       Break;
     end;

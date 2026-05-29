@@ -1,5 +1,4 @@
 program bench_simd_comprehensive;
-{$MODE OBJFPC}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$OPTIMIZATION LEVEL3}
 

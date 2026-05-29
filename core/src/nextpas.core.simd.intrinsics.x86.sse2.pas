@@ -311,7 +311,7 @@ procedure simd_stream_si64(var Dest; Value: Int64); // Non-temporal store 64-bit
 implementation
 
 uses
-  Math;
+  nextpas.core.simd.mathutil;
 
 {$PUSH}
 {$WARN 5057 OFF} // raw leaf / assembler 路径的 Result 初始化误报
@@ -2811,268 +2811,268 @@ asm
 {$ENDIF}
 end;
 
-	// === 字节级移位函数实现 ===
-	function simd_slli_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
-	{$ENDIF}
-	asm
-	{$IFDEF CPUX86_64}
-	  {$IFDEF WINDOWS}
-	    movdqu xmm0, [rcx]
-	    cmp dl, 0; je @done
-	    cmp dl, 16; jae @zero
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @zero
-	@s1: pslldq xmm0, 1; jmp @done
-	@s2: pslldq xmm0, 2; jmp @done
-	@s3: pslldq xmm0, 3; jmp @done
-	@s4: pslldq xmm0, 4; jmp @done
-	@s5: pslldq xmm0, 5; jmp @done
-	@s6: pslldq xmm0, 6; jmp @done
-	@s7: pslldq xmm0, 7; jmp @done
-	@s8: pslldq xmm0, 8; jmp @done
-	@s9: pslldq xmm0, 9; jmp @done
-	@s10: pslldq xmm0, 10; jmp @done
-	@s11: pslldq xmm0, 11; jmp @done
-	@s12: pslldq xmm0, 12; jmp @done
-	@s13: pslldq xmm0, 13; jmp @done
-	@s14: pslldq xmm0, 14; jmp @done
-	@s15: pslldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	  {$ELSE}
-	    movdqu xmm0, [rdi]
-	    cmp sil, 0; je @done
-	    cmp sil, 16; jae @zero
-	    cmp sil, 1; je @s1
-	    cmp sil, 2; je @s2
-	    cmp sil, 3; je @s3
-	    cmp sil, 4; je @s4
-	    cmp sil, 5; je @s5
-	    cmp sil, 6; je @s6
-	    cmp sil, 7; je @s7
-	    cmp sil, 8; je @s8
-	    cmp sil, 9; je @s9
-	    cmp sil, 10; je @s10
-	    cmp sil, 11; je @s11
-	    cmp sil, 12; je @s12
-	    cmp sil, 13; je @s13
-	    cmp sil, 14; je @s14
-	    cmp sil, 15; je @s15
-	    jmp @zero
-	@s1: pslldq xmm0, 1; jmp @done
-	@s2: pslldq xmm0, 2; jmp @done
-	@s3: pslldq xmm0, 3; jmp @done
-	@s4: pslldq xmm0, 4; jmp @done
-	@s5: pslldq xmm0, 5; jmp @done
-	@s6: pslldq xmm0, 6; jmp @done
-	@s7: pslldq xmm0, 7; jmp @done
-	@s8: pslldq xmm0, 8; jmp @done
-	@s9: pslldq xmm0, 9; jmp @done
-	@s10: pslldq xmm0, 10; jmp @done
-	@s11: pslldq xmm0, 11; jmp @done
-	@s12: pslldq xmm0, 12; jmp @done
-	@s13: pslldq xmm0, 13; jmp @done
-	@s14: pslldq xmm0, 14; jmp @done
-	@s15: pslldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	  {$ENDIF}
-	{$ELSEIF CPUX86}
-	    mov eax, [esp + 4]; mov edx, [esp + 8]
-	    movdqu xmm0, [eax]
-	    cmp dl, 0; je @done
-	    cmp dl, 16; jae @zero
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @zero
-	@s1: pslldq xmm0, 1; jmp @done
-	@s2: pslldq xmm0, 2; jmp @done
-	@s3: pslldq xmm0, 3; jmp @done
-	@s4: pslldq xmm0, 4; jmp @done
-	@s5: pslldq xmm0, 5; jmp @done
-	@s6: pslldq xmm0, 6; jmp @done
-	@s7: pslldq xmm0, 7; jmp @done
-	@s8: pslldq xmm0, 8; jmp @done
-	@s9: pslldq xmm0, 9; jmp @done
-	@s10: pslldq xmm0, 10; jmp @done
-	@s11: pslldq xmm0, 11; jmp @done
-	@s12: pslldq xmm0, 12; jmp @done
-	@s13: pslldq xmm0, 13; jmp @done
-	@s14: pslldq xmm0, 14; jmp @done
-	@s15: pslldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	{$ELSE}
-	    {$ERROR Unsupported CPU}
-	{$ENDIF}
-	{$IFDEF CPUX86_64}
-	  movq rax, xmm0
-	  movdqa xmm1, xmm0
-	  psrldq xmm1, 8
-	  movq rdx, xmm1
-	{$ENDIF}
-	end;
+  // === 字节级移位函数实现 ===
+  function simd_slli_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
+  {$ENDIF}
+  asm
+  {$IFDEF CPUX86_64}
+    {$IFDEF WINDOWS}
+      movdqu xmm0, [rcx]
+      cmp dl, 0; je @done
+      cmp dl, 16; jae @zero
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @zero
+  @s1: pslldq xmm0, 1; jmp @done
+  @s2: pslldq xmm0, 2; jmp @done
+  @s3: pslldq xmm0, 3; jmp @done
+  @s4: pslldq xmm0, 4; jmp @done
+  @s5: pslldq xmm0, 5; jmp @done
+  @s6: pslldq xmm0, 6; jmp @done
+  @s7: pslldq xmm0, 7; jmp @done
+  @s8: pslldq xmm0, 8; jmp @done
+  @s9: pslldq xmm0, 9; jmp @done
+  @s10: pslldq xmm0, 10; jmp @done
+  @s11: pslldq xmm0, 11; jmp @done
+  @s12: pslldq xmm0, 12; jmp @done
+  @s13: pslldq xmm0, 13; jmp @done
+  @s14: pslldq xmm0, 14; jmp @done
+  @s15: pslldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+    {$ELSE}
+      movdqu xmm0, [rdi]
+      cmp sil, 0; je @done
+      cmp sil, 16; jae @zero
+      cmp sil, 1; je @s1
+      cmp sil, 2; je @s2
+      cmp sil, 3; je @s3
+      cmp sil, 4; je @s4
+      cmp sil, 5; je @s5
+      cmp sil, 6; je @s6
+      cmp sil, 7; je @s7
+      cmp sil, 8; je @s8
+      cmp sil, 9; je @s9
+      cmp sil, 10; je @s10
+      cmp sil, 11; je @s11
+      cmp sil, 12; je @s12
+      cmp sil, 13; je @s13
+      cmp sil, 14; je @s14
+      cmp sil, 15; je @s15
+      jmp @zero
+  @s1: pslldq xmm0, 1; jmp @done
+  @s2: pslldq xmm0, 2; jmp @done
+  @s3: pslldq xmm0, 3; jmp @done
+  @s4: pslldq xmm0, 4; jmp @done
+  @s5: pslldq xmm0, 5; jmp @done
+  @s6: pslldq xmm0, 6; jmp @done
+  @s7: pslldq xmm0, 7; jmp @done
+  @s8: pslldq xmm0, 8; jmp @done
+  @s9: pslldq xmm0, 9; jmp @done
+  @s10: pslldq xmm0, 10; jmp @done
+  @s11: pslldq xmm0, 11; jmp @done
+  @s12: pslldq xmm0, 12; jmp @done
+  @s13: pslldq xmm0, 13; jmp @done
+  @s14: pslldq xmm0, 14; jmp @done
+  @s15: pslldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+    {$ENDIF}
+  {$ELSEIF CPUX86}
+      mov eax, [esp + 4]; mov edx, [esp + 8]
+      movdqu xmm0, [eax]
+      cmp dl, 0; je @done
+      cmp dl, 16; jae @zero
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @zero
+  @s1: pslldq xmm0, 1; jmp @done
+  @s2: pslldq xmm0, 2; jmp @done
+  @s3: pslldq xmm0, 3; jmp @done
+  @s4: pslldq xmm0, 4; jmp @done
+  @s5: pslldq xmm0, 5; jmp @done
+  @s6: pslldq xmm0, 6; jmp @done
+  @s7: pslldq xmm0, 7; jmp @done
+  @s8: pslldq xmm0, 8; jmp @done
+  @s9: pslldq xmm0, 9; jmp @done
+  @s10: pslldq xmm0, 10; jmp @done
+  @s11: pslldq xmm0, 11; jmp @done
+  @s12: pslldq xmm0, 12; jmp @done
+  @s13: pslldq xmm0, 13; jmp @done
+  @s14: pslldq xmm0, 14; jmp @done
+  @s15: pslldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+  {$ELSE}
+      {$ERROR Unsupported CPU}
+  {$ENDIF}
+  {$IFDEF CPUX86_64}
+    movq rax, xmm0
+    movdqa xmm1, xmm0
+    psrldq xmm1, 8
+    movq rdx, xmm1
+  {$ENDIF}
+  end;
 
-	function simd_srli_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
-	{$ENDIF}
-	asm
-	{$IFDEF CPUX86_64}
-	  {$IFDEF WINDOWS}
-	    movdqu xmm0, [rcx]
-	    cmp dl, 0; je @done
-	    cmp dl, 16; jae @zero
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @zero
-	@s1: psrldq xmm0, 1; jmp @done
-	@s2: psrldq xmm0, 2; jmp @done
-	@s3: psrldq xmm0, 3; jmp @done
-	@s4: psrldq xmm0, 4; jmp @done
-	@s5: psrldq xmm0, 5; jmp @done
-	@s6: psrldq xmm0, 6; jmp @done
-	@s7: psrldq xmm0, 7; jmp @done
-	@s8: psrldq xmm0, 8; jmp @done
-	@s9: psrldq xmm0, 9; jmp @done
-	@s10: psrldq xmm0, 10; jmp @done
-	@s11: psrldq xmm0, 11; jmp @done
-	@s12: psrldq xmm0, 12; jmp @done
-	@s13: psrldq xmm0, 13; jmp @done
-	@s14: psrldq xmm0, 14; jmp @done
-	@s15: psrldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	  {$ELSE}
-	    movdqu xmm0, [rdi]
-	    cmp sil, 0; je @done
-	    cmp sil, 16; jae @zero
-	    cmp sil, 1; je @s1
-	    cmp sil, 2; je @s2
-	    cmp sil, 3; je @s3
-	    cmp sil, 4; je @s4
-	    cmp sil, 5; je @s5
-	    cmp sil, 6; je @s6
-	    cmp sil, 7; je @s7
-	    cmp sil, 8; je @s8
-	    cmp sil, 9; je @s9
-	    cmp sil, 10; je @s10
-	    cmp sil, 11; je @s11
-	    cmp sil, 12; je @s12
-	    cmp sil, 13; je @s13
-	    cmp sil, 14; je @s14
-	    cmp sil, 15; je @s15
-	    jmp @zero
-	@s1: psrldq xmm0, 1; jmp @done
-	@s2: psrldq xmm0, 2; jmp @done
-	@s3: psrldq xmm0, 3; jmp @done
-	@s4: psrldq xmm0, 4; jmp @done
-	@s5: psrldq xmm0, 5; jmp @done
-	@s6: psrldq xmm0, 6; jmp @done
-	@s7: psrldq xmm0, 7; jmp @done
-	@s8: psrldq xmm0, 8; jmp @done
-	@s9: psrldq xmm0, 9; jmp @done
-	@s10: psrldq xmm0, 10; jmp @done
-	@s11: psrldq xmm0, 11; jmp @done
-	@s12: psrldq xmm0, 12; jmp @done
-	@s13: psrldq xmm0, 13; jmp @done
-	@s14: psrldq xmm0, 14; jmp @done
-	@s15: psrldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	  {$ENDIF}
-	{$ELSEIF CPUX86}
-	    mov eax, [esp + 4]; mov edx, [esp + 8]
-	    movdqu xmm0, [eax]
-	    cmp dl, 0; je @done
-	    cmp dl, 16; jae @zero
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @zero
-	@s1: psrldq xmm0, 1; jmp @done
-	@s2: psrldq xmm0, 2; jmp @done
-	@s3: psrldq xmm0, 3; jmp @done
-	@s4: psrldq xmm0, 4; jmp @done
-	@s5: psrldq xmm0, 5; jmp @done
-	@s6: psrldq xmm0, 6; jmp @done
-	@s7: psrldq xmm0, 7; jmp @done
-	@s8: psrldq xmm0, 8; jmp @done
-	@s9: psrldq xmm0, 9; jmp @done
-	@s10: psrldq xmm0, 10; jmp @done
-	@s11: psrldq xmm0, 11; jmp @done
-	@s12: psrldq xmm0, 12; jmp @done
-	@s13: psrldq xmm0, 13; jmp @done
-	@s14: psrldq xmm0, 14; jmp @done
-	@s15: psrldq xmm0, 15; jmp @done
-	@zero:
-	    pxor xmm0, xmm0
-	@done:
-	{$ELSE}
-	    {$ERROR Unsupported CPU}
-	{$ENDIF}
-	{$IFDEF CPUX86_64}
-	  movq rax, xmm0
-	  movdqa xmm1, xmm0
-	  psrldq xmm1, 8
-	  movq rdx, xmm1
-	{$ENDIF}
-	end;
+  function simd_srli_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
+  {$ENDIF}
+  asm
+  {$IFDEF CPUX86_64}
+    {$IFDEF WINDOWS}
+      movdqu xmm0, [rcx]
+      cmp dl, 0; je @done
+      cmp dl, 16; jae @zero
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @zero
+  @s1: psrldq xmm0, 1; jmp @done
+  @s2: psrldq xmm0, 2; jmp @done
+  @s3: psrldq xmm0, 3; jmp @done
+  @s4: psrldq xmm0, 4; jmp @done
+  @s5: psrldq xmm0, 5; jmp @done
+  @s6: psrldq xmm0, 6; jmp @done
+  @s7: psrldq xmm0, 7; jmp @done
+  @s8: psrldq xmm0, 8; jmp @done
+  @s9: psrldq xmm0, 9; jmp @done
+  @s10: psrldq xmm0, 10; jmp @done
+  @s11: psrldq xmm0, 11; jmp @done
+  @s12: psrldq xmm0, 12; jmp @done
+  @s13: psrldq xmm0, 13; jmp @done
+  @s14: psrldq xmm0, 14; jmp @done
+  @s15: psrldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+    {$ELSE}
+      movdqu xmm0, [rdi]
+      cmp sil, 0; je @done
+      cmp sil, 16; jae @zero
+      cmp sil, 1; je @s1
+      cmp sil, 2; je @s2
+      cmp sil, 3; je @s3
+      cmp sil, 4; je @s4
+      cmp sil, 5; je @s5
+      cmp sil, 6; je @s6
+      cmp sil, 7; je @s7
+      cmp sil, 8; je @s8
+      cmp sil, 9; je @s9
+      cmp sil, 10; je @s10
+      cmp sil, 11; je @s11
+      cmp sil, 12; je @s12
+      cmp sil, 13; je @s13
+      cmp sil, 14; je @s14
+      cmp sil, 15; je @s15
+      jmp @zero
+  @s1: psrldq xmm0, 1; jmp @done
+  @s2: psrldq xmm0, 2; jmp @done
+  @s3: psrldq xmm0, 3; jmp @done
+  @s4: psrldq xmm0, 4; jmp @done
+  @s5: psrldq xmm0, 5; jmp @done
+  @s6: psrldq xmm0, 6; jmp @done
+  @s7: psrldq xmm0, 7; jmp @done
+  @s8: psrldq xmm0, 8; jmp @done
+  @s9: psrldq xmm0, 9; jmp @done
+  @s10: psrldq xmm0, 10; jmp @done
+  @s11: psrldq xmm0, 11; jmp @done
+  @s12: psrldq xmm0, 12; jmp @done
+  @s13: psrldq xmm0, 13; jmp @done
+  @s14: psrldq xmm0, 14; jmp @done
+  @s15: psrldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+    {$ENDIF}
+  {$ELSEIF CPUX86}
+      mov eax, [esp + 4]; mov edx, [esp + 8]
+      movdqu xmm0, [eax]
+      cmp dl, 0; je @done
+      cmp dl, 16; jae @zero
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @zero
+  @s1: psrldq xmm0, 1; jmp @done
+  @s2: psrldq xmm0, 2; jmp @done
+  @s3: psrldq xmm0, 3; jmp @done
+  @s4: psrldq xmm0, 4; jmp @done
+  @s5: psrldq xmm0, 5; jmp @done
+  @s6: psrldq xmm0, 6; jmp @done
+  @s7: psrldq xmm0, 7; jmp @done
+  @s8: psrldq xmm0, 8; jmp @done
+  @s9: psrldq xmm0, 9; jmp @done
+  @s10: psrldq xmm0, 10; jmp @done
+  @s11: psrldq xmm0, 11; jmp @done
+  @s12: psrldq xmm0, 12; jmp @done
+  @s13: psrldq xmm0, 13; jmp @done
+  @s14: psrldq xmm0, 14; jmp @done
+  @s15: psrldq xmm0, 15; jmp @done
+  @zero:
+      pxor xmm0, xmm0
+  @done:
+  {$ELSE}
+      {$ERROR Unsupported CPU}
+  {$ENDIF}
+  {$IFDEF CPUX86_64}
+    movq rax, xmm0
+    movdqa xmm1, xmm0
+    psrldq xmm1, 8
+    movq rdx, xmm1
+  {$ENDIF}
+  end;
 
 function ConvertSingleToInt32Nearest(const aValue: Single): LongInt; inline;
 begin
@@ -4504,7 +4504,7 @@ asm
 {$ENDIF}
 end;
 
-	function simd_insert_epi16(constref a: TM128; Value: Integer; imm8: Byte): TM128;
+  function simd_insert_epi16(constref a: TM128; Value: Integer; imm8: Byte): TM128;
 begin
   Result := a;
   Result.m128i_u16[imm8 and $7] := Word(Value and $FFFF);
@@ -4846,157 +4846,157 @@ begin
   Result := BuildPackedDoubleToSingle(a);
 end;
 
-	function simd_srai_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
-	{$ENDIF}
-	asm
-	{$IFDEF CPUX86_64}
-	  {$IFDEF WINDOWS}
-	    movdqu xmm0, [rcx]
-	    cmp dl, 0; je @done
-	
-	    pxor xmm1, xmm1
-	    mov al, [rcx + 15]
-	    test al, $80
-	    jz @fill_ready
-	    pcmpeqb xmm1, xmm1
-	@fill_ready:
-	    cmp dl, 16; jae @allfill
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @allfill
-	@s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
-	@s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
-	@s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
-	@s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
-	@s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
-	@s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
-	@s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
-	@s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
-	@s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
-	@s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
-	@s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
-	@s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
-	@s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
-	@s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
-	@s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
-	@allfill:
-	    movdqa xmm0, xmm1
-	@done:
-	  {$ELSE}
-	    movdqu xmm0, [rdi]
-	    cmp sil, 0; je @done
-	
-	    pxor xmm1, xmm1
-	    mov al, [rdi + 15]
-	    test al, $80
-	    jz @fill_ready
-	    pcmpeqb xmm1, xmm1
-	@fill_ready:
-	    cmp sil, 16; jae @allfill
-	    cmp sil, 1; je @s1
-	    cmp sil, 2; je @s2
-	    cmp sil, 3; je @s3
-	    cmp sil, 4; je @s4
-	    cmp sil, 5; je @s5
-	    cmp sil, 6; je @s6
-	    cmp sil, 7; je @s7
-	    cmp sil, 8; je @s8
-	    cmp sil, 9; je @s9
-	    cmp sil, 10; je @s10
-	    cmp sil, 11; je @s11
-	    cmp sil, 12; je @s12
-	    cmp sil, 13; je @s13
-	    cmp sil, 14; je @s14
-	    cmp sil, 15; je @s15
-	    jmp @allfill
-	@s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
-	@s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
-	@s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
-	@s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
-	@s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
-	@s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
-	@s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
-	@s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
-	@s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
-	@s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
-	@s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
-	@s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
-	@s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
-	@s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
-	@s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
-	@allfill:
-	    movdqa xmm0, xmm1
-	@done:
-	  {$ENDIF}
-	{$ELSEIF CPUX86}
-	    mov ecx, [esp + 4]; mov edx, [esp + 8]
-	    movdqu xmm0, [ecx]
-	    cmp dl, 0; je @done
-	
-	    pxor xmm1, xmm1
-	    mov al, [ecx + 15]
-	    test al, $80
-	    jz @fill_ready
-	    pcmpeqb xmm1, xmm1
-	@fill_ready:
-	    cmp dl, 16; jae @allfill
-	    cmp dl, 1; je @s1
-	    cmp dl, 2; je @s2
-	    cmp dl, 3; je @s3
-	    cmp dl, 4; je @s4
-	    cmp dl, 5; je @s5
-	    cmp dl, 6; je @s6
-	    cmp dl, 7; je @s7
-	    cmp dl, 8; je @s8
-	    cmp dl, 9; je @s9
-	    cmp dl, 10; je @s10
-	    cmp dl, 11; je @s11
-	    cmp dl, 12; je @s12
-	    cmp dl, 13; je @s13
-	    cmp dl, 14; je @s14
-	    cmp dl, 15; je @s15
-	    jmp @allfill
-	@s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
-	@s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
-	@s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
-	@s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
-	@s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
-	@s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
-	@s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
-	@s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
-	@s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
-	@s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
-	@s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
-	@s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
-	@s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
-	@s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
-	@s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
-	@allfill:
-	    movdqa xmm0, xmm1
-	@done:
-	{$ELSE}
-	    {$ERROR Unsupported CPU}
-	{$ENDIF}
-	{$IFDEF CPUX86_64}
-	  movq rax, xmm0
-	  movdqa xmm1, xmm0
-	  psrldq xmm1, 8
-	  movq rdx, xmm1
-	{$ENDIF}
-	end;
+  function simd_srai_si128(constref a: TM128; imm8: Byte): TM128; {$IFDEF FPC}assembler; nostackframe;
+  {$ENDIF}
+  asm
+  {$IFDEF CPUX86_64}
+    {$IFDEF WINDOWS}
+      movdqu xmm0, [rcx]
+      cmp dl, 0; je @done
+  
+      pxor xmm1, xmm1
+      mov al, [rcx + 15]
+      test al, $80
+      jz @fill_ready
+      pcmpeqb xmm1, xmm1
+  @fill_ready:
+      cmp dl, 16; jae @allfill
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @allfill
+  @s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
+  @s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
+  @s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
+  @s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
+  @s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
+  @s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
+  @s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
+  @s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
+  @s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
+  @s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
+  @s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
+  @s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
+  @s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
+  @s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
+  @s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
+  @allfill:
+      movdqa xmm0, xmm1
+  @done:
+    {$ELSE}
+      movdqu xmm0, [rdi]
+      cmp sil, 0; je @done
+  
+      pxor xmm1, xmm1
+      mov al, [rdi + 15]
+      test al, $80
+      jz @fill_ready
+      pcmpeqb xmm1, xmm1
+  @fill_ready:
+      cmp sil, 16; jae @allfill
+      cmp sil, 1; je @s1
+      cmp sil, 2; je @s2
+      cmp sil, 3; je @s3
+      cmp sil, 4; je @s4
+      cmp sil, 5; je @s5
+      cmp sil, 6; je @s6
+      cmp sil, 7; je @s7
+      cmp sil, 8; je @s8
+      cmp sil, 9; je @s9
+      cmp sil, 10; je @s10
+      cmp sil, 11; je @s11
+      cmp sil, 12; je @s12
+      cmp sil, 13; je @s13
+      cmp sil, 14; je @s14
+      cmp sil, 15; je @s15
+      jmp @allfill
+  @s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
+  @s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
+  @s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
+  @s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
+  @s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
+  @s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
+  @s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
+  @s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
+  @s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
+  @s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
+  @s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
+  @s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
+  @s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
+  @s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
+  @s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
+  @allfill:
+      movdqa xmm0, xmm1
+  @done:
+    {$ENDIF}
+  {$ELSEIF CPUX86}
+      mov ecx, [esp + 4]; mov edx, [esp + 8]
+      movdqu xmm0, [ecx]
+      cmp dl, 0; je @done
+  
+      pxor xmm1, xmm1
+      mov al, [ecx + 15]
+      test al, $80
+      jz @fill_ready
+      pcmpeqb xmm1, xmm1
+  @fill_ready:
+      cmp dl, 16; jae @allfill
+      cmp dl, 1; je @s1
+      cmp dl, 2; je @s2
+      cmp dl, 3; je @s3
+      cmp dl, 4; je @s4
+      cmp dl, 5; je @s5
+      cmp dl, 6; je @s6
+      cmp dl, 7; je @s7
+      cmp dl, 8; je @s8
+      cmp dl, 9; je @s9
+      cmp dl, 10; je @s10
+      cmp dl, 11; je @s11
+      cmp dl, 12; je @s12
+      cmp dl, 13; je @s13
+      cmp dl, 14; je @s14
+      cmp dl, 15; je @s15
+      jmp @allfill
+  @s1: psrldq xmm0, 1; pslldq xmm1, 15; por xmm0, xmm1; jmp @done
+  @s2: psrldq xmm0, 2; pslldq xmm1, 14; por xmm0, xmm1; jmp @done
+  @s3: psrldq xmm0, 3; pslldq xmm1, 13; por xmm0, xmm1; jmp @done
+  @s4: psrldq xmm0, 4; pslldq xmm1, 12; por xmm0, xmm1; jmp @done
+  @s5: psrldq xmm0, 5; pslldq xmm1, 11; por xmm0, xmm1; jmp @done
+  @s6: psrldq xmm0, 6; pslldq xmm1, 10; por xmm0, xmm1; jmp @done
+  @s7: psrldq xmm0, 7; pslldq xmm1, 9; por xmm0, xmm1; jmp @done
+  @s8: psrldq xmm0, 8; pslldq xmm1, 8; por xmm0, xmm1; jmp @done
+  @s9: psrldq xmm0, 9; pslldq xmm1, 7; por xmm0, xmm1; jmp @done
+  @s10: psrldq xmm0, 10; pslldq xmm1, 6; por xmm0, xmm1; jmp @done
+  @s11: psrldq xmm0, 11; pslldq xmm1, 5; por xmm0, xmm1; jmp @done
+  @s12: psrldq xmm0, 12; pslldq xmm1, 4; por xmm0, xmm1; jmp @done
+  @s13: psrldq xmm0, 13; pslldq xmm1, 3; por xmm0, xmm1; jmp @done
+  @s14: psrldq xmm0, 14; pslldq xmm1, 2; por xmm0, xmm1; jmp @done
+  @s15: psrldq xmm0, 15; pslldq xmm1, 1; por xmm0, xmm1; jmp @done
+  @allfill:
+      movdqa xmm0, xmm1
+  @done:
+  {$ELSE}
+      {$ERROR Unsupported CPU}
+  {$ENDIF}
+  {$IFDEF CPUX86_64}
+    movq rax, xmm0
+    movdqa xmm1, xmm0
+    psrldq xmm1, 8
+    movq rdx, xmm1
+  {$ENDIF}
+  end;
 
 function simd_max_epu8(constref a, b: TM128): TM128; {$IFDEF FPC}assembler; nostackframe;
 {$ENDIF}

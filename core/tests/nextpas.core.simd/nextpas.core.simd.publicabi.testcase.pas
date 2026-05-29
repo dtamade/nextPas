@@ -1,6 +1,5 @@
 unit nextpas.core.simd.publicabi.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
@@ -47,8 +46,7 @@ uses
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
-  nextpas.core.simd.runtime,
-  nextpas.core.simd.api;
+  nextpas.core.simd.runtime;
 
 type
   TTestCase_PublicAbi = class(TSimdVectorAsmStatefulTestCase)
@@ -1153,13 +1151,13 @@ end;
 procedure TTestCase_PublicAbi.AssertCrossSurfaceCurrentState(const aContext: string;
   aExpectedBackend: TSimdBackend; const aExpectAutomatic: Boolean);
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatch: PSimdDispatchTable;
   LFrameworkInfo: TSimdBackendInfo;
   LFrameworkSnapshot: TSimdRuntimeSnapshot;
   LRuntimeInfo: TSimdBackendInfo;
   LRuntimeSnapshot: TSimdRuntimeSnapshot;
-  LPodInfo: TFafafaSimdBackendPodInfo;
+  LPodInfo: TNextPasSimdBackendPodInfo;
   LNamePtr: PAnsiChar;
   LDescriptionPtr: PAnsiChar;
   LDispatchableBackends: TSimdBackendArray;
@@ -1257,7 +1255,7 @@ begin
   end;
 end;
 
-function GetPublicApiFuncPointer(const aApi: PFafafaSimdPublicApi; aSlotIndex: Integer): Pointer;
+function GetPublicApiFuncPointer(const aApi: PNextPasSimdPublicApi; aSlotIndex: Integer): Pointer;
 begin
   if aApi = nil then
     Exit(nil);
@@ -1350,12 +1348,12 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_Table_IsBound_And_Metadata_IsPresent;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
 begin
   LApi := GetSimdPublicApi;
   AssertNotNull('Public API table should not be nil', LApi);
   AssertEquals('StructSize should match record size',
-    SizeOf(TFafafaSimdPublicApi), LApi^.StructSize);
+    SizeOf(TNextPasSimdPublicApi), LApi^.StructSize);
   AssertEquals('ABI major should match getter',
     GetSimdAbiVersionMajor, LApi^.AbiVersionMajor);
   AssertEquals('ABI minor should match getter',
@@ -1383,15 +1381,15 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_V2_Table_IsBound_And_Metadata_IsPresent;
 var
-  LApiV1: PFafafaSimdPublicApi;
-  LApiV2: PFafafaSimdPublicApiV2;
+  LApiV1: PNextPasSimdPublicApi;
+  LApiV2: PNextPasSimdPublicApiV2;
 begin
   LApiV1 := GetSimdPublicApi;
   LApiV2 := GetSimdPublicApiV2;
   AssertNotNull('Public API v1 table should not be nil', LApiV1);
   AssertNotNull('Public API v2 table should not be nil', LApiV2);
   AssertEquals('V2 StructSize should match record size',
-    SizeOf(TFafafaSimdPublicApiV2), LApiV2^.StructSize);
+    SizeOf(TNextPasSimdPublicApiV2), LApiV2^.StructSize);
   AssertEquals('V2 ABI major should be 2', 2, Integer(LApiV2^.AbiVersionMajor));
   AssertEquals('V2 ABI minor should be 0', 0, Integer(LApiV2^.AbiVersionMinor));
   AssertTrue('V2 ABI signature hi should be non-zero', LApiV2^.AbiSignatureHi <> 0);
@@ -1429,8 +1427,8 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_CachedTable_RemainsCallable_Across_Rebind;
 var
-  LApiBefore: PFafafaSimdPublicApi;
-  LApiAfter: PFafafaSimdPublicApi;
+  LApiBefore: PNextPasSimdPublicApi;
+  LApiAfter: PNextPasSimdPublicApi;
   LBufferA: array[0..31] of Byte;
   LBufferB: array[0..31] of Byte;
 begin
@@ -1451,11 +1449,11 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_CachedTable_Preserves_PreviousSnapshot_Metadata_Across_Rebind;
 var
-  LApiBefore: PFafafaSimdPublicApi;
-  LApiAfter: PFafafaSimdPublicApi;
+  LApiBefore: PNextPasSimdPublicApi;
+  LApiAfter: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LTargetBackend: TSimdBackend;
-  LBeforeFlags: TFafafaSimdAbiFlags;
+  LBeforeFlags: TNextPasSimdAbiFlags;
   LDispatchable: TSimdBackendArray;
   LFoundDifferent: Boolean;
   LIndex: Integer;
@@ -1509,8 +1507,8 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_V2_SnapshotGeneration_Refreshes_AfterBackendSwitch;
 var
-  LApiBefore: PFafafaSimdPublicApiV2;
-  LApiAfter: PFafafaSimdPublicApiV2;
+  LApiBefore: PNextPasSimdPublicApiV2;
+  LApiAfter: PNextPasSimdPublicApiV2;
   LOriginalBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
   LTargetBackend: TSimdBackend;
@@ -1565,7 +1563,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_Table_Refreshes_AfterBackendSwitch;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LOriginalDispatchable: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -1619,8 +1617,8 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_Table_Uses_Stable_Cdecl_EntryPoints_AfterBackendSwitch;
 var
-  LApiBefore: PFafafaSimdPublicApi;
-  LApiAfter: PFafafaSimdPublicApi;
+  LApiBefore: PNextPasSimdPublicApi;
+  LApiAfter: PNextPasSimdPublicApi;
   LDispatchBefore: PSimdDispatchTable;
   LDispatchAfter: PSimdDispatchTable;
   LDispatchable: TSimdBackendArray;
@@ -1683,8 +1681,8 @@ var
   LBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LModifiedTable: TSimdDispatchTable;
-  LApiBefore: PFafafaSimdPublicApi;
-  LApiAfter: PFafafaSimdPublicApi;
+  LApiBefore: PNextPasSimdPublicApi;
+  LApiAfter: PNextPasSimdPublicApi;
   LBufferA: array[0..7] of Byte;
   LBufferB: array[0..7] of Byte;
   LOriginalTableRestored: Boolean;
@@ -1730,9 +1728,9 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendRoundTrip_Reuses_PreviouslyPublishedMetadataTable;
 var
-  LApiInitial: PFafafaSimdPublicApi;
-  LApiMiddle: PFafafaSimdPublicApi;
-  LApiFinal: PFafafaSimdPublicApi;
+  LApiInitial: PNextPasSimdPublicApi;
+  LApiMiddle: PNextPasSimdPublicApi;
+  LApiFinal: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LTargetBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -1777,9 +1775,9 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_VectorAsmRoundTrip_Reuses_PreviouslyPublishedMetadataTable;
 var
-  LApiInitial: PFafafaSimdPublicApi;
-  LApiMiddle: PFafafaSimdPublicApi;
-  LApiFinal: PFafafaSimdPublicApi;
+  LApiInitial: PNextPasSimdPublicApi;
+  LApiMiddle: PNextPasSimdPublicApi;
+  LApiFinal: PNextPasSimdPublicApi;
   LInitialBackend: TSimdBackend;
   LMiddleBackend: TSimdBackend;
 begin
@@ -1819,7 +1817,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_Flags_AreSelfConsistent;
 var
   LBackend: TSimdBackend;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LNamePtr: PAnsiChar;
 begin
   for LBackend := Low(TSimdBackend) to High(TSimdBackend) do
@@ -1827,7 +1825,7 @@ begin
     AssertTrue('TryGetSimdBackendPodInfo should succeed for backend=' + PublicAbiBackendName(LBackend),
       TryGetSimdBackendPodInfo(LBackend, LInfo));
     AssertEquals('StructSize mismatch for backend=' + PublicAbiBackendName(LBackend),
-      SizeOf(TFafafaSimdBackendPodInfo), LInfo.StructSize);
+      SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize);
     AssertEquals('BackendId mismatch for backend=' + PublicAbiBackendName(LBackend),
       Ord(LBackend), Integer(LInfo.BackendId));
 
@@ -2070,7 +2068,7 @@ var
   LBackend: TSimdBackend;
   LScalarTable: TSimdDispatchTable;
   LBackendTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LHasNonScalarShuffleSlots: Boolean;
 
   procedure ObserveRepresentativeSlot(aScalarSlot, aBackendSlot: Pointer);
@@ -2116,7 +2114,7 @@ var
   LBackend: TSimdBackend;
   LScalarTable: TSimdDispatchTable;
   LBackendTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LHasNonScalarMaskedSlots: Boolean;
 
   function IsX86MaskedOpsBackend(const aBackend: TSimdBackend): Boolean;
@@ -2171,7 +2169,7 @@ procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expos
 var
   LScalarTable: TSimdDispatchTable;
   LAVX2Table: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   AssertTrue('Scalar dispatch table should be registered',
     TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
@@ -2201,7 +2199,7 @@ var
   LBackend: TSimdBackend;
   LScalarTable: TSimdDispatchTable;
   LBackendTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 
   function IsShuffleCapabilityGatedBackend(const aBackend: TSimdBackend): Boolean;
   begin
@@ -2247,7 +2245,7 @@ var
   LBackend: TSimdBackend;
   LScalarTable: TSimdDispatchTable;
   LBackendTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LHasNonScalarAlwaysOnIntegerSlots: Boolean;
 
   function IsAlwaysOnNarrowIntegerBackend(const aBackend: TSimdBackend): Boolean;
@@ -2303,7 +2301,7 @@ procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expos
 var
   LScalarTable: TSimdDispatchTable;
   LAVX512Table: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   AssertTrue('Scalar dispatch table should be registered',
     TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
@@ -2332,7 +2330,7 @@ procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expos
 var
   LScalarTable: TSimdDispatchTable;
   LAVX512Table: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   AssertTrue('Scalar dispatch table should be registered',
     TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
@@ -2357,7 +2355,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Clear_AVX512VectorAsmGatedBits_WhenVectorAsmDisabled;
 var
   LAVX512Table: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512Table) then
     Exit;
@@ -2388,7 +2386,7 @@ var
   LBackend: TSimdBackend;
   LScalarTable: TSimdDispatchTable;
   LBackendTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LHasNonScalarMaskedSlots: Boolean;
 
   function IsX86MaskedOpsBackend(const aBackend: TSimdBackend): Boolean;
@@ -2445,7 +2443,7 @@ procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expos
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   AssertTrue('Scalar dispatch table should be registered',
     TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
@@ -2481,7 +2479,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_NEONFMA_WhenNativeSlotsPresent;
 var
   LNEONTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND}
   AssertTrue('NEON opt-in test registration should be present',
@@ -2512,7 +2510,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_NEONIntegerOps_WhenNativeSlotsPresent;
 var
   LNEONTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND}
   AssertTrue('NEON opt-in test registration should be present',
@@ -2542,7 +2540,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Clear_NEONVectorAsmGatedBits_WhenVectorAsmDisabled;
 var
   LNEONTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   {$IFNDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
   Exit;
@@ -2568,7 +2566,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_RISCVVIntegerOps_WhenNativeSlotsPresent;
 var
   LRISCVVTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -2604,7 +2602,7 @@ procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expos
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   AssertTrue('Scalar dispatch table should be registered',
     TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable));
@@ -2646,7 +2644,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_RISCVVShuffle_WhenNativeSlotsPresent;
 var
   LRISCVVTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -2681,7 +2679,7 @@ end;
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_CapabilityBits_Clear_RISCVVVectorAsmGatedBits_WhenVectorAsmDisabled;
 var
   LRISCVVTable: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   {$IFNDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
   Exit;
@@ -2706,13 +2704,13 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_BackendPodInfo_Refreshes_WhenBackendBecomesNonDispatchable;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LModifiedTable: TSimdDispatchTable;
-  LOriginalInfo: TFafafaSimdBackendPodInfo;
-  LUpdatedInfo: TFafafaSimdBackendPodInfo;
-  LActiveInfo: TFafafaSimdBackendPodInfo;
+  LOriginalInfo: TNextPasSimdBackendPodInfo;
+  LUpdatedInfo: TNextPasSimdBackendPodInfo;
+  LActiveInfo: TNextPasSimdBackendPodInfo;
 begin
   LOriginalBackend := GetCurrentBackend;
 
@@ -2767,11 +2765,11 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ActiveBackendId_Tracks_RegisterSlot_After_ReRegister;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LModifiedTable: TSimdDispatchTable;
-  LActiveInfo: TFafafaSimdBackendPodInfo;
+  LActiveInfo: TNextPasSimdBackendPodInfo;
 begin
   GetSimdPublicApi;
   SetVectorAsmEnabled(True);
@@ -2813,10 +2811,10 @@ var
 
   procedure AssertStableCurrentState(const aContext: string; const aExpectAutomatic: Boolean);
   var
-    LApi: PFafafaSimdPublicApi;
+    LApi: PNextPasSimdPublicApi;
     LCurrentBackend: TSimdBackend;
     LCurrentInfo: TSimdBackendInfo;
-    LCurrentPodInfo: TFafafaSimdBackendPodInfo;
+    LCurrentPodInfo: TNextPasSimdBackendPodInfo;
     LDispatchableBackends: TSimdBackendArray;
     LFoundCurrent: Boolean;
     LListIndex: Integer;
@@ -2897,7 +2895,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ActiveBackendId_Tracks_FinalState_When_HookReRegister_Overrides_ForcedSelection;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LRequestedBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
 begin
@@ -2931,7 +2929,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_FailedHookMutation_DoesNotRevive_PreviouslyRequestedBackend_AfterRestore;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -2989,8 +2987,8 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_FailedHookMutation_Restores_AutomaticBackend_Immediately;
 var
-  LApi: PFafafaSimdPublicApi;
-  LActiveInfo: TFafafaSimdBackendPodInfo;
+  LApi: PNextPasSimdPublicApi;
+  LActiveInfo: TNextPasSimdBackendPodInfo;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -3048,7 +3046,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_FailedHookMutation_Restores_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -3131,7 +3129,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_ReSelects_RequestedBackend_Before_Return;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LRequestedBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
 begin
@@ -3174,7 +3172,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_Preserves_ForcedSelection;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
@@ -3276,7 +3274,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_FromPreviousForcedState_Preserves_RequestedSelection;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -3406,7 +3404,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_FromPreviousForcedState_LateForce_DuringThirdRestore_Preserves_RequestedSelection;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -3540,7 +3538,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_FromPreviousForcedState_LateForce_UntilAttemptCap_Restores_PreviousStableState;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -3672,7 +3670,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_FromLowerPriorityPreviousForcedState_LateForce_UntilAttemptCap_Restores_PreviousStableState;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -3802,7 +3800,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_LateForce_DuringThirdRestore_Preserves_ForcedSelection;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
@@ -3912,7 +3910,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_Success_LateForce_UntilAttemptCap_Restores_AutomaticIntent;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
@@ -4024,7 +4022,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetActiveBackend_HookLateFailure_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -4106,7 +4104,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -4184,7 +4182,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_DuringRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -4262,7 +4260,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_DuringThirdRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -4346,7 +4344,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -4438,7 +4436,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_DuringThirdRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -4541,7 +4539,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ResetToAutomaticBackend_HookLateForce_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
 begin
   SetVectorAsmEnabled(True);
@@ -4583,7 +4581,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RollbackRestore_LateForce_UntilAttemptCap_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LRequestedBackend: TSimdBackend;
   LDispatchable: TSimdBackendArray;
@@ -4670,12 +4668,12 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_Refreshes_WhenVectorAsmDisabled_ReSelects_Away_From_ScalarBacked_CurrentBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LOriginalBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LScalarTable: TSimdDispatchTable;
-  LOriginalInfo: TFafafaSimdBackendPodInfo;
-  LActiveInfo: TFafafaSimdBackendPodInfo;
+  LOriginalInfo: TNextPasSimdBackendPodInfo;
+  LActiveInfo: TNextPasSimdBackendPodInfo;
 
   function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
@@ -4737,7 +4735,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ResetToAutomaticBackend_HookLateForce_DuringRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
 begin
   SetVectorAsmEnabled(True);
@@ -4779,7 +4777,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ResetToAutomaticBackend_HookLateForce_DuringThirdRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOldVectorAsm: Boolean;
 begin
@@ -4828,7 +4826,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_ResetToAutomaticBackend_HookLateForce_UntilAttemptCap_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOldVectorAsm: Boolean;
 begin
@@ -4880,7 +4878,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
 begin
   SetVectorAsmEnabled(True);
@@ -4922,7 +4920,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_DuringRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
 begin
   SetVectorAsmEnabled(True);
@@ -4964,7 +4962,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_DuringThirdRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOldVectorAsm: Boolean;
 begin
@@ -5016,7 +5014,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_UntilAttemptCap_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOldVectorAsm: Boolean;
 begin
@@ -5068,7 +5066,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateAutomaticReset_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5129,7 +5127,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateAutomaticReset_DuringRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5186,7 +5184,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_DuringRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5247,7 +5245,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_DuringThirdRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5318,7 +5316,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_SetVectorAsmEnabled_HookLateForce_UntilAttemptCap_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5387,7 +5385,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
 begin
@@ -5430,7 +5428,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_UntilAttemptCap_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LOldVectorAsm: Boolean;
@@ -5483,7 +5481,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_DuringThirdRestore_Restores_AutomaticBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LAutomaticBackend: TSimdBackend;
   LOriginalTable: TSimdDispatchTable;
   LOldVectorAsm: Boolean;
@@ -5532,7 +5530,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateAutomaticReset_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5602,7 +5600,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_DuringRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5676,7 +5674,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_DuringThirdRestore_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5756,7 +5754,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_RegisterBackend_HookLateForce_UntilAttemptCap_Preserves_PreviousForcedBackend;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LDispatchable: TSimdBackendArray;
   LAutomaticBackend: TSimdBackend;
   LPreviousForcedBackend: TSimdBackend;
@@ -5834,7 +5832,7 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_DataPlane_Parity;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LStage: string;
   LA, LB: array[0..31] of Byte;
   LIdx: Integer;
@@ -6003,8 +6001,8 @@ end;
 
 procedure TTestCase_PublicAbi.Test_PublicApi_V1_And_V2_DataPlane_Parity;
 var
-  LApiV1: PFafafaSimdPublicApi;
-  LApiV2: PFafafaSimdPublicApiV2;
+  LApiV1: PNextPasSimdPublicApi;
+  LApiV2: PNextPasSimdPublicApiV2;
   LA, LB: array[0..31] of Byte;
   LNeedle: array[0..2] of Byte;
   LFirstV1: SizeUInt;

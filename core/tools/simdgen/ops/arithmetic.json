@@ -1,0 +1,84 @@
+{
+  "_comment": "SIMD operation definitions - arithmetic category",
+  "category": "arithmetic",
+  "operations": [
+    {
+      "name": "Add",
+      "signature": "binary",
+      "scalar_op": "+",
+      "doc": "Element-wise addition",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U32x4", "U32x8"
+      ]
+    },
+    {
+      "name": "Sub",
+      "signature": "binary",
+      "scalar_op": "-",
+      "doc": "Element-wise subtraction",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U32x4", "U32x8"
+      ]
+    },
+    {
+      "name": "Mul",
+      "signature": "binary",
+      "scalar_op": "*",
+      "doc": "Element-wise multiplication",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "U32x4", "U32x8"
+      ]
+    },
+    {
+      "name": "Div",
+      "signature": "binary",
+      "scalar_op": "/",
+      "doc": "Element-wise division (float only)",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Min",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body": "if a.{field}[i] < b.{field}[i] then Result.{field}[i] := a.{field}[i] else Result.{field}[i] := b.{field}[i]",
+      "doc": "Element-wise minimum",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2",
+        "U32x4", "U32x8", "U32x16",
+        "U64x2"
+      ]
+    },
+    {
+      "name": "Max",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body": "if a.{field}[i] > b.{field}[i] then Result.{field}[i] := a.{field}[i] else Result.{field}[i] := b.{field}[i]",
+      "doc": "Element-wise maximum",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2",
+        "U32x4", "U32x8", "U32x16",
+        "U64x2"
+      ]
+    }
+  ]
+}

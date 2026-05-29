@@ -5,7 +5,6 @@ unit nextpas.core.math;
 interface
 
 uses
-  Math,
   nextpas.core.base;
 
 function IsAddOverflow(aA, aB: SizeUInt): Boolean; overload; inline;
@@ -47,65 +46,54 @@ end;
 
 function Min(aA, aB: SizeUInt): SizeUInt;
 begin
-  if aA < aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA < aB then Result := aA else Result := aB;
 end;
 
 function Max(aA, aB: SizeUInt): SizeUInt;
 begin
-  if aA > aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA > aB then Result := aA else Result := aB;
 end;
 
 function Min(aA, aB: SizeInt): SizeInt;
 begin
-  if aA < aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA < aB then Result := aA else Result := aB;
 end;
 
 function Max(aA, aB: SizeInt): SizeInt;
 begin
-  if aA > aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA > aB then Result := aA else Result := aB;
 end;
 
 function Min(aA, aB: Double): Double;
 begin
-  if aA < aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA < aB then Result := aA else Result := aB;
 end;
 
 function Max(aA, aB: Double): Double;
 begin
-  if aA > aB then
-    Result := aA
-  else
-    Result := aB;
+  if aA > aB then Result := aA else Result := aB;
 end;
 
 function Ceil(x: Double): Int64;
+var LI: Int64;
 begin
-  Result := Int64(Math.Ceil(x));
+  LI := System.Trunc(x);
+  if (x > 0) and (x <> LI) then Inc(LI);
+  Result := LI;
 end;
 
 function IsNaN(x: Double): Boolean;
+var LI: UInt64;
 begin
-  Result := Math.IsNaN(x);
+  Move(x, LI, 8);
+  Result := (LI and $7FF0000000000000 = $7FF0000000000000) and (LI and $000FFFFFFFFFFFFF <> 0);
 end;
 
 function IsInfinite(x: Double): Boolean;
+var LI: UInt64;
 begin
-  Result := Math.IsInfinite(x);
+  Move(x, LI, 8);
+  Result := (LI and $7FFFFFFFFFFFFFFF) = $7FF0000000000000;
 end;
 
 end.

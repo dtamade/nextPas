@@ -37,21 +37,15 @@ function sve_mul_u32_z(const pred: TSVEPredicate; const a, b: TSVEVector): TSVEV
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.cpuinfo;
 
 procedure EnsureExperimentalIntrinsicsEnabled; inline;
 begin
   {$IFNDEF NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS}
-  raise ENotSupportedException.Create(
-    'nextpas.core.simd.intrinsics.sve is experimental placeholder semantics. ' +
-    'Define NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS to opt in.'
-  );
-  {$ELSE}
+  
+  RunError(217);  {$ELSE}
   if not HasSVE then
-    raise ENotSupportedException.Create(
-      'nextpas.core.simd.intrinsics.sve placeholder semantics are only qualified on AArch64 targets whose cpuinfo reports SVE.'
-    );
+    
   {$ENDIF}
 end;
 

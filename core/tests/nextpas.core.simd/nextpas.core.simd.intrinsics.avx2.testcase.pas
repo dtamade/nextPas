@@ -1,6 +1,5 @@
 unit nextpas.core.simd.intrinsics.avx2.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$WARN 6018 OFF}
 {$CODEPAGE UTF8}

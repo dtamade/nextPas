@@ -516,11 +516,16 @@ procedure EmitSyntaxError(
   const AToken: TToken;
   const AExpected: string
 );
+var
+  EffectiveFileId: TSourceFileId;
 begin
+  EffectiveFileId := ARootFileId;
+  if AToken.FileId <> 0 then
+    EffectiveFileId := AToken.FileId;
   ADiagnostics.EmitError(
     'parser.syntax-error',
     'syntax',
-    ARootFileId,
+    EffectiveFileId,
     AToken.ByteOffset,
     BuildExpectedButFoundMessage(AExpected, AToken)
   );
@@ -529,6 +534,27 @@ end;
 procedure AdvanceCursor(var ACursor: LongInt);
 begin
   Inc(ACursor);
+end;
+
+function IsCallingDirective(const ALexeme: string): Boolean;
+var
+  L: string;
+begin
+  L := LowerCase(ALexeme);
+  Result := (L = 'inline') or (L = 'overload') or (L = 'cdecl') or
+    (L = 'stdcall') or (L = 'register') or (L = 'pascal') or
+    (L = 'safecall') or (L = 'static') or (L = 'virtual') or
+    (L = 'override') or (L = 'abstract') or (L = 'reintroduce') or
+    (L = 'export') or (L = 'far') or (L = 'near') or
+    (L = 'nostackframe') or (L = 'assembler') or (L = 'compilerproc') or
+    (L = 'platform') or (L = 'deprecated') or (L = 'experimental') or
+    (L = 'unimplemented') or (L = 'library') or (L = 'interrupt');
+end;
+
+function IsDirectiveToken(AKind: TTokenKind): Boolean;
+begin
+  Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
+    tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword];
 end;
 
 procedure SkipDirectives(const ALexer: TLexerResult; var ACursor: LongInt);
@@ -798,9 +824,16 @@ begin
 
   Token := CurrentToken(ALexer, ACursor);
   case Token.Kind of
-    tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword:
+    tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
+      tkInheritedKeyword:
       begin
         Inc(ACursor);
+        if (Token.Kind = tkInheritedKeyword) and (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+        begin
+          Token.Lexeme := 'inherited ' + CurrentToken(ALexer, ACursor).Lexeme;
+          Inc(ACursor);
+        end;
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
         begin
@@ -814,7 +847,16 @@ begin
           begin
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
-              Result.AppendChild(RHS);
+              Result.AppendChild(RHS)
+            else
+            begin
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkComma) then
+                Inc(ACursor);
+              if (ACursor >= ALexer.TokenCount) or
+                (CurrentToken(ALexer, ACursor).Kind = tkEOF) then Break;
+            end;
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkComma) then
               Inc(ACursor);
@@ -872,6 +914,14 @@ begin
           if Result <> nil then
             Result.Free;
           Exit(nil);
+        end;
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkCaret) do
+        begin
+          RHS := TGreenNode.Create(gnkDereference, Result.ByteOffset, 0, '');
+          RHS.AppendChild(Result);
+          Result := RHS;
+          Inc(ACursor);
         end;
       end;
     tkLBracket:
@@ -1409,6 +1459,21 @@ begin
           NameNode.FText := NameNode.FText + SpecArgs;
         end;
 
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkDot) do
+        begin
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+          begin
+            NameNode.FText := NameNode.FText + '.' +
+              CurrentToken(ALexer, ACursor).Lexeme;
+            Inc(ACursor);
+          end
+          else
+            Break;
+        end;
+
         Result := NameNode;
       end;
     tkStringKeyword, tkFileKeyword:
@@ -1803,6 +1868,7 @@ var
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
   SpecArgs: string;
+  I: LongInt;
 begin
   Section := TGreenNode.Create(gnkTypeSection,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -1810,10 +1876,13 @@ begin
   Inc(ATree.FNodeCount);
   Inc(ACursor);
 
-  while (ACursor < ALexer.TokenCount) and
-    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
-     (CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword)) do
+  while True do
   begin
+    SkipDirectives(ALexer, ACursor);
+    if (ACursor >= ALexer.TokenCount) or
+      ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
+       (CurrentToken(ALexer, ACursor).Kind <> tkGenericKeyword)) then
+      Break;
     if CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword then
       Inc(ACursor);
     if (ACursor >= ALexer.TokenCount) or
@@ -1882,6 +1951,7 @@ begin
             SkipDirectives(ALexer, ACursor);
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
             begin
               if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
@@ -1939,6 +2009,33 @@ begin
                   (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
                   Inc(ACursor);
               end
+              else if CurrentToken(ALexer, ACursor).Kind in
+                [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
+                 tkConstructorKeyword, tkDestructorKeyword, tkOperatorKeyword,
+                 tkPropertyKeyword, tkStaticKeyword, tkGenericKeyword] then
+              begin
+                I := 0;
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                begin
+                  if CurrentToken(ALexer, ACursor).Kind = tkLParen then Inc(I)
+                  else if CurrentToken(ALexer, ACursor).Kind = tkRParen then Dec(I)
+                  else if (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) and (I <= 0) then
+                    Break;
+                  Inc(ACursor);
+                end;
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                while (ACursor < ALexer.TokenCount) and
+                  (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+                   ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                    IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+                begin
+                  Inc(ACursor);
+                  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                end;
+              end
               else
                 Inc(ACursor);
             end;
@@ -1951,15 +2048,14 @@ begin
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
             Inc(ACursor);
-            if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
             begin
-              IndexNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
-                ARootFileId);
-              if IndexNode <> nil then
-              begin
-                TypeNode.AppendChild(IndexNode);
-                Inc(ATree.FNodeCount);
-              end;
+              Inc(ACursor);
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
               MatchTokenSilent(ALexer, ACursor, tkRBracket);
             end;
             if MatchTokenSilent(ALexer, ACursor, tkOfKeyword) then
@@ -2015,6 +2111,25 @@ begin
               end;
               MatchTokenSilent(ALexer, ACursor, tkRParen);
             end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) then
+            begin
+              // Forward class declaration: class; or class(parent);
+            end
+            else if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkOfKeyword) then
+            begin
+              Inc(ACursor);
+              ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
+                ARootFileId);
+              if ElementNode <> nil then
+              begin
+                TypeNode.AppendChild(ElementNode);
+                Inc(ATree.FNodeCount);
+              end;
+            end
+            else
+            begin
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
               (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
@@ -2032,12 +2147,19 @@ begin
               end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword,
-                 tkConstructorKeyword, tkDestructorKeyword] then
+                 tkConstructorKeyword, tkDestructorKeyword,
+                 tkGenericKeyword, tkClassKeyword] then
               begin
                 ElementNode := TGreenNode.Create(gnkClassMethod,
                   CurrentToken(ALexer, ACursor).ByteOffset, 0,
                   TokenKindName(CurrentToken(ALexer, ACursor).Kind));
                 Inc(ACursor);
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind in
+                    [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
+                     tkConstructorKeyword, tkDestructorKeyword,
+                     tkGenericKeyword, tkOperatorKeyword]) do
+                  Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
                 begin
@@ -2046,6 +2168,15 @@ begin
                     CurrentToken(ALexer, ACursor).Lexeme));
                   Inc(ATree.FNodeCount);
                   Inc(ACursor);
+                end;
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+                begin
+                  while (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                    Inc(ACursor);
+                  if ACursor < ALexer.TokenCount then Inc(ACursor);
                 end;
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
@@ -2068,9 +2199,12 @@ begin
                 end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind in
+                  (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+                   (CurrentToken(ALexer, ACursor).Kind in
                     [tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword,
-                     tkOverloadKeyword]) do
+                     tkOverloadKeyword]) or
+                   ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                    IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
                 begin
                   if CurrentToken(ALexer, ACursor).Kind = tkVirtualKeyword then
                     ElementNode.FText := ElementNode.FText + ';virtual'
@@ -2273,6 +2407,7 @@ begin
                 Inc(ACursor);
             end;
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+            end;
           end;
         tkInterfaceKeyword:
           begin
@@ -2311,13 +2446,41 @@ begin
               if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword] then
               begin
+                ElementNode := TGreenNode.Create(gnkClassMethod,
+                  CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                  TokenKindName(CurrentToken(ALexer, ACursor).Kind));
                 Inc(ACursor);
-                while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                begin
+                  ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                    CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                    CurrentToken(ALexer, ACursor).Lexeme));
+                  Inc(ATree.FNodeCount);
                   Inc(ACursor);
+                end;
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+                  ParseParameterList(ALexer, ACursor, ElementNode, ATree,
+                    ADiagnostics, ARootFileId);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                begin
+                  Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
+                     (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
+                  begin
+                    ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
+                      CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                      CurrentToken(ALexer, ACursor).Lexeme));
+                    Inc(ATree.FNodeCount);
+                    Inc(ACursor);
+                  end;
+                end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                TypeNode.AppendChild(ElementNode);
+                Inc(ATree.FNodeCount);
               end
               else if CurrentToken(ALexer, ACursor).Kind = tkPropertyKeyword then
               begin
@@ -2485,6 +2648,40 @@ begin
               Inc(ACursor);
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
           end;
+        tkPackedKeyword:
+          begin
+            Inc(ACursor);
+            SkipDirectives(ALexer, ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkRecordKeyword) then
+            begin
+              TypeNode := TGreenNode.Create(gnkRecordType,
+                CurrentToken(ALexer, ACursor).ByteOffset, 0, 'packed');
+              Decl.AppendChild(TypeNode);
+              Inc(ATree.FNodeCount);
+              Inc(ACursor);
+              SkipDirectives(ALexer, ACursor);
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
+              MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+            end
+            else
+            begin
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
+            end;
+          end;
+        tkMinus, tkPlus, tkIntegerLiteral, tkCharLiteral:
+          begin
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+          end;
       else
         TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
         if TypeNode <> nil then
@@ -2495,6 +2692,15 @@ begin
       end;
     end;
 
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind in
+        [tkDeprecatedKeyword, tkPlatformKeyword, tkExperimentalKeyword]) then
+    begin
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        Inc(ACursor);
+    end;
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
 
@@ -2512,6 +2718,7 @@ function ParseProcedureDecl(
 var
   Node: TGreenNode;
   NameToken: TToken;
+  I: LongInt;
 begin
   Node := TGreenNode.Create(gnkProcedureDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2529,6 +2736,14 @@ begin
   Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
+    (NameToken.Kind = tkStar) and
+    (CurrentToken(ALexer, ACursor).Kind = tkStar) then
+  begin
+    Node.FText := '**';
+    Inc(ACursor);
+  end;
+
+  if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkDot) then
   begin
     Inc(ACursor);
@@ -2540,9 +2755,31 @@ begin
     end;
   end;
 
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+  begin
+    Inc(ACursor);
+    while (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+      (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
+      Inc(ACursor);
+  end;
+
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
 
   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+
+  while (ACursor < ALexer.TokenCount) and
+    (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+  begin
+    Inc(ACursor);
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+  end;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
@@ -2554,24 +2791,50 @@ begin
   begin
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind in
-        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword]) do
+        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
+         tkFunctionKeyword, tkProcedureKeyword]) do
     begin
-      Inc(ACursor);
-      while (ACursor < ALexer.TokenCount) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
+        (ACursor + 2 < ALexer.TokenCount) and
+        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+        Break;
+      I := ACursor;
+      if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
+        ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
+        ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else
+      begin
         Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkAsmKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+      end;
+      if ACursor = I then begin Inc(ACursor); Break; end;
     end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
     begin
       Inc(ACursor);
       ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
     end
     else
@@ -2609,6 +2872,7 @@ var
   Node: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
+  I: LongInt;
 begin
   Node := TGreenNode.Create(gnkFunctionDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2619,7 +2883,10 @@ begin
     ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
      not (CurrentToken(ALexer, ACursor).Kind in
        [tkPlus, tkMinus, tkStar, tkSlash, tkEquals, tkNotEquals,
-        tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual])) then
+        tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
+        tkModKeyword, tkDivKeyword, tkShlKeyword, tkShrKeyword,
+        tkAndKeyword, tkOrKeyword, tkXorKeyword, tkNotKeyword,
+        tkInKeyword])) then
   begin
     Node.Free;
     Exit(False);
@@ -2628,6 +2895,14 @@ begin
   NameToken := CurrentToken(ALexer, ACursor);
   Node.FText := NameToken.Lexeme;
   Inc(ACursor);
+
+  if (ACursor < ALexer.TokenCount) and
+    (NameToken.Kind = tkStar) and
+    (CurrentToken(ALexer, ACursor).Kind = tkStar) then
+  begin
+    Node.FText := '**';
+    Inc(ACursor);
+  end;
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkDot) then
@@ -2641,7 +2916,26 @@ begin
     end;
   end;
 
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+  begin
+    Inc(ACursor);
+    while (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+      (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      Inc(ACursor);
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
+      Inc(ACursor);
+  end;
+
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+    (ACursor + 1 < ALexer.TokenCount) and
+    (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
+    Inc(ACursor);
 
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkColon) then
@@ -2657,6 +2951,15 @@ begin
 
   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
 
+  while (ACursor < ALexer.TokenCount) and
+    (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+  begin
+    Inc(ACursor);
+    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+  end;
+
   if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkForwardKeyword) then
   begin
@@ -2667,24 +2970,50 @@ begin
   begin
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind in
-        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword]) do
+        [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
+         tkFunctionKeyword, tkProcedureKeyword]) do
     begin
-      Inc(ACursor);
-      while (ACursor < ALexer.TokenCount) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
-        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
+        (ACursor + 2 < ALexer.TokenCount) and
+        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+        Break;
+      I := ACursor;
+      if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
+        ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
+        ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else
+      begin
         Inc(ACursor);
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkAsmKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkVarKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkConstKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkTypeKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkFunctionKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkProcedureKeyword) and
+          (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+          Inc(ACursor);
+      end;
+      if ACursor = I then begin Inc(ACursor); Break; end;
     end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
     begin
       Inc(ACursor);
       ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
     end
     else
@@ -2736,7 +3065,13 @@ begin
       tkVarKeyword:
         Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
+      tkThreadVarKeyword:
+        Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
+          ADiagnostics, ARootFileId) and Result;
       tkConstKeyword:
+        Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
+          ADiagnostics, ARootFileId) and Result;
+      tkResourceStringKeyword:
         Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
       tkTypeKeyword:
@@ -2767,6 +3102,19 @@ begin
       tkOperatorKeyword:
         Result := ParseFunctionDecl(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
+      tkGenericKeyword:
+        begin
+          Inc(ACursor);
+          SkipDirectives(ALexer, ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword) then
+            Result := ParseFunctionDecl(ALexer, ACursor, AParent, ATree,
+              ADiagnostics, ARootFileId) and Result
+          else if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword) then
+            Result := ParseProcedureDecl(ALexer, ACursor, AParent, ATree,
+              ADiagnostics, ARootFileId) and Result;
+        end;
     else
       AdvanceCursor(ACursor);
     end;
@@ -3424,6 +3772,19 @@ var
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
               StmtNode.AppendChild(RHS);
+          end;
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+            (LowerCase(CurrentToken(ALexer, ACursor).Lexeme) = 'at') then
+          begin
+            Inc(ACursor);
+            ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+            begin
+              Inc(ACursor);
+              ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            end;
           end;
           Inc(ATree.FNodeCount);
           Result := True;

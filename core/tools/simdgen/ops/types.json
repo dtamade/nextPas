@@ -1,0 +1,317 @@
+{
+  "_comment": "SIMD vector type registry - all supported vector types",
+  "types": {
+    "F32x4": {
+      "vec_type": "TVecF32x4",
+      "scalar_type": "Single",
+      "field": "f",
+      "lanes": 4,
+      "width": 128,
+      "mask": "TMask4",
+      "ptr": "PSingle",
+      "category": "float"
+    },
+    "F32x3": {
+      "vec_type": "TVecF32x4",
+      "scalar_type": "Single",
+      "field": "f",
+      "lanes": 3,
+      "width": 128,
+      "mask": "TMask4",
+      "ptr": "PSingle",
+      "category": "float"
+    },
+    "F32x8": {
+      "vec_type": "TVecF32x8",
+      "scalar_type": "Single",
+      "field": "f",
+      "lanes": 8,
+      "width": 256,
+      "mask": "TMask8",
+      "ptr": "PSingle",
+      "category": "float",
+      "decompose": ["F32x4", "F32x4"]
+    },
+    "F32x16": {
+      "vec_type": "TVecF32x16",
+      "scalar_type": "Single",
+      "field": "f",
+      "lanes": 16,
+      "width": 512,
+      "mask": "TMask16",
+      "ptr": "PSingle",
+      "category": "float",
+      "decompose": ["F32x8", "F32x8"]
+    },
+    "F64x2": {
+      "vec_type": "TVecF64x2",
+      "scalar_type": "Double",
+      "field": "d",
+      "lanes": 2,
+      "width": 128,
+      "mask": "TMask2",
+      "ptr": "PDouble",
+      "category": "float"
+    },
+    "F64x4": {
+      "vec_type": "TVecF64x4",
+      "scalar_type": "Double",
+      "field": "d",
+      "lanes": 4,
+      "width": 256,
+      "mask": "TMask4",
+      "ptr": "PDouble",
+      "category": "float",
+      "decompose": ["F64x2", "F64x2"]
+    },
+    "F64x8": {
+      "vec_type": "TVecF64x8",
+      "scalar_type": "Double",
+      "field": "d",
+      "lanes": 8,
+      "width": 512,
+      "mask": "TMask8",
+      "ptr": "PDouble",
+      "category": "float",
+      "decompose": ["F64x4", "F64x4"]
+    },
+    "I32x4": {
+      "vec_type": "TVecI32x4",
+      "scalar_type": "Int32",
+      "field": "i",
+      "lanes": 4,
+      "width": 128,
+      "mask": "TMask4",
+      "ptr": "PInt32",
+      "category": "signed_int"
+    },
+    "I32x8": {
+      "vec_type": "TVecI32x8",
+      "scalar_type": "Int32",
+      "field": "i",
+      "lanes": 8,
+      "width": 256,
+      "mask": "TMask8",
+      "ptr": "PInt32",
+      "category": "signed_int",
+      "decompose": ["I32x4", "I32x4"]
+    },
+    "I32x16": {
+      "vec_type": "TVecI32x16",
+      "scalar_type": "Int32",
+      "field": "i",
+      "lanes": 16,
+      "width": 512,
+      "mask": "TMask16",
+      "ptr": "PInt32",
+      "category": "signed_int",
+      "decompose": ["I32x8", "I32x8"]
+    },
+    "I64x2": {
+      "vec_type": "TVecI64x2",
+      "scalar_type": "Int64",
+      "field": "i",
+      "lanes": 2,
+      "width": 128,
+      "mask": "TMask2",
+      "ptr": "PInt64",
+      "category": "signed_int"
+    },
+    "I64x4": {
+      "vec_type": "TVecI64x4",
+      "scalar_type": "Int64",
+      "field": "i",
+      "lanes": 4,
+      "width": 256,
+      "mask": "TMask4",
+      "ptr": "PInt64",
+      "category": "signed_int",
+      "decompose": ["I64x2", "I64x2"]
+    },
+    "I64x8": {
+      "vec_type": "TVecI64x8",
+      "scalar_type": "Int64",
+      "field": "i",
+      "lanes": 8,
+      "width": 512,
+      "mask": "TMask8",
+      "ptr": "PInt64",
+      "category": "signed_int",
+      "decompose": ["I64x4", "I64x4"]
+    },
+    "U32x4": {
+      "vec_type": "TVecU32x4",
+      "scalar_type": "UInt32",
+      "field": "u",
+      "lanes": 4,
+      "width": 128,
+      "mask": "TMask4",
+      "ptr": "PUInt32",
+      "category": "unsigned_int"
+    },
+    "U32x8": {
+      "vec_type": "TVecU32x8",
+      "scalar_type": "UInt32",
+      "field": "u",
+      "lanes": 8,
+      "width": 256,
+      "mask": "TMask8",
+      "ptr": "PUInt32",
+      "category": "unsigned_int",
+      "decompose": ["U32x4", "U32x4"]
+    },
+    "U32x16": {
+      "vec_type": "TVecU32x16",
+      "scalar_type": "UInt32",
+      "field": "u",
+      "lanes": 16,
+      "width": 512,
+      "mask": "TMask16",
+      "ptr": "PUInt32",
+      "category": "unsigned_int",
+      "decompose": ["U32x8", "U32x8"]
+    },
+    "U64x2": {
+      "vec_type": "TVecU64x2",
+      "scalar_type": "UInt64",
+      "field": "u",
+      "lanes": 2,
+      "width": 128,
+      "mask": "TMask2",
+      "ptr": "PUInt64",
+      "category": "unsigned_int"
+    },
+    "U64x4": {
+      "vec_type": "TVecU64x4",
+      "scalar_type": "UInt64",
+      "field": "u",
+      "lanes": 4,
+      "width": 256,
+      "mask": "TMask4",
+      "ptr": "PUInt64",
+      "category": "unsigned_int",
+      "decompose": ["U64x2", "U64x2"]
+    },
+    "U64x8": {
+      "vec_type": "TVecU64x8",
+      "scalar_type": "UInt64",
+      "field": "u",
+      "lanes": 8,
+      "width": 512,
+      "mask": "TMask8",
+      "ptr": "PUInt64",
+      "category": "unsigned_int",
+      "decompose": ["U64x4", "U64x4"]
+    },
+    "I16x8": {
+      "vec_type": "TVecI16x8",
+      "scalar_type": "Int16",
+      "field": "i",
+      "lanes": 8,
+      "width": 128,
+      "mask": "TMask8",
+      "ptr": "PInt16",
+      "category": "signed_int"
+    },
+    "I16x32": {
+      "vec_type": "TVecI16x32",
+      "scalar_type": "Int16",
+      "field": "i",
+      "lanes": 32,
+      "width": 512,
+      "mask": "TMask32",
+      "ptr": "PInt16",
+      "category": "signed_int"
+    },
+    "I8x16": {
+      "vec_type": "TVecI8x16",
+      "scalar_type": "Int8",
+      "field": "i",
+      "lanes": 16,
+      "width": 128,
+      "mask": "TMask16",
+      "ptr": "PInt8",
+      "category": "signed_int"
+    },
+    "I8x64": {
+      "vec_type": "TVecI8x64",
+      "scalar_type": "Int8",
+      "field": "i",
+      "lanes": 64,
+      "width": 512,
+      "mask": "TMask64",
+      "ptr": "PInt8",
+      "category": "signed_int"
+    },
+    "U8x16": {
+      "vec_type": "TVecU8x16",
+      "scalar_type": "UInt8",
+      "field": "u",
+      "lanes": 16,
+      "width": 128,
+      "mask": "TMask16",
+      "ptr": "PUInt8",
+      "category": "unsigned_int"
+    },
+    "U8x64": {
+      "vec_type": "TVecU8x64",
+      "scalar_type": "UInt8",
+      "field": "u",
+      "lanes": 64,
+      "width": 512,
+      "mask": "TMask64",
+      "ptr": "PUInt8",
+      "category": "unsigned_int"
+    },
+    "U16x8": {
+      "vec_type": "TVecU16x8",
+      "scalar_type": "UInt16",
+      "field": "u",
+      "lanes": 8,
+      "width": 128,
+      "mask": "TMask8",
+      "ptr": "PUInt16",
+      "category": "unsigned_int"
+    },
+    "Mask2": {
+      "vec_type": "TMask2",
+      "scalar_type": "Boolean",
+      "field": "",
+      "lanes": 2,
+      "width": 2,
+      "mask": "TMask2",
+      "ptr": "Pointer",
+      "category": "mask"
+    },
+    "Mask4": {
+      "vec_type": "TMask4",
+      "scalar_type": "Boolean",
+      "field": "",
+      "lanes": 4,
+      "width": 4,
+      "mask": "TMask4",
+      "ptr": "Pointer",
+      "category": "mask"
+    },
+    "Mask8": {
+      "vec_type": "TMask8",
+      "scalar_type": "Boolean",
+      "field": "",
+      "lanes": 8,
+      "width": 8,
+      "mask": "TMask8",
+      "ptr": "Pointer",
+      "category": "mask"
+    },
+    "Mask16": {
+      "vec_type": "TMask16",
+      "scalar_type": "Boolean",
+      "field": "",
+      "lanes": 16,
+      "width": 16,
+      "mask": "TMask16",
+      "ptr": "Pointer",
+      "category": "mask"
+    }
+  }
+}

@@ -62,6 +62,7 @@ function getaddrinfo(node: PAnsiChar; service: PAnsiChar; hints: Pointer; res: P
 procedure freeaddrinfo(res: Pointer); cdecl; external 'c' name 'freeaddrinfo';
 function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUInt; serv: PAnsiChar; servlen: PtrUInt; flags: Int32): Int32; cdecl; external 'c' name 'getnameinfo';
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
+function getdents(fd: Int32; buf: PAnsiChar; nbytes: PtrUInt): PtrInt; cdecl; external 'c' name 'getdents';
 
 implementation
 

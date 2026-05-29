@@ -4,6 +4,9 @@ unit nextpas.core.sync.intf;
 
 interface
 
+uses
+  nextpas.core.sync.base;
+
 type
   ILockGuard = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560001}']
@@ -46,6 +49,40 @@ type
     function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
     procedure Signal;
     procedure Broadcast;
+  end;
+
+  IOnce = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560010}']
+    procedure Do_(const AProc: TOnceProc);
+    function Done: Boolean;
+  end;
+
+  ISpinLock = interface(ILock)
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560011}']
+  end;
+
+  ISemaphore = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560012}']
+    procedure Acquire;
+    function TryAcquire: Boolean;
+    function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Release;
+    procedure Release(const ACount: Int32);
+    function Available: Int32;
+  end;
+
+  IBarrier = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560013}']
+    function Wait: TBarrierWaitResult;
+  end;
+
+  IEvent = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560014}']
+    procedure SetEvent;
+    procedure Reset;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function IsSet: Boolean;
   end;
 
 implementation

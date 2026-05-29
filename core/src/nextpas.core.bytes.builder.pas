@@ -6,151 +6,273 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.bytes.base,
-  nextpas.core.bytes.intf;
+  nextpas.core.mem.intf;
 
-function CreateByteBuilder(const AInitialCapacity: SizeUInt = 256): IByteBuilder;
+type
+  IBytesBuilder = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function GetLength: SizeUInt;
+    function GetCapacity: SizeUInt;
+    function GetData: PByte;
+
+    procedure AppendByte(const AValue: Byte);
+    procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
+    procedure AppendSpan(const ASpan: TByteSpan);
+    procedure AppendUInt16LE(const AValue: UInt16);
+    procedure AppendUInt16BE(const AValue: UInt16);
+    procedure AppendUInt32LE(const AValue: UInt32);
+    procedure AppendUInt32BE(const AValue: UInt32);
+    procedure AppendUInt64LE(const AValue: UInt64);
+    procedure AppendUInt64BE(const AValue: UInt64);
+    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
+
+    function WrittenSpan: TByteSpan;
+    function ToBytes: TBytes;
+
+    procedure Clear;
+    procedure Reserve(const AAdditional: SizeUInt);
+    procedure Truncate(const ANewLen: SizeUInt);
+
+    property Length: SizeUInt read GetLength;
+    property Capacity: SizeUInt read GetCapacity;
+    property Data: PByte read GetData;
+  end;
+
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
+function CreateBytesBuilderWith(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder;
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 type
-  TByteBuilder = class(TInterfacedObject, IByteBuilder)
+  TBytesBuilderImpl = class(TInterfacedObject, IBytesBuilder)
   private
-    FData: TBytes;
-    FSize: SizeUInt;
+    FPtr: PByte;
+    FLen: SizeUInt;
+    FCap: SizeUInt;
+    FAllocator: IAllocator;
     procedure Grow(const ANeeded: SizeUInt);
   public
-    constructor Create(const AInitialCapacity: SizeUInt);
-    function GetSize: SizeUInt;
+    constructor Create(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt);
+    destructor Destroy; override;
+
+    function GetLength: SizeUInt;
+    function GetCapacity: SizeUInt;
+    function GetData: PByte;
+
     procedure AppendByte(const AValue: Byte);
     procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
-    procedure AppendUInt16(const AValue: Word; const AEndian: TEndian);
-    procedure AppendUInt32(const AValue: LongWord; const AEndian: TEndian);
-    procedure AppendUInt64(const AValue: QWord; const AEndian: TEndian);
+    procedure AppendSpan(const ASpan: TByteSpan);
+    procedure AppendUInt16LE(const AValue: UInt16);
+    procedure AppendUInt16BE(const AValue: UInt16);
+    procedure AppendUInt32LE(const AValue: UInt32);
+    procedure AppendUInt32BE(const AValue: UInt32);
+    procedure AppendUInt64LE(const AValue: UInt64);
+    procedure AppendUInt64BE(const AValue: UInt64);
+    procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
+
+    function WrittenSpan: TByteSpan;
     function ToBytes: TBytes;
+
     procedure Clear;
+    procedure Reserve(const AAdditional: SizeUInt);
+    procedure Truncate(const ANewLen: SizeUInt);
   end;
 
-function CreateByteBuilder(const AInitialCapacity: SizeUInt): IByteBuilder;
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder;
 begin
-  Result := TByteBuilder.Create(AInitialCapacity);
+  Result := TBytesBuilderImpl.Create(nextpas.core.mem.DefaultAllocator, AInitialCapacity);
 end;
 
-{ TByteBuilder }
+function CreateBytesBuilderWith(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt): IBytesBuilder;
+begin
+  Result := TBytesBuilderImpl.Create(AAllocator, AInitialCapacity);
+end;
 
-constructor TByteBuilder.Create(const AInitialCapacity: SizeUInt);
+{ TBytesBuilderImpl }
+
+constructor TBytesBuilderImpl.Create(const AAllocator: IAllocator; const AInitialCapacity: SizeUInt);
 begin
   inherited Create;
-  SetLength(FData, AInitialCapacity);
-  FSize := 0;
+  FAllocator := AAllocator;
+  if AInitialCapacity > 0 then
+    FPtr := FAllocator.Allocate(AInitialCapacity)
+  else
+    FPtr := nil;
+  FLen := 0;
+  FCap := AInitialCapacity;
 end;
 
-procedure TByteBuilder.Grow(const ANeeded: SizeUInt);
+destructor TBytesBuilderImpl.Destroy;
+begin
+  if FPtr <> nil then
+  begin
+    FAllocator.Deallocate(FPtr);
+    FPtr := nil;
+  end;
+  inherited;
+end;
+
+procedure TBytesBuilderImpl.Grow(const ANeeded: SizeUInt);
 var
   LNewCap: SizeUInt;
 begin
-  if FSize + ANeeded <= SizeUInt(Length(FData)) then
+  if FLen + ANeeded <= FCap then
     Exit;
-  LNewCap := SizeUInt(Length(FData));
-  if LNewCap = 0 then
-    LNewCap := 64;
-  while LNewCap < FSize + ANeeded do
-    LNewCap := LNewCap * 2;
-  SetLength(FData, LNewCap);
+  LNewCap := FCap;
+  if LNewCap < BYTES_BUILDER_MIN_GROW then
+    LNewCap := BYTES_BUILDER_MIN_GROW;
+  while LNewCap < FLen + ANeeded do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := FLen + ANeeded;
+      Break;
+    end;
+  end;
+  FPtr := FAllocator.Reallocate(FPtr, LNewCap);
+  FCap := LNewCap;
 end;
 
-function TByteBuilder.GetSize: SizeUInt;
+function TBytesBuilderImpl.GetLength: SizeUInt;
 begin
-  Result := FSize;
+  Result := FLen;
 end;
 
-procedure TByteBuilder.AppendByte(const AValue: Byte);
+function TBytesBuilderImpl.GetCapacity: SizeUInt;
+begin
+  Result := FCap;
+end;
+
+function TBytesBuilderImpl.GetData: PByte;
+begin
+  Result := FPtr;
+end;
+
+procedure TBytesBuilderImpl.AppendByte(const AValue: Byte);
 begin
   Grow(1);
-  FData[FSize] := AValue;
-  Inc(FSize);
+  FPtr[FLen] := AValue;
+  Inc(FLen);
 end;
 
-procedure TByteBuilder.AppendBytes(const AData: PByte; const ACount: SizeUInt);
+procedure TBytesBuilderImpl.AppendBytes(const AData: PByte; const ACount: SizeUInt);
 begin
   if ACount = 0 then Exit;
   Grow(ACount);
-  Move(AData^, FData[FSize], ACount);
-  Inc(FSize, ACount);
+  Move(AData^, FPtr[FLen], ACount);
+  Inc(FLen, ACount);
 end;
 
-procedure TByteBuilder.AppendUInt16(const AValue: Word; const AEndian: TEndian);
+procedure TBytesBuilderImpl.AppendSpan(const ASpan: TByteSpan);
+begin
+  AppendBytes(ASpan.Data, ASpan.Len);
+end;
+
+procedure TBytesBuilderImpl.AppendUInt16LE(const AValue: UInt16);
 begin
   Grow(2);
-  if AEndian = enLittle then
-  begin
-    FData[FSize]     := Byte(AValue);
-    FData[FSize + 1] := Byte(AValue shr 8);
-  end
-  else
-  begin
-    FData[FSize]     := Byte(AValue shr 8);
-    FData[FSize + 1] := Byte(AValue);
-  end;
-  Inc(FSize, 2);
+  FPtr[FLen]     := Byte(AValue);
+  FPtr[FLen + 1] := Byte(AValue shr 8);
+  Inc(FLen, 2);
 end;
 
-procedure TByteBuilder.AppendUInt32(const AValue: LongWord; const AEndian: TEndian);
+procedure TBytesBuilderImpl.AppendUInt16BE(const AValue: UInt16);
+begin
+  Grow(2);
+  FPtr[FLen]     := Byte(AValue shr 8);
+  FPtr[FLen + 1] := Byte(AValue);
+  Inc(FLen, 2);
+end;
+
+procedure TBytesBuilderImpl.AppendUInt32LE(const AValue: UInt32);
 begin
   Grow(4);
-  if AEndian = enLittle then
-  begin
-    FData[FSize]     := Byte(AValue);
-    FData[FSize + 1] := Byte(AValue shr 8);
-    FData[FSize + 2] := Byte(AValue shr 16);
-    FData[FSize + 3] := Byte(AValue shr 24);
-  end
-  else
-  begin
-    FData[FSize]     := Byte(AValue shr 24);
-    FData[FSize + 1] := Byte(AValue shr 16);
-    FData[FSize + 2] := Byte(AValue shr 8);
-    FData[FSize + 3] := Byte(AValue);
-  end;
-  Inc(FSize, 4);
+  FPtr[FLen]     := Byte(AValue);
+  FPtr[FLen + 1] := Byte(AValue shr 8);
+  FPtr[FLen + 2] := Byte(AValue shr 16);
+  FPtr[FLen + 3] := Byte(AValue shr 24);
+  Inc(FLen, 4);
 end;
 
-procedure TByteBuilder.AppendUInt64(const AValue: QWord; const AEndian: TEndian);
+procedure TBytesBuilderImpl.AppendUInt32BE(const AValue: UInt32);
+begin
+  Grow(4);
+  FPtr[FLen]     := Byte(AValue shr 24);
+  FPtr[FLen + 1] := Byte(AValue shr 16);
+  FPtr[FLen + 2] := Byte(AValue shr 8);
+  FPtr[FLen + 3] := Byte(AValue);
+  Inc(FLen, 4);
+end;
+
+procedure TBytesBuilderImpl.AppendUInt64LE(const AValue: UInt64);
 begin
   Grow(8);
-  if AEndian = enLittle then
-  begin
-    FData[FSize]     := Byte(AValue);
-    FData[FSize + 1] := Byte(AValue shr 8);
-    FData[FSize + 2] := Byte(AValue shr 16);
-    FData[FSize + 3] := Byte(AValue shr 24);
-    FData[FSize + 4] := Byte(AValue shr 32);
-    FData[FSize + 5] := Byte(AValue shr 40);
-    FData[FSize + 6] := Byte(AValue shr 48);
-    FData[FSize + 7] := Byte(AValue shr 56);
-  end
-  else
-  begin
-    FData[FSize]     := Byte(AValue shr 56);
-    FData[FSize + 1] := Byte(AValue shr 48);
-    FData[FSize + 2] := Byte(AValue shr 40);
-    FData[FSize + 3] := Byte(AValue shr 32);
-    FData[FSize + 4] := Byte(AValue shr 24);
-    FData[FSize + 5] := Byte(AValue shr 16);
-    FData[FSize + 6] := Byte(AValue shr 8);
-    FData[FSize + 7] := Byte(AValue);
-  end;
-  Inc(FSize, 8);
+  FPtr[FLen]     := Byte(AValue);
+  FPtr[FLen + 1] := Byte(AValue shr 8);
+  FPtr[FLen + 2] := Byte(AValue shr 16);
+  FPtr[FLen + 3] := Byte(AValue shr 24);
+  FPtr[FLen + 4] := Byte(AValue shr 32);
+  FPtr[FLen + 5] := Byte(AValue shr 40);
+  FPtr[FLen + 6] := Byte(AValue shr 48);
+  FPtr[FLen + 7] := Byte(AValue shr 56);
+  Inc(FLen, 8);
 end;
 
-function TByteBuilder.ToBytes: TBytes;
+procedure TBytesBuilderImpl.AppendUInt64BE(const AValue: UInt64);
 begin
-  Result := Copy(FData, 0, FSize);
+  Grow(8);
+  FPtr[FLen]     := Byte(AValue shr 56);
+  FPtr[FLen + 1] := Byte(AValue shr 48);
+  FPtr[FLen + 2] := Byte(AValue shr 40);
+  FPtr[FLen + 3] := Byte(AValue shr 32);
+  FPtr[FLen + 4] := Byte(AValue shr 24);
+  FPtr[FLen + 5] := Byte(AValue shr 16);
+  FPtr[FLen + 6] := Byte(AValue shr 8);
+  FPtr[FLen + 7] := Byte(AValue);
+  Inc(FLen, 8);
 end;
 
-procedure TByteBuilder.Clear;
+procedure TBytesBuilderImpl.AppendFill(const AValue: Byte; const ACount: SizeUInt);
 begin
-  FSize := 0;
+  if ACount = 0 then Exit;
+  Grow(ACount);
+  FillChar(FPtr[FLen], ACount, AValue);
+  Inc(FLen, ACount);
+end;
+
+function TBytesBuilderImpl.WrittenSpan: TByteSpan;
+begin
+  Result := TByteSpan.Create(FPtr, FLen);
+end;
+
+function TBytesBuilderImpl.ToBytes: TBytes;
+begin
+  SetLength(Result, FLen);
+  if FLen > 0 then
+    Move(FPtr^, Result[0], FLen);
+end;
+
+procedure TBytesBuilderImpl.Clear;
+begin
+  FLen := 0;
+end;
+
+procedure TBytesBuilderImpl.Reserve(const AAdditional: SizeUInt);
+begin
+  Grow(AAdditional);
+end;
+
+procedure TBytesBuilderImpl.Truncate(const ANewLen: SizeUInt);
+begin
+  if ANewLen < FLen then
+    FLen := ANewLen;
 end;
 
 end.

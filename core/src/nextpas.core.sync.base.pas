@@ -11,6 +11,13 @@ type
     lsLockedWithWaiters
   );
 
+  TOnceProc = procedure;
+
+  TBarrierWaitResult = record
+    IsLeader: Boolean;
+    Generation: Int64;
+  end;
+
 implementation
 
 end.

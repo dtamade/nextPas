@@ -11,7 +11,7 @@ function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 implementation
 
 uses
-  Windows, SysUtils;
+  Windows;
 
 type
   PSYSTEM_LOGICAL_PROCESSOR_INFORMATION = ^SYSTEM_LOGICAL_PROCESSOR_INFORMATION;

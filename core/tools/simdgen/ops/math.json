@@ -1,0 +1,72 @@
+{
+  "_comment": "SIMD operation definitions - math functions",
+  "category": "math",
+  "operations": [
+    {
+      "name": "Abs",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Abs(a.{field}[i])",
+      "doc": "Absolute value",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Sqrt",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Sqrt(a.{field}[i])",
+      "doc": "Square root",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Floor",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Floor(a.{field}[i])",
+      "doc": "Floor (round toward negative infinity)",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Ceil",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Ceil(a.{field}[i])",
+      "doc": "Ceiling (round toward positive infinity)",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Round",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Round(a.{field}[i])",
+      "doc": "Round to nearest integer",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "Trunc",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := Trunc(a.{field}[i])",
+      "doc": "Truncate toward zero",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    }
+  ]
+}

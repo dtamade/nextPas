@@ -5,7 +5,7 @@ unit np_semantic_model;
 interface
 
 uses
-  np_green_tree;
+  np_green_tree, np_hir_types;
 
 type
   TSemanticSymbol = record
@@ -42,6 +42,7 @@ type
   TTypedHirNode = record
     HirNodeId: LongInt;
     Kind: string;
+    NodeKind: THirNodeKind;
     DisplayName: string;
     SymbolId: LongInt;
     TypeId: LongInt;
@@ -76,6 +77,42 @@ type
     LogicalId: string;
     LinkageKind: string;
     Strength: string;
+  end;
+
+  TFieldMeta = record
+    Name: string;
+    Index: LongInt;
+    IsString: Boolean;
+    IsPointer: Boolean;
+    TypeId: LongInt;
+  end;
+
+  TVmtSlot = record
+    MethodName: string;
+    SlotIndex: LongInt;
+    FuncQualName: string;
+  end;
+
+  TPropertyMeta = record
+    Name: string;
+    ReadAccessor: string;
+    WriteAccessor: string;
+  end;
+
+  TTypeMetadata = record
+    TypeId: LongInt;
+    Size: Int64;
+    IsRecord: Boolean;
+    VmtCount: LongInt;
+    ParentClassId: LongInt;
+    ParentClassName: string;
+    Interfaces: string;
+    Fields: array of TFieldMeta;
+    VmtSlots: array of TVmtSlot;
+    RetPtrMethods: array of string;
+    Properties: array of TPropertyMeta;
+    ArrElemSize: Int64;
+    ArrElemType: string;
   end;
 
   TSemanticConstValue = record
@@ -124,6 +161,7 @@ type
     FConstValues: array of TSemanticConstValue;
     FVarInitValues: array of TSemanticVarInitValue;
     FStringConstValues: array of TSemanticStringConstValue;
+    FTypeMetadataEntries: array of TTypeMetadata;
     FRootName: string;
     FStatus: string;
   public
@@ -216,6 +254,15 @@ type
     function LookupVarInitValue(const AName: string;
       out AValue: Int64): Boolean;
     function HasVarInitValue(const AName: string): Boolean;
+    procedure SetTypeMeta(const ATypeId: LongInt; const AMeta: TTypeMetadata);
+    function GetTypeMeta(const ATypeId: LongInt;
+      out AMeta: TTypeMetadata): Boolean;
+    function GetTypeMetaByName(const ATypeName: string;
+      out AMeta: TTypeMetadata): Boolean;
+    function GetFieldMetaByName(const ATypeId: LongInt;
+      const AFieldName: string; out AField: TFieldMeta): Boolean;
+    function GetVmtSlotByName(const ATypeId: LongInt;
+      const AMethodName: string; out ASlot: TVmtSlot): Boolean;
     procedure AddStringConstValue(const AName: string; const AValue: string);
     function LookupStringConstValue(const AName: string;
       out AValue: string): Boolean;
@@ -589,6 +636,7 @@ begin
   SetLength(FTypedHirNodes, NextIndex + 1);
   FTypedHirNodes[NextIndex].HirNodeId := NextIndex + 1;
   FTypedHirNodes[NextIndex].Kind := AKind;
+  FTypedHirNodes[NextIndex].NodeKind := ParseHirNodeKind(AKind);
   FTypedHirNodes[NextIndex].DisplayName := ADisplayName;
   FTypedHirNodes[NextIndex].SymbolId := ASymbolId;
   FTypedHirNodes[NextIndex].TypeId := ATypeId;
@@ -940,6 +988,89 @@ begin
     if SameText(FVarInitValues[Index].Name, AName) then
       Exit(True);
   Result := False;
+end;
+
+procedure TSemanticModel.SetTypeMeta(const ATypeId: LongInt;
+  const AMeta: TTypeMetadata);
+var
+  I: LongInt;
+begin
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      FTypeMetadataEntries[I] := AMeta;
+      FTypeMetadataEntries[I].TypeId := ATypeId;
+      Exit;
+    end;
+  SetLength(FTypeMetadataEntries, Length(FTypeMetadataEntries) + 1);
+  FTypeMetadataEntries[High(FTypeMetadataEntries)] := AMeta;
+  FTypeMetadataEntries[High(FTypeMetadataEntries)].TypeId := ATypeId;
+end;
+
+function TSemanticModel.GetTypeMeta(const ATypeId: LongInt;
+  out AMeta: TTypeMetadata): Boolean;
+var
+  I: LongInt;
+begin
+  Result := False;
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      AMeta := FTypeMetadataEntries[I];
+      Exit(True);
+    end;
+end;
+
+function TSemanticModel.GetTypeMetaByName(const ATypeName: string;
+  out AMeta: TTypeMetadata): Boolean;
+var
+  I: LongInt;
+begin
+  Result := False;
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if SameText(FTypes[FTypeMetadataEntries[I].TypeId - 1].Name, ATypeName) then
+    begin
+      AMeta := FTypeMetadataEntries[I];
+      Exit(True);
+    end;
+end;
+
+function TSemanticModel.GetFieldMetaByName(const ATypeId: LongInt;
+  const AFieldName: string; out AField: TFieldMeta): Boolean;
+var
+  I, J: LongInt;
+begin
+  Result := False;
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      for J := 0 to Length(FTypeMetadataEntries[I].Fields) - 1 do
+        if SameText(FTypeMetadataEntries[I].Fields[J].Name, AFieldName) then
+        begin
+          AField := FTypeMetadataEntries[I].Fields[J];
+          Exit(True);
+        end;
+      Exit;
+    end;
+end;
+
+function TSemanticModel.GetVmtSlotByName(const ATypeId: LongInt;
+  const AMethodName: string; out ASlot: TVmtSlot): Boolean;
+var
+  I, J: LongInt;
+begin
+  Result := False;
+  for I := 0 to Length(FTypeMetadataEntries) - 1 do
+    if FTypeMetadataEntries[I].TypeId = ATypeId then
+    begin
+      for J := 0 to Length(FTypeMetadataEntries[I].VmtSlots) - 1 do
+        if SameText(FTypeMetadataEntries[I].VmtSlots[J].MethodName, AMethodName) then
+        begin
+          ASlot := FTypeMetadataEntries[I].VmtSlots[J];
+          Exit(True);
+        end;
+      Exit;
+    end;
 end;
 
 procedure TSemanticModel.AddStringConstValue(const AName: string; const AValue: string);

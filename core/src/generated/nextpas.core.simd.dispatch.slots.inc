@@ -647,9 +647,14 @@
     CmpGtU8x64: function(const a, b: TVecU8x64): TMask64;
     { --- batch --- }
     ArrayAddF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+    ArrayAddScalarF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
     ArrayAxpyF32: procedure(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
+    ArrayDivF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+    ArrayMaxF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+    ArrayMinF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
     ArrayMulF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
     ArrayMulScalarF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
+    ArraySubF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
     ReduceDotF32: function(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
     ReduceMaxF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
     ReduceMinF32: function(aSrc: PSingle; aCount: SizeUInt): Single;

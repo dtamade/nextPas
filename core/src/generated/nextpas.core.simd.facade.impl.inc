@@ -3676,11 +3676,39 @@ begin
   LDispatch^.ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
 end;
 
+procedure ArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayAddScalarF32(aSrc, aDst, aCount, aScalar);
+end;
+
 procedure ArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   LDispatch^.ArrayAxpyF32(aAlpha, aX, aY, aDst, aCount);
+end;
+
+procedure ArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayDivF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure ArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMaxF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure ArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayMinF32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -3695,6 +3723,13 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   LDispatch^.ArrayMulScalarF32(aSrc, aDst, aCount, aScalar);
+end;
+
+procedure ArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySubF32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 function ReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;

@@ -61,6 +61,7 @@ function SetFilePointer(hFile: HANDLE; lDistanceToMove: LONG; lpDistanceToMoveHi
 function GetFileSizeEx(InFileHandle: HANDLE; OutFileSize: PINT64): BOOL; stdcall; external 'kernel32' name 'GetFileSizeEx';
 function SetFilePointerEx(InFile: HANDLE; InDistanceToMove: Int64; OutoptNewFilePointer: PINT64; InMoveMethod: DWORD): BOOL; stdcall; external 'kernel32' name 'SetFilePointerEx';
 function GetFileAttributesExA(lpFileName: LPCSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExA';
+function SetFileAttributesA(lpFileName: LPCSTR; dwFileAttributes: DWORD): BOOL; stdcall; external 'kernel32' name 'SetFileAttributesA';
 function GetFileAttributesExW(lpFileName: LPCWSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExW';
 function GetFileInformationByHandle(hFile: HANDLE; lpFileInformation: PBY_HANDLE_FILE_INFORMATION): BOOL; stdcall; external 'kernel32' name 'GetFileInformationByHandle';
 function CreateDirectoryA(lpPathName: LPCSTR; lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateDirectoryA';
@@ -130,6 +131,12 @@ function LocalFree(hMem: Pointer): Pointer; stdcall; external 'kernel32' name 'L
 function GetModuleFileNameA(hModule: HMODULE; lpFilename: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetModuleFileNameA';
 function GetTempPathA(nBufferLength: DWORD; lpBuffer: LPSTR): DWORD; stdcall; external 'kernel32' name 'GetTempPathA';
 function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
+function LockFileEx(hFile: HANDLE; dwFlags: DWORD; dwReserved: DWORD; nNumberOfBytesToLockLow: DWORD; nNumberOfBytesToLockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'LockFileEx';
+function UnlockFileEx(hFile: HANDLE; dwReserved: DWORD; nNumberOfBytesToUnlockLow: DWORD; nNumberOfBytesToUnlockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'UnlockFileEx';
+function CreateSymbolicLinkA(lpSymlinkFileName: LPCSTR; lpTargetFileName: LPCSTR; dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'CreateSymbolicLinkA';
+function GetFinalPathNameByHandleA(hFile: HANDLE; lpszFilePath: LPSTR; cchFilePath: DWORD; dwFlags: DWORD): DWORD; stdcall; external 'kernel32' name 'GetFinalPathNameByHandleA';
+function FindFirstFileA(lpFileName: LPCSTR; lpFindFileData: LPWIN32_FIND_DATAA): HANDLE; stdcall; external 'kernel32' name 'FindFirstFileA';
+function FindNextFileA(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAA): WINBOOL; stdcall; external 'kernel32' name 'FindNextFileA';
 
 { winsock2 FFI }
 {$I nextpas.core.platform.windows.ffi.winsock2.inc}

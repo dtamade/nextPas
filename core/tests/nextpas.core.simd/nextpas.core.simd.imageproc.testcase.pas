@@ -1,6 +1,5 @@
 unit nextpas.core.simd.imageproc.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

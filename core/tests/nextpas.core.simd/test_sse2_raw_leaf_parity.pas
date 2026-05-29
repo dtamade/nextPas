@@ -1,5 +1,4 @@
 program test_sse2_raw_leaf_parity;
-{$MODE OBJFPC}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

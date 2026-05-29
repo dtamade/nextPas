@@ -1,0 +1,944 @@
+{
+  "_comment": "SIMD batch helper definitions for pointer-based array arithmetic and reductions",
+  "category": "batch",
+  "operations": [
+    {
+      "name": "ArrayAddF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise addition of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc1[i] + aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vaddps",
+            "scalar": "vaddss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayMulF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise multiplication of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc1[i] * aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vmulps",
+            "scalar": "vmulss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArraySubF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise subtraction of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc1[i] - aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vsubps",
+            "scalar": "vsubss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayDivF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise division of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc1[i] / aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vdivps",
+            "scalar": "vdivss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayMinF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise minimum of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  if aSrc1[i] <= aSrc2[i] then",
+        "    aDst[i] := aSrc1[i]",
+        "  else",
+        "    aDst[i] := aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vminps",
+            "scalar": "vminss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayMaxF32",
+      "signature": "psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise maximum of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  if aSrc1[i] >= aSrc2[i] then",
+        "    aDst[i] := aSrc1[i]",
+        "  else",
+        "    aDst[i] := aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vmaxps",
+            "scalar": "vmaxss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayAbsF32",
+      "signature": "psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise absolute value of a Single array",
+      "scalar_vars": ["i: SizeUInt", "LVal: LongWord"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do begin",
+        "  LVal := PLongWord(@aSrc[i])^ and $7FFFFFFF;",
+        "  PLongWord(@aDst[i])^ := LVal;",
+        "end;"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "unary",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vandps", "scalar": "vandps", "rhs": "mask"}],
+        "constant_mask": {"value": "7FFFFFFF"},
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayNegF32",
+      "signature": "psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise negation of a Single array",
+      "scalar_vars": ["i: SizeUInt", "LVal: LongWord"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do begin",
+        "  LVal := PLongWord(@aSrc[i])^ xor $80000000;",
+        "  PLongWord(@aDst[i])^ := LVal;",
+        "end;"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "unary",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vxorps", "scalar": "vxorps", "rhs": "mask"}],
+        "constant_mask": {"value": "80000000"},
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArraySqrtF32",
+      "signature": "psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise square root of a Single array",
+      "scalar_vars": ["i: SizeUInt"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := Sqrt(aSrc[i]);"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "unary",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vsqrtps", "scalar": "vsqrtss", "rhs": null}],
+        "constant_mask": null,
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayRcpF32",
+      "signature": "psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise approximate reciprocal (~12-bit precision)",
+      "scalar_vars": ["i: SizeUInt"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := 1.0 / aSrc[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "unary",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vrcpps", "scalar": "vrcpss", "rhs": null}],
+        "constant_mask": null,
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayRsqrtF32",
+      "signature": "psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Element-wise approximate reciprocal square root (~12-bit precision)",
+      "scalar_vars": ["i: SizeUInt"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := 1.0 / Sqrt(aSrc[i]);"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "unary",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vrsqrtps", "scalar": "vrsqrtss", "rhs": null}],
+        "constant_mask": null,
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayAddScalarF32",
+      "signature": "psingle_psingle_count_single_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Add a scalar to each element of a Single array",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc[i] + aScalar;"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc",
+              "local": "pS",
+              "reg": "rax"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": {
+          "param": "aScalar",
+          "local": "LScalar",
+          "type": "Single",
+          "xmm": "xmm7",
+          "ymm": "ymm7",
+          "broadcast": "vbroadcastss"
+        },
+        "broadcast_scalar": true,
+        "steps": [
+          {
+            "vector": "vaddps",
+            "scalar": "vaddss",
+            "rhs": "broadcast"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayMulScalarF32",
+      "signature": "psingle_psingle_count_single_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Multiply a Single array by a scalar",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aSrc[i] * aScalar;"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc",
+              "local": "pS",
+              "reg": "rax"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": {
+          "param": "aScalar",
+          "local": "LScalar",
+          "type": "Single",
+          "xmm": "xmm7",
+          "ymm": "ymm7",
+          "broadcast": "vbroadcastss"
+        },
+        "broadcast_scalar": true,
+        "steps": [
+          {
+            "vector": "vmulps",
+            "scalar": "vmulss",
+            "rhs": "broadcast"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayAxpyF32",
+      "signature": "single_psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Compute aDst = aAlpha * aX + aY for Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aAlpha * aX[i] + aY[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "elementwise",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aX",
+              "local": "pX",
+              "reg": "rax"
+            },
+            {
+              "param": "aY",
+              "local": "pY",
+              "reg": "rdx"
+            }
+          ],
+          "output": {
+            "param": "aDst",
+            "local": "pD",
+            "reg": "rcx"
+          }
+        },
+        "scalar_param": {
+          "param": "aAlpha",
+          "local": "LAlpha",
+          "type": "Single",
+          "xmm": "xmm7",
+          "ymm": "ymm7",
+          "broadcast": "vbroadcastss"
+        },
+        "broadcast_scalar": true,
+        "steps": [
+          {
+            "vector": "vmulps",
+            "scalar": "vmulss",
+            "rhs": "broadcast"
+          },
+          {
+            "vector": "vaddps",
+            "scalar": "vaddss",
+            "rhs": "input:1"
+          }
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayClampF32",
+      "signature": "psingle_psingle_count_single_single_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Clamp each element of a Single array to [aMin, aMax]",
+      "scalar_vars": ["i: SizeUInt", "v: Single"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do begin",
+        "  v := aSrc[i];",
+        "  if v < aMin then v := aMin",
+        "  else if v > aMax then v := aMax;",
+        "  aDst[i] := v;",
+        "end;"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "clamp",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [{"param": "aSrc", "local": "pS", "reg": "rax"}],
+          "output": {"param": "aDst", "local": "pD", "reg": "rcx"}
+        },
+        "scalar_params": [
+          {
+            "param": "aMin",
+            "local": "LMin",
+            "type": "Single",
+            "xmm": "xmm6",
+            "ymm": "ymm6",
+            "broadcast": "vbroadcastss"
+          },
+          {
+            "param": "aMax",
+            "local": "LMax",
+            "type": "Single",
+            "xmm": "xmm7",
+            "ymm": "ymm7",
+            "broadcast": "vbroadcastss"
+          }
+        ],
+        "broadcast_scalar": false,
+        "steps": [
+          {"vector": "vmaxps", "scalar": "vmaxss", "rhs": "scalar:0"},
+          {"vector": "vminps", "scalar": "vminss", "rhs": "scalar:1"}
+        ],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ArrayFmaF32",
+      "signature": "psingle_psingle_psingle_psingle_count_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Fused multiply-add: aDst[i] = aA[i] * aB[i] + aC[i]",
+      "scalar_vars": ["i: SizeUInt"],
+      "scalar_body": [
+        "if aCount = 0 then Exit;",
+        "for i := 0 to aCount - 1 do",
+        "  aDst[i] := aA[i] * aB[i] + aC[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "fma",
+        "dtype": "f32",
+        "input_stream_count": 3,
+        "streams": {
+          "inputs": [
+            {"param": "aA", "local": "pA", "reg": "rax"},
+            {"param": "aB", "local": "pB", "reg": "rdx"},
+            {"param": "aC", "local": "pC", "reg": "rcx"}
+          ],
+          "output": {"param": "aDst", "local": "pD", "reg": "r9"}
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [{"vector": "vfmadd213ps", "scalar": "vfmadd213ss", "rhs": "input:2"}],
+        "reduction": null
+      }
+    },
+    {
+      "name": "ReduceSumF32",
+      "signature": "psingle_count_single",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Sum a Single array",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "Result := 0.0;",
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  Result := Result + aSrc[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "reduction",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc",
+              "local": "pS",
+              "reg": "rax"
+            }
+          ]
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vaddps",
+            "scalar": "vaddss",
+            "rhs": "input:0"
+          }
+        ],
+        "reduction": {
+          "result_local": "LSum",
+          "empty_result": "0",
+          "init": "zero",
+          "accumulate_shape": "direct",
+          "combine_opcode": "vaddps",
+          "scalar_opcode": "vaddss",
+          "horizontal": "hadd"
+        }
+      }
+    },
+    {
+      "name": "ReduceMinF32",
+      "signature": "psingle_count_single",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Find the minimum value in a Single array",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "begin",
+        "  Result := 0.0;",
+        "  Exit;",
+        "end;",
+        "",
+        "Result := aSrc[0];",
+        "for i := 1 to aCount - 1 do",
+        "  if aSrc[i] < Result then",
+        "    Result := aSrc[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "reduction",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc",
+              "local": "pS",
+              "reg": "rax"
+            }
+          ]
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vminps",
+            "scalar": "vminss",
+            "rhs": "input:0"
+          }
+        ],
+        "reduction": {
+          "result_local": "LResult",
+          "empty_result": "0",
+          "init": "broadcast_first",
+          "accumulate_shape": "direct",
+          "combine_opcode": "vminps",
+          "scalar_opcode": "vminss",
+          "horizontal": "permute_minmax"
+        }
+      }
+    },
+    {
+      "name": "ReduceMaxF32",
+      "signature": "psingle_count_single",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Find the maximum value in a Single array",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if aCount = 0 then",
+        "begin",
+        "  Result := 0.0;",
+        "  Exit;",
+        "end;",
+        "",
+        "Result := aSrc[0];",
+        "for i := 1 to aCount - 1 do",
+        "  if aSrc[i] > Result then",
+        "    Result := aSrc[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "reduction",
+        "dtype": "f32",
+        "input_stream_count": 1,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc",
+              "local": "pS",
+              "reg": "rax"
+            }
+          ]
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vmaxps",
+            "scalar": "vmaxss",
+            "rhs": "input:0"
+          }
+        ],
+        "reduction": {
+          "result_local": "LResult",
+          "empty_result": "0",
+          "init": "broadcast_first",
+          "accumulate_shape": "direct",
+          "combine_opcode": "vmaxps",
+          "scalar_opcode": "vmaxss",
+          "horizontal": "permute_minmax"
+        }
+      }
+    },
+    {
+      "name": "ReduceDotF32",
+      "signature": "psingle_psingle_count_single",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "Scalar{op}",
+      "doc": "Dot product of two Single arrays",
+      "scalar_vars": [
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "Result := 0.0;",
+        "if aCount = 0 then",
+        "  Exit;",
+        "",
+        "for i := 0 to aCount - 1 do",
+        "  Result := Result + aSrc1[i] * aSrc2[i];"
+      ],
+      "applies_to": [],
+      "avx2_template": {
+        "kind": "reduction",
+        "dtype": "f32",
+        "input_stream_count": 2,
+        "streams": {
+          "inputs": [
+            {
+              "param": "aSrc1",
+              "local": "pS1",
+              "reg": "rax"
+            },
+            {
+              "param": "aSrc2",
+              "local": "pS2",
+              "reg": "rdx"
+            }
+          ]
+        },
+        "scalar_param": null,
+        "broadcast_scalar": false,
+        "steps": [
+          {
+            "vector": "vmulps",
+            "scalar": "vmulss",
+            "rhs": "input:1"
+          },
+          {
+            "vector": "vaddps",
+            "scalar": "vaddss",
+            "rhs": "accumulator"
+          }
+        ],
+        "reduction": {
+          "result_local": "LSum",
+          "empty_result": "0",
+          "init": "zero",
+          "accumulate_shape": "dot",
+          "combine_opcode": "vaddps",
+          "scalar_opcode": "vaddss",
+          "horizontal": "hadd"
+        }
+      }
+    }
+  ]
+}

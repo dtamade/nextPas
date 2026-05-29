@@ -1,6 +1,5 @@
 program nextpas.core.simd.test_highlevel_api;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

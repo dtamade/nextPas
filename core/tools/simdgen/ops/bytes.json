@@ -1,0 +1,122 @@
+{
+  "_comment": "SIMD byte helper definitions for pointer-length statistics",
+  "category": "bytes",
+  "operations": [
+    {
+      "name": "SumBytes",
+      "signature": "pointer_len_uint64",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Sum bytes in a memory range",
+      "scalar_vars": [
+        "pb: PByte",
+        "pq: PQWord",
+        "i, qwordCount, remaining: SizeUInt",
+        "qval: QWord",
+        "sum0, sum1, sum2, sum3: UInt64"
+      ],
+      "scalar_body": [
+        "{$PUSH}{$Q-}{$R-}",
+        "Result := 0;",
+        "",
+        "if (len = 0) or (p = nil) then",
+        "  Exit;",
+        "",
+        "pb := PByte(p);",
+        "",
+        "// Use 4-way accumulators to reduce dependency chains",
+        "sum0 := 0;",
+        "sum1 := 0;",
+        "sum2 := 0;",
+        "sum3 := 0;",
+        "",
+        "// Fast path: process 8 bytes (QWord) at a time",
+        "qwordCount := len div 8;",
+        "if qwordCount > 0 then",
+        "begin",
+        "  pq := PQWord(pb);",
+        "  for i := 0 to qwordCount - 1 do",
+        "  begin",
+        "    qval := pq[i];",
+        "    sum0 := sum0 + (qval and $FF);",
+        "    sum1 := sum1 + ((qval shr 8) and $FF);",
+        "    sum2 := sum2 + ((qval shr 16) and $FF);",
+        "    sum3 := sum3 + ((qval shr 24) and $FF);",
+        "    sum0 := sum0 + ((qval shr 32) and $FF);",
+        "    sum1 := sum1 + ((qval shr 40) and $FF);",
+        "    sum2 := sum2 + ((qval shr 48) and $FF);",
+        "    sum3 := sum3 + ((qval shr 56) and $FF);",
+        "  end;",
+        "  pb := pb + qwordCount * 8;",
+        "end;",
+        "",
+        "// Handle remaining 0-7 bytes",
+        "remaining := len mod 8;",
+        "if remaining > 0 then",
+        "  for i := 0 to remaining - 1 do",
+        "    sum0 := sum0 + pb[i];",
+        "",
+        "Result := sum0 + sum1 + sum2 + sum3;",
+        "{$POP}"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "CountByte",
+      "signature": "pointer_len_byte_sizeuint",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Count occurrences of a byte value in a memory range",
+      "scalar_vars": [
+        "pb: PByte",
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "Result := 0;",
+        "",
+        "if (len = 0) or (p = nil) then",
+        "  Exit;",
+        "",
+        "pb := PByte(p);",
+        "",
+        "for i := 0 to len - 1 do",
+        "begin",
+        "  if pb[i] = value then",
+        "    Inc(Result);",
+        "end;"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "BitsetPopCount",
+      "signature": "pointer_len_sizeuint",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Count set bits across a byte buffer",
+      "scalar_vars": [
+        "pb: PByte",
+        "i: SizeUInt",
+        "b: Byte"
+      ],
+      "scalar_body": [
+        "Result := 0;",
+        "",
+        "if (len = 0) or (p = nil) then",
+        "  Exit;",
+        "",
+        "pb := PByte(p);",
+        "",
+        "for i := 0 to len - 1 do",
+        "begin",
+        "  b := pb[i];",
+        "  while b <> 0 do",
+        "  begin",
+        "    b := b and (b - 1);",
+        "    Inc(Result);",
+        "  end;",
+        "end;"
+      ],
+      "applies_to": []
+    }
+  ]
+}

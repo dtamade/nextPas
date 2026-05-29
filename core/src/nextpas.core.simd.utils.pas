@@ -235,7 +235,7 @@ function VecF64x8ExtractHi(const a: TVecF64x8): TVecF64x4; inline;
 implementation
 
 uses
-  Math;  // RTL Math 单元 (Trunc)
+  nextpas.core.simd.mathutil;
 
 // === Shuffle/Swizzle 实现 ===
 function MM_SHUFFLE(d, c, b, a: Byte): Byte; inline;

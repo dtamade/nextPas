@@ -822,8 +822,7 @@ function ScalarSelectF64x4(const mask: TVecU64x4; const a, b: TVecF64x4): TVecF6
 implementation
 
 uses
-  Math,  // RTL Math 单元 (Abs, Sqrt, Min, Max, Floor, Ceil, Round, Trunc)
-  SysUtils;
+  nextpas.core.simd.mathutil;
 
 function ScalarNormalizeSignedZeroSingle(const aInput, aOutput: Single): Single; inline;
 var
@@ -1654,13 +1653,13 @@ end;
 function ScalarShiftLeftI16x32(const a: TVecI16x32; count: Integer): TVecI16x32;
 var i: Integer;
 begin
-  if count <= 0 then begin Result := a; Exit; end;
-  if count >= 16 then
-    for i := 0 to 31 do
-      Result.i[i] := 0
-  else
-    for i := 0 to 31 do
-      Result.i[i] := a.i[i] shl count;
+  if (count <= 0) or (count >= 16) then
+  begin
+    for i := 0 to 31 do Result.i[i] := 0;
+    Exit;
+  end;
+  for i := 0 to 31 do
+    Result.i[i] := a.i[i] shl count;
 end;
 
 function ScalarShiftRightI16x32(const a: TVecI16x32; count: Integer): TVecI16x32;
@@ -3517,7 +3516,7 @@ var i: SizeUInt;
 begin
   if aCount = 0 then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Single(Math.Power(aSrc[i], aExponent));
+    aDst[i] := Single(SimdPowerF32(aSrc[i], aExponent));
 end;
 
 procedure ScalarArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt);

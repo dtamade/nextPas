@@ -30,30 +30,30 @@ begin
   end;
 end;
 
-function AVX2SplatF32x8(value: Single): TVecF32x8;
-var
-  pr: Pointer;
-begin
-  pr := @Result;
-  asm
-    mov          rax, pr
-    movss        xmm0, value
-    vbroadcastss ymm0, xmm0     // broadcast to all 8 lanes
-    vmovups      [rax], ymm0
-    vzeroupper
-  end;
+function AVX2SplatF32x8(value: Single): TVecF32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // rdi=@Result, xmm0=value
+  vbroadcastss ymm0, xmm0
+  vmovups      [rdi], ymm0
+  {$ELSE}
+  // rcx=@Result, xmm0=value
+  vbroadcastss ymm0, xmm0
+  vmovups      [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
-function AVX2ZeroF32x8: TVecF32x8;
-var
-  pr: Pointer;
-begin
-  pr := @Result;
-  asm
-    mov     rax, pr
-    vxorps  ymm0, ymm0, ymm0
-    vmovups [rax], ymm0
-    vzeroupper
-  end;
+function AVX2ZeroF32x8: TVecF32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // rdi=@Result
+  vxorps  ymm0, ymm0, ymm0
+  vmovups [rdi], ymm0
+  {$ELSE}
+  // rcx=@Result
+  vxorps  ymm0, ymm0, ymm0
+  vmovups [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
-

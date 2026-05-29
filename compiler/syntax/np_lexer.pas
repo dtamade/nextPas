@@ -172,6 +172,7 @@ type
   TToken = record
     Kind: TTokenKind;
     Lexeme: string;
+    FileId: TCoreId;
     ByteOffset: LongInt;
     Line: LongInt;
     Column: LongInt;
@@ -254,6 +255,8 @@ type
       const ADiagnostics: TDiagnosticsSink;
       const AFileId: TCoreId
     ); overload;
+    constructor CreateFromTokens(const ATokens: array of TToken;
+      const ACount: LongInt);
     function TokenCount: LongInt;
     function TokenAt(const AIndex: LongInt): TToken;
   end;
@@ -718,6 +721,23 @@ begin
   SetLength(FTokens, FTokenCount);
 end;
 
+constructor TLexerResult.CreateFromTokens(const ATokens: array of TToken;
+  const ACount: LongInt);
+var
+  I: LongInt;
+begin
+  inherited Create;
+  FTokenCount := ACount;
+  SetLength(FTokens, ACount);
+  for I := 0 to ACount - 1 do
+    FTokens[I] := ATokens[I];
+  FCurrentLine := 1;
+  FLineStartByte := 0;
+  FDiagnostics := nil;
+  FFileId := 0;
+  SetLength(FPendingTrivia, 0);
+end;
+
 procedure TLexerResult.ReportError(
   const ACode: string;
   const AByteOffset: LongInt;
@@ -821,6 +841,7 @@ begin
   end;
   FTokens[NextIndex].Kind := AKind;
   FTokens[NextIndex].Lexeme := ALexeme;
+  FTokens[NextIndex].FileId := FFileId;
   FTokens[NextIndex].ByteOffset := AByteOffset;
   FTokens[NextIndex].Line := ALine;
   FTokens[NextIndex].Column := AColumn;

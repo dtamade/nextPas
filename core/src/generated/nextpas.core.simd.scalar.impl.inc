@@ -4475,6 +4475,17 @@ begin
     aDst[i] := aSrc1[i] + aSrc2[i];
 end;
 
+procedure ScalarArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
+var
+  i: SizeUInt;
+begin
+  if aCount = 0 then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc[i] + aScalar;
+end;
+
 procedure ScalarArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
 var
   i: SizeUInt;
@@ -4484,6 +4495,45 @@ begin
 
   for i := 0 to aCount - 1 do
     aDst[i] := aAlpha * aX[i] + aY[i];
+end;
+
+procedure ScalarArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  i: SizeUInt;
+begin
+  if aCount = 0 then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc1[i] / aSrc2[i];
+end;
+
+procedure ScalarArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  i: SizeUInt;
+begin
+  if aCount = 0 then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] >= aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
+end;
+
+procedure ScalarArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  i: SizeUInt;
+begin
+  if aCount = 0 then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] <= aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
 end;
 
 procedure ScalarArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -4506,6 +4556,17 @@ begin
 
   for i := 0 to aCount - 1 do
     aDst[i] := aSrc[i] * aScalar;
+end;
+
+procedure ScalarArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+var
+  i: SizeUInt;
+begin
+  if aCount = 0 then
+    Exit;
+
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc1[i] - aSrc2[i];
 end;
 
 function ScalarReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;

@@ -1,7 +1,7 @@
 unit nextpas.core.simd.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
+{$I ../../src/nextpas.core.simd.settings.inc}
 {$CODEPAGE UTF8}
 
 // 对于溢出测试，需要在编译时关闭 Range 和 Overflow 检查
@@ -12,12 +12,11 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
+  Classes, SysUtils, Math, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.utils,
-  nextpas.core.simd.api,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar,
   nextpas.core.simd.backend.consistency.testcase,

@@ -96,7 +96,8 @@ implementation
 
 uses
   nextpas.core.simd,
-  nextpas.core.simd.alloc;
+  nextpas.core.simd.alloc,
+  nextpas.core.simd.linalg.gemm;
 
 procedure SigmoidF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 begin
@@ -781,164 +782,6 @@ begin
     ArrayReLUF32(aOutput, aOutput, LTotal);
 end;
 
-// === GEMM 6×16 微内核 (AVX2 FMA) ===
-// C[6,16] += A[6,K] × B_packed[K,16]
-// RDI=A, RSI=B_packed, RDX=C, RCX=K, R8=A_stride(bytes), R9=C_stride(bytes)
-procedure GemmMicro6x16(aA, aB, aC: PSingle; aK, aAStride, aCStride: SizeUInt); assembler; nostackframe;
-asm
-  // 清零 12 个累加器
-  vxorps ymm0, ymm0, ymm0
-  vxorps ymm1, ymm1, ymm1
-  vxorps ymm2, ymm2, ymm2
-  vxorps ymm3, ymm3, ymm3
-  vxorps ymm4, ymm4, ymm4
-  vxorps ymm5, ymm5, ymm5
-  vxorps ymm6, ymm6, ymm6
-  vxorps ymm7, ymm7, ymm7
-  vxorps ymm8, ymm8, ymm8
-  vxorps ymm9, ymm9, ymm9
-  vxorps ymm10, ymm10, ymm10
-  vxorps ymm11, ymm11, ymm11
-
-  // 计算 A 行指针: row0=RDI, row1=RDI+R8, row2=RDI+2*R8, ...
-  mov rax, rdi          // A_row0
-  lea r10, [rdi + r8]   // A_row1
-  lea r11, [r10 + r8]   // A_row2
-  push rbx
-  lea rbx, [r11 + r8]   // A_row3
-  push r12
-  lea r12, [rbx + r8]   // A_row4
-  push r13
-  lea r13, [r12 + r8]   // A_row5
-
-  xor r14d, r14d        // k = 0 (但 r14 是 callee-saved)
-  push r14
-  push r15
-
-  // K 循环
-  test rcx, rcx
-  jz @store
-
-@k_loop:
-  // 加载 B_packed[k, 0..15]
-  vmovups ymm12, [rsi]
-  vmovups ymm13, [rsi + 32]
-
-  // Row 0
-  vbroadcastss ymm14, dword [rax]
-  vfmadd231ps ymm0, ymm14, ymm12
-  vfmadd231ps ymm1, ymm14, ymm13
-  // Row 1
-  vbroadcastss ymm14, dword [r10]
-  vfmadd231ps ymm2, ymm14, ymm12
-  vfmadd231ps ymm3, ymm14, ymm13
-  // Row 2
-  vbroadcastss ymm14, dword [r11]
-  vfmadd231ps ymm4, ymm14, ymm12
-  vfmadd231ps ymm5, ymm14, ymm13
-  // Row 3
-  vbroadcastss ymm14, dword [rbx]
-  vfmadd231ps ymm6, ymm14, ymm12
-  vfmadd231ps ymm7, ymm14, ymm13
-  // Row 4
-  vbroadcastss ymm14, dword [r12]
-  vfmadd231ps ymm8, ymm14, ymm12
-  vfmadd231ps ymm9, ymm14, ymm13
-  // Row 5
-  vbroadcastss ymm14, dword [r13]
-  vfmadd231ps ymm10, ymm14, ymm12
-  vfmadd231ps ymm11, ymm14, ymm13
-
-  // 前进 k
-  add rax, 4
-  add r10, 4
-  add r11, 4
-  add rbx, 4
-  add r12, 4
-  add r13, 4
-  add rsi, 64           // B_packed stride = 16 * 4
-
-  dec rcx
-  jnz @k_loop
-
-@store:
-  // 存储 C[6, 16]
-  vmovups [rdx], ymm0
-  vmovups [rdx + 32], ymm1
-  add rdx, r9
-  vmovups [rdx], ymm2
-  vmovups [rdx + 32], ymm3
-  add rdx, r9
-  vmovups [rdx], ymm4
-  vmovups [rdx + 32], ymm5
-  add rdx, r9
-  vmovups [rdx], ymm6
-  vmovups [rdx + 32], ymm7
-  add rdx, r9
-  vmovups [rdx], ymm8
-  vmovups [rdx + 32], ymm9
-  add rdx, r9
-  vmovups [rdx], ymm10
-  vmovups [rdx + 32], ymm11
-
-  pop r15
-  pop r14
-  pop r13
-  pop r12
-  pop rbx
-  vzeroupper
-end;
-
-procedure GemmTiled6x16F32(aA, aB, aC: PSingle; aM, aN, aK: SizeUInt);
-const
-  MR = 6;
-  NR = 16;
-var
-  LBPacked: PSingle;
-  m, n, k, col: SizeUInt;
-  LAStride, LCStride: SizeUInt;
-begin
-  LAStride := aK * SizeOf(Single);
-  LCStride := aN * SizeOf(Single);
-  LBPacked := PSingle(SimdAlloc(aK * NR * SizeOf(Single)));
-
-  n := 0;
-  while n + NR <= aN do
-  begin
-    // Pack B panel: Im2col[n..n+15, 0..K-1] → B_packed[K, 16]
-    for k := 0 to aK - 1 do
-      for col := 0 to NR - 1 do
-        LBPacked[k * NR + col] := aB[(n + col) * aK + k];
-
-    // Process MR rows at a time
-    m := 0;
-    while m + MR <= aM do
-    begin
-      GemmMicro6x16(@aA[m * aK], LBPacked, @aC[m * aN + n], aK, LAStride, LCStride);
-      Inc(m, MR);
-    end;
-    // M remainder
-    while m < aM do
-    begin
-      for col := 0 to NR - 1 do
-        aC[m * aN + n + col] := ReduceDotF32(@aA[m * aK], @aB[(n + col) * aK], aK);
-      Inc(m);
-    end;
-
-    Inc(n, NR);
-  end;
-
-  // N remainder
-  while n < aN do
-  begin
-    for m := 0 to aM - 1 do
-      aC[m * aN + n] := ReduceDotF32(@aA[m * aK], @aB[n * aK], aK);
-    Inc(n);
-  end;
-
-  SimdFree(LBPacked);
-end;
-
 procedure Conv2DMultiChannelF32(aInput, aKernel, aBias, aOutput: PSingle;
   aInputC, aInputH, aInputW, aKernelH, aKernelW, aNumFilters: SizeUInt);
 var
@@ -974,7 +817,7 @@ begin
       end;
 
     // GEMM: Output[F, HW] = Kernel[F, K] × Im2col[HW, K]^T
-    GemmTiled6x16F32(aKernel, LIm2col, aOutput, aNumFilters, LHW, LK);
+    GemmBlockedTransBF32(aKernel, LIm2col, aOutput, aNumFilters, LHW, LK, LK, LK, LHW);
     if aBias <> nil then
       for f := 0 to aNumFilters - 1 do
         ArrayAddScalarF32(@aOutput[f * LHW], @aOutput[f * LHW], LHW, aBias[f]);

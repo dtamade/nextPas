@@ -1,6 +1,5 @@
 unit nextpas.core.simd.dataplane.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
@@ -57,7 +56,7 @@ procedure TTestCase_DataPlane.Test_DataPlane_BoundSlots_Match_CurrentDispatch_An
 var
   LDataPlane: PSimdDataPlane;
   LDispatch: PSimdDispatchTable;
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
 begin
   LDataPlane := GetCurrentSimdDataPlane;
   LDispatch := GetDispatchTable;
@@ -117,8 +116,8 @@ procedure TTestCase_DataPlane.Test_DataPlane_ExplicitRebind_WithoutDispatchMutat
 var
   LBefore: PSimdDataPlane;
   LAfter: PSimdDataPlane;
-  LApiBefore: PFafafaSimdPublicApi;
-  LApiAfter: PFafafaSimdPublicApi;
+  LApiBefore: PNextPasSimdPublicApi;
+  LApiAfter: PNextPasSimdPublicApi;
 begin
   LBefore := GetCurrentSimdDataPlane;
   LApiBefore := GetSimdPublicApi;

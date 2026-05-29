@@ -1,5 +1,4 @@
 program test_simdgen_compile;
-{$MODE OBJFPC}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

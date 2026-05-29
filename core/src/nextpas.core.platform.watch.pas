@@ -4,9 +4,16 @@ unit nextpas.core.platform.watch;
 
 interface
 
+const
+  PLATFORM_WATCH_MAX_FDS = 16;
+
 type
   TPlatformWatcher = record
     Fd: Int32;
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    WatchFds: array[0..PLATFORM_WATCH_MAX_FDS - 1] of Int32;
+    WatchCount: Int32;
+  {$ENDIF}
   end;
 
   TPlatformWatchEvent = record
@@ -123,14 +130,112 @@ end;
 {$ENDIF}
 
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+{$IFDEF NEXTPAS_MACOS}
+  nextpas.core.platform.darwin.base,
+  nextpas.core.platform.darwin.ffi;
+{$ELSE}
+  nextpas.core.platform.freebsd.base,
+  nextpas.core.platform.freebsd.ffi;
+{$ENDIF}
+
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
-begin AWatcher.Fd := -1; Result := -1; end;
-function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
-begin Result := -1; end;
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
-begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
+begin
+  FillChar(AWatcher, SizeOf(AWatcher), 0);
+  AWatcher.Fd := kqueue;
+  if AWatcher.Fd < 0 then
+  begin
+    AWatcher.Fd := -1;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    AWatcher.WatchCount := 0;
+    Result := 0;
+  end;
+end;
+
+function platform_watch_add(var AWatcher: TPlatformWatcher;
+  const APath: PAnsiChar): Int32;
+var
+  LFd: Int32;
+  LChange: TKEvent;
+begin
+  if AWatcher.WatchCount >= PLATFORM_WATCH_MAX_FDS then
+    Exit(-1);
+  LFd := open(APath, O_RDONLY, 0);
+  if LFd < 0 then
+    Exit(platform_get_errno);
+
+  FillChar(LChange, SizeOf(LChange), 0);
+  LChange.Ident := PtrUInt(LFd);
+  LChange.Filter := EVFILT_VNODE;
+  LChange.Flags := EV_ADD or EV_CLEAR;
+  LChange.FFlags := NOTE_WRITE or NOTE_DELETE or NOTE_RENAME or NOTE_EXTEND or NOTE_ATTRIB;
+  LChange.uData := nil;
+
+  if kevent(AWatcher.Fd, @LChange, 1, nil, 0, nil) < 0 then
+  begin
+    close(LFd);
+    Exit(platform_get_errno);
+  end;
+
+  AWatcher.WatchFds[AWatcher.WatchCount] := LFd;
+  Inc(AWatcher.WatchCount);
+  Result := LFd;
+end;
+
+function platform_watch_poll(var AWatcher: TPlatformWatcher;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int32): Int32;
+var
+  LEvent: TKEvent;
+  LTimeout: TTimeSpec;
+  LTimeoutPtr: Pointer;
+  LRet: Int32;
+begin
+  FillChar(AEvent, SizeOf(AEvent), 0);
+
+  if ATimeoutMs >= 0 then
+  begin
+    LTimeout.tv_sec := ATimeoutMs div 1000;
+    LTimeout.tv_nsec := (ATimeoutMs mod 1000) * 1000000;
+    LTimeoutPtr := @LTimeout;
+  end
+  else
+    LTimeoutPtr := nil;
+
+  FillChar(LEvent, SizeOf(LEvent), 0);
+  LRet := kevent(AWatcher.Fd, nil, 0, @LEvent, 1, LTimeoutPtr);
+  if LRet <= 0 then
+    Exit(0);
+
+  if (LEvent.Flags and EV_ERROR) <> 0 then
+    Exit(0);
+
+  AEvent.Modified := (LEvent.FFlags and (NOTE_WRITE or NOTE_EXTEND)) <> 0;
+  AEvent.Deleted := (LEvent.FFlags and NOTE_DELETE) <> 0;
+  AEvent.Created := (LEvent.FFlags and NOTE_WRITE) <> 0;
+  AEvent.IsDir := True;
+  Result := 1;
+end;
+
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
-begin Result := -1; end;
+var
+  I: Int32;
+begin
+  for I := 0 to AWatcher.WatchCount - 1 do
+    if AWatcher.WatchFds[I] >= 0 then
+      close(AWatcher.WatchFds[I]);
+  if AWatcher.Fd >= 0 then
+  begin
+    close(AWatcher.Fd);
+    AWatcher.Fd := -1;
+  end;
+  AWatcher.WatchCount := 0;
+  Result := 0;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}

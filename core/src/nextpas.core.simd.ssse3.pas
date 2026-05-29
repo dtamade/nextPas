@@ -72,7 +72,6 @@ function SSSE3MulHRS(const a, b: TVecI16x8): TVecI16x8;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.simd.sse2,
   nextpas.core.simd.sse3,
   nextpas.core.simd.cpuinfo;

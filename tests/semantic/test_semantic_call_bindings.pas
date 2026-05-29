@@ -3676,6 +3676,246 @@ begin
   end;
 end;
 
+procedure CheckInterfaceMethodCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  I: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  Found: Boolean;
+begin
+  SourceText :=
+    'program InterfaceCall;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IGreeter = interface' + LineEnding +
+    '    procedure Greet(const Name: String);' + LineEnding +
+    '    function GetMessage: String;' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  G: IGreeter;' + LineEnding +
+    'begin' + LineEnding +
+    '  G.Greet(' + #39 + 'World' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('interface-call-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('interface-call-missing-model');
+    Found := False;
+    for I := 0 to Model.BindingCount - 1 do
+      if SameText(Model.BindingAt(I).Name, 'Greet') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+      begin
+        Found := True;
+        Break;
+      end;
+    if not Found then
+      Fail('interface-call-greet-not-bound');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInterfaceMissingMethodDiagnostic;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InterfaceMissing;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IWorker = interface' + LineEnding +
+    '    procedure DoWork;' + LineEnding +
+    '    function GetStatus: Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    '  TBadWorker = class(IWorker)' + LineEnding +
+    '    procedure DoWork;' + LineEnding +
+    '  end;' + LineEnding +
+    'procedure TBadWorker.DoWork;' + LineEnding +
+    'begin' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('interface-missing-method-expected-diagnostic');
+    if Diagnostics.LastDiagnosticCode <> 'sema.missing-interface-method' then
+      Fail('interface-missing-method-wrong-code:' + Diagnostics.LastDiagnosticCode);
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInterfaceInheritanceBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  I: LongInt;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+  FoundGreet, FoundSpeak: Boolean;
+begin
+  SourceText :=
+    'program InterfaceInherit;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  IBase = interface' + LineEnding +
+    '    procedure Speak;' + LineEnding +
+    '  end;' + LineEnding +
+    '  IChild = interface(IBase)' + LineEnding +
+    '    procedure Greet(const Name: String);' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  C: IChild;' + LineEnding +
+    'begin' + LineEnding +
+    '  C.Speak;' + LineEnding +
+    '  C.Greet(' + #39 + 'hi' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if Diagnostics.HasErrors then
+      Fail('interface-inherit-unexpected:' + Diagnostics.LastDiagnosticCode);
+    if Model = nil then
+      Fail('interface-inherit-missing-model');
+    FoundSpeak := False;
+    FoundGreet := False;
+    for I := 0 to Model.BindingCount - 1 do
+    begin
+      if SameText(Model.BindingAt(I).Name, 'Speak') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+        FoundSpeak := True;
+      if SameText(Model.BindingAt(I).Name, 'Greet') and
+        (Model.BindingAt(I).TargetSymbolId > 0) then
+        FoundGreet := True;
+    end;
+    if not FoundSpeak then
+      Fail('interface-inherit-speak-not-bound');
+    if not FoundGreet then
+      Fail('interface-inherit-greet-not-bound');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure CheckInterfaceMethodTypeMismatch;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Model: TSemanticModel;
+  SourceText: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  SourceText :=
+    'program InterfaceTypeMismatch;' + LineEnding +
+    '{$mode objfpc}{$H+}' + LineEnding +
+    'type' + LineEnding +
+    '  ICalculator = interface' + LineEnding +
+    '    function Add(A, B: Integer): Integer;' + LineEnding +
+    '  end;' + LineEnding +
+    'var' + LineEnding +
+    '  Calc: ICalculator;' + LineEnding +
+    'begin' + LineEnding +
+    '  Calc.Add(' + #39 + 'x' + #39 + ', ' + #39 + 'y' + #39 + ');' + LineEnding +
+    'end.' + LineEnding;
+
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := TLexerResult.Create(SourceText, Diagnostics, 1);
+  Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+  Ast := TAstFacade.Create(Tree);
+  UnitGraph := TUnitGraph.Create;
+  Analyzer := nil;
+  Model := nil;
+  try
+    UnitGraph.SetRootName(Ast.DeclaredName);
+    Analyzer := TSemanticAnalyzer.Create(Ast, UnitGraph, Diagnostics, 1, True);
+    Analyzer.Analyze;
+    Model := Analyzer.DetachModel;
+    if not Diagnostics.HasErrors then
+      Fail('interface-type-mismatch-expected-diagnostic');
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
 procedure CheckOverloadBindings;
 var
   Analyzer: TSemanticAnalyzer;
@@ -16022,6 +16262,10 @@ begin
     CheckGenericParentChainInstantiation;
     CheckGenericSpecializeBeforeBody;
     CheckGenericFixedTypeParentChain;
+    CheckInterfaceMethodCallBinding;
+    CheckInterfaceMissingMethodDiagnostic;
+    CheckInterfaceInheritanceBinding;
+    CheckInterfaceMethodTypeMismatch;
 
     WriteLn('semantic-call-bindings-status=pass');
   finally
