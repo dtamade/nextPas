@@ -8559,7 +8559,6 @@ var
   PP: TPreprocessor;
   PPDefines: TDefineTable;
   IncResolver: TFileIncludeResolver;
-  I: LongInt;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -8590,12 +8589,6 @@ begin
         SourceText := SourceText + Line;
       end;
       Close(F);
-      // Truncate to interface section only — LSP needs declarations, not bodies
-      I := Pos(#10'implementation'#10, LowerCase(SourceText));
-      if I <= 0 then
-        I := Pos(#10'implementation'#13, LowerCase(SourceText));
-      if I > 0 then
-        SourceText := Copy(SourceText, 1, I) + #10 + 'implementation' + #10 + 'end.';
       UnitLexer := TLexerResult.Create(SourceText);
       PPDefines := TDefineTable.Create;
       PPDefines.SeedFPCDefines;
