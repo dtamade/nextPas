@@ -1,0 +1,31 @@
+FPC ?= /opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc
+CORE_ROOT := ../..
+BUILD_DIR := $(CORE_ROOT)/build/bin
+FPC_FLAGS := -O3 -gl
+FPC_FLAGS += -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src -Fu$(CORE_ROOT)/src/generated -Fu.
+FPC_FLAGS += -FE$(BUILD_DIR)
+
+RUNNER := nextpas.core.simd.test
+VEC_TEST := test_vec_all
+
+.PHONY: test test-vec test-all bench clean
+
+test:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B $(RUNNER).lpr
+	$(BUILD_DIR)/$(RUNNER) --no-bench
+
+test-vec:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B $(VEC_TEST).pas
+	$(BUILD_DIR)/$(VEC_TEST)
+
+test-all: test test-vec
+
+bench:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B $(RUNNER).lpr
+	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
+
+clean:
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST)

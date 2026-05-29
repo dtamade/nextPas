@@ -276,7 +276,7 @@ var
 begin
   LNeg := AX < 0;
   if LNeg then AX := -AX;
-  if AX > 1.0 then begin Result := 0; Exit; end;
+  if AX > 1.0 then begin Result := NaN; Exit; end;
 
   if AX <= 0.5 then
   begin

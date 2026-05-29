@@ -26,7 +26,7 @@ uses
   nextpas.core.simd.runtime.testcase,
   nextpas.core.simd.dispatchslots.testcase,
   nextpas.core.simd.publicabi.testcase,
-  // nextpas.core.simd.edgecases.testcase,  // TODO: needs TVecF32x4 operator+ in ops.pas
+  nextpas.core.simd.edgecases.testcase,
   nextpas.core.simd.vec512types.testcase,
   nextpas.core.simd.imageproc.testcase,
   {$IFDEF SIMD_X86_AVAILABLE}
@@ -218,7 +218,7 @@ begin
   HandleSuite('TTestCase_ShuffleSWizzle', TTestCase_ShuffleSWizzle, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_MathFunctions', TTestCase_MathFunctions, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_AdvancedAlgorithms', TTestCase_AdvancedAlgorithms, aListOnly, aTargetSuite);
-  //   HandleSuite('TTestCase_EdgeCases', TTestCase_EdgeCases, aListOnly, aTargetSuite); // disabled: needs ops.pas operator+
+  HandleSuite('TTestCase_EdgeCases', TTestCase_EdgeCases, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_Vec512Types', TTestCase_Vec512Types, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_Vec512MaskFacadeGuards', TTestCase_Vec512MaskFacadeGuards, aListOnly, aTargetSuite);
   HandleSuite('TTestCase_Memutils', TTestCase_Memutils, aListOnly, aTargetSuite);

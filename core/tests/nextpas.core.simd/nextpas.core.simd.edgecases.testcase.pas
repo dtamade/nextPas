@@ -11,6 +11,7 @@ interface
 uses
   Math,
   Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
+  nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
   nextpas.core.simd.utils,
