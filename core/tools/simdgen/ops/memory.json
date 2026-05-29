@@ -1,0 +1,293 @@
+{
+  "_comment": "SIMD operation definitions - memory operations (Load/Store/Aligned/Splat/Zero)",
+  "category": "memory",
+  "operations": [
+    {
+      "name": "Load",
+      "signature": "load",
+      "scalar_op": "",
+      "doc": "Load vector from unaligned memory",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I64x4"
+      ]
+    },
+    {
+      "name": "LoadAligned",
+      "name_pattern": "Load{type}Aligned",
+      "facade_name_pattern": "Vec{type}LoadAligned",
+      "signature": "load",
+      "scalar_op": "custom",
+      "scalar_body": [
+        "Result := ScalarLoadF32x4(p);"
+      ],
+      "doc": "Load vector from aligned memory",
+      "applies_to": [
+        "F32x4"
+      ]
+    },
+    {
+      "name": "Store",
+      "signature": "store",
+      "scalar_op": "",
+      "doc": "Store vector to unaligned memory",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I64x4"
+      ]
+    },
+    {
+      "name": "StoreAligned",
+      "name_pattern": "Store{type}Aligned",
+      "facade_name_pattern": "Vec{type}StoreAligned",
+      "signature": "store",
+      "scalar_op": "custom",
+      "scalar_body": [
+        "ScalarStoreF32x4(p, a);"
+      ],
+      "doc": "Store vector to aligned memory",
+      "applies_to": [
+        "F32x4"
+      ]
+    },
+    {
+      "name": "Splat",
+      "signature": "splat",
+      "scalar_op": "",
+      "doc": "Broadcast scalar to all lanes",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I64x4"
+      ]
+    },
+    {
+      "name": "Zero",
+      "signature": "zero",
+      "scalar_op": "",
+      "doc": "Return zero vector",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I64x4"
+      ]
+    },
+    {
+      "name": "MemCopy",
+      "signature": "pointer_ptr_len_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Copy a byte range",
+      "scalar_body": [
+        "if (len = 0) or (src = nil) or (dst = nil) then",
+        "  Exit;",
+        "",
+        "Move(src^, dst^, len);"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "MemSet",
+      "signature": "pointer_len_byte_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Set a byte range to a value",
+      "scalar_body": [
+        "if (len = 0) or (dst = nil) then",
+        "  Exit;",
+        "",
+        "FillChar(dst^, len, value);"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "MemReverse",
+      "signature": "pointer_len_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Reverse a byte range in place",
+      "scalar_vars": [
+        "pb: PByte",
+        "temp: Byte"
+      ],
+      "scalar_body": [
+        "if (len <= 1) or (p = nil) then",
+        "  Exit;",
+        "",
+        "pb := PByte(p);",
+        "",
+        "for i := 0 to (len div 2) - 1 do",
+        "begin",
+        "  temp := pb[i];",
+        "  pb[i] := pb[len - 1 - i];",
+        "  pb[len - 1 - i] := temp;",
+        "end;"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "MemFindByte",
+      "signature": "pointer_len_byte_ptrint",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Find the first byte value in a memory range",
+      "scalar_vars": [
+        "pb: PByte",
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "if (len = 0) or (p = nil) then",
+        "begin",
+        "  Result := -1;",
+        "  Exit;",
+        "end;",
+        "",
+        "pb := PByte(p);",
+        "",
+        "for i := 0 to len - 1 do",
+        "begin",
+        "  if pb[i] = value then",
+        "  begin",
+        "    Result := PtrInt(i);",
+        "    Exit;",
+        "  end;",
+        "end;",
+        "",
+        "Result := -1;"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "MemDiffRange",
+      "signature": "pointer_ptr_len_out_sizeuint_out_sizeuint_bool",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Find the first and last differing byte offsets between two memory ranges",
+      "scalar_vars": [
+        "pa, pb: PByte",
+        "i: SizeUInt",
+        "foundFirst: Boolean"
+      ],
+      "scalar_body": [
+        "firstDiff := 0;",
+        "lastDiff := 0;",
+        "",
+        "if len = 0 then",
+        "begin",
+        "  Result := False;",
+        "  Exit;",
+        "end;",
+        "",
+        "if (a = nil) or (b = nil) then",
+        "begin",
+        "  if a <> b then",
+        "  begin",
+        "    firstDiff := 0;",
+        "    lastDiff := len - 1;",
+        "    Result := True;",
+        "  end",
+        "  else",
+        "    Result := False;",
+        "  Exit;",
+        "end;",
+        "",
+        "pa := PByte(a);",
+        "pb := PByte(b);",
+        "foundFirst := False;",
+        "",
+        "for i := 0 to len - 1 do",
+        "begin",
+        "  if pa[i] <> pb[i] then",
+        "  begin",
+        "    if not foundFirst then",
+        "    begin",
+        "      firstDiff := i;",
+        "      foundFirst := True;",
+        "    end;",
+        "    lastDiff := i;",
+        "  end;",
+        "end;",
+        "",
+        "Result := foundFirst;"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "MinMaxBytes",
+      "signature": "pointer_len_out_byte_byte_void",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Find the minimum and maximum byte values in a memory range",
+      "scalar_vars": [
+        "pb: PByte",
+        "i: SizeUInt"
+      ],
+      "scalar_body": [
+        "minVal := 255;",
+        "maxVal := 0;",
+        "",
+        "if (len = 0) or (p = nil) then",
+        "  Exit;",
+        "",
+        "pb := PByte(p);",
+        "minVal := pb[0];",
+        "maxVal := pb[0];",
+        "",
+        "for i := 1 to len - 1 do",
+        "begin",
+        "  if pb[i] < minVal then",
+        "    minVal := pb[i];",
+        "  if pb[i] > maxVal then",
+        "    maxVal := pb[i];",
+        "end;"
+      ],
+      "applies_to": []
+    },
+    {
+      "name": "BytesIndexOf",
+      "signature": "pointer_len_ptr_len_ptrint",
+      "scalar_op": "custom",
+      "scalar_name_pattern": "{op}_Scalar",
+      "doc": "Find a byte pattern inside a byte range",
+      "scalar_vars": [
+        "ph, pn: PByte",
+        "i, j: SizeUInt",
+        "found: Boolean"
+      ],
+      "scalar_body": [
+        "Result := -1;",
+        "",
+        "if (haystackLen = 0) or (needleLen = 0) or (haystack = nil) or (needle = nil) then",
+        "  Exit;",
+        "",
+        "if needleLen > haystackLen then",
+        "  Exit;",
+        "",
+        "ph := PByte(haystack);",
+        "pn := PByte(needle);",
+        "",
+        "for i := 0 to haystackLen - needleLen do",
+        "begin",
+        "  found := True;",
+        "  for j := 0 to needleLen - 1 do",
+        "  begin",
+        "    if ph[i + j] <> pn[j] then",
+        "    begin",
+        "      found := False;",
+        "      Break;",
+        "    end;",
+        "  end;",
+        "",
+        "  if found then",
+        "  begin",
+        "    Result := PtrInt(i);",
+        "    Exit;",
+        "  end;",
+        "end;"
+      ],
+      "applies_to": []
+    }
+  ]
+}

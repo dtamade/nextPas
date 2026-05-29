@@ -1,0 +1,46 @@
+{
+  "_comment": "SIMD operation definitions - reduction operations",
+  "category": "reduction",
+  "operations": [
+    {
+      "name": "ReduceAdd",
+      "signature": "reduce",
+      "scalar_op": "custom",
+      "doc": "Horizontal sum of all lanes",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "ReduceMin",
+      "signature": "reduce",
+      "scalar_op": "custom",
+      "doc": "Minimum across all lanes",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "ReduceMax",
+      "signature": "reduce",
+      "scalar_op": "custom",
+      "doc": "Maximum across all lanes",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    },
+    {
+      "name": "ReduceMul",
+      "signature": "reduce",
+      "scalar_op": "custom",
+      "doc": "Product of all lanes",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8"
+      ]
+    }
+  ]
+}

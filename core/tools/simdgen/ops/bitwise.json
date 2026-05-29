@@ -1,0 +1,165 @@
+{
+  "_comment": "SIMD operation definitions - bitwise category",
+  "category": "bitwise",
+  "operations": [
+    {
+      "name": "And",
+      "signature": "binary",
+      "scalar_op": "and",
+      "doc": "Bitwise AND",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "Or",
+      "signature": "binary",
+      "scalar_op": "or",
+      "doc": "Bitwise OR",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "Xor",
+      "signature": "binary",
+      "scalar_op": "xor",
+      "doc": "Bitwise XOR",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "Not",
+      "signature": "unary",
+      "scalar_op": "not",
+      "doc": "Bitwise NOT",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "AndNot",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := (not a.{field}[i]) and b.{field}[i]",
+      "doc": "Bitwise AND-NOT: (~a) & b",
+      "applies_to": [
+        "I16x8", "I8x16",
+        "I16x32", "I8x64",
+        "U16x8", "U8x16",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4",
+        "U64x2",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "ShiftLeft",
+      "signature": "shift",
+      "scalar_op": "custom",
+      "scalar_body": [
+        "if (count <= 0) then",
+        "begin Result := a; Exit; end;",
+        "if (count >= {lane_bits}) then",
+        "begin",
+        "  for i := 0 to {lanes} - 1 do Result.{field}[i] := 0;",
+        "  Exit;",
+        "end;",
+        "for i := 0 to {lanes} - 1 do",
+        "  Result.{field}[i] := a.{field}[i] shl count"
+      ],
+      "doc": "Logical shift left by count bits. count<=0: no-op; count>=lane_bits: zero",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "ShiftRight",
+      "signature": "shift",
+      "scalar_op": "custom",
+      "scalar_body": [
+        "if (count <= 0) then",
+        "begin Result := a; Exit; end;",
+        "if (count >= {lane_bits}) then",
+        "begin",
+        "  for i := 0 to {lanes} - 1 do Result.{field}[i] := 0;",
+        "  Exit;",
+        "end;",
+        "for i := 0 to {lanes} - 1 do",
+        "  Result.{field}[i] := {scalar_type}(a.{field}[i] shr count)"
+      ],
+      "doc": "Logical shift right by count bits. count<=0: no-op; count>=lane_bits: zero",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "ShiftRightArith",
+      "signature": "shift",
+      "scalar_op": "custom",
+      "scalar_body": [
+        "if (count <= 0) then",
+        "begin Result := a; Exit; end;",
+        "if (count >= {lane_bits}) then",
+        "begin",
+        "  for i := 0 to {lanes} - 1 do",
+        "    if a.{field}[i] < 0 then Result.{field}[i] := -1",
+        "    else Result.{field}[i] := 0;",
+        "  Exit;",
+        "end;",
+        "for i := 0 to {lanes} - 1 do",
+        "  Result.{field}[i] := SarLongInt(a.{field}[i], count)"
+      ],
+      "scalar_body_by_type": {
+        "I64x2": [
+          "if (count <= 0) then",
+          "begin Result := a; Exit; end;",
+          "if (count >= 64) then",
+          "begin",
+          "  for i := 0 to 1 do",
+          "    if a.{field}[i] < 0 then Result.{field}[i] := -1",
+          "    else Result.{field}[i] := 0;",
+          "  Exit;",
+          "end;",
+          "for i := 0 to 1 do",
+          "  Result.{field}[i] := SarInt64(a.{field}[i], count);"
+        ],
+        "I64x4": [
+          "if (count <= 0) then",
+          "begin Result := a; Exit; end;",
+          "if (count >= 64) then",
+          "begin",
+          "  for i := 0 to 3 do",
+          "    if a.{field}[i] < 0 then Result.{field}[i] := -1",
+          "    else Result.{field}[i] := 0;",
+          "  Exit;",
+          "end;",
+          "for i := 0 to 3 do",
+          "  Result.{field}[i] := SarInt64(a.{field}[i], count);"
+        ]
+      },
+      "doc": "Arithmetic shift right (sign-extending). count<=0: no-op; count>=lane_bits: sign-fill",
+      "applies_to": [
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4"
+      ]
+    }
+  ]
+}

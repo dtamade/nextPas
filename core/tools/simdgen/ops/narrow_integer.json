@@ -1,0 +1,289 @@
+{
+  "_comment": "SIMD operation definitions - narrow integer types (I16x8, I8x16, U16x8, U8x16, wide variants)",
+  "category": "narrow_integer",
+  "operations": [
+    {
+      "name": "Add",
+      "signature": "binary",
+      "scalar_op": "+",
+      "doc": "Element-wise addition (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64", "U32x16", "U64x2", "U64x4", "U64x8"]
+    },
+    {
+      "name": "Sub",
+      "signature": "binary",
+      "scalar_op": "-",
+      "doc": "Element-wise subtraction (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64", "U32x16", "U64x2", "U64x4", "U64x8"]
+    },
+    {
+      "name": "SatAdd",
+      "name_pattern": "{type}{op}",
+      "facade_name_pattern": "Vec{type}{op}",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_vars_by_type": {
+        "I8x16": ["sum: Int32;"],
+        "I16x8": ["sum: Int32;"],
+        "U8x16": ["sum: UInt32;"],
+        "U16x8": ["sum: UInt32;"]
+      },
+      "scalar_body_by_type": {
+        "I8x16": [
+          "for i := 0 to 15 do",
+          "begin",
+          "  sum := Int32(a.i[i]) + Int32(b.i[i]);",
+          "  if sum > 127 then",
+          "    Result.i[i] := 127",
+          "  else if sum < -128 then",
+          "    Result.i[i] := -128",
+          "  else",
+          "    Result.i[i] := Int8(sum);",
+          "end;"
+        ],
+        "I16x8": [
+          "for i := 0 to 7 do",
+          "begin",
+          "  sum := Int32(a.i[i]) + Int32(b.i[i]);",
+          "  if sum > 32767 then",
+          "    Result.i[i] := 32767",
+          "  else if sum < -32768 then",
+          "    Result.i[i] := -32768",
+          "  else",
+          "    Result.i[i] := Int16(sum);",
+          "end;"
+        ],
+        "U8x16": [
+          "for i := 0 to 15 do",
+          "begin",
+          "  sum := UInt32(a.u[i]) + UInt32(b.u[i]);",
+          "  if sum > 255 then",
+          "    Result.u[i] := 255",
+          "  else",
+          "    Result.u[i] := UInt8(sum);",
+          "end;"
+        ],
+        "U16x8": [
+          "for i := 0 to 7 do",
+          "begin",
+          "  sum := UInt32(a.u[i]) + UInt32(b.u[i]);",
+          "  if sum > 65535 then",
+          "    Result.u[i] := 65535",
+          "  else",
+          "    Result.u[i] := UInt16(sum);",
+          "end;"
+        ]
+      },
+      "doc": "Element-wise saturating addition (narrow integer)",
+      "applies_to": ["I8x16", "I16x8", "U8x16", "U16x8"]
+    },
+    {
+      "name": "SatSub",
+      "name_pattern": "{type}{op}",
+      "facade_name_pattern": "Vec{type}{op}",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_vars_by_type": {
+        "I8x16": ["diff: Int32;"],
+        "I16x8": ["diff: Int32;"]
+      },
+      "scalar_body_by_type": {
+        "I8x16": [
+          "for i := 0 to 15 do",
+          "begin",
+          "  diff := Int32(a.i[i]) - Int32(b.i[i]);",
+          "  if diff > 127 then",
+          "    Result.i[i] := 127",
+          "  else if diff < -128 then",
+          "    Result.i[i] := -128",
+          "  else",
+          "    Result.i[i] := Int8(diff);",
+          "end;"
+        ],
+        "I16x8": [
+          "for i := 0 to 7 do",
+          "begin",
+          "  diff := Int32(a.i[i]) - Int32(b.i[i]);",
+          "  if diff > 32767 then",
+          "    Result.i[i] := 32767",
+          "  else if diff < -32768 then",
+          "    Result.i[i] := -32768",
+          "  else",
+          "    Result.i[i] := Int16(diff);",
+          "end;"
+        ],
+        "U8x16": [
+          "for i := 0 to 15 do",
+          "begin",
+          "  if b.u[i] > a.u[i] then",
+          "    Result.u[i] := 0",
+          "  else",
+          "    Result.u[i] := a.u[i] - b.u[i];",
+          "end;"
+        ],
+        "U16x8": [
+          "for i := 0 to 7 do",
+          "begin",
+          "  if b.u[i] > a.u[i] then",
+          "    Result.u[i] := 0",
+          "  else",
+          "    Result.u[i] := a.u[i] - b.u[i];",
+          "end;"
+        ]
+      },
+      "doc": "Element-wise saturating subtraction (narrow integer)",
+      "applies_to": ["I8x16", "I16x8", "U8x16", "U16x8"]
+    },
+    {
+      "name": "Mul",
+      "signature": "binary",
+      "scalar_op": "*",
+      "doc": "Element-wise multiplication (narrow integer)",
+      "applies_to": ["I16x8", "U16x8", "U32x16"]
+    },
+    {
+      "name": "And",
+      "signature": "binary",
+      "scalar_op": "and",
+      "doc": "Bitwise AND (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "Or",
+      "signature": "binary",
+      "scalar_op": "or",
+      "doc": "Bitwise OR (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "Xor",
+      "signature": "binary",
+      "scalar_op": "xor",
+      "doc": "Bitwise XOR (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "Not",
+      "signature": "unary",
+      "scalar_op": "not",
+      "doc": "Bitwise NOT (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "Min",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body": "if a.{field}[i] < b.{field}[i] then Result.{field}[i] := a.{field}[i] else Result.{field}[i] := b.{field}[i]",
+      "doc": "Element-wise minimum (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "Max",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body": "if a.{field}[i] > b.{field}[i] then Result.{field}[i] := a.{field}[i] else Result.{field}[i] := b.{field}[i]",
+      "doc": "Element-wise maximum (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "CmpEq",
+      "signature": "compare",
+      "scalar_op": "=",
+      "doc": "Equal comparison (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "CmpLt",
+      "signature": "compare",
+      "scalar_op": "<",
+      "doc": "Less-than comparison (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "CmpGt",
+      "signature": "compare",
+      "scalar_op": ">",
+      "doc": "Greater-than comparison (narrow integer)",
+      "applies_to": ["I16x8", "I16x32", "I8x16", "I8x64", "U16x8", "U8x16", "U8x64"]
+    },
+    {
+      "name": "CmpLe",
+      "signature": "compare",
+      "scalar_op": "<=",
+      "doc": "Less-or-equal comparison (narrow integer)",
+      "applies_to": ["I16x8", "I8x16", "U16x8", "U8x16"]
+    },
+    {
+      "name": "CmpGe",
+      "signature": "compare",
+      "scalar_op": ">=",
+      "doc": "Greater-or-equal comparison (narrow integer)",
+      "applies_to": ["I16x8", "I8x16", "U16x8", "U8x16"]
+    },
+    {
+      "name": "CmpNe",
+      "signature": "compare",
+      "scalar_op": "<>",
+      "doc": "Not-equal comparison (narrow integer)",
+      "applies_to": ["I16x8", "I8x16", "U16x8", "U8x16"]
+    },
+    {
+      "name": "ShiftLeft",
+      "signature": "shift",
+      "scalar_op": "shl",
+      "doc": "Logical shift left (narrow integer)",
+      "scalar_body_by_type": {
+        "I16x32": [
+          "if (count < 0) or (count >= 16) then",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := 0",
+          "else",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := a.{field}[i] shl count;"
+        ]
+      },
+      "applies_to": ["I16x8", "I16x32", "U16x8", "U64x4", "U64x8"]
+    },
+    {
+      "name": "ShiftRight",
+      "signature": "shift",
+      "scalar_op": "shr",
+      "doc": "Logical shift right (narrow integer)",
+      "scalar_body_by_type": {
+        "I16x32": [
+          "if (count < 0) or (count >= 16) then",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := 0",
+          "else",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := Int16(UInt16(a.{field}[i]) shr count);"
+        ]
+      },
+      "applies_to": ["I16x8", "I16x32", "U16x8", "U64x4", "U64x8"]
+    },
+    {
+      "name": "ShiftRightArith",
+      "signature": "shift",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := SarLongInt(a.{field}[i], count)",
+      "doc": "Arithmetic shift right (narrow integer)",
+      "scalar_body_by_type": {
+        "I16x32": [
+          "if count < 0 then",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := a.{field}[i]",
+          "else if count >= 16 then",
+          "  for i := 0 to 31 do",
+          "    if a.{field}[i] < 0 then",
+          "      Result.{field}[i] := -1",
+          "    else",
+          "      Result.{field}[i] := 0",
+          "else",
+          "  for i := 0 to 31 do",
+          "    Result.{field}[i] := Int16(SarLongint(a.{field}[i], count));"
+        ]
+      },
+      "applies_to": ["I16x8", "I16x32"]
+    }
+  ]
+}

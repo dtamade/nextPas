@@ -1,0 +1,214 @@
+{
+  "_comment": "SIMD operation definitions - special operations (Fma, Clamp, Select, Extract, Insert, Rcp, Rsqrt, Cross, Length, Normalize, Dot)",
+  "category": "special",
+  "operations": [
+    {
+      "name": "Fma",
+      "signature": "ternary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := a.{field}[i] * b.{field}[i] + c.{field}[i]",
+      "doc": "Fused multiply-add: a*b + c. Hardware backends use single-rounding FMA; scalar fallback uses a*b+c (two roundings, not IEEE fused)",
+      "applies_to": ["F32x4", "F32x8", "F32x16", "F64x2", "F64x4", "F64x8"]
+    },
+    {
+      "name": "Clamp",
+      "signature": "ternary",
+      "scalar_op": "custom",
+      "scalar_body": "if a.{field}[i] < b.{field}[i] then Result.{field}[i] := b.{field}[i] else if a.{field}[i] > c.{field}[i] then Result.{field}[i] := c.{field}[i] else Result.{field}[i] := a.{field}[i]",
+      "doc": "Clamp: max(min(a, hi), lo) where b=lo, c=hi",
+      "applies_to": ["F32x4", "F32x8", "F32x16", "F64x2", "F64x4", "F64x8"]
+    },
+    {
+      "name": "Rcp",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := 1.0 / a.{field}[i]",
+      "doc": "Reciprocal approximation: 1/a",
+      "applies_to": ["F32x4", "F64x4"]
+    },
+    {
+      "name": "Rsqrt",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_body": "Result.{field}[i] := 1.0 / Sqrt(a.{field}[i])",
+      "doc": "Reciprocal square root approximation: 1/sqrt(a)",
+      "applies_to": ["F32x4"]
+    },
+    {
+      "name": "Cross",
+      "signature": "binary",
+      "scalar_op": "custom",
+      "scalar_body_by_type": {
+        "F32x3": [
+          "Result.{field}[0] := a.{field}[1] * b.{field}[2] - a.{field}[2] * b.{field}[1];",
+          "Result.{field}[1] := a.{field}[2] * b.{field}[0] - a.{field}[0] * b.{field}[2];",
+          "Result.{field}[2] := a.{field}[0] * b.{field}[1] - a.{field}[1] * b.{field}[0];",
+          "Result.{field}[3] := 0.0;"
+        ]
+      },
+      "doc": "Cross product for 3D vectors",
+      "applies_to": ["F32x3"]
+    },
+    {
+      "name": "Length",
+      "signature": "reduce",
+      "scalar_op": "custom",
+      "scalar_body_by_type": {
+        "F32x3": [
+          "Result := 0.0;",
+          "for i := 0 to 2 do",
+          "  Result := Result + a.{field}[i] * a.{field}[i];",
+          "Result := Sqrt(Result);"
+        ],
+        "F32x4": [
+          "Result := 0.0;",
+          "for i := 0 to 3 do",
+          "  Result := Result + a.{field}[i] * a.{field}[i];",
+          "Result := Sqrt(Result);"
+        ]
+      },
+      "doc": "Vector length / magnitude",
+      "applies_to": ["F32x3", "F32x4"]
+    },
+    {
+      "name": "Normalize",
+      "signature": "unary",
+      "scalar_op": "custom",
+      "scalar_vars_by_type": {
+        "F32x3": ["len: Single", "invLen: Single"],
+        "F32x4": ["len: Single", "invLen: Single"]
+      },
+      "scalar_body_by_type": {
+        "F32x3": [
+          "len := ScalarLengthF32x3(a);",
+          "if len > 0.0 then",
+          "begin",
+          "  invLen := 1.0 / len;",
+          "  Result := a;",
+          "  for i := 0 to 2 do",
+          "    Result.{field}[i] := Result.{field}[i] * invLen;",
+          "end",
+          "else",
+          "begin",
+          "  Result := a;",
+          "end;",
+          "Result.{field}[3] := 0.0;"
+        ],
+        "F32x4": [
+          "len := ScalarLengthF32x4(a);",
+          "if len > 0.0 then",
+          "begin",
+          "  invLen := 1.0 / len;",
+          "  Result := a;",
+          "  for i := 0 to 3 do",
+          "    Result.{field}[i] := Result.{field}[i] * invLen;",
+          "end",
+          "else",
+          "begin",
+          "  Result := a;",
+          "end;"
+        ]
+      },
+      "doc": "Normalize vector to unit length",
+      "applies_to": ["F32x3", "F32x4"]
+    },
+    {
+      "name": "Select",
+      "signature": "select",
+      "scalar_op": "custom",
+      "mask_type_by_type": {
+        "F32x4": "TMask4",
+        "F64x2": "TMask2",
+        "F32x16": "TMask16",
+        "F64x8": "TMask8",
+        "I32x4": "TVecI32x4",
+        "F32x8": "TVecU32x8",
+        "F64x4": "TVecU64x4"
+      },
+      "scalar_body_by_type": {
+        "F32x4": [
+          "for i := 0 to 3 do",
+          "  if (mask and (1 shl i)) <> 0 then",
+          "    Result.{field}[i] := a.{field}[i]",
+          "  else",
+          "    Result.{field}[i] := b.{field}[i]"
+        ],
+        "F64x2": [
+          "for i := 0 to 1 do",
+          "  if (mask and (1 shl i)) <> 0 then",
+          "    Result.{field}[i] := a.{field}[i]",
+          "  else",
+          "    Result.{field}[i] := b.{field}[i]"
+        ],
+        "F32x16": [
+          "for i := 0 to 15 do",
+          "  if (mask and (1 shl i)) <> 0 then",
+          "    Result.{field}[i] := a.{field}[i]",
+          "  else",
+          "    Result.{field}[i] := b.{field}[i]"
+        ],
+        "F64x8": [
+          "for i := 0 to 7 do",
+          "  if (mask and (1 shl i)) <> 0 then",
+          "    Result.{field}[i] := a.{field}[i]",
+          "  else",
+          "    Result.{field}[i] := b.{field}[i]"
+        ],
+        "I32x4": [
+          "for i := 0 to 3 do",
+          "  Result.{field}[i] := (a.{field}[i] and mask.i[i]) or (b.{field}[i] and (not mask.i[i]))"
+        ],
+        "F32x8": [
+          "for i := 0 to 7 do",
+          "begin",
+          "  la := PDWord(@a.f[i])^;",
+          "  lb := PDWord(@b.f[i])^;",
+          "  lr := (la and mask.u[i]) or (lb and (not mask.u[i]));",
+          "  PDWord(@Result.f[i])^ := lr;",
+          "end"
+        ],
+        "F64x4": [
+          "for i := 0 to 3 do",
+          "begin",
+          "  la64 := PQWord(@a.d[i])^;",
+          "  lb64 := PQWord(@b.d[i])^;",
+          "  lr64 := (la64 and mask.u[i]) or (lb64 and (not mask.u[i]));",
+          "  PQWord(@Result.d[i])^ := lr64;",
+          "end"
+        ]
+      },
+      "scalar_vars_by_type": {
+        "F32x8": "la, lb, lr: UInt32",
+        "F64x4": "la64, lb64, lr64: UInt64"
+      },
+      "doc": "Conditional select: bitwise blend = (a AND mask) OR (b AND NOT mask)",
+      "applies_to": ["F32x4", "F64x2", "F32x16", "F64x8", "I32x4", "F32x8", "F64x4"]
+    },
+    {
+      "name": "Extract",
+      "signature": "extract",
+      "scalar_op": "custom",
+      "doc": "Extract single element",
+      "applies_to": ["F32x4", "F64x2", "I32x4", "I64x2", "F32x8", "F64x4", "I32x8", "I64x4", "F32x16", "I32x16"]
+    },
+    {
+      "name": "Insert",
+      "signature": "insert",
+      "scalar_op": "custom",
+      "doc": "Insert value at index",
+      "applies_to": ["F32x4", "F64x2", "I32x4", "I64x2", "F32x8", "F64x4", "I32x8", "I64x4", "F32x16", "I32x16"]
+    },
+    {
+      "name": "Dot",
+      "signature": "reduce_binary",
+      "scalar_op": "custom",
+      "doc": "Dot product (sum of element-wise products)",
+      "scalar_body_by_type": {
+        "F32x3": [
+          "Result := a.{field}[0] * b.{field}[0] + a.{field}[1] * b.{field}[1] + a.{field}[2] * b.{field}[2];"
+        ]
+      },
+      "applies_to": ["F32x3", "F32x4", "F32x8", "F64x2", "F64x4"]
+    }
+  ]
+}

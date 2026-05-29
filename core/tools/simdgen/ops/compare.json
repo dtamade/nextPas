@@ -1,0 +1,90 @@
+{
+  "_comment": "SIMD operation definitions - comparison category",
+  "category": "comparison",
+  "operations": [
+    {
+      "name": "CmpEq",
+      "signature": "compare",
+      "scalar_op": "=",
+      "doc": "Equal comparison, returns bitmask",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "CmpLt",
+      "signature": "compare",
+      "scalar_op": "<",
+      "doc": "Less-than comparison",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "CmpGt",
+      "signature": "compare",
+      "scalar_op": ">",
+      "doc": "Greater-than comparison",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x2", "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "CmpLe",
+      "signature": "compare",
+      "scalar_op": "<=",
+      "doc": "Less-or-equal comparison",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "CmpGe",
+      "signature": "compare",
+      "scalar_op": ">=",
+      "doc": "Greater-or-equal comparison",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x4", "U64x8",
+        "U32x4", "U32x8", "U32x16"
+      ]
+    },
+    {
+      "name": "CmpNe",
+      "signature": "compare",
+      "scalar_op": "<>",
+      "doc": "Not-equal comparison",
+      "applies_to": [
+        "F32x4", "F32x8", "F32x16",
+        "F64x2", "F64x4", "F64x8",
+        "I32x4", "I32x8", "I32x16",
+        "I64x2", "I64x4", "I64x8",
+        "U64x4", "U64x8",
+        "U32x8", "U32x16"
+      ]
+    }
+  ]
+}
