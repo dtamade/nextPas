@@ -1,0 +1,807 @@
+procedure FillBaseDispatchTable(var dispatchTable: TSimdDispatchTable);
+begin
+  // Initialize dispatch table to zeros
+  FillChar(dispatchTable, SizeOf(TSimdDispatchTable), 0);
+
+  // Note: Backend and BackendInfo are NOT set here - caller must set them.
+
+  // === F32x4 Arithmetic ===
+  dispatchTable.AddF32x4 := @ScalarAddF32x4;
+  dispatchTable.SubF32x4 := @ScalarSubF32x4;
+  dispatchTable.MulF32x4 := @ScalarMulF32x4;
+  dispatchTable.DivF32x4 := @ScalarDivF32x4;
+
+  // === F32x8 Arithmetic ===
+  dispatchTable.AddF32x8 := @ScalarAddF32x8;
+  dispatchTable.SubF32x8 := @ScalarSubF32x8;
+  dispatchTable.MulF32x8 := @ScalarMulF32x8;
+  dispatchTable.DivF32x8 := @ScalarDivF32x8;
+
+  // === F64x2 Arithmetic ===
+  dispatchTable.AddF64x2 := @ScalarAddF64x2;
+  dispatchTable.SubF64x2 := @ScalarSubF64x2;
+  dispatchTable.MulF64x2 := @ScalarMulF64x2;
+  dispatchTable.DivF64x2 := @ScalarDivF64x2;
+
+  // === I32x4 Arithmetic ===
+  dispatchTable.AddI32x4 := @ScalarAddI32x4;
+  dispatchTable.SubI32x4 := @ScalarSubI32x4;
+  dispatchTable.MulI32x4 := @ScalarMulI32x4;
+
+  // === I32x4 Bitwise ===
+  dispatchTable.AndI32x4 := @ScalarAndI32x4;
+  dispatchTable.OrI32x4 := @ScalarOrI32x4;
+  dispatchTable.XorI32x4 := @ScalarXorI32x4;
+  dispatchTable.NotI32x4 := @ScalarNotI32x4;
+  dispatchTable.AndNotI32x4 := @ScalarAndNotI32x4;
+
+  // === I32x4 Shift ===
+  dispatchTable.ShiftLeftI32x4 := @ScalarShiftLeftI32x4;
+  dispatchTable.ShiftRightI32x4 := @ScalarShiftRightI32x4;
+  dispatchTable.ShiftRightArithI32x4 := @ScalarShiftRightArithI32x4;
+
+  // === I32x4 Comparison ===
+  dispatchTable.CmpEqI32x4 := @ScalarCmpEqI32x4;
+  dispatchTable.CmpLtI32x4 := @ScalarCmpLtI32x4;
+  dispatchTable.CmpGtI32x4 := @ScalarCmpGtI32x4;
+  dispatchTable.CmpLeI32x4 := @ScalarCmpLeI32x4;
+  dispatchTable.CmpGeI32x4 := @ScalarCmpGeI32x4;
+  dispatchTable.CmpNeI32x4 := @ScalarCmpNeI32x4;
+
+  // === I32x4 MinMax ===
+  dispatchTable.MinI32x4 := @ScalarMinI32x4;
+  dispatchTable.MaxI32x4 := @ScalarMaxI32x4;
+
+  // === I64x2 Arithmetic ===
+  dispatchTable.AddI64x2 := @ScalarAddI64x2;
+  dispatchTable.SubI64x2 := @ScalarSubI64x2;
+
+  // === I64x2 Bitwise ===
+  dispatchTable.AndI64x2 := @ScalarAndI64x2;
+  dispatchTable.OrI64x2 := @ScalarOrI64x2;
+  dispatchTable.XorI64x2 := @ScalarXorI64x2;
+  dispatchTable.NotI64x2 := @ScalarNotI64x2;
+  dispatchTable.AndNotI64x2 := @ScalarAndNotI64x2;
+  dispatchTable.ShiftLeftI64x2 := @ScalarShiftLeftI64x2;
+  dispatchTable.ShiftRightI64x2 := @ScalarShiftRightI64x2;
+  dispatchTable.ShiftRightArithI64x2 := @ScalarShiftRightArithI64x2;
+
+  // === I64x2 Comparison ===
+  dispatchTable.CmpEqI64x2 := @ScalarCmpEqI64x2;
+  dispatchTable.CmpLtI64x2 := @ScalarCmpLtI64x2;
+  dispatchTable.CmpGtI64x2 := @ScalarCmpGtI64x2;
+  dispatchTable.CmpLeI64x2 := @ScalarCmpLeI64x2;
+  dispatchTable.CmpGeI64x2 := @ScalarCmpGeI64x2;
+  dispatchTable.CmpNeI64x2 := @ScalarCmpNeI64x2;
+  dispatchTable.MinI64x2 := @ScalarMinI64x2;
+  dispatchTable.MaxI64x2 := @ScalarMaxI64x2;
+
+  // === U64x2 Operations ===
+  dispatchTable.AddU64x2 := @ScalarAddU64x2;
+  dispatchTable.SubU64x2 := @ScalarSubU64x2;
+  dispatchTable.AndU64x2 := @ScalarAndU64x2;
+  dispatchTable.OrU64x2 := @ScalarOrU64x2;
+  dispatchTable.XorU64x2 := @ScalarXorU64x2;
+  dispatchTable.NotU64x2 := @ScalarNotU64x2;
+  dispatchTable.AndNotU64x2 := @ScalarAndNotU64x2;
+  dispatchTable.CmpEqU64x2 := @ScalarCmpEqU64x2;
+  dispatchTable.CmpLtU64x2 := @ScalarCmpLtU64x2;
+  dispatchTable.CmpGtU64x2 := @ScalarCmpGtU64x2;
+  dispatchTable.MinU64x2 := @ScalarMinU64x2;
+  dispatchTable.MaxU64x2 := @ScalarMaxU64x2;
+
+  // === U32x8 Operations (256-bit AVX2) ===
+  dispatchTable.AddU32x8 := @ScalarAddU32x8;
+  dispatchTable.SubU32x8 := @ScalarSubU32x8;
+  dispatchTable.MulU32x8 := @ScalarMulU32x8;
+  dispatchTable.AndU32x8 := @ScalarAndU32x8;
+  dispatchTable.OrU32x8 := @ScalarOrU32x8;
+  dispatchTable.XorU32x8 := @ScalarXorU32x8;
+  dispatchTable.NotU32x8 := @ScalarNotU32x8;
+  dispatchTable.AndNotU32x8 := @ScalarAndNotU32x8;
+  dispatchTable.ShiftLeftU32x8 := @ScalarShiftLeftU32x8;
+  dispatchTable.ShiftRightU32x8 := @ScalarShiftRightU32x8;
+  dispatchTable.CmpEqU32x8 := @ScalarCmpEqU32x8;
+  dispatchTable.CmpLtU32x8 := @ScalarCmpLtU32x8;
+  dispatchTable.CmpGtU32x8 := @ScalarCmpGtU32x8;
+  dispatchTable.CmpLeU32x8 := @ScalarCmpLeU32x8;
+  dispatchTable.CmpGeU32x8 := @ScalarCmpGeU32x8;
+  dispatchTable.CmpNeU32x8 := @ScalarCmpNeU32x8;
+  dispatchTable.MinU32x8 := @ScalarMinU32x8;
+  dispatchTable.MaxU32x8 := @ScalarMaxU32x8;
+
+  // === I64x4 Operations (256-bit AVX2) ===
+  // I64x4 Arithmetic
+  dispatchTable.AddI64x4 := @ScalarAddI64x4;
+  dispatchTable.SubI64x4 := @ScalarSubI64x4;
+  // I64x4 Bitwise
+  dispatchTable.AndI64x4 := @ScalarAndI64x4;
+  dispatchTable.OrI64x4 := @ScalarOrI64x4;
+  dispatchTable.XorI64x4 := @ScalarXorI64x4;
+  dispatchTable.NotI64x4 := @ScalarNotI64x4;
+  dispatchTable.AndNotI64x4 := @ScalarAndNotI64x4;
+  // I64x4 Shift
+  dispatchTable.ShiftLeftI64x4 := @ScalarShiftLeftI64x4;
+  dispatchTable.ShiftRightI64x4 := @ScalarShiftRightI64x4;
+  dispatchTable.ShiftRightArithI64x4 := @ScalarShiftRightArithI64x4;
+  // I64x4 Comparison
+  dispatchTable.CmpEqI64x4 := @ScalarCmpEqI64x4;
+  dispatchTable.CmpLtI64x4 := @ScalarCmpLtI64x4;
+  dispatchTable.CmpGtI64x4 := @ScalarCmpGtI64x4;
+  dispatchTable.CmpLeI64x4 := @ScalarCmpLeI64x4;
+  dispatchTable.CmpGeI64x4 := @ScalarCmpGeI64x4;
+  dispatchTable.CmpNeI64x4 := @ScalarCmpNeI64x4;
+  // I64x4 Utility
+  dispatchTable.LoadI64x4 := @ScalarLoadI64x4;
+  dispatchTable.StoreI64x4 := @ScalarStoreI64x4;
+  dispatchTable.SplatI64x4 := @ScalarSplatI64x4;
+  dispatchTable.ZeroI64x4 := @ScalarZeroI64x4;
+
+  // === U64x4 Operations (256-bit AVX2) ===
+  // U64x4 Arithmetic
+  dispatchTable.AddU64x4 := @ScalarAddU64x4;
+  dispatchTable.SubU64x4 := @ScalarSubU64x4;
+  // U64x4 Bitwise
+  dispatchTable.AndU64x4 := @ScalarAndU64x4;
+  dispatchTable.OrU64x4 := @ScalarOrU64x4;
+  dispatchTable.XorU64x4 := @ScalarXorU64x4;
+  dispatchTable.NotU64x4 := @ScalarNotU64x4;
+  // U64x4 Shift
+  dispatchTable.ShiftLeftU64x4 := @ScalarShiftLeftU64x4;
+  dispatchTable.ShiftRightU64x4 := @ScalarShiftRightU64x4;
+  // U64x4 Comparison (unsigned)
+  dispatchTable.CmpEqU64x4 := @ScalarCmpEqU64x4;
+  dispatchTable.CmpLtU64x4 := @ScalarCmpLtU64x4;
+  dispatchTable.CmpGtU64x4 := @ScalarCmpGtU64x4;
+  dispatchTable.CmpLeU64x4 := @ScalarCmpLeU64x4;
+  dispatchTable.CmpGeU64x4 := @ScalarCmpGeU64x4;
+  dispatchTable.CmpNeU64x4 := @ScalarCmpNeU64x4;
+
+  // === F64x4 Arithmetic (256-bit) ===
+  dispatchTable.AddF64x4 := @ScalarAddF64x4;
+  dispatchTable.SubF64x4 := @ScalarSubF64x4;
+  dispatchTable.MulF64x4 := @ScalarMulF64x4;
+  dispatchTable.DivF64x4 := @ScalarDivF64x4;
+  dispatchTable.RcpF64x4 := @ScalarRcpF64x4;
+
+  // === I32x8 Arithmetic (256-bit) ===
+  dispatchTable.AddI32x8 := @ScalarAddI32x8;
+  dispatchTable.SubI32x8 := @ScalarSubI32x8;
+  dispatchTable.MulI32x8 := @ScalarMulI32x8;
+
+  // === I32x8 Bitwise ===
+  dispatchTable.AndI32x8 := @ScalarAndI32x8;
+  dispatchTable.OrI32x8 := @ScalarOrI32x8;
+  dispatchTable.XorI32x8 := @ScalarXorI32x8;
+  dispatchTable.NotI32x8 := @ScalarNotI32x8;
+  dispatchTable.AndNotI32x8 := @ScalarAndNotI32x8;
+
+  // === I32x8 Shift ===
+  dispatchTable.ShiftLeftI32x8 := @ScalarShiftLeftI32x8;
+  dispatchTable.ShiftRightI32x8 := @ScalarShiftRightI32x8;
+  dispatchTable.ShiftRightArithI32x8 := @ScalarShiftRightArithI32x8;
+
+  // === I32x8 Comparison ===
+  dispatchTable.CmpEqI32x8 := @ScalarCmpEqI32x8;
+  dispatchTable.CmpLtI32x8 := @ScalarCmpLtI32x8;
+  dispatchTable.CmpGtI32x8 := @ScalarCmpGtI32x8;
+  dispatchTable.CmpLeI32x8 := @ScalarCmpLeI32x8;
+  dispatchTable.CmpGeI32x8 := @ScalarCmpGeI32x8;
+  dispatchTable.CmpNeI32x8 := @ScalarCmpNeI32x8;
+
+  // === I32x8 MinMax ===
+  dispatchTable.MinI32x8 := @ScalarMinI32x8;
+  dispatchTable.MaxI32x8 := @ScalarMaxI32x8;
+
+  // === F32x16 Arithmetic (512-bit) ===
+  dispatchTable.AddF32x16 := @ScalarAddF32x16;
+  dispatchTable.SubF32x16 := @ScalarSubF32x16;
+  dispatchTable.MulF32x16 := @ScalarMulF32x16;
+  dispatchTable.DivF32x16 := @ScalarDivF32x16;
+
+  // === F64x8 Arithmetic (512-bit) ===
+  dispatchTable.AddF64x8 := @ScalarAddF64x8;
+  dispatchTable.SubF64x8 := @ScalarSubF64x8;
+  dispatchTable.MulF64x8 := @ScalarMulF64x8;
+  dispatchTable.DivF64x8 := @ScalarDivF64x8;
+
+  // === I32x16 Arithmetic (512-bit) ===
+  dispatchTable.AddI32x16 := @ScalarAddI32x16;
+  dispatchTable.SubI32x16 := @ScalarSubI32x16;
+  dispatchTable.MulI32x16 := @ScalarMulI32x16;
+
+  // === I32x16 Bitwise ===
+  dispatchTable.AndI32x16 := @ScalarAndI32x16;
+  dispatchTable.OrI32x16 := @ScalarOrI32x16;
+  dispatchTable.XorI32x16 := @ScalarXorI32x16;
+  dispatchTable.NotI32x16 := @ScalarNotI32x16;
+  dispatchTable.AndNotI32x16 := @ScalarAndNotI32x16;
+
+  // === I32x16 Shift ===
+  dispatchTable.ShiftLeftI32x16 := @ScalarShiftLeftI32x16;
+  dispatchTable.ShiftRightI32x16 := @ScalarShiftRightI32x16;
+  dispatchTable.ShiftRightArithI32x16 := @ScalarShiftRightArithI32x16;
+
+  // === I32x16 Comparison ===
+  dispatchTable.CmpEqI32x16 := @ScalarCmpEqI32x16;
+  dispatchTable.CmpLtI32x16 := @ScalarCmpLtI32x16;
+  dispatchTable.CmpGtI32x16 := @ScalarCmpGtI32x16;
+  dispatchTable.CmpLeI32x16 := @ScalarCmpLeI32x16;
+  dispatchTable.CmpGeI32x16 := @ScalarCmpGeI32x16;
+  dispatchTable.CmpNeI32x16 := @ScalarCmpNeI32x16;
+
+  // === I32x16 MinMax ===
+  dispatchTable.MinI32x16 := @ScalarMinI32x16;
+  dispatchTable.MaxI32x16 := @ScalarMaxI32x16;
+
+  // === I64x8 Arithmetic/Bitwise/Comparison (512-bit) ===
+  dispatchTable.AddI64x8 := @ScalarAddI64x8;
+  dispatchTable.SubI64x8 := @ScalarSubI64x8;
+  dispatchTable.AndI64x8 := @ScalarAndI64x8;
+  dispatchTable.OrI64x8 := @ScalarOrI64x8;
+  dispatchTable.XorI64x8 := @ScalarXorI64x8;
+  dispatchTable.NotI64x8 := @ScalarNotI64x8;
+  dispatchTable.CmpEqI64x8 := @ScalarCmpEqI64x8;
+  dispatchTable.CmpLtI64x8 := @ScalarCmpLtI64x8;
+  dispatchTable.CmpGtI64x8 := @ScalarCmpGtI64x8;
+  dispatchTable.CmpLeI64x8 := @ScalarCmpLeI64x8;
+  dispatchTable.CmpGeI64x8 := @ScalarCmpGeI64x8;
+  dispatchTable.CmpNeI64x8 := @ScalarCmpNeI64x8;
+
+  // === U32x16 Arithmetic/Bitwise/Shift/Comparison/MinMax (512-bit) ===
+  dispatchTable.AddU32x16 := @ScalarAddU32x16;
+  dispatchTable.SubU32x16 := @ScalarSubU32x16;
+  dispatchTable.MulU32x16 := @ScalarMulU32x16;
+  dispatchTable.AndU32x16 := @ScalarAndU32x16;
+  dispatchTable.OrU32x16 := @ScalarOrU32x16;
+  dispatchTable.XorU32x16 := @ScalarXorU32x16;
+  dispatchTable.NotU32x16 := @ScalarNotU32x16;
+  dispatchTable.AndNotU32x16 := @ScalarAndNotU32x16;
+  dispatchTable.ShiftLeftU32x16 := @ScalarShiftLeftU32x16;
+  dispatchTable.ShiftRightU32x16 := @ScalarShiftRightU32x16;
+  dispatchTable.CmpEqU32x16 := @ScalarCmpEqU32x16;
+  dispatchTable.CmpLtU32x16 := @ScalarCmpLtU32x16;
+  dispatchTable.CmpGtU32x16 := @ScalarCmpGtU32x16;
+  dispatchTable.CmpLeU32x16 := @ScalarCmpLeU32x16;
+  dispatchTable.CmpGeU32x16 := @ScalarCmpGeU32x16;
+  dispatchTable.CmpNeU32x16 := @ScalarCmpNeU32x16;
+  dispatchTable.MinU32x16 := @ScalarMinU32x16;
+  dispatchTable.MaxU32x16 := @ScalarMaxU32x16;
+
+  // === U64x8 Arithmetic/Bitwise/Shift/Comparison (512-bit) ===
+  dispatchTable.AddU64x8 := @ScalarAddU64x8;
+  dispatchTable.SubU64x8 := @ScalarSubU64x8;
+  dispatchTable.AndU64x8 := @ScalarAndU64x8;
+  dispatchTable.OrU64x8 := @ScalarOrU64x8;
+  dispatchTable.XorU64x8 := @ScalarXorU64x8;
+  dispatchTable.NotU64x8 := @ScalarNotU64x8;
+  dispatchTable.ShiftLeftU64x8 := @ScalarShiftLeftU64x8;
+  dispatchTable.ShiftRightU64x8 := @ScalarShiftRightU64x8;
+  dispatchTable.CmpEqU64x8 := @ScalarCmpEqU64x8;
+  dispatchTable.CmpLtU64x8 := @ScalarCmpLtU64x8;
+  dispatchTable.CmpGtU64x8 := @ScalarCmpGtU64x8;
+  dispatchTable.CmpLeU64x8 := @ScalarCmpLeU64x8;
+  dispatchTable.CmpGeU64x8 := @ScalarCmpGeU64x8;
+  dispatchTable.CmpNeU64x8 := @ScalarCmpNeU64x8;
+
+  // === I16x32 Arithmetic/Bitwise/Shift/Comparison/MinMax (512-bit) ===
+  dispatchTable.AddI16x32 := @ScalarAddI16x32;
+  dispatchTable.SubI16x32 := @ScalarSubI16x32;
+  dispatchTable.AndI16x32 := @ScalarAndI16x32;
+  dispatchTable.OrI16x32 := @ScalarOrI16x32;
+  dispatchTable.XorI16x32 := @ScalarXorI16x32;
+  dispatchTable.NotI16x32 := @ScalarNotI16x32;
+  dispatchTable.AndNotI16x32 := @ScalarAndNotI16x32;
+  dispatchTable.ShiftLeftI16x32 := @ScalarShiftLeftI16x32;
+  dispatchTable.ShiftRightI16x32 := @ScalarShiftRightI16x32;
+  dispatchTable.ShiftRightArithI16x32 := @ScalarShiftRightArithI16x32;
+  dispatchTable.CmpEqI16x32 := @ScalarCmpEqI16x32;
+  dispatchTable.CmpLtI16x32 := @ScalarCmpLtI16x32;
+  dispatchTable.CmpGtI16x32 := @ScalarCmpGtI16x32;
+  dispatchTable.MinI16x32 := @ScalarMinI16x32;
+  dispatchTable.MaxI16x32 := @ScalarMaxI16x32;
+
+  // === I8x64 Arithmetic/Bitwise/Comparison/MinMax (512-bit) ===
+  dispatchTable.AddI8x64 := @ScalarAddI8x64;
+  dispatchTable.SubI8x64 := @ScalarSubI8x64;
+  dispatchTable.AndI8x64 := @ScalarAndI8x64;
+  dispatchTable.OrI8x64 := @ScalarOrI8x64;
+  dispatchTable.XorI8x64 := @ScalarXorI8x64;
+  dispatchTable.NotI8x64 := @ScalarNotI8x64;
+  dispatchTable.AndNotI8x64 := @ScalarAndNotI8x64;
+  dispatchTable.CmpEqI8x64 := @ScalarCmpEqI8x64;
+  dispatchTable.CmpLtI8x64 := @ScalarCmpLtI8x64;
+  dispatchTable.CmpGtI8x64 := @ScalarCmpGtI8x64;
+  dispatchTable.MinI8x64 := @ScalarMinI8x64;
+  dispatchTable.MaxI8x64 := @ScalarMaxI8x64;
+
+  // === U8x64 Arithmetic/Bitwise/Comparison/MinMax (512-bit) ===
+  dispatchTable.AddU8x64 := @ScalarAddU8x64;
+  dispatchTable.SubU8x64 := @ScalarSubU8x64;
+  dispatchTable.AndU8x64 := @ScalarAndU8x64;
+  dispatchTable.OrU8x64 := @ScalarOrU8x64;
+  dispatchTable.XorU8x64 := @ScalarXorU8x64;
+  dispatchTable.NotU8x64 := @ScalarNotU8x64;
+  dispatchTable.CmpEqU8x64 := @ScalarCmpEqU8x64;
+  dispatchTable.CmpLtU8x64 := @ScalarCmpLtU8x64;
+  dispatchTable.CmpGtU8x64 := @ScalarCmpGtU8x64;
+  dispatchTable.MinU8x64 := @ScalarMinU8x64;
+  dispatchTable.MaxU8x64 := @ScalarMaxU8x64;
+
+  // === F32x4 Comparison ===
+  dispatchTable.CmpEqF32x4 := @ScalarCmpEqF32x4;
+  dispatchTable.CmpLtF32x4 := @ScalarCmpLtF32x4;
+  dispatchTable.CmpLeF32x4 := @ScalarCmpLeF32x4;
+  dispatchTable.CmpGtF32x4 := @ScalarCmpGtF32x4;
+  dispatchTable.CmpGeF32x4 := @ScalarCmpGeF32x4;
+  dispatchTable.CmpNeF32x4 := @ScalarCmpNeF32x4;
+
+  // F64x2 比较操作
+  dispatchTable.CmpEqF64x2 := @ScalarCmpEqF64x2;
+  dispatchTable.CmpLtF64x2 := @ScalarCmpLtF64x2;
+  dispatchTable.CmpLeF64x2 := @ScalarCmpLeF64x2;
+  dispatchTable.CmpGtF64x2 := @ScalarCmpGtF64x2;
+  dispatchTable.CmpGeF64x2 := @ScalarCmpGeF64x2;
+  dispatchTable.CmpNeF64x2 := @ScalarCmpNeF64x2;
+
+  // === F32x8/F64x4 Comparison (256-bit) ===
+  dispatchTable.CmpEqF32x8 := @ScalarCmpEqF32x8;
+  dispatchTable.CmpLtF32x8 := @ScalarCmpLtF32x8;
+  dispatchTable.CmpLeF32x8 := @ScalarCmpLeF32x8;
+  dispatchTable.CmpGtF32x8 := @ScalarCmpGtF32x8;
+  dispatchTable.CmpGeF32x8 := @ScalarCmpGeF32x8;
+  dispatchTable.CmpNeF32x8 := @ScalarCmpNeF32x8;
+  dispatchTable.CmpEqF64x4 := @ScalarCmpEqF64x4;
+  dispatchTable.CmpLtF64x4 := @ScalarCmpLtF64x4;
+  dispatchTable.CmpLeF64x4 := @ScalarCmpLeF64x4;
+  dispatchTable.CmpGtF64x4 := @ScalarCmpGtF64x4;
+  dispatchTable.CmpGeF64x4 := @ScalarCmpGeF64x4;
+  dispatchTable.CmpNeF64x4 := @ScalarCmpNeF64x4;
+
+  // === F32x16/F64x8 Comparison (512-bit) ===
+  dispatchTable.CmpEqF32x16 := @ScalarCmpEqF32x16;
+  dispatchTable.CmpLtF32x16 := @ScalarCmpLtF32x16;
+  dispatchTable.CmpLeF32x16 := @ScalarCmpLeF32x16;
+  dispatchTable.CmpGtF32x16 := @ScalarCmpGtF32x16;
+  dispatchTable.CmpGeF32x16 := @ScalarCmpGeF32x16;
+  dispatchTable.CmpNeF32x16 := @ScalarCmpNeF32x16;
+  dispatchTable.CmpEqF64x8 := @ScalarCmpEqF64x8;
+  dispatchTable.CmpLtF64x8 := @ScalarCmpLtF64x8;
+  dispatchTable.CmpLeF64x8 := @ScalarCmpLeF64x8;
+  dispatchTable.CmpGtF64x8 := @ScalarCmpGtF64x8;
+  dispatchTable.CmpGeF64x8 := @ScalarCmpGeF64x8;
+  dispatchTable.CmpNeF64x8 := @ScalarCmpNeF64x8;
+
+  // === F32x4 Math ===
+  dispatchTable.AbsF32x4 := @ScalarAbsF32x4;
+  dispatchTable.SqrtF32x4 := @ScalarSqrtF32x4;
+  dispatchTable.MinF32x4 := @ScalarMinF32x4;
+  dispatchTable.MaxF32x4 := @ScalarMaxF32x4;
+
+  // === F32x4 Extended Math ===
+  dispatchTable.FmaF32x4 := @ScalarFmaF32x4;
+  dispatchTable.RcpF32x4 := @ScalarRcpF32x4;
+  dispatchTable.RsqrtF32x4 := @ScalarRsqrtF32x4;
+  dispatchTable.FloorF32x4 := @ScalarFloorF32x4;
+  dispatchTable.CeilF32x4 := @ScalarCeilF32x4;
+  dispatchTable.RoundF32x4 := @ScalarRoundF32x4;
+  dispatchTable.TruncF32x4 := @ScalarTruncF32x4;
+  dispatchTable.ClampF32x4 := @ScalarClampF32x4;
+
+  // === Wide Vector Extended Math ===
+  // F64x2
+  dispatchTable.FmaF64x2 := @ScalarFmaF64x2;
+  dispatchTable.FloorF64x2 := @ScalarFloorF64x2;
+  dispatchTable.CeilF64x2 := @ScalarCeilF64x2;
+  dispatchTable.RoundF64x2 := @ScalarRoundF64x2;
+  dispatchTable.TruncF64x2 := @ScalarTruncF64x2;
+  // F32x8
+  dispatchTable.FmaF32x8 := @ScalarFmaF32x8;
+  dispatchTable.FloorF32x8 := @ScalarFloorF32x8;
+  dispatchTable.CeilF32x8 := @ScalarCeilF32x8;
+  dispatchTable.RoundF32x8 := @ScalarRoundF32x8;
+  dispatchTable.TruncF32x8 := @ScalarTruncF32x8;
+  // F64x4
+  dispatchTable.FmaF64x4 := @ScalarFmaF64x4;
+  dispatchTable.FloorF64x4 := @ScalarFloorF64x4;
+  dispatchTable.CeilF64x4 := @ScalarCeilF64x4;
+  dispatchTable.RoundF64x4 := @ScalarRoundF64x4;
+  dispatchTable.TruncF64x4 := @ScalarTruncF64x4;
+
+  // F32x16 (512-bit)
+  dispatchTable.FmaF32x16 := @ScalarFmaF32x16;
+  dispatchTable.FloorF32x16 := @ScalarFloorF32x16;
+  dispatchTable.CeilF32x16 := @ScalarCeilF32x16;
+  dispatchTable.RoundF32x16 := @ScalarRoundF32x16;
+  dispatchTable.TruncF32x16 := @ScalarTruncF32x16;
+
+  // F64x8 (512-bit)
+  dispatchTable.FmaF64x8 := @ScalarFmaF64x8;
+  dispatchTable.FloorF64x8 := @ScalarFloorF64x8;
+  dispatchTable.CeilF64x8 := @ScalarCeilF64x8;
+  dispatchTable.RoundF64x8 := @ScalarRoundF64x8;
+  dispatchTable.TruncF64x8 := @ScalarTruncF64x8;
+
+  // === Wide Vector Math (Abs/Sqrt/Min/Max/Clamp) ===
+  // F64x2
+  dispatchTable.AbsF64x2 := @ScalarAbsF64x2;
+  dispatchTable.SqrtF64x2 := @ScalarSqrtF64x2;
+  dispatchTable.MinF64x2 := @ScalarMinF64x2;
+  dispatchTable.MaxF64x2 := @ScalarMaxF64x2;
+  dispatchTable.ClampF64x2 := @ScalarClampF64x2;
+  // F32x8
+  dispatchTable.AbsF32x8 := @ScalarAbsF32x8;
+  dispatchTable.SqrtF32x8 := @ScalarSqrtF32x8;
+  dispatchTable.MinF32x8 := @ScalarMinF32x8;
+  dispatchTable.MaxF32x8 := @ScalarMaxF32x8;
+  dispatchTable.ClampF32x8 := @ScalarClampF32x8;
+  // F64x4
+  dispatchTable.AbsF64x4 := @ScalarAbsF64x4;
+  dispatchTable.SqrtF64x4 := @ScalarSqrtF64x4;
+  dispatchTable.MinF64x4 := @ScalarMinF64x4;
+  dispatchTable.MaxF64x4 := @ScalarMaxF64x4;
+  dispatchTable.ClampF64x4 := @ScalarClampF64x4;
+
+  // F32x16 (512-bit)
+  dispatchTable.AbsF32x16 := @ScalarAbsF32x16;
+  dispatchTable.SqrtF32x16 := @ScalarSqrtF32x16;
+  dispatchTable.MinF32x16 := @ScalarMinF32x16;
+  dispatchTable.MaxF32x16 := @ScalarMaxF32x16;
+  dispatchTable.ClampF32x16 := @ScalarClampF32x16;
+
+  // F64x8 (512-bit)
+  dispatchTable.AbsF64x8 := @ScalarAbsF64x8;
+  dispatchTable.SqrtF64x8 := @ScalarSqrtF64x8;
+  dispatchTable.MinF64x8 := @ScalarMinF64x8;
+  dispatchTable.MaxF64x8 := @ScalarMaxF64x8;
+  dispatchTable.ClampF64x8 := @ScalarClampF64x8;
+
+  // === 3D/4D Vector Math ===
+  dispatchTable.DotF32x4 := @ScalarDotF32x4;
+  dispatchTable.DotF32x3 := @ScalarDotF32x3;
+  dispatchTable.CrossF32x3 := @ScalarCrossF32x3;
+  dispatchTable.LengthF32x4 := @ScalarLengthF32x4;
+  dispatchTable.LengthF32x3 := @ScalarLengthF32x3;
+  dispatchTable.NormalizeF32x4 := @ScalarNormalizeF32x4;
+  dispatchTable.NormalizeF32x3 := @ScalarNormalizeF32x3;
+
+  // === FMA-optimized Dot Product ===
+  dispatchTable.DotF32x8 := @ScalarDotF32x8;
+  dispatchTable.DotF64x2 := @ScalarDotF64x2;
+  dispatchTable.DotF64x4 := @ScalarDotF64x4;
+
+  // === F32x4 Reduction ===
+  dispatchTable.ReduceAddF32x4 := @ScalarReduceAddF32x4;
+  dispatchTable.ReduceMinF32x4 := @ScalarReduceMinF32x4;
+  dispatchTable.ReduceMaxF32x4 := @ScalarReduceMaxF32x4;
+  dispatchTable.ReduceMulF32x4 := @ScalarReduceMulF32x4;
+
+  // === Wide Vector Reduction ===
+  // F64x2
+  dispatchTable.ReduceAddF64x2 := @ScalarReduceAddF64x2;
+  dispatchTable.ReduceMinF64x2 := @ScalarReduceMinF64x2;
+  dispatchTable.ReduceMaxF64x2 := @ScalarReduceMaxF64x2;
+  dispatchTable.ReduceMulF64x2 := @ScalarReduceMulF64x2;
+  // F32x8
+  dispatchTable.ReduceAddF32x8 := @ScalarReduceAddF32x8;
+  dispatchTable.ReduceMinF32x8 := @ScalarReduceMinF32x8;
+  dispatchTable.ReduceMaxF32x8 := @ScalarReduceMaxF32x8;
+  dispatchTable.ReduceMulF32x8 := @ScalarReduceMulF32x8;
+  // F64x4
+  dispatchTable.ReduceAddF64x4 := @ScalarReduceAddF64x4;
+  dispatchTable.ReduceMinF64x4 := @ScalarReduceMinF64x4;
+  dispatchTable.ReduceMaxF64x4 := @ScalarReduceMaxF64x4;
+  dispatchTable.ReduceMulF64x4 := @ScalarReduceMulF64x4;
+
+  // F32x16 (512-bit)
+  dispatchTable.ReduceAddF32x16 := @ScalarReduceAddF32x16;
+  dispatchTable.ReduceMinF32x16 := @ScalarReduceMinF32x16;
+  dispatchTable.ReduceMaxF32x16 := @ScalarReduceMaxF32x16;
+  dispatchTable.ReduceMulF32x16 := @ScalarReduceMulF32x16;
+
+  // F64x8 (512-bit)
+  dispatchTable.ReduceAddF64x8 := @ScalarReduceAddF64x8;
+  dispatchTable.ReduceMinF64x8 := @ScalarReduceMinF64x8;
+  dispatchTable.ReduceMaxF64x8 := @ScalarReduceMaxF64x8;
+  dispatchTable.ReduceMulF64x8 := @ScalarReduceMulF64x8;
+
+  // === F32x4 Memory Operations ===
+  dispatchTable.LoadF32x4 := @ScalarLoadF32x4;
+  dispatchTable.LoadF32x4Aligned := @ScalarLoadF32x4Aligned;
+  dispatchTable.StoreF32x4 := @ScalarStoreF32x4;
+  dispatchTable.StoreF32x4Aligned := @ScalarStoreF32x4Aligned;
+
+  // === F32x4 Utility Operations ===
+  dispatchTable.SplatF32x4 := @ScalarSplatF32x4;
+  dispatchTable.ZeroF32x4 := @ScalarZeroF32x4;
+  dispatchTable.SelectF32x4 := @ScalarSelectF32x4;
+  dispatchTable.ExtractF32x4 := @ScalarExtractF32x4;
+  dispatchTable.InsertF32x4 := @ScalarInsertF32x4;
+
+  // === Extract/Insert Lane Operations ===
+  // F64x2 (128-bit)
+  dispatchTable.ExtractF64x2 := @ScalarExtractF64x2;
+  dispatchTable.InsertF64x2 := @ScalarInsertF64x2;
+  // I32x4 (128-bit)
+  dispatchTable.ExtractI32x4 := @ScalarExtractI32x4;
+  dispatchTable.InsertI32x4 := @ScalarInsertI32x4;
+  // I64x2 (128-bit)
+  dispatchTable.ExtractI64x2 := @ScalarExtractI64x2;
+  dispatchTable.InsertI64x2 := @ScalarInsertI64x2;
+  // F32x8 (256-bit)
+  dispatchTable.ExtractF32x8 := @ScalarExtractF32x8;
+  dispatchTable.InsertF32x8 := @ScalarInsertF32x8;
+  // F64x4 (256-bit)
+  dispatchTable.ExtractF64x4 := @ScalarExtractF64x4;
+  dispatchTable.InsertF64x4 := @ScalarInsertF64x4;
+  // I32x8 (256-bit)
+  dispatchTable.ExtractI32x8 := @ScalarExtractI32x8;
+  dispatchTable.InsertI32x8 := @ScalarInsertI32x8;
+  // I64x4 (256-bit)
+  dispatchTable.ExtractI64x4 := @ScalarExtractI64x4;
+  dispatchTable.InsertI64x4 := @ScalarInsertI64x4;
+  // F32x16 (512-bit)
+  dispatchTable.ExtractF32x16 := @ScalarExtractF32x16;
+  dispatchTable.InsertF32x16 := @ScalarInsertF32x16;
+  // I32x16 (512-bit)
+  dispatchTable.ExtractI32x16 := @ScalarExtractI32x16;
+  dispatchTable.InsertI32x16 := @ScalarInsertI32x16;
+
+  // === Wide Vector Load/Store/Splat/Zero ===
+  // F64x2
+  dispatchTable.LoadF64x2 := @ScalarLoadF64x2;
+  dispatchTable.StoreF64x2 := @ScalarStoreF64x2;
+  dispatchTable.SplatF64x2 := @ScalarSplatF64x2;
+  dispatchTable.ZeroF64x2 := @ScalarZeroF64x2;
+  // F32x8
+  dispatchTable.LoadF32x8 := @ScalarLoadF32x8;
+  dispatchTable.StoreF32x8 := @ScalarStoreF32x8;
+  dispatchTable.SplatF32x8 := @ScalarSplatF32x8;
+  dispatchTable.ZeroF32x8 := @ScalarZeroF32x8;
+  // F64x4
+  dispatchTable.LoadF64x4 := @ScalarLoadF64x4;
+  dispatchTable.StoreF64x4 := @ScalarStoreF64x4;
+  dispatchTable.SplatF64x4 := @ScalarSplatF64x4;
+  dispatchTable.ZeroF64x4 := @ScalarZeroF64x4;
+
+  // F32x16 (512-bit)
+  dispatchTable.LoadF32x16 := @ScalarLoadF32x16;
+  dispatchTable.StoreF32x16 := @ScalarStoreF32x16;
+  dispatchTable.SplatF32x16 := @ScalarSplatF32x16;
+  dispatchTable.ZeroF32x16 := @ScalarZeroF32x16;
+
+  // F64x8 (512-bit)
+  dispatchTable.LoadF64x8 := @ScalarLoadF64x8;
+  dispatchTable.StoreF64x8 := @ScalarStoreF64x8;
+  dispatchTable.SplatF64x8 := @ScalarSplatF64x8;
+  dispatchTable.ZeroF64x8 := @ScalarZeroF64x8;
+
+  // === Facade Functions ===
+  dispatchTable.MemEqual := @MemEqual_Scalar;
+  dispatchTable.MemFindByte := @MemFindByte_Scalar;
+  dispatchTable.MemDiffRange := @MemDiffRange_Scalar;
+  dispatchTable.MemCopy := @MemCopy_Scalar;
+  dispatchTable.MemSet := @MemSet_Scalar;
+  dispatchTable.MemReverse := @MemReverse_Scalar;
+  dispatchTable.SumBytes := @SumBytes_Scalar;
+  dispatchTable.MinMaxBytes := @MinMaxBytes_Scalar;
+  dispatchTable.CountByte := @CountByte_Scalar;
+  dispatchTable.Utf8Validate := @Utf8Validate_Scalar;
+  dispatchTable.AsciiIEqual := @AsciiIEqual_Scalar;
+  dispatchTable.ToLowerAscii := @ToLowerAscii_Scalar;
+  dispatchTable.ToUpperAscii := @ToUpperAscii_Scalar;
+  dispatchTable.BytesIndexOf := @BytesIndexOf_Scalar;
+  dispatchTable.BitsetPopCount := @BitsetPopCount_Scalar;
+
+  // === Saturating Arithmetic ===
+  dispatchTable.I8x16SatAdd := @ScalarI8x16SatAdd;
+  dispatchTable.I8x16SatSub := @ScalarI8x16SatSub;
+  dispatchTable.I16x8SatAdd := @ScalarI16x8SatAdd;
+  dispatchTable.I16x8SatSub := @ScalarI16x8SatSub;
+  dispatchTable.U8x16SatAdd := @ScalarU8x16SatAdd;
+  dispatchTable.U8x16SatSub := @ScalarU8x16SatSub;
+  dispatchTable.U16x8SatAdd := @ScalarU16x8SatAdd;
+  dispatchTable.U16x8SatSub := @ScalarU16x8SatSub;
+
+  // === Mask 操作 ===
+  dispatchTable.Mask2All := @ScalarMask2All;
+  dispatchTable.Mask2Any := @ScalarMask2Any;
+  dispatchTable.Mask2None := @ScalarMask2None;
+  dispatchTable.Mask2PopCount := @ScalarMask2PopCount;
+  dispatchTable.Mask2FirstSet := @ScalarMask2FirstSet;
+  dispatchTable.Mask4All := @ScalarMask4All;
+  dispatchTable.Mask4Any := @ScalarMask4Any;
+  dispatchTable.Mask4None := @ScalarMask4None;
+  dispatchTable.Mask4PopCount := @ScalarMask4PopCount;
+  dispatchTable.Mask4FirstSet := @ScalarMask4FirstSet;
+  dispatchTable.Mask8All := @ScalarMask8All;
+  dispatchTable.Mask8Any := @ScalarMask8Any;
+  dispatchTable.Mask8None := @ScalarMask8None;
+  dispatchTable.Mask8PopCount := @ScalarMask8PopCount;
+  dispatchTable.Mask8FirstSet := @ScalarMask8FirstSet;
+  dispatchTable.Mask16All := @ScalarMask16All;
+  dispatchTable.Mask16Any := @ScalarMask16Any;
+  dispatchTable.Mask16None := @ScalarMask16None;
+  dispatchTable.Mask16PopCount := @ScalarMask16PopCount;
+  dispatchTable.Mask16FirstSet := @ScalarMask16FirstSet;
+
+  // === F64x2 Select ===
+  dispatchTable.SelectF64x2 := @ScalarSelectF64x2;
+
+  // === 512-bit Select ===
+  dispatchTable.SelectF32x16 := @ScalarSelectF32x16;
+  dispatchTable.SelectF64x8 := @ScalarSelectF64x8;
+
+  // === 缺失的 Select 操作 ===
+  dispatchTable.SelectI32x4 := @ScalarSelectI32x4;
+  dispatchTable.SelectF32x8 := @ScalarSelectF32x8;
+  dispatchTable.SelectF64x4 := @ScalarSelectF64x4;
+
+  // === Narrow Integer Types (I16x8, I8x16, U32x4, U16x8, U8x16) ===
+
+  // --- I16x8 完整操作 (8×Int16) ---
+  dispatchTable.AddI16x8 := @ScalarAddI16x8;
+  dispatchTable.SubI16x8 := @ScalarSubI16x8;
+  dispatchTable.MulI16x8 := @ScalarMulI16x8;
+  dispatchTable.AndI16x8 := @ScalarAndI16x8;
+  dispatchTable.OrI16x8 := @ScalarOrI16x8;
+  dispatchTable.XorI16x8 := @ScalarXorI16x8;
+  dispatchTable.NotI16x8 := @ScalarNotI16x8;
+  dispatchTable.AndNotI16x8 := @ScalarAndNotI16x8;
+  dispatchTable.ShiftLeftI16x8 := @ScalarShiftLeftI16x8;
+  dispatchTable.ShiftRightI16x8 := @ScalarShiftRightI16x8;
+  dispatchTable.ShiftRightArithI16x8 := @ScalarShiftRightArithI16x8;
+  dispatchTable.CmpEqI16x8 := @ScalarCmpEqI16x8;
+  dispatchTable.CmpLtI16x8 := @ScalarCmpLtI16x8;
+  dispatchTable.CmpGtI16x8 := @ScalarCmpGtI16x8;
+  dispatchTable.CmpLeI16x8 := @ScalarCmpLeI16x8;
+  dispatchTable.CmpGeI16x8 := @ScalarCmpGeI16x8;
+  dispatchTable.CmpNeI16x8 := @ScalarCmpNeI16x8;
+  dispatchTable.MinI16x8 := @ScalarMinI16x8;
+  dispatchTable.MaxI16x8 := @ScalarMaxI16x8;
+
+  // --- I8x16 完整操作 (16×Int8) ---
+  dispatchTable.AddI8x16 := @ScalarAddI8x16;
+  dispatchTable.SubI8x16 := @ScalarSubI8x16;
+  dispatchTable.AndI8x16 := @ScalarAndI8x16;
+  dispatchTable.OrI8x16 := @ScalarOrI8x16;
+  dispatchTable.XorI8x16 := @ScalarXorI8x16;
+  dispatchTable.NotI8x16 := @ScalarNotI8x16;
+  dispatchTable.AndNotI8x16 := @ScalarAndNotI8x16;
+  dispatchTable.CmpEqI8x16 := @ScalarCmpEqI8x16;
+  dispatchTable.CmpLtI8x16 := @ScalarCmpLtI8x16;
+  dispatchTable.CmpGtI8x16 := @ScalarCmpGtI8x16;
+  dispatchTable.CmpLeI8x16 := @ScalarCmpLeI8x16;
+  dispatchTable.CmpGeI8x16 := @ScalarCmpGeI8x16;
+  dispatchTable.CmpNeI8x16 := @ScalarCmpNeI8x16;
+  dispatchTable.MinI8x16 := @ScalarMinI8x16;
+  dispatchTable.MaxI8x16 := @ScalarMaxI8x16;
+
+  // --- U32x4 完整操作 (4×UInt32) ---
+  dispatchTable.AddU32x4 := @ScalarAddU32x4;
+  dispatchTable.SubU32x4 := @ScalarSubU32x4;
+  dispatchTable.MulU32x4 := @ScalarMulU32x4;
+  dispatchTable.AndU32x4 := @ScalarAndU32x4;
+  dispatchTable.OrU32x4 := @ScalarOrU32x4;
+  dispatchTable.XorU32x4 := @ScalarXorU32x4;
+  dispatchTable.NotU32x4 := @ScalarNotU32x4;
+  dispatchTable.AndNotU32x4 := @ScalarAndNotU32x4;
+  dispatchTable.ShiftLeftU32x4 := @ScalarShiftLeftU32x4;
+  dispatchTable.ShiftRightU32x4 := @ScalarShiftRightU32x4;
+  dispatchTable.CmpEqU32x4 := @ScalarCmpEqU32x4;
+  dispatchTable.CmpLtU32x4 := @ScalarCmpLtU32x4;
+  dispatchTable.CmpGtU32x4 := @ScalarCmpGtU32x4;
+  dispatchTable.CmpLeU32x4 := @ScalarCmpLeU32x4;
+  dispatchTable.CmpGeU32x4 := @ScalarCmpGeU32x4;
+  dispatchTable.MinU32x4 := @ScalarMinU32x4;
+  dispatchTable.MaxU32x4 := @ScalarMaxU32x4;
+
+  // --- U16x8 完整操作 (8×UInt16) ---
+  dispatchTable.AddU16x8 := @ScalarAddU16x8;
+  dispatchTable.SubU16x8 := @ScalarSubU16x8;
+  dispatchTable.MulU16x8 := @ScalarMulU16x8;
+  dispatchTable.AndU16x8 := @ScalarAndU16x8;
+  dispatchTable.OrU16x8 := @ScalarOrU16x8;
+  dispatchTable.XorU16x8 := @ScalarXorU16x8;
+  dispatchTable.NotU16x8 := @ScalarNotU16x8;
+  dispatchTable.AndNotU16x8 := @ScalarAndNotU16x8;
+  dispatchTable.ShiftLeftU16x8 := @ScalarShiftLeftU16x8;
+  dispatchTable.ShiftRightU16x8 := @ScalarShiftRightU16x8;
+  dispatchTable.CmpEqU16x8 := @ScalarCmpEqU16x8;
+  dispatchTable.CmpLtU16x8 := @ScalarCmpLtU16x8;
+  dispatchTable.CmpGtU16x8 := @ScalarCmpGtU16x8;
+  dispatchTable.CmpLeU16x8 := @ScalarCmpLeU16x8;
+  dispatchTable.CmpGeU16x8 := @ScalarCmpGeU16x8;
+  dispatchTable.CmpNeU16x8 := @ScalarCmpNeU16x8;
+  dispatchTable.MinU16x8 := @ScalarMinU16x8;
+  dispatchTable.MaxU16x8 := @ScalarMaxU16x8;
+
+  // --- U8x16 完整操作 (16×UInt8) ---
+  dispatchTable.AddU8x16 := @ScalarAddU8x16;
+  dispatchTable.SubU8x16 := @ScalarSubU8x16;
+  dispatchTable.AndU8x16 := @ScalarAndU8x16;
+  dispatchTable.OrU8x16 := @ScalarOrU8x16;
+  dispatchTable.XorU8x16 := @ScalarXorU8x16;
+  dispatchTable.NotU8x16 := @ScalarNotU8x16;
+  dispatchTable.AndNotU8x16 := @ScalarAndNotU8x16;
+  dispatchTable.CmpEqU8x16 := @ScalarCmpEqU8x16;
+  dispatchTable.CmpLtU8x16 := @ScalarCmpLtU8x16;
+  dispatchTable.CmpGtU8x16 := @ScalarCmpGtU8x16;
+  dispatchTable.CmpLeU8x16 := @ScalarCmpLeU8x16;
+  dispatchTable.CmpGeU8x16 := @ScalarCmpGeU8x16;
+  dispatchTable.CmpNeU8x16 := @ScalarCmpNeU8x16;
+  dispatchTable.MinU8x16 := @ScalarMinU8x16;
+  dispatchTable.MaxU8x16 := @ScalarMaxU8x16;
+
+  // Batch array operations
+  dispatchTable.ArrayAddF32 := @ScalarArrayAddF32;
+  dispatchTable.ArraySubF32 := @ScalarArraySubF32;
+  dispatchTable.ArrayMulF32 := @ScalarArrayMulF32;
+  dispatchTable.ArrayDivF32 := @ScalarArrayDivF32;
+  dispatchTable.ArrayMinF32 := @ScalarArrayMinF32;
+  dispatchTable.ArrayMaxF32 := @ScalarArrayMaxF32;
+  dispatchTable.ArrayAbsF32 := @ScalarArrayAbsF32;
+  dispatchTable.ArrayNegF32 := @ScalarArrayNegF32;
+  dispatchTable.ArraySqrtF32 := @ScalarArraySqrtF32;
+  dispatchTable.ArrayRcpF32 := @ScalarArrayRcpF32;
+  dispatchTable.ArrayRsqrtF32 := @ScalarArrayRsqrtF32;
+  dispatchTable.ArrayRcpRefineF32 := @ScalarArrayRcpRefineF32;
+  dispatchTable.ArrayRsqrtRefineF32 := @ScalarArrayRsqrtRefineF32;
+  dispatchTable.ArrayAddScalarF32 := @ScalarArrayAddScalarF32;
+  dispatchTable.ArrayMulScalarF32 := @ScalarArrayMulScalarF32;
+  dispatchTable.ArrayClampF32 := @ScalarArrayClampF32;
+  dispatchTable.ArrayFmaF32 := @ScalarArrayFmaF32;
+  dispatchTable.ArrayAxpyF32 := @ScalarArrayAxpyF32;
+  dispatchTable.ReduceSumF32 := @ScalarReduceSumF32;
+  dispatchTable.ReduceDotF32 := @ScalarReduceDotF32;
+  dispatchTable.ReduceMinF32 := @ScalarReduceMinF32;
+  dispatchTable.ReduceMaxF32 := @ScalarReduceMaxF32;
+
+  // F64 batch
+  dispatchTable.ArrayAddF64 := @ScalarArrayAddF64;
+  dispatchTable.ArraySubF64 := @ScalarArraySubF64;
+  dispatchTable.ArrayMulF64 := @ScalarArrayMulF64;
+  dispatchTable.ArrayDivF64 := @ScalarArrayDivF64;
+  dispatchTable.ReduceSumF64 := @ScalarReduceSumF64;
+  dispatchTable.ReduceDotF64 := @ScalarReduceDotF64;
+  dispatchTable.ReduceMinF64 := @ScalarReduceMinF64;
+  dispatchTable.ReduceMaxF64 := @ScalarReduceMaxF64;
+  dispatchTable.ArrayAbsF64 := @ScalarArrayAbsF64;
+  dispatchTable.ArrayNegF64 := @ScalarArrayNegF64;
+  dispatchTable.ArraySqrtF64 := @ScalarArraySqrtF64;
+  dispatchTable.ArrayMulScalarF64 := @ScalarArrayMulScalarF64;
+  dispatchTable.ArrayAddScalarF64 := @ScalarArrayAddScalarF64;
+  dispatchTable.ArrayClampF64 := @ScalarArrayClampF64;
+  dispatchTable.ArrayLinearF64 := @ScalarArrayLinearF64;
+
+  // Transcendental F32
+  dispatchTable.ArrayExpF32 := @ScalarArrayExpF32;
+  dispatchTable.ArrayLogF32 := @ScalarArrayLogF32;
+  dispatchTable.ArrayPowF32 := @ScalarArrayPowF32;
+  dispatchTable.ArraySinF32 := @ScalarArraySinF32;
+  dispatchTable.ArrayCosF32 := @ScalarArrayCosF32;
+
+  // Integer batch
+  dispatchTable.ArrayAddI32 := @ScalarArrayAddI32;
+  dispatchTable.ArraySubI32 := @ScalarArraySubI32;
+  dispatchTable.ArrayMulI16 := @ScalarArrayMulI16;
+  dispatchTable.ArrayPackSatI32toI16 := @ScalarArrayPackSatI32toI16;
+
+  // Type conversion
+  dispatchTable.ArrayF32toI32 := @ScalarArrayF32toI32;
+  dispatchTable.ArrayI32toF32 := @ScalarArrayI32toF32;
+
+  // Bitwise
+  dispatchTable.ArrayAndI32 := @ScalarArrayAndI32;
+  dispatchTable.ArrayOrI32 := @ScalarArrayOrI32;
+  dispatchTable.ArrayXorI32 := @ScalarArrayXorI32;
+  dispatchTable.ArrayShlI32 := @ScalarArrayShlI32;
+  dispatchTable.ArrayShrI32 := @ScalarArrayShrI32;
+
+  // Fused
+  dispatchTable.ArrayLinearF32 := @ScalarArrayLinearF32;
+  dispatchTable.ArrayAbsDiffF32 := @ScalarArrayAbsDiffF32;
+  dispatchTable.ArrayReLUF32 := @ScalarArrayReLUF32;
+  dispatchTable.ArrayNormF32 := @ScalarArrayNormF32;
+  dispatchTable.ArrayLinearReLUF32 := @ScalarArrayLinearReLUF32;
+end;
