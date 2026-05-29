@@ -30,32 +30,32 @@ begin
   end;
 end;
 
-function AVX2SplatF64x4(value: Double): TVecF64x4;
-var
-  pr: Pointer;
-  LValuePtr: PDouble;
-begin
-  pr := @Result;
-  LValuePtr := @value;
-  asm
-    mov          rax, pr
-    mov          rdx, LValuePtr
-    vbroadcastsd ymm0, [rdx]    // broadcast scalar from memory to all 4 lanes
-    vmovupd      [rax], ymm0
-    vzeroupper
-  end;
+function AVX2SplatF64x4(value: Double): TVecF64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // rdi=@Result, xmm0=value
+  vmovsd       [rsp-8], xmm0
+  vbroadcastsd ymm0, [rsp-8]
+  vmovupd      [rdi], ymm0
+  {$ELSE}
+  // rcx=@Result, xmm0=value
+  vmovsd       [rsp-8], xmm0
+  vbroadcastsd ymm0, [rsp-8]
+  vmovupd      [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
-function AVX2ZeroF64x4: TVecF64x4;
-var
-  pr: Pointer;
-begin
-  pr := @Result;
-  asm
-    mov     rax, pr
-    vxorpd  ymm0, ymm0, ymm0
-    vmovupd [rax], ymm0
-    vzeroupper
-  end;
+function AVX2ZeroF64x4: TVecF64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // rdi=@Result
+  vxorpd  ymm0, ymm0, ymm0
+  vmovupd [rdi], ymm0
+  {$ELSE}
+  // rcx=@Result
+  vxorpd  ymm0, ymm0, ymm0
+  vmovupd [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
-
