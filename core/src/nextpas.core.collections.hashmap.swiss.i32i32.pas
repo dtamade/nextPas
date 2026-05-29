@@ -198,7 +198,7 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    Vec16ProbeGroup(@FCtrl[LBase], Lh2, LMask, LEmptyMask);
     while LMask <> 0 do
     begin
       Li := LBase + SizeUInt(Vec16Ctz(LMask));
@@ -206,7 +206,6 @@ begin
       begin FSlots[Li].Value := AValue; Exit; end;
       LMask := LMask and (LMask - 1);
     end;
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
       LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
@@ -241,7 +240,7 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    Vec16ProbeGroup(@FCtrl[LBase], Lh2, LMask, LEmptyMask);
     while LMask <> 0 do
     begin
       Li := LBase + SizeUInt(Vec16Ctz(LMask));
@@ -253,7 +252,6 @@ begin
       end;
       LMask := LMask and (LMask - 1);
     end;
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then Exit(False);
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
