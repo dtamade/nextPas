@@ -919,14 +919,10 @@
         "broadcast_scalar": false,
         "steps": [
           {
-            "vector": "vmulps",
-            "scalar": "vmulss",
-            "rhs": "input:1"
-          },
-          {
-            "vector": "vaddps",
-            "scalar": "vaddss",
-            "rhs": "accumulator"
+            "vector": "vfmadd231ps",
+            "scalar": "vfmadd231ss",
+            "rhs": "input:1",
+            "fused": true
           }
         ],
         "reduction": {

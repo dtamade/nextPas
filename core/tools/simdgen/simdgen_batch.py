@@ -764,8 +764,7 @@ def emit_reduction(op: dict) -> list[str]:
     if is_dot:
         for n, off in enumerate((0, 32, 64, 96)):
             lines.append(asm_line("vmovups", f"ymm{n+4}, {mem(src0, off)}"))
-            lines.append(packed("vmulps", f"ymm{n+4}", mem(src1, off)))
-            lines.append(asm_line("vaddps", f" ymm{n}, ymm{n}, ymm{n+4}"))
+            lines.append(asm_line("vfmadd231ps", f"ymm{n}, ymm{n+4}, {mem(src1, off)}"))
     else:
         for n, off in enumerate((0, 32, 64, 96)):
             lines.append(asm_line(vec_op, f"ymm{n}, ymm{n}, {mem(src0, off)}"))
@@ -779,8 +778,7 @@ def emit_reduction(op: dict) -> list[str]:
     if is_dot:
         for n, off in enumerate((0, 32)):
             lines.append(asm_line("vmovups", f"ymm{n+4}, {mem(src0, off)}"))
-            lines.append(packed("vmulps", f"ymm{n+4}", mem(src1, off)))
-            lines.append(asm_line("vaddps", f" ymm{n}, ymm{n}, ymm{n+4}"))
+            lines.append(asm_line("vfmadd231ps", f"ymm{n}, ymm{n+4}, {mem(src1, off)}"))
     else:
         for n, off in enumerate((0, 32)):
             lines.append(asm_line(vec_op, f"ymm{n}, ymm{n}, {mem(src0, off)}"))
@@ -792,8 +790,7 @@ def emit_reduction(op: dict) -> list[str]:
     lines += ["  @tail8:", asm_line("cmp", "r8, 8"), asm_line("jb", "@reduce")]
     if is_dot:
         lines.append(asm_line("vmovups", f"ymm4, {mem(src0)}"))
-        lines.append(packed("vmulps", "ymm4", mem(src1)))
-        lines.append(asm_line("vaddps", " ymm0, ymm0, ymm4"))
+        lines.append(asm_line("vfmadd231ps", "ymm0, ymm4, " + mem(src1)))
     else:
         lines.append(asm_line(vec_op, f"ymm0, ymm0, {mem(src0)}"))
     lines.append(asm_line("add", f"{src0}, 32"))
