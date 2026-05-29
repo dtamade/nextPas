@@ -265,7 +265,8 @@ type
 implementation
 
 uses
-  nextpas.core.math;
+  nextpas.core.math,
+  nextpas.core.hash.wyhash;
 
 { Hash helper functions }
 
@@ -296,21 +297,27 @@ begin
 end;
 
 function HashOfAnsiString(const s: AnsiString): UInt32;
-var i: SizeInt; h: UInt32;
+var h: UInt64;
 begin
-  h := 2166136261;
-  for i := 1 to Length(s) do
-    h := (h xor Ord(s[i])) * 16777619; // FNV-1a 简化版
-  Result := HashMix32(h);
+  if Length(s) = 0 then
+    Result := HashMix32(2166136261)
+  else
+  begin
+    h := nextpas.core.hash.wyhash.WyHash(@s[1], SizeUInt(Length(s)));
+    Result := UInt32(h xor (h shr 32));
+  end;
 end;
 
 function HashOfUnicodeString(const s: UnicodeString): UInt32;
-var i: SizeInt; h: UInt32;
+var h: UInt64;
 begin
-  h := 2166136261;
-  for i := 1 to Length(s) do
-    h := (h xor Ord(s[i])) * 16777619;
-  Result := HashMix32(h);
+  if Length(s) = 0 then
+    Result := HashMix32(2166136261)
+  else
+  begin
+    h := nextpas.core.hash.wyhash.WyHash(@s[1], SizeUInt(Length(s)) * 2);
+    Result := UInt32(h xor (h shr 32));
+  end;
 end;
 
 { THashMap<K,V> }

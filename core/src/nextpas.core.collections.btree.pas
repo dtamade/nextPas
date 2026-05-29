@@ -136,12 +136,28 @@ function TBTreeMap.SearchNode(ANode: PNode; const AKey: K; out AIndex: Int32): B
 var lo, hi, mid, cmp: Int32;
 begin
   lo := 0; hi := ANode^.Count - 1;
-  while lo <= hi do
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
   begin
-    mid := (lo + hi) shr 1;
-    cmp := FCompare(AKey, ANode^.Keys[mid], FCompareData);
-    if cmp = 0 then begin AIndex := mid; Exit(True); end;
-    if cmp < 0 then hi := mid - 1 else lo := mid + 1;
+    while lo <= hi do
+    begin
+      mid := (lo + hi) shr 1;
+      if PInt32(@AKey)^ = PInt32(@ANode^.Keys[mid])^ then
+        begin AIndex := mid; Exit(True); end;
+      if PInt32(@AKey)^ < PInt32(@ANode^.Keys[mid])^ then
+        hi := mid - 1
+      else
+        lo := mid + 1;
+    end;
+  end
+  else
+  begin
+    while lo <= hi do
+    begin
+      mid := (lo + hi) shr 1;
+      cmp := FCompare(AKey, ANode^.Keys[mid], FCompareData);
+      if cmp = 0 then begin AIndex := mid; Exit(True); end;
+      if cmp < 0 then hi := mid - 1 else lo := mid + 1;
+    end;
   end;
   AIndex := lo;
   Result := False;
@@ -243,11 +259,23 @@ begin
 
   if ANode^.IsLeaf then
   begin
-    while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
+    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
     begin
-      ANode^.Keys[i + 1] := ANode^.Keys[i];
-      ANode^.Values[i + 1] := ANode^.Values[i];
-      Dec(i);
+      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
+      begin
+        ANode^.Keys[i + 1] := ANode^.Keys[i];
+        ANode^.Values[i + 1] := ANode^.Values[i];
+        Dec(i);
+      end;
+    end
+    else
+    begin
+      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
+      begin
+        ANode^.Keys[i + 1] := ANode^.Keys[i];
+        ANode^.Values[i + 1] := ANode^.Values[i];
+        Dec(i);
+      end;
     end;
     ANode^.Keys[i + 1] := AKey;
     ANode^.Values[i + 1] := AValue;
@@ -256,21 +284,41 @@ begin
   end
   else
   begin
-    while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
-      Dec(i);
+    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    begin
+      while (i >= 0) and (PInt32(@AKey)^ < PInt32(@ANode^.Keys[i])^) do
+        Dec(i);
+    end
+    else
+    begin
+      while (i >= 0) and (FCompare(AKey, ANode^.Keys[i], FCompareData) < 0) do
+        Dec(i);
+    end;
     Inc(i);
     if ANode^.Children[i]^.Count = BTREE_MAX_KEYS then
     begin
       SplitChild(ANode, i);
-      cmp := FCompare(AKey, ANode^.Keys[i], FCompareData);
-      if cmp = 0 then
+      if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
       begin
-        // key already exists at split point — update
-        if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
-        ANode^.Values[i] := AValue;
-        Exit;
+        if PInt32(@AKey)^ = PInt32(@ANode^.Keys[i])^ then
+        begin
+          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
+          ANode^.Values[i] := AValue;
+          Exit;
+        end;
+        if PInt32(@AKey)^ > PInt32(@ANode^.Keys[i])^ then Inc(i);
+      end
+      else
+      begin
+        cmp := FCompare(AKey, ANode^.Keys[i], FCompareData);
+        if cmp = 0 then
+        begin
+          if System.IsManagedType(V) then Finalize(ANode^.Values[i]);
+          ANode^.Values[i] := AValue;
+          Exit;
+        end;
+        if cmp > 0 then Inc(i);
       end;
-      if cmp > 0 then Inc(i);
     end;
     InsertNonFull(ANode^.Children[i], AKey, AValue);
   end;
