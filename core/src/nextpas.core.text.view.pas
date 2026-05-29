@@ -50,20 +50,8 @@ type
 implementation
 
 uses
-  nextpas.core.text.char;
-
-function ViewMemEq(const A, B: Pointer; const ALen: SizeUInt): Boolean; inline;
-var
-  I: SizeUInt;
-  PA, PB: PByte;
-begin
-  PA := PByte(A);
-  PB := PByte(B);
-  for I := 0 to ALen - 1 do
-    if PA[I] <> PB[I] then
-      Exit(False);
-  Result := True;
-end;
+  nextpas.core.text.char,
+  nextpas.core.simd.api.v2;
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
@@ -166,7 +154,7 @@ begin
     Exit(True);
   if FData = AOther.FData then
     Exit(True);
-  Result := ViewMemEq(FData, AOther.FData, FLen);
+  Result := MemEqual(FData, AOther.FData, FLen);
 end;
 
 function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean;
@@ -187,7 +175,7 @@ begin
     Exit(False);
   if APrefix.FLen = 0 then
     Exit(True);
-  Result := ViewMemEq(FData, APrefix.FData, APrefix.FLen);
+  Result := MemEqual(FData, APrefix.FData, APrefix.FLen);
 end;
 
 function TStringView.EndsWith(const ASuffix: TStringView): Boolean;
@@ -196,22 +184,17 @@ begin
     Exit(False);
   if ASuffix.FLen = 0 then
     Exit(True);
-  Result := ViewMemEq(FData + (FLen - ASuffix.FLen), ASuffix.FData, ASuffix.FLen);
+  Result := MemEqual(FData + (FLen - ASuffix.FLen), ASuffix.FData, ASuffix.FLen);
 end;
 
 function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
-var
-  I: SizeUInt;
 begin
-  for I := 0 to FLen - 1 do
-    if FData[I] = ACh then
-      Exit(PtrInt(I));
-  Result := -1;
+  if FLen = 0 then
+    Exit(-1);
+  Result := MemFindByte(FData, FLen, Byte(ACh));
 end;
 
 function TStringView.IndexOfStr(const ANeedle: TStringView): PtrInt;
-var
-  I: SizeUInt;
 begin
   if ANeedle.FLen = 0 then
     Exit(0);
@@ -219,10 +202,7 @@ begin
     Exit(-1);
   if ANeedle.FLen = 1 then
     Exit(IndexOf(ANeedle.FData[0]));
-  for I := 0 to FLen - ANeedle.FLen do
-    if ViewMemEq(FData + I, ANeedle.FData, ANeedle.FLen) then
-      Exit(PtrInt(I));
-  Result := -1;
+  Result := BytesIndexOf(FData, FLen, ANeedle.FData, ANeedle.FLen);
 end;
 
 function TStringView.Contains(const ACh: AnsiChar): Boolean;
@@ -231,13 +211,10 @@ begin
 end;
 
 function TStringView.CountChar(const ACh: AnsiChar): SizeUInt;
-var
-  I: SizeUInt;
 begin
-  Result := 0;
-  for I := 0 to FLen - 1 do
-    if FData[I] = ACh then
-      Inc(Result);
+  if FLen = 0 then
+    Exit(0);
+  Result := CountByte(FData, FLen, Byte(ACh));
 end;
 
 function TStringView.PeekByte: Byte;

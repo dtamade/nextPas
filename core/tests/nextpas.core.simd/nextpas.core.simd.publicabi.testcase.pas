@@ -48,7 +48,7 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.runtime,
-  nextpas.core.simd.api;
+  nextpas.core.simd;
 
 type
   TTestCase_PublicAbi = class(TSimdVectorAsmStatefulTestCase)

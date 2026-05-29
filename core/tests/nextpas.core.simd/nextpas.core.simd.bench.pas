@@ -14,7 +14,7 @@ uses
   nextpas.core.simd.scalar,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.memutils,
-  nextpas.core.simd.api;
+  nextpas.core.simd;
 
 type
   TBenchResult = record

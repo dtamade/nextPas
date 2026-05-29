@@ -26,7 +26,7 @@ uses
   nextpas.core.simd.runtime.testcase,
   nextpas.core.simd.dispatchslots.testcase,
   nextpas.core.simd.publicabi.testcase,
-  nextpas.core.simd.api.v2.testcase,
+  nextpas.core.simd.v2.testcase,
   nextpas.core.simd.edgecases.testcase,
   nextpas.core.simd.vec512types.testcase,
   nextpas.core.simd.imageproc.testcase,
@@ -43,7 +43,7 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.dispatch,
-  nextpas.core.simd.api,
+  nextpas.core.simd,
   nextpas.core.simd.scalar
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND}
   , nextpas.core.simd.neon

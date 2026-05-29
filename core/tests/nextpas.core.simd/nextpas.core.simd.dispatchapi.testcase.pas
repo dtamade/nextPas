@@ -54,7 +54,7 @@ uses
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.utils,
   nextpas.core.simd.ops,
-  nextpas.core.simd.api,
+  nextpas.core.simd,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.dataplane,
   nextpas.core.simd.backend.priority,

@@ -16,7 +16,7 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.utils,
   nextpas.core.simd.ops,
-  nextpas.core.simd.api,
+  nextpas.core.simd,
   nextpas.core.simd.scalar,
   nextpas.core.simd.memutils;
 

@@ -13,7 +13,7 @@ uses
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
-  nextpas.core.simd.api,
+  nextpas.core.simd,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.direct,
   nextpas.core.simd.scalar;
