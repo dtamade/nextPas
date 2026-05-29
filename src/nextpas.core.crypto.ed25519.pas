@@ -16,6 +16,8 @@ function Ed25519Sign(const APrivateKey: TBytes; const AMessage: TBytes;
 
 function Ed25519PublicKeyFromPrivate(const APrivateKey: TBytes): TBytes;
 
+function Ed25519TestScReduce(const AInput: TBytes): TBytes;
+function Ed25519TestScMulAdd(const A, B, C: TBytes): TBytes;
 function Ed25519TestFePow2523(const AInput: TBytes): TBytes;
 function Ed25519TestFeSq(const AInput: TBytes): TBytes;
 function Ed25519TestFeMul(const A, B: TBytes): TBytes;
@@ -581,6 +583,21 @@ begin
   FeToBytes(Result, LOut);
 end;
 
+function Ed25519TestScReduce(const AInput: TBytes): TBytes;
+var
+  LBuf: array[0..63] of Byte;
+  I: Integer;
+begin
+  FillChar(LBuf, 64, 0);
+  for I := 0 to High(AInput) do
+    if I < 64 then LBuf[I] := AInput[I];
+  ScReduce(LBuf);
+  SetLength(Result, 32);
+  Move(LBuf[0], Result[0], 32);
+end;
+
+
+
 function Ed25519TestFeSq(const AInput: TBytes): TBytes;
 var
   LIn, LOut: TFe25519;
@@ -717,6 +734,26 @@ begin
   // Copy result
   for I := 0 to 31 do
     S[I] := LProduct[I];
+end;
+
+function Ed25519TestScMulAdd(const A, B, C: TBytes): TBytes;
+var
+  LA, LB, LC: array[0..63] of Byte;
+  LS: array[0..31] of Byte;
+  I: Integer;
+begin
+  FillChar(LA, 64, 0);
+  FillChar(LB, 64, 0);
+  FillChar(LC, 64, 0);
+  for I := 0 to 31 do
+  begin
+    if I <= High(A) then LA[I] := A[I];
+    if I <= High(B) then LB[I] := B[I];
+    if I <= High(C) then LC[I] := C[I];
+  end;
+  ScMulAdd(LS, LA, LB, LC);
+  SetLength(Result, 32);
+  Move(LS[0], Result[0], 32);
 end;
 
 function Ed25519PublicKeyFromPrivate(const APrivateKey: TBytes): TBytes;
