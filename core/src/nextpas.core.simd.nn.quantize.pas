@@ -26,6 +26,12 @@ procedure DequantizeI8ToF32(ASrc: PInt8; ADst: PSingle;
 procedure GemmQuantizedI8(AA: PInt8; AB: PInt8; AC: PSingle;
   AM, AN, AK: SizeUInt; AScaleA, AScaleB: Single);
 
+// Packed B variant: B is [N, K] row-major — enables SSE2 DotI8
+procedure GemmQuantizedI8_PackedB(AA: PInt8; AB: PInt8; AC: PSingle;
+  AM, AN, AK: SizeUInt; AScaleA, AScaleB: Single);
+
+function DotI8(AA, AB: PInt8; ACount: SizeUInt): Int32;
+
 implementation
 
 uses
@@ -75,6 +81,69 @@ begin
     ADst[LI] := ASrc[LI] * AScale;
 end;
 
+// INT8 dot product of two contiguous arrays, returns INT32 sum
+function DotI8(AA, AB: PInt8; ACount: SizeUInt): Int32;
+var
+  LP: SizeUInt;
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LCount16: SizeUInt;
+  {$ENDIF}
+begin
+  Result := 0;
+  LP := 0;
+  {$IFDEF SIMD_X86_AVAILABLE}
+  LCount16 := ACount and (not SizeUInt(15));
+  if LCount16 > 0 then
+  asm
+    push rbx
+    mov rax, AA
+    mov rbx, AB
+    xor ecx, ecx         // loop counter
+    pxor xmm0, xmm0      // INT32 accumulator
+
+  @dot_loop:
+    // Load 16 INT8 from A and B
+    movdqu xmm1, [rax + rcx]
+    movdqu xmm2, [rbx + rcx]
+
+    // Sign-extend low 8 bytes to INT16
+    pmovsxbw xmm3, xmm1        // A[0..7] → INT16
+    pmovsxbw xmm4, xmm2        // B[0..7] → INT16
+    pmaddwd xmm3, xmm4         // paired mul-add → 4 INT32
+    paddd xmm0, xmm3
+
+    // Sign-extend high 8 bytes
+    psrldq xmm1, 8
+    psrldq xmm2, 8
+    pmovsxbw xmm3, xmm1        // A[8..15] → INT16
+    pmovsxbw xmm4, xmm2        // B[8..15] → INT16
+    pmaddwd xmm3, xmm4
+    paddd xmm0, xmm3
+
+    add ecx, 16
+    cmp ecx, dword [LCount16]
+    jb @dot_loop
+
+    // Horizontal sum
+    movdqa xmm1, xmm0
+    psrldq xmm1, 8
+    paddd xmm0, xmm1
+    movdqa xmm1, xmm0
+    psrldq xmm1, 4
+    paddd xmm0, xmm1
+    movd eax, xmm0
+    add Result, eax
+    mov LP, rcx
+    pop rbx
+  end;
+  {$ENDIF}
+  while LP < ACount do
+  begin
+    Result := Result + Int32(AA[LP]) * Int32(AB[LP]);
+    Inc(LP);
+  end;
+end;
+
 procedure GemmQuantizedI8(AA: PInt8; AB: PInt8; AC: PSingle;
   AM, AN, AK: SizeUInt; AScaleA, AScaleB: Single);
 var
@@ -86,11 +155,26 @@ begin
   for LI := 0 to AM - 1 do
     for LJ := 0 to AN - 1 do
     begin
+      // B column is strided — scalar fallback for now
       LAccum := 0;
       for LP := 0 to AK - 1 do
         LAccum := LAccum + Int32(AA[LI * AK + LP]) * Int32(AB[LP * AN + LJ]);
       AC[LI * AN + LJ] := LAccum * LScale;
     end;
+end;
+
+// Packed variant: B is [N, K] row-major (each row of B is contiguous)
+// Use DotI8 for SIMD acceleration
+procedure GemmQuantizedI8_PackedB(AA: PInt8; AB: PInt8; AC: PSingle;
+  AM, AN, AK: SizeUInt; AScaleA, AScaleB: Single);
+var
+  LI, LJ: SizeUInt;
+  LScale: Single;
+begin
+  LScale := AScaleA * AScaleB;
+  for LI := 0 to AM - 1 do
+    for LJ := 0 to AN - 1 do
+      AC[LI * AN + LJ] := DotI8(@AA[LI * AK], @AB[LJ * AK], AK) * LScale;
 end;
 
 end.

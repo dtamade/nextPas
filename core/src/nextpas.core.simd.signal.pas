@@ -852,7 +852,7 @@ var
   LHalf, k: SizeUInt;
   LPacked: PSimdComplexF32;
   LTwR, LTwI, LER, LEI, LOR, LOI: Single;
-  LAngle: Single;
+  LTwBufR, LTwBufI: PSingle;
 begin
   if aCount = 0 then Exit;
   if aCount = 1 then begin aOutput[0].Re := aInput[0]; aOutput[0].Im := 0; Exit; end;
@@ -882,6 +882,16 @@ begin
   // N/2 complex FFT
   FftRadix2F32(LPacked, LHalf, sfdForward);
 
+  // Precompute unpack twiddle factors
+  LTwBufR := PSingle(SimdAlloc(LHalf * SizeOf(Single)));
+  LTwBufI := PSingle(SimdAlloc(LHalf * SizeOf(Single)));
+  for k := 0 to LHalf - 1 do
+    LTwBufR[k] := -SIMD_PI * k / LHalf;
+  ArrayCosF32(LTwBufR, LTwBufR, LHalf);
+  for k := 0 to LHalf - 1 do
+    LTwBufI[k] := -SIMD_PI * k / LHalf;
+  ArraySinF32(LTwBufI, LTwBufI, LHalf);
+
   // Unpack: X[k] = 0.5*(Z[k] + Z*[N/2-k]) - 0.5j*W^k*(Z[k] - Z*[N/2-k])
   aOutput[0].Re := LPacked[0].Re + LPacked[0].Im;
   aOutput[0].Im := 0;
@@ -890,9 +900,8 @@ begin
 
   for k := 1 to LHalf - 1 do
   begin
-    LAngle := -SIMD_PI * k / LHalf;
-    LTwR := SimdCosF32(LAngle);
-    LTwI := SimdSinF32(LAngle);
+    LTwR := LTwBufR[k];
+    LTwI := LTwBufI[k];
 
     // Even part: 0.5*(Z[k] + Z*[N/2-k])
     LER := 0.5 * (LPacked[k].Re + LPacked[LHalf - k].Re);
@@ -913,6 +922,8 @@ begin
     aOutput[aCount - k].Im := -(LEI - LTwR * LOR + LTwI * LOI);
   end;
 
+  SimdFree(LTwBufI);
+  SimdFree(LTwBufR);
   SimdFree(LPacked);
 end;
 
