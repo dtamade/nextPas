@@ -10,7 +10,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.io.buffer,
-  nextpas.core.io.util;
+  nextpas.core.io.util,
+  nextpas.core.io.pipe;
 
 type
   TSeekOrigin = nextpas.core.io.base.TSeekOrigin;
@@ -58,6 +59,13 @@ function CopyBuffer(const ADst: IWriter; const ASrc: IReader; var ABuf; const AB
 procedure ReadAtLeast(const ASrc: IReader; var ABuf; const ACount, AMin: SizeUInt); inline;
 function WriteString(const ADst: IWriter; const AStr: string): SizeUInt; inline;
 function SectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader; inline;
+
+{ Pipe }
+type
+  IPipeReader = nextpas.core.io.pipe.IPipeReader;
+  IPipeWriter = nextpas.core.io.pipe.IPipeWriter;
+
+procedure Pipe(out AReader: IPipeReader; out AWriter: IPipeWriter); inline;
 
 implementation
 
@@ -154,6 +162,11 @@ end;
 function SectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64): IReader;
 begin
   Result := nextpas.core.io.util.IoSectionReader(AInner, AOffset, ALimit);
+end;
+
+procedure Pipe(out AReader: IPipeReader; out AWriter: IPipeWriter);
+begin
+  nextpas.core.io.pipe.CreatePipe(AReader, AWriter);
 end;
 
 end.
