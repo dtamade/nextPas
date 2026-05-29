@@ -65,6 +65,10 @@ type
     class operator >=(const A, B: TDuration): Boolean; inline;
 
     function ToString: string;
+    function AsMinutesF: Double; inline;
+    function AsHoursF: Double; inline;
+    function Truncate(const AUnit: TDuration): TDuration;
+    function Round(const AUnit: TDuration): TDuration;
   end;
 
   {**
@@ -378,6 +382,38 @@ begin
 
   if LNeg and (LAbsNs >= NS_PER_US) then
     Result := '-' + Result;
+end;
+
+function TDuration.AsMinutesF: Double;
+begin
+  Result := FNs / 60000000000.0;
+end;
+
+function TDuration.AsHoursF: Double;
+begin
+  Result := FNs / 3600000000000.0;
+end;
+
+function TDuration.Truncate(const AUnit: TDuration): TDuration;
+begin
+  if AUnit.FNs <= 0 then
+    Result := Self
+  else
+    Result.FNs := FNs - (FNs mod AUnit.FNs);
+end;
+
+function TDuration.Round(const AUnit: TDuration): TDuration;
+var
+  LRem, LHalf: Int64;
+begin
+  if AUnit.FNs <= 0 then
+    Exit(Self);
+  LRem := FNs mod AUnit.FNs;
+  LHalf := AUnit.FNs div 2;
+  if System.Abs(LRem) > LHalf then
+    Result.FNs := FNs - LRem + AUnit.FNs
+  else
+    Result.FNs := FNs - LRem;
 end;
 
 { TInstant }
