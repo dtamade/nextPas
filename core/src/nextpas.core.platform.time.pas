@@ -107,9 +107,16 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 var
   LTzi: array[0..43] of Int32;
+  LRet: UInt32;
+  LBias: Int32;
 begin
-  GetTimeZoneInformation(LTzi);
-  Result := -LTzi[0] * 60;
+  LRet := GetTimeZoneInformation(LTzi);
+  LBias := LTzi[0];
+  case LRet of
+    1: LBias := LBias + LTzi[21];
+    2: LBias := LBias + LTzi[42];
+  end;
+  Result := -LBias * 60;
 end;
 {$ELSE}
 begin
@@ -184,11 +191,6 @@ begin
   if LMonth >= 10 then
     Inc(LYear);
   AResult.Year := LYear;
-  AResult.Month := ((LMonth + 2) mod 12) + 1;
-  AResult.Day := Int32(LDay) + 1;
-end;
-
-end.
   AResult.Month := ((LMonth + 2) mod 12) + 1;
   AResult.Day := Int32(LDay) + 1;
 end;
