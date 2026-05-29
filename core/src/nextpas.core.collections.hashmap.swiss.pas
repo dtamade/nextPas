@@ -47,6 +47,7 @@ type
     TEquals = specialize TKeyEqualsFunc<K>;
     TRetainFunc = function(const AKey: K; const AValue: V): Boolean;
     TVisitFunc = procedure(const AKey: K; const AValue: V);
+    TKeyArray = array of K;
     PSlot = ^TSlot;
     TSlot = record
       Key: K;
@@ -88,6 +89,9 @@ type
     procedure Clear;
     procedure Retain(AFunc: TRetainFunc);
     procedure ForEach(AFunc: TVisitFunc);
+    function GetKeys: TKeyArray;
+    function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
+    function GetSlotKey(AIndex: SizeUInt): K; inline;
     function GetCount: SizeUInt;
 
     property Count: SizeUInt read FCount;
@@ -644,6 +648,30 @@ begin
   for i := 0 to FCapacity - 1 do
     if FCtrl[i] < $80 then
       AFunc(FSlots[i].Key, FSlots[i].Value);
+end;
+
+function TSwissTable.GetKeys: TKeyArray;
+var i, j: SizeUInt;
+begin
+  SetLength(Result, FCount);
+  j := 0;
+  if FCapacity > 0 then
+    for i := 0 to FCapacity - 1 do
+      if FCtrl[i] < $80 then
+      begin
+        Result[j] := FSlots[i].Key;
+        Inc(j);
+      end;
+end;
+
+function TSwissTable.GetCtrlByte(AIndex: SizeUInt): Byte;
+begin
+  Result := FCtrl[AIndex];
+end;
+
+function TSwissTable.GetSlotKey(AIndex: SizeUInt): K;
+begin
+  Result := FSlots[AIndex].Key;
 end;
 
 function TSwissTable.GetCount: SizeUInt;

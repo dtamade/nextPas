@@ -22,6 +22,7 @@ type
     TEqualsFunc = function(const A, B: K): Boolean;
     TComputeFunc = function(const AKey: K; var AValue: V; AExists: Boolean): Boolean;
     TForEachFunc = procedure(const AKey: K; const AValue: V);
+    TKeyArray = array of K;
   private type
     TSegmentTable = specialize TSwissTable<K, V>;
   private
@@ -44,6 +45,7 @@ type
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure ForEach(AFunc: TForEachFunc);
+    function Keys: TKeyArray;
     procedure Clear;
 
     function GetCount: SizeUInt;
@@ -216,6 +218,35 @@ begin
       FSegmentLocks[i].ReleaseRead;
     end;
   end;
+end;
+
+function TConcurrentHashMap.Keys: TKeyArray;
+var
+  i: Integer;
+  LTotal, LIdx, j, LSegCount: SizeUInt;
+  LSeg: TSegmentTable;
+begin
+  LTotal := GetCount;
+  SetLength(Result, LTotal);
+  LIdx := 0;
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireRead;
+    try
+      LSeg := FSegments[i];
+      LSegCount := LSeg.GetCount;
+      if (LSegCount > 0) and (LSeg.Capacity > 0) then
+        for j := 0 to LSeg.Capacity - 1 do
+          if (LIdx < LTotal) and (LSeg.GetCtrlByte(j) < $80) then
+          begin
+            Result[LIdx] := LSeg.GetSlotKey(j);
+            Inc(LIdx);
+          end;
+    finally
+      FSegmentLocks[i].ReleaseRead;
+    end;
+  end;
+  SetLength(Result, LIdx);
 end;
 
 function TConcurrentHashMap.GetCount: SizeUInt;
