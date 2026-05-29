@@ -32,7 +32,24 @@ function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.simd,
+  nextpas.core.simd.dispatch;
+
+function UTF8IsValidScalar(const AData: PByte; const ALen: SizeUInt): Boolean;
+var
+  LPos: SizeUInt;
+  LDec: TUTF8DecodeResult;
+begin
+  LPos := 0;
+  while LPos < ALen do
+  begin
+    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
+    if LDec.ByteLen = 0 then
+      Exit(False);
+    Inc(LPos, LDec.ByteLen);
+  end;
+  Result := True;
+end;
 
 function UTF8ByteLength(const ALeadByte: Byte): Byte;
 begin
@@ -133,20 +150,48 @@ begin
 end;
 
 function UTF8IsValid(const AData: PByte; const ALen: SizeUInt): Boolean;
+var
+  LDispatch: PSimdDispatchTable;
 begin
   if ALen = 0 then
     Exit(True);
-  Result := Utf8Validate(AData, ALen);
+  LDispatch := GetDispatchTable;
+  if (LDispatch <> nil) and Assigned(LDispatch^.Utf8Validate) then
+    Result := LDispatch^.Utf8Validate(AData, ALen)
+  else
+    Result := UTF8IsValidScalar(AData, ALen);
 end;
 
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
-  I: SizeUInt;
+  LData, LMaskVec, LContVec: TVecU8x16;
+  LMask: TMask16;
+  LPos: SizeUInt;
+  I: Integer;
 begin
   Result := 0;
-  for I := 0 to ALen - 1 do
-    if (AData[I] and $C0) <> $80 then
+  if ALen = 0 then
+    Exit;
+  for I := 0 to 15 do
+  begin
+    LMaskVec.u[I] := $C0;
+    LContVec.u[I] := $80;
+  end;
+  LPos := 0;
+  while LPos + 16 <= ALen do
+  begin
+    Move(AData[LPos], LData.u[0], 16);
+    LData := VecU8x16And(LData, LMaskVec);
+    LMask := VecU8x16CmpEq(LData, LContVec);
+    Inc(Result, 16 - Mask16PopCount(LMask));
+    Inc(LPos, 16);
+  end;
+  while LPos < ALen do
+  begin
+    if (AData[LPos] and $C0) <> $80 then
       Inc(Result);
+    Inc(LPos);
+  end;
 end;
 
 procedure TUTF8Iterator.Init(const AData: PByte; const ALen: SizeUInt);
