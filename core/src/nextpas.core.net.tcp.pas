@@ -130,12 +130,24 @@ function TTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LSent: Int32;
   LResult: Int32;
+  LPtr: PByte;
+  LRemaining: SizeUInt;
 begin
   if ACount = 0 then Exit(0);
-  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
-  if LResult <> 0 then
-    raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
-  Result := SizeUInt(LSent);
+  LPtr := @ABuf;
+  LRemaining := ACount;
+  Result := 0;
+  while LRemaining > 0 do
+  begin
+    LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), 0, LSent);
+    if LResult <> 0 then
+      raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
+    if LSent = 0 then
+      Break;
+    Inc(LPtr, LSent);
+    Dec(LRemaining, SizeUInt(LSent));
+    Inc(Result, SizeUInt(LSent));
+  end;
 end;
 
 function TTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -187,7 +199,7 @@ var
   LVal: Int32;
 begin
   if AValue then LVal := 1 else LVal := 0;
-  platform_socket_setsockopt(FSocket, IPPROTO_TCP, 1{TCP_NODELAY}, @LVal, SizeOf(LVal));
+  platform_socket_setsockopt(FSocket, IPPROTO_TCP, TCP_NODELAY, @LVal, SizeOf(LVal));
 end;
 
 procedure TTcpStream.SetKeepAlive(const AValue: Boolean);
@@ -195,7 +207,7 @@ var
   LVal: Int32;
 begin
   if AValue then LVal := 1 else LVal := 0;
-  platform_socket_setsockopt(FSocket, SOL_SOCKET, 9{SO_KEEPALIVE}, @LVal, SizeOf(LVal));
+  platform_socket_setsockopt(FSocket, SOL_SOCKET, SO_KEEPALIVE, @LVal, SizeOf(LVal));
 end;
 
 { TTcpListener }
@@ -218,15 +230,21 @@ end;
 function TTcpListener.Accept: ITcpStream;
 var
   LClient: TPlatformSocket;
-  LAddr: sockaddr_in;
+  LAddr, LLocalAddr: sockaddr_in;
   LAddrLen: socklen_t;
   LResult: Int32;
+  LLocal: TNetAddress;
 begin
   LAddrLen := SizeOf(LAddr);
   LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
-  Result := TTcpStream.Create(LClient, FLocal, AddrFromSockAddr(LAddr));
+  LAddrLen := SizeOf(LLocalAddr);
+  if platform_socket_getsockname(LClient, @LLocalAddr, @LAddrLen) = 0 then
+    LLocal := AddrFromSockAddr(LLocalAddr)
+  else
+    LLocal := FLocal;
+  Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
 end;
 
 function TTcpListener.LocalAddr: TNetAddress;
@@ -299,7 +317,11 @@ begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('tcp connect failed (' + IntToStr(LResult) + ')');
   end;
-  Result := TTcpStream.Create(LSock, TNetAddress.Any(0), LRemote);
+  LSaLen := SizeOf(LSa);
+  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
+    Result := TTcpStream.Create(LSock, AddrFromSockAddr(LSa), LRemote)
+  else
+    Result := TTcpStream.Create(LSock, TNetAddress.Any(0), LRemote);
 end;
 
 end.

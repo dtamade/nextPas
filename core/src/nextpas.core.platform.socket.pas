@@ -44,6 +44,12 @@ function platform_socket_shutdown(const ASocket: TPlatformSocket;
   AHow: Int32): Int32;
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
+function platform_socket_sendto(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Int32; out ASent: Int32): Int32;
+function platform_socket_recvfrom(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; out ARecvd: Int32): Int32;
 function platform_socket_getsockname(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
@@ -165,6 +171,44 @@ begin
     Result := 0
   else
     Result := platform_get_errno;
+end;
+
+function platform_socket_sendto(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Int32; out ASent: Int32): Int32;
+var
+  LResult: ssize_t;
+begin
+  LResult := sendto(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, socklen_t(AAddrLen));
+  if LResult < 0 then
+  begin
+    ASent := 0;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    ASent := Int32(LResult);
+    Result := 0;
+  end;
+end;
+
+function platform_socket_recvfrom(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; out ARecvd: Int32): Int32;
+var
+  LResult: ssize_t;
+begin
+  LResult := recvfrom(ASocket.Value, ABuf, size_t(ALen), AFlags, AAddr, AAddrLen);
+  if LResult < 0 then
+  begin
+    ARecvd := 0;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    ARecvd := Int32(LResult);
+    Result := 0;
+  end;
 end;
 
 function platform_socket_getsockname(const ASocket: TPlatformSocket;
@@ -327,6 +371,15 @@ begin
   else
     Result := WSAGetLastError;
 end;
+
+var
+  GWsaData: array[0..99] of Byte;
+
+initialization
+  WSAStartup($0202, @GWsaData);
+
+finalization
+  WSACleanup;
 
 {$ENDIF}
 

@@ -16,7 +16,6 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.socket,
   nextpas.core.net.resolve;
 
@@ -63,37 +62,39 @@ end;
 function TUdpSocket.SendTo(const ABuf; const ACount: SizeUInt; const AAddr: TNetAddress): SizeUInt;
 var
   LSa: sockaddr_in;
-  LResult: ssize_t;
+  LSent: Int32;
+  LResult: Int32;
 begin
   FillChar(LSa, SizeOf(LSa), 0);
   LSa.sin_family := AF_INET;
   LSa.sin_port := Htons(AAddr.Port);
   LSa.sin_addr.s_addr := NetResolveIPv4(AAddr.IP);
-  LResult := nextpas.core.platform.posix.ffi.sendto(
-    FSocket.Value, @ABuf, size_t(ACount), 0, @LSa, socklen_t(SizeOf(LSa)));
-  if LResult < 0 then
-    raise ENetworkError.Create('udp sendto failed');
-  Result := SizeUInt(LResult);
+  LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
+    @LSa, SizeOf(LSa), LSent);
+  if LResult <> 0 then
+    raise ENetworkError.Create('udp sendto failed (' + IntToStr(LResult) + ')');
+  Result := SizeUInt(LSent);
 end;
 
 function TUdpSocket.RecvFrom(var ABuf; const ACount: SizeUInt; out AAddr: TNetAddress): SizeUInt;
 var
   LSa: sockaddr_in;
   LSaLen: socklen_t;
-  LResult: ssize_t;
+  LRecvd: Int32;
+  LResult: Int32;
   LA: UInt32;
 begin
   LSaLen := SizeOf(LSa);
-  LResult := nextpas.core.platform.posix.ffi.recvfrom(
-    FSocket.Value, @ABuf, size_t(ACount), 0, @LSa, @LSaLen);
-  if LResult < 0 then
-    raise ENetworkError.Create('udp recvfrom failed');
+  LResult := platform_socket_recvfrom(FSocket, @ABuf, Int32(ACount), 0,
+    @LSa, @LSaLen, LRecvd);
+  if LResult <> 0 then
+    raise ENetworkError.Create('udp recvfrom failed (' + IntToStr(LResult) + ')');
   LA := LSa.sin_addr.s_addr;
   AAddr.IP := IntToStr(LA and $FF) + '.' + IntToStr((LA shr 8) and $FF) + '.' +
     IntToStr((LA shr 16) and $FF) + '.' + IntToStr((LA shr 24) and $FF);
   AAddr.Port := Ntohs(LSa.sin_port);
   AAddr.IsIPv6 := False;
-  Result := SizeUInt(LResult);
+  Result := SizeUInt(LRecvd);
 end;
 
 function TUdpSocket.LocalAddr: TNetAddress;

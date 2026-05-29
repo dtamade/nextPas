@@ -283,6 +283,12 @@ const
   IPPROTO_UDP = cint(17);
   SOL_SOCKET  = cint(1);
   SO_REUSEADDR = cint(2);
+{$IFDEF NEXTPAS_LINUX}
+  SO_KEEPALIVE = cint(9);
+{$ELSE}
+  SO_KEEPALIVE = cint(8);
+{$ENDIF}
+  TCP_NODELAY  = cint(1);
   SHUT_RD     = cint(0);
   SHUT_WR     = cint(1);
   SHUT_RDWR   = cint(2);
