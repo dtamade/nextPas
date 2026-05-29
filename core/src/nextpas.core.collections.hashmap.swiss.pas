@@ -397,7 +397,10 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  Lh := KeyHash(AKey);
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    Lh := HashOfUInt32(PUInt32(@AKey)^)
+  else
+    Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -433,7 +436,10 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  Lh := KeyHash(AKey);
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    Lh := HashOfUInt32(PUInt32(@AKey)^)
+  else
+    Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -467,7 +473,10 @@ begin
   if FGrowthLeft = 0 then
     GrowAndRehash;
 
-  Lh := KeyHash(AKey);
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    Lh := HashOfUInt32(PUInt32(@AKey)^)
+  else
+    Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -530,7 +539,10 @@ var
   LIdx: SizeUInt;
 begin
   if FCapacity = 0 then Exit(False);
-  Lh := KeyHash(AKey);
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    Lh := HashOfUInt32(PUInt32(@AKey)^)
+  else
+    Lh := KeyHash(AKey);
   if not FindIndex(AKey, Lh, LIdx) then Exit(False);
 
   if System.IsManagedType(K) then Finalize(FSlots[LIdx].Key);
