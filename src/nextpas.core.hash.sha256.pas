@@ -150,6 +150,9 @@ begin
     movl %ebx, LEbx
   end ['eax', 'ebx', 'ecx', 'edx'];
   GHasSHANI := (LEbx and (1 shl 29)) <> 0;
+  // SSSE3 path also requires BMI2 for rorx
+  if GHasSSSE3 then
+    GHasSSSE3 := (LEbx and (1 shl 8)) <> 0;
   GDispatchInitialized := True;
 end;
 {$ENDIF}
