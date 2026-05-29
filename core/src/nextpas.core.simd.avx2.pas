@@ -177,66 +177,42 @@ end;
 
 function AVX2FloorF32x4(const a: TVecF32x4): TVecF32x4;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea    rax, a
-      vmovups xmm0, [rax]
-      // roundps xmm0, xmm0, 1  (floor)
-      db $66, $0F, $3A, $08, $C0, $01
-      vmovups [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarFloorF32x4(a);
+  asm
+    lea    rax, a
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 1
+    vmovups [result], xmm0
+  end;
 end;
 
 function AVX2CeilF32x4(const a: TVecF32x4): TVecF32x4;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea    rax, a
-      vmovups xmm0, [rax]
-      // roundps xmm0, xmm0, 2  (ceil)
-      db $66, $0F, $3A, $08, $C0, $02
-      vmovups [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarCeilF32x4(a);
+  asm
+    lea    rax, a
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 2
+    vmovups [result], xmm0
+  end;
 end;
 
 function AVX2RoundF32x4(const a: TVecF32x4): TVecF32x4;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea    rax, a
-      vmovups xmm0, [rax]
-      // roundps xmm0, xmm0, 0  (round to nearest even)
-      db $66, $0F, $3A, $08, $C0, $00
-      vmovups [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarRoundF32x4(a);
+  asm
+    lea    rax, a
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 0
+    vmovups [result], xmm0
+  end;
 end;
 
 function AVX2TruncF32x4(const a: TVecF32x4): TVecF32x4;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea    rax, a
-      vmovups xmm0, [rax]
-      // roundps xmm0, xmm0, 3  (truncate)
-      db $66, $0F, $3A, $08, $C0, $03
-      vmovups [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarTruncF32x4(a);
+  asm
+    lea    rax, a
+    vmovups xmm0, [rax]
+    vroundps xmm0, xmm0, 3
+    vmovups [result], xmm0
+  end;
 end;
 
 function AVX2ClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
@@ -729,62 +705,42 @@ end;
 
 function AVX2FloorF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea      rax, a
-      vmovupd  xmm0, [rax]
-      vroundpd xmm0, xmm0, 1   // floor = round toward -inf
-      vmovupd  [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarFloorF64x2(a);
+  asm
+    lea      rax, a
+    vmovupd  xmm0, [rax]
+    vroundpd xmm0, xmm0, 1
+    vmovupd  [result], xmm0
+  end;
 end;
 
 function AVX2CeilF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea      rax, a
-      vmovupd  xmm0, [rax]
-      vroundpd xmm0, xmm0, 2   // ceil = round toward +inf
-      vmovupd  [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarCeilF64x2(a);
+  asm
+    lea      rax, a
+    vmovupd  xmm0, [rax]
+    vroundpd xmm0, xmm0, 2
+    vmovupd  [result], xmm0
+  end;
 end;
 
 function AVX2RoundF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea      rax, a
-      vmovupd  xmm0, [rax]
-      vroundpd xmm0, xmm0, 0   // round to nearest even
-      vmovupd  [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarRoundF64x2(a);
+  asm
+    lea      rax, a
+    vmovupd  xmm0, [rax]
+    vroundpd xmm0, xmm0, 0
+    vmovupd  [result], xmm0
+  end;
 end;
 
 function AVX2TruncF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if HasSSE41 then
-  begin
-    asm
-      lea      rax, a
-      vmovupd  xmm0, [rax]
-      vroundpd xmm0, xmm0, 3   // truncate = round toward zero
-      vmovupd  [result], xmm0
-    end;
-  end
-  else
-    Result := ScalarTruncF64x2(a);
+  asm
+    lea      rax, a
+    vmovupd  xmm0, [rax]
+    vroundpd xmm0, xmm0, 3
+    vmovupd  [result], xmm0
+  end;
 end;
 
 // === F64x2 Load/Store/Splat/Zero Operations (128-bit) ===
