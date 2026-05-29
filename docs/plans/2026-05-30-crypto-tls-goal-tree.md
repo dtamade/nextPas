@@ -17,9 +17,9 @@
 
 | ID | Goal | Status | Gate |
 |----|------|--------|------|
-| G1 | Crypto primitives 100% tested | **IN PROGRESS** | All NIST/RFC vectors pass, zero leaks |
-| G2 | Crypto performance ≥ Go stdlib | **PARTIAL** | SHA-256 ✓, AES-GCM ✓ |
-| G3 | TLS 1.3 key schedule verified | TODO | RFC 8448 vectors pass |
+| G1 | Crypto primitives 100% tested | **90%** | All NIST/RFC vectors pass, zero leaks |
+| G2 | Crypto performance ≥ Go stdlib | **DONE** | SHA-256 ✓, AES-GCM ✓ |
+| G3 | TLS 1.3 key schedule verified | **NEXT** | RFC 8448 vectors pass |
 | G4 | TLS 1.3 record layer verified | TODO | Encrypt/decrypt app data |
 | G5 | TLS 1.3 handshake state machine | TODO | Full handshake with openssl s_server |
 | G6 | TLS 1.3 pure Pascal engine E2E | TODO | Connect to real server, no OpenSSL |
@@ -37,15 +37,15 @@
 | crypto.aesgcm | AES-128/256-GCM Encrypt/Decrypt | ✅ 14 tests | NIST SP 800-38D |
 | crypto.x25519 | ScalarMult, KeyPair, SharedSecret | ✅ 6 tests | RFC 7748 |
 | crypto.ed25519 | Sign, Verify, PubFromPriv | ✅ 13 tests | RFC 8032 |
-| crypto.aescbc | AESCBCEncrypt/DecryptNoPadding | ❌ TODO | NIST SP 800-38A |
+| crypto.aescbc | AESCBCEncrypt/DecryptNoPadding | ✅ 10 tests | NIST SP 800-38A |
 | crypto.hmac | HMAC-SHA256 | ✅ (in hash tests) | RFC 4231 |
 | crypto.hkdf | HKDF-Expand/Extract | ✅ (in hash tests) | RFC 5869 |
-| crypto.rsa | PKCS1v15 Encrypt | ❌ TODO | PKCS#1 vectors |
-| crypto.ecdsa | P-256 Sign/Verify | ❌ TODO | NIST FIPS 186-4 |
-| crypto.p384 | P-384 ECDHE/Verify | ❌ TODO | NIST vectors |
-| crypto.bigint | ModPow, ModInv, etc. | ❌ TODO | Known-answer |
-| crypto.tls12prf | PRF-SHA256 | ❌ TODO | RFC 5246 vectors |
-| crypto.tls12record | Record encrypt/decrypt | ❌ TODO | Wireshark captures |
+| crypto.rsa | PKCS1v15 Encrypt | ✅ 14 tests | PKCS#1 format + roundtrip |
+| crypto.ecdsa | P-256 Sign/Verify | ✅ 16 tests | NIST P-256 + RFC 6979 |
+| crypto.bigint | ModPow, ModMul, Add, etc. | ✅ 19 tests | Known-answer vectors |
+| crypto.tls12prf | PRF-SHA256/SHA384 | ✅ 11 tests | Python HMAC verification |
+| crypto.p384 | P-384 ECDHE/Verify | ⏳ TODO | NIST vectors |
+| crypto.tls12record | Record encrypt/decrypt | ⏳ TODO | Wireshark captures |
 
 ---
 
