@@ -21,6 +21,7 @@ type
     THashFunc = function(const AKey: K): UInt32;
     TEqualsFunc = function(const A, B: K): Boolean;
     TComputeFunc = function(const AKey: K; var AValue: V; AExists: Boolean): Boolean;
+    TForEachFunc = procedure(const AKey: K; const AValue: V);
   private type
     TSegmentTable = specialize TSwissTable<K, V>;
   private
@@ -42,6 +43,7 @@ type
     function Remove(const AKey: K): Boolean;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
+    procedure ForEach(AFunc: TForEachFunc);
     procedure Clear;
 
     function GetCount: SizeUInt;
@@ -199,6 +201,20 @@ begin
       FSegments[LSeg].Remove(AKey);
   finally
     FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+procedure TConcurrentHashMap.ForEach(AFunc: TForEachFunc);
+var i: Integer;
+begin
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireRead;
+    try
+      FSegments[i].ForEach(TSegmentTable.TVisitFunc(AFunc));
+    finally
+      FSegmentLocks[i].ReleaseRead;
+    end;
   end;
 end;
 

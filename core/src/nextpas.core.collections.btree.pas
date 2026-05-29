@@ -89,6 +89,7 @@ type
     function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function Floor(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function Rank(const AKey: K): SizeUInt;
+    function Select(ARank: SizeUInt; out AKey: K; out AValue: V): Boolean;
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
     function GetEnumerator: TEnumerator;
@@ -756,6 +757,50 @@ begin
     if LNode^.IsLeaf then Exit;
     LNode := LNode^.Children[LIdx];
   end;
+end;
+
+{ Select — find key at given rank (0-based) }
+
+function TBTreeMap.Select(ARank: SizeUInt; out AKey: K; out AValue: V): Boolean;
+var
+  LNode: PNode;
+  i: Int32;
+  LChildSize: SizeUInt;
+begin
+  if ARank >= FCount then Exit(False);
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    if LNode^.IsLeaf then
+    begin
+      AKey := LNode^.Keys[ARank];
+      AValue := LNode^.Values[ARank];
+      Exit(True);
+    end;
+    for i := 0 to LNode^.Count - 1 do
+    begin
+      LChildSize := SubtreeSize(LNode^.Children[i]);
+      if ARank < LChildSize then
+      begin
+        LNode := LNode^.Children[i];
+        Break;
+      end;
+      Dec(ARank, LChildSize);
+      if ARank = 0 then
+      begin
+        AKey := LNode^.Keys[i];
+        AValue := LNode^.Values[i];
+        Exit(True);
+      end;
+      Dec(ARank);
+      if i = LNode^.Count - 1 then
+      begin
+        LNode := LNode^.Children[LNode^.Count];
+        Break;
+      end;
+    end;
+  end;
+  Result := False;
 end;
 
 { ForEach — in-order traversal }

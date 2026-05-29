@@ -46,6 +46,7 @@ type
     THash = specialize TKeyHashFunc<K>;
     TEquals = specialize TKeyEqualsFunc<K>;
     TRetainFunc = function(const AKey: K; const AValue: V): Boolean;
+    TVisitFunc = procedure(const AKey: K; const AValue: V);
     PSlot = ^TSlot;
     TSlot = record
       Key: K;
@@ -86,6 +87,7 @@ type
     function Get(const AKey: K): V;
     procedure Clear;
     procedure Retain(AFunc: TRetainFunc);
+    procedure ForEach(AFunc: TVisitFunc);
     function GetCount: SizeUInt;
 
     property Count: SizeUInt read FCount;
@@ -633,6 +635,15 @@ begin
       end;
     end;
   end;
+end;
+
+procedure TSwissTable.ForEach(AFunc: TVisitFunc);
+var i: SizeUInt;
+begin
+  if FCapacity = 0 then Exit;
+  for i := 0 to FCapacity - 1 do
+    if FCtrl[i] < $80 then
+      AFunc(FSlots[i].Key, FSlots[i].Value);
 end;
 
 function TSwissTable.GetCount: SizeUInt;

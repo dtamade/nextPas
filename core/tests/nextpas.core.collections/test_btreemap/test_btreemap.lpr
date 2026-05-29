@@ -200,6 +200,50 @@ begin
   finally M.Free; end;
 end;
 
+procedure TestFloor;
+var M: TIntBTree; k, v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(10, 1); M.Put(20, 2); M.Put(30, 3); M.Put(40, 4); M.Put(50, 5);
+    Check(M.Floor(25, k, v), 'floor 25'); CheckEqual(Int64(20), Int64(k), 'floor 25 key');
+    Check(M.Floor(30, k, v), 'floor 30'); CheckEqual(Int64(30), Int64(k), 'floor 30 key');
+    Check(M.Floor(55, k, v), 'floor 55'); CheckEqual(Int64(50), Int64(k), 'floor 55 key');
+    Check(not M.Floor(5, k, v), 'floor 5 not found');
+  finally M.Free; end;
+end;
+
+procedure TestRank;
+var M: TIntBTree; i: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 99 do M.Put(i * 10, i);
+    CheckEqual(Int64(0), Int64(M.Rank(0)), 'rank 0');
+    CheckEqual(Int64(1), Int64(M.Rank(10)), 'rank 10');
+    CheckEqual(Int64(5), Int64(M.Rank(50)), 'rank 50');
+    CheckEqual(Int64(99), Int64(M.Rank(990)), 'rank 990');
+  finally M.Free; end;
+end;
+
+procedure TestEnumerator;
+var M: TIntBTree; E: TIntBTree.TEntry; i, prev, count: Integer; sorted: Boolean;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 99 do M.Put((i * 7919) mod 100, i);
+    count := 0; prev := -1; sorted := True;
+    for E in M do
+    begin
+      if E.Key <= prev then sorted := False;
+      prev := E.Key;
+      Inc(count);
+    end;
+    CheckEqual(Int64(100), Int64(count), 'enum count');
+    Check(sorted, 'enum sorted');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.btreemap');
   T.Run('Put/Get', @TestPutGet);
@@ -214,5 +258,8 @@ begin
   T.Run('UpperBound', @TestUpperBound);
   T.Run('ForEach', @TestForEach);
   T.Run('Range', @TestRange);
+  T.Run('Floor', @TestFloor);
+  T.Run('Rank', @TestRank);
+  T.Run('Enumerator (for-in)', @TestEnumerator);
   T.Summary;
 end.
