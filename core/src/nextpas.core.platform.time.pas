@@ -39,7 +39,16 @@ function platform_timespec_to_ns(
   const ASec: Int64;
   const ANsec: Int64): TPlatformTimeNanoseconds; inline;
 
+{ Get the local UTC offset in seconds (e.g. +28800 for UTC+8). }
+function platform_utc_offset_seconds: Int32;
+
 implementation
+
+{$IFDEF NEXTPAS_UNIX}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
+{$ENDIF}
 
 function platform_monotonic_ns: TPlatformTimeNanoseconds;
 begin
@@ -75,5 +84,32 @@ function platform_timespec_to_ns(
 begin
   Result := nextpas.core.platform.time.host.platform_timespec_to_ns(ASec, ANsec);
 end;
+
+function platform_utc_offset_seconds: Int32;
+{$IFDEF NEXTPAS_UNIX}
+var
+  LTime: time_t;
+  LTm: tm;
+begin
+  LTime := c_time(nil);
+  localtime_r(@LTime, @LTm);
+  Result := Int32(LTm.tm_gmtoff);
+end;
+{$ELSE}
+{$IFDEF NEXTPAS_WINDOWS}
+var
+  LBias: Int32;
+begin
+  // Windows: GetTimeZoneInformation returns bias in minutes (UTC = local + bias)
+  // So offset = -bias * 60
+  LBias := 0; // TODO: implement via GetTimeZoneInformation
+  Result := -LBias * 60;
+end;
+{$ELSE}
+begin
+  Result := 0;
+end;
+{$ENDIF}
+{$ENDIF}
 
 end.

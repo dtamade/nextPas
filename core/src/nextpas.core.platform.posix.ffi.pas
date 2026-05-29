@@ -13,6 +13,9 @@ uses
 function clock_gettime(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_gettime';
 function clock_getres(const clk_id: Int32; tp: Pointer): Int32; cdecl; external 'c' name 'clock_getres';
 function nanosleep(req: Pointer; rem: Pointer): Int32; cdecl; external 'c' name 'nanosleep';
+function c_time(tloc: Pointer): time_t; cdecl; external 'c' name 'time';
+function localtime_r(const timep: ptime_t; result_: ptm): ptm; cdecl; external 'c' name 'localtime_r';
+function gmtime_r(const timep: ptime_t; result_: ptm): ptm; cdecl; external 'c' name 'gmtime_r';
 function sched_yield: Int32; cdecl; external 'c' name 'sched_yield';
 function sysconf(name: Int32): PtrInt; cdecl; external 'c' name 'sysconf';
 function getpid: pid_t; cdecl; external 'c' name 'getpid';
