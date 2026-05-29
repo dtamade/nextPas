@@ -685,22 +685,22 @@ begin
   dispatchTable.Mask2Any := @AVX2Mask2Any;
   dispatchTable.Mask2None := @AVX2Mask2None;
   dispatchTable.Mask2PopCount := @AVX2Mask2PopCount;
-  dispatchTable.Mask2FirstSet := @AVX2Mask2FirstSet;
+  dispatchTable.Mask2FirstSet := @SharedMask2FirstSet;
   dispatchTable.Mask4All := @AVX2Mask4All;
   dispatchTable.Mask4Any := @AVX2Mask4Any;
   dispatchTable.Mask4None := @AVX2Mask4None;
   dispatchTable.Mask4PopCount := @AVX2Mask4PopCount;
-  dispatchTable.Mask4FirstSet := @AVX2Mask4FirstSet;
+  dispatchTable.Mask4FirstSet := @SharedMask4FirstSet;
   dispatchTable.Mask8All := @AVX2Mask8All;
   dispatchTable.Mask8Any := @AVX2Mask8Any;
   dispatchTable.Mask8None := @AVX2Mask8None;
   dispatchTable.Mask8PopCount := @AVX2Mask8PopCount;
-  dispatchTable.Mask8FirstSet := @AVX2Mask8FirstSet;
+  dispatchTable.Mask8FirstSet := @SharedMask8FirstSet;
   dispatchTable.Mask16All := @AVX2Mask16All;
   dispatchTable.Mask16Any := @AVX2Mask16Any;
   dispatchTable.Mask16None := @AVX2Mask16None;
   dispatchTable.Mask16PopCount := @AVX2Mask16PopCount;
-  dispatchTable.Mask16FirstSet := @AVX2Mask16FirstSet;
+  dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
 
   // Batch array operations (AVX2 256-bit)
   dispatchTable.ArrayAddF32 := @AVX2ArrayAddF32;

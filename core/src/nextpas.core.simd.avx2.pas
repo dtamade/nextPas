@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask,
   nextpas.core.simd.backend.priority;
 
 // === AVX2 Backend Implementation ===
@@ -3230,22 +3231,6 @@ asm
   {$ENDIF}
 end;
 
-function AVX2Mask2FirstSet(mask: TMask2): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 3
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  and   ecx, 3
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask4 Operations (4 bits) ---
 function AVX2Mask4All(mask: TMask4): Boolean; assembler; nostackframe;
@@ -3294,22 +3279,6 @@ asm
   {$ENDIF}
 end;
 
-function AVX2Mask4FirstSet(mask: TMask4): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 15
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  and   ecx, 15
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask8 Operations (8 bits) ---
 function AVX2Mask8All(mask: TMask8): Boolean; assembler; nostackframe;
@@ -3356,22 +3325,6 @@ asm
   {$ENDIF}
 end;
 
-function AVX2Mask8FirstSet(mask: TMask8): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  movzx edi, dil
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  movzx ecx, cl
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask16 Operations (16 bits) ---
 function AVX2Mask16All(mask: TMask16): Boolean; assembler; nostackframe;
@@ -3418,22 +3371,6 @@ asm
   {$ENDIF}
 end;
 
-function AVX2Mask16FirstSet(mask: TMask16): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  movzx edi, di
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  movzx ecx, cx
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // === SelectF64x2 Compatibility Wrapper ===
 // 这里仍保留 AVX2 owned slot，但语义直接委托 scalar reference helper。

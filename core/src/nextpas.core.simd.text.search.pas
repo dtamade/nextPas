@@ -50,7 +50,24 @@ begin
     movdqu xmm2, [rax + rcx]
     pcmpeqb xmm2, xmm1     // compare: 0xFF where match
     pmovmskb ebx, xmm2     // bit mask of matches
-    popcnt ebx, ebx         // count bits
+    // SWAR popcount (safe on all x86, no POPCNT dependency)
+    mov edx, ebx
+    shr edx, 1
+    and edx, $5555
+    sub ebx, edx
+    mov edx, ebx
+    shr edx, 2
+    and ebx, $3333
+    and edx, $3333
+    add ebx, edx
+    mov edx, ebx
+    shr edx, 4
+    add ebx, edx
+    and ebx, $0F0F
+    mov edx, ebx
+    shr edx, 8
+    add ebx, edx
+    and ebx, $FF
     add Result, rbx
 
     add ecx, 16

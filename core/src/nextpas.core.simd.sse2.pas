@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask,
   nextpas.core.simd.backend.priority;
 
 // === SSE2 Backend Adapter ===
@@ -4502,22 +4503,6 @@ asm
   {$ENDIF}
 end;
 
-function SSE2Mask2FirstSet(mask: TMask2): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 3        // 只保留低 2 位
-  bsf   eax, edi      // 找第一个设置的位
-  jnz   @done
-  mov   eax, -1       // 没有设置的位
-@done:
-  {$ELSE}
-  and   ecx, 3
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask4 Operations (4 bits) ---
 function SSE2Mask4All(mask: TMask4): Boolean; assembler; nostackframe;
@@ -4583,22 +4568,6 @@ asm
   {$ENDIF}
 end;
 
-function SSE2Mask4FirstSet(mask: TMask4): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 15
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  and   ecx, 15
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask8 Operations (8 bits) ---
 function SSE2Mask8All(mask: TMask8): Boolean; assembler; nostackframe;
@@ -4670,22 +4639,6 @@ asm
   {$ENDIF}
 end;
 
-function SSE2Mask8FirstSet(mask: TMask8): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  movzx edi, dil
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  movzx ecx, cl
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 // --- TMask16 Operations (16 bits) ---
 function SSE2Mask16All(mask: TMask16): Boolean; assembler; nostackframe;
@@ -4765,22 +4718,6 @@ asm
   {$ENDIF}
 end;
 
-function SSE2Mask16FirstSet(mask: TMask16): Integer; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  movzx edi, di
-  bsf   eax, edi
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ELSE}
-  movzx ecx, cx
-  bsf   eax, ecx
-  jnz   @done
-  mov   eax, -1
-@done:
-  {$ENDIF}
-end;
 
 {$I nextpas.core.simd.sse2.select.inc}
 

@@ -589,22 +589,22 @@ begin
   dispatchTable.Mask2Any := @SSE2Mask2Any;
   dispatchTable.Mask2None := @SSE2Mask2None;
   dispatchTable.Mask2PopCount := @SSE2Mask2PopCount;
-  dispatchTable.Mask2FirstSet := @SSE2Mask2FirstSet;
+  dispatchTable.Mask2FirstSet := @SharedMask2FirstSet;
   dispatchTable.Mask4All := @SSE2Mask4All;
   dispatchTable.Mask4Any := @SSE2Mask4Any;
   dispatchTable.Mask4None := @SSE2Mask4None;
   dispatchTable.Mask4PopCount := @SSE2Mask4PopCount;
-  dispatchTable.Mask4FirstSet := @SSE2Mask4FirstSet;
+  dispatchTable.Mask4FirstSet := @SharedMask4FirstSet;
   dispatchTable.Mask8All := @SSE2Mask8All;
   dispatchTable.Mask8Any := @SSE2Mask8Any;
   dispatchTable.Mask8None := @SSE2Mask8None;
   dispatchTable.Mask8PopCount := @SSE2Mask8PopCount;
-  dispatchTable.Mask8FirstSet := @SSE2Mask8FirstSet;
+  dispatchTable.Mask8FirstSet := @SharedMask8FirstSet;
   dispatchTable.Mask16All := @SSE2Mask16All;
   dispatchTable.Mask16Any := @SSE2Mask16Any;
   dispatchTable.Mask16None := @SSE2Mask16None;
   dispatchTable.Mask16PopCount := @SSE2Mask16PopCount;
-  dispatchTable.Mask16FirstSet := @SSE2Mask16FirstSet;
+  dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
 
   // ============================================================================
   // Batch Array Operations (SSE2 SIMD loops)

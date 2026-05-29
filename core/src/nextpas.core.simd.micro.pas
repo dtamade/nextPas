@@ -95,13 +95,14 @@ begin
 end;
 
 function MicroPopcnt16(AMask: TMask16): Int32; inline;
+var
+  m: UInt32;
 begin
-  Result := 0;
-  asm
-    movzx eax, AMask
-    popcnt eax, eax
-    mov Result, eax
-  end;
+  m := AMask;
+  m := m - ((m shr 1) and $5555);
+  m := (m and $3333) + ((m shr 2) and $3333);
+  m := (m + (m shr 4)) and $0F0F;
+  Result := Int32((m + (m shr 8)) and $FF);
 end;
 
 function MicroContainsByte(AData: PByte; AValue: Byte): Boolean; inline;
