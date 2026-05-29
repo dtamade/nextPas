@@ -98,6 +98,13 @@ begin
   Check(V.Data[0] = ',', 'next is comma');
 end;
 
+procedure TestFindByte;
+begin
+  CheckEqual(Int64(5), Int64(ScanFindByte(PAnsiChar('hello:world'), 11, Ord(':'))), 'colon at 5');
+  CheckEqual(Int64(0), Int64(ScanFindByte(PAnsiChar(':abc'), 4, Ord(':'))), 'colon at 0');
+  CheckEqual(Int64(-1), Int64(ScanFindByte(PAnsiChar('abcdef'), 6, Ord(':'))), 'not found');
+end;
+
 procedure TestFindByte2Long;
 var
   Buf: array[0..63] of AnsiChar;
@@ -109,6 +116,7 @@ end;
 
 begin
   T := TTestRunner.Create('nextpas.core.text.scan');
+  T.Run('FindByte', @TestFindByte);
   T.Run('FindByte2', @TestFindByte2);
   T.Run('FindByte3', @TestFindByte3);
   T.Run('FindInRange', @TestFindInRange);

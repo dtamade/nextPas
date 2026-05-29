@@ -7,6 +7,8 @@ interface
 uses
   nextpas.core.text.view;
 
+function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
+  const A: Byte): PtrInt;
 function ScanFindByte2(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B: Byte): PtrInt;
 function ScanFindByte3(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -29,6 +31,29 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.vec16,
   nextpas.core.text.char;
+
+function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
+  const A: Byte): PtrInt;
+var
+  LPos: SizeUInt;
+  LMask: TMask16;
+begin
+  LPos := 0;
+  while LPos + 16 <= ALen do
+  begin
+    LMask := Vec16CmpEq(@AData[LPos], A);
+    if LMask <> MASK16_NONE_SET then
+      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
+    Inc(LPos, 16);
+  end;
+  while LPos < ALen do
+  begin
+    if Byte(AData[LPos]) = A then
+      Exit(PtrInt(LPos));
+    Inc(LPos);
+  end;
+  Result := -1;
+end;
 
 function ScanFindByte2(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B: Byte): PtrInt;
@@ -129,19 +154,19 @@ end;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LMask: TMask16;
+  LWsMask: TMask16;
 begin
   LPos := 0;
   while LPos + 16 <= ALen do
   begin
-    LMask := Vec16CmpLtU(@AData[LPos], $21);
-    if LMask = MASK16_ALL_SET then
+    LWsMask := Vec16CmpEq(@AData[LPos], $20) or Vec16CmpEq(@AData[LPos], $09) or
+               Vec16CmpEq(@AData[LPos], $0A) or Vec16CmpEq(@AData[LPos], $0D);
+    if LWsMask = MASK16_ALL_SET then
       Inc(LPos, 16)
     else
     begin
-      LMask := not LMask;
-      LMask := LMask and MASK16_ALL_SET;
-      Exit(LPos + SizeUInt(Vec16Ctz(LMask)));
+      LWsMask := (not LWsMask) and MASK16_ALL_SET;
+      Exit(LPos + SizeUInt(Vec16Ctz(LWsMask)));
     end;
   end;
   while LPos < ALen do
