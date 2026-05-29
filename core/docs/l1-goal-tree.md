@@ -27,6 +27,7 @@ L1 是框架的基础设施层，只依赖 L0（base/errors/platform/mem）。
 | 模块 | 职责 | 状态 |
 |------|------|------|
 | `fs` | 文件系统 (IFile/IDirIterator/Path/Symlink/Walk) | ✅ 完成 (35 tests, bench, Codex审查10项全修) |
+| `net` | 网络 (TCP/UDP/Resolve, ITcpStream extends IStream) | ✅ 完成 (7 tests, Codex审查修复, 跨平台) |
 
 ### T1: 基础字符串操作 ✅
 - [x] Trim/Split/Join/Replace/Case/Pad/Repeat/IndexOf
