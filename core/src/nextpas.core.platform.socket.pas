@@ -44,6 +44,10 @@ function platform_socket_shutdown(const ASocket: TPlatformSocket;
   AHow: Int32): Int32;
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
+function platform_socket_getsockname(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
+function platform_socket_getpeername(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
 
 implementation
 
@@ -158,6 +162,24 @@ function platform_socket_setsockopt(const ASocket: TPlatformSocket;
   ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32;
 begin
   if setsockopt(ASocket.Value, ALevel, AOptName, AOptVal, socklen_t(AOptLen)) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_socket_getsockname(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
+begin
+  if getsockname(ASocket.Value, AAddr, AAddrLen) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_socket_getpeername(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
+begin
+  if getpeername(ASocket.Value, AAddr, AAddrLen) = 0 then
     Result := 0
   else
     Result := platform_get_errno;
@@ -288,6 +310,24 @@ begin
     Result := WSAGetLastError;
 end;
 
+function platform_socket_getsockname(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
+begin
+  if winsock_getsockname(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
+    Result := 0
+  else
+    Result := WSAGetLastError;
+end;
+
+function platform_socket_getpeername(const ASocket: TPlatformSocket;
+  AAddr: Pointer; AAddrLen: Pointer): Int32;
+begin
+  if winsock_getpeername(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
+    Result := 0
+  else
+    Result := WSAGetLastError;
+end;
+
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -301,6 +341,8 @@ function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALe
 function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := -1; end;
 function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): Int32; begin Result := -1; end;
 function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := -1; end;
+function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
+function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
 {$ENDIF}
 
 end.

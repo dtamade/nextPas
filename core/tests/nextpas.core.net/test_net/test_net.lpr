@@ -19,11 +19,11 @@ uses
 var
   T: TTestRunner;
 
-{ TCP echo test }
+{ TCP echo test — uses port 0 (OS assigns) }
 
 var
+  GEchoPort: UInt16 = 0;
   GListenerReady: Int32 = 0;
-  GTcpPort: UInt16 = 19876;
 
 function TcpEchoServer(AArg: Pointer): Pointer; cdecl;
 var
@@ -34,7 +34,8 @@ var
   LTotal: SizeUInt;
 begin
   Result := nil;
-  LListener := TcpListen('127.0.0.1', GTcpPort);
+  LListener := TcpListen('127.0.0.1', 0);
+  GEchoPort := LListener.LocalAddr.Port;
   InterlockedExchange(GListenerReady, 1);
   LClient := LListener.Accept;
   LTotal := 0;
@@ -61,7 +62,7 @@ begin
   platform_thread_create(LHandle, @TcpEchoServer, nil);
   while InterlockedCompareExchange(GListenerReady, 0, 0) = 0 do
     platform_thread_sleep_ns(1000000);
-  LClient := TcpConnect('127.0.0.1', GTcpPort);
+  LClient := TcpConnect('127.0.0.1', GEchoPort);
   LClient.Write(PAnsiChar('hello')^, 5);
   LClient.Shutdown;
   LN := LClient.Read(LBuf[0], 256);
@@ -82,11 +83,10 @@ var
   LN: SizeUInt;
 begin
   GListenerReady := 0;
-  GTcpPort := 19877;
   platform_thread_create(LHandle, @TcpEchoServer, nil);
   while InterlockedCompareExchange(GListenerReady, 0, 0) = 0 do
     platform_thread_sleep_ns(1000000);
-  LClient := TcpConnect('127.0.0.1', GTcpPort);
+  LClient := TcpConnect('127.0.0.1', GEchoPort);
   FillChar(LBuf[0], 1024, $AA);
   LClient.Write(LBuf[0], 1024);
   LClient.Shutdown;
@@ -112,9 +112,11 @@ var
   LBuf: array[0..31] of Byte;
   LN: SizeUInt;
   LFrom: TNetAddress;
+  LPort: UInt16;
 begin
-  LS := UdpBind('127.0.0.1', 19878);
-  LS.SendTo(PAnsiChar('ping')^, 4, TNetAddress.Create('127.0.0.1', 19878));
+  LS := UdpBind('127.0.0.1', 0);
+  LPort := LS.LocalAddr.Port;
+  LS.SendTo(PAnsiChar('ping')^, 4, TNetAddress.Create('127.0.0.1', LPort));
   LN := LS.RecvFrom(LBuf[0], 32, LFrom);
   CheckEqual(SizeUInt(4), LN, 'udp recv 4');
   CheckEqual(Byte(Ord('p')), LBuf[0]);
@@ -164,7 +166,7 @@ end;
 { ITcpStream as IReader/IWriter }
 
 var
-  GIoPort: UInt16 = 19879;
+  GIoPort: UInt16 = 0;
   GIoReady: Int32 = 0;
 
 function IoEchoServer(AArg: Pointer): Pointer; cdecl;
@@ -175,7 +177,8 @@ var
   LN: SizeUInt;
 begin
   Result := nil;
-  LListener := TcpListen('127.0.0.1', GIoPort);
+  LListener := TcpListen('127.0.0.1', 0);
+  GIoPort := LListener.LocalAddr.Port;
   InterlockedExchange(GIoReady, 1);
   LClient := LListener.Accept;
   LN := (LClient as IReader).Read(LBuf[0], 256);

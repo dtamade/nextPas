@@ -114,6 +114,7 @@ function NetUdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;
 var
   LSock: TPlatformSocket;
   LSa: sockaddr_in;
+  LSaLen: socklen_t;
   LOne: Int32;
   LResult: Int32;
   LLocal: TNetAddress;
@@ -137,6 +138,9 @@ begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('udp bind failed');
   end;
+  LSaLen := SizeOf(LSa);
+  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
+    LLocal.Port := Ntohs(LSa.sin_port);
   Result := TUdpSocket.Create(LSock, LLocal);
 end;
 

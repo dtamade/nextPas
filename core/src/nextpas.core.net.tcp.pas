@@ -273,6 +273,10 @@ begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('tcp listen: listen failed (' + IntToStr(LResult) + ')');
   end;
+  { Get actual bound address (important when port=0) }
+  LSaLen := SizeOf(LSa);
+  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
+    LLocal := AddrFromSockAddr(LSa);
   Result := TTcpListener.Create(LSock, LLocal);
 end;
 
