@@ -94,12 +94,8 @@ begin
 end;
 
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TMask16;
-var
-  i: Integer;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] >= $80 then Result := Result or TMask16(1 shl i);
+  Result := Vec16CmpGtU(ACtrl, $7F);
 end;
 
 { TSwissTable<K,V> - Core helpers }
@@ -291,10 +287,10 @@ begin
 
   while True do
   begin
-    LMask := MatchEmptyOrDeleted(@FCtrl[LGroupIdx * GROUP_SIZE]);
+    LMask := Vec16CmpGtU(@FCtrl[LGroupIdx * GROUP_SIZE], $7F);
     if LMask <> 0 then
     begin
-      Result := LGroupIdx * GROUP_SIZE + SizeUInt(GroupMaskFirstSet(LMask));
+      Result := LGroupIdx * GROUP_SIZE + SizeUInt(Vec16Ctz(LMask));
       Exit;
     end;
     Inc(LProbeOfs);
@@ -461,7 +457,7 @@ begin
     // 整组无 empty：检查 deleted 槽位作为插入点（仅首次记录）
     if not LFoundInsert then
     begin
-      LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
+      LMask := Vec16CmpGtU(@FCtrl[LBase], $7F);
       if LMask <> 0 then
       begin
         LInsertIdx := LBase + SizeUInt(Vec16Ctz(LMask));
