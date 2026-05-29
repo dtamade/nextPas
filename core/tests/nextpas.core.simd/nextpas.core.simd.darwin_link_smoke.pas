@@ -1,6 +1,5 @@
 program fafafa_core_simd_darwin_link_smoke;
 
-{$mode objfpc}{$H+}
 {$I nextpas.core.settings.inc}
 
 uses

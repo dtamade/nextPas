@@ -1,4 +1,3 @@
-{$MODE OBJFPC}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 unit nextpas.core.simd.generated.scalar;

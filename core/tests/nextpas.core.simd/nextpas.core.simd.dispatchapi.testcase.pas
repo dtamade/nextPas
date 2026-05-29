@@ -1,6 +1,5 @@
 unit nextpas.core.simd.dispatchapi.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 {$WARN 6060 OFF}

@@ -1,6 +1,5 @@
 program nextpas.core.simd.test_narrow512;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

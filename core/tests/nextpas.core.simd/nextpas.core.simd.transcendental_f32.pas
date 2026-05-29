@@ -1,6 +1,5 @@
 program nextpas.core.simd.transcendental_f32;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

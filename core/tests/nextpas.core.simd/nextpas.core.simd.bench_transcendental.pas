@@ -1,6 +1,5 @@
 program nextpas.core.simd.bench_transcendental;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

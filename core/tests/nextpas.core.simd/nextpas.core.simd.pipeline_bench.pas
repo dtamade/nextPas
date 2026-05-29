@@ -1,6 +1,5 @@
 program nextpas.core.simd.pipeline_bench;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 
 uses

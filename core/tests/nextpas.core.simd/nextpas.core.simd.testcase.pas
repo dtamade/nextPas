@@ -1,6 +1,5 @@
 unit nextpas.core.simd.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
@@ -17,7 +16,6 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.utils,
-  nextpas.core.simd,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar,
   nextpas.core.simd.backend.consistency.testcase,

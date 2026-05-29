@@ -1,6 +1,5 @@
 program nextpas.core.simd.dispatch_preinit_smoke;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

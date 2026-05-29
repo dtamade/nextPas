@@ -1,6 +1,5 @@
 unit nextpas.core.simd.alignment.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$R-}{$Q-}
 

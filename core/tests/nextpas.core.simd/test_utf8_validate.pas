@@ -4,7 +4,18 @@ program test_utf8_validate;
 
 uses
   SysUtils,
-  nextpas.core.simd;
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch;
+
+function Utf8Validate(p: Pointer; len: SizeUInt): Boolean;
+var dt: PSimdDispatchTable;
+begin
+  dt := GetDispatchTable;
+  if (dt <> nil) and Assigned(dt^.Utf8Validate) then
+    Result := dt^.Utf8Validate(p, len)
+  else
+    Result := True;
+end;
 
 var
   LPass, LFail: Integer;
@@ -24,6 +35,7 @@ var
   LBig: array[0..1023] of Byte;
   i: Integer;
 begin
+  InitializeDispatch;
   LPass := 0;
   LFail := 0;
 

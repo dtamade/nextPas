@@ -1,6 +1,5 @@
 program nextpas.core.simd.array_f32_correctness;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

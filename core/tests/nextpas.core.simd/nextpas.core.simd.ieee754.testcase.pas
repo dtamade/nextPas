@@ -1,6 +1,5 @@
 unit nextpas.core.simd.ieee754.testcase;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

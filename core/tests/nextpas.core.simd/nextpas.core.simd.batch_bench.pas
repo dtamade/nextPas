@@ -1,6 +1,5 @@
 program fafafa_core_simd_batch_bench;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

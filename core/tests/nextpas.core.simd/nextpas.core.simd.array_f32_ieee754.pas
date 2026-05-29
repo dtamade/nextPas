@@ -1,6 +1,5 @@
 program fafafa_core_simd_array_f32_ieee754;
 
-{$mode objfpc}{$H+}
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 
