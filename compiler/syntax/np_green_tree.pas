@@ -2600,6 +2600,7 @@ function ParseProcedureDecl(
 var
   Node: TGreenNode;
   NameToken: TToken;
+  I: LongInt;
 begin
   Node := TGreenNode.Create(gnkProcedureDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2675,6 +2676,11 @@ begin
         [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
          tkFunctionKeyword, tkProcedureKeyword]) do
     begin
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
+        (ACursor + 2 < ALexer.TokenCount) and
+        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+        Break;
+      I := ACursor;
       if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
@@ -2693,6 +2699,7 @@ begin
           (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
           Inc(ACursor);
       end;
+      if ACursor = I then begin Inc(ACursor); Break; end;
     end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
@@ -2747,6 +2754,7 @@ var
   Node: TGreenNode;
   NameToken: TToken;
   TypeNode: TGreenNode;
+  I: LongInt;
 begin
   Node := TGreenNode.Create(gnkFunctionDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2847,6 +2855,11 @@ begin
         [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
          tkFunctionKeyword, tkProcedureKeyword]) do
     begin
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
+        (ACursor + 2 < ALexer.TokenCount) and
+        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+        Break;
+      I := ACursor;
       if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
@@ -2865,6 +2878,7 @@ begin
           (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
           Inc(ACursor);
       end;
+      if ACursor = I then begin Inc(ACursor); Break; end;
     end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkBeginKeyword) then
