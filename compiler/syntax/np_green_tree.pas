@@ -554,7 +554,8 @@ end;
 function IsDirectiveToken(AKind: TTokenKind): Boolean;
 begin
   Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
-    tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword];
+    tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword,
+    tkDeprecatedKeyword, tkPlatformKeyword, tkExperimentalKeyword];
 end;
 
 procedure SkipDirectives(const ALexer: TLexerResult; var ACursor: LongInt);
@@ -2033,6 +2034,9 @@ begin
                     IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
                 begin
                   Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+                    Inc(ACursor);
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end;
               end
@@ -2663,6 +2667,7 @@ begin
               SkipDirectives(ALexer, ACursor);
               while (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
                 Inc(ACursor);
               MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
