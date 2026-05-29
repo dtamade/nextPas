@@ -66,7 +66,7 @@ var
   LResult: Int32;
 begin
   FillChar(LSa, SizeOf(LSa), 0);
-  LSa.sin_family := AF_INET;
+  LSa.sin_family := PLATFORM_AF_INET;
   LSa.sin_port := Htons(AAddr.Port);
   LSa.sin_addr.s_addr := NetResolveIPv4(AAddr.IP);
   LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
@@ -121,13 +121,13 @@ var
   LLocal: TNetAddress;
 begin
   LLocal := TNetAddress.Create(AAddr, APort);
-  LResult := platform_socket_create(AF_INET, SOCK_DGRAM, 0, LSock);
+  LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM, 0, LSock);
   if LResult <> 0 then
     raise ENetworkError.Create('udp bind: socket create failed');
   LOne := 1;
-  platform_socket_setsockopt(LSock, SOL_SOCKET, SO_REUSEADDR, @LOne, SizeOf(LOne));
+  platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
   FillChar(LSa, SizeOf(LSa), 0);
-  LSa.sin_family := AF_INET;
+  LSa.sin_family := PLATFORM_AF_INET;
   LSa.sin_port := Htons(APort);
   if (AAddr = '0.0.0.0') or (AAddr = '') then
     LSa.sin_addr.s_addr := 0

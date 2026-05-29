@@ -4,8 +4,41 @@ unit nextpas.core.platform.socket;
 
 interface
 
+{$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base;
+{$ENDIF}
+
+const
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_AF_INET     = 2;
+  PLATFORM_AF_INET6    = 23;
+  PLATFORM_SOCK_STREAM = 1;
+  PLATFORM_SOCK_DGRAM  = 2;
+  PLATFORM_IPPROTO_TCP = 6;
+  PLATFORM_IPPROTO_UDP = 17;
+  PLATFORM_SOL_SOCKET  = $FFFF;
+  PLATFORM_SO_REUSEADDR = $0004;
+  PLATFORM_SO_KEEPALIVE = $0008;
+  PLATFORM_TCP_NODELAY  = $0001;
+  PLATFORM_SHUT_RD     = 0;
+  PLATFORM_SHUT_WR     = 1;
+  PLATFORM_SHUT_RDWR   = 2;
+{$ELSE}
+  PLATFORM_AF_INET     = AF_INET;
+  PLATFORM_AF_INET6    = AF_INET6;
+  PLATFORM_SOCK_STREAM = SOCK_STREAM;
+  PLATFORM_SOCK_DGRAM  = SOCK_DGRAM;
+  PLATFORM_IPPROTO_TCP = IPPROTO_TCP;
+  PLATFORM_IPPROTO_UDP = IPPROTO_UDP;
+  PLATFORM_SOL_SOCKET  = SOL_SOCKET;
+  PLATFORM_SO_REUSEADDR = SO_REUSEADDR;
+  PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
+  PLATFORM_TCP_NODELAY  = TCP_NODELAY;
+  PLATFORM_SHUT_RD     = SHUT_RD;
+  PLATFORM_SHUT_WR     = SHUT_WR;
+  PLATFORM_SHUT_RDWR   = SHUT_RDWR;
+{$ENDIF}
 
 type
   TPlatformSocket = record
@@ -372,8 +405,46 @@ begin
     Result := WSAGetLastError;
 end;
 
+function platform_socket_sendto(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Int32; out ASent: Int32): Int32;
 var
-  GWsaData: array[0..99] of Byte;
+  LResult: LongInt;
+begin
+  LResult := winsock_sendto(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
+  if LResult < 0 then
+  begin
+    ASent := 0;
+    Result := WSAGetLastError;
+  end
+  else
+  begin
+    ASent := LResult;
+    Result := 0;
+  end;
+end;
+
+function platform_socket_recvfrom(const ASocket: TPlatformSocket;
+  ABuf: Pointer; ALen: Int32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; out ARecvd: Int32): Int32;
+var
+  LResult: LongInt;
+begin
+  LResult := winsock_recvfrom(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
+  if LResult < 0 then
+  begin
+    ARecvd := 0;
+    Result := WSAGetLastError;
+  end
+  else
+  begin
+    ARecvd := LResult;
+    Result := 0;
+  end;
+end;
+
+var
+  GWsaData: array[0..511] of Byte;
 
 initialization
   WSAStartup($0202, @GWsaData);

@@ -73,7 +73,7 @@ end;
 procedure FillSockAddr(const AAddr: TNetAddress; out ASa: sockaddr_in; out ALen: Int32);
 begin
   FillChar(ASa, SizeOf(ASa), 0);
-  ASa.sin_family := AF_INET;
+  ASa.sin_family := PLATFORM_AF_INET;
   ASa.sin_port := Htons(AAddr.Port);
   if (AAddr.IP = '0.0.0.0') or (AAddr.IP = '') then
     ASa.sin_addr.s_addr := 0
@@ -191,7 +191,7 @@ end;
 
 procedure TTcpStream.Shutdown;
 begin
-  platform_socket_shutdown(FSocket, SHUT_WR);
+  platform_socket_shutdown(FSocket, PLATFORM_SHUT_WR);
 end;
 
 procedure TTcpStream.SetNoDelay(const AValue: Boolean);
@@ -199,7 +199,7 @@ var
   LVal: Int32;
 begin
   if AValue then LVal := 1 else LVal := 0;
-  platform_socket_setsockopt(FSocket, IPPROTO_TCP, TCP_NODELAY, @LVal, SizeOf(LVal));
+  platform_socket_setsockopt(FSocket, PLATFORM_IPPROTO_TCP, PLATFORM_TCP_NODELAY, @LVal, SizeOf(LVal));
 end;
 
 procedure TTcpStream.SetKeepAlive(const AValue: Boolean);
@@ -207,7 +207,7 @@ var
   LVal: Int32;
 begin
   if AValue then LVal := 1 else LVal := 0;
-  platform_socket_setsockopt(FSocket, SOL_SOCKET, SO_KEEPALIVE, @LVal, SizeOf(LVal));
+  platform_socket_setsockopt(FSocket, PLATFORM_SOL_SOCKET, PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
 end;
 
 { TTcpListener }
@@ -273,11 +273,11 @@ var
   LLocal: TNetAddress;
 begin
   LLocal := TNetAddress.Create(AAddr, APort);
-  LResult := platform_socket_create(AF_INET, SOCK_STREAM, 0, LSock);
+  LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp listen: socket create failed (' + IntToStr(LResult) + ')');
   LOne := 1;
-  platform_socket_setsockopt(LSock, SOL_SOCKET, SO_REUSEADDR, @LOne, SizeOf(LOne));
+  platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
   FillSockAddr(LLocal, LSa, LSaLen);
   LResult := platform_socket_bind(LSock, @LSa, LSaLen);
   if LResult <> 0 then
@@ -307,7 +307,7 @@ var
   LRemote: TNetAddress;
 begin
   LRemote := TNetAddress.Create(AAddr, APort);
-  LResult := platform_socket_create(AF_INET, SOCK_STREAM, 0, LSock);
+  LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp connect: socket create failed (' + IntToStr(LResult) + ')');
   FillSockAddr(LRemote, LSa, LSaLen);
