@@ -206,6 +206,41 @@ begin
   end;
 end;
 
+procedure TestFloatToJsonBuffer;
+var
+  Buf: array[0..31] of AnsiChar;
+  N: Int32;
+begin
+  N := FloatToJsonBuffer(1.5, @Buf[0]); Buf[N] := #0;
+  CheckEqual('1.5', string(PAnsiChar(@Buf[0])), '1.5 normal');
+
+  N := FloatToJsonBuffer(0.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('null', string(PAnsiChar(@Buf[0])), 'NaN -> null');
+
+  N := FloatToJsonBuffer(1.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('null', string(PAnsiChar(@Buf[0])), 'Inf -> null');
+
+  N := FloatToJsonBuffer(-1.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('null', string(PAnsiChar(@Buf[0])), '-Inf -> null');
+end;
+
+procedure TestViewToDouble;
+var
+  V: TStringView;
+  D: Double;
+begin
+  V := TStringView.Create(PAnsiChar('3.14'), 4);
+  Check(ViewToDouble(V, D), 'view parse');
+  Check(Abs(D - 3.14) < 1e-15, 'view val');
+
+  V := TStringView.Create(PAnsiChar('-1e10'), 5);
+  Check(ViewToDouble(V, D), 'view neg exp');
+  Check(D = -1e10, 'view neg exp val');
+
+  V := TStringView.Empty;
+  Check(not ViewToDouble(V, D), 'empty fails');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.number');
   T.Run('IntToBuffer', @TestIntToBuffer);
@@ -216,7 +251,9 @@ begin
   T.Run('ViewToInt64', @TestViewToInt);
   T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
   T.Run('FloatToBuffer', @TestFloatToBuffer);
+  T.Run('FloatToJsonBuffer', @TestFloatToJsonBuffer);
   T.Run('ParseDouble', @TestParseDouble);
+  T.Run('ViewToDouble', @TestViewToDouble);
   T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;
 end.

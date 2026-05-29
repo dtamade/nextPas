@@ -292,5 +292,13 @@ begin
   BenchStringBuilder;
   WriteLn;
 
+  WriteLn('--- Reference (literature/known values) ---');
+  WriteLn('  Go strconv.FormatFloat:                ~120 ns/op (Ryu)');
+  WriteLn('  Go strconv.ParseFloat:                 ~50 ns/op (Eisel-Lemire)');
+  WriteLn('  Rust ryu::d2s_buffered:                ~25 ns/op');
+  WriteLn('  yyjson write (C, Schubfach):           ~30 ns/op');
+  WriteLn('  yyjson read (C, Eisel-Lemire):         ~20 ns/op');
+  WriteLn;
+
   WriteLn('Done.');
 end.
