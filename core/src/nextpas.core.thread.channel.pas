@@ -139,7 +139,7 @@ begin
     AValue := FHandshakeItem;
     FHandshakeItem := Default(T);
     FHandshakeDone := False;
-    platform_condvar_signal(FSendCond);
+    platform_condvar_broadcast(FSendCond);
     platform_mutex_unlock(FMutex);
     Result := True;
     Exit;
@@ -215,7 +215,7 @@ begin
     AValue := FHandshakeItem;
     FHandshakeItem := Default(T);
     FHandshakeDone := False;
-    platform_condvar_signal(FSendCond);
+    platform_condvar_broadcast(FSendCond);
     platform_mutex_unlock(FMutex);
     Result := True;
     Exit;
