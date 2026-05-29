@@ -55,6 +55,7 @@ procedure GemmMicro6x16F32(AA, AB, AC: PSingle;
   AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
 asm
   // Load existing C[6,16] into accumulators
+  {$I nextpas.core.simd.abi.win64remap6.inc}
   mov rax, rdx            // save C ptr
   vmovups ymm0, [rdx]
   vmovups ymm1, [rdx + 32]
@@ -224,6 +225,7 @@ procedure GemmMicro6x16F32_Zero(AA, AB, AC: PSingle;
   AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
 asm
   vxorps ymm0, ymm0, ymm0
+  {$I nextpas.core.simd.abi.win64remap6.inc}
   vxorps ymm1, ymm1, ymm1
   vxorps ymm2, ymm2, ymm2
   vxorps ymm3, ymm3, ymm3
@@ -729,6 +731,7 @@ procedure GemmMicro4x8F64_Zero(AA, AB, AC: PDouble;
   AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
 asm
   // RDI=A, RSI=B_packed, RDX=C, RCX=K, R8=A_stride(bytes), R9=C_stride(bytes)
+  {$I nextpas.core.simd.abi.win64remap6.inc}
   vxorpd ymm0, ymm0, ymm0
   vxorpd ymm1, ymm1, ymm1
   vxorpd ymm2, ymm2, ymm2
@@ -797,6 +800,7 @@ procedure GemmMicro4x8F64_Acc(AA, AB, AC: PDouble;
   AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
 asm
   mov rax, rdx
+  {$I nextpas.core.simd.abi.win64remap6.inc}
   vmovupd ymm0, [rdx]
   vmovupd ymm1, [rdx + 32]
   add rdx, r9

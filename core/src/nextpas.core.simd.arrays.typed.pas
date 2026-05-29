@@ -582,7 +582,7 @@ begin
   for i := 0 to FCount - 1 do
   begin
     v := FData[i * FStride];
-    if (v = Infinity) or (v = NegInfinity) then Exit(True);
+    if (v = SimdInfinity) or (v = SimdNegInfinity) then Exit(True);
   end;
 end;
 
