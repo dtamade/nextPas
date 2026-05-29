@@ -11,8 +11,8 @@ interface
 
 uses
   SysUtils, np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
-  np_package_manifest, np_source_database, np_target_facts, np_text_primitives,
-  np_toolchain_profiles, np_unit_graph;
+  np_package_manifest, np_preprocessor, np_source_database, np_target_facts,
+  np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
   TSearchIndexEntry = record
@@ -506,6 +506,7 @@ var
   HasExistingUnit: Boolean;
   DependencyFileId: TSourceFileId;
   DependencyLexer: TLexerResult;
+  DependencyPP: TPreprocessor;
   DependencyGreenTree: TGreenTree;
   DependencyAst: TAstFacade;
   DependencyName: string;
@@ -564,8 +565,18 @@ begin
 
   DependencyFileId := FSourceDatabase.RegisterSource(Candidates[0]);
   DependencyLexer := TLexerResult.Create(
-    FSourceDatabase.SourceTextForFileId(DependencyFileId)
+    FSourceDatabase.SourceTextForFileId(DependencyFileId),
+    FDiagnostics,
+    DependencyFileId
   );
+  DependencyPP := TPreprocessor.Create(TDefineTable.Create, True, nil);
+  try
+    DependencyPP.Process(DependencyLexer);
+    DependencyLexer.Free;
+    DependencyLexer := DependencyPP.ToLexerResult;
+  finally
+    DependencyPP.Free;
+  end;
   DependencyGreenTree := ParseGreenTree(
     DependencyLexer,
     FDiagnostics,
