@@ -23,6 +23,9 @@ implementation
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.vec16,
+{$IFDEF HAS_AVX2}
+  nextpas.core.simd.vec32,
+{$ENDIF}
   nextpas.core.text.char,
   nextpas.core.text.utf8;
 
@@ -59,10 +62,40 @@ var
   LPos, LOut: SizeUInt;
   LMaskQuote, LMaskBs, LMaskCtrl, LCombined: TMask16;
   LFirst: Int32;
-  LSafeRun: SizeUInt;
+{$IFDEF HAS_AVX2}
+  LMQ32, LMB32, LMC32, LC32: TMask32;
+  LF32: Int32;
+{$ENDIF}
 begin
   LPos := 0;
   LOut := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LMQ32 := Vec32CmpEq(@ASrc[LPos], Ord('"'));
+    LMB32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
+    LMC32 := Vec32CmpLtU(@ASrc[LPos], $20);
+    LC32 := LMQ32 or LMB32 or LMC32;
+    if LC32 = MASK32_NONE_SET then
+    begin
+      Move(ASrc[LPos], ADst[LOut], 32);
+      Inc(LPos, 32);
+      Inc(LOut, 32);
+    end
+    else
+    begin
+      LF32 := Vec32Ctz(LC32);
+      if LF32 > 0 then
+      begin
+        Move(ASrc[LPos], ADst[LOut], LF32);
+        Inc(LPos, SizeUInt(LF32));
+        Inc(LOut, SizeUInt(LF32));
+      end;
+      EmitEscapeSeq(Byte(ASrc[LPos]), ADst, LOut);
+      Inc(LPos);
+    end;
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
     LMaskQuote := Vec16CmpEq(@ASrc[LPos], Ord('"'));

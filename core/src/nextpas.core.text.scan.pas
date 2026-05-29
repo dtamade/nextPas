@@ -30,20 +30,35 @@ implementation
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.vec16,
+{$IFDEF HAS_AVX2}
+  nextpas.core.simd.vec32,
+{$ENDIF}
   nextpas.core.text.char;
 
 function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
   const A: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LMask: TMask16;
+  LMask16: TMask16;
+{$IFDEF HAS_AVX2}
+  LMask32: TMask32;
+{$ENDIF}
 begin
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LMask32 := Vec32CmpEq(@AData[LPos], A);
+    if LMask32 <> MASK32_NONE_SET then
+      Exit(PtrInt(LPos) + Vec32Ctz(LMask32));
+    Inc(LPos, 32);
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
-    LMask := Vec16CmpEq(@AData[LPos], A);
-    if LMask <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
+    LMask16 := Vec16CmpEq(@AData[LPos], A);
+    if LMask16 <> MASK16_NONE_SET then
+      Exit(PtrInt(LPos) + Vec16Ctz(LMask16));
     Inc(LPos, 16);
   end;
   while LPos < ALen do
@@ -59,14 +74,26 @@ function ScanFindByte2(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LCombined: TMask16;
+  LCombined16: TMask16;
+{$IFDEF HAS_AVX2}
+  LCombined32: TMask32;
+{$ENDIF}
 begin
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LCombined32 := Vec32CmpEq(@AData[LPos], A) or Vec32CmpEq(@AData[LPos], B);
+    if LCombined32 <> MASK32_NONE_SET then
+      Exit(PtrInt(LPos) + Vec32Ctz(LCombined32));
+    Inc(LPos, 32);
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
-    LCombined := Vec16CmpEq(@AData[LPos], A) or Vec16CmpEq(@AData[LPos], B);
-    if LCombined <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LCombined));
+    LCombined16 := Vec16CmpEq(@AData[LPos], A) or Vec16CmpEq(@AData[LPos], B);
+    if LCombined16 <> MASK16_NONE_SET then
+      Exit(PtrInt(LPos) + Vec16Ctz(LCombined16));
     Inc(LPos, 16);
   end;
   while LPos < ALen do
@@ -154,19 +181,36 @@ end;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LWsMask: TMask16;
+  LWsMask16: TMask16;
+{$IFDEF HAS_AVX2}
+  LWsMask32: TMask32;
+{$ENDIF}
 begin
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LWsMask32 := Vec32CmpEq(@AData[LPos], $20) or Vec32CmpEq(@AData[LPos], $09) or
+                 Vec32CmpEq(@AData[LPos], $0A) or Vec32CmpEq(@AData[LPos], $0D);
+    if LWsMask32 = MASK32_ALL_SET then
+      Inc(LPos, 32)
+    else
+    begin
+      LWsMask32 := (not LWsMask32) and MASK32_ALL_SET;
+      Exit(LPos + SizeUInt(Vec32Ctz(LWsMask32)));
+    end;
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
-    LWsMask := Vec16CmpEq(@AData[LPos], $20) or Vec16CmpEq(@AData[LPos], $09) or
-               Vec16CmpEq(@AData[LPos], $0A) or Vec16CmpEq(@AData[LPos], $0D);
-    if LWsMask = MASK16_ALL_SET then
+    LWsMask16 := Vec16CmpEq(@AData[LPos], $20) or Vec16CmpEq(@AData[LPos], $09) or
+                 Vec16CmpEq(@AData[LPos], $0A) or Vec16CmpEq(@AData[LPos], $0D);
+    if LWsMask16 = MASK16_ALL_SET then
       Inc(LPos, 16)
     else
     begin
-      LWsMask := (not LWsMask) and MASK16_ALL_SET;
-      Exit(LPos + SizeUInt(Vec16Ctz(LWsMask)));
+      LWsMask16 := (not LWsMask16) and MASK16_ALL_SET;
+      Exit(LPos + SizeUInt(Vec16Ctz(LWsMask16)));
     end;
   end;
   while LPos < ALen do
