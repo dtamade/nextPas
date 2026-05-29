@@ -585,24 +585,24 @@ begin
   dispatchTable.Utf8Validate := @Utf8Validate_SSE2;
 
   // Mask operations (bsf + SWAR popcount, always enabled)
-  dispatchTable.Mask2All := @SSE2Mask2All;
-  dispatchTable.Mask2Any := @SSE2Mask2Any;
-  dispatchTable.Mask2None := @SSE2Mask2None;
+  dispatchTable.Mask2All := @SharedMask2All;
+  dispatchTable.Mask2Any := @SharedMask2Any;
+  dispatchTable.Mask2None := @SharedMask2None;
   dispatchTable.Mask2PopCount := @SSE2Mask2PopCount;
   dispatchTable.Mask2FirstSet := @SharedMask2FirstSet;
-  dispatchTable.Mask4All := @SSE2Mask4All;
-  dispatchTable.Mask4Any := @SSE2Mask4Any;
-  dispatchTable.Mask4None := @SSE2Mask4None;
+  dispatchTable.Mask4All := @SharedMask4All;
+  dispatchTable.Mask4Any := @SharedMask4Any;
+  dispatchTable.Mask4None := @SharedMask4None;
   dispatchTable.Mask4PopCount := @SSE2Mask4PopCount;
   dispatchTable.Mask4FirstSet := @SharedMask4FirstSet;
-  dispatchTable.Mask8All := @SSE2Mask8All;
-  dispatchTable.Mask8Any := @SSE2Mask8Any;
-  dispatchTable.Mask8None := @SSE2Mask8None;
+  dispatchTable.Mask8All := @SharedMask8All;
+  dispatchTable.Mask8Any := @SharedMask8Any;
+  dispatchTable.Mask8None := @SharedMask8None;
   dispatchTable.Mask8PopCount := @SSE2Mask8PopCount;
   dispatchTable.Mask8FirstSet := @SharedMask8FirstSet;
-  dispatchTable.Mask16All := @SSE2Mask16All;
-  dispatchTable.Mask16Any := @SSE2Mask16Any;
-  dispatchTable.Mask16None := @SSE2Mask16None;
+  dispatchTable.Mask16All := @SharedMask16All;
+  dispatchTable.Mask16Any := @SharedMask16Any;
+  dispatchTable.Mask16None := @SharedMask16None;
   dispatchTable.Mask16PopCount := @SSE2Mask16PopCount;
   dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
 

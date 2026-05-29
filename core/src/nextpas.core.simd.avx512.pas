@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.backend.priority;
 

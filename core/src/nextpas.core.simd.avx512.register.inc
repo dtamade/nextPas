@@ -257,10 +257,10 @@ begin
   dispatchTable.ReduceMaxF64x8 := @AVX512ReduceMaxF64x8;
   dispatchTable.ReduceMulF64x8 := @AVX512ReduceMulF64x8;
 
-  // === Mask16 Operations (AVX-512 Optimized) ===
-  dispatchTable.Mask16All := @AVX512Mask16All;
-  dispatchTable.Mask16Any := @AVX512Mask16Any;
-  dispatchTable.Mask16None := @AVX512Mask16None;
+  // === Mask16 Operations (shared scalar, ABI-safe) ===
+  dispatchTable.Mask16All := @SharedMask16All;
+  dispatchTable.Mask16Any := @SharedMask16Any;
+  dispatchTable.Mask16None := @SharedMask16None;
   dispatchTable.Mask16PopCount := @AVX512Mask16PopCount;
   dispatchTable.Mask16FirstSet := @AVX512Mask16FirstSet;
 

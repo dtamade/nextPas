@@ -3180,51 +3180,16 @@ begin
   end;
 end;
 
-// === Mask Operations SIMD Implementation (AVX2) ===
-// AVX2 CPU 都支持 popcnt 指令（SSE4.2），可以使用原生指令
-// 使用 bsf (bit scan forward) 和 popcnt 指令
+// === Mask Operations (AVX2) ===
+// All/Any/None/FirstSet: shared in nextpas.core.simd.mask
+// PopCount: AVX2-specific (native popcnt instruction, Haswell+ guaranteed)
 
-// --- TMask2 Operations (2 bits) ---
-function AVX2Mask2All(mask: TMask2): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 3
-  cmp   edi, 3
-  sete  al
-  {$ELSE}
-  and   ecx, 3
-  cmp   ecx, 3
-  sete  al
-  {$ENDIF}
-end;
-
-function AVX2Mask2Any(mask: TMask2): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  edi, 3
-  setne al
-  {$ELSE}
-  test  ecx, 3
-  setne al
-  {$ENDIF}
-end;
-
-function AVX2Mask2None(mask: TMask2): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  edi, 3
-  sete  al
-  {$ELSE}
-  test  ecx, 3
-  sete  al
-  {$ENDIF}
-end;
-
+// --- TMask2 PopCount (2 bits) ---
 function AVX2Mask2PopCount(mask: TMask2): Integer; assembler; nostackframe;
 asm
   {$IFDEF UNIX}
   and   edi, 3
-  popcnt eax, edi    // 原生 popcnt 指令
+  popcnt eax, edi
   {$ELSE}
   and   ecx, 3
   popcnt eax, ecx
@@ -3232,42 +3197,7 @@ asm
 end;
 
 
-// --- TMask4 Operations (4 bits) ---
-function AVX2Mask4All(mask: TMask4): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  and   edi, 15
-  cmp   edi, 15
-  sete  al
-  {$ELSE}
-  and   ecx, 15
-  cmp   ecx, 15
-  sete  al
-  {$ENDIF}
-end;
-
-function AVX2Mask4Any(mask: TMask4): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  edi, 15
-  setne al
-  {$ELSE}
-  test  ecx, 15
-  setne al
-  {$ENDIF}
-end;
-
-function AVX2Mask4None(mask: TMask4): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  edi, 15
-  sete  al
-  {$ELSE}
-  test  ecx, 15
-  sete  al
-  {$ENDIF}
-end;
-
+// --- TMask4 PopCount (4 bits) ---
 function AVX2Mask4PopCount(mask: TMask4): Integer; assembler; nostackframe;
 asm
   {$IFDEF UNIX}
@@ -3280,40 +3210,7 @@ asm
 end;
 
 
-// --- TMask8 Operations (8 bits) ---
-function AVX2Mask8All(mask: TMask8): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  cmp   dil, $FF
-  sete  al
-  {$ELSE}
-  cmp   cl, $FF
-  sete  al
-  {$ENDIF}
-end;
-
-function AVX2Mask8Any(mask: TMask8): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  dil, dil
-  setne al
-  {$ELSE}
-  test  cl, cl
-  setne al
-  {$ENDIF}
-end;
-
-function AVX2Mask8None(mask: TMask8): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  dil, dil
-  sete  al
-  {$ELSE}
-  test  cl, cl
-  sete  al
-  {$ENDIF}
-end;
-
+// --- TMask8 PopCount (8 bits) ---
 function AVX2Mask8PopCount(mask: TMask8): Integer; assembler; nostackframe;
 asm
   {$IFDEF UNIX}
@@ -3326,40 +3223,7 @@ asm
 end;
 
 
-// --- TMask16 Operations (16 bits) ---
-function AVX2Mask16All(mask: TMask16): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  cmp   di, $FFFF
-  sete  al
-  {$ELSE}
-  cmp   cx, $FFFF
-  sete  al
-  {$ENDIF}
-end;
-
-function AVX2Mask16Any(mask: TMask16): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  di, di
-  setne al
-  {$ELSE}
-  test  cx, cx
-  setne al
-  {$ENDIF}
-end;
-
-function AVX2Mask16None(mask: TMask16): Boolean; assembler; nostackframe;
-asm
-  {$IFDEF UNIX}
-  test  di, di
-  sete  al
-  {$ELSE}
-  test  cx, cx
-  sete  al
-  {$ENDIF}
-end;
-
+// --- TMask16 PopCount (16 bits) ---
 function AVX2Mask16PopCount(mask: TMask16): Integer; assembler; nostackframe;
 asm
   {$IFDEF UNIX}
