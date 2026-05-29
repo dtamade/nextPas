@@ -119,12 +119,39 @@ end;
 
 {$IFDEF CPUX86_64}
 {$I nextpas.core.hash.sha256.x64.inc}
+{$I nextpas.core.hash.sha256.shani.inc}
+{$ENDIF}
+
+{$IFDEF CPUX86_64}
+var
+  GHasSHANI: Boolean = False;
+  GDispatchInitialized: Boolean = False;
+
+procedure InitSHA256Dispatch;
+var
+  LEax, LEbx, LEcx, LEdx: DWord;
+begin
+  if GDispatchInitialized then
+    Exit;
+  LEax := 0; LEbx := 0; LEcx := 0; LEdx := 0;
+  asm
+    movl $7, %eax
+    xorl %ecx, %ecx
+    cpuid
+    movl %ebx, LEbx
+  end ['eax', 'ebx', 'ecx', 'edx'];
+  GHasSHANI := (LEbx and (1 shl 29)) <> 0;
+  GDispatchInitialized := True;
+end;
 {$ENDIF}
 
 procedure TSHA256Hasher.ProcessBlock(ABlock: PByte);
 begin
   {$IFDEF CPUX86_64}
-  ProcessBlockX64(ABlock, @FH[0]);
+  if GHasSHANI then
+    ProcessBlockSHANI(ABlock, @FH[0])
+  else
+    ProcessBlockX64(ABlock, @FH[0]);
   {$ELSE}
   ProcessBlockLocal(ABlock, FH);
   {$ENDIF}
@@ -195,9 +222,14 @@ begin
       LBuf[LBufLen] := 0;
       Inc(LBufLen);
     end;
-    // Process this block with local state
-    // Inline ProcessBlock logic on local LH
-    {$IFDEF CPUX86_64}ProcessBlockX64(@LBuf[0], @LH[0]){$ELSE}ProcessBlockLocal(@LBuf[0], LH){$ENDIF};
+    {$IFDEF CPUX86_64}
+    if GHasSHANI then
+      ProcessBlockSHANI(@LBuf[0], @LH[0])
+    else
+      ProcessBlockX64(@LBuf[0], @LH[0]);
+    {$ELSE}
+    ProcessBlockLocal(@LBuf[0], LH);
+    {$ENDIF}
     LBufLen := 0;
   end;
 
@@ -216,7 +248,14 @@ begin
   LBuf[62] := Byte(LTotalBits shr 8);
   LBuf[63] := Byte(LTotalBits);
 
-  {$IFDEF CPUX86_64}ProcessBlockX64(@LBuf[0], @LH[0]){$ELSE}ProcessBlockLocal(@LBuf[0], LH){$ENDIF};
+  {$IFDEF CPUX86_64}
+  if GHasSHANI then
+    ProcessBlockSHANI(@LBuf[0], @LH[0])
+  else
+    ProcessBlockX64(@LBuf[0], @LH[0]);
+  {$ELSE}
+  ProcessBlockLocal(@LBuf[0], LH);
+  {$ENDIF}
 
   LDst := @ADst;
   for I := 0 to 7 do
@@ -248,5 +287,10 @@ function NewSHA256: IHasher;
 begin
   Result := TSHA256Hasher.Create;
 end;
+
+{$IFDEF CPUX86_64}
+initialization
+  InitSHA256Dispatch;
+{$ENDIF}
 
 end.
