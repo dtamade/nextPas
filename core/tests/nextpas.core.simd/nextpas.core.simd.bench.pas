@@ -106,7 +106,7 @@ end;
 function MeasureOpsPerSec(Func: TBenchFunc; var TotalOps: Int64): Double;
 var
   Iterations, i: Integer;
-  ElapsedNs: UInt64;
+  ElapsedNs: Int64;
   LStopwatch: TStopwatch;
   LMeasuredOps: Int64;
 begin
@@ -120,7 +120,7 @@ begin
   for i := 1 to MIN_ITERATIONS do
     Func();
   LStopwatch.Stop;
-  ElapsedNs := LStopwatch.ElapsedNs;
+  ElapsedNs := LStopwatch.Elapsed.AsNanoseconds;
   
   if ElapsedNs > 0 then
     Iterations := Trunc((Int64(MIN_ITERATIONS) * TARGET_TIME_NS) / ElapsedNs)
@@ -138,7 +138,7 @@ begin
   LStopwatch.Stop;
   
   TotalOps := LMeasuredOps;
-  ElapsedNs := LStopwatch.ElapsedNs;
+  ElapsedNs := LStopwatch.Elapsed.AsNanoseconds;
   if ElapsedNs = 0 then
     ElapsedNs := 1;
   Result := (LMeasuredOps * 1000000000.0) / ElapsedNs;
@@ -522,7 +522,7 @@ end;
 
 function BenchHotMemEqual_PublicCached: Int64;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LIndex: Integer;
 begin
   LApi := GetSimdPublicApi;
@@ -560,7 +560,7 @@ end;
 
 function BenchHotSumBytes_PublicCached: Int64;
 var
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LIndex: Integer;
 begin
   LApi := GetSimdPublicApi;

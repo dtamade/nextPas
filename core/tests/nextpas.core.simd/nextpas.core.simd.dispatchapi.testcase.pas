@@ -44,7 +44,7 @@ unit nextpas.core.simd.dispatchapi.testcase;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
+  Classes, SysUtils, Math, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
@@ -53,7 +53,6 @@ uses
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.utils,
   nextpas.core.simd.ops,
-  nextpas.core.simd,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.dataplane,
   nextpas.core.simd.backend.priority,
@@ -15476,7 +15475,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_AVX2FMA_When_FusedPathUsable;
 var
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LScalarTable: TSimdDispatchTable;
   LTable: TSimdDispatchTable;
 begin
@@ -15717,7 +15716,7 @@ procedure TTestCase_X86MaskedFmaContract.Test_AVX2_FmaSlots_StayScalar_When_Hard
 var
   LScalarTable: TSimdDispatchTable;
   LAVX2Table: TSimdDispatchTable;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
 begin
   if not HasAVX2 then
     Exit;
@@ -15791,7 +15790,7 @@ end;
 
 procedure TTestCase_RISCVVMaskedOpsContract.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_RISCVVMaskedOps_When_MaskSlots_AreNative;
 var
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
 begin
@@ -16302,7 +16301,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_PublicApi_BackendPodInfo_CapabilityBits_Expose_AVX2Shuffle_When_NativeShuffleSlotsUsable;
 var
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LScalarTable: TSimdDispatchTable;
   LAVX2Table: TSimdDispatchTable;
 begin
@@ -16366,7 +16365,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_PublicApi_BackendPodInfo_CapabilityBits_Clear_AVX2VectorAsmGatedBits_When_VectorAsmDisabled;
 var
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LAVX2Table: TSimdDispatchTable;
 begin
   GetDispatchTable;

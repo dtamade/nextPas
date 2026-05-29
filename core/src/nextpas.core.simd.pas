@@ -1251,6 +1251,23 @@ function VecI32x4CastToF32x4(const a: TVecI32x4): TVecF32x4; inline;
 *}
 function VecF32x4CastToI32x4(const a: TVecF32x4): TVecI32x4; inline;
 
+// Facade functions (dispatch-based bulk operations)
+function MemEqual(a, b: Pointer; len: SizeUInt): LongBool; inline;
+function MemFindByte(p: Pointer; len: SizeUInt; value: Byte): PtrInt; inline;
+function MemDiffRange(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; inline;
+procedure MemCopy(src, dst: Pointer; len: SizeUInt); inline;
+procedure MemSet(dst: Pointer; len: SizeUInt; value: Byte); inline;
+procedure MemReverse(p: Pointer; len: SizeUInt); inline;
+function SumBytes(p: Pointer; len: SizeUInt): UInt64; inline;
+procedure MinMaxBytes(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); inline;
+function CountByte(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; inline;
+function Utf8Validate(p: Pointer; len: SizeUInt): Boolean; inline;
+function AsciiIEqual(a, b: Pointer; len: SizeUInt): Boolean; inline;
+procedure ToLowerAscii(p: Pointer; len: SizeUInt); inline;
+procedure ToUpperAscii(p: Pointer; len: SizeUInt); inline;
+function BytesIndexOf(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; inline;
+function BitsetPopCount(p: Pointer; len: SizeUInt): SizeUInt; inline;
+
 implementation
 
 uses
@@ -1330,6 +1347,43 @@ end;
 
 {$I nextpas.core.simd.impl.core.inc}
 {$I nextpas.core.simd.impl.wide.inc}
+
+// Facade function implementations (dispatch-based)
+function GetFacadeDispatch: PSimdDispatchTable; inline;
+begin
+  Result := GetSimdFacadeDispatchFastPath;
+end;
+
+function MemEqual(a, b: Pointer; len: SizeUInt): LongBool; inline;
+begin Result := GetFacadeDispatch^.MemEqual(a, b, len); end;
+function MemFindByte(p: Pointer; len: SizeUInt; value: Byte): PtrInt; inline;
+begin Result := GetFacadeDispatch^.MemFindByte(p, len, value); end;
+function MemDiffRange(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; inline;
+begin Result := GetFacadeDispatch^.MemDiffRange(a, b, len, firstDiff, lastDiff); end;
+procedure MemCopy(src, dst: Pointer; len: SizeUInt); inline;
+begin GetFacadeDispatch^.MemCopy(src, dst, len); end;
+procedure MemSet(dst: Pointer; len: SizeUInt; value: Byte); inline;
+begin GetFacadeDispatch^.MemSet(dst, len, value); end;
+procedure MemReverse(p: Pointer; len: SizeUInt); inline;
+begin GetFacadeDispatch^.MemReverse(p, len); end;
+function SumBytes(p: Pointer; len: SizeUInt): UInt64; inline;
+begin Result := GetFacadeDispatch^.SumBytes(p, len); end;
+procedure MinMaxBytes(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); inline;
+begin GetFacadeDispatch^.MinMaxBytes(p, len, minVal, maxVal); end;
+function CountByte(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; inline;
+begin Result := GetFacadeDispatch^.CountByte(p, len, value); end;
+function Utf8Validate(p: Pointer; len: SizeUInt): Boolean; inline;
+begin Result := GetFacadeDispatch^.Utf8Validate(p, len); end;
+function AsciiIEqual(a, b: Pointer; len: SizeUInt): Boolean; inline;
+begin Result := GetFacadeDispatch^.AsciiIEqual(a, b, len); end;
+procedure ToLowerAscii(p: Pointer; len: SizeUInt); inline;
+begin GetFacadeDispatch^.ToLowerAscii(p, len); end;
+procedure ToUpperAscii(p: Pointer; len: SizeUInt); inline;
+begin GetFacadeDispatch^.ToUpperAscii(p, len); end;
+function BytesIndexOf(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; inline;
+begin Result := GetFacadeDispatch^.BytesIndexOf(haystack, haystackLen, needle, needleLen); end;
+function BitsetPopCount(p: Pointer; len: SizeUInt): SizeUInt; inline;
+begin Result := GetFacadeDispatch^.BitsetPopCount(p, len); end;
 
 procedure ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 var

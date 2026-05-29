@@ -9,6 +9,7 @@ unit nextpas.core.simd.ieee754.testcase;
 interface
 
 uses
+  Math,
   Classes, SysUtils, nextpas.core.math, fpcunit, testregistry,
   nextpas.core.simd,
   nextpas.core.simd.testcase,

@@ -1653,13 +1653,13 @@ end;
 function ScalarShiftLeftI16x32(const a: TVecI16x32; count: Integer): TVecI16x32;
 var i: Integer;
 begin
-  if count <= 0 then begin Result := a; Exit; end;
-  if count >= 16 then
-    for i := 0 to 31 do
-      Result.i[i] := 0
-  else
-    for i := 0 to 31 do
-      Result.i[i] := a.i[i] shl count;
+  if (count <= 0) or (count >= 16) then
+  begin
+    for i := 0 to 31 do Result.i[i] := 0;
+    Exit;
+  end;
+  for i := 0 to 31 do
+    Result.i[i] := a.i[i] shl count;
 end;
 
 function ScalarShiftRightI16x32(const a: TVecI16x32; count: Integer): TVecI16x32;

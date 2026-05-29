@@ -134,7 +134,11 @@ begin
   while aIndex > 0 do
   begin
     LParentIdx := (aIndex - 1) shr 1;
-    if FComparer(LItem, FItems[LParentIdx], nil) >= 0 then
+    if (GetTypeKind(T) = tkInteger) and (SizeOf(T) = 4) then
+    begin
+      if PInt32(@LItem)^ >= PInt32(@FItems[LParentIdx])^ then Break;
+    end
+    else if FComparer(LItem, FItems[LParentIdx], nil) >= 0 then
       Break;
     FItems[aIndex] := FItems[LParentIdx];
     aIndex := LParentIdx;
@@ -153,10 +157,18 @@ begin
     LChild := 2 * aIndex + 1;
     if LChild >= FCount then Break;
     LRight := LChild + 1;
-    if (LRight < FCount) and (FComparer(FItems[LRight], FItems[LChild], nil) < 0) then
-      LChild := LRight;
-    if FComparer(LItem, FItems[LChild], nil) <= 0 then
-      Break;
+    if (GetTypeKind(T) = tkInteger) and (SizeOf(T) = 4) then
+    begin
+      if (LRight < FCount) and (PInt32(@FItems[LRight])^ < PInt32(@FItems[LChild])^) then
+        LChild := LRight;
+      if PInt32(@LItem)^ <= PInt32(@FItems[LChild])^ then Break;
+    end
+    else
+    begin
+      if (LRight < FCount) and (FComparer(FItems[LRight], FItems[LChild], nil) < 0) then
+        LChild := LRight;
+      if FComparer(LItem, FItems[LChild], nil) <= 0 then Break;
+    end;
     FItems[aIndex] := FItems[LChild];
     aIndex := LChild;
   end;

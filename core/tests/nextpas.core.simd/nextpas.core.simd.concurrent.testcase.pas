@@ -344,8 +344,8 @@ type
     FBackend: TSimdBackend;
     FExpectedCapsA: UInt64;
     FExpectedCapsB: UInt64;
-    FExpectedFlagsA: TFafafaSimdAbiFlags;
-    FExpectedFlagsB: TFafafaSimdAbiFlags;
+    FExpectedFlagsA: TNextPasSimdAbiFlags;
+    FExpectedFlagsB: TNextPasSimdAbiFlags;
     FSuccess: Boolean;
     FErrorMsg: string;
   protected
@@ -353,7 +353,7 @@ type
   public
     constructor Create(aIterations: Integer; aBackend: TSimdBackend;
       aExpectedCapsA, aExpectedCapsB: UInt64;
-      aExpectedFlagsA, aExpectedFlagsB: TFafafaSimdAbiFlags);
+      aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
     property Success: Boolean read FSuccess;
     property ErrorMsg: string read FErrorMsg;
   end;
@@ -386,9 +386,9 @@ type
     FBackend: TSimdBackend;
     FExpectedCapsEnabled: UInt64;
     FExpectedCapsDisabled: UInt64;
-    FExpectedFlagsEnabledActive: TFafafaSimdAbiFlags;
-    FExpectedFlagsEnabledInactive: TFafafaSimdAbiFlags;
-    FExpectedFlagsDisabledInactive: TFafafaSimdAbiFlags;
+    FExpectedFlagsEnabledActive: TNextPasSimdAbiFlags;
+    FExpectedFlagsEnabledInactive: TNextPasSimdAbiFlags;
+    FExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags;
     FSuccess: Boolean;
     FErrorMsg: string;
   protected
@@ -397,7 +397,7 @@ type
     constructor Create(aIterations: Integer; aBackend: TSimdBackend;
       aExpectedCapsEnabled, aExpectedCapsDisabled: UInt64;
       aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive,
-      aExpectedFlagsDisabledInactive: TFafafaSimdAbiFlags);
+      aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
     property Success: Boolean read FSuccess;
     property ErrorMsg: string read FErrorMsg;
   end;
@@ -497,15 +497,15 @@ type
     FIterations: Integer;
     FExpectedBackendA: TSimdBackend;
     FExpectedBackendB: TSimdBackend;
-    FExpectedFlagsA: TFafafaSimdAbiFlags;
-    FExpectedFlagsB: TFafafaSimdAbiFlags;
+    FExpectedFlagsA: TNextPasSimdAbiFlags;
+    FExpectedFlagsB: TNextPasSimdAbiFlags;
     FSuccess: Boolean;
     FErrorMsg: string;
   protected
     procedure Execute; override;
   public
     constructor Create(aIterations: Integer; aExpectedBackendA, aExpectedBackendB: TSimdBackend;
-      aExpectedFlagsA, aExpectedFlagsB: TFafafaSimdAbiFlags);
+      aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
     property Success: Boolean read FSuccess;
     property ErrorMsg: string read FErrorMsg;
   end;
@@ -605,7 +605,7 @@ begin
 end;
 
 function BuildExpectedAbiFlagsLocal(const aBackend: TSimdBackend;
-  const aSupportedOnCPU, aRegistered, aDispatchable, aActive: Boolean): TFafafaSimdAbiFlags;
+  const aSupportedOnCPU, aRegistered, aDispatchable, aActive: Boolean): TNextPasSimdAbiFlags;
 begin
   Result := 0;
   if aSupportedOnCPU then
@@ -1369,8 +1369,8 @@ end;
 procedure TPublicApiReadWorker.Execute;
 var
   LIndex: Integer;
-  LApi: PFafafaSimdPublicApi;
-  LExpectedFlags: TFafafaSimdAbiFlags;
+  LApi: PNextPasSimdPublicApi;
+  LExpectedFlags: TNextPasSimdAbiFlags;
   LExpectedAbiMajor: UInt16;
   LExpectedAbiMinor: UInt16;
   LExpectedSigHi: UInt64;
@@ -1395,10 +1395,10 @@ begin
         FErrorMsg := Format('public api table is nil at iter %d', [LIndex]);
         Exit;
       end;
-      if LApi^.StructSize <> SizeOf(TFafafaSimdPublicApi) then
+      if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
         FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TFafafaSimdPublicApi), LApi^.StructSize]);
+          [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
       if LApi^.AbiVersionMajor <> LExpectedAbiMajor then
@@ -1488,7 +1488,7 @@ end;
 
 constructor TPublicAbiPodInfoReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   aExpectedCapsA, aExpectedCapsB: UInt64;
-  aExpectedFlagsA, aExpectedFlagsB: TFafafaSimdAbiFlags);
+  aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -1521,7 +1521,7 @@ end;
 procedure TPublicAbiPodInfoReadWorker.Execute;
 var
   LIndex: Integer;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LMatchesA: Boolean;
   LMatchesB: Boolean;
 begin
@@ -1535,10 +1535,10 @@ begin
         FErrorMsg := Format('backend pod info query failed at iter %d', [LIndex]);
         Exit;
       end;
-      if LInfo.StructSize <> SizeOf(TFafafaSimdBackendPodInfo) then
+      if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
         FErrorMsg := Format('backend pod info StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TFafafaSimdBackendPodInfo), LInfo.StructSize]);
+          [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
@@ -1683,7 +1683,7 @@ end;
 constructor TCurrentBackendPodInfoReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   aExpectedCapsEnabled, aExpectedCapsDisabled: UInt64;
   aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive,
-  aExpectedFlagsDisabledInactive: TFafafaSimdAbiFlags);
+  aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -1832,7 +1832,7 @@ end;
 procedure TCurrentBackendPodInfoReadWorker.Execute;
 var
   LIndex: Integer;
-  LInfo: TFafafaSimdBackendPodInfo;
+  LInfo: TNextPasSimdBackendPodInfo;
   LMatchesEnabledActive: Boolean;
   LMatchesEnabledInactive: Boolean;
   LMatchesDisabledInactive: Boolean;
@@ -1848,10 +1848,10 @@ begin
         FErrorMsg := Format('current backend pod info query failed at iter %d', [LIndex]);
         Exit;
       end;
-      if LInfo.StructSize <> SizeOf(TFafafaSimdBackendPodInfo) then
+      if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
         FErrorMsg := Format('current backend pod info StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TFafafaSimdBackendPodInfo), LInfo.StructSize]);
+          [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
@@ -1957,7 +1957,7 @@ end;
 
 constructor TPublicApiActiveMetadataReadWorker.Create(aIterations: Integer;
   aExpectedBackendA, aExpectedBackendB: TSimdBackend;
-  aExpectedFlagsA, aExpectedFlagsB: TFafafaSimdAbiFlags);
+  aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
 begin
   inherited Create(True);
   FreeOnTerminate := False;
@@ -2061,7 +2061,7 @@ end;
 procedure TPublicApiActiveMetadataReadWorker.Execute;
 var
   LIndex: Integer;
-  LApi: PFafafaSimdPublicApi;
+  LApi: PNextPasSimdPublicApi;
   LMatchesA: Boolean;
   LMatchesB: Boolean;
   LBufA: array[0..31] of Byte;
@@ -2082,10 +2082,10 @@ begin
         FErrorMsg := Format('public api table is nil at iter %d', [LIndex]);
         Exit;
       end;
-      if LApi^.StructSize <> SizeOf(TFafafaSimdPublicApi) then
+      if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
         FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d',
-          [LIndex, SizeOf(TFafafaSimdPublicApi), LApi^.StructSize]);
+          [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
 
@@ -2663,8 +2663,8 @@ var
   LSupportedOnCPU: Boolean;
   LExpectedCapsEnabled: UInt64;
   LExpectedCapsDisabled: UInt64;
-  LExpectedFlagsEnabled: TFafafaSimdAbiFlags;
-  LExpectedFlagsDisabled: TFafafaSimdAbiFlags;
+  LExpectedFlagsEnabled: TNextPasSimdAbiFlags;
+  LExpectedFlagsDisabled: TNextPasSimdAbiFlags;
 begin
   LOldVectorAsm := IsVectorAsmEnabled;
   LWriters := nil;
@@ -2872,8 +2872,8 @@ var
   LOriginalTable: TSimdDispatchTable;
   LDisabledTable: TSimdDispatchTable;
   LFallbackInfo: TSimdBackendInfo;
-  LExpectedFlagsEnabled: TFafafaSimdAbiFlags;
-  LExpectedFlagsDisabled: TFafafaSimdAbiFlags;
+  LExpectedFlagsEnabled: TNextPasSimdAbiFlags;
+  LExpectedFlagsDisabled: TNextPasSimdAbiFlags;
 begin
   LOldVectorAsm := IsVectorAsmEnabled;
   LWriters := nil;
@@ -2973,8 +2973,8 @@ var
   LReaders: array of TPublicApiActiveMetadataReadWorker;
   LExpectedEnabledBackend: TSimdBackend;
   LExpectedDisabledBackend: TSimdBackend;
-  LExpectedEnabledFlags: TFafafaSimdAbiFlags;
-  LExpectedDisabledFlags: TFafafaSimdAbiFlags;
+  LExpectedEnabledFlags: TNextPasSimdAbiFlags;
+  LExpectedDisabledFlags: TNextPasSimdAbiFlags;
   LCurrentInfo: TSimdBackendInfo;
   LIndex: Integer;
   LAllSuccess: Boolean;
@@ -3073,9 +3073,9 @@ var
   LDisabledTable: TSimdDispatchTable;
   LExpectedCapsEnabled: UInt64;
   LExpectedCapsDisabled: UInt64;
-  LExpectedFlagsEnabledActive: TFafafaSimdAbiFlags;
-  LExpectedFlagsEnabledInactive: TFafafaSimdAbiFlags;
-  LExpectedFlagsDisabledInactive: TFafafaSimdAbiFlags;
+  LExpectedFlagsEnabledActive: TNextPasSimdAbiFlags;
+  LExpectedFlagsEnabledInactive: TNextPasSimdAbiFlags;
+  LExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags;
 begin
   LOldVectorAsm := IsVectorAsmEnabled;
   LWriters := nil;
