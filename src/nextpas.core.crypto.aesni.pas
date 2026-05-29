@@ -320,32 +320,62 @@ end;
 procedure AESNIEncryptCTR128(const AKey: TAESNIExpandedKey128;
   const AICB: TAESNIBlock; const AInput: PByte; AInputLen: Integer; AOutput: PByte);
 var
-  LCounter: TAESNIBlock;
-  LEncCounter: TAESNIBlock;
-  I, LBlockIdx: Integer;
-begin
-  LCounter := AICB;
-  LBlockIdx := 0;
-  while LBlockIdx < AInputLen do
+  LCtr, LCtr1, LCtr2, LCtr3: TAESNIBlock;
+  LEnc0, LEnc1, LEnc2, LEnc3: TAESNIBlock;
+  LBlockIdx, LRemain, I: Integer;
+  LCtrVal: UInt32;
+
+  procedure IncCtr(var C: TAESNIBlock); inline;
+  var V: UInt32;
   begin
-    AESNIEncryptBlock128(LCounter, LEncCounter, AKey);
+    V := (UInt32(C[12]) shl 24) or (UInt32(C[13]) shl 16)
+       or (UInt32(C[14]) shl 8) or UInt32(C[15]);
+    Inc(V);
+    C[12] := Byte(V shr 24); C[13] := Byte(V shr 16);
+    C[14] := Byte(V shr 8); C[15] := Byte(V);
+  end;
+
+begin
+  if AInputLen <= 0 then Exit;
+  LCtr := AICB;
+  LBlockIdx := 0;
+  LRemain := AInputLen;
+
+  while LRemain >= 64 do
+  begin
+    LCtr1 := LCtr; IncCtr(LCtr1);
+    LCtr2 := LCtr1; IncCtr(LCtr2);
+    LCtr3 := LCtr2; IncCtr(LCtr3);
+
+    AESNIEncryptBlock128(LCtr, LEnc0, AKey);
+    AESNIEncryptBlock128(LCtr1, LEnc1, AKey);
+    AESNIEncryptBlock128(LCtr2, LEnc2, AKey);
+    AESNIEncryptBlock128(LCtr3, LEnc3, AKey);
+
     for I := 0 to 15 do
     begin
-      if LBlockIdx + I >= AInputLen then Break;
-      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEncCounter[I];
+      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEnc0[I];
+      AOutput[LBlockIdx + 16 + I] := AInput[LBlockIdx + 16 + I] xor LEnc1[I];
+      AOutput[LBlockIdx + 32 + I] := AInput[LBlockIdx + 32 + I] xor LEnc2[I];
+      AOutput[LBlockIdx + 48 + I] := AInput[LBlockIdx + 48 + I] xor LEnc3[I];
     end;
-    Inc(LCounter[15]);
-    if LCounter[15] = 0 then
+
+    LCtr := LCtr3; IncCtr(LCtr);
+    Inc(LBlockIdx, 64);
+    Dec(LRemain, 64);
+  end;
+
+  while LRemain > 0 do
+  begin
+    AESNIEncryptBlock128(LCtr, LEnc0, AKey);
+    for I := 0 to 15 do
     begin
-      Inc(LCounter[14]);
-      if LCounter[14] = 0 then
-      begin
-        Inc(LCounter[13]);
-        if LCounter[13] = 0 then
-          Inc(LCounter[12]);
-      end;
+      if I >= LRemain then Break;
+      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEnc0[I];
     end;
+    IncCtr(LCtr);
     Inc(LBlockIdx, 16);
+    Dec(LRemain, 16);
   end;
 end;
 
