@@ -9,7 +9,8 @@ uses
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.simd.group;
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec16;
 
 const
   CTRL_EMPTY   = Byte($FF);
@@ -17,10 +18,10 @@ const
   GROUP_SIZE   = 16;
   MIN_CAPACITY = 16;
 
-function GroupMaskFirstSet(mask: TGroupMask): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchEmpty(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function GroupMaskFirstSet(mask: TMask16): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchH2(ACtrl: PByte; AH2: Byte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmpty(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+function SwissMatchEmptyOrDeleted(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
 type
   generic TSwissTable<K, V> = class
@@ -45,9 +46,9 @@ type
 
     function KeyHash(const AKey: K): UInt32;
     function KeysEqual(const L, R: K): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchGroup(ACtrl: PByte; AH2: Byte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchEmpty(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
-    function MatchEmptyOrDeleted(ACtrl: PByte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchGroup(ACtrl: PByte; AH2: Byte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchEmpty(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    function MatchEmptyOrDeleted(ACtrl: PByte): TMask16; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
     function FindInsertSlot(AHash: UInt32): SizeUInt;
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -77,28 +78,28 @@ implementation
 uses
   nextpas.core.collections.hashmap;
 
-function GroupMaskFirstSet(mask: TGroupMask): Integer;
+function GroupMaskFirstSet(mask: TMask16): Integer;
 begin
-  Result := GroupCtz(mask);
+  Result := Vec16Ctz(mask);
 end;
 
-function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
+function SwissMatchH2(ACtrl: PByte; AH2: Byte): TMask16;
 begin
-  Result := GroupMatch(ACtrl, AH2);
+  Result := Vec16CmpEq(ACtrl, AH2);
 end;
 
-function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
+function SwissMatchEmpty(ACtrl: PByte): TMask16;
 begin
-  Result := GroupMatch(ACtrl, CTRL_EMPTY);
+  Result := Vec16CmpEq(ACtrl, CTRL_EMPTY);
 end;
 
-function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
+function SwissMatchEmptyOrDeleted(ACtrl: PByte): TMask16;
 var
   i: Integer;
 begin
   Result := 0;
   for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] >= $80 then Result := Result or TGroupMask(1 shl i);
+    if ACtrl[i] >= $80 then Result := Result or TMask16(1 shl i);
 end;
 
 { TSwissTable<K,V> - Core helpers }
@@ -160,17 +161,17 @@ begin
   Result := L = R;
 end;
 
-function TSwissTable.MatchGroup(ACtrl: PByte; AH2: Byte): TGroupMask;
+function TSwissTable.MatchGroup(ACtrl: PByte; AH2: Byte): TMask16;
 begin
   Result := SwissMatchH2(ACtrl, AH2);
 end;
 
-function TSwissTable.MatchEmpty(ACtrl: PByte): TGroupMask;
+function TSwissTable.MatchEmpty(ACtrl: PByte): TMask16;
 begin
   Result := SwissMatchEmpty(ACtrl);
 end;
 
-function TSwissTable.MatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
+function TSwissTable.MatchEmptyOrDeleted(ACtrl: PByte): TMask16;
 begin
   Result := SwissMatchEmptyOrDeleted(ACtrl);
 end;
@@ -243,7 +244,7 @@ function TSwissTable.FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUIn
 var
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TGroupMask;
+  LMask, LEmptyMask: TMask16;
   LBit: Integer;
 begin
   if FCapacity = 0 then begin AIndex := 0; Exit(False); end;
@@ -255,10 +256,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := GroupMatch(@FCtrl[LBase], Lh2);
+    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := GroupCtz(LMask);
+      LBit := Vec16Ctz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -268,10 +269,10 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := GroupMatch(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
-      AIndex := LBase + SizeUInt(GroupCtz(LEmptyMask));
+      AIndex := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
       Exit(False);
     end;
 
@@ -283,7 +284,7 @@ end;
 function TSwissTable.FindInsertSlot(AHash: UInt32): SizeUInt;
 var
   LGroupIdx, LProbeOfs: SizeUInt;
-  LMask: TGroupMask;
+  LMask: TMask16;
 begin
   LGroupIdx := (AHash shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -416,7 +417,7 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LInsertIdx, LBase: SizeUInt;
-  LMask, LEmptyMask: TGroupMask;
+  LMask, LEmptyMask: TMask16;
   LBit: Integer;
   LFoundInsert: Boolean;
 begin
@@ -433,10 +434,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := GroupMatch(@FCtrl[LBase], Lh2);
+    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := GroupCtz(LMask);
+      LBit := Vec16Ctz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -448,12 +449,12 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := GroupMatch(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
       // empty 槽位既是探测链终点，也是首选插入点
       if not LFoundInsert then
-        LInsertIdx := LBase + SizeUInt(GroupCtz(LEmptyMask));
+        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
       Break;
     end;
 
@@ -463,7 +464,7 @@ begin
       LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
       if LMask <> 0 then
       begin
-        LInsertIdx := LBase + SizeUInt(GroupCtz(LMask));
+        LInsertIdx := LBase + SizeUInt(Vec16Ctz(LMask));
         LFoundInsert := True;
       end;
     end;
