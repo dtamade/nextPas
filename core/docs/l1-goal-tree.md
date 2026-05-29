@@ -13,8 +13,9 @@ L1 是框架的基础设施层，只依赖 L0（base/errors/platform/mem）。
 | `text` | 字符串操作、Unicode、格式化 | ✅ 完成 (base+conv+format, 35 tests, 0 SysUtils) |
 | `encoding` | 编解码 (base64/hex/url/varint) | ✅ 已有 |
 | `collections` | 容器 (Vec/HashMap/Deque/Set/List/LRU) | ✅ 已有 |
-| `sync` | 同步原语 (Mutex/RWLock/Atomic/WaitGroup) | ✅ 已有 (11 tests) |
-| `thread` | 线程池、Channel、Future | ⬜ 待建 |
+| `sync` | 同步原语 (Mutex/RWLock/Atomic/WaitGroup/Once/Semaphore/Barrier/Event) | ✅ 完成 (28 tests, 3轮Codex审查) |
+| `thread` | 线程池、Channel、Future、CancellationToken | ✅ 完成 (18 tests, 3轮Codex审查) |
+| `lockfree` | 无锁数据结构 (MPMC Channel/SPSC Queue) | ⬜ 待建 |
 | `async` | 事件循环、Reactor、异步运行时 | ⬜ 待建 |
 | `io` | 流抽象 (Reader/Writer/Buffer/Scanner/Pipe) | ✅ 完成 (Go parity, 46 tests, bench, Scanner) |
 | `time` | DateTime/Duration/Timer/Stopwatch | 🔶 Wave 1-2 done, Wave 3-5 待做 |
