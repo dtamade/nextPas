@@ -7,6 +7,13 @@ interface
 type
   TThreadTask = reference to procedure;
 
+  TFutureState = (
+    fsPending,
+    fsCompleted,
+    fsFailed,
+    fsCancelled
+  );
+
 implementation
 
 end.
