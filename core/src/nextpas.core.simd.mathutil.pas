@@ -304,7 +304,7 @@ end;
 
 function ArcTan2(AY, AX: Single): Single;
 var
-  LR, LAbsX, LAbsY: Single;
+  LR, LR2, LPoly, LAbsX, LAbsY: Single;
 begin
   LAbsX := System.Abs(AX);
   LAbsY := System.Abs(AY);
@@ -314,8 +314,20 @@ begin
   if LAbsX >= LAbsY then
   begin
     LR := AY / AX;
-    // atan(r) ≈ r - r³/3 + r⁵/5 (for |r| <= 1)
-    LR := LR * (1.0 - LR * LR * (0.3333333 - LR * LR * 0.2));
+    LR2 := LR * LR;
+    // 9th-order minimax polynomial for atan(x) on [-1,1]
+    // atan(x) ≈ x * (c0 + x²*(c2 + x²*(c4 + x²*(c6 + x²*c8))))
+    // Coefficients from Cephes/musl single-precision atan
+    LPoly := 0.0028662257;
+    LPoly := LPoly * LR2 + (-0.0161657367);
+    LPoly := LPoly * LR2 + 0.0429096138;
+    LPoly := LPoly * LR2 + (-0.0752896400);
+    LPoly := LPoly * LR2 + 0.1065626393;
+    LPoly := LPoly * LR2 + (-0.1420889944);
+    LPoly := LPoly * LR2 + 0.1999355085;
+    LPoly := LPoly * LR2 + (-0.3333314528);
+    LPoly := LR2 * LPoly;
+    LR := LR + LR * LPoly;
     if AX < 0 then
     begin
       if AY >= 0 then LR := LR + SIMD_PI
@@ -325,7 +337,17 @@ begin
   else
   begin
     LR := AX / AY;
-    LR := LR * (1.0 - LR * LR * (0.3333333 - LR * LR * 0.2));
+    LR2 := LR * LR;
+    LPoly := 0.0028662257;
+    LPoly := LPoly * LR2 + (-0.0161657367);
+    LPoly := LPoly * LR2 + 0.0429096138;
+    LPoly := LPoly * LR2 + (-0.0752896400);
+    LPoly := LPoly * LR2 + 0.1065626393;
+    LPoly := LPoly * LR2 + (-0.1420889944);
+    LPoly := LPoly * LR2 + 0.1999355085;
+    LPoly := LPoly * LR2 + (-0.3333314528);
+    LPoly := LR2 * LPoly;
+    LR := LR + LR * LPoly;
     if AY > 0 then LR := SIMD_PI * 0.5 - LR
     else LR := -SIMD_PI * 0.5 - LR;
   end;

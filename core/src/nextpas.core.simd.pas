@@ -762,6 +762,9 @@ function VecI16x8ShiftRightArith(const a: TVecI16x8; count: Integer): TVecI16x8;
 function VecI16x8CmpEq(const a, b: TVecI16x8): TMask8; inline;
 function VecI16x8CmpLt(const a, b: TVecI16x8): TMask8; inline;
 function VecI16x8CmpGt(const a, b: TVecI16x8): TMask8; inline;
+function VecI16x8CmpLe(const a, b: TVecI16x8): TMask8; inline;
+function VecI16x8CmpGe(const a, b: TVecI16x8): TMask8; inline;
+function VecI16x8CmpNe(const a, b: TVecI16x8): TMask8; inline;
 
 // I16x8 min/max
 function VecI16x8Min(const a, b: TVecI16x8): TVecI16x8; inline;
@@ -785,6 +788,9 @@ function VecI8x16AndNot(const a, b: TVecI8x16): TVecI8x16; inline;
 function VecI8x16CmpEq(const a, b: TVecI8x16): TMask16; inline;
 function VecI8x16CmpLt(const a, b: TVecI8x16): TMask16; inline;
 function VecI8x16CmpGt(const a, b: TVecI8x16): TMask16; inline;
+function VecI8x16CmpLe(const a, b: TVecI8x16): TMask16; inline;
+function VecI8x16CmpGe(const a, b: TVecI8x16): TMask16; inline;
+function VecI8x16CmpNe(const a, b: TVecI8x16): TMask16; inline;
 
 // I8x16 min/max
 function VecI8x16Min(const a, b: TVecI8x16): TVecI8x16; inline;
@@ -808,6 +814,9 @@ function VecU8x16AndNot(const a, b: TVecU8x16): TVecU8x16; inline;
 function VecU8x16CmpEq(const a, b: TVecU8x16): TMask16; inline;
 function VecU8x16CmpLt(const a, b: TVecU8x16): TMask16; inline;
 function VecU8x16CmpGt(const a, b: TVecU8x16): TMask16; inline;
+function VecU8x16CmpLe(const a, b: TVecU8x16): TMask16; inline;
+function VecU8x16CmpGe(const a, b: TVecU8x16): TMask16; inline;
+function VecU8x16CmpNe(const a, b: TVecU8x16): TMask16; inline;
 
 // U8x16 min/max (unsigned)
 function VecU8x16Min(const a, b: TVecU8x16): TVecU8x16; inline;
@@ -836,6 +845,9 @@ function VecU16x8ShiftRight(const a: TVecU16x8; count: Integer): TVecU16x8; inli
 function VecU16x8CmpEq(const a, b: TVecU16x8): TMask8; inline;
 function VecU16x8CmpLt(const a, b: TVecU16x8): TMask8; inline;
 function VecU16x8CmpGt(const a, b: TVecU16x8): TMask8; inline;
+function VecU16x8CmpLe(const a, b: TVecU16x8): TMask8; inline;
+function VecU16x8CmpGe(const a, b: TVecU16x8): TMask8; inline;
+function VecU16x8CmpNe(const a, b: TVecU16x8): TMask8; inline;
 
 // U16x8 min/max (unsigned)
 function VecU16x8Min(const a, b: TVecU16x8): TVecU16x8; inline;

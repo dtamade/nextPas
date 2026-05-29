@@ -1513,6 +1513,8 @@ function VecI16x8ShiftLeft(const a: TVecI16x8; count: Integer): TVecI16x8;
 var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
+  if count <= 0 then begin Result := a; Exit; end;
+  if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
   if (dispatch <> nil) and Assigned(dispatch^.ShiftLeftI16x8) then
     Result := dispatch^.ShiftLeftI16x8(a, count)
@@ -1525,24 +1527,33 @@ function VecI16x8ShiftRight(const a: TVecI16x8; count: Integer): TVecI16x8;
 var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
+  if count <= 0 then begin Result := a; Exit; end;
+  if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
   if (dispatch <> nil) and Assigned(dispatch^.ShiftRightI16x8) then
     Result := dispatch^.ShiftRightI16x8(a, count)
   else
     for i := 0 to 7 do
-      Result.i[i] := Int16(UInt16(a.i[i]) shr count);  // 逻辑右移
+      Result.i[i] := Int16(UInt16(a.i[i]) shr count);
 end;
 
 function VecI16x8ShiftRightArith(const a: TVecI16x8; count: Integer): TVecI16x8;
 var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
+  if count <= 0 then begin Result := a; Exit; end;
+  if count >= 16 then
+  begin
+    for i := 0 to 7 do
+      if a.i[i] < 0 then Result.i[i] := -1 else Result.i[i] := 0;
+    Exit;
+  end;
   dispatch := GetSimdFacadeDispatchFastPath;
   if (dispatch <> nil) and Assigned(dispatch^.ShiftRightArithI16x8) then
     Result := dispatch^.ShiftRightArithI16x8(a, count)
   else
     for i := 0 to 7 do
-      Result.i[i] := SarSmallint(a.i[i], count);  // 算术右移 (保留符号位)
+      Result.i[i] := SarSmallint(a.i[i], count);
 end;
 
 function VecI16x8CmpEq(const a, b: TVecI16x8): TMask8;
@@ -1587,6 +1598,51 @@ begin
     Result := 0;
     for i := 0 to 7 do
       if a.i[i] > b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecI16x8CmpLe(const a, b: TVecI16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpLeI16x8) then
+    Result := dispatch^.CmpLeI16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.i[i] <= b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecI16x8CmpGe(const a, b: TVecI16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpGeI16x8) then
+    Result := dispatch^.CmpGeI16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.i[i] >= b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecI16x8CmpNe(const a, b: TVecI16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpNeI16x8) then
+    Result := dispatch^.CmpNeI16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.i[i] <> b.i[i] then Result := Result or (1 shl i);
   end;
 end;
 
@@ -1758,6 +1814,51 @@ begin
   end;
 end;
 
+function VecI8x16CmpLe(const a, b: TVecI8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpLeI8x16) then
+    Result := dispatch^.CmpLeI8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.i[i] <= b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecI8x16CmpGe(const a, b: TVecI8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpGeI8x16) then
+    Result := dispatch^.CmpGeI8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.i[i] >= b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecI8x16CmpNe(const a, b: TVecI8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpNeI8x16) then
+    Result := dispatch^.CmpNeI8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.i[i] <> b.i[i] then Result := Result or (1 shl i);
+  end;
+end;
+
 function VecI8x16Min(const a, b: TVecI8x16): TVecI8x16;
 var dispatch: PSimdDispatchTable;
     i: Integer;
@@ -1926,6 +2027,51 @@ begin
   end;
 end;
 
+function VecU8x16CmpLe(const a, b: TVecU8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpLeU8x16) then
+    Result := dispatch^.CmpLeU8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.u[i] <= b.u[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecU8x16CmpGe(const a, b: TVecU8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpGeU8x16) then
+    Result := dispatch^.CmpGeU8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.u[i] >= b.u[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecU8x16CmpNe(const a, b: TVecU8x16): TMask16;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpNeU8x16) then
+    Result := dispatch^.CmpNeU8x16(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 15 do
+      if a.u[i] <> b.u[i] then Result := Result or (1 shl i);
+  end;
+end;
+
 function VecU8x16Min(const a, b: TVecU8x16): TVecU8x16;
 var dispatch: PSimdDispatchTable;
     i: Integer;
@@ -2065,6 +2211,8 @@ function VecU16x8ShiftLeft(const a: TVecU16x8; count: Integer): TVecU16x8;
 var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
+  if count <= 0 then begin Result := a; Exit; end;
+  if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
   if (dispatch <> nil) and Assigned(dispatch^.ShiftLeftU16x8) then
     Result := dispatch^.ShiftLeftU16x8(a, count)
@@ -2077,12 +2225,14 @@ function VecU16x8ShiftRight(const a: TVecU16x8; count: Integer): TVecU16x8;
 var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
+  if count <= 0 then begin Result := a; Exit; end;
+  if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
   if (dispatch <> nil) and Assigned(dispatch^.ShiftRightU16x8) then
     Result := dispatch^.ShiftRightU16x8(a, count)
   else
     for i := 0 to 7 do
-      Result.u[i] := a.u[i] shr count;  // 逻辑右移 (无符号)
+      Result.u[i] := a.u[i] shr count;
 end;
 
 function VecU16x8CmpEq(const a, b: TVecU16x8): TMask8;
@@ -2127,6 +2277,51 @@ begin
     Result := 0;
     for i := 0 to 7 do
       if a.u[i] > b.u[i] then Result := Result or (1 shl i);  // 无符号比较
+  end;
+end;
+
+function VecU16x8CmpLe(const a, b: TVecU16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpLeU16x8) then
+    Result := dispatch^.CmpLeU16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.u[i] <= b.u[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecU16x8CmpGe(const a, b: TVecU16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpGeU16x8) then
+    Result := dispatch^.CmpGeU16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.u[i] >= b.u[i] then Result := Result or (1 shl i);
+  end;
+end;
+
+function VecU16x8CmpNe(const a, b: TVecU16x8): TMask8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CmpNeU16x8) then
+    Result := dispatch^.CmpNeU16x8(a, b)
+  else
+  begin
+    Result := 0;
+    for i := 0 to 7 do
+      if a.u[i] <> b.u[i] then Result := Result or (1 shl i);
   end;
 end;
 
