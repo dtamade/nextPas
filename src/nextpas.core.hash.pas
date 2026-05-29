@@ -40,6 +40,7 @@ function NewSHA1: IHasher; inline;
 function NewSHA256: IHasher; inline;
 function NewSHA384: IHasher; inline;
 function NewSHA512: IHasher; inline;
+function NewHasher(AAlgo: THashAlgorithm): IHasher;
 
 function SHA256Of(const ABuf; ALen: SizeUInt): TSHA256Digest;
 function SHA1Of(const ABuf; ALen: SizeUInt): TSHA1Digest;
@@ -129,6 +130,19 @@ begin
   begin
     Result[I*2 + 1] := HEX_CHARS[P[I] shr 4];
     Result[I*2 + 2] := HEX_CHARS[P[I] and $0F];
+  end;
+end;
+
+function NewHasher(AAlgo: THashAlgorithm): IHasher;
+begin
+  case AAlgo of
+    haMD5:    Result := nextpas.core.hash.md5.NewMD5;
+    haSHA1:   Result := nextpas.core.hash.sha1.NewSHA1;
+    haSHA256: Result := nextpas.core.hash.sha256.NewSHA256;
+    haSHA384: Result := nextpas.core.hash.sha512.NewSHA384;
+    haSHA512: Result := nextpas.core.hash.sha512.NewSHA512;
+  else
+    Result := nil;
   end;
 end;
 
