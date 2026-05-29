@@ -267,6 +267,26 @@ type
 
 {$packrecords c}
 const
+  AF_INET     = cint(2);
+{$IFDEF NEXTPAS_LINUX}
+  AF_INET6    = cint(10);
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  AF_INET6    = cint(30);
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  AF_INET6    = cint(28);
+{$ELSE}
+  AF_INET6    = cint(10);
+{$ENDIF}
+  SOCK_STREAM = cint(1);
+  SOCK_DGRAM  = cint(2);
+  IPPROTO_TCP = cint(6);
+  IPPROTO_UDP = cint(17);
+  SOL_SOCKET  = cint(1);
+  SO_REUSEADDR = cint(2);
+  SHUT_RD     = cint(0);
+  SHUT_WR     = cint(1);
+  SHUT_RDWR   = cint(2);
+
   PLATFORM_POSIX_PROT_NONE = Int32(0);
   PLATFORM_POSIX_PROT_READ = Int32(1);
   PLATFORM_POSIX_PROT_WRITE = Int32(2);
