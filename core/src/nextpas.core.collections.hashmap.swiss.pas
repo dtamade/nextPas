@@ -427,10 +427,32 @@ end;
 function TSwissTable.ContainsKey(const AKey: K): Boolean;
 var
   Lh: UInt32;
-  LIdx: SizeUInt;
+  Lh2: Byte;
+  LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
+  LMask, LEmptyMask: TMask16;
+  LBit: Integer;
 begin
+  if FCapacity = 0 then Exit(False);
   Lh := KeyHash(AKey);
-  Result := FindIndex(AKey, Lh, LIdx);
+  Lh2 := Lh and $7F;
+  LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
+  LProbeOfs := 0;
+  while True do
+  begin
+    LBase := LGroupIdx * GROUP_SIZE;
+    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
+    while LMask <> 0 do
+    begin
+      LBit := Vec16Ctz(LMask);
+      Li := LBase + SizeUInt(LBit);
+      if KeysEqual(FSlots[Li].Key, AKey) then Exit(True);
+      LMask := LMask and (LMask - 1);
+    end;
+    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
+    if LEmptyMask <> 0 then Exit(False);
+    Inc(LProbeOfs);
+    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
+  end;
 end;
 
 function TSwissTable.AddOrAssign(const AKey: K; const AValue: V): Boolean;
