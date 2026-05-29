@@ -5,7 +5,7 @@ unit np_semantic_model;
 interface
 
 uses
-  np_green_tree;
+  np_green_tree, np_hir_types;
 
 type
   TSemanticSymbol = record
@@ -42,6 +42,7 @@ type
   TTypedHirNode = record
     HirNodeId: LongInt;
     Kind: string;
+    NodeKind: THirNodeKind;
     DisplayName: string;
     SymbolId: LongInt;
     TypeId: LongInt;
@@ -635,6 +636,7 @@ begin
   SetLength(FTypedHirNodes, NextIndex + 1);
   FTypedHirNodes[NextIndex].HirNodeId := NextIndex + 1;
   FTypedHirNodes[NextIndex].Kind := AKind;
+  FTypedHirNodes[NextIndex].NodeKind := ParseHirNodeKind(AKind);
   FTypedHirNodes[NextIndex].DisplayName := ADisplayName;
   FTypedHirNodes[NextIndex].SymbolId := ASymbolId;
   FTypedHirNodes[NextIndex].TypeId := ATypeId;

@@ -1130,7 +1130,7 @@ var
   Arg: string;
   TabPos, Code: LongInt;
 begin
-  if ANode.Kind = 'var-decl-runtime' then
+  if ANode.NodeKind = hnkVarDeclRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1187,7 +1187,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetIntType);
   end
-  else if ANode.Kind = 'var-decl-str-runtime' then
+  else if ANode.NodeKind = hnkVarDeclStrRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1230,7 +1230,7 @@ begin
       EnsureAlloca(ANode.Operand + '$len', GetIntType);
     end;
   end
-  else if ANode.Kind = 'var-decl-arr-runtime' then
+  else if ANode.NodeKind = hnkVarDeclArrRuntime then
   begin
     if FInStartFunc then
     begin
@@ -1259,7 +1259,7 @@ begin
       EnsureAlloca(ANode.Operand + '$len', GetIntType);
     end;
   end
-  else if ANode.Kind = 'var-decl-ptr-runtime' then
+  else if ANode.NodeKind = hnkVarDeclPtrRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1286,7 +1286,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
-  else if ANode.Kind = 'var-decl-varref-runtime' then
+  else if ANode.NodeKind = hnkVarDeclVarrefRuntime then
   begin
     if FPendingParamCount > 0 then
     begin
@@ -1308,7 +1308,7 @@ begin
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
-  else if ANode.Kind = 'var-decl-record-runtime' then
+  else if ANode.NodeKind = hnkVarDeclRecordRuntime then
   begin
     TabPos := Pos(#9, ANode.Operand);
     if TabPos > 0 then
@@ -3308,8 +3308,8 @@ end;
 procedure THIRBuilder.ProcessNode(const ANode: TTypedHirNode);
 begin
   if (FPendingObjectFreeDestroyName <> '') and
-    (ANode.Kind <> 'call-runtime') and
-    (ANode.Kind <> 'object-free-runtime') then
+    (ANode.NodeKind <> hnkCallRuntime) and
+    (ANode.NodeKind <> hnkObjectFreeRuntime) then
   begin
     FPendingObjectFreeDestroyName := '';
     FPendingObjectFreeReceiverName := '';
@@ -3317,81 +3317,79 @@ begin
     FPendingObjectFreeHeapRelease := False;
   end;
 
-  if (ANode.Kind = 'var-decl-runtime') or
-     (ANode.Kind = 'var-decl-str-runtime') or
-     (ANode.Kind = 'var-decl-arr-runtime') or
-     (ANode.Kind = 'var-decl-ptr-runtime') or
-     (ANode.Kind = 'var-decl-varref-runtime') or
-     (ANode.Kind = 'var-decl-record-runtime') then
-    ProcessVarDecl(ANode)
-  else if ANode.Kind = 'assign-runtime' then
-    ProcessAssign(ANode)
-  else if ANode.Kind = 'assign-str-runtime' then
-    ProcessAssignStr(ANode)
-  else if ANode.Kind = 'assign-str-copy-runtime' then
-    ProcessAssignStrCopy(ANode)
-  else if ANode.Kind = 'assign-str-call-runtime' then
-    ProcessAssignStrCall(ANode)
-  else if ANode.Kind = 'assign-str-vcall-runtime' then
-    ProcessAssignStrVcall(ANode)
-  else if ANode.Kind = 'assign-str-concat-runtime' then
-    ProcessAssignStrConcat(ANode)
-  else if ANode.Kind = 'halt-call-runtime' then
-    ProcessHaltCall(ANode)
-  else if ANode.Kind = 'halt-call' then
-    ProcessHaltCallConst(ANode)
-  else if ANode.Kind = 'cond-br-runtime' then
-    ProcessCondBr(ANode)
-  else if ANode.Kind = 'switch-runtime' then
-    ProcessSwitch(ANode)
-  else if ANode.Kind = 'br-runtime' then
-    ProcessBr(ANode)
-  else if ANode.Kind = 'block-label-runtime' then
-    ProcessBlockLabel(ANode)
-  else if ANode.Kind = 'function-body-begin' then
-    ProcessFunctionBegin(ANode)
-  else if ANode.Kind = 'function-body-end' then
-    ProcessFunctionEnd(ANode)
-  else if ANode.Kind = 'ret-runtime' then
-    ProcessRetRuntime(ANode)
-  else if ANode.Kind = 'ret-str-runtime' then
-    ProcessRetStrRuntime(ANode)
-  else if ANode.Kind = 'call-runtime' then
-    ProcessCallRuntime(ANode)
-  else if ANode.Kind = 'object-free-runtime' then
-    ProcessObjectFreeRuntime(ANode)
-  else if ANode.Kind = 'int-to-str-runtime' then
-    ProcessIntToStr(ANode)
-  else if ANode.Kind = 'copy-str-runtime' then
-    ProcessCopyStr(ANode)
-  else if ANode.Kind = 'write-int-runtime' then
-    ProcessWriteInt(ANode)
-  else if ANode.Kind = 'write-string-runtime' then
-    ProcessWriteStr(ANode)
-  else if ANode.Kind = 'write-str-var-runtime' then
-    ProcessWriteStrVar(ANode)
-  else if ANode.Kind = 'write-call' then
-    ProcessWriteStr(ANode)
-  else if ANode.Kind = 'setlength-arr-runtime' then
-    ProcessSetLengthArr(ANode)
-  else if ANode.Kind = 'assign-arr-elem-runtime' then
-    ProcessAssignArrElem(ANode)
-  else if ANode.Kind = 'method-body-begin' then
-    ProcessMethodBegin(ANode)
-  else if ANode.Kind = 'class-new-runtime' then
-    ProcessClassNew(ANode)
-  else if ANode.Kind = 'field-store-runtime' then
-    ProcessFieldStore(ANode)
-  else if ANode.Kind = 'record-field-store-runtime' then
-    ProcessRecordFieldStore(ANode)
-  else if ANode.Kind = 'record-copy-runtime' then
-    ProcessRecordCopy(ANode)
-  else if ANode.Kind = 'field-store-str-runtime' then
-    ProcessFieldStoreStr(ANode)
-  else if ANode.Kind = 'assign-str-field-load-runtime' then
-    ProcessAssignStrFieldLoad(ANode)
-  else if ANode.Kind = 'vmt-store-runtime' then
-    ProcessVmtStore(ANode);
+  case ANode.NodeKind of
+    hnkVarDeclRuntime, hnkVarDeclStrRuntime, hnkVarDeclArrRuntime,
+    hnkVarDeclPtrRuntime, hnkVarDeclVarrefRuntime, hnkVarDeclRecordRuntime:
+      ProcessVarDecl(ANode);
+    hnkAssignRuntime:
+      ProcessAssign(ANode);
+    hnkAssignStrRuntime:
+      ProcessAssignStr(ANode);
+    hnkAssignStrCopyRuntime:
+      ProcessAssignStrCopy(ANode);
+    hnkAssignStrCallRuntime:
+      ProcessAssignStrCall(ANode);
+    hnkAssignStrVcallRuntime:
+      ProcessAssignStrVcall(ANode);
+    hnkAssignStrConcatRuntime:
+      ProcessAssignStrConcat(ANode);
+    hnkHaltCallRuntime:
+      ProcessHaltCall(ANode);
+    hnkHaltCall:
+      ProcessHaltCallConst(ANode);
+    hnkCondBrRuntime:
+      ProcessCondBr(ANode);
+    hnkSwitchRuntime:
+      ProcessSwitch(ANode);
+    hnkBrRuntime:
+      ProcessBr(ANode);
+    hnkBlockLabelRuntime:
+      ProcessBlockLabel(ANode);
+    hnkFunctionBodyBegin:
+      ProcessFunctionBegin(ANode);
+    hnkFunctionBodyEnd:
+      ProcessFunctionEnd(ANode);
+    hnkRetRuntime:
+      ProcessRetRuntime(ANode);
+    hnkRetStrRuntime:
+      ProcessRetStrRuntime(ANode);
+    hnkCallRuntime:
+      ProcessCallRuntime(ANode);
+    hnkObjectFreeRuntime:
+      ProcessObjectFreeRuntime(ANode);
+    hnkIntToStrRuntime:
+      ProcessIntToStr(ANode);
+    hnkCopyStrRuntime:
+      ProcessCopyStr(ANode);
+    hnkWriteIntRuntime:
+      ProcessWriteInt(ANode);
+    hnkWriteStringRuntime, hnkWriteCall:
+      ProcessWriteStr(ANode);
+    hnkWriteStrVarRuntime:
+      ProcessWriteStrVar(ANode);
+    hnkSetLengthArrRuntime:
+      ProcessSetLengthArr(ANode);
+    hnkAssignArrElemRuntime:
+      ProcessAssignArrElem(ANode);
+    hnkMethodBodyBegin:
+      ProcessMethodBegin(ANode);
+    hnkClassNewRuntime:
+      ProcessClassNew(ANode);
+    hnkFieldStoreRuntime:
+      ProcessFieldStore(ANode);
+    hnkRecordFieldStoreRuntime:
+      ProcessRecordFieldStore(ANode);
+    hnkRecordCopyRuntime:
+      ProcessRecordCopy(ANode);
+    hnkFieldStoreStrRuntime:
+      ProcessFieldStoreStr(ANode);
+    hnkAssignStrFieldLoadRuntime:
+      ProcessAssignStrFieldLoad(ANode);
+    hnkVmtStoreRuntime:
+      ProcessVmtStore(ANode);
+    hnkUnknown:
+      ;
+  end;
 end;
 
 procedure THIRBuilder.Build;
