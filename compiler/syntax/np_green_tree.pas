@@ -824,7 +824,8 @@ begin
 
   Token := CurrentToken(ALexer, ACursor);
   case Token.Kind of
-    tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword:
+    tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
+      tkInheritedKeyword:
       begin
         Inc(ACursor);
         if (ACursor < ALexer.TokenCount) and
@@ -840,7 +841,16 @@ begin
           begin
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
-              Result.AppendChild(RHS);
+              Result.AppendChild(RHS)
+            else
+            begin
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkComma) then
+                Inc(ACursor);
+              if (ACursor >= ALexer.TokenCount) or
+                (CurrentToken(ALexer, ACursor).Kind = tkEOF) then Break;
+            end;
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkComma) then
               Inc(ACursor);
