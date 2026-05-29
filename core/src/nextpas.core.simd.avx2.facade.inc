@@ -1,8 +1,10 @@
 // === AVX2 Memory Functions (256-bit) ===
 
 function MemEqual_AVX2(a, b: Pointer; len: SizeUInt): LongBool; assembler; nostackframe;
-// RDI = a, RSI = b, RDX = len
+// SysV: RDI = a, RSI = b, RDX = len
+// Win64: RCX = a, RDX = b, R8 = len
 asm
+{$IFDEF UNIX}
   xor eax, eax           // Default result = false
   test rdx, rdx
   jz @equal              // Empty = equal
@@ -64,22 +66,88 @@ asm
 @equal:
   mov eax, 1
 @done:
+{$ELSE}
+  // Windows x64: RCX = a, RDX = b, R8 = len
+  xor eax, eax
+  test r8, r8
+  jz @equal
+  test rcx, rcx
+  jz @check_both_nil
+  test rdx, rdx
+  jz @done
+  cmp rcx, rdx
+  je @equal
+
+  // Use r10 as index (rcx/rdx are params)
+  xor r10, r10
+
+@loop32:
+  lea r9, [r10 + 32]
+  cmp r9, r8
+  ja @loop16
+  vmovdqu ymm0, [rcx + r10]
+  vpcmpeqb ymm0, ymm0, [rdx + r10]
+  vpmovmskb eax, ymm0
+  cmp eax, $FFFFFFFF
+  jne @not_equal_cleanup
+  add r10, 32
+  jmp @loop32
+
+@loop16:
+  lea r9, [r10 + 16]
+  cmp r9, r8
+  ja @remainder
+  vmovdqu xmm0, [rcx + r10]
+  vpcmpeqb xmm0, xmm0, [rdx + r10]
+  vpmovmskb eax, xmm0
+  cmp eax, $FFFF
+  jne @not_equal_cleanup
+  add r10, 16
+  jmp @loop16
+
+@remainder:
+  cmp r10, r8
+  jae @equal_cleanup
+  movzx r9d, byte ptr [rcx + r10]
+  movzx r11d, byte ptr [rdx + r10]
+  cmp r9d, r11d
+  jne @not_equal_cleanup
+  inc r10
+  jmp @remainder
+
+@check_both_nil:
+  test rdx, rdx
+  jz @equal
+  jmp @done
+
+@not_equal_cleanup:
+  vzeroupper
+  xor eax, eax
+  ret
+
+@equal_cleanup:
+  vzeroupper
+@equal:
+  mov eax, 1
+@done:
+{$ENDIF}
 end;
 
 function MemFindByte_AVX2(p: Pointer; len: SizeUInt; value: Byte): PtrInt; assembler; nostackframe;
-// RDI = p, RSI = len, RDX = value
+// SysV: RDI = p, RSI = len, RDX = value
+// Win64: RCX = p, RDX = len, R8 = value
 asm
-  mov rax, -1            // Default result = -1 (not found)
+{$IFDEF UNIX}
+  mov rax, -1
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
 
-  // Broadcast value to all 32 bytes in ymm1
   vmovd xmm1, edx
   vpbroadcastb ymm1, xmm1
 
-  xor rcx, rcx           // i = 0
+  xor rcx, rcx
 
 @loop32:
   lea r8, [rcx + 32]
@@ -135,21 +203,90 @@ asm
   vzeroupper
   mov rax, -1
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len, R8 = value
+  mov rax, -1
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+
+  vmovd xmm1, r8d
+  vpbroadcastb ymm1, xmm1
+
+  xor r10, r10
+
+@loop32:
+  lea r9, [r10 + 32]
+  cmp r9, rdx
+  ja @loop16
+  vmovdqu ymm0, [rcx + r10]
+  vpcmpeqb ymm0, ymm0, ymm1
+  vpmovmskb r9d, ymm0
+  test r9d, r9d
+  jnz @found32
+  add r10, 32
+  jmp @loop32
+
+@found32:
+  bsf r9d, r9d
+  lea rax, [r10 + r9]
+  vzeroupper
+  ret
+
+@loop16:
+  lea r9, [r10 + 16]
+  cmp r9, rdx
+  ja @remainder
+  vmovdqu xmm0, [rcx + r10]
+  vpcmpeqb xmm0, xmm0, xmm1
+  vpmovmskb r9d, xmm0
+  test r9d, r9d
+  jnz @found16
+  add r10, 16
+  jmp @loop16
+
+@found16:
+  bsf r9d, r9d
+  lea rax, [r10 + r9]
+  vzeroupper
+  ret
+
+@remainder:
+  cmp r10, rdx
+  jae @cleanup
+  movzx r9d, byte ptr [rcx + r10]
+  cmp r9d, r8d
+  je @found_remainder
+  inc r10
+  jmp @remainder
+
+@found_remainder:
+  mov rax, r10
+  vzeroupper
+  ret
+
+@cleanup:
+  vzeroupper
+  mov rax, -1
+@done:
+{$ENDIF}
 end;
 
 function SumBytes_AVX2(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;
-// RDI = p, RSI = len
-// Use vpsadbw for fast byte summation
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
-  xor rax, rax           // sum = 0
+{$IFDEF UNIX}
+  xor rax, rax
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
 
-  vpxor ymm2, ymm2, ymm2 // accumulator
-  vpxor ymm3, ymm3, ymm3 // zero for psadbw
-  xor rcx, rcx           // i = 0
+  vpxor ymm2, ymm2, ymm2
+  vpxor ymm3, ymm3, ymm3
+  xor rcx, rcx
 
 @loop32:
   lea r8, [rcx + 32]
@@ -162,9 +299,8 @@ asm
   jmp @loop32
 
 @loop16:
-  // Before 128-bit loop, reduce 256-bit accumulator to avoid losing high bits
-  vextracti128 xmm4, ymm2, 1    // xmm4 = high 128 bits of ymm2
-  vpaddq xmm2, xmm2, xmm4        // xmm2 = sum of high and low (now only 128-bit)
+  vextracti128 xmm4, ymm2, 1
+  vpaddq xmm2, xmm2, xmm4
 
 @loop16_inner:
   lea r8, [rcx + 16]
@@ -177,13 +313,11 @@ asm
   jmp @loop16_inner
 
 @remainder:
-  // Sum the 128-bit accumulator (2 x 64-bit values in xmm2)
-  vpshufd xmm1, xmm2, $4E      // swap high/low 64-bit
+  vpshufd xmm1, xmm2, $4E
   vpaddq xmm0, xmm2, xmm1
   vmovq rax, xmm0
   vzeroupper
 
-  // Handle remaining bytes
 @remainder_loop:
   cmp rcx, rsi
   jae @done
@@ -193,23 +327,75 @@ asm
   jmp @remainder_loop
 
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len
+  xor rax, rax
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+
+  vpxor ymm2, ymm2, ymm2
+  vpxor ymm3, ymm3, ymm3
+  xor r10, r10
+
+@loop32:
+  lea r8, [r10 + 32]
+  cmp r8, rdx
+  ja @loop16
+  vmovdqu ymm0, [rcx + r10]
+  vpsadbw ymm0, ymm0, ymm3
+  vpaddq ymm2, ymm2, ymm0
+  add r10, 32
+  jmp @loop32
+
+@loop16:
+  vextracti128 xmm4, ymm2, 1
+  vpaddq xmm2, xmm2, xmm4
+
+@loop16_inner:
+  lea r8, [r10 + 16]
+  cmp r8, rdx
+  ja @remainder
+  vmovdqu xmm0, [rcx + r10]
+  vpsadbw xmm0, xmm0, xmm3
+  vpaddq xmm2, xmm2, xmm0
+  add r10, 16
+  jmp @loop16_inner
+
+@remainder:
+  vpshufd xmm1, xmm2, $4E
+  vpaddq xmm0, xmm2, xmm1
+  vmovq rax, xmm0
+  vzeroupper
+
+@remainder_loop:
+  cmp r10, rdx
+  jae @done
+  movzx r8d, byte ptr [rcx + r10]
+  add rax, r8
+  inc r10
+  jmp @remainder_loop
+
+@done:
+{$ENDIF}
 end;
 
 function CountByte_AVX2(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;
-// RDI = p, RSI = len, RDX = value
-// Use popcnt instruction (available on all AVX2 CPUs)
+// SysV: RDI = p, RSI = len, RDX = value
+// Win64: RCX = p, RDX = len, R8 = value
 asm
-  xor rax, rax           // count = 0
+{$IFDEF UNIX}
+  xor rax, rax
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
 
-  // Broadcast value to all 32 bytes in ymm1
   vmovd xmm1, edx
   vpbroadcastb ymm1, xmm1
 
-  xor rcx, rcx           // i = 0
+  xor rcx, rcx
 
 @loop32:
   lea r8, [rcx + 32]
@@ -249,104 +435,140 @@ asm
   jmp @remainder_loop
 
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len, R8 = value
+  xor rax, rax
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+
+  vmovd xmm1, r8d
+  vpbroadcastb ymm1, xmm1
+
+  xor r10, r10
+
+@loop32:
+  lea r9, [r10 + 32]
+  cmp r9, rdx
+  ja @loop16
+  vmovdqu ymm0, [rcx + r10]
+  vpcmpeqb ymm0, ymm0, ymm1
+  vpmovmskb r9d, ymm0
+  popcnt r9d, r9d
+  add rax, r9
+  add r10, 32
+  jmp @loop32
+
+@loop16:
+  lea r9, [r10 + 16]
+  cmp r9, rdx
+  ja @remainder
+  vmovdqu xmm0, [rcx + r10]
+  vpcmpeqb xmm0, xmm0, xmm1
+  vpmovmskb r9d, xmm0
+  popcnt r9d, r9d
+  add rax, r9
+  add r10, 16
+  jmp @loop16
+
+@remainder:
+  vzeroupper
+@remainder_loop:
+  cmp r10, rdx
+  jae @done
+  movzx r9d, byte ptr [rcx + r10]
+  cmp r9d, r8d
+  jne @skip
+  inc rax
+@skip:
+  inc r10
+  jmp @remainder_loop
+
+@done:
+{$ENDIF}
 end;
 
 // MinMaxBytes_AVX2 - 使用 AVX2 vpminub/vpmaxub 指令查找字节数组的最小和最大值
 // 使用 256 位宽向量一次处理 32 字节
 procedure MinMaxBytes_AVX2(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;
+// SysV: RDI = p, RSI = len, RDX = &minVal, RCX = &maxVal
+// Win64: RCX = p, RDX = len, R8 = &minVal, R9 = &maxVal
 asm
-  // 参数: RDI = p, RSI = len, RDX = &minVal, RCX = &maxVal
-  // 保存 minVal 和 maxVal 指针
+{$IFDEF UNIX}
   push rbx
   mov r8, rdx       // r8 = &minVal
   mov r9, rcx       // r9 = &maxVal
   
-  // 边界检查
   test rsi, rsi
   jz @empty
   
-  // 初始化 min = 255, max = 0
   mov al, 255
   mov bl, 0
   
-  // 如果长度 < 32，跳到标量处理
   cmp rsi, 32
   jb @scalar_loop
   
-  // 初始化 YMM 寄存器
-  // ymm0 = min (全 255)
-  // ymm1 = max (全 0)
-  vpcmpeqb ymm0, ymm0, ymm0   // ymm0 = all 1s (255)
-  vpxor ymm1, ymm1, ymm1       // ymm1 = all 0s
+  vpcmpeqb ymm0, ymm0, ymm0
+  vpxor ymm1, ymm1, ymm1
   
-  // 计算向量循环次数
   mov rcx, rsi
-  shr rcx, 5            // rcx = len / 32
-  
-  // 向量主循环
+  shr rcx, 5
+
 @vector_loop:
-  vmovdqu ymm2, [rdi]   // 加载 32 字节
-  vpminub ymm0, ymm0, ymm2    // min = min(min, data)
-  vpmaxub ymm1, ymm1, ymm2    // max = max(max, data)
+  vmovdqu ymm2, [rdi]
+  vpminub ymm0, ymm0, ymm2
+  vpmaxub ymm1, ymm1, ymm2
   add rdi, 32
   dec rcx
   jnz @vector_loop
   
-  // 水平归约 256 位到标量
-  // 提取高低 128 位并比较
-  vextracti128 xmm2, ymm0, 1    // xmm2 = high 128 of ymm0
-  vextracti128 xmm3, ymm1, 1    // xmm3 = high 128 of ymm1
-  vpminub xmm0, xmm0, xmm2      // xmm0 = min of high and low
-  vpmaxub xmm1, xmm1, xmm3      // xmm1 = max of high and low
+  vextracti128 xmm2, ymm0, 1
+  vextracti128 xmm3, ymm1, 1
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
   
-  // 128 位归约到 64 位
   vpsrldq xmm2, xmm0, 8
   vpsrldq xmm3, xmm1, 8
   vpminub xmm0, xmm0, xmm2
   vpmaxub xmm1, xmm1, xmm3
   
-  // 64 位归约到 32 位
   vpsrldq xmm2, xmm0, 4
   vpsrldq xmm3, xmm1, 4
   vpminub xmm0, xmm0, xmm2
   vpmaxub xmm1, xmm1, xmm3
   
-  // 32 位归约到 16 位
   vpsrldq xmm2, xmm0, 2
   vpsrldq xmm3, xmm1, 2
   vpminub xmm0, xmm0, xmm2
   vpmaxub xmm1, xmm1, xmm3
   
-  // 16 位归约到 8 位
   vpsrldq xmm2, xmm0, 1
   vpsrldq xmm3, xmm1, 1
   vpminub xmm0, xmm0, xmm2
   vpmaxub xmm1, xmm1, xmm3
   
-  // 提取结果
-  vpextrb eax, xmm0, 0          // al = min
-  vpextrb ebx, xmm1, 0          // bl = max
+  vpextrb eax, xmm0, 0
+  vpextrb ebx, xmm1, 0
   
-  // 计算剩余字节
-  and rsi, 31           // len % 32
+  and rsi, 31
   jz @store_result
-  
-  // 处理剩余字节
+
 @scalar_loop:
   test rsi, rsi
   jz @store_result
   movzx ecx, byte ptr [rdi]
   cmp cl, al
-  cmovb eax, ecx       // if (data < min) min = data
+  cmovb eax, ecx
   cmp cl, bl
-  cmova ebx, ecx       // if (data > max) max = data
+  cmova ebx, ecx
   inc rdi
   dec rsi
   jnz @scalar_loop
   
 @store_result:
-  mov [r8], al         // *minVal = al
-  mov [r9], bl         // *maxVal = bl
+  mov [r8], al
+  mov [r9], bl
   vzeroupper
   pop rbx
   jmp @return
@@ -357,26 +579,118 @@ asm
   pop rbx
   
 @return:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len, R8 = &minVal, R9 = &maxVal
+  push rbx
+  push rsi
+  push rdi
+  mov rdi, rcx      // rdi = p
+  mov rsi, rdx      // rsi = len
+  // r8 = &minVal (already)
+  // r9 = &maxVal (already)
+  
+  test rsi, rsi
+  jz @empty
+  
+  mov al, 255
+  mov bl, 0
+  
+  cmp rsi, 32
+  jb @scalar_loop
+  
+  vpcmpeqb ymm0, ymm0, ymm0
+  vpxor ymm1, ymm1, ymm1
+  
+  mov rcx, rsi
+  shr rcx, 5
+
+@vector_loop:
+  vmovdqu ymm2, [rdi]
+  vpminub ymm0, ymm0, ymm2
+  vpmaxub ymm1, ymm1, ymm2
+  add rdi, 32
+  dec rcx
+  jnz @vector_loop
+  
+  vextracti128 xmm2, ymm0, 1
+  vextracti128 xmm3, ymm1, 1
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
+  
+  vpsrldq xmm2, xmm0, 8
+  vpsrldq xmm3, xmm1, 8
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
+  
+  vpsrldq xmm2, xmm0, 4
+  vpsrldq xmm3, xmm1, 4
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
+  
+  vpsrldq xmm2, xmm0, 2
+  vpsrldq xmm3, xmm1, 2
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
+  
+  vpsrldq xmm2, xmm0, 1
+  vpsrldq xmm3, xmm1, 1
+  vpminub xmm0, xmm0, xmm2
+  vpmaxub xmm1, xmm1, xmm3
+  
+  vpextrb eax, xmm0, 0
+  vpextrb ebx, xmm1, 0
+  
+  and rsi, 31
+  jz @store_result
+
+@scalar_loop:
+  test rsi, rsi
+  jz @store_result
+  movzx ecx, byte ptr [rdi]
+  cmp cl, al
+  cmovb eax, ecx
+  cmp cl, bl
+  cmova ebx, ecx
+  inc rdi
+  dec rsi
+  jnz @scalar_loop
+  
+@store_result:
+  mov [r8], al
+  mov [r9], bl
+  vzeroupper
+  pop rdi
+  pop rsi
+  pop rbx
+  jmp @return
+  
+@empty:
+  mov byte ptr [r8], 0
+  mov byte ptr [r9], 0
+  pop rdi
+  pop rsi
+  pop rbx
+  
+@return:
+{$ENDIF}
 end;
 
 // BitsetPopCount_AVX2 - 使用 POPCNT 指令计算位集中置 1 的位数
 // 一次处理 8 字节（64位）使用硬件 POPCNT 指令
 function BitsetPopCount_AVX2(p: Pointer; len: SizeUInt): SizeUInt; assembler; nostackframe;
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
-  // 参数: RDI = p, RSI = len
-  // 返回: RAX = 置 1 的位数
+{$IFDEF UNIX}
+  xor rax, rax
   
-  xor rax, rax          // result = 0
-  
-  // 边界检查
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
   
-  // 主循环：一次处理 8 字节
   mov rcx, rsi
-  shr rcx, 3            // rcx = len / 8
+  shr rcx, 3
   jz @remainder
   
 @main_loop:
@@ -387,8 +701,7 @@ asm
   jnz @main_loop
   
 @remainder:
-  // 处理剩余字节 (0-7)
-  and rsi, 7            // len % 8
+  and rsi, 7
   jz @done
   
 @scalar_loop:
@@ -400,19 +713,67 @@ asm
   jnz @scalar_loop
   
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len
+  xor rax, rax
+  
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+  
+  mov r10, rdx
+  shr r10, 3
+  jz @remainder
+  
+@main_loop:
+  popcnt r8, qword ptr [rcx]
+  add rax, r8
+  add rcx, 8
+  dec r10
+  jnz @main_loop
+  
+@remainder:
+  and rdx, 7
+  jz @done
+  
+@scalar_loop:
+  movzx r8d, byte ptr [rcx]
+  popcnt r8d, r8d
+  add rax, r8
+  inc rcx
+  dec rdx
+  jnz @scalar_loop
+  
+@done:
+{$ENDIF}
 end;
 
 // Utf8Validate_AVX2 - 完整 SIMD UTF-8 验证 (Lemire lookup4, 纯汇编)
 // 32 字节/iter 处理所有 UTF-8 序列，不回退标量。
 // 参考: simdjson utf8_lookup4_algorithm.h, Lemire arXiv:2010.03090
 function Utf8Validate_AVX2(p: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;
-// RDI = p, RSI = len. Returns AL (Boolean).
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
+{$IFDEF UNIX}
   // === 边界检查 ===
   test rsi, rsi
   jz @valid
   test rdi, rdi
   jz @invalid
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len -> remap to RDI, RSI
+  // rdi/rsi are non-volatile on Windows, must save
+  test rdx, rdx
+  jz @valid
+  test rcx, rcx
+  jz @invalid
+  push rdi
+  push rsi
+  mov rdi, rcx
+  mov rsi, rdx
+{$ENDIF}
 
   // === 初始化状态寄存器 ===
   vpxor ymm13, ymm13, ymm13    // prev_block = 0
@@ -588,8 +949,7 @@ asm
   vpand ymm3, ymm3, ymm5
   vpalignr ymm6, ymm0, ymm1, 14
   vpalignr ymm7, ymm0, ymm1, 13
-  vpsubusb ymm6, ymm6, [rsp]       // splat_60 still at rsp (after add rsp,32 above... wait)
-  // 注意: 上面 add rsp,32 后 splat 常量仍在 [rsp] (因为之前 sub rsp,96 的空间还在)
+  vpsubusb ymm6, ymm6, [rsp]
   vpsubusb ymm7, ymm7, [rsp+32]
   vpor ymm6, ymm6, ymm7
   vpand ymm6, ymm6, [rsp+64]
@@ -607,6 +967,10 @@ asm
   // 清理栈 (96 bytes for splat constants)
   add rsp, 96
   vzeroupper
+{$IFNDEF UNIX}
+  pop rsi
+  pop rdi
+{$ENDIF}
   ret
 
 @valid:
@@ -621,8 +985,10 @@ end;
 // MemReverse_AVX2 - 使用标量字节反转（优化版本）
 // 策略: 从两端向中间交换，利用 bswap 一次处理 8 字节
 procedure MemReverse_AVX2(p: Pointer; len: SizeUInt); assembler; nostackframe;
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
-  // RDI = p, RSI = len
+{$IFDEF UNIX}
   test rsi, rsi
   jz @done
   test rdi, rdi
@@ -630,25 +996,20 @@ asm
   cmp rsi, 1
   je @done
   
-  // pLeft = p, pRight = p + len - 1
-  mov rax, rdi               // rax = pLeft
-  lea rdx, [rdi + rsi - 1]   // rdx = pRight
+  mov rax, rdi
+  lea rdx, [rdi + rsi - 1]
   
-  // 主循环: 一次交换 8 字节 (64-bit)
 @loop8:
   lea rcx, [rax + 8]
   cmp rcx, rdx
   ja @loop1
   
-  // 加载左右各 8 字节
-  mov r8, qword ptr [rax]      // left 8 bytes
-  mov r9, qword ptr [rdx - 7]  // right 8 bytes (rdx 指向最后一个字节)
+  mov r8, qword ptr [rax]
+  mov r9, qword ptr [rdx - 7]
   
-  // 使用 bswap 反转字节序
   bswap r8
   bswap r9
   
-  // 交换写回
   mov qword ptr [rax], r9
   mov qword ptr [rdx - 7], r8
   
@@ -656,7 +1017,6 @@ asm
   sub rdx, 8
   jmp @loop8
   
-  // 处理剩余字节: 一次交换 1 字节
 @loop1:
   cmp rax, rdx
   jae @done
@@ -671,14 +1031,61 @@ asm
   jmp @loop1
   
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+  cmp rdx, 1
+  je @done
+  
+  mov rax, rcx               // rax = pLeft
+  lea r10, [rcx + rdx - 1]  // r10 = pRight
+  
+@loop8:
+  lea r8, [rax + 8]
+  cmp r8, r10
+  ja @loop1
+  
+  mov r8, qword ptr [rax]
+  mov r9, qword ptr [r10 - 7]
+  
+  bswap r8
+  bswap r9
+  
+  mov qword ptr [rax], r9
+  mov qword ptr [r10 - 7], r8
+  
+  add rax, 8
+  sub r10, 8
+  jmp @loop8
+  
+@loop1:
+  cmp rax, r10
+  jae @done
+  
+  movzx r8d, byte ptr [rax]
+  movzx r9d, byte ptr [r10]
+  mov byte ptr [rax], r9b
+  mov byte ptr [r10], r8b
+  
+  inc rax
+  dec r10
+  jmp @loop1
+  
+@done:
+{$ENDIF}
 end;
 
 // AsciiIEqual_AVX2 - 向量化 ASCII 大小写不敏感比较
 // 策略: 将两边都转为小写后比较
 function AsciiIEqual_AVX2(a, b: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;
+// SysV: RDI = a, RSI = b, RDX = len
+// Win64: RCX = a, RDX = b, R8 = len
 asm
-  // RDI = a, RSI = b, RDX = len
-  mov rax, 1             // 默认 true
+{$IFDEF UNIX}
+  mov rax, 1
   
   test rdx, rdx
   jz @done
@@ -687,67 +1094,59 @@ asm
   test rsi, rsi
   jz @false
   cmp rdi, rsi
-  je @done               // 同一指针
-  
-  // 准备常量:
-  // 'A' = 65, 'Z' = 90, 差值 = 32
-  mov r8d, 64            // 'A' - 1
+  je @done
+
+  mov r8d, 64
   vmovd xmm2, r8d
-  vpbroadcastb ymm2, xmm2  // ymm2 = all 64 ('A'-1)
-  
-  mov r8d, 91            // 'Z' + 1  
+  vpbroadcastb ymm2, xmm2
+
+  mov r8d, 91
   vmovd xmm3, r8d
-  vpbroadcastb ymm3, xmm3  // ymm3 = all 91 ('Z'+1)
-  
+  vpbroadcastb ymm3, xmm3
+
   mov r8d, 32
   vmovd xmm4, r8d
-  vpbroadcastb ymm4, xmm4  // ymm4 = all 32 (大小写差)
-  
-  xor rcx, rcx           // i = 0
-  
+  vpbroadcastb ymm4, xmm4
+
+  xor rcx, rcx
+
 @loop32:
   lea r8, [rcx + 32]
   cmp r8, rdx
   ja @loop_remainder
-  
-  // 加载 32 字节
-  vmovdqu ymm0, [rdi + rcx]  // a
-  vmovdqu ymm1, [rsi + rcx]  // b
-  
-  // 将 a 转为小写: 如果在 A-Z 范围，加 32
-  vpcmpgtb ymm5, ymm0, ymm2      // a > 'A'-1
-  vpcmpgtb ymm6, ymm3, ymm0      // 'Z'+1 > a
-  vpand ymm5, ymm5, ymm6          // 在 A-Z 范围内
-  vpand ymm5, ymm5, ymm4          // 掩码 & 32
-  vpaddb ymm0, ymm0, ymm5         // a += 32 (if A-Z)
-  
-  // 将 b 转为小写
+
+  vmovdqu ymm0, [rdi + rcx]
+  vmovdqu ymm1, [rsi + rcx]
+
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpaddb ymm0, ymm0, ymm5
+
   vpcmpgtb ymm5, ymm1, ymm2
   vpcmpgtb ymm6, ymm3, ymm1
   vpand ymm5, ymm5, ymm6
   vpand ymm5, ymm5, ymm4
   vpaddb ymm1, ymm1, ymm5
-  
-  // 比较
+
   vpcmpeqb ymm0, ymm0, ymm1
   vpmovmskb r8d, ymm0
   cmp r8d, $FFFFFFFF
   jne @false_cleanup
-  
+
   add rcx, 32
   jmp @loop32
-  
+
 @loop_remainder:
   vzeroupper
   cmp rcx, rdx
   jae @done
-  
-  // 标量处理剩余字节
+
 @scalar_loop:
   movzx r8d, byte ptr [rdi + rcx]
   movzx r9d, byte ptr [rsi + rcx]
-  
-  // 转小写
+
   cmp r8d, 65
   jb @skip_lower1
   cmp r8d, 90
@@ -760,42 +1159,140 @@ asm
   ja @skip_lower2
   add r9d, 32
 @skip_lower2:
-  
+
   cmp r8d, r9d
   jne @false
-  
+
   inc rcx
   cmp rcx, rdx
   jb @scalar_loop
   jmp @done
-  
+
 @check_both_nil:
   test rsi, rsi
   jnz @false
   jmp @done
-  
+
 @false_cleanup:
   vzeroupper
 @false:
   xor eax, eax
 @done:
+{$ELSE}
+  // Windows x64: RCX = a, RDX = b, R8 = len
+  mov rax, 1
+  
+  test r8, r8
+  jz @done
+  test rcx, rcx
+  jz @check_both_nil
+  test rdx, rdx
+  jz @false
+  cmp rcx, rdx
+  je @done
+
+  // Prepare constants
+  mov r9d, 64
+  vmovd xmm2, r9d
+  vpbroadcastb ymm2, xmm2
+
+  mov r9d, 91
+  vmovd xmm3, r9d
+  vpbroadcastb ymm3, xmm3
+
+  mov r9d, 32
+  vmovd xmm4, r9d
+  vpbroadcastb ymm4, xmm4
+
+  xor r10, r10
+
+@loop32:
+  lea r9, [r10 + 32]
+  cmp r9, r8
+  ja @loop_remainder
+
+  vmovdqu ymm0, [rcx + r10]
+  vmovdqu ymm1, [rdx + r10]
+
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpaddb ymm0, ymm0, ymm5
+
+  vpcmpgtb ymm5, ymm1, ymm2
+  vpcmpgtb ymm6, ymm3, ymm1
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpaddb ymm1, ymm1, ymm5
+
+  vpcmpeqb ymm0, ymm0, ymm1
+  vpmovmskb r9d, ymm0
+  cmp r9d, $FFFFFFFF
+  jne @false_cleanup
+
+  add r10, 32
+  jmp @loop32
+
+@loop_remainder:
+  vzeroupper
+  cmp r10, r8
+  jae @done
+
+@scalar_loop:
+  movzx r9d, byte ptr [rcx + r10]
+  movzx r11d, byte ptr [rdx + r10]
+
+  cmp r9d, 65
+  jb @skip_lower1
+  cmp r9d, 90
+  ja @skip_lower1
+  add r9d, 32
+@skip_lower1:
+  cmp r11d, 65
+  jb @skip_lower2
+  cmp r11d, 90
+  ja @skip_lower2
+  add r11d, 32
+@skip_lower2:
+
+  cmp r9d, r11d
+  jne @false
+
+  inc r10
+  cmp r10, r8
+  jb @scalar_loop
+  jmp @done
+
+@check_both_nil:
+  test rdx, rdx
+  jnz @false
+  jmp @done
+
+@false_cleanup:
+  vzeroupper
+@false:
+  xor eax, eax
+@done:
+{$ENDIF}
 end;
 
 // ToLowerAscii_AVX2 - 向量化 ASCII 大写转小写
 procedure ToLowerAscii_AVX2(p: Pointer; len: SizeUInt); assembler; nostackframe;
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
-  // RDI = p, RSI = len
+{$IFDEF UNIX}
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
   
-  // 准备常量
-  mov eax, 64            // 'A' - 1
+  mov eax, 64
   vmovd xmm2, eax
   vpbroadcastb ymm2, xmm2
   
-  mov eax, 91            // 'Z' + 1
+  mov eax, 91
   vmovd xmm3, eax
   vpbroadcastb ymm3, xmm3
   
@@ -811,11 +1308,11 @@ asm
   ja @remainder
   
   vmovdqu ymm0, [rdi + rcx]
-  vpcmpgtb ymm5, ymm0, ymm2      // > 'A'-1
-  vpcmpgtb ymm6, ymm3, ymm0      // < 'Z'+1
-  vpand ymm5, ymm5, ymm6          // in A-Z
-  vpand ymm5, ymm5, ymm4          // mask & 32
-  vpaddb ymm0, ymm0, ymm5         // += 32
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpaddb ymm0, ymm0, ymm5
   vmovdqu [rdi + rcx], ymm0
   
   add rcx, 32
@@ -840,23 +1337,81 @@ asm
   jb @scalar_loop
   
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+  
+  mov eax, 64
+  vmovd xmm2, eax
+  vpbroadcastb ymm2, xmm2
+  
+  mov eax, 91
+  vmovd xmm3, eax
+  vpbroadcastb ymm3, xmm3
+  
+  mov eax, 32
+  vmovd xmm4, eax
+  vpbroadcastb ymm4, xmm4
+  
+  xor r10, r10
+  
+@loop32:
+  lea rax, [r10 + 32]
+  cmp rax, rdx
+  ja @remainder
+  
+  vmovdqu ymm0, [rcx + r10]
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpaddb ymm0, ymm0, ymm5
+  vmovdqu [rcx + r10], ymm0
+  
+  add r10, 32
+  jmp @loop32
+  
+@remainder:
+  vzeroupper
+  cmp r10, rdx
+  jae @done
+  
+@scalar_loop:
+  movzx eax, byte ptr [rcx + r10]
+  cmp eax, 65
+  jb @skip
+  cmp eax, 90
+  ja @skip
+  add eax, 32
+  mov byte ptr [rcx + r10], al
+@skip:
+  inc r10
+  cmp r10, rdx
+  jb @scalar_loop
+  
+@done:
+{$ENDIF}
 end;
 
 // ToUpperAscii_AVX2 - 向量化 ASCII 小写转大写
 procedure ToUpperAscii_AVX2(p: Pointer; len: SizeUInt); assembler; nostackframe;
+// SysV: RDI = p, RSI = len
+// Win64: RCX = p, RDX = len
 asm
-  // RDI = p, RSI = len
+{$IFDEF UNIX}
   test rsi, rsi
   jz @done
   test rdi, rdi
   jz @done
   
-  // 准备常量: 'a' = 97, 'z' = 122
-  mov eax, 96            // 'a' - 1
+  mov eax, 96
   vmovd xmm2, eax
   vpbroadcastb ymm2, xmm2
   
-  mov eax, 123           // 'z' + 1
+  mov eax, 123
   vmovd xmm3, eax
   vpbroadcastb ymm3, xmm3
   
@@ -872,11 +1427,11 @@ asm
   ja @remainder
   
   vmovdqu ymm0, [rdi + rcx]
-  vpcmpgtb ymm5, ymm0, ymm2      // > 'a'-1
-  vpcmpgtb ymm6, ymm3, ymm0      // < 'z'+1
-  vpand ymm5, ymm5, ymm6          // in a-z
-  vpand ymm5, ymm5, ymm4          // mask & 32
-  vpsubb ymm0, ymm0, ymm5         // -= 32
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpsubb ymm0, ymm0, ymm5
   vmovdqu [rdi + rcx], ymm0
   
   add rcx, 32
@@ -901,14 +1456,73 @@ asm
   jb @scalar_loop
   
 @done:
+{$ELSE}
+  // Windows x64: RCX = p, RDX = len
+  test rdx, rdx
+  jz @done
+  test rcx, rcx
+  jz @done
+  
+  mov eax, 96
+  vmovd xmm2, eax
+  vpbroadcastb ymm2, xmm2
+  
+  mov eax, 123
+  vmovd xmm3, eax
+  vpbroadcastb ymm3, xmm3
+  
+  mov eax, 32
+  vmovd xmm4, eax
+  vpbroadcastb ymm4, xmm4
+  
+  xor r10, r10
+  
+@loop32:
+  lea rax, [r10 + 32]
+  cmp rax, rdx
+  ja @remainder
+  
+  vmovdqu ymm0, [rcx + r10]
+  vpcmpgtb ymm5, ymm0, ymm2
+  vpcmpgtb ymm6, ymm3, ymm0
+  vpand ymm5, ymm5, ymm6
+  vpand ymm5, ymm5, ymm4
+  vpsubb ymm0, ymm0, ymm5
+  vmovdqu [rcx + r10], ymm0
+  
+  add r10, 32
+  jmp @loop32
+  
+@remainder:
+  vzeroupper
+  cmp r10, rdx
+  jae @done
+  
+@scalar_loop:
+  movzx eax, byte ptr [rcx + r10]
+  cmp eax, 97
+  jb @skip
+  cmp eax, 122
+  ja @skip
+  sub eax, 32
+  mov byte ptr [rcx + r10], al
+@skip:
+  inc r10
+  cmp r10, rdx
+  jb @scalar_loop
+  
+@done:
+{$ENDIF}
 end;
 
 // MemCopy_AVX2 - 大缓冲区使用 NT stores 避免 cache 污染
 // < 256KB: rep movsb (利用 CPU ERMS 优化)
 // >= 256KB: vmovdqu load + vmovntdq store (bypass cache, 要求 dst 32B 对齐)
 procedure MemCopy_AVX2(src, dst: Pointer; len: SizeUInt); assembler; nostackframe;
-// RDI = src, RSI = dst, RDX = len
+// SysV: RDI = src, RSI = dst, RDX = len
+// Win64: RCX = src, RDX = dst, R8 = len
 asm
+{$IFDEF UNIX}
   test rdx, rdx
   jz @done
   test rdi, rdi
@@ -916,7 +1530,6 @@ asm
   test rsi, rsi
   jz @done
 
-  // < 256KB 或 dst 未对齐: 用 rep movsb
   cmp rdx, 262144
   jb @use_move
   test rsi, 31
@@ -942,7 +1555,6 @@ asm
   and rdx, 31
   test rdx, rdx
   jz @nt_done
-  // rep movsb needs RSI=src, RDI=dst — swap
   mov rax, rdi
   mov rdi, rsi
   mov rsi, rax
@@ -955,15 +1567,77 @@ asm
   ret
 
 @use_move:
-  // rep movsb: RSI=source, RDI=dest — swap our params
-  mov rax, rdi        // rax = src (was in RDI)
-  mov rdi, rsi        // RDI = dst (for rep movsb dest)
-  mov rsi, rax        // RSI = src (for rep movsb source)
-  mov rcx, rdx        // RCX = len
+  mov rax, rdi
+  mov rdi, rsi
+  mov rsi, rax
+  mov rcx, rdx
   cld
   rep movsb
 
 @done:
+{$ELSE}
+  // Windows x64: RCX = src, RDX = dst, R8 = len
+  test r8, r8
+  jz @done
+  test rcx, rcx
+  jz @done
+  test rdx, rdx
+  jz @done
+
+  cmp r8, 262144
+  jb @use_move
+  test rdx, 31
+  jnz @use_move
+
+  // === NT store path (>= 256KB, dst 32B aligned) ===
+  mov r10, r8
+  shr r10, 5
+  test r10, r10
+  jz @nt_tail
+
+@nt_loop:
+  vmovdqu ymm0, [rcx]
+  vmovntdq [rdx], ymm0
+  add rcx, 32
+  add rdx, 32
+  dec r10
+  jnz @nt_loop
+
+  sfence
+
+@nt_tail:
+  and r8, 31
+  test r8, r8
+  jz @nt_done
+  // rep movsb: RDI=dst, RSI=src, RCX=len
+  push rdi
+  push rsi
+  mov rdi, rdx
+  mov rsi, rcx
+  mov rcx, r8
+  cld
+  rep movsb
+  pop rsi
+  pop rdi
+
+@nt_done:
+  vzeroupper
+  ret
+
+@use_move:
+  // rep movsb: RDI=dst, RSI=src, RCX=len
+  push rdi
+  push rsi
+  mov rdi, rdx
+  mov rsi, rcx
+  mov rcx, r8
+  cld
+  rep movsb
+  pop rsi
+  pop rdi
+
+@done:
+{$ENDIF}
 end;
 
 // MemSet_AVX2 - 使用 FPC 内置 FillChar 函数（已足够优化）
@@ -1197,4 +1871,3 @@ begin
     Inc(i);
   end;
 end;
-

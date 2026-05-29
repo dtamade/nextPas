@@ -3,8 +3,15 @@
 // MemEqual_AVX512 - 使用 AVX-512 比较两个内存区域
 // 一次处理 64 字节，使用 ZMM 寄存器
 function MemEqual_AVX512(a, b: Pointer; len: SizeUInt): LongBool; assembler; nostackframe;
-// RDI = a, RSI = b, RDX = len
 asm
+  {$IFDEF UNIX}
+    // RDI = a, RSI = b, RDX = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = a, RDX = b, R8 = len
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   xor eax, eax           // Default result = false
   test rdx, rdx
   jz @equal              // Empty = equal
@@ -83,8 +90,15 @@ end;
 // MemFindByte_AVX512 - 使用 AVX-512 查找字节
 // 一次搜索 64 字节
 function MemFindByte_AVX512(p: Pointer; len: SizeUInt; value: Byte): PtrInt; assembler; nostackframe;
-// RDI = p, RSI = len, RDX = value
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len, RDX = value (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len, R8 = value
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   mov rax, -1            // Default result = -1 (not found)
   test rsi, rsi
   jz @done
@@ -173,8 +187,14 @@ end;
 // SumBytes_AVX512 - 使用 AVX-512 求和字节数组
 // 使用 vpsadbw 快速累加
 function SumBytes_AVX512(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;
-// RDI = p, RSI = len
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len
+    mov rdi, rcx
+    mov rsi, rdx
+  {$ENDIF}
   xor rax, rax           // sum = 0
   test rsi, rsi
   jz @done
@@ -243,8 +263,15 @@ end;
 
 // CountByte_AVX512 - 使用 AVX-512 计数指定字节
 function CountByte_AVX512(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;
-// RDI = p, RSI = len, RDX = value
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len, RDX = value (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len, R8 = value
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   xor rax, rax           // count = 0
   test rsi, rsi
   jz @done
@@ -311,7 +338,15 @@ end;
 // MinMaxBytes_AVX512 - 使用 AVX-512 查找最小和最大字节
 procedure MinMaxBytes_AVX512(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;
 asm
-  // RDI = p, RSI = len, RDX = &minVal, RCX = &maxVal
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len, RDX = &minVal, RCX = &maxVal (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len, R8 = &minVal, R9 = &maxVal
+    mov rdi, rcx
+    mov rcx, r9
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   push rbx
   mov r8, rdx       // r8 = &minVal
   mov r9, rcx       // r9 = &maxVal
@@ -475,8 +510,13 @@ end;
 // BitsetPopCount_AVX512 - 使用 POPCNT 指令计算位集中置 1 的位数
 function BitsetPopCount_AVX512(p: Pointer; len: SizeUInt): SizeUInt; assembler; nostackframe;
 asm
-  // 参数: RDI = p, RSI = len
-  // 返回: RAX = 置 1 的位数
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len
+    mov rdi, rcx
+    mov rsi, rdx
+  {$ENDIF}
   
   xor rax, rax          // result = 0
   
@@ -519,8 +559,15 @@ end;
 // AsciiIEqual_AVX512 - 使用 AVX-512 进行大小写不敏感的 ASCII 比较
 // 算法：将两个字符串都转换为小写后比较
 function AsciiIEqual_AVX512(a, b: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;
-// RDI = a, RSI = b, RDX = len
 asm
+  {$IFDEF UNIX}
+    // RDI = a, RSI = b, RDX = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = a, RDX = b, R8 = len
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   xor eax, eax           // Default result = false
   test rdx, rdx
   jz @equal              // Empty = equal
@@ -697,8 +744,15 @@ end;
 // 一次复制 64 字节以获得最大吸吐
 // 注意：应对重叠情况需要处理
 procedure MemCopy_AVX512(src, dst: Pointer; len: SizeUInt); assembler; nostackframe;
-// RDI = src, RSI = dst, RDX = len
 asm
+  {$IFDEF UNIX}
+    // RDI = src, RSI = dst, RDX = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = src, RDX = dst, R8 = len
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   test rdx, rdx
   jz @done
   test rdi, rdi
@@ -807,8 +861,15 @@ end;
 // MemSet_AVX512 - 使用 AVX-512 填充内存
 // 一次填充 64 字节
 procedure MemSet_AVX512(dst: Pointer; len: SizeUInt; value: Byte); assembler; nostackframe;
-// RDI = dst, RSI = len, RDX = value
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len, RDX = value (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len, R8 = value
+    mov rdi, rcx
+    mov rsi, rdx
+    mov rdx, r8
+  {$ENDIF}
   test rsi, rsi
   jz @done
   test rdi, rdi
@@ -858,8 +919,14 @@ end;
 // ToLowerAscii_AVX512 - 使用 AVX-512 将 ASCII 转换为小写
 // 算法：如果字符在 'A'-'Z' 范围，加 32
 procedure ToLowerAscii_AVX512(p: Pointer; len: SizeUInt); assembler; nostackframe;
-// RDI = p, RSI = len
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len
+    mov rdi, rcx
+    mov rsi, rdx
+  {$ENDIF}
   test rsi, rsi
   jz @done
   test rdi, rdi
@@ -958,8 +1025,14 @@ end;
 // ToUpperAscii_AVX512 - 使用 AVX-512 将 ASCII 转换为大写
 // 算法：如果字符在 'a'-'z' 范围，减 32
 procedure ToUpperAscii_AVX512(p: Pointer; len: SizeUInt); assembler; nostackframe;
-// RDI = p, RSI = len
 asm
+  {$IFDEF UNIX}
+    // RDI = p, RSI = len (SysV ABI)
+  {$ELSE}
+    // Win64: RCX = p, RDX = len
+    mov rdi, rcx
+    mov rsi, rdx
+  {$ENDIF}
   test rsi, rsi
   jz @done
   test rdi, rdi
