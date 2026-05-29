@@ -69,6 +69,7 @@ type
     procedure InorderTraverse(ANode: PNode; ACallback: TForEachCallback; AData: Pointer);
     procedure RangeTraverse(ANode: PNode; const ALo, AHi: K;
       ACallback: TForEachCallback; AData: Pointer);
+    function SubtreeSize(ANode: PNode): SizeUInt;
 
   public
     constructor Create(ACompare: TCompareFunc; ACompareData: Pointer = nil);
@@ -87,6 +88,7 @@ type
     function LowerBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function Floor(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+    function Rank(const AKey: K): SizeUInt;
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
     function GetEnumerator: TEnumerator;
@@ -713,6 +715,44 @@ begin
       AValue := LNode^.Values[LIdx - 1];
       Result := True;
     end;
+    if LNode^.IsLeaf then Exit;
+    LNode := LNode^.Children[LIdx];
+  end;
+end;
+
+{ Rank — number of keys strictly less than AKey }
+
+function TBTreeMap.SubtreeSize(ANode: PNode): SizeUInt;
+var i: Int32;
+begin
+  if ANode = nil then Exit(0);
+  Result := SizeUInt(ANode^.Count);
+  if not ANode^.IsLeaf then
+    for i := 0 to ANode^.Count do
+      Result := Result + SubtreeSize(ANode^.Children[i]);
+end;
+
+function TBTreeMap.Rank(const AKey: K): SizeUInt;
+var
+  LNode: PNode;
+  LIdx, i: Int32;
+begin
+  Result := 0;
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    if SearchNode(LNode, AKey, LIdx) then
+    begin
+      if not LNode^.IsLeaf then
+        for i := 0 to LIdx - 1 do
+          Result := Result + SubtreeSize(LNode^.Children[i]);
+      Result := Result + SizeUInt(LIdx);
+      Exit;
+    end;
+    if not LNode^.IsLeaf then
+      for i := 0 to LIdx - 1 do
+        Result := Result + SubtreeSize(LNode^.Children[i]);
+    Result := Result + SizeUInt(LIdx);
     if LNode^.IsLeaf then Exit;
     LNode := LNode^.Children[LIdx];
   end;
