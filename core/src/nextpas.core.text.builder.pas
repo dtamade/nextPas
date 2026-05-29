@@ -28,6 +28,7 @@ type
     procedure AppendUInt(const AValue: UInt64);
     procedure AppendHex(const AValue: UInt64; const AMinDigits: Int32 = 1);
     procedure AppendBool(const AValue: Boolean);
+    procedure AppendFloat(const AValue: Double);
 
     function AsView: TStringView; inline;
     function ToString: string;
@@ -44,13 +45,16 @@ uses
 
 procedure TStringBuilder.Grow(const ANeeded: SizeUInt);
 var
-  LNewCap: SizeUInt;
+  LNewCap, LRequired: SizeUInt;
 begin
+  LRequired := FLen + ANeeded;
   LNewCap := FCap;
   if LNewCap = 0 then
     LNewCap := 256;
-  while LNewCap < FLen + ANeeded do
+  while (LNewCap < LRequired) and (LNewCap <= LNewCap * 2) do
     LNewCap := LNewCap * 2;
+  if LNewCap < LRequired then
+    LNewCap := LRequired;
   ReallocMem(FBuf, LNewCap);
   FCap := LNewCap;
 end;
@@ -167,6 +171,16 @@ begin
     AppendBytes('true', 4)
   else
     AppendBytes('false', 5);
+end;
+
+procedure TStringBuilder.AppendFloat(const AValue: Double);
+var
+  LWritten: Int32;
+begin
+  if FLen + 25 > FCap then
+    Grow(25);
+  LWritten := FloatToBuffer(AValue, FBuf + FLen);
+  Inc(FLen, SizeUInt(LWritten));
 end;
 
 function TStringBuilder.AsView: TStringView;

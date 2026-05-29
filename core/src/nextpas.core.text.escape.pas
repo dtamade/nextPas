@@ -219,6 +219,23 @@ begin
   Result := -1;
 end;
 
+function EscapeParseHex4(const ASrc: PAnsiChar; const ALen: SizeUInt;
+  const AStart: SizeUInt): Int32;
+var
+  I: SizeUInt;
+  D, V: Int32;
+begin
+  V := 0;
+  for I := AStart to AStart + 3 do
+  begin
+    if I >= ALen then Exit(-1);
+    D := HexDigitValue(Byte(ASrc[I]));
+    if D < 0 then Exit(-1);
+    V := (V shl 4) or D;
+  end;
+  Result := V;
+end;
+
 function JsonUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
 var
@@ -227,23 +244,6 @@ var
   LHi, LLo: UInt32;
   LCP: UInt32;
   LEncLen: Byte;
-
-  function ParseHex4(AStart: SizeUInt): Int32;
-  var
-    I: SizeUInt;
-    D, V: Int32;
-  begin
-    V := 0;
-    for I := AStart to AStart + 3 do
-    begin
-      if I >= ALen then Exit(-1);
-      D := HexDigitValue(Byte(ASrc[I]));
-      if D < 0 then Exit(-1);
-      V := (V shl 4) or D;
-    end;
-    Result := V;
-  end;
-
 begin
   AError := ueNone;
   LPos := 0;
@@ -282,7 +282,7 @@ begin
           AError := ueTruncated;
           Exit(LOut);
         end;
-        LHi := UInt32(ParseHex4(LPos));
+        LHi := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
         if Int32(LHi) < 0 then
         begin
           AError := ueInvalidUnicode;
@@ -294,7 +294,7 @@ begin
           if (LPos + 6 <= ALen) and (ASrc[LPos] = '\') and (ASrc[LPos + 1] = 'u') then
           begin
             Inc(LPos, 2);
-            LLo := UInt32(ParseHex4(LPos));
+            LLo := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
             if (Int32(LLo) < 0) or (LLo < $DC00) or (LLo > $DFFF) then
             begin
               AError := ueInvalidUnicode;

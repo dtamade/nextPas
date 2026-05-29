@@ -240,7 +240,9 @@ begin
     AValue := 0.0 / 0.0;
     Exit(True);
   end;
-  if (ALen - LPos >= 8) and (AData[LPos] = 'I') then
+  if (ALen - LPos >= 8) and (AData[LPos] = 'I') and (AData[LPos+1] = 'n') and
+     (AData[LPos+2] = 'f') and (AData[LPos+3] = 'i') and (AData[LPos+4] = 'n') and
+     (AData[LPos+5] = 'i') and (AData[LPos+6] = 't') and (AData[LPos+7] = 'y') then
   begin
     if LNeg then
       AValue := -1.0 / 0.0
