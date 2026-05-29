@@ -146,6 +146,50 @@ begin
   Doc.Done;
 end;
 
+procedure TestObjectIteration;
+var Doc: TJsonDocument; V: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('{"a":1,"b":2,"c":3}')), 'parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(3), Int64(V.ObjectLen), 'len=3');
+  CheckEqual('a', V.ObjectKeyAt(0).ToString, 'key[0]=a');
+  CheckEqual('b', V.ObjectKeyAt(1).ToString, 'key[1]=b');
+  CheckEqual('c', V.ObjectKeyAt(2).ToString, 'key[2]=c');
+  CheckEqual(Int64(1), V.ObjectValueAt(0).AsInt, 'val[0]=1');
+  CheckEqual(Int64(2), V.ObjectValueAt(1).AsInt, 'val[1]=2');
+  CheckEqual(Int64(3), V.ObjectValueAt(2).AsInt, 'val[2]=3');
+  Doc.Done;
+end;
+
+procedure TestStringEscape;
+var Doc: TJsonDocument; V: TJsonValue; S: string;
+const
+  INPUT = '{"msg":"hello'#92'nworld"}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.Create(PAnsiChar(INPUT), Length(INPUT))), 'parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  S := V.ObjectGet(SV('msg')).AsStr.ToString;
+  CheckEqual(Int64(11), Int64(Length(S)), 'decoded len=11');
+  Check(Ord(S[6]) = 10, 'byte 6 = LF');
+  Doc.Done;
+end;
+
+procedure TestUnicodeEscape;
+var Doc: TJsonDocument; V: TJsonValue; S: string;
+const
+  INPUT = '{"c":"'#92'u00e9"}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.Create(PAnsiChar(INPUT), Length(INPUT))), 'parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  S := V.ObjectGet(SV('c')).AsStr.ToString;
+  Check(Ord(S[1]) = $C3, 'utf8 byte 0');
+  Check(Ord(S[2]) = $A9, 'utf8 byte 1');
+  Doc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.parser');
   T.Run('parse null', @TestParseNull);
@@ -158,5 +202,8 @@ begin
   T.Run('parse nested', @TestParseNested);
   T.Run('parse empty', @TestParseEmpty);
   T.Run('parse error', @TestParseError);
+  T.Run('object iteration', @TestObjectIteration);
+  T.Run('string escape', @TestStringEscape);
+  T.Run('unicode escape', @TestUnicodeEscape);
   T.Summary;
 end.

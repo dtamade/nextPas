@@ -35,6 +35,9 @@ type
     function ObjectGet(const AKey: string): TJsonValue; overload;
     function ObjectHas(const AKey: TStringView): Boolean; overload;
     function ObjectHas(const AKey: string): Boolean; overload;
+    function ObjectLen: UInt32;
+    function ObjectKeyAt(AIndex: UInt32): TStringView;
+    function ObjectValueAt(AIndex: UInt32): TJsonValue;
   end;
 
 implementation
@@ -191,6 +194,60 @@ end;
 function TJsonValue.ObjectHas(const AKey: string): Boolean;
 begin
   Result := ObjectGet(AKey).IsValid;
+end;
+
+function TJsonValue.ObjectLen: UInt32;
+begin
+  if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkObject) then
+    Exit(0);
+  Result := FDoc^.Node(FIdx)^.Container.Count;
+end;
+
+function TJsonValue.ObjectKeyAt(AIndex: UInt32): TStringView;
+var
+  LNode: PJsonNode;
+  LCur: UInt32;
+  I: UInt32;
+begin
+  Result := TStringView.Empty;
+  if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkObject) then
+    Exit;
+  LNode := FDoc^.Node(FIdx);
+  if AIndex >= LNode^.Container.Count then Exit;
+  LCur := LNode^.Container.FirstChild;
+  I := 0;
+  while I < AIndex do
+  begin
+    if LCur = JSON_NODE_NONE then Exit;
+    LCur := FDoc^.Node(FDoc^.Node(LCur)^.Next)^.Next;
+    Inc(I);
+  end;
+  if LCur <> JSON_NODE_NONE then
+    Result := FDoc^.Node(LCur)^.Str;
+end;
+
+function TJsonValue.ObjectValueAt(AIndex: UInt32): TJsonValue;
+var
+  LNode: PJsonNode;
+  LCur: UInt32;
+  I: UInt32;
+begin
+  Result.FDoc := FDoc;
+  Result.FIdx := JSON_NODE_NONE;
+  if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkObject) then
+    Exit;
+  LNode := FDoc^.Node(FIdx);
+  if AIndex >= LNode^.Container.Count then Exit;
+  LCur := LNode^.Container.FirstChild;
+  I := 0;
+  while I < AIndex do
+  begin
+    if LCur = JSON_NODE_NONE then Exit;
+    LCur := FDoc^.Node(FDoc^.Node(LCur)^.Next)^.Next;
+    Inc(I);
+  end;
+  if LCur <> JSON_NODE_NONE then
+    Result.FIdx := FDoc^.Node(LCur)^.Next;
 end;
 
 end.
