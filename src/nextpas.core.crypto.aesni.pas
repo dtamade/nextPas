@@ -320,10 +320,10 @@ end;
 procedure AESNIEncryptCTR128(const AKey: TAESNIExpandedKey128;
   const AICB: TAESNIBlock; const AInput: PByte; AInputLen: Integer; AOutput: PByte);
 var
-  LCtr, LCtr1, LCtr2, LCtr3: TAESNIBlock;
-  LEnc0, LEnc1, LEnc2, LEnc3: TAESNIBlock;
+  LCtr: TAESNIBlock;
+  LEnc: TAESNIBlock;
+  LCtrs: array[0..3] of TAESNIBlock;
   LBlockIdx, LRemain, I: Integer;
-  LCtrVal: UInt32;
 
   procedure IncCtr(var C: TAESNIBlock); inline;
   var V: UInt32;
@@ -343,35 +343,109 @@ begin
 
   while LRemain >= 64 do
   begin
-    LCtr1 := LCtr; IncCtr(LCtr1);
-    LCtr2 := LCtr1; IncCtr(LCtr2);
-    LCtr3 := LCtr2; IncCtr(LCtr3);
+    LCtrs[0] := LCtr;
+    IncCtr(LCtr); LCtrs[1] := LCtr;
+    IncCtr(LCtr); LCtrs[2] := LCtr;
+    IncCtr(LCtr); LCtrs[3] := LCtr;
+    IncCtr(LCtr);
 
-    AESNIEncryptBlock128(LCtr, LEnc0, AKey);
-    AESNIEncryptBlock128(LCtr1, LEnc1, AKey);
-    AESNIEncryptBlock128(LCtr2, LEnc2, AKey);
-    AESNIEncryptBlock128(LCtr3, LEnc3, AKey);
+    asm
+      lea rax, LCtrs
+      mov rcx, AKey
 
-    for I := 0 to 15 do
-    begin
-      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEnc0[I];
-      AOutput[LBlockIdx + 16 + I] := AInput[LBlockIdx + 16 + I] xor LEnc1[I];
-      AOutput[LBlockIdx + 32 + I] := AInput[LBlockIdx + 32 + I] xor LEnc2[I];
-      AOutput[LBlockIdx + 48 + I] := AInput[LBlockIdx + 48 + I] xor LEnc3[I];
-    end;
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rax+16]
+      movdqu xmm2, [rax+32]
+      movdqu xmm3, [rax+48]
 
-    LCtr := LCtr3; IncCtr(LCtr);
+      movdqu xmm4, [rcx]
+      pxor xmm0, xmm4
+      pxor xmm1, xmm4
+      pxor xmm2, xmm4
+      pxor xmm3, xmm4
+
+      movdqu xmm4, [rcx+16]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+32]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+48]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+64]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+80]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+96]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+112]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+128]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+144]
+      aesenc xmm0, xmm4
+      aesenc xmm1, xmm4
+      aesenc xmm2, xmm4
+      aesenc xmm3, xmm4
+      movdqu xmm4, [rcx+160]
+      aesenclast xmm0, xmm4
+      aesenclast xmm1, xmm4
+      aesenclast xmm2, xmm4
+      aesenclast xmm3, xmm4
+
+      mov rax, AInput
+      movsxd rcx, dword ptr LBlockIdx
+      add rax, rcx
+      mov rdx, AOutput
+      add rdx, rcx
+
+      movdqu xmm4, [rax]
+      pxor xmm0, xmm4
+      movdqu [rdx], xmm0
+      movdqu xmm4, [rax+16]
+      pxor xmm1, xmm4
+      movdqu [rdx+16], xmm1
+      movdqu xmm4, [rax+32]
+      pxor xmm2, xmm4
+      movdqu [rdx+32], xmm2
+      movdqu xmm4, [rax+48]
+      pxor xmm3, xmm4
+      movdqu [rdx+48], xmm3
+    end ['rax', 'rcx', 'rdx', 'xmm0', 'xmm1', 'xmm2', 'xmm3', 'xmm4'];
+
     Inc(LBlockIdx, 64);
     Dec(LRemain, 64);
   end;
 
   while LRemain > 0 do
   begin
-    AESNIEncryptBlock128(LCtr, LEnc0, AKey);
+    AESNIEncryptBlock128(LCtr, LEnc, AKey);
     for I := 0 to 15 do
     begin
       if I >= LRemain then Break;
-      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEnc0[I];
+      AOutput[LBlockIdx + I] := AInput[LBlockIdx + I] xor LEnc[I];
     end;
     IncCtr(LCtr);
     Inc(LBlockIdx, 16);
