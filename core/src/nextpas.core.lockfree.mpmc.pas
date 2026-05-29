@@ -91,7 +91,7 @@ begin
       begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
-        LockFreeWakeData(@FDataEpoch);
+        LockFreeNotifyData(@FDataEpoch);
         Result := True;
         Exit;
       end;
@@ -122,7 +122,7 @@ begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        LockFreeWakeSpace(@FSpaceEpoch);
+        LockFreeNotifySpace(@FSpaceEpoch);
         Result := True;
         Exit;
       end;

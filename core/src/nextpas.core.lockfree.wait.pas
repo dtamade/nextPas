@@ -7,9 +7,11 @@ interface
 procedure LockFreeWaitData(AEpoch: PInt32; const AExpected: Int32;
   const ATimeoutNs: Int64);
 procedure LockFreeWakeData(AEpoch: PInt32);
+procedure LockFreeNotifyData(AEpoch: PInt32);
 procedure LockFreeWaitSpace(AEpoch: PInt32; const AExpected: Int32;
   const ATimeoutNs: Int64);
 procedure LockFreeWakeSpace(AEpoch: PInt32);
+procedure LockFreeNotifySpace(AEpoch: PInt32);
 
 implementation
 
@@ -52,6 +54,11 @@ begin
   platform_wake_address_all(AEpoch);
 end;
 
+procedure LockFreeNotifyData(AEpoch: PInt32);
+begin
+  AtomicFetchAdd32(AEpoch^, 1, moRelease);
+end;
+
 procedure LockFreeWaitSpace(AEpoch: PInt32; const AExpected: Int32;
   const ATimeoutNs: Int64);
 begin
@@ -62,6 +69,11 @@ procedure LockFreeWakeSpace(AEpoch: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   platform_wake_address_all(AEpoch);
+end;
+
+procedure LockFreeNotifySpace(AEpoch: PInt32);
+begin
+  AtomicFetchAdd32(AEpoch^, 1, moRelease);
 end;
 
 end.

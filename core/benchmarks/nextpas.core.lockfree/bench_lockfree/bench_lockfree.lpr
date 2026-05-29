@@ -147,12 +147,61 @@ begin
   GMutexCh.Free;
 end;
 
+{ Single-thread throughput: pure Try* hot path, no contention }
+
+procedure BenchSpscSingleThread;
+var
+  LQ: TIntSpsc;
+  LI: Integer;
+  LV: Integer;
+  LStart: TInstant;
+  LNs: Int64;
+begin
+  LQ := TIntSpsc.Create(1024);
+  LStart := TInstant.Now;
+  for LI := 1 to OPS do
+  begin
+    LQ.TryEnqueue(LI);
+    LQ.TryDequeue(LV);
+  end;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  WriteLn(Format('  SPSC Try* 1T 1M      %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
+  LQ.Free;
+end;
+
+procedure BenchMpmcSingleThread;
+var
+  LQ: TIntMpmc;
+  LI: Integer;
+  LV: Integer;
+  LStart: TInstant;
+  LNs: Int64;
+begin
+  LQ := TIntMpmc.Create(1024);
+  LStart := TInstant.Now;
+  for LI := 1 to OPS do
+  begin
+    LQ.TryEnqueue(LI);
+    LQ.TryDequeue(LV);
+  end;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  WriteLn(Format('  MPMC Try* 1T 1M      %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
+    [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
+  LQ.Free;
+end;
+
 begin
   WriteLn('=== nextpas.core.lockfree benchmarks (1M ops) ===');
   WriteLn;
+  WriteLn('  --- Multi-thread (blocking wait) ---');
   BenchSpsc;
   BenchMpmc;
   BenchMutexChannel;
+  WriteLn;
+  WriteLn('  --- Single-thread (pure Try* hot path) ---');
+  BenchSpscSingleThread;
+  BenchMpmcSingleThread;
   WriteLn;
   WriteLn('Done.');
 end.

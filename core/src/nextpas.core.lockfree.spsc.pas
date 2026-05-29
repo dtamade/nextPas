@@ -86,7 +86,7 @@ begin
   FSlots[LTail and Int64(FMask)] := AValue;
   FTail := LTail + 1;
   AtomicStore64(FTailPublished, LTail + 1, moRelease);
-  LockFreeWakeData(@FDataEpoch);
+  LockFreeNotifyData(@FDataEpoch);
   Result := True;
 end;
 
@@ -104,7 +104,7 @@ begin
   AValue := FSlots[LHead and Int64(FMask)];
   FHead := LHead + 1;
   AtomicStore64(FHeadPublished, LHead + 1, moRelease);
-  LockFreeWakeSpace(@FSpaceEpoch);
+  LockFreeNotifySpace(@FSpaceEpoch);
   Result := True;
 end;
 
@@ -236,7 +236,7 @@ begin
     FSlots[(LTail + Int64(LI)) and Int64(FMask)] := AValues[LI];
   FTail := LTail + Int64(LCount);
   AtomicStore64(FTailPublished, FTail, moRelease);
-  LockFreeWakeData(@FDataEpoch);
+  LockFreeNotifyData(@FDataEpoch);
   Result := LCount;
 end;
 
@@ -266,7 +266,7 @@ begin
     AValues[LI] := FSlots[(LHead + Int64(LI)) and Int64(FMask)];
   FHead := LHead + Int64(LCount);
   AtomicStore64(FHeadPublished, FHead, moRelease);
-  LockFreeWakeSpace(@FSpaceEpoch);
+  LockFreeNotifySpace(@FSpaceEpoch);
   Result := LCount;
 end;
 
