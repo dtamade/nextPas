@@ -229,12 +229,12 @@ end;
 function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Double): Boolean;
 var
-  LBuf: array[0..63] of AnsiChar;
+  LBuf: array[0..1023] of AnsiChar;
   LCode: Integer;
   LActualLen: SizeUInt;
 begin
   LActualLen := ALen;
-  if LActualLen > 63 then LActualLen := 63;
+  if LActualLen > 1023 then LActualLen := 1023;
   Move(AData^, LBuf[0], LActualLen);
   LBuf[LActualLen] := #0;
   Val(PAnsiChar(@LBuf[0]), AValue, LCode);
