@@ -7,7 +7,9 @@ interface
 uses
   nextpas.core.time.date,
   nextpas.core.time.timeofday,
-  nextpas.core.time.datetime;
+  nextpas.core.time.datetime,
+  nextpas.core.time.timezone,
+  nextpas.core.time.offsetdatetime;
 
 function ParseISO8601Date(const AStr: string): TDate;
 function TryParseISO8601Date(const AStr: string; out ADate: TDate): Boolean;
@@ -17,6 +19,9 @@ function TryParseISO8601Time(const AStr: string; out ATime: TTimeOfDay): Boolean
 
 function ParseISO8601DateTime(const AStr: string): TNaiveDateTime;
 function TryParseISO8601DateTime(const AStr: string; out ADT: TNaiveDateTime): Boolean;
+
+function ParseISO8601DateTimeOffset(const AStr: string): TOffsetDateTime;
+function TryParseISO8601DateTimeOffset(const AStr: string; out ADT: TOffsetDateTime): Boolean;
 
 implementation
 
@@ -106,6 +111,60 @@ function ParseISO8601DateTime(const AStr: string): TNaiveDateTime;
 begin
   if not TryParseISO8601DateTime(AStr, Result) then
     raise Exception.CreateFmt('Invalid ISO 8601 datetime: %s', [AStr]);
+end;
+
+function TryParseISO8601DateTimeOffset(const AStr: string; out ADT: TOffsetDateTime): Boolean;
+var
+  LLen, LTzStart: Integer;
+  LDtStr: string;
+  LNaive: TNaiveDateTime;
+  LOffset: TUtcOffset;
+  LSign: Integer;
+  LH, LM: Integer;
+begin
+  Result := False;
+  LLen := Length(AStr);
+  if LLen < 20 then
+    Exit;
+
+  if AStr[LLen] = 'Z' then
+  begin
+    LDtStr := Copy(AStr, 1, LLen - 1);
+    LOffset := TUtcOffset.UTC;
+  end
+  else
+  begin
+    LTzStart := LLen - 5;
+    if LTzStart < 1 then
+      Exit;
+    if (AStr[LTzStart] = '+') or (AStr[LTzStart] = '-') then
+    begin
+      if AStr[LTzStart] = '+' then
+        LSign := 1
+      else
+        LSign := -1;
+      LH := (Ord(AStr[LTzStart + 1]) - Ord('0')) * 10 + (Ord(AStr[LTzStart + 2]) - Ord('0'));
+      if AStr[LTzStart + 3] <> ':' then
+        Exit;
+      LM := (Ord(AStr[LTzStart + 4]) - Ord('0')) * 10 + (Ord(AStr[LTzStart + 5]) - Ord('0'));
+      LOffset := TUtcOffset.FromSeconds(LSign * (LH * 3600 + LM * 60));
+      LDtStr := Copy(AStr, 1, LTzStart - 1);
+    end
+    else
+      Exit;
+  end;
+
+  if not TryParseISO8601DateTime(LDtStr, LNaive) then
+    Exit;
+
+  ADT := TOffsetDateTime.Create(LNaive, LOffset);
+  Result := True;
+end;
+
+function ParseISO8601DateTimeOffset(const AStr: string): TOffsetDateTime;
+begin
+  if not TryParseISO8601DateTimeOffset(AStr, Result) then
+    raise Exception.CreateFmt('Invalid ISO 8601 datetime with offset: %s', [AStr]);
 end;
 
 end.
