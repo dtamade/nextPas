@@ -1,0 +1,67 @@
+================================================================
+Comprehensive Crypto Performance Benchmark
+================================================================
+
+Iterations per test: 100
+
+Initializing test data...
+Test data initialized
+
+Registering benchmark tests...
+Registered 17 benchmark tests
+
+Running benchmarks...
+================================================================
+=== Performance Benchmark ===
+Iterations: 100
+Warmup: 100
+
+  aes_gcm_dec_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_dec_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_dec_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_16kb: 0.020 ms/op (stddev: 0.140, ops/s: 50000.0)
+  aes_gcm_enc_1kb: 0.020 ms/op (stddev: 0.140, ops/s: 50000.0)
+  aes_gcm_enc_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  generate_key_128bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  generate_key_256bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_16kb: 0.060 ms/op (stddev: 0.237, ops/s: 16666.7)
+  secure_random_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha256_16kb: 0.050 ms/op (stddev: 0.218, ops/s: 20000.0)
+  sha256_1kb: 0.010 ms/op (stddev: 0.099, ops/s: 100000.0)
+  sha256_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_16kb: 0.030 ms/op (stddev: 0.171, ops/s: 33333.3)
+  sha512_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+
+================================================================
+
+=== Benchmark Results ===
+
+Test                         Mean (ms)     P95 (ms)     P99 (ms)        Ops/s
+---------------------------------------------------------------------------
+aes_gcm_dec_16kb                 0.000        0.000        0.000          0.0
+aes_gcm_dec_1kb                  0.000        0.000        0.000          0.0
+aes_gcm_dec_64b                  0.000        0.000        0.000          0.0
+aes_gcm_enc_16kb                 0.020        0.000        1.000      50000.0
+aes_gcm_enc_1kb                  0.020        0.000        1.000      50000.0
+aes_gcm_enc_64b                  0.000        0.000        0.000          0.0
+generate_key_128bit              0.000        0.000        0.000          0.0
+generate_key_256bit              0.000        0.000        0.000          0.0
+secure_random_16kb               0.060        1.000        1.000      16666.7
+secure_random_1kb                0.000        0.000        0.000          0.0
+secure_random_64b                0.000        0.000        0.000          0.0
+sha256_16kb                      0.050        1.000        1.000      20000.0
+sha256_1kb                       0.010        0.000        1.000     100000.0
+sha256_64b                       0.000        0.000        0.000          0.0
+sha512_16kb                      0.030        0.000        1.000      33333.3
+sha512_1kb                       0.000        0.000        0.000          0.0
+sha512_64b                       0.000        0.000        0.000          0.0
+
+
+Saving baseline to crypto_baseline.json...
+Baseline saved
+
+================================================================
+Benchmark completed successfully
+================================================================

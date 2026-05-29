@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract tier runner for fafafa.ssl.
+"""Contract tier runner for nextpas.core.tls.
 
 Usage:
     python3 scripts/run_contracts.py --tier core

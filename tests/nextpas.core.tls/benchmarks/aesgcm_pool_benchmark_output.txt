@@ -1,0 +1,65 @@
+OpenSSL initialized: 3.x (libcrypto.so.3)
+
+========================================
+  AES-GCM Context Pool Benchmark
+========================================
+Iterations: 1000
+Warmup:     100
+
+Initializing test data...
+Test data initialized
+Registering traditional (non-pooled) benchmarks...
+Registering pooled benchmarks...
+
+Running all benchmarks...
+
+=== Performance Benchmark ===
+Iterations: 1000
+Warmup: 100
+
+  AES-GCM Decrypt 16KB (Pooled): 0.029 ms/op (stddev: 0.168, ops/s: 34482.8)
+  AES-GCM Decrypt 16KB (Traditional): 0.024 ms/op (stddev: 0.153, ops/s: 41666.7)
+  AES-GCM Decrypt 1KB (Pooled): 0.015 ms/op (stddev: 0.122, ops/s: 66666.7)
+  AES-GCM Decrypt 1KB (Traditional): 0.012 ms/op (stddev: 0.109, ops/s: 83333.3)
+  AES-GCM Decrypt 64B (Pooled): 0.015 ms/op (stddev: 0.122, ops/s: 66666.7)
+  AES-GCM Decrypt 64B (Traditional): 0.009 ms/op (stddev: 0.094, ops/s: 111111.1)
+  AES-GCM Encrypt 16KB (Pooled): 0.016 ms/op (stddev: 0.125, ops/s: 62500.0)
+  AES-GCM Encrypt 16KB (Traditional): 0.014 ms/op (stddev: 0.117, ops/s: 71428.6)
+  AES-GCM Encrypt 1KB (Pooled): 0.008 ms/op (stddev: 0.089, ops/s: 125000.0)
+  AES-GCM Encrypt 1KB (Traditional): 0.007 ms/op (stddev: 0.083, ops/s: 142857.1)
+  AES-GCM Encrypt 64B (Pooled): 0.008 ms/op (stddev: 0.089, ops/s: 125000.0)
+  AES-GCM Encrypt 64B (Traditional): 0.006 ms/op (stddev: 0.077, ops/s: 166666.7)
+
+
+Generating performance comparison report...
+
+=== Benchmark Results ===
+
+Test                         Mean (ms)     P95 (ms)     P99 (ms)        Ops/s
+---------------------------------------------------------------------------
+AES-GCM Decrypt 16KB (Pooled)        0.029        0.000        1.000      34482.8
+AES-GCM Decrypt 16KB (Traditional)        0.024        0.000        1.000      41666.7
+AES-GCM Decrypt 1KB (Pooled)        0.015        0.000        1.000      66666.7
+AES-GCM Decrypt 1KB (Traditional)        0.012        0.000        1.000      83333.3
+AES-GCM Decrypt 64B (Pooled)        0.015        0.000        1.000      66666.7
+AES-GCM Decrypt 64B (Traditional)        0.009        0.000        0.000     111111.1
+AES-GCM Encrypt 16KB (Pooled)        0.016        0.000        1.000      62500.0
+AES-GCM Encrypt 16KB (Traditional)        0.014        0.000        1.000      71428.6
+AES-GCM Encrypt 1KB (Pooled)        0.008        0.000        0.000     125000.0
+AES-GCM Encrypt 1KB (Traditional)        0.007        0.000        0.000     142857.1
+AES-GCM Encrypt 64B (Pooled)        0.008        0.000        0.000     125000.0
+AES-GCM Encrypt 64B (Traditional)        0.006        0.000        0.000     166666.7
+
+
+FATAL ERROR: File not found
+Heap dump by heaptrc unit of "./benchmark_aesgcm_pool"
+46605 memory blocks allocated : 194317686
+46604 memory blocks freed     : 194317644
+1 unfreed memory blocks : 42
+True heap size : 131072
+True free heap : 130800
+Should be : 130838
+Call trace for block $00007F9163273660 size 42
+  $00000000004CEC22
+  $00000000004D3A35  TryLoadOpenSSLLibraries,  line 703 of ../../src/fafafa.ssl.openssl.api.core.pas
+  $000000000047ABE2  InitializeOpenSSL,  line 57 of ../../src/fafafa.ssl.init.pas

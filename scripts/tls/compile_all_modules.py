@@ -53,9 +53,9 @@ UNIT_PATHS = build_unit_paths(FPC_BASE)
 
 # 排除的文件（WinSSL在Linux上无法编译）
 EXCLUDE_PATTERNS = [
-    "fafafa.ssl.winssl",  # Windows专用
+    "nextpas.core.tls.winssl",  # Windows专用
     "rand_old.pas",        # 已废弃
-    "fafafa.ssl.http.simple",  # 依赖 socket/HTTP 示例，非核心单元
+    "nextpas.core.tls.http.simple",  # 依赖 socket/HTTP 示例，非核心单元
 ]
 
 def should_compile(file_path):

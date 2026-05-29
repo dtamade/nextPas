@@ -1,0 +1,123 @@
+================================================================
+性能基准测试汇总报告
+================================================================
+
+时间: Sat Feb  7 03:02:22 CST 2026
+迭代次数: 50 (加密算法), 20 (TLS 握手)
+
+----------------------------------------------------------------
+测试结果
+----------------------------------------------------------------
+总测试数: 2
+通过: 2
+失败: 0
+
+成功率: 100.0%
+
+----------------------------------------------------------------
+详细日志
+----------------------------------------------------------------
+
+=== benchmark_crypto_comprehensive_20260207_030221.log ===
+
+  aes_gcm_dec_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_dec_1kb: 0.020 ms/op (stddev: 0.140, ops/s: 50000.0)
+  aes_gcm_dec_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_64b: 0.020 ms/op (stddev: 0.140, ops/s: 50000.0)
+  generate_key_128bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  generate_key_256bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_64b: 0.020 ms/op (stddev: 0.140, ops/s: 50000.0)
+  sha256_16kb: 0.040 ms/op (stddev: 0.196, ops/s: 25000.0)
+  sha256_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha256_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_16kb: 0.040 ms/op (stddev: 0.196, ops/s: 25000.0)
+  sha512_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+
+================================================================
+
+=== Benchmark Results ===
+
+Test                         Mean (ms)     P95 (ms)     P99 (ms)        Ops/s
+---------------------------------------------------------------------------
+aes_gcm_dec_16kb                 0.000        0.000        0.000          0.0
+aes_gcm_dec_1kb                  0.020        0.000        1.000      50000.0
+aes_gcm_dec_64b                  0.000        0.000        0.000          0.0
+aes_gcm_enc_16kb                 0.000        0.000        0.000          0.0
+aes_gcm_enc_1kb                  0.000        0.000        0.000          0.0
+aes_gcm_enc_64b                  0.020        0.000        1.000      50000.0
+generate_key_128bit              0.000        0.000        0.000          0.0
+generate_key_256bit              0.000        0.000        0.000          0.0
+secure_random_16kb               0.000        0.000        0.000          0.0
+secure_random_1kb                0.000        0.000        0.000          0.0
+secure_random_64b                0.020        0.000        1.000      50000.0
+sha256_16kb                      0.040        0.000        1.000      25000.0
+sha256_1kb                       0.000        0.000        0.000          0.0
+sha256_64b                       0.000        0.000        0.000          0.0
+sha512_16kb                      0.040        0.000        1.000      25000.0
+sha512_1kb                       0.000        0.000        0.000          0.0
+sha512_64b                       0.000        0.000        0.000          0.0
+
+
+Saving baseline to crypto_baseline.json...
+Baseline saved
+
+================================================================
+Benchmark completed successfully
+================================================================
+
+=== benchmark_random_pool_20260207_030221.log ===
+
+
+=================================
+  Random Pool - 1 KB (Standard)
+=================================
+
+Random Pool Enabled (1KB x 10000)       :    40.00 ms  (    244.14 MB/s)
+  Cache hit rate: 100.00%
+  Refill count: 1250
+Direct Generation (1KB x 10000)         :    83.00 ms  (    117.66 MB/s)
+
+
+==================================================
+  Random Pool - 4 KB (Boundary - MaxRequestSize)
+==================================================
+
+Random Pool Enabled (4KB x 1000)        :    16.00 ms  (    244.14 MB/s)
+  Cache hit rate: 100.00%
+  Refill count: 500
+Direct Generation (4KB x 1000)          :    18.00 ms  (    217.01 MB/s)
+
+
+==================================================
+  Random Pool - 8 KB (Large - Direct Generation)
+==================================================
+
+Random Pool Enabled (8KB x 1000)        :    31.00 ms  (    252.02 MB/s)
+  Cache hit rate: 0.00% (expected: 0% - bypasses pool)
+  Cache misses: 1000
+Direct Generation (8KB x 1000)          :    30.00 ms  (    260.42 MB/s)
+
+╔════════════════════════════════════════════════════════╗
+║  Random Pool Performance Summary                      ║
+╚════════════════════════════════════════════════════════╝
+
+Phase B 优化目标：2-5x 性能提升
+
+关键发现：
+  - 小数据块 (256B-1KB): 缓存池显著提升性能
+  - 边界场景 (4KB): 接近 MaxRequestSize，性能提升明显
+  - 大数据块 (8KB): 自动绕过缓存池，性能相当
+
+配置建议：
+  - PoolSize: 8KB (默认)
+  - RefillThreshold: 1KB (默认)
+  - MaxRequestSize: 4KB (默认)
+
+╔════════════════════════════════════════════════════════╗
+║  Benchmark Completed Successfully                     ║
+╚════════════════════════════════════════════════════════╝
