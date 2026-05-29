@@ -118,6 +118,7 @@ type
   TParserState = record
     Doc: ^TJsonDocument;
     Cur: TStringView;
+    Depth: Int32;
     procedure SkipWS; inline;
     function Peek: Byte; inline;
     procedure Advance(N: SizeUInt); inline;
@@ -207,6 +208,25 @@ begin
     SetError('invalid number', 14);
     Exit(JSON_NODE_NONE);
   end;
+  { RFC 8259 validation: no leading zeros, no trailing dot }
+  I := 0;
+  if Cur.Data[0] = '-' then I := 1;
+  if (I < LNumLen - 1) and (Cur.Data[I] = '0') and (Cur.Data[I+1] >= '0') and (Cur.Data[I+1] <= '9') then
+  begin
+    SetError('leading zero', 12);
+    Exit(JSON_NODE_NONE);
+  end;
+  if Cur.Data[LNumLen - 1] = '.' then
+  begin
+    SetError('trailing dot', 12);
+    Exit(JSON_NODE_NONE);
+  end;
+  if (Cur.Data[LNumLen - 1] = 'e') or (Cur.Data[LNumLen - 1] = 'E') or
+     (Cur.Data[LNumLen - 1] = '+') or (Cur.Data[LNumLen - 1] = '-') then
+  begin
+    SetError('truncated exponent', 18);
+    Exit(JSON_NODE_NONE);
+  end;
   LHasDot := False;
   LHasExp := False;
   for I := 0 to LNumLen - 1 do
@@ -244,6 +264,12 @@ var
   LIdx, LChild, LPrev: UInt32;
   LCount: UInt32;
 begin
+  Inc(Depth);
+  if Depth > 512 then
+  begin
+    SetError('max depth exceeded', 18);
+    Exit(JSON_NODE_NONE);
+  end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkArray;
   Advance(1);
@@ -293,6 +319,12 @@ var
   LIdx, LKeyIdx, LValIdx, LPrev: UInt32;
   LCount: UInt32;
 begin
+  Inc(Depth);
+  if Depth > 512 then
+  begin
+    SetError('max depth exceeded', 18);
+    Exit(JSON_NODE_NONE);
+  end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkObject;
   Advance(1);
@@ -429,6 +461,7 @@ begin
   FHasError := False;
   LState.Doc := @Self;
   LState.Cur := AInput;
+  LState.Depth := 0;
   if LState.ParseValue = JSON_NODE_NONE then
     Exit(False);
   LState.SkipWS;
