@@ -1992,6 +1992,18 @@ begin
                   (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
                   Inc(ACursor);
               end
+              else if CurrentToken(ALexer, ACursor).Kind in
+                [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
+                 tkConstructorKeyword, tkDestructorKeyword, tkOperatorKeyword,
+                 tkPropertyKeyword, tkStaticKeyword] then
+              begin
+                while (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                  Inc(ACursor);
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+              end
               else
                 Inc(ACursor);
             end;
