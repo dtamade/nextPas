@@ -66,6 +66,16 @@ begin
   CheckEqual(Int64(20), V.ObjectGet('items').ArrayGet(1).AsInt, 'items[1]');
 end;
 
+procedure TestPrettyPrint;
+var Doc: IJsonDocument; S: string;
+begin
+  Doc := JsonParse('{"a":1,"b":[2,3]}');
+  S := Doc.StringifyPretty(2);
+  Check(Pos(#10, S) > 0, 'has newlines');
+  Check(Pos('  "a"', S) > 0, 'indented key');
+  Check(Pos('  "b"', S) > 0, 'indented key b');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json (facade)');
   T.Run('parse interface', @TestJsonParseInterface);
@@ -74,5 +84,6 @@ begin
   T.Run('stringify func', @TestJsonStringifyFunc);
   T.Run('parse error', @TestJsonParseError);
   T.Run('parse nested', @TestJsonParseNested);
+  T.Run('pretty print', @TestPrettyPrint);
   T.Summary;
 end.

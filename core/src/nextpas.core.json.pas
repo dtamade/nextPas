@@ -32,7 +32,8 @@ function JsonStringify(const AValue: TJsonValue): string;
 implementation
 
 uses
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.text.escape;
 
 type
   TJsonDocumentImpl = class(TInterfacedObject, IJsonDocument)
@@ -148,8 +149,95 @@ begin
 end;
 
 function TJsonDocumentImpl.StringifyPretty(const AIndent: Int32): string;
+var
+  LBuilder: TStringBuilder;
+
+  procedure WriteIndent(ADepth: Int32);
+  var J: Int32;
+  begin
+    LBuilder.AppendChar(#10);
+    for J := 1 to ADepth * AIndent do
+      LBuilder.AppendChar(' ');
+  end;
+
+  procedure WritePrettyNode(AIdx: UInt32; ADepth: Int32);
+  var
+    LNode: PJsonNode;
+    LChild: UInt32;
+    I: UInt32;
+    LBuf: array[0..31] of AnsiChar;
+    LN: Int32;
+  begin
+    if AIdx = JSON_NODE_NONE then
+    begin
+      LBuilder.AppendBytes('null', 4);
+      Exit;
+    end;
+    LNode := FDoc.Node(AIdx);
+    case LNode^.Kind of
+      jnkNull: LBuilder.AppendBytes('null', 4);
+      jnkBool:
+        if LNode^.BoolVal then LBuilder.AppendBytes('true', 4)
+        else LBuilder.AppendBytes('false', 5);
+      jnkInt: LBuilder.AppendInt(LNode^.IntVal);
+      jnkReal: LBuilder.AppendFloat(LNode^.RealVal);
+      jnkString:
+      begin
+        LBuilder.AppendChar('"');
+        JsonEscapeToBuilder(LNode^.Str, LBuilder);
+        LBuilder.AppendChar('"');
+      end;
+      jnkArray:
+      begin
+        if LNode^.Container.Count = 0 then
+        begin
+          LBuilder.AppendBytes('[]', 2);
+          Exit;
+        end;
+        LBuilder.AppendChar('[');
+        LChild := LNode^.Container.FirstChild;
+        for I := 0 to LNode^.Container.Count - 1 do
+        begin
+          if I > 0 then LBuilder.AppendChar(',');
+          WriteIndent(ADepth + 1);
+          if LChild = JSON_NODE_NONE then Break;
+          WritePrettyNode(LChild, ADepth + 1);
+          LChild := FDoc.Node(LChild)^.Next;
+        end;
+        WriteIndent(ADepth);
+        LBuilder.AppendChar(']');
+      end;
+      jnkObject:
+      begin
+        if LNode^.Container.Count = 0 then
+        begin
+          LBuilder.AppendBytes('{}', 2);
+          Exit;
+        end;
+        LBuilder.AppendChar('{');
+        LChild := LNode^.Container.FirstChild;
+        for I := 0 to LNode^.Container.Count - 1 do
+        begin
+          if I > 0 then LBuilder.AppendChar(',');
+          WriteIndent(ADepth + 1);
+          if LChild = JSON_NODE_NONE then Break;
+          LBuilder.AppendChar('"');
+          JsonEscapeToBuilder(FDoc.Node(LChild)^.Str, LBuilder);
+          LBuilder.AppendBytes('": ', 3);
+          WritePrettyNode(FDoc.Node(LChild)^.Next, ADepth + 1);
+          LChild := FDoc.Node(FDoc.Node(LChild)^.Next)^.Next;
+        end;
+        WriteIndent(ADepth);
+        LBuilder.AppendChar('}');
+      end;
+    end;
+  end;
+
 begin
-  Result := Stringify;
+  LBuilder.Init(512);
+  WritePrettyNode(FDoc.Root, 0);
+  Result := LBuilder.ToString;
+  LBuilder.Done;
 end;
 
 function JsonParse(const AInput: string): IJsonDocument;
