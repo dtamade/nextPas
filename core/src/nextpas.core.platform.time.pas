@@ -39,11 +39,20 @@ function platform_timespec_to_ns(
   const ASec: Int64;
   const ANsec: Int64): TPlatformTimeNanoseconds; inline;
 
+{ Get the local UTC offset in seconds (e.g. +28800 for UTC+8). }
+function platform_utc_offset_seconds: Int32;
+
 { Break down realtime nanoseconds (since Unix epoch) into UTC components. }
 procedure platform_time_breakdown_utc(ANs: TPlatformTimeNanoseconds;
   out AResult: TPlatformTimeBreakdown);
 
 implementation
+
+{$IFDEF NEXTPAS_UNIX}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
+{$ENDIF}
 
 function platform_monotonic_ns: TPlatformTimeNanoseconds;
 begin
@@ -79,6 +88,28 @@ function platform_timespec_to_ns(
 begin
   Result := nextpas.core.platform.time.host.platform_timespec_to_ns(ASec, ANsec);
 end;
+
+function platform_utc_offset_seconds: Int32;
+{$IFDEF NEXTPAS_UNIX}
+var
+  LTime: time_t;
+  LTm: tm;
+begin
+  LTime := c_time(nil);
+  localtime_r(@LTime, @LTm);
+  Result := Int32(LTm.tm_gmtoff);
+end;
+{$ELSE}
+{$IFDEF NEXTPAS_WINDOWS}
+begin
+  Result := 0;
+end;
+{$ELSE}
+begin
+  Result := 0;
+end;
+{$ENDIF}
+{$ENDIF}
 
 procedure platform_time_breakdown_utc(ANs: TPlatformTimeNanoseconds;
   out AResult: TPlatformTimeBreakdown);
@@ -146,6 +177,11 @@ begin
   if LMonth >= 10 then
     Inc(LYear);
   AResult.Year := LYear;
+  AResult.Month := ((LMonth + 2) mod 12) + 1;
+  AResult.Day := Int32(LDay) + 1;
+end;
+
+end.
   AResult.Month := ((LMonth + 2) mod 12) + 1;
   AResult.Day := Int32(LDay) + 1;
 end;

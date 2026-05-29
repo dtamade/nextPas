@@ -81,6 +81,12 @@ type
 
     function ToISO8601: string;
     function ToString: string;
+
+    function Succ: TDate; inline;
+    function Pred: TDate; inline;
+    function GetISOWeek: Integer;
+    function GetISOWeekYear: Integer;
+    class function Today: TDate; static;
   end;
 
 function IsLeapYearFn(AYear: Integer): Boolean; inline;
@@ -89,7 +95,8 @@ function DaysInMonthFn(AYear, AMonth: Integer): Integer;
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.platform.time;
 
 const
   DAYS_IN_MONTH: array[1..12] of Integer = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31);
@@ -429,6 +436,57 @@ end;
 function TDate.ToString: string;
 begin
   Result := ToISO8601;
+end;
+
+function TDate.Succ: TDate;
+begin
+  Result.FJulianDay := FJulianDay + 1;
+end;
+
+function TDate.Pred: TDate;
+begin
+  Result.FJulianDay := FJulianDay - 1;
+end;
+
+function TDate.GetISOWeek: Integer;
+var
+  LDow, LOrdinal, LWeek: Integer;
+  LJan1Dow: Integer;
+begin
+  LDow := Ord(GetDayOfWeek);
+  if LDow = 1 then LDow := 7 else Dec(LDow);
+  LOrdinal := GetDayOfYear;
+  LJan1Dow := Ord(TDate.Create(GetYear, 1, 1).GetDayOfWeek);
+  if LJan1Dow = 1 then LJan1Dow := 7 else Dec(LJan1Dow);
+  LWeek := (LOrdinal - LDow + 10) div 7;
+  if LWeek < 1 then
+    LWeek := 52
+  else if LWeek > 52 then
+  begin
+    if LJan1Dow = 4 then
+      LWeek := 53
+    else
+      LWeek := 1;
+  end;
+  Result := LWeek;
+end;
+
+function TDate.GetISOWeekYear: Integer;
+var
+  LWeek: Integer;
+begin
+  LWeek := GetISOWeek;
+  Result := GetYear;
+  if (LWeek >= 52) and (GetMonth = 1) then
+    Dec(Result)
+  else if (LWeek = 1) and (GetMonth = 12) then
+    Inc(Result);
+end;
+
+class function TDate.Today: TDate;
+begin
+  Result := TDate.FromUnixDays(Integer(platform_realtime_ns div (1000000000 * 86400))
+    + Integer(platform_utc_offset_seconds div 86400));
 end;
 
 end.

@@ -101,6 +101,21 @@ type
   TTimeVal = timeval;
   PTimeVal = ^timeval;
 
+  tm = record
+    tm_sec: cint;
+    tm_min: cint;
+    tm_hour: cint;
+    tm_mday: cint;
+    tm_mon: cint;
+    tm_year: cint;
+    tm_wday: cint;
+    tm_yday: cint;
+    tm_isdst: cint;
+    tm_gmtoff: clong;
+    tm_zone: PAnsiChar;
+  end;
+  ptm = ^tm;
+
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   pthread_t = Pointer;
   {$ELSEIF defined(NEXTPAS_ANDROID)}

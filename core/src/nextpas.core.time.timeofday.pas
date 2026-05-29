@@ -50,6 +50,9 @@ type
 
     function ToISO8601: string;
     function ToString: string;
+    function WithHour(const AHour: Integer): TTimeOfDay;
+    function WithMinute(const AMinute: Integer): TTimeOfDay;
+    function WithSecond(const ASecond: Integer): TTimeOfDay;
   end;
 
 implementation
@@ -261,6 +264,21 @@ end;
 function TTimeOfDay.ToString: string;
 begin
   Result := ToISO8601;
+end;
+
+function TTimeOfDay.WithHour(const AHour: Integer): TTimeOfDay;
+begin
+  Result := TTimeOfDay.Create(AHour, GetMinute, GetSecond, GetSubsecondNanos);
+end;
+
+function TTimeOfDay.WithMinute(const AMinute: Integer): TTimeOfDay;
+begin
+  Result := TTimeOfDay.Create(GetHour, AMinute, GetSecond, GetSubsecondNanos);
+end;
+
+function TTimeOfDay.WithSecond(const ASecond: Integer): TTimeOfDay;
+begin
+  Result := TTimeOfDay.Create(GetHour, GetMinute, ASecond, GetSubsecondNanos);
 end;
 
 end.
