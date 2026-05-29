@@ -121,12 +121,14 @@ end;
 {$I nextpas.core.hash.sha256.x64.inc}
 {$I nextpas.core.hash.sha256.x64v2.inc}
 {$I nextpas.core.hash.sha256.avx2.inc}
+{$I nextpas.core.hash.sha256.avx2dual.inc}
 {$I nextpas.core.hash.sha256.shani.inc}
 {$ENDIF}
 
 {$IFDEF CPUX86_64}
 var
   GHasSHANI: Boolean = False;
+  GHasAVX2: Boolean = False;
   GHasAVX: Boolean = False;
   GHasSSSE3: Boolean = False;
   GDispatchInitialized: Boolean = False;
@@ -153,8 +155,9 @@ begin
     movl %ebx, LEbx
   end ['eax', 'ebx', 'ecx', 'edx'];
   GHasSHANI := (LEbx and (1 shl 29)) <> 0;
+  GHasAVX2 := GHasAVX and ((LEbx and (1 shl 5)) <> 0) and ((LEbx and (1 shl 8)) <> 0);
   if GHasAVX then
-    GHasAVX := (LEbx and (1 shl 8)) <> 0;  // need BMI2
+    GHasAVX := (LEbx and (1 shl 8)) <> 0;
   if GHasSSSE3 then
     GHasSSSE3 := (LEbx and (1 shl 8)) <> 0;
   GDispatchInitialized := True;
@@ -202,6 +205,15 @@ begin
       FBufLen := 0;
     end;
   end;
+
+  {$IFDEF CPUX86_64}
+  while (LRemaining >= 128) and GHasAVX2 do
+  begin
+    ProcessBlocks2AVX2(LSrc, @FH[0]);
+    Inc(LSrc, 128);
+    Dec(LRemaining, 128);
+  end;
+  {$ENDIF}
 
   while LRemaining >= SHA256_BLOCK_SIZE do
   begin
