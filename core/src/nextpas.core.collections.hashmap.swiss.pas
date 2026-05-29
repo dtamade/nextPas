@@ -8,8 +8,7 @@ uses
   SysUtils, TypInfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.hashmap.base,
-  nextpas.core.simd;
+  nextpas.core.collections.hashmap.base;
 
 const
   CTRL_EMPTY   = Byte($FF);
@@ -18,7 +17,7 @@ const
   MIN_CAPACITY = 16;
 
 type
-  TGroupMask = nextpas.core.simd.TMask16;
+  TGroupMask = Word;
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -82,34 +81,35 @@ uses
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer;
 begin
-  Result := nextpas.core.simd.Mask16FirstSet(mask);
+  if mask = 0 then Exit(-1);
+  Result := BsfWord(mask);
 end;
 
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
 var
-  LCtrl, LSplat: TVecU8x16;
+  i: Integer;
 begin
-  Move(ACtrl^, LCtrl, 16);
-  FillChar(LSplat, 16, AH2);
-  Result := VecU8x16CmpEq(LCtrl, LSplat);
+  Result := 0;
+  for i := 0 to GROUP_SIZE - 1 do
+    if ACtrl[i] = AH2 then Result := Result or TGroupMask(1 shl i);
 end;
 
 function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
 var
-  LCtrl, LSplat: TVecU8x16;
+  i: Integer;
 begin
-  Move(ACtrl^, LCtrl, 16);
-  FillChar(LSplat, 16, CTRL_EMPTY);
-  Result := VecU8x16CmpEq(LCtrl, LSplat);
+  Result := 0;
+  for i := 0 to GROUP_SIZE - 1 do
+    if ACtrl[i] = CTRL_EMPTY then Result := Result or TGroupMask(1 shl i);
 end;
 
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
 var
-  LCtrl, LSplat: TVecU8x16;
+  i: Integer;
 begin
-  Move(ACtrl^, LCtrl, 16);
-  FillChar(LSplat, 16, $80);
-  Result := VecU8x16CmpEq(VecU8x16And(LCtrl, LSplat), LSplat);
+  Result := 0;
+  for i := 0 to GROUP_SIZE - 1 do
+    if ACtrl[i] >= $80 then Result := Result or TGroupMask(1 shl i);
 end;
 
 { TSwissTable<K,V> - Core helpers }
