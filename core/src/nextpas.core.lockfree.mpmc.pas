@@ -265,6 +265,8 @@ function TMpmcQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
   LI: PtrUInt;
 begin
+  if Length(AValues) = 0 then
+    Exit(0);
   Result := 0;
   for LI := 0 to PtrUInt(High(AValues)) do
   begin
@@ -272,14 +274,14 @@ begin
       Exit;
     Inc(Result);
   end;
-  if Result > 0 then
-    LockFreeWakeData(@FDataEpoch);
 end;
 
 function TMpmcQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
   LI, LCount: PtrUInt;
 begin
+  if (AMaxCount = 0) or (Length(AValues) = 0) then
+    Exit(0);
   LCount := AMaxCount;
   if LCount > PtrUInt(Length(AValues)) then
     LCount := PtrUInt(Length(AValues));

@@ -281,11 +281,11 @@ var
   LSt: TIntStack;
   LV: Integer;
 begin
-  LSt := TIntStack.Create;
+  LSt := TIntStack.Create(16);
   Check(LSt.IsEmpty, 'empty');
-  LSt.Push(10);
-  LSt.Push(20);
-  LSt.Push(30);
+  Check(LSt.TryPush(10), 'push 1');
+  Check(LSt.TryPush(20), 'push 2');
+  Check(LSt.TryPush(30), 'push 3');
   Check(not LSt.IsEmpty, 'not empty');
   Check(LSt.TryPop(LV), 'pop 1');
   CheckEqual(Int64(30), Int64(LV), 'LIFO');
