@@ -36,6 +36,7 @@ type
     function ValueOf(const AName: string): string;
     procedure Clear;
     function Count: LongInt;
+    procedure SeedFPCDefines;
   end;
 
   TConditionalFrame = record
@@ -56,6 +57,8 @@ type
     FOutputCount: LongInt;
     FCurrentFileId: TCoreId;
     FNextFileId: TCoreId;
+    FEvalExpr: string;
+    FEvalPos: LongInt;
     function IsActive: Boolean;
     procedure PushFrame(ACondition: Boolean);
     procedure HandleElse;
@@ -65,6 +68,18 @@ type
     function ParseDirectiveName(const ALexeme: string;
       out ADirective, AArg: string): Boolean;
     function EvalSimpleCondition(const AArg: string): Boolean;
+    function EvalIfExpr(const AExpr: string): Boolean;
+    procedure EvalSkipWS;
+    function EvalPeekChar: Char;
+    function EvalMatchStr(const S: string): Boolean;
+    function EvalParseInt: Int64;
+    function EvalParseIdent: string;
+    function EvalAtom: Int64;
+    function EvalMul: Int64;
+    function EvalAdd: Int64;
+    function EvalCmp: Int64;
+    function EvalAnd: Int64;
+    function EvalOr: Int64;
     procedure ProcessInclude(const AArg: string);
   public
     constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
@@ -190,6 +205,53 @@ begin
   Result := FCount;
 end;
 
+procedure TDefineTable.SeedFPCDefines;
+begin
+  Define('FPC');
+  DefineValue('FPC_VERSION', '3');
+  DefineValue('FPC_RELEASE', '3');
+  DefineValue('FPC_PATCH', '1');
+  DefineValue('FPC_FULLVERSION', '30301');
+  Define('VER3');
+  Define('VER3_3');
+  Define('VER3_3_1');
+  {$ifdef CPUX86_64}
+  Define('CPUX86_64');
+  Define('CPU64');
+  Define('CPUAMD64');
+  {$endif}
+  {$ifdef CPUAARCH64}
+  Define('CPUAARCH64');
+  Define('CPU64');
+  {$endif}
+  {$ifdef LINUX}
+  Define('LINUX');
+  Define('UNIX');
+  {$endif}
+  {$ifdef DARWIN}
+  Define('DARWIN');
+  Define('UNIX');
+  {$endif}
+  {$ifdef MSWINDOWS}
+  Define('MSWINDOWS');
+  Define('WINDOWS');
+  {$endif}
+  {$ifdef ENDIAN_LITTLE}
+  Define('ENDIAN_LITTLE');
+  {$endif}
+  {$ifdef ENDIAN_BIG}
+  Define('ENDIAN_BIG');
+  {$endif}
+  Define('FPC_HAS_TYPE_EXTENDED');
+  Define('FPC_HAS_FEATURE_CLASSES');
+  Define('FPC_HAS_FEATURE_EXCEPTIONS');
+  Define('FPC_HAS_FEATURE_DYNARRAYS');
+  Define('FPC_HAS_FEATURE_ANSISTRINGS');
+  Define('FPC_HAS_FEATURE_WIDESTRINGS');
+  Define('FPC_HAS_FEATURE_VARIANTS');
+  Define('FPC_HAS_FEATURE_RTTI');
+end;
+
 { TPreprocessor }
 
 constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
@@ -307,21 +369,197 @@ begin
 end;
 
 function TPreprocessor.EvalSimpleCondition(const AArg: string): Boolean;
-var
-  Inner: string;
-  P: LongInt;
 begin
-  if (Length(AArg) > 9) and (LowerCase(Copy(AArg, 1, 8)) = 'defined(') then
+  Result := EvalIfExpr(AArg);
+end;
+
+procedure TPreprocessor.EvalSkipWS;
+begin
+  while (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] in [' ', #9]) do
+    Inc(FEvalPos);
+end;
+
+function TPreprocessor.EvalPeekChar: Char;
+begin
+  EvalSkipWS;
+  if FEvalPos <= Length(FEvalExpr) then Result := FEvalExpr[FEvalPos]
+  else Result := #0;
+end;
+
+function TPreprocessor.EvalMatchStr(const S: string): Boolean;
+var
+  I: LongInt;
+begin
+  EvalSkipWS;
+  if FEvalPos + Length(S) - 1 > Length(FEvalExpr) then Exit(False);
+  for I := 1 to Length(S) do
+    if UpCase(FEvalExpr[FEvalPos + I - 1]) <> UpCase(S[I]) then Exit(False);
+  if (FEvalPos + Length(S) <= Length(FEvalExpr)) and
+    (FEvalExpr[FEvalPos + Length(S)] in ['A'..'Z','a'..'z','0'..'9','_']) then
+    Exit(False);
+  Inc(FEvalPos, Length(S));
+  Result := True;
+end;
+
+function TPreprocessor.EvalParseInt: Int64;
+var
+  Start: LongInt;
+  Neg: Boolean;
+begin
+  EvalSkipWS;
+  Neg := False;
+  if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '-') then
+  begin Neg := True; Inc(FEvalPos); EvalSkipWS; end;
+  if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '$') then
   begin
-    P := Pos(')', AArg);
-    if P > 9 then
-      Inner := Trim(Copy(AArg, 9, P - 9))
-    else
-      Inner := Trim(Copy(AArg, 9, Length(AArg) - 8));
-    Result := FDefines.IsDefined(Inner);
+    Inc(FEvalPos); Start := FEvalPos;
+    while (FEvalPos <= Length(FEvalExpr)) and
+      (FEvalExpr[FEvalPos] in ['0'..'9','A'..'F','a'..'f']) do Inc(FEvalPos);
+    Result := StrToInt64Def('$' + Copy(FEvalExpr, Start, FEvalPos - Start), 0);
   end
   else
-    Result := FDefines.IsDefined(AArg);
+  begin
+    Start := FEvalPos;
+    while (FEvalPos <= Length(FEvalExpr)) and
+      (FEvalExpr[FEvalPos] in ['0'..'9']) do Inc(FEvalPos);
+    Result := StrToInt64Def(Copy(FEvalExpr, Start, FEvalPos - Start), 0);
+  end;
+  if Neg then Result := -Result;
+end;
+
+function TPreprocessor.EvalParseIdent: string;
+var
+  Start: LongInt;
+begin
+  EvalSkipWS;
+  Start := FEvalPos;
+  while (FEvalPos <= Length(FEvalExpr)) and
+    (FEvalExpr[FEvalPos] in ['A'..'Z','a'..'z','0'..'9','_']) do Inc(FEvalPos);
+  Result := Copy(FEvalExpr, Start, FEvalPos - Start);
+end;
+
+function TPreprocessor.EvalAtom: Int64;
+var
+  Id, Inner: string;
+begin
+  EvalSkipWS;
+  if EvalPeekChar = '(' then
+  begin Inc(FEvalPos); Result := EvalOr; EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    Exit;
+  end;
+  if EvalMatchStr('not') then Exit(Ord(EvalAtom = 0));
+  if EvalMatchStr('true') then Exit(1);
+  if EvalMatchStr('false') then Exit(0);
+  if (EvalPeekChar in ['0'..'9','$']) or
+    ((EvalPeekChar = '-') and (FEvalPos < Length(FEvalExpr)) and
+     (FEvalExpr[FEvalPos+1] in ['0'..'9','$'])) then
+    Exit(EvalParseInt);
+  Id := EvalParseIdent;
+  if Id = '' then Exit(0);
+  if LowerCase(Id) = 'defined' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    Inner := EvalParseIdent;
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    if FDefines.IsDefined(Inner) then Result := 1 else Result := 0;
+  end
+  else if LowerCase(Id) = 'declared' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    EvalParseIdent;
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    Result := 0;
+  end
+  else
+  begin
+    if FDefines.TryGetValue(Id, Inner) then
+      Result := StrToInt64Def(Inner, Ord(FDefines.IsDefined(Id)))
+    else if FDefines.IsDefined(Id) then
+      Result := 1
+    else
+      Result := 0;
+  end;
+end;
+
+function TPreprocessor.EvalMul: Int64;
+var
+  R: Int64;
+begin
+  Result := EvalAtom;
+  while True do
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '*') then
+    begin Inc(FEvalPos); Result := Result * EvalAtom; end
+    else if EvalMatchStr('div') then
+    begin R := EvalAtom; if R <> 0 then Result := Result div R; end
+    else if EvalMatchStr('mod') then
+    begin R := EvalAtom; if R <> 0 then Result := Result mod R; end
+    else Break;
+  end;
+end;
+
+function TPreprocessor.EvalAdd: Int64;
+begin
+  Result := EvalMul;
+  while True do
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '+') then
+    begin Inc(FEvalPos); Result := Result + EvalMul; end
+    else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '-') then
+    begin Inc(FEvalPos); Result := Result - EvalMul; end
+    else Break;
+  end;
+end;
+
+function TPreprocessor.EvalCmp: Int64;
+var
+  R: Int64;
+begin
+  Result := EvalAdd;
+  EvalSkipWS;
+  if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') and
+    (FEvalExpr[FEvalPos+1] = '>') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result <> R); end
+  else if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '>') and
+    (FEvalExpr[FEvalPos+1] = '=') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result >= R); end
+  else if (FEvalPos < Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') and
+    (FEvalExpr[FEvalPos+1] = '=') then
+  begin Inc(FEvalPos, 2); R := EvalAdd; Result := Ord(Result <= R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '=') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result = R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '>') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result > R); end
+  else if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '<') then
+  begin Inc(FEvalPos); R := EvalAdd; Result := Ord(Result < R); end;
+end;
+
+function TPreprocessor.EvalAnd: Int64;
+begin
+  Result := EvalCmp;
+  while EvalMatchStr('and') do
+    Result := Ord((Result <> 0) and (EvalCmp <> 0));
+end;
+
+function TPreprocessor.EvalOr: Int64;
+begin
+  Result := EvalAnd;
+  while EvalMatchStr('or') do
+    Result := Ord((Result <> 0) or (EvalAnd <> 0));
+end;
+
+function TPreprocessor.EvalIfExpr(const AExpr: string): Boolean;
+begin
+  FEvalExpr := AExpr;
+  FEvalPos := 1;
+  Result := EvalOr <> 0;
 end;
 
 procedure TPreprocessor.ProcessInclude(const AArg: string);
@@ -400,10 +638,12 @@ begin
         PushFrame(EvalSimpleCondition(Arg))
       else if Dir = 'ifndef' then
         PushFrame(not EvalSimpleCondition(Arg))
+      else if Dir = 'if' then
+        PushFrame(EvalIfExpr(Arg))
       else if Dir = 'else' then
         HandleElse
       else if Dir = 'elseif' then
-        HandleElseIf(EvalSimpleCondition(Arg))
+        HandleElseIf(EvalIfExpr(Arg))
       else if (Dir = 'endif') or (Dir = 'ifend') then
         HandleEndIf
       else if Dir = 'define' then
