@@ -229,6 +229,131 @@ begin
   Check(LMutex.Released, 'test mutex must be released before waiting');
 end;
 
+{ Once tests }
+
+var
+  GOnceCounter: Int32 = 0;
+
+procedure OnceIncrement;
+begin
+  Inc(GOnceCounter);
+end;
+
+procedure TestOnceBasic;
+var
+  LOnce: IOnce;
+begin
+  GOnceCounter := 0;
+  LOnce := Once;
+  LOnce.Do_(@OnceIncrement);
+  LOnce.Do_(@OnceIncrement);
+  LOnce.Do_(@OnceIncrement);
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'executed exactly once');
+  Check(LOnce.Done, 'done after call');
+end;
+
+procedure TestOnceDoneBeforeCall;
+var
+  LOnce: IOnce;
+begin
+  LOnce := Once;
+  Check(not LOnce.Done, 'not done before call');
+end;
+
+procedure OnceRaiser;
+begin
+  raise Exception.Create('boom');
+end;
+
+procedure TestOnceExceptionResets;
+var
+  LOnce: IOnce;
+  LGot: Boolean;
+begin
+  GOnceCounter := 0;
+  LOnce := Once;
+  LGot := False;
+  try
+    LOnce.Do_(@OnceRaiser);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'exception propagated');
+  Check(not LOnce.Done, 'not done after exception');
+  LOnce.Do_(@OnceIncrement);
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'retry succeeded');
+  Check(LOnce.Done, 'done after retry');
+end;
+
+{ SpinLock tests }
+
+procedure TestSpinLockBasic;
+var
+  LS: ISpinLock;
+begin
+  LS := SpinLock;
+  LS.Acquire;
+  Check(not LS.TryAcquire, 'cannot re-acquire');
+  LS.Release;
+  Check(LS.TryAcquire, 'can acquire after release');
+  LS.Release;
+end;
+
+procedure TestSpinLockGuard;
+var
+  LS: ISpinLock;
+  LG: ILockGuard;
+begin
+  LS := SpinLock;
+  LG := LS.Lock;
+  Check(not LS.TryAcquire, 'locked by guard');
+  LG := nil;
+  Check(LS.TryAcquire, 'released after guard nil');
+  LS.Release;
+end;
+
+{ Semaphore tests }
+
+procedure TestSemaphoreBasic;
+var
+  LSem: ISemaphore;
+begin
+  LSem := Semaphore(2);
+  CheckEqual(Int64(2), Int64(LSem.Available), 'initial 2');
+  LSem.Acquire;
+  CheckEqual(Int64(1), Int64(LSem.Available), 'after 1 acquire');
+  LSem.Acquire;
+  CheckEqual(Int64(0), Int64(LSem.Available), 'after 2 acquires');
+  Check(not LSem.TryAcquire, 'exhausted');
+  LSem.Release;
+  CheckEqual(Int64(1), Int64(LSem.Available), 'after release');
+  Check(LSem.TryAcquire, 'can acquire again');
+  LSem.Release;
+end;
+
+procedure TestSemaphoreTimeout;
+var
+  LSem: ISemaphore;
+begin
+  LSem := Semaphore(0);
+  Check(not LSem.TryAcquireTimeout(1000000), 'timeout on empty (1ms)');
+  LSem.Release;
+  Check(LSem.TryAcquireTimeout(1000000), 'acquire after release');
+end;
+
+procedure TestSemaphoreReleaseMultiple;
+var
+  LSem: ISemaphore;
+begin
+  LSem := Semaphore(0);
+  LSem.Release(3);
+  CheckEqual(Int64(3), Int64(LSem.Available), 'released 3');
+  LSem.Acquire;
+  LSem.Acquire;
+  LSem.Acquire;
+  Check(not LSem.TryAcquire, 'all consumed');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.sync');
   T.Run('Mutex basic', @TestMutexBasic);
@@ -242,5 +367,15 @@ begin
   T.Run('WaitGroup basic', @TestWaitGroupBasic);
   T.Run('WaitGroup multiple', @TestWaitGroupMultiple);
   T.Run('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
+
+  T.Run('Once basic', @TestOnceBasic);
+  T.Run('Once not done before call', @TestOnceDoneBeforeCall);
+  T.Run('Once exception resets', @TestOnceExceptionResets);
+  T.Run('SpinLock basic', @TestSpinLockBasic);
+  T.Run('SpinLock guard', @TestSpinLockGuard);
+  T.Run('Semaphore basic', @TestSemaphoreBasic);
+  T.Run('Semaphore timeout', @TestSemaphoreTimeout);
+  T.Run('Semaphore release multiple', @TestSemaphoreReleaseMultiple);
+
   T.Summary;
 end.
