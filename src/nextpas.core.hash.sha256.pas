@@ -120,12 +120,14 @@ end;
 {$IFDEF CPUX86_64}
 {$I nextpas.core.hash.sha256.x64.inc}
 {$I nextpas.core.hash.sha256.x64v2.inc}
+{$I nextpas.core.hash.sha256.avx2.inc}
 {$I nextpas.core.hash.sha256.shani.inc}
 {$ENDIF}
 
 {$IFDEF CPUX86_64}
 var
   GHasSHANI: Boolean = False;
+  GHasAVX: Boolean = False;
   GHasSSSE3: Boolean = False;
   GDispatchInitialized: Boolean = False;
 
@@ -142,6 +144,7 @@ begin
     movl %ecx, LEcx
   end ['eax', 'ebx', 'ecx', 'edx'];
   GHasSSSE3 := (LEcx and (1 shl 9)) <> 0;
+  GHasAVX := (LEcx and (1 shl 28)) <> 0;
   LEbx := 0;
   asm
     movl $7, %eax
@@ -150,7 +153,8 @@ begin
     movl %ebx, LEbx
   end ['eax', 'ebx', 'ecx', 'edx'];
   GHasSHANI := (LEbx and (1 shl 29)) <> 0;
-  // SSSE3 path also requires BMI2 for rorx
+  if GHasAVX then
+    GHasAVX := (LEbx and (1 shl 8)) <> 0;  // need BMI2
   if GHasSSSE3 then
     GHasSSSE3 := (LEbx and (1 shl 8)) <> 0;
   GDispatchInitialized := True;
@@ -162,6 +166,8 @@ begin
   {$IFDEF CPUX86_64}
   if GHasSHANI then
     ProcessBlockSHANI(ABlock, @FH[0])
+  else if GHasAVX then
+    ProcessBlockAVX2(ABlock, @FH[0])
   else if GHasSSSE3 then
     ProcessBlockX64V2(ABlock, @FH[0])
   else
