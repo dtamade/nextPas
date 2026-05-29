@@ -86,6 +86,7 @@ type
 
     function LowerBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+    function Floor(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
     function GetEnumerator: TEnumerator;
@@ -96,6 +97,7 @@ type
   generic TBTreeSet<T> = class
   public type
     TCompareFunc = function(const A, B: T; aData: Pointer): SizeInt;
+    TForEachCallback = procedure(const AItem: T; aData: Pointer);
   private type
     TInner = specialize TBTreeMap<T, Byte>;
   private
@@ -111,6 +113,9 @@ type
 
     function Min(out AItem: T): Boolean;
     function Max(out AItem: T): Boolean;
+    function LowerBound(const AItem: T; out AFound: T): Boolean;
+    function UpperBound(const AItem: T; out AFound: T): Boolean;
+    function Floor(const AItem: T; out AFound: T): Boolean;
 
     function GetCount: SizeUInt;
     property Count: SizeUInt read GetCount;
@@ -685,6 +690,34 @@ begin
   end;
 end;
 
+{ Floor — last key <= AKey }
+
+function TBTreeMap.Floor(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+var
+  LNode: PNode;
+  LIdx: Int32;
+begin
+  Result := False;
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    if SearchNode(LNode, AKey, LIdx) then
+    begin
+      AFoundKey := LNode^.Keys[LIdx];
+      AValue := LNode^.Values[LIdx];
+      Exit(True);
+    end;
+    if LIdx > 0 then
+    begin
+      AFoundKey := LNode^.Keys[LIdx - 1];
+      AValue := LNode^.Values[LIdx - 1];
+      Result := True;
+    end;
+    if LNode^.IsLeaf then Exit;
+    LNode := LNode^.Children[LIdx];
+  end;
+end;
+
 { ForEach — in-order traversal }
 
 procedure TBTreeMap.InorderTraverse(ANode: PNode; ACallback: TForEachCallback; AData: Pointer);
@@ -867,6 +900,24 @@ end;
 function TBTreeSet.GetCount: SizeUInt;
 begin
   Result := FInner.Count;
+end;
+
+function TBTreeSet.LowerBound(const AItem: T; out AFound: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.LowerBound(AItem, AFound, LDummy);
+end;
+
+function TBTreeSet.UpperBound(const AItem: T; out AFound: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.UpperBound(AItem, AFound, LDummy);
+end;
+
+function TBTreeSet.Floor(const AItem: T; out AFound: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.Floor(AItem, AFound, LDummy);
 end;
 
 end.
