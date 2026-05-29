@@ -414,6 +414,44 @@ begin
     end;
   end;
 
+  if FindFirst(
+    IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) + '*.pp',
+    faAnyFile,
+    SearchRec
+  ) = 0 then
+  begin
+    try
+      repeat
+        if (SearchRec.Attr and faDirectory) <> 0 then
+          Continue;
+
+        UnitId := NormalizeUnitIdentity(ChangeFileExt(SearchRec.Name, ''));
+        if UnitId = '' then
+          Continue;
+
+        CandidatePath := NormalizeCorePath(
+          IncludeTrailingPathDelimiter(FRootIndexes[ARootIndex].RootPath) +
+            SearchRec.Name
+        );
+        EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
+        if EntryIndex < 0 then
+        begin
+          Index := Length(FRootIndexes[ARootIndex].Entries);
+          SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
+          FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
+          SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
+          EntryIndex := Index;
+        end;
+        AppendString(
+          FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
+          CandidatePath
+        );
+      until FindNext(SearchRec) <> 0;
+    finally
+      FindClose(SearchRec);
+    end;
+  end;
+
   FRootIndexes[ARootIndex].Status := 'ready';
   FRootIndexes[ARootIndex].LastScanTimestamp := Round(Now * 86400);
 end;
