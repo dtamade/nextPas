@@ -9,16 +9,13 @@ uses
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.simd.micro;
+  nextpas.core.simd.group;
 
 const
   CTRL_EMPTY   = Byte($FF);
   CTRL_DELETED = Byte($80);
   GROUP_SIZE   = 16;
   MIN_CAPACITY = 16;
-
-type
-  TGroupMask = Word;
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -82,18 +79,17 @@ uses
 
 function GroupMaskFirstSet(mask: TGroupMask): Integer;
 begin
-  if mask = 0 then Exit(-1);
-  Result := MicroCtz16(TMask16(mask));
+  Result := GroupCtz(mask);
 end;
 
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
 begin
-  Result := TGroupMask(MicroCmpEqU8x16_Asm(ACtrl, AH2));
+  Result := GroupMatch(ACtrl, AH2);
 end;
 
 function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
 begin
-  Result := TGroupMask(MicroCmpEqU8x16_Asm(ACtrl, CTRL_EMPTY));
+  Result := GroupMatch(ACtrl, CTRL_EMPTY);
 end;
 
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
@@ -259,10 +255,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], Lh2);
+    LMask := GroupMatch(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := MicroCtz16(LMask);
+      LBit := GroupCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -272,10 +268,10 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := GroupMatch(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
-      AIndex := LBase + SizeUInt(MicroCtz16(LEmptyMask));
+      AIndex := LBase + SizeUInt(GroupCtz(LEmptyMask));
       Exit(False);
     end;
 
@@ -437,10 +433,10 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], Lh2);
+    LMask := GroupMatch(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := MicroCtz16(LMask);
+      LBit := GroupCtz(LMask);
       Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
@@ -452,12 +448,12 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], CTRL_EMPTY);
+    LEmptyMask := GroupMatch(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
       // empty 槽位既是探测链终点，也是首选插入点
       if not LFoundInsert then
-        LInsertIdx := LBase + SizeUInt(MicroCtz16(LEmptyMask));
+        LInsertIdx := LBase + SizeUInt(GroupCtz(LEmptyMask));
       Break;
     end;
 
@@ -467,7 +463,7 @@ begin
       LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
       if LMask <> 0 then
       begin
-        LInsertIdx := LBase + SizeUInt(MicroCtz16(LMask));
+        LInsertIdx := LBase + SizeUInt(GroupCtz(LMask));
         LFoundInsert := True;
       end;
     end;
