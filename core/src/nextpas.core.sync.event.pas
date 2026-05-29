@@ -55,10 +55,11 @@ procedure TManualResetEvent.SetEvent;
 var
   LCur: Int32;
 begin
-  LCur := AtomicLoad32(FGen, moAcquire);
-  if (LCur and 1) = 1 then
-    Exit;
-  AtomicFetchAdd32(FGen, 1, moRelease);
+  repeat
+    LCur := AtomicLoad32(FGen, moAcquire);
+    if (LCur and 1) = 1 then
+      Exit;
+  until AtomicCompareExchange32(FGen, LCur, LCur + 1, moAcqRel) = LCur;
   platform_wake_address_all(@FGen);
 end;
 
@@ -66,10 +67,11 @@ procedure TManualResetEvent.Reset;
 var
   LCur: Int32;
 begin
-  LCur := AtomicLoad32(FGen, moAcquire);
-  if (LCur and 1) = 0 then
-    Exit;
-  AtomicFetchAdd32(FGen, 1, moRelease);
+  repeat
+    LCur := AtomicLoad32(FGen, moAcquire);
+    if (LCur and 1) = 0 then
+      Exit;
+  until AtomicCompareExchange32(FGen, LCur, LCur + 1, moAcqRel) = LCur;
 end;
 
 procedure TManualResetEvent.Wait;
