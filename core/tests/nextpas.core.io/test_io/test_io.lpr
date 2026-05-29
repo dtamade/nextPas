@@ -755,6 +755,22 @@ begin
   Check(not LScan.Scan, 'done');
 end;
 
+procedure TestByteWriterStream;
+var
+  LS: IStream;
+  LBW: IByteWriter;
+  LBuf: array[0..1] of Byte;
+begin
+  LS := BytesStream(16);
+  LBW := LS as IByteWriter;
+  LBW.WriteByte($CA);
+  LBW.WriteByte($FE);
+  LS.Seek(0, soBeginning);
+  LS.Read(LBuf[0], 2);
+  CheckEqual(Byte($CA), LBuf[0]);
+  CheckEqual(Byte($FE), LBuf[1]);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io');
 
@@ -809,6 +825,7 @@ begin
   T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
   T.Run('Scanner empty', @TestScannerEmpty);
   T.Run('Scanner empty lines', @TestScannerEmptyLines);
+  T.Run('ByteWriter stream', @TestByteWriterStream);
 
   T.Summary;
 end.

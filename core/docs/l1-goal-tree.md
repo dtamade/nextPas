@@ -16,7 +16,7 @@ L1 是框架的基础设施层，只依赖 L0（base/errors/platform/mem）。
 | `sync` | 同步原语 (Mutex/RWLock/Atomic/WaitGroup) | ✅ 已有 (11 tests) |
 | `thread` | 线程池、Channel、Future | ⬜ 待建 |
 | `async` | 事件循环、Reactor、异步运行时 | ⬜ 待建 |
-| `io` | 流抽象 (Reader/Writer/Buffer) | ✅ 完成 (Go parity, 28 tests, bench, Pipe) |
+| `io` | 流抽象 (Reader/Writer/Buffer/Scanner/Pipe) | ✅ 完成 (Go parity, 43 tests, bench, Scanner) |
 | `time` | DateTime/Duration/Timer/Stopwatch | 🔶 Wave 1-2 done, Wave 3-5 待做 |
 | `id` | UUID/ULID/Snowflake/NanoID | ✅ 已有 (15 tests) |
 | `testing` | 测试框架 | ✅ 已有 (TTestRunner) |
