@@ -44,6 +44,9 @@ type
     FGlobalNames: array of string;
     FGlobalTypes: array of THIRTypeId;
     FGlobalCount: LongInt;
+    FGlobalRefCache: array of string;
+    FGlobalRefValues: array of THIRValueId;
+    FGlobalRefCount: LongInt;
     FInStartFunc: Boolean;
     FEntryBlockId: THIRBlockId;
 
@@ -61,6 +64,7 @@ type
     procedure RegisterAllocaEntry(const AName: string; AValue: THIRValueId;
       AType: THIRTypeId; AIsVarParam: Boolean);
     function FindAlloca(const AName: string): THIRValueId;
+    function FindLocalAlloca(const AName: string): THIRValueId;
     function FindAllocaType(const AName: string): THIRTypeId;
     function IsVarParamAlloca(const AName: string): Boolean;
     function GetIntType: THIRTypeId;
@@ -154,6 +158,7 @@ begin
   FAllocaCount := 0;
   FBlockCount := 0;
   FGlobalCount := 0;
+  FGlobalRefCount := 0;
   FInStartFunc := True;
   FEntryBlockId := 0;
   FPendingParamCount := 0;
@@ -288,6 +293,16 @@ begin
   Inc(FAllocaCount);
 end;
 
+function THIRBuilder.FindLocalAlloca(const AName: string): THIRValueId;
+var
+  I: LongInt;
+begin
+  for I := 0 to FAllocaCount - 1 do
+    if SameText(FAllocaNames[I], AName) then
+      Exit(FAllocaValues[I]);
+  Result := 0;
+end;
+
 function THIRBuilder.FindAlloca(const AName: string): THIRValueId;
 var
   I: LongInt;
@@ -296,6 +311,9 @@ begin
   for I := 0 to FAllocaCount - 1 do
     if SameText(FAllocaNames[I], AName) then
       Exit(FAllocaValues[I]);
+  for I := 0 to FGlobalRefCount - 1 do
+    if SameText(FGlobalRefCache[I], AName) then
+      Exit(FGlobalRefValues[I]);
   for I := 0 to FGlobalCount - 1 do
     if SameText(FGlobalNames[I], AName) then
     begin
@@ -306,6 +324,14 @@ begin
       Instr.IntrinsicName := 'global_ref';
       Instr.CallTarget := AName;
       EmitInstr(Instr);
+      if FGlobalRefCount >= Length(FGlobalRefCache) then
+      begin
+        SetLength(FGlobalRefCache, FGlobalRefCount + 16);
+        SetLength(FGlobalRefValues, FGlobalRefCount + 16);
+      end;
+      FGlobalRefCache[FGlobalRefCount] := AName;
+      FGlobalRefValues[FGlobalRefCount] := Instr.ResultId;
+      Inc(FGlobalRefCount);
       Exit(Instr.ResultId);
     end;
   Result := 0;
@@ -1594,6 +1620,7 @@ begin
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
+    FGlobalRefCount := 0;
     FBlockCount := 0;
     FPendingParamCount := 0;
     FPendingParamLlvmIdx := 0;
@@ -1673,6 +1700,7 @@ begin
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
     FAllocaCount := 0;
+    FGlobalRefCount := 0;
     FBlockCount := 0;
     if (Length(Rest) > 1) and (Rest[1] = 'r') then
     begin
@@ -2633,6 +2661,7 @@ begin
   FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
   FAllocaCount := 0;
+  FGlobalRefCount := 0;
   FBlockCount := 0;
 
   ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
