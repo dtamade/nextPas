@@ -13,7 +13,9 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.platform.sync;
+  nextpas.core.errors,
+  nextpas.core.platform.sync,
+  nextpas.core.time.base;
 
 type
   TSemaphore = class(TInterfacedObject, ISemaphore)
@@ -32,6 +34,8 @@ type
 constructor TSemaphore.Create(const AInitial: Int32);
 begin
   inherited Create;
+  if AInitial < 0 then
+    raise EArgumentError.Create('Semaphore: initial must be >= 0');
   FCount := AInitial;
 end;
 
@@ -71,25 +75,20 @@ end;
 
 function TSemaphore.TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
 var
-  LSpin: Int32;
+  LDeadline: TInstant;
+  LRemaining: Int64;
 begin
   if TryAcquire then
     Exit(True);
-  LSpin := 0;
+  LDeadline := TInstant.Now;
   while True do
   begin
+    LRemaining := ATimeoutNs - LDeadline.Elapsed.AsNanoseconds;
+    if LRemaining <= 0 then
+      Exit(TryAcquire);
+    platform_wait_address32(@FCount, 0, LRemaining);
     if TryAcquire then
       Exit(True);
-    if LSpin < 16 then
-    begin
-      CpuPause;
-      Inc(LSpin);
-    end
-    else
-    begin
-      if platform_wait_address32(@FCount, 0, ATimeoutNs) <> 0 then
-        Exit(TryAcquire);
-    end;
   end;
 end;
 
@@ -103,6 +102,8 @@ procedure TSemaphore.Release(const ACount: Int32);
 var
   LI: Int32;
 begin
+  if ACount <= 0 then
+    raise EArgumentError.Create('Semaphore.Release: count must be > 0');
   AtomicFetchAdd32(FCount, ACount, moRelease);
   for LI := 0 to ACount - 1 do
     platform_wake_address_one(@FCount);

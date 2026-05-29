@@ -71,7 +71,6 @@ end;
 
 function TSpinLock.Lock: ILockGuard;
 begin
-  Acquire;
   Result := TSpinLockGuard.Create(Self);
 end;
 
@@ -79,6 +78,7 @@ constructor TSpinLockGuard.Create(const AOwner: ISpinLock);
 begin
   inherited Create;
   FOwner := AOwner;
+  FOwner.Acquire;
 end;
 
 destructor TSpinLockGuard.Destroy;

@@ -39,37 +39,31 @@ end;
 
 procedure TOnce.Do_(const AProc: TOnceProc);
 var
-  LOld, LSpin: Int32;
+  LOld, LCur: Int32;
 begin
-  if AtomicLoad32(FState, moAcquire) = STATE_DONE then
-    Exit;
-
-  LOld := AtomicCompareExchange32(FState, STATE_INIT, STATE_RUNNING, moAcqRel);
-  if LOld = STATE_INIT then
+  while True do
   begin
-    try
-      AProc();
-      AtomicStore32(FState, STATE_DONE, moRelease);
-      platform_wake_address_all(@FState);
-    except
-      AtomicStore32(FState, STATE_INIT, moRelease);
-      platform_wake_address_all(@FState);
-      raise;
-    end;
-  end
-  else
-  begin
-    LSpin := 0;
-    while AtomicLoad32(FState, moAcquire) <> STATE_DONE do
+    LCur := AtomicLoad32(FState, moAcquire);
+    if LCur = STATE_DONE then
+      Exit;
+    if LCur = STATE_INIT then
     begin
-      if LSpin < 32 then
+      LOld := AtomicCompareExchange32(FState, STATE_INIT, STATE_RUNNING, moAcqRel);
+      if LOld = STATE_INIT then
       begin
-        CpuPause;
-        Inc(LSpin);
-      end
-      else
-        platform_wait_address32(@FState, STATE_RUNNING, -1);
+        try
+          AProc();
+          AtomicStore32(FState, STATE_DONE, moRelease);
+          platform_wake_address_all(@FState);
+        except
+          AtomicStore32(FState, STATE_INIT, moRelease);
+          platform_wake_address_all(@FState);
+          raise;
+        end;
+        Exit;
+      end;
     end;
+    platform_wait_address32(@FState, STATE_RUNNING, -1);
   end;
 end;
 
