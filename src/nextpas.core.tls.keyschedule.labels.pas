@@ -1,4 +1,4 @@
-unit nextpas.core.tls.keyschedule.label;
+unit nextpas.core.tls.keyschedule.labels;
 
 {$mode objfpc}{$H+}
 
