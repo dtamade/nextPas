@@ -404,14 +404,20 @@ end;
 
 function TDuration.Round(const AUnit: TDuration): TDuration;
 var
-  LRem, LHalf: Int64;
+  LRem: Int64;
+  LHalf: Int64;
 begin
   if AUnit.FNs <= 0 then
     Exit(Self);
   LRem := FNs mod AUnit.FNs;
   LHalf := AUnit.FNs div 2;
   if System.Abs(LRem) > LHalf then
-    Result.FNs := FNs - LRem + AUnit.FNs
+  begin
+    if FNs >= 0 then
+      Result.FNs := FNs - LRem + AUnit.FNs
+    else
+      Result.FNs := FNs - LRem - AUnit.FNs;
+  end
   else
     Result.FNs := FNs - LRem;
 end;

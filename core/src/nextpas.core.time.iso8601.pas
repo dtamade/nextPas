@@ -143,10 +143,14 @@ begin
         LSign := 1
       else
         LSign := -1;
+      if not (AStr[LTzStart + 1] in ['0'..'9']) then Exit;
+      if not (AStr[LTzStart + 2] in ['0'..'9']) then Exit;
+      if AStr[LTzStart + 3] <> ':' then Exit;
+      if not (AStr[LTzStart + 4] in ['0'..'9']) then Exit;
+      if not (AStr[LTzStart + 5] in ['0'..'9']) then Exit;
       LH := (Ord(AStr[LTzStart + 1]) - Ord('0')) * 10 + (Ord(AStr[LTzStart + 2]) - Ord('0'));
-      if AStr[LTzStart + 3] <> ':' then
-        Exit;
       LM := (Ord(AStr[LTzStart + 4]) - Ord('0')) * 10 + (Ord(AStr[LTzStart + 5]) - Ord('0'));
+      if (LH > 23) or (LM > 59) then Exit;
       LOffset := TUtcOffset.FromSeconds(LSign * (LH * 3600 + LM * 60));
       LDtStr := Copy(AStr, 1, LTzStart - 1);
     end

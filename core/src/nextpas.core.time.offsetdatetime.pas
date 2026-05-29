@@ -192,13 +192,23 @@ begin
 end;
 
 function TOffsetDateTime.ToUnixSeconds: Int64;
+var
+  LNs: Int64;
 begin
-  Result := ToUnixNanos div NS_PER_SEC;
+  LNs := ToUnixNanos;
+  Result := LNs div NS_PER_SEC;
+  if (LNs < 0) and (LNs mod NS_PER_SEC <> 0) then
+    Dec(Result);
 end;
 
 function TOffsetDateTime.ToUnixMillis: Int64;
+var
+  LNs: Int64;
 begin
-  Result := ToUnixNanos div NS_PER_MS;
+  LNs := ToUnixNanos;
+  Result := LNs div NS_PER_MS;
+  if (LNs < 0) and (LNs mod NS_PER_MS <> 0) then
+    Dec(Result);
 end;
 
 function TOffsetDateTime.ToUtc: TOffsetDateTime;

@@ -448,45 +448,47 @@ begin
   Result.FJulianDay := FJulianDay - 1;
 end;
 
+function ISODayOfWeek(const ADate: TDate): Integer; inline;
+var
+  LDow: Integer;
+begin
+  LDow := Ord(ADate.GetDayOfWeek);
+  if LDow = 1 then Result := 7 else Result := LDow - 1;
+end;
+
 function TDate.GetISOWeek: Integer;
 var
-  LDow, LOrdinal, LWeek: Integer;
-  LJan1Dow: Integer;
+  LThursday: TDate;
+  LJan4: TDate;
+  LWeek1Start: TDate;
 begin
-  LDow := Ord(GetDayOfWeek);
-  if LDow = 1 then LDow := 7 else Dec(LDow);
-  LOrdinal := GetDayOfYear;
-  LJan1Dow := Ord(TDate.Create(GetYear, 1, 1).GetDayOfWeek);
-  if LJan1Dow = 1 then LJan1Dow := 7 else Dec(LJan1Dow);
-  LWeek := (LOrdinal - LDow + 10) div 7;
-  if LWeek < 1 then
-    LWeek := 52
-  else if LWeek > 52 then
-  begin
-    if LJan1Dow = 4 then
-      LWeek := 53
-    else
-      LWeek := 1;
-  end;
-  Result := LWeek;
+  { ISO week: the week containing Thursday determines the week number.
+    Find the Thursday of this week, then compute which week of the year it falls in. }
+  LThursday := Self.AddDays(4 - ISODayOfWeek(Self));
+  LJan4 := TDate.Create(LThursday.GetYear, 1, 4);
+  LWeek1Start := LJan4.AddDays(1 - ISODayOfWeek(LJan4));
+  Result := (LThursday.FJulianDay - LWeek1Start.FJulianDay) div 7 + 1;
 end;
 
 function TDate.GetISOWeekYear: Integer;
 var
-  LWeek: Integer;
+  LThursday: TDate;
 begin
-  LWeek := GetISOWeek;
-  Result := GetYear;
-  if (LWeek >= 52) and (GetMonth = 1) then
-    Dec(Result)
-  else if (LWeek = 1) and (GetMonth = 12) then
-    Inc(Result);
+  LThursday := Self.AddDays(4 - ISODayOfWeek(Self));
+  Result := LThursday.GetYear;
 end;
 
 class function TDate.Today: TDate;
+var
+  LUtcSec, LLocalSec: Int64;
+  LDays: Integer;
 begin
-  Result := TDate.FromUnixDays(Integer(platform_realtime_ns div (1000000000 * 86400))
-    + Integer(platform_utc_offset_seconds div 86400));
+  LUtcSec := Int64(platform_realtime_ns) div 1000000000;
+  LLocalSec := LUtcSec + Int64(platform_utc_offset_seconds);
+  LDays := Integer(LLocalSec div 86400);
+  if (LLocalSec < 0) and (LLocalSec mod 86400 <> 0) then
+    Dec(LDays);
+  Result := TDate.FromUnixDays(LDays);
 end;
 
 end.
