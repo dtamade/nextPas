@@ -1876,18 +1876,17 @@ end;
 function AVX2CmpGtU8x16(const a, b: TVecU8x16): TMask16;
 var mask: Integer;
 begin
-  // Unsigned comparison: flip sign bit and use signed compare
   asm
     lea      rax, a
     lea      rdx, b
-    mov      al, $80
+    vmovdqu  xmm0, [rax]
+    vmovdqu  xmm1, [rdx]
+    mov      eax, $80
     vmovd    xmm2, eax
     vpbroadcastb xmm2, xmm2
-    vmovdqu  xmm0, [rax]
     vpxor    xmm0, xmm0, xmm2
-    vmovdqu  xmm1, [rdx]
     vpxor    xmm1, xmm1, xmm2
-    vpcmpgtb xmm0, xmm0, xmm1   // a > b
+    vpcmpgtb xmm0, xmm0, xmm1
     vpmovmskb eax, xmm0
     mov      mask, eax
   end;
