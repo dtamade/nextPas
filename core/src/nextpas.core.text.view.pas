@@ -147,6 +147,9 @@ begin
 end;
 
 function TStringView.Equals(const AOther: TStringView): Boolean;
+var
+  LNeedle, LData: TVecU8x16;
+  LPos: SizeUInt;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
@@ -154,7 +157,22 @@ begin
     Exit(True);
   if FData = AOther.FData then
     Exit(True);
-  Result := MemEqual(FData, AOther.FData, FLen);
+  LPos := 0;
+  while LPos + 16 <= FLen do
+  begin
+    Move(FData[LPos], LData.u[0], 16);
+    Move(AOther.FData[LPos], LNeedle.u[0], 16);
+    if VecU8x16CmpEq(LData, LNeedle) <> $FFFF then
+      Exit(False);
+    Inc(LPos, 16);
+  end;
+  while LPos < FLen do
+  begin
+    if FData[LPos] <> AOther.FData[LPos] then
+      Exit(False);
+    Inc(LPos);
+  end;
+  Result := True;
 end;
 
 function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean;
@@ -170,31 +188,66 @@ begin
 end;
 
 function TStringView.StartsWith(const APrefix: TStringView): Boolean;
+var
+  LV: TStringView;
 begin
   if APrefix.FLen > FLen then
     Exit(False);
   if APrefix.FLen = 0 then
     Exit(True);
-  Result := MemEqual(FData, APrefix.FData, APrefix.FLen);
+  LV := Left(APrefix.FLen);
+  Result := LV.Equals(APrefix);
 end;
 
 function TStringView.EndsWith(const ASuffix: TStringView): Boolean;
+var
+  LV: TStringView;
 begin
   if ASuffix.FLen > FLen then
     Exit(False);
   if ASuffix.FLen = 0 then
     Exit(True);
-  Result := MemEqual(FData + (FLen - ASuffix.FLen), ASuffix.FData, ASuffix.FLen);
+  LV := Right(ASuffix.FLen);
+  Result := LV.Equals(ASuffix);
 end;
 
 function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
+var
+  LNeedle, LData: TVecU8x16;
+  LMask: TMask16;
+  LPos: SizeUInt;
+  I: Integer;
 begin
   if FLen = 0 then
     Exit(-1);
-  Result := MemFindByte(FData, FLen, Byte(ACh));
+  for I := 0 to 15 do
+    LNeedle.u[I] := Byte(ACh);
+  LPos := 0;
+  while LPos + 16 <= FLen do
+  begin
+    Move(FData[LPos], LData.u[0], 16);
+    LMask := VecU8x16CmpEq(LData, LNeedle);
+    if Mask16Any(LMask) then
+      Exit(PtrInt(LPos) + Mask16FirstSet(LMask));
+    Inc(LPos, 16);
+  end;
+  while LPos < FLen do
+  begin
+    if FData[LPos] = ACh then
+      Exit(PtrInt(LPos));
+    Inc(LPos);
+  end;
+  Result := -1;
 end;
 
 function TStringView.IndexOfStr(const ANeedle: TStringView): PtrInt;
+var
+  LFirst: TVecU8x16;
+  LData: TVecU8x16;
+  LMask: TMask16;
+  LPos: SizeUInt;
+  LBit: Integer;
+  I: Integer;
 begin
   if ANeedle.FLen = 0 then
     Exit(0);
@@ -202,7 +255,30 @@ begin
     Exit(-1);
   if ANeedle.FLen = 1 then
     Exit(IndexOf(ANeedle.FData[0]));
-  Result := BytesIndexOf(FData, FLen, ANeedle.FData, ANeedle.FLen);
+  for I := 0 to 15 do
+    LFirst.u[I] := Byte(ANeedle.FData[0]);
+  LPos := 0;
+  while LPos + 16 <= FLen - ANeedle.FLen + 1 do
+  begin
+    Move(FData[LPos], LData.u[0], 16);
+    LMask := VecU8x16CmpEq(LData, LFirst);
+    while Mask16Any(LMask) do
+    begin
+      LBit := Mask16FirstSet(LMask);
+      if Slice(LPos + SizeUInt(LBit), ANeedle.FLen).Equals(ANeedle) then
+        Exit(PtrInt(LPos) + LBit);
+      LMask := LMask and not TMask16(1 shl LBit);
+    end;
+    Inc(LPos, 16);
+  end;
+  while LPos <= FLen - ANeedle.FLen do
+  begin
+    if FData[LPos] = ANeedle.FData[0] then
+      if Slice(LPos, ANeedle.FLen).Equals(ANeedle) then
+        Exit(PtrInt(LPos));
+    Inc(LPos);
+  end;
+  Result := -1;
 end;
 
 function TStringView.Contains(const ACh: AnsiChar): Boolean;
@@ -211,10 +287,31 @@ begin
 end;
 
 function TStringView.CountChar(const ACh: AnsiChar): SizeUInt;
+var
+  LNeedle, LData: TVecU8x16;
+  LMask: TMask16;
+  LPos: SizeUInt;
+  I: Integer;
 begin
+  Result := 0;
   if FLen = 0 then
-    Exit(0);
-  Result := CountByte(FData, FLen, Byte(ACh));
+    Exit;
+  for I := 0 to 15 do
+    LNeedle.u[I] := Byte(ACh);
+  LPos := 0;
+  while LPos + 16 <= FLen do
+  begin
+    Move(FData[LPos], LData.u[0], 16);
+    LMask := VecU8x16CmpEq(LData, LNeedle);
+    Inc(Result, Mask16PopCount(LMask));
+    Inc(LPos, 16);
+  end;
+  while LPos < FLen do
+  begin
+    if FData[LPos] = ACh then
+      Inc(Result);
+    Inc(LPos);
+  end;
 end;
 
 function TStringView.PeekByte: Byte;
