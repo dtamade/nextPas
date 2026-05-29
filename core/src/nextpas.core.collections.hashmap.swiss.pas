@@ -243,7 +243,7 @@ function TSwissTable.FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUIn
 var
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TGroupMask;
   LBit: Integer;
 begin
   if FCapacity = 0 then begin AIndex := 0; Exit(False); end;
@@ -416,7 +416,7 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LInsertIdx, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
+  LMask, LEmptyMask: TGroupMask;
   LBit: Integer;
   LFoundInsert: Boolean;
 begin
