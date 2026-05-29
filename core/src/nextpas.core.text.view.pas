@@ -35,9 +35,11 @@ type
     function EndsWith(const ASuffix: TStringView): Boolean;
 
     function IndexOf(const ACh: AnsiChar): PtrInt;
+    function LastIndexOf(const ACh: AnsiChar): PtrInt;
     function IndexOfStr(const ANeedle: TStringView): PtrInt;
     function Contains(const ACh: AnsiChar): Boolean; inline;
     function CountChar(const ACh: AnsiChar): SizeUInt;
+    function SplitFirst(const ASep: AnsiChar; out ALeft, ARight: TStringView): Boolean;
 
     function PeekByte: Byte; inline;
     function TryConsumeByte(out AByte: Byte): Boolean; inline;
@@ -181,6 +183,8 @@ var
 begin
   if FLen <> AOther.FLen then
     Exit(False);
+  if FLen = 0 then
+    Exit(True);
   for I := 0 to FLen - 1 do
     if ToLower(Byte(FData[I])) <> ToLower(Byte(AOther.FData[I])) then
       Exit(False);
@@ -237,6 +241,18 @@ begin
       Exit(PtrInt(LPos));
     Inc(LPos);
   end;
+  Result := -1;
+end;
+
+function TStringView.LastIndexOf(const ACh: AnsiChar): PtrInt;
+var
+  I: PtrInt;
+begin
+  if FLen = 0 then
+    Exit(-1);
+  for I := PtrInt(FLen) - 1 downto 0 do
+    if FData[I] = ACh then
+      Exit(I);
   Result := -1;
 end;
 
@@ -312,6 +328,22 @@ begin
       Inc(Result);
     Inc(LPos);
   end;
+end;
+
+function TStringView.SplitFirst(const ASep: AnsiChar; out ALeft, ARight: TStringView): Boolean;
+var
+  LIdx: PtrInt;
+begin
+  LIdx := IndexOf(ASep);
+  if LIdx < 0 then
+  begin
+    ALeft := Self;
+    ARight := TStringView.Empty;
+    Exit(False);
+  end;
+  ALeft := Left(SizeUInt(LIdx));
+  ARight := Slice(SizeUInt(LIdx) + 1, FLen - SizeUInt(LIdx) - 1);
+  Result := True;
 end;
 
 function TStringView.PeekByte: Byte;

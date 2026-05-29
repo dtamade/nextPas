@@ -175,6 +175,49 @@ begin
   CheckEqual(Int64(0), Int64(V.CountChar('z')), 'count z');
 end;
 
+procedure TestLastIndexOf;
+var
+  V: TStringView;
+begin
+  V := TStringView.Create(PAnsiChar('hello world'), 11);
+  CheckEqual(Int64(7), Int64(V.LastIndexOf('o')), 'last o');
+  CheckEqual(Int64(-1), Int64(V.LastIndexOf('z')), 'z not found');
+  CheckEqual(Int64(0), Int64(V.LastIndexOf('h')), 'h at 0');
+  V := TStringView.Empty;
+  CheckEqual(Int64(-1), Int64(V.LastIndexOf('x')), 'empty');
+end;
+
+procedure TestSplitFirst;
+var
+  V, L, R: TStringView;
+begin
+  V := TStringView.Create(PAnsiChar('key:value'), 9);
+  Check(V.SplitFirst(':', L, R), 'split found');
+  Check(L.Equals(TStringView.Create(PAnsiChar('key'), 3)), 'left=key');
+  Check(R.Equals(TStringView.Create(PAnsiChar('value'), 5)), 'right=value');
+
+  V := TStringView.Create(PAnsiChar('nosep'), 5);
+  Check(not V.SplitFirst(':', L, R), 'split not found');
+  Check(L.Equals(V), 'left=whole');
+  Check(R.IsEmpty, 'right=empty');
+
+  V := TStringView.Create(PAnsiChar(':start'), 6);
+  Check(V.SplitFirst(':', L, R), 'split at start');
+  Check(L.IsEmpty, 'left empty');
+  Check(R.Equals(TStringView.Create(PAnsiChar('start'), 5)), 'right=start');
+end;
+
+procedure TestEqualsIgnoreCaseEmpty;
+var
+  A, B: TStringView;
+begin
+  A := TStringView.Empty;
+  B := TStringView.Empty;
+  Check(A.EqualsIgnoreCase(B), 'both empty');
+  B := TStringView.Create(PAnsiChar('x'), 1);
+  Check(not A.EqualsIgnoreCase(B), 'empty vs non-empty');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.view');
   T.Run('create and basic', @TestCreateAndBasic);
@@ -190,5 +233,8 @@ begin
   T.Run('advance cursor', @TestAdvanceCursor);
   T.Run('toString', @TestToString);
   T.Run('countChar', @TestCountChar);
+  T.Run('lastIndexOf', @TestLastIndexOf);
+  T.Run('splitFirst', @TestSplitFirst);
+  T.Run('equalsIgnoreCase empty', @TestEqualsIgnoreCaseEmpty);
   T.Summary;
 end.
