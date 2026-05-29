@@ -8558,6 +8558,7 @@ var
   TmpDiag: TDiagnosticsSink;
   PP: TPreprocessor;
   PPDefines: TDefineTable;
+  IncResolver: TFileIncludeResolver;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -8588,10 +8589,25 @@ begin
         SourceText := SourceText + Line;
       end;
       Close(F);
+      // Truncate to interface section only — LSP needs declarations, not bodies
+      I := Pos(#10'implementation'#10, LowerCase(SourceText));
+      if I <= 0 then
+        I := Pos(#10'implementation'#13, LowerCase(SourceText));
+      if I > 0 then
+        SourceText := Copy(SourceText, 1, I) + #10 + 'implementation' + #10 + 'end.';
       UnitLexer := TLexerResult.Create(SourceText);
       PPDefines := TDefineTable.Create;
       PPDefines.SeedFPCDefines;
-      PP := TPreprocessor.Create(PPDefines, True, nil);
+      IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath));
+      IncResolver.AddSearchPath(ExtractFileDir(SourcePath));
+      IncResolver.AddSearchPath(
+        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'objpas');
+      IncResolver.AddSearchPath(
+        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'objpas' +
+        PathDelim + 'sysutils');
+      IncResolver.AddSearchPath(
+        ExtractFileDir(ExtractFileDir(SourcePath)) + PathDelim + 'inc');
+      PP := TPreprocessor.Create(PPDefines, True, IncResolver);
       try
         PP.Process(UnitLexer);
         UnitLexer.Free;
@@ -8600,8 +8616,7 @@ begin
         PP.Free;
       end;
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
-      if (UnitTree <> nil) and UnitTree.IsValid and
-        (UnitTree.RootNode <> nil) then
+      if (UnitTree <> nil) and (UnitTree.RootNode <> nil) then
       begin
         OwnerUnitId := ResolvedUnit.UnitId;
         if OwnerUnitId = '' then

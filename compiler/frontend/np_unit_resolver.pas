@@ -508,6 +508,7 @@ var
   DependencyDiag: TDiagnosticsSink;
   DependencyLexer: TLexerResult;
   DependencyDefines: TDefineTable;
+  DependencyIncResolver: TFileIncludeResolver;
   DependencyPP: TPreprocessor;
   DependencyGreenTree: TGreenTree;
   DependencyAst: TAstFacade;
@@ -574,7 +575,17 @@ begin
   );
   DependencyDefines := TDefineTable.Create;
   DependencyDefines.SeedFPCDefines;
-  DependencyPP := TPreprocessor.Create(DependencyDefines, True, nil);
+  DependencyIncResolver := TFileIncludeResolver.Create(
+    ExtractFileDir(Candidates[0]));
+  DependencyIncResolver.AddSearchPath(ExtractFileDir(Candidates[0]));
+  DependencyIncResolver.AddSearchPath(
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'objpas');
+  DependencyIncResolver.AddSearchPath(
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'objpas' +
+    PathDelim + 'sysutils');
+  DependencyIncResolver.AddSearchPath(
+    ExtractFileDir(ExtractFileDir(Candidates[0])) + PathDelim + 'inc');
+  DependencyPP := TPreprocessor.Create(DependencyDefines, True, DependencyIncResolver);
   try
     DependencyPP.Process(DependencyLexer);
     DependencyLexer.Free;
@@ -589,7 +600,7 @@ begin
   );
   DependencyAst := TAstFacade.Create(DependencyGreenTree);
   try
-    if DependencyDiag.HasErrors or not DependencyAst.IsValid then
+    if not DependencyAst.IsValid then
     begin
       Exit;
     end;
