@@ -544,6 +544,32 @@ begin
     if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
     if FDefines.IsDefined(Inner) then Result := 1 else Result := 0;
   end
+  else if LowerCase(Id) = 'sizeof' then
+  begin
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = '(') then Inc(FEvalPos);
+    Inner := LowerCase(EvalParseIdent);
+    EvalSkipWS;
+    if (FEvalPos <= Length(FEvalExpr)) and (FEvalExpr[FEvalPos] = ')') then Inc(FEvalPos);
+    if (Inner = 'pointer') or (Inner = 'ptrint') or (Inner = 'ptruint') or
+      (Inner = 'nativeint') or (Inner = 'nativeuint') then
+      Result := {$ifdef CPU64}8{$else}4{$endif}
+    else if (Inner = 'byte') or (Inner = 'shortint') or (Inner = 'boolean') or
+      (Inner = 'ansichar') or (Inner = 'char') then
+      Result := 1
+    else if (Inner = 'word') or (Inner = 'smallint') or (Inner = 'widechar') then
+      Result := 2
+    else if (Inner = 'dword') or (Inner = 'longint') or (Inner = 'cardinal') or
+      (Inner = 'longword') or (Inner = 'single') then
+      Result := 4
+    else if (Inner = 'qword') or (Inner = 'int64') or (Inner = 'double') or
+      (Inner = 'comp') or (Inner = 'currency') then
+      Result := 8
+    else if (Inner = 'extended') then
+      Result := 10
+    else
+      Result := 0;
+  end
   else if LowerCase(Id) = 'declared' then
   begin
     EvalSkipWS;

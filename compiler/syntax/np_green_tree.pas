@@ -828,6 +828,12 @@ begin
       tkInheritedKeyword:
       begin
         Inc(ACursor);
+        if (Token.Kind = tkInheritedKeyword) and (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+        begin
+          Token.Lexeme := 'inherited ' + CurrentToken(ALexer, ACursor).Lexeme;
+          Inc(ACursor);
+        end;
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
         begin
@@ -908,6 +914,14 @@ begin
           if Result <> nil then
             Result.Free;
           Exit(nil);
+        end;
+        while (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkCaret) do
+        begin
+          RHS := TGreenNode.Create(gnkDereference, Result.ByteOffset, 0, '');
+          RHS.AppendChild(Result);
+          Result := RHS;
+          Inc(ACursor);
         end;
       end;
     tkLBracket:
@@ -3666,6 +3680,19 @@ var
             RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
             if RHS <> nil then
               StmtNode.AppendChild(RHS);
+          end;
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+            (LowerCase(CurrentToken(ALexer, ACursor).Lexeme) = 'at') then
+          begin
+            Inc(ACursor);
+            ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+            begin
+              Inc(ACursor);
+              ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+            end;
           end;
           Inc(ATree.FNodeCount);
           Result := True;
