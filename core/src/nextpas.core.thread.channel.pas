@@ -85,13 +85,20 @@ begin
 
   if FUnbuffered then
   begin
-    FHandshakeItem := AValue;
-    FHandshakeDone := True;
-    Inc(FSendWaiting);
-    platform_condvar_signal(FRecvCond);
+    { Wait until handshake slot is free (previous sender consumed). }
     while FHandshakeDone and (not FClosed) do
       platform_condvar_wait(FSendCond, FMutex);
-    Dec(FSendWaiting);
+    if FClosed then
+    begin
+      platform_mutex_unlock(FMutex);
+      Exit;
+    end;
+    FHandshakeItem := AValue;
+    FHandshakeDone := True;
+    platform_condvar_signal(FRecvCond);
+    { Wait until receiver consumes our value. }
+    while FHandshakeDone and (not FClosed) do
+      platform_condvar_wait(FSendCond, FMutex);
     platform_mutex_unlock(FMutex);
     Exit;
   end;
@@ -130,6 +137,7 @@ begin
       Exit;
     end;
     AValue := FHandshakeItem;
+    FHandshakeItem := Default(T);
     FHandshakeDone := False;
     platform_condvar_signal(FSendCond);
     platform_mutex_unlock(FMutex);
@@ -148,6 +156,7 @@ begin
   end;
 
   AValue := FBuffer[FHead];
+  FBuffer[FHead] := Default(T);
   FHead := (FHead + 1) mod FCapacity;
   Dec(FCount);
   Result := True;
@@ -166,7 +175,7 @@ begin
   end;
   if FUnbuffered then
   begin
-    if FRecvWaiting = 0 then
+    if (FRecvWaiting = 0) or FHandshakeDone then
     begin
       platform_mutex_unlock(FMutex);
       Exit(False);
@@ -204,6 +213,7 @@ begin
       Exit(False);
     end;
     AValue := FHandshakeItem;
+    FHandshakeItem := Default(T);
     FHandshakeDone := False;
     platform_condvar_signal(FSendCond);
     platform_mutex_unlock(FMutex);
@@ -216,6 +226,7 @@ begin
     Exit(False);
   end;
   AValue := FBuffer[FHead];
+  FBuffer[FHead] := Default(T);
   FHead := (FHead + 1) mod FCapacity;
   Dec(FCount);
   platform_mutex_unlock(FMutex);

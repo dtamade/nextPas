@@ -13,13 +13,14 @@ type
   generic TFuturePromise<T> = class(TInterfacedObject,
     specialize IFuture<T>, specialize IPromise<T>)
   private
-    FState: TFutureState;
+    FState: Int32;
     FValue: T;
     FErrorClass: ExceptClass;
     FErrorMsg: string;
     FMutex: IInterface;
     FEvent: IInterface;
     procedure WaitDone;
+    function GetState: TFutureState;
   public
     constructor Create;
     function Wait: T;
@@ -37,13 +38,14 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.atomic,
   nextpas.core.sync,
   nextpas.core.sync.intf;
 
 constructor TFuturePromise.Create;
 begin
   inherited Create;
-  FState := fsPending;
+  FState := Int32(Ord(fsPending));
   FErrorClass := nil;
   FErrorMsg := '';
   FMutex := Mutex;
@@ -55,10 +57,15 @@ begin
   (FEvent as IEvent).Wait;
 end;
 
+function TFuturePromise.GetState: TFutureState;
+begin
+  Result := TFutureState(AtomicLoad32(FState, moAcquire));
+end;
+
 function TFuturePromise.Wait: T;
 begin
   WaitDone;
-  case FState of
+  case GetState of
     fsCompleted: Result := FValue;
     fsFailed: raise FErrorClass.Create(FErrorMsg);
     fsCancelled: raise ECancelledError.Create('future cancelled');
@@ -74,17 +81,17 @@ end;
 
 function TFuturePromise.State: TFutureState;
 begin
-  Result := FState;
+  Result := GetState;
 end;
 
 function TFuturePromise.IsDone: Boolean;
 begin
-  Result := FState <> fsPending;
+  Result := GetState <> fsPending;
 end;
 
 function TFuturePromise.Get: T;
 begin
-  if FState = fsPending then
+  if GetState = fsPending then
     raise EInvalidOperationError.Create('future not done');
   Result := Wait;
 end;
@@ -93,10 +100,10 @@ procedure TFuturePromise.Complete(const AValue: T);
 begin
   (FMutex as IMutex).Acquire;
   try
-    if FState <> fsPending then
+    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
       raise EInvalidOperationError.Create('future already resolved');
     FValue := AValue;
-    FState := fsCompleted;
+    AtomicStore32(FState, Int32(Ord(fsCompleted)), moRelease);
   finally
     (FMutex as IMutex).Release;
   end;
@@ -107,11 +114,11 @@ procedure TFuturePromise.Fail(const AError: Exception);
 begin
   (FMutex as IMutex).Acquire;
   try
-    if FState <> fsPending then
+    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
       raise EInvalidOperationError.Create('future already resolved');
     FErrorClass := ExceptClass(AError.ClassType);
     FErrorMsg := AError.Message;
-    FState := fsFailed;
+    AtomicStore32(FState, Int32(Ord(fsFailed)), moRelease);
   finally
     (FMutex as IMutex).Release;
   end;
@@ -123,9 +130,9 @@ procedure TFuturePromise.Cancel;
 begin
   (FMutex as IMutex).Acquire;
   try
-    if FState <> fsPending then
+    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
       Exit;
-    FState := fsCancelled;
+    AtomicStore32(FState, Int32(Ord(fsCancelled)), moRelease);
   finally
     (FMutex as IMutex).Release;
   end;
