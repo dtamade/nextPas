@@ -15,6 +15,19 @@ type
       out APath: string; out AContent: string): Boolean;
   end;
 
+  TFileIncludeResolver = class(TInterfacedObject, IIncludeResolver)
+  private
+    FSearchPaths: array of string;
+    FSearchCount: LongInt;
+    FBaseDir: string;
+  public
+    constructor Create(const ABaseDir: string);
+    procedure AddSearchPath(const APath: string);
+    function ResolveInclude(const AName: string;
+      const AFromFileId: TCoreId;
+      out APath: string; out AContent: string): Boolean;
+  end;
+
   TDefineEntry = record
     Name: string;
     Value: string;
@@ -250,6 +263,71 @@ begin
   Define('FPC_HAS_FEATURE_WIDESTRINGS');
   Define('FPC_HAS_FEATURE_VARIANTS');
   Define('FPC_HAS_FEATURE_RTTI');
+end;
+
+{ TFileIncludeResolver }
+
+constructor TFileIncludeResolver.Create(const ABaseDir: string);
+begin
+  inherited Create;
+  FBaseDir := ABaseDir;
+  FSearchCount := 0;
+  SetLength(FSearchPaths, 0);
+end;
+
+procedure TFileIncludeResolver.AddSearchPath(const APath: string);
+begin
+  if FSearchCount >= Length(FSearchPaths) then
+    SetLength(FSearchPaths, FSearchCount + 8);
+  FSearchPaths[FSearchCount] := APath;
+  Inc(FSearchCount);
+end;
+
+function TFileIncludeResolver.ResolveInclude(const AName: string;
+  const AFromFileId: TCoreId;
+  out APath: string; out AContent: string): Boolean;
+var
+  I: LongInt;
+  Candidate: string;
+  F: Text;
+  Line: string;
+begin
+  APath := '';
+  AContent := '';
+  Candidate := FBaseDir + DirectorySeparator + AName;
+  if FileExists(Candidate) then
+  begin
+    APath := Candidate;
+    Assign(F, APath);
+    {$I-} Reset(F); {$I+}
+    if IOResult <> 0 then Exit(False);
+    while not System.EOF(F) do
+    begin
+      ReadLn(F, Line);
+      AContent := AContent + Line + #10;
+    end;
+    Close(F);
+    Exit(True);
+  end;
+  for I := 0 to FSearchCount - 1 do
+  begin
+    Candidate := FSearchPaths[I] + DirectorySeparator + AName;
+    if FileExists(Candidate) then
+    begin
+      APath := Candidate;
+      Assign(F, APath);
+      {$I-} Reset(F); {$I+}
+      if IOResult <> 0 then Exit(False);
+      while not System.EOF(F) do
+      begin
+        ReadLn(F, Line);
+        AContent := AContent + Line + #10;
+      end;
+      Close(F);
+      Exit(True);
+    end;
+  end;
+  Result := False;
 end;
 
 { TPreprocessor }
