@@ -286,6 +286,117 @@ begin
   platform_file_unlink(TARGET);
 end;
 
+procedure TestOpenEx;
+var
+  H: TPlatformFileHandle;
+  LWritten, LRead: PtrUInt;
+  LBuf: array[0..31] of AnsiChar;
+  LPos: Int64;
+const
+  PATH = '/tmp/nextpas_test_open_ex.txt';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_file_open_ex(PATH, fomWriteOnly, fcmCreateAlways, True, False, 420, H) = 0, 'open_ex append');
+  platform_file_write(H, PAnsiChar('AAA'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_open_ex(PATH, fomWriteOnly, fcmOpenExisting, True, False, 420, H) = 0, 'open_ex append 2');
+  platform_file_write(H, PAnsiChar('BBB'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_open(PATH, fomReadOnly, fcmOpenExisting, H) = 0, 'open read');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  platform_file_read(H, @LBuf[0], 6, LRead);
+  platform_file_close(H);
+  Check(LRead = 6, 'read 6 bytes');
+  Check(LBuf[0] = 'A', 'first write preserved');
+  Check(LBuf[3] = 'B', 'append worked');
+  platform_file_unlink(PATH);
+end;
+
+procedure TestPreadPwrite;
+var
+  H: TPlatformFileHandle;
+  LWritten, LRead: PtrUInt;
+  LBuf: array[0..31] of AnsiChar;
+  LPos: Int64;
+const
+  PATH = '/tmp/nextpas_test_pread.txt';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_file_open(PATH, fomReadWrite, fcmCreateAlways, H) = 0, 'open');
+  platform_file_write(H, PAnsiChar('ABCDEFGH'), 8, LWritten);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_file_pread(H, @LBuf[0], 3, 2, LRead) = 0, 'pread');
+  Check(LRead = 3, 'pread 3 bytes');
+  Check(LBuf[0] = 'C', 'pread offset correct');
+  Check(LBuf[2] = 'E', 'pread end correct');
+  Check(platform_file_pwrite(H, PAnsiChar('XY'), 2, 4, LWritten) = 0, 'pwrite');
+  Check(LWritten = 2, 'pwrite 2 bytes');
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Check(platform_file_pread(H, @LBuf[0], 8, 0, LRead) = 0, 'pread full');
+  Check(LBuf[4] = 'X', 'pwrite at offset 4');
+  Check(LBuf[5] = 'Y', 'pwrite at offset 5');
+  Check(LBuf[0] = 'A', 'original data preserved');
+  platform_file_seek(H, 0, fsoCurrent, LPos);
+  Check(LPos = 8, 'file position unchanged by pread/pwrite');
+  platform_file_close(H);
+  platform_file_unlink(PATH);
+end;
+
+procedure TestFstat;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LStat: TPlatformFileStat;
+const
+  PATH = '/tmp/nextpas_test_fstat.txt';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_file_open(PATH, fomReadWrite, fcmCreateAlways, H) = 0, 'open');
+  platform_file_write(H, PAnsiChar('hello'), 5, LWritten);
+  Check(platform_file_fstat(H, LStat) = 0, 'fstat');
+  Check(LStat.Size = 5, 'fstat size = 5');
+  Check(LStat.FileType = ftRegular, 'fstat type = regular');
+  platform_file_close(H);
+  platform_file_unlink(PATH);
+end;
+
+procedure TestChmod;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LStat: TPlatformFileStat;
+const
+  PATH = '/tmp/nextpas_test_chmod.txt';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H) = 0, 'open');
+  platform_file_write(H, PAnsiChar('x'), 1, LWritten);
+  platform_file_close(H);
+  Check(platform_file_chmod(PATH, 292) = 0, 'chmod 0444');
+  Check(platform_file_stat(PATH, LStat) = 0, 'stat after chmod');
+  Check((LStat.Mode and 511) = 292, 'mode = 0444');
+  Check(platform_file_chmod(PATH, 420) = 0, 'chmod 0644 restore');
+  platform_file_unlink(PATH);
+end;
+
+procedure TestTruncatePath;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LStat: TPlatformFileStat;
+const
+  PATH = '/tmp/nextpas_test_truncpath.txt';
+begin
+  platform_file_unlink(PATH);
+  Check(platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H) = 0, 'open');
+  platform_file_write(H, PAnsiChar('0123456789'), 10, LWritten);
+  platform_file_close(H);
+  Check(platform_file_truncate_path(PATH, 4) = 0, 'truncate_path to 4');
+  Check(platform_file_stat(PATH, LStat) = 0, 'stat');
+  Check(LStat.Size = 4, 'size = 4 after truncate_path');
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -305,5 +416,12 @@ begin
   T.Run('file lock exclusive', @TestLockExclusive);
   T.Run('file trylock conflict', @TestTrylockConflict);
   T.Run('symlink/readlink', @TestSymlinkReadlink);
+  T.Run('open_ex append', @TestOpenEx);
+  T.Run('pread/pwrite', @TestPreadPwrite);
+  T.Run('fstat', @TestFstat);
+  T.Run('chmod', @TestChmod);
+  T.Run('truncate_path', @TestTruncatePath);
+  T.Summary;
+end.
   T.Summary;
 end.
