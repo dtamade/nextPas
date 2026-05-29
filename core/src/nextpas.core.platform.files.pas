@@ -39,6 +39,8 @@ function platform_file_chdir(const APath: PAnsiChar): Int32;
 function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
+function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
@@ -458,6 +460,29 @@ begin
     Result := 0
   else
     Result := platform_get_errno;
+end;
+
+function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
+begin
+  if symlink(ATarget, ALinkPath) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+var
+  LResult: PtrInt;
+begin
+  ALen := 0;
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LResult := readlink(APath, ABuf, ABufLen - 1);
+  if LResult < 0 then
+    Exit(platform_get_errno);
+  ABuf[LResult] := #0;
+  ALen := Int32(LResult);
+  Result := 0;
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
@@ -1016,24 +1041,118 @@ begin
     Result := Int32(GetLastError);
 end;
 
+function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
+begin
+  Result := Int32(GetLastError);
+  if not CreateSymbolicLinkA(ALinkPath, ATarget, 0) then
+    Result := Int32(GetLastError)
+  else
+    Result := 0;
+end;
+
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32;
+var
+  LHandle: HANDLE;
+  LBytesReturned: DWORD;
+begin
+  ALen := 0;
+  if (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LHandle := CreateFileA(APath, 0, FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+    nil, OPEN_EXISTING, $02200000, nil);
+  if LHandle = HANDLE(PtrInt(-1)) then
+    Exit(Int32(GetLastError));
+  LBytesReturned := GetFinalPathNameByHandleA(LHandle, ABuf, DWORD(ABufLen - 1), 0);
+  CloseHandle(LHandle);
+  if (LBytesReturned = 0) or (Int32(LBytesReturned) >= ABufLen) then
+    Exit(Int32(GetLastError));
+  ABuf[LBytesReturned] := #0;
+  ALen := Int32(LBytesReturned);
+  Result := 0;
+end;
+
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+var
+  LPattern: array[0..MAX_PATH + 2] of AnsiChar;
+  LLen: Int32;
 begin
   FillChar(AHandle, SizeOf(AHandle), 0);
   AHandle.FindHandle := HANDLE(PtrInt(-1));
   AHandle.First := True;
   AHandle.Finished := False;
+
+  LLen := 0;
+  while (LLen < MAX_PATH - 2) and (APath[LLen] <> #0) do
+  begin
+    LPattern[LLen] := APath[LLen];
+    Inc(LLen);
+  end;
+  if (LLen > 0) and (LPattern[LLen - 1] <> '\') and (LPattern[LLen - 1] <> '/') then
+  begin
+    LPattern[LLen] := '\';
+    Inc(LLen);
+  end;
+  LPattern[LLen] := '*';
+  Inc(LLen);
+  LPattern[LLen] := #0;
+
+  AHandle.FindHandle := FindFirstFileA(@LPattern[0], @AHandle.FindData);
+  if AHandle.FindHandle = HANDLE(PtrInt(-1)) then
+  begin
+    AHandle.Finished := True;
+    Result := Int32(GetLastError);
+    Exit;
+  end;
   Result := 0;
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
+var
+  LNamePtr: PAnsiChar;
+  LNameLen: Int32;
 begin
   FillChar(AEntry, SizeOf(AEntry), 0);
   if AHandle.Finished then
+    Exit(1);
+
+  while True do
   begin
-    Result := 1;
+    if not AHandle.First then
+    begin
+      if not FindNextFileA(AHandle.FindHandle, @AHandle.FindData) then
+      begin
+        AHandle.Finished := True;
+        Exit(1);
+      end;
+    end;
+    AHandle.First := False;
+
+    LNamePtr := @AHandle.FindData.cFileName[0];
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
+      Continue;
+    if (LNamePtr[0] = '.') and (LNamePtr[1] = '.') and (LNamePtr[2] = #0) then
+      Continue;
+
+    LNameLen := 0;
+    while (LNameLen < 255) and (LNamePtr[LNameLen] <> #0) do
+    begin
+      AEntry.Name[LNameLen] := LNamePtr[LNameLen];
+      Inc(LNameLen);
+    end;
+    AEntry.Name[LNameLen] := #0;
+    AEntry.NameLen := LNameLen;
+    AEntry.Ino := 0;
+
+    if (AHandle.FindData.dwFileAttributes and $400) <> 0 then
+      AEntry.FileType := ftSymlink
+    else if (AHandle.FindData.dwFileAttributes and $10) <> 0 then
+      AEntry.FileType := ftDirectory
+    else
+      AEntry.FileType := ftRegular;
+
+    Result := 0;
     Exit;
   end;
-  Result := 1;
 end;
 
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
@@ -1072,6 +1191,8 @@ function platform_file_chdir(const APath: PAnsiChar): Int32; begin Result := -1;
 function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32; begin Result := -1; end;
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
+function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := -1; end;
+function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufLen: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := -1; end;
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32; begin FillChar(AHandle, SizeOf(AHandle), 0); Result := -1; end;
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32; begin FillChar(AEntry, SizeOf(AEntry), 0); Result := 1; end;
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32; begin Result := -1; end;

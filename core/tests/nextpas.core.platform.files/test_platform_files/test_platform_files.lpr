@@ -261,6 +261,31 @@ begin
   platform_file_unlink('/tmp/nextpas_trylock.tmp');
 end;
 
+procedure TestSymlinkReadlink;
+var
+  H: TPlatformFileHandle;
+  LWritten: PtrUInt;
+  LBuf: array[0..1023] of AnsiChar;
+  LLen: Int32;
+const
+  TARGET = '/tmp/nextpas_readlink_target.txt';
+  LINK = '/tmp/nextpas_readlink_link.txt';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('abc'), 3, LWritten);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0, 'symlink create');
+  Check(platform_file_readlink(LINK, @LBuf[0], SizeOf(LBuf), LLen) = 0, 'readlink');
+  Check(LLen = Length(TARGET), 'readlink len');
+  LBuf[LLen] := #0;
+  Check(LBuf[0] = '/', 'readlink starts with /');
+  Check(CompareMem(@LBuf[0], @TARGET[1], LLen), 'readlink content matches target');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.files');
   T.Run('open/create/close', @TestOpenCreateClose);
@@ -279,5 +304,6 @@ begin
   T.Run('create exclusive', @TestCreateExclusive);
   T.Run('file lock exclusive', @TestLockExclusive);
   T.Run('file trylock conflict', @TestTrylockConflict);
+  T.Run('symlink/readlink', @TestSymlinkReadlink);
   T.Summary;
 end.
