@@ -21,7 +21,11 @@ L1 是框架的基础设施层，只依赖 L0（base/errors/platform/mem）。
 | `id` | UUID/ULID/Snowflake/NanoID | ✅ 已有 (15 tests) |
 | `testing` | 测试框架 | ✅ 已有 (TTestRunner) |
 
-## 当前焦点：text 模块完善
+## L2 模块状态
+
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `fs` | 文件系统 (IFile/IDirIterator/Path/Walk) | ✅ 完成 (24 tests, bench, 0 leaks) |
 
 ### T1: 基础字符串操作 ✅
 - [x] Trim/Split/Join/Replace/Case/Pad/Repeat/IndexOf
