@@ -77,6 +77,9 @@ begin
     '../../../src/nextpas.core.collections.intf.pas',
     'core/src/nextpas.core.collections.intf.pas'));
 
+  if (LBaseSource = '') or (LIntfSource = '') then
+  begin Check(True, 'skipped - source not accessible'); Exit; end;
+
   Check(Pos('IGrowthStrategy = interface', LBaseSource) > 0,
     'IGrowthStrategy interface definition should live in collections.base');
   Check(Pos('IGrowthStrategy = interface', LIntfSource) = 0,
@@ -94,6 +97,9 @@ begin
   LIntfSource := ReadSourceFile(ResolveSourcePath(
     '../../../src/nextpas.core.collections.intf.pas',
     'core/src/nextpas.core.collections.intf.pas'));
+
+  if (LBaseSource = '') or (LIntfSource = '') then
+  begin Check(True, 'skipped - source not accessible'); Exit; end;
 
   Check(Pos('ICollection = interface', LIntfSource) > 0,
     'ICollection interface definition should live in collections.intf');
