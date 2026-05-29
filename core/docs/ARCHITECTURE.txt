@@ -1,0 +1,111 @@
+nextpas.core.simd — Architecture Overview
+==========================================
+
+Last updated: 2026-05-30
+
+This document is the entry point for developers working on the SIMD module.
+Read this first, then dive into specific files as needed.
+
+
+1. Layer Diagram
+----------------
+
+  Consumer code (hashmap, text, nn, linalg, ...)
+       |
+       |--- uses nextpas.core.simd (main facade, 700+ functions)
+       |         |
+       |         +-- dispatch table (runtime backend selection)
+       |         |     SSE2 -> AVX2 -> AVX-512 -> NEON -> RISC-V V
+       |         |
+       |         +-- facade functions (MemEqual, ToLowerAscii, ...)
+       |               dispatched via function pointers
+       |
+       |--- uses nextpas.core.simd.vec16/32/64 (hot-path inline primitives)
+                  |
+                  +-- compile-time platform selection ({$IFDEF})
+                  +-- zero dispatch overhead
+                  +-- used by SwissTable hashmap, text scanner
+
+
+2. Key Units
+------------
+
+  nextpas.core.simd.pas        Main facade. Exports all vector ops + facade functions.
+  nextpas.core.simd.base.pas   Type definitions (TVecF32x4, TMask16, etc.)
+  nextpas.core.simd.dispatch.pas  Dispatch table, backend registration, control plane.
+  nextpas.core.simd.scalar.pas    Scalar reference implementations (fallback).
+  nextpas.core.simd.sse2.pas      SSE2 backend (x86-64 baseline).
+  nextpas.core.simd.avx2.pas      AVX2 backend.
+  nextpas.core.simd.avx512.pas    AVX-512 backend.
+  nextpas.core.simd.neon.pas      ARM NEON backend.
+  nextpas.core.simd.riscvv.pas    RISC-V Vector backend.
+  nextpas.core.simd.vec16.pas     Hot-path 16-byte inline primitives.
+  nextpas.core.simd.vec32.pas     Hot-path 32-byte inline primitives (-dHAS_AVX2).
+  nextpas.core.simd.vec64.pas     Hot-path 64-byte inline primitives (-dHAS_AVX512).
+  nextpas.core.simd.mask.pas      Shared mask operations (All/Any/None/FirstSet).
+  nextpas.core.simd.mathutil.pas  Single-precision math (Sin/Cos/ArcTan2/Ln/Exp).
+  nextpas.core.simd.cpuinfo.pas   Runtime CPU feature detection.
+
+
+3. Dispatch vs vec16 — When to Use Which
+-----------------------------------------
+
+  Dispatch (nextpas.core.simd):
+    - Bulk operations on entire buffers (MemEqual, ToLowerAscii, Utf8Validate)
+    - One indirect call per invocation, amortized over large data
+    - Runtime backend selection (best available ISA)
+
+  vec16/32/64:
+    - Hot inner loops processing 16/32/64 bytes per iteration
+    - Direct function call (no dispatch overhead)
+    - Compile-time platform selection
+    - Used by: SwissTable probe, text scanner, custom SIMD loops
+
+
+4. Backend Registration Flow
+-----------------------------
+
+  1. FillBaseDispatchTable() fills all slots with scalar fallbacks
+  2. Each backend calls RegisterBackend() in its initialization section
+  3. Higher-tier backends use CloneDispatchTable() to inherit from lower tiers
+     (e.g., AVX-512 clones from AVX2, only overrides 512-bit slots)
+  4. InitializeDispatch() selects the best available backend as active
+
+
+5. Code Generation (simdgen)
+-----------------------------
+
+  tools/simdgen/simdgen.py generates scalar implementations from JSON definitions.
+  Source of truth: tools/simdgen/ops/*.json
+
+  To regenerate:  python3 tools/simdgen/simdgen.py
+  To verify:      python3 tools/simdgen/simdgen.py --verify
+  To audit:       python3 tools/simdgen/simdgen_verify_slots.py
+
+  Generated files live in src/generated/ and are {$I}'d by scalar.pas.
+
+
+6. Adding a New Operation
+--------------------------
+
+  1. Add slot to dispatch.table.inc
+  2. Add scalar implementation to scalar.pas (or via simdgen JSON)
+  3. Add to baseline.inc (FillBaseDispatchTable)
+  4. Implement in relevant backends (sse2, avx2, etc.)
+  5. Register in backend's register.inc
+  6. Export via facade in nextpas.core.simd.pas (interface + implementation)
+  7. Add test
+
+
+7. Platform Support
+--------------------
+
+  Compile-time defines:
+    CPUX86_64          x86-64 (SSE2 baseline always available)
+    HAS_AVX2           Enable AVX2 vec32 hot-path
+    HAS_AVX512         Enable AVX-512 vec64 hot-path
+    CPUAARCH64         ARM 64-bit (NEON)
+    CPURISCV64         RISC-V 64-bit (RVV)
+
+  All nostackframe asm functions have {$IFDEF UNIX}/{$ELSE} branches
+  for correct Windows x64 ABI support.

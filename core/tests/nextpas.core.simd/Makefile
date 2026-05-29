@@ -8,7 +8,7 @@ FPC_FLAGS += -FE$(BUILD_DIR)
 RUNNER := nextpas.core.simd.test
 VEC_TEST := test_vec_all
 
-.PHONY: test test-vec test-all bench clean
+.PHONY: test test-vec test-all bench audit clean
 
 test:
 	@mkdir -p $(BUILD_DIR)
@@ -20,7 +20,11 @@ test-vec:
 	$(FPC) $(FPC_FLAGS) -B $(VEC_TEST).pas
 	$(BUILD_DIR)/$(VEC_TEST)
 
-test-all: test test-vec
+test-all: test test-vec audit
+
+audit:
+	python3 $(CORE_ROOT)/tools/simdgen/simdgen.py --verify
+	python3 $(CORE_ROOT)/tools/simdgen/simdgen_verify_slots.py
 
 bench:
 	@mkdir -p $(BUILD_DIR)
