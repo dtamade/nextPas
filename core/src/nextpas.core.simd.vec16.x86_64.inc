@@ -154,3 +154,32 @@ begin
       AData[i] := AData[i] - ADelta;
   {$POP}
 end;
+
+procedure Vec16ProbeGroup(AData: PByte; AH2: Byte; out AMatchMask, AEmptyMask: TMask16); inline;
+begin
+  AMatchMask := 0;
+  AEmptyMask := 0;
+  asm
+    mov rax, AData
+    movdqu xmm2, [rax]           // 一次加载 16 字节 ctrl group
+
+    // h2 match: broadcast AH2, compare equal
+    movzx edx, AH2
+    movd xmm0, edx
+    punpcklbw xmm0, xmm0
+    pshuflw xmm0, xmm0, 0
+    punpcklqdq xmm0, xmm0
+    movdqa xmm1, xmm2
+    pcmpeqb xmm1, xmm0
+    pmovmskb eax, xmm1
+    mov rdx, AMatchMask
+    mov [rdx], ax
+
+    // empty match: compare with $FF (all-ones)
+    pcmpeqd xmm0, xmm0           // xmm0 = all $FF
+    pcmpeqb xmm0, xmm2
+    pmovmskb eax, xmm0
+    mov rdx, AEmptyMask
+    mov [rdx], ax
+  end;
+end;
