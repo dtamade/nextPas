@@ -5,7 +5,9 @@ unit nextpas.core.text;
 interface
 
 uses
-  nextpas.core.text.base;
+  nextpas.core.text.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   TStringArray = nextpas.core.text.base.TStringArray;
@@ -41,10 +43,36 @@ function TextIsBlank(const AValue: string): Boolean;
 function TextUTF8Length(const AValue: string): Integer;
 function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 
+{ Number conversion (from text.conv) }
+function IntToStr(const AValue: Int64): string; inline;
+function UIntToStr(const AValue: UInt64): string; inline;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+function StrToInt(const AStr: string): Int64; inline;
+function TryStrToInt(const AStr: string; out AValue: Int64): Boolean; inline;
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean; inline;
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean; inline;
+function FloatToStr(const AValue: Double): string; inline;
+function TryStrToFloat(const AStr: string; out AValue: Double): Boolean; inline;
+function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
+
+{ Formatting (from text.format) }
+function TextFormat(const AFmt: string; const AArgs: array of const): string;
+
 implementation
 
-uses
-  SysUtils;
+function MemEqual(const A, B: Pointer; const ASize: SizeUInt): Boolean;
+var
+  LI: SizeUInt;
+  LP, LQ: PByte;
+begin
+  if ASize = 0 then Exit(True);
+  LP := PByte(A);
+  LQ := PByte(B);
+  for LI := 0 to ASize - 1 do
+    if LP[LI] <> LQ[LI] then
+      Exit(False);
+  Result := True;
+end;
 
 { Trim }
 
@@ -92,7 +120,7 @@ begin
     Exit(True);
   if Length(AValue) < LPrefixLen then
     Exit(False);
-  Result := CompareMem(@AValue[1], @APrefix[1], LPrefixLen);
+  Result := MemEqual(@AValue[1], @APrefix[1], LPrefixLen);
 end;
 
 function TextEndsWith(const AValue, ASuffix: string): Boolean;
@@ -105,7 +133,7 @@ begin
   if Length(AValue) < LSuffixLen then
     Exit(False);
   LOffset := Length(AValue) - LSuffixLen + 1;
-  Result := CompareMem(@AValue[LOffset], @ASuffix[1], LSuffixLen);
+  Result := MemEqual(@AValue[LOffset], @ASuffix[1], LSuffixLen);
 end;
 
 function TextContains(const AValue, ASubStr: string): Boolean;
@@ -239,7 +267,7 @@ begin
   LPadCount := AWidth - Length(AValue);
   if LPadCount <= 0 then
     Exit(AValue);
-  Result := StringOfChar(APadChar, LPadCount) + AValue;
+  Result := nextpas.core.text.conv.TextOfChar(APadChar, LPadCount) + AValue;
 end;
 
 function TextPadRight(const AValue: string; const AWidth: Integer; const APadChar: Char): string;
@@ -249,7 +277,7 @@ begin
   LPadCount := AWidth - Length(AValue);
   if LPadCount <= 0 then
     Exit(AValue);
-  Result := AValue + StringOfChar(APadChar, LPadCount);
+  Result := AValue + nextpas.core.text.conv.TextOfChar(APadChar, LPadCount);
 end;
 
 { Repeat }
@@ -379,6 +407,65 @@ begin
       Inc(LIdx, 4);
     Inc(LCharIdx);
   end;
+end;
+
+{ Re-export: conv }
+
+function IntToStr(const AValue: Int64): string;
+begin
+  Result := nextpas.core.text.conv.IntToStr(AValue);
+end;
+
+function UIntToStr(const AValue: UInt64): string;
+begin
+  Result := nextpas.core.text.conv.UIntToStr(AValue);
+end;
+
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+begin
+  Result := nextpas.core.text.conv.IntToHex(AValue, ADigits);
+end;
+
+function StrToInt(const AStr: string): Int64;
+begin
+  Result := nextpas.core.text.conv.StrToInt(AStr);
+end;
+
+function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
+begin
+  Result := nextpas.core.text.conv.TryStrToInt(AStr, AValue);
+end;
+
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
+begin
+  Result := nextpas.core.text.conv.TryStrToInt32(AStr, AValue);
+end;
+
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
+begin
+  Result := nextpas.core.text.conv.TryStrToUInt64(AStr, AValue);
+end;
+
+function FloatToStr(const AValue: Double): string;
+begin
+  Result := nextpas.core.text.conv.FloatToStr(AValue);
+end;
+
+function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
+begin
+  Result := nextpas.core.text.conv.TryStrToFloat(AStr, AValue);
+end;
+
+function TextOfChar(const ACh: Char; const ACount: Integer): string;
+begin
+  Result := nextpas.core.text.conv.TextOfChar(ACh, ACount);
+end;
+
+{ Re-export: format }
+
+function TextFormat(const AFmt: string; const AArgs: array of const): string;
+begin
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 end.
