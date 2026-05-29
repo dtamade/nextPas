@@ -11,9 +11,9 @@ const
   SIMD_LN10: Single = 2.30258509299404568402;
 
 var
-  Infinity: Single;
-  NegInfinity: Single;
-  NaN: Single;
+  SimdInfinity: Single;
+  SimdNegInfinity: Single;
+  SimdNaN: Single;
 
 function SimdSinF32(AX: Single): Single;
 function SimdCosF32(AX: Single): Single;
@@ -105,24 +105,31 @@ var
   LI: Int32;
   LM, LM1, LM2, LResult: Single;
   LE: Int32;
+  LSubnormalAdj: Integer;
 const
   LN2: Single = 0.6931471805599453;
 begin
   if AX <= 0 then begin Result := -1e30; Exit; end;
 
-  // Extract exponent and mantissa via integer reinterpretation
+  LSubnormalAdj := 0;
   Move(AX, LI, 4);
+  if (LI and $7F800000) = 0 then
+  begin
+    AX := AX * 8388608.0;
+    Move(AX, LI, 4);
+    LSubnormalAdj := 23;
+  end;
+
   LE := ((LI shr 23) and $FF) - 127;
   LI := (LI and $007FFFFF) or $3F800000;
   Move(LI, LM, 4);
 
-  // ln(m) for m in [1, 2) using Remez polynomial on (m-1)
   LM1 := LM - 1.0;
   LM2 := LM1 * LM1;
   LResult := LM1 * (0.99999994 + LM1 * (-0.49999925 + LM1 * (0.33332880 +
     LM1 * (-0.24999899 + LM1 * (0.20003712 + LM1 * (-0.16650993))))));
 
-  Result := LResult + LE * LN2;
+  Result := LResult + (LE - LSubnormalAdj) * LN2;
 end;
 
 function SimdTruncF32(AX: Single): SizeUInt; inline;
@@ -154,6 +161,7 @@ function SimdFloorF32(AX: Single): Single; inline;
 var
   LI: Int32;
 begin
+  if System.Abs(AX) >= 8388608.0 then begin Result := AX; Exit; end;
   LI := System.Trunc(AX);
   if (AX < 0) and (AX <> LI) then Dec(LI);
   Result := LI;
@@ -163,6 +171,7 @@ function SimdCeilF32(AX: Single): Single; inline;
 var
   LI: Int32;
 begin
+  if System.Abs(AX) >= 8388608.0 then begin Result := AX; Exit; end;
   LI := System.Trunc(AX);
   if (AX > 0) and (AX <> LI) then Inc(LI);
   Result := LI;
@@ -173,9 +182,16 @@ function SimdPowerF32(ABase, AExp: Single): Single;
 var
   LLn: Single;
 begin
-  if ABase <= 0 then begin Result := 0; Exit; end;
+  if ABase = 0 then
+  begin
+    if AExp = 0 then begin Result := 1.0; Exit; end;
+    if AExp > 0 then begin Result := 0.0; Exit; end;
+    Result := SimdInfinity;
+    Exit;
+  end;
+  if ABase < 0 then begin Result := SimdNaN; Exit; end;
   LLn := SimdLnF32(ABase);
-  Result := System.Exp(LLn * AExp);
+  Result := Single(System.Exp(LLn * AExp));
 end;
 
 function Min(AA, AB: Single): Single; inline; overload;
@@ -276,7 +292,7 @@ var
 begin
   LNeg := AX < 0;
   if LNeg then AX := -AX;
-  if AX > 1.0 then begin Result := NaN; Exit; end;
+  if AX > 1.0 then begin Result := SimdNaN; Exit; end;
 
   if AX <= 0.5 then
   begin
@@ -355,8 +371,8 @@ begin
 end;
 
 initialization
-  UInt32((@Infinity)^) := $7F800000;
-  UInt32((@NegInfinity)^) := $FF800000;
-  UInt32((@NaN)^) := $7FC00000;
+  UInt32((@SimdInfinity)^) := $7F800000;
+  UInt32((@SimdNegInfinity)^) := $FF800000;
+  UInt32((@SimdNaN)^) := $7FC00000;
 
 end.

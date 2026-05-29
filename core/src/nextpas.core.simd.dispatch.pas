@@ -217,7 +217,7 @@ var
   // Readers that see g_DispatchState=0 during a control-plane batch rebuild
   // must not initialize against the half-rebuilt backend set.
   g_DispatchBatchRebuildState: LongInt = 0;
-  g_DispatchControlPlaneInitialized: Boolean = False;
+  g_DispatchControlPlaneInitialized: LongInt = 0;
 
 // === Initialization ===
 
@@ -268,7 +268,7 @@ end;
 
 procedure EnsureDispatchControlPlaneInitialized;
 begin
-  if g_DispatchControlPlaneInitialized then
+  if InterlockedCompareExchange(g_DispatchControlPlaneInitialized, 1, 0) <> 0 then
     Exit;
 
   InitializeDefaultBackendTexts;
@@ -276,7 +276,6 @@ begin
   g_DispatchHooksLock := Default(TRTLCriticalSection);
   InitCriticalSection(g_VectorAsmToggleLock);
   InitCriticalSection(g_DispatchHooksLock);
-  g_DispatchControlPlaneInitialized := True;
 end;
 
 procedure EnsureUniqueBackendInfoText(var aInfo: TSimdBackendInfo); inline;
@@ -1126,11 +1125,11 @@ initialization
 finalization
   FinalizeDispatchPublishedStates;
   SetLength(g_DispatchChangedHooks, 0);
-  if g_DispatchControlPlaneInitialized then
+  if g_DispatchControlPlaneInitialized <> 0 then
   begin
     DoneCriticalSection(g_DispatchHooksLock);
     DoneCriticalSection(g_VectorAsmToggleLock);
-    g_DispatchControlPlaneInitialized := False;
+    g_DispatchControlPlaneInitialized := 0;
   end;
 
 end.

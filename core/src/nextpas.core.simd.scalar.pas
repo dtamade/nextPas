@@ -3498,7 +3498,7 @@ end;
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
-  if aCount = 0 then Exit;
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
     aDst[i] := Single(System.Exp(aSrc[i]));
 end;
@@ -3506,7 +3506,7 @@ end;
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
-  if aCount = 0 then Exit;
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
     aDst[i] := Single(System.Ln(aSrc[i]));
 end;
@@ -3522,7 +3522,7 @@ end;
 procedure ScalarArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
-  if aCount = 0 then Exit;
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
     aDst[i] := Single(System.Sin(aSrc[i]));
 end;
@@ -3530,7 +3530,7 @@ end;
 procedure ScalarArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var i: SizeUInt;
 begin
-  if aCount = 0 then Exit;
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
     aDst[i] := Single(System.Cos(aSrc[i]));
 end;

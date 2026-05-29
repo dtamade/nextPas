@@ -155,3 +155,60 @@ python3 tools/simdgen/simdgen.py --audit
 | `docs/SIMD_INTRINSICS_DISPOSITION.md` | 各 intrinsics 单元状态 |
 | `docs/SIMD_BACKEND_TRUTH.md` | 后端真相源表 |
 | `docs/SIMD_SSE2_MIGRATION_MAP.md` | SSE2 迁移分桶图 |
+
+## 热路径 inline 原语层 (vec16/32/64)
+
+> 新增于 2026-05-29
+
+### 设计理念
+
+dispatch 表适合批量操作（MemEqual 处理整个 buffer，一次间接调用开销可忽略），
+但热路径内循环（如 SwissTable 每次 probe、text scanner 每 16 字节）不能承受
+间接调用开销。vec16/32/64 提供编译期平台选择的 inline 原语，零开销。
+
+### 架构位置
+
+```
+消费者 (hashmap.swiss, text.scanner, ...)
+    │
+    ▼
+vec16/32/64 inline 原语层 (编译期选平台，全 inline)
+    │
+    ├── vec16.x86_64.inc  (SSE2 asm, 始终可用)
+    ├── vec32.avx2.inc    (AVX2 asm, -dHAS_AVX2)
+    ├── vec64.avx512.inc  (AVX-512 asm, -dHAS_AVX512)
+    └── *.scalar.inc      (纯 Pascal fallback)
+```
+
+### 使用方式
+
+```pascal
+uses nextpas.core.simd.vec16;  // 或 vec32, vec64
+
+var mask: TMask16;
+begin
+  mask := Vec16CmpEq(@data[0], needle);  // 16 字节比较，返回 bitmask
+  if mask <> 0 then
+    idx := Vec16Ctz(mask);               // 第一个匹配位置
+end;
+```
+
+### 接口清单 (每个宽度相同)
+
+| 函数 | 语义 |
+|------|------|
+| `VecNCmpEq(data, value)` | 逐字节相等比较 → bitmask |
+| `VecNCmpEq2(data, pattern)` | 两块数据逐字节比较 |
+| `VecNCmpLtU(data, threshold)` | 无符号小于 |
+| `VecNCmpGtU(data, threshold)` | 无符号大于 |
+| `VecNCmpRange(data, lo, hi)` | 范围检测 [lo, hi] |
+| `VecNCtz(mask)` | 第一个 set bit，-1 if 0 |
+| `VecNPopcnt(mask)` | set bit 计数 |
+| `VecNAddWhere(data, mask, delta)` | 条件字节加法 |
+| `VecNSubWhere(data, mask, delta)` | 条件字节减法 |
+
+### 与 dispatch 层的关系
+
+- dispatch 层：处理"给我整个 buffer 的结果"（ToLowerAscii, MemEqual）
+- vec16/32/64 层：处理"给我这 N 字节的 mask"（probe, scan）
+- 两者互补，不重叠。dispatch 后端内部可以使用相同的算法模式。
