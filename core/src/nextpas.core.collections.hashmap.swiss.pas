@@ -111,8 +111,28 @@ function TSwissTable.KeyHash(const AKey: K): UInt32;
 var
   p: Pointer;
 begin
-  if Assigned(FHash) then Exit(FHash(AKey));
   p := @AKey;
+  // 编译期特化：ordinal/基本类型直接计算，绕过 FHash 指针检查
+  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
+     (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
+     (GetTypeKind(K) = tkEnumeration) then
+  begin
+    case SizeOf(K) of
+      1: Exit(HashOfUInt32(PByte(p)^));
+      2: Exit(HashOfUInt32(PWord(p)^));
+      4: Exit(HashOfUInt32(PUInt32(p)^));
+      8: Exit(HashOfUInt64(PQWord(p)^));
+    end;
+  end;
+  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+    Exit(HashOfUInt64(PQWord(p)^));
+
+  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
+    Exit(HashOfAnsiString(PAnsiString(p)^));
+  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
+    Exit(HashOfUnicodeString(PUnicodeString(p)^));
+
+  if Assigned(FHash) then Exit(FHash(AKey));
   case SizeOf(K) of
     1: Result := HashOfUInt32(PByte(p)^);
     2: Result := HashOfUInt32(PWord(p)^);
@@ -125,6 +145,21 @@ end;
 
 function TSwissTable.KeysEqual(const L, R: K): Boolean;
 begin
+  // 编译期特化：ordinal 类型直接整数比较，绕过 FEquals 指针检查
+  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
+     (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
+     (GetTypeKind(K) = tkEnumeration) then
+  begin
+    case SizeOf(K) of
+      1: Exit(PByte(@L)^ = PByte(@R)^);
+      2: Exit(PWord(@L)^ = PWord(@R)^);
+      4: Exit(PUInt32(@L)^ = PUInt32(@R)^);
+      8: Exit(PQWord(@L)^ = PQWord(@R)^);
+    end;
+  end;
+  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+    Exit(PQWord(@L)^ = PQWord(@R)^);
+
   if Assigned(FEquals) then Exit(FEquals(L, R));
   Result := L = R;
 end;
@@ -211,8 +246,8 @@ end;
 function TSwissTable.FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
 var
   Lh2: Byte;
-  LGroupIdx, LProbeOfs, Li: SizeUInt;
-  LMask, LEmptyMask: TGroupMask;
+  LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
+  LMask, LEmptyMask: TMask16;
   LBit: Integer;
 begin
   if FCapacity = 0 then begin AIndex := 0; Exit(False); end;
@@ -223,11 +258,12 @@ begin
 
   while True do
   begin
-    LMask := MatchGroup(@FCtrl[LGroupIdx * GROUP_SIZE], Lh2);
+    LBase := LGroupIdx * GROUP_SIZE;
+    LMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := GroupMaskFirstSet(LMask);
-      Li := LGroupIdx * GROUP_SIZE + SizeUInt(LBit);
+      LBit := MicroCtz16(LMask);
+      Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
         AIndex := Li;
@@ -236,10 +272,10 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := MatchEmpty(@FCtrl[LGroupIdx * GROUP_SIZE]);
+    LEmptyMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], CTRL_EMPTY);
     if LEmptyMask <> 0 then
     begin
-      AIndex := LGroupIdx * GROUP_SIZE + SizeUInt(GroupMaskFirstSet(LEmptyMask));
+      AIndex := LBase + SizeUInt(MicroCtz16(LEmptyMask));
       Exit(False);
     end;
 
@@ -299,7 +335,9 @@ begin
         Lh := KeyHash(LOldSlots[i].Key);
         LIdx := FindInsertSlot(Lh);
         SetCtrl(LIdx, Lh and $7F);
-        FSlots[LIdx] := LOldSlots[i];
+        // 所有权转移：用 Move 把旧 slot 的内容（含 managed 引用）搬到新 slot，
+        // 不触发 refcount 增减。旧 slot 内存随后整块释放，无需 finalize。
+        Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
         Inc(FCount);
         Dec(FGrowthLeft);
       end;
@@ -381,8 +419,8 @@ function TSwissTable.AddOrAssign(const AKey: K; const AValue: V): Boolean;
 var
   Lh: UInt32;
   Lh2: Byte;
-  LGroupIdx, LProbeOfs, Li, LInsertIdx: SizeUInt;
-  LMask, LEmptyMask: TGroupMask;
+  LGroupIdx, LProbeOfs, Li, LInsertIdx, LBase: SizeUInt;
+  LMask, LEmptyMask: TMask16;
   LBit: Integer;
   LFoundInsert: Boolean;
 begin
@@ -398,11 +436,12 @@ begin
 
   while True do
   begin
-    LMask := MatchGroup(@FCtrl[LGroupIdx * GROUP_SIZE], Lh2);
+    LBase := LGroupIdx * GROUP_SIZE;
+    LMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], Lh2);
     while LMask <> 0 do
     begin
-      LBit := GroupMaskFirstSet(LMask);
-      Li := LGroupIdx * GROUP_SIZE + SizeUInt(LBit);
+      LBit := MicroCtz16(LMask);
+      Li := LBase + SizeUInt(LBit);
       if KeysEqual(FSlots[Li].Key, AKey) then
       begin
         if System.IsManagedType(V) then
@@ -413,26 +452,29 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
+    LEmptyMask := MicroCmpEqU8x16_Asm(@FCtrl[LBase], CTRL_EMPTY);
+    if LEmptyMask <> 0 then
+    begin
+      // empty 槽位既是探测链终点，也是首选插入点
+      if not LFoundInsert then
+        LInsertIdx := LBase + SizeUInt(MicroCtz16(LEmptyMask));
+      Break;
+    end;
+
+    // 整组无 empty：检查 deleted 槽位作为插入点（仅首次记录）
     if not LFoundInsert then
     begin
-      LEmptyMask := MatchEmptyOrDeleted(@FCtrl[LGroupIdx * GROUP_SIZE]);
-      if LEmptyMask <> 0 then
+      LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
+      if LMask <> 0 then
       begin
-        LInsertIdx := LGroupIdx * GROUP_SIZE + SizeUInt(GroupMaskFirstSet(LEmptyMask));
+        LInsertIdx := LBase + SizeUInt(MicroCtz16(LMask));
         LFoundInsert := True;
       end;
     end;
 
-    LEmptyMask := MatchEmpty(@FCtrl[LGroupIdx * GROUP_SIZE]);
-    if LEmptyMask <> 0 then
-      Break;
-
     Inc(LProbeOfs);
     LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
-
-  if not LFoundInsert then
-    LInsertIdx := LGroupIdx * GROUP_SIZE + SizeUInt(GroupMaskFirstSet(MatchEmpty(@FCtrl[LGroupIdx * GROUP_SIZE])));
 
   SetCtrl(LInsertIdx, Lh2);
   FSlots[LInsertIdx].Key := AKey;
