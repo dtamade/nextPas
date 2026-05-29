@@ -8,6 +8,14 @@ uses
   np_semantic_model, np_hir_types, np_hir_model;
 
 type
+  TAllocaEntry = record
+    Name: string;
+    Value: THIRValueId;
+    TypeId: THIRTypeId;
+    RecordSlots: LongInt;
+    IsVarParam: Boolean;
+  end;
+
   THIRBuilder = class
   private
     FSemaModel: TSemanticModel;
@@ -17,11 +25,8 @@ type
     FBlockTerminated: Boolean;
     FSavedFuncId: THIRFuncId;
     FSavedBlockId: THIRBlockId;
-    FSavedAllocaNames: array of string;
-    FSavedAllocaValues: array of THIRValueId;
-    FSavedAllocaTypes: array of THIRTypeId;
+    FSavedAllocas: array of TAllocaEntry;
     FSavedAllocaCount: LongInt;
-    FSavedVarParamFlags: array of Boolean;
     FSavedBlockNames: array of string;
     FSavedBlockIds: array of THIRBlockId;
     FSavedBlockCount: LongInt;
@@ -34,12 +39,8 @@ type
     FPendingObjectFreeHeapRelease: Boolean;
     FSretValueId: THIRValueId;
 
-    FAllocaNames: array of string;
-    FAllocaValues: array of THIRValueId;
-    FAllocaTypes: array of THIRTypeId;
+    FAllocas: array of TAllocaEntry;
     FAllocaCount: LongInt;
-    FRecordAllocaSlots: array of LongInt;
-    FVarParamFlags: array of Boolean;
 
     FGlobalNames: array of string;
     FGlobalTypes: array of THIRTypeId;
@@ -167,10 +168,7 @@ begin
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
   FPendingObjectFreeHeapRelease := False;
-  SetLength(FAllocaNames, 0);
-  SetLength(FAllocaValues, 0);
-  SetLength(FRecordAllocaSlots, 0);
-  SetLength(FVarParamFlags, 0);
+  SetLength(FAllocas, 0);
   SetLength(FGlobalNames, 0);
   SetLength(FGlobalTypes, 0);
   SetLength(FBlockNames, 0);
@@ -258,38 +256,26 @@ begin
   else
     EmitInstr(Instr);
 
-  if FAllocaCount >= Length(FAllocaNames) then
-  begin
-    SetLength(FAllocaNames, FAllocaCount + 32);
-    SetLength(FAllocaValues, FAllocaCount + 32);
-    SetLength(FAllocaTypes, FAllocaCount + 32);
-    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-    SetLength(FVarParamFlags, FAllocaCount + 32);
-  end;
-  FAllocaNames[FAllocaCount] := AName;
-  FAllocaValues[FAllocaCount] := Instr.ResultId;
-  FAllocaTypes[FAllocaCount] := AType;
-  FRecordAllocaSlots[FAllocaCount] := 0;
-  FVarParamFlags[FAllocaCount] := False;
+  if FAllocaCount >= Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
+  FAllocas[FAllocaCount].Name := AName;
+  FAllocas[FAllocaCount].Value := Instr.ResultId;
+  FAllocas[FAllocaCount].TypeId := AType;
+  FAllocas[FAllocaCount].RecordSlots := 0;
+  FAllocas[FAllocaCount].IsVarParam := False;
   Inc(FAllocaCount);
 end;
 
 procedure THIRBuilder.RegisterAllocaEntry(const AName: string;
   AValue: THIRValueId; AType: THIRTypeId; AIsVarParam: Boolean);
 begin
-  if FAllocaCount >= Length(FAllocaNames) then
-  begin
-    SetLength(FAllocaNames, FAllocaCount + 32);
-    SetLength(FAllocaValues, FAllocaCount + 32);
-    SetLength(FAllocaTypes, FAllocaCount + 32);
-    SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-    SetLength(FVarParamFlags, FAllocaCount + 32);
-  end;
-  FAllocaNames[FAllocaCount] := AName;
-  FAllocaValues[FAllocaCount] := AValue;
-  FAllocaTypes[FAllocaCount] := AType;
-  FRecordAllocaSlots[FAllocaCount] := 0;
-  FVarParamFlags[FAllocaCount] := AIsVarParam;
+  if FAllocaCount >= Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
+  FAllocas[FAllocaCount].Name := AName;
+  FAllocas[FAllocaCount].Value := AValue;
+  FAllocas[FAllocaCount].TypeId := AType;
+  FAllocas[FAllocaCount].RecordSlots := 0;
+  FAllocas[FAllocaCount].IsVarParam := AIsVarParam;
   Inc(FAllocaCount);
 end;
 
@@ -298,8 +284,8 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FAllocaValues[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].Value);
   Result := 0;
 end;
 
@@ -309,8 +295,8 @@ var
   Instr: THIRInstr;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FAllocaValues[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].Value);
   for I := 0 to FGlobalRefCount - 1 do
     if SameText(FGlobalRefCache[I], AName) then
       Exit(FGlobalRefValues[I]);
@@ -342,8 +328,8 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FAllocaTypes[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].TypeId);
   Result := 0;
 end;
 
@@ -352,8 +338,8 @@ var
   I: LongInt;
 begin
   for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocaNames[I], AName) then
-      Exit(FVarParamFlags[I]);
+    if SameText(FAllocas[I].Name, AName) then
+      Exit(FAllocas[I].IsVarParam);
   Result := False;
 end;
 
@@ -1157,14 +1143,6 @@ begin
         Instr.TypeId := GetIntType;
         EmitInstr(Instr);
 
-        if FAllocaCount >= Length(FAllocaNames) then
-        begin
-          SetLength(FAllocaNames, FAllocaCount + 32);
-          SetLength(FAllocaValues, FAllocaCount + 32);
-          SetLength(FAllocaTypes, FAllocaCount + 32);
-          SetLength(FRecordAllocaSlots, FAllocaCount + 32);
-          SetLength(FVarParamFlags, FAllocaCount + 32);
-        end;
         RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetIntType, False);
 
         EmitStore(GetIntType, ParamValueId, Instr.ResultId);
@@ -1325,7 +1303,7 @@ begin
         EmitInstr(Instr);
 
         RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
-        FRecordAllocaSlots[FAllocaCount - 1] := ParamIdx;
+        FAllocas[FAllocaCount - 1].RecordSlots := ParamIdx;
       end;
     end;
   end;
@@ -1551,17 +1529,9 @@ begin
   FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocaNames, FAllocaCount);
-  SetLength(FSavedAllocaValues, FAllocaCount);
-  SetLength(FSavedAllocaTypes, FAllocaCount);
-  SetLength(FSavedVarParamFlags, FAllocaCount);
+  SetLength(FSavedAllocas, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
-  begin
-    FSavedAllocaNames[I] := FAllocaNames[I];
-    FSavedAllocaValues[I] := FAllocaValues[I];
-    FSavedAllocaTypes[I] := FAllocaTypes[I];
-    FSavedVarParamFlags[I] := FVarParamFlags[I];
-  end;
+    FSavedAllocas[I] := FAllocas[I];
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
   SetLength(FSavedBlockIds, FBlockCount);
@@ -1725,13 +1695,10 @@ begin
   FCurrentBlockId := FSavedBlockId;
   FEntryBlockId := FSavedEntryBlockId;
   FAllocaCount := FSavedAllocaCount;
+  if FAllocaCount > Length(FAllocas) then
+    SetLength(FAllocas, FAllocaCount + 32);
   for I := 0 to FSavedAllocaCount - 1 do
-  begin
-    FAllocaNames[I] := FSavedAllocaNames[I];
-    FAllocaValues[I] := FSavedAllocaValues[I];
-    FAllocaTypes[I] := FSavedAllocaTypes[I];
-    FVarParamFlags[I] := FSavedVarParamFlags[I];
-  end;
+    FAllocas[I] := FSavedAllocas[I];
   FBlockCount := FSavedBlockCount;
   for I := 0 to FSavedBlockCount - 1 do
   begin
@@ -2594,17 +2561,9 @@ begin
   FSavedEntryBlockId := FEntryBlockId;
   FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocaNames, FAllocaCount);
-  SetLength(FSavedAllocaValues, FAllocaCount);
-  SetLength(FSavedAllocaTypes, FAllocaCount);
-  SetLength(FSavedVarParamFlags, FAllocaCount);
+  SetLength(FSavedAllocas, FAllocaCount);
   for I := 0 to FAllocaCount - 1 do
-  begin
-    FSavedAllocaNames[I] := FAllocaNames[I];
-    FSavedAllocaValues[I] := FAllocaValues[I];
-    FSavedAllocaTypes[I] := FAllocaTypes[I];
-    FSavedVarParamFlags[I] := FVarParamFlags[I];
-  end;
+    FSavedAllocas[I] := FAllocas[I];
   FSavedBlockCount := FBlockCount;
   SetLength(FSavedBlockNames, FBlockCount);
   SetLength(FSavedBlockIds, FBlockCount);
@@ -2732,10 +2691,10 @@ begin
     Instr.TypeId := GetPtrType;
     EmitInstr(Instr);
     for I := 0 to FAllocaCount - 1 do
-      if SameText(FAllocaNames[I], VarName) then
+      if SameText(FAllocas[I].Name, VarName) then
       begin
-        FAllocaValues[I] := Instr.ResultId;
-        FAllocaTypes[I] := GetPtrType;
+        FAllocas[I].Value := Instr.ResultId;
+        FAllocas[I].TypeId := GetPtrType;
         Break;
       end;
   end;
