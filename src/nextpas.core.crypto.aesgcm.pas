@@ -48,6 +48,23 @@ end;
 
 {$IFDEF CPUX86_64}
 {$ASMMODE INTEL}
+{$CODEALIGN CONSTMIN=16}
+
+const
+  GHASHReflectHi: array[0..15] of Byte = (
+    $00, $80, $40, $C0, $20, $A0, $60, $E0,
+    $10, $90, $50, $D0, $30, $B0, $70, $F0
+  );
+  GHASHReflectLo: array[0..15] of Byte = (
+    $00, $08, $04, $0C, $02, $0A, $06, $0E,
+    $01, $09, $05, $0D, $03, $0B, $07, $0F
+  );
+  GHASHMask0F: array[0..15] of Byte = (
+    $0F, $0F, $0F, $0F, $0F, $0F, $0F, $0F,
+    $0F, $0F, $0F, $0F, $0F, $0F, $0F, $0F
+  );
+
+{$CODEALIGN CONSTMIN=1}
 
 function IsPCLMULAvailable: Boolean; assembler; nostackframe;
 asm
@@ -60,70 +77,79 @@ asm
   pop rbx
 end;
 
-procedure GHASHMultiplyPCLMUL(var ABlock: TAESBlock; const AHashKey: TAESBlock);
-  assembler; nostackframe;
+procedure GHASHUpdatePCLMUL(var AState: TAESBlock; const AHashKey: TAESBlock;
+  AData: PByte; ABlocks: Integer); assembler; nostackframe;
 asm
-  movdqu xmm0, [rdi]
-  movdqu xmm1, [rsi]
+  // rdi=AState, rsi=AHashKey, rdx=AData, ecx=ABlocks
+  test ecx, ecx
+  jle @done
 
-  // Per-byte bit-reverse using dual LUT (no psllw contamination)
-  mov r8, $E060A020C0408000
-  movq xmm2, r8
-  mov r8, $F070B030D0509010
-  movq xmm3, r8
-  punpcklqdq xmm2, xmm3   // LUT_hi: reversed nibble in high position
-  mov r8, $0E060A020C040800
-  movq xmm3, r8
-  mov r8, $0F070B030D050901
-  movq xmm4, r8
-  punpcklqdq xmm3, xmm4   // LUT_lo: reversed nibble in low position
-  mov r8, $0F0F0F0F0F0F0F0F
-  movq xmm7, r8
-  punpcklqdq xmm7, xmm7   // 0x0F mask
+  // Load LUT constants into xmm8-xmm10 (persistent across loop)
+  movdqa xmm8, [rip + GHASHReflectHi]
+  movdqa xmm9, [rip + GHASHReflectLo]
+  movdqa xmm10, [rip + GHASHMask0F]
 
-  // Reflect xmm0
-  movdqa xmm4, xmm0
-  pand xmm4, xmm7
+  // Load and pre-reflect H into xmm11
+  movdqu xmm0, [rsi]
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
   psrlw xmm0, 4
-  pand xmm0, xmm7
-  movdqa xmm5, xmm2
-  pshufb xmm5, xmm4
-  movdqa xmm4, xmm3
-  pshufb xmm4, xmm0
-  por xmm4, xmm5
-  movdqa xmm0, xmm4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2
+  movdqa xmm11, xmm1   // xmm11 = reflected H
 
-  // Reflect xmm1
-  movdqa xmm4, xmm1
-  pand xmm4, xmm7
-  psrlw xmm1, 4
-  pand xmm1, xmm7
-  movdqa xmm5, xmm2
-  pshufb xmm5, xmm4
-  movdqa xmm4, xmm3
-  pshufb xmm4, xmm1
-  por xmm4, xmm5
-  movdqa xmm1, xmm4
+  // Load state and reflect into xmm12 (accumulator in reflected domain)
+  movdqu xmm0, [rdi]
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2
+  movdqa xmm12, xmm1   // xmm12 = reflected state
 
-  // Karatsuba multiplication
+  mov r8d, ecx          // r8d = block counter
+
+@loop:
+  // Load data block, reflect it, XOR into reflected accumulator
+  movdqu xmm0, [rdx]
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2       // xmm1 = reflected data block
+  pxor xmm12, xmm1     // accumulator ^= reflected data
+
+  // Karatsuba: xmm12 * xmm11
+  movdqa xmm0, xmm12
   movdqa xmm2, xmm0
   movdqa xmm3, xmm0
   movdqa xmm4, xmm0
-  pclmulqdq xmm2, xmm1, $00
-  pclmulqdq xmm3, xmm1, $11
-  pclmulqdq xmm4, xmm1, $01
+  pclmulqdq xmm2, xmm11, $00   // low
+  pclmulqdq xmm3, xmm11, $11   // high
+  pclmulqdq xmm4, xmm11, $01   // mid1
   movdqa xmm5, xmm0
-  pclmulqdq xmm5, xmm1, $10
+  pclmulqdq xmm5, xmm11, $10   // mid2
   pxor xmm4, xmm5
   movdqa xmm5, xmm4
   pslldq xmm5, 8
   psrldq xmm4, 8
-  pxor xmm2, xmm5
-  pxor xmm3, xmm4
-  // xmm3:xmm2 = 256-bit product (high:low)
+  pxor xmm2, xmm5              // xmm2 = C_L
+  pxor xmm3, xmm4              // xmm3 = C_H
 
-  // Reduction: fold C_H into C_L using P(x) = x^128 + x^7 + x^2 + x + 1
-  // C_H << 7 (128-bit)
+  // Reduction: P(x) = x^128 + x^7 + x^2 + x + 1
+  // C_H << 7
   movdqa xmm4, xmm3
   movdqa xmm5, xmm3
   psllq xmm4, 7
@@ -173,30 +199,26 @@ asm
   // Result = C_L XOR main XOR overflow
   pxor xmm2, xmm4
   pxor xmm2, xmm5
+  movdqa xmm12, xmm2   // update reflected accumulator
 
-  // Per-byte bit-reverse result back (rebuild LUTs)
-  mov r8, $E060A020C0408000
-  movq xmm3, r8
-  mov r8, $F070B030D0509010
-  movq xmm4, r8
-  punpcklqdq xmm3, xmm4
-  mov r8, $0E060A020C040800
-  movq xmm4, r8
-  mov r8, $0F070B030D050901
-  movq xmm5, r8
-  punpcklqdq xmm4, xmm5
-  mov r8, $0F0F0F0F0F0F0F0F
-  movq xmm7, r8
-  punpcklqdq xmm7, xmm7
-  movdqa xmm5, xmm2
-  pand xmm5, xmm7
-  psrlw xmm2, 4
-  pand xmm2, xmm7
-  movdqa xmm6, xmm3
-  pshufb xmm6, xmm5
-  pshufb xmm4, xmm2
-  por xmm4, xmm6
-  movdqu [rdi], xmm4
+  add rdx, 16
+  dec r8d
+  jnz @loop
+
+  // Un-reflect final accumulator back to normal form
+  movdqa xmm0, xmm12
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2
+  movdqu [rdi], xmm1
+
+@done:
 end;
 
 {$ENDIF}
@@ -338,7 +360,7 @@ begin
     AOutput[I] := T[I] xor Byte(AExpandedKey[ANr * 4 + I div 4] shr (24 - (I mod 4) * 8));
 end;
 
-procedure GHASHMultiply(var AX: TAESBlock; const AH: TAESBlock);
+procedure GHASHMultiplyScalar(var AX: TAESBlock; const LHPtr: TAESBlock);
 var
   V: array[0..15] of Byte;
   Z: array[0..15] of Byte;
@@ -346,15 +368,7 @@ var
   Bit: Byte;
   Carry: Byte;
 begin
-  {$IFDEF CPUX86_64}
-  if UsePCLMUL then
-  begin
-    GHASHMultiplyPCLMUL(AX, AH);
-    Exit;
-  end;
-  {$ENDIF}
-
-  Move(AH[0], V[0], 16);
+  Move(LHPtr[0], V[0], 16);
   FillChar(Z[0], 16, 0);
 
   for I := 0 to 15 do
@@ -376,7 +390,131 @@ begin
   Move(Z[0], AX[0], 16);
 end;
 
-procedure GHASHUpdate(var AState: TAESBlock; const AH: TAESBlock; const AData: TBytes; AOffset, ALen: Integer);
+{$IFDEF CPUX86_64}
+procedure GHASHMultiplyPCLMUL(var ABlock: TAESBlock; const AHashKey: TAESBlock);
+  assembler; nostackframe;
+asm
+  // rdi=ABlock, rsi=AHashKey
+  movdqa xmm8, [rip + GHASHReflectHi]
+  movdqa xmm9, [rip + GHASHReflectLo]
+  movdqa xmm10, [rip + GHASHMask0F]
+
+  // Load and reflect ABlock
+  movdqu xmm0, [rdi]
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2
+  movdqa xmm0, xmm1   // xmm0 = reflected block
+
+  // Load and reflect AHashKey
+  movdqu xmm1, [rsi]
+  movdqa xmm3, xmm1
+  pand xmm3, xmm10
+  psrlw xmm1, 4
+  pand xmm1, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm3
+  movdqa xmm3, xmm9
+  pshufb xmm3, xmm1
+  por xmm3, xmm2
+  movdqa xmm1, xmm3   // xmm1 = reflected H
+
+  // Karatsuba
+  movdqa xmm2, xmm0
+  movdqa xmm3, xmm0
+  movdqa xmm4, xmm0
+  pclmulqdq xmm2, xmm1, $00
+  pclmulqdq xmm3, xmm1, $11
+  pclmulqdq xmm4, xmm1, $01
+  movdqa xmm5, xmm0
+  pclmulqdq xmm5, xmm1, $10
+  pxor xmm4, xmm5
+  movdqa xmm5, xmm4
+  pslldq xmm5, 8
+  psrldq xmm4, 8
+  pxor xmm2, xmm5
+  pxor xmm3, xmm4
+
+  // Reduction
+  movdqa xmm4, xmm3
+  movdqa xmm5, xmm3
+  psllq xmm4, 7
+  psrlq xmm5, 57
+  pslldq xmm5, 8
+  por xmm4, xmm5
+  movdqa xmm5, xmm3
+  movdqa xmm6, xmm3
+  psllq xmm5, 2
+  psrlq xmm6, 62
+  pslldq xmm6, 8
+  por xmm5, xmm6
+  movdqa xmm6, xmm3
+  movdqa xmm7, xmm3
+  psllq xmm6, 1
+  psrlq xmm7, 63
+  pslldq xmm7, 8
+  por xmm6, xmm7
+  pxor xmm4, xmm5
+  pxor xmm4, xmm6
+  pxor xmm4, xmm3
+  // Overflow
+  movdqa xmm5, xmm3
+  psrlq xmm5, 57
+  psrldq xmm5, 8
+  movdqa xmm6, xmm3
+  psrlq xmm6, 62
+  psrldq xmm6, 8
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm3
+  psrlq xmm6, 63
+  psrldq xmm6, 8
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm5
+  movdqa xmm7, xmm5
+  psllq xmm6, 7
+  pxor xmm5, xmm6
+  movdqa xmm6, xmm7
+  psllq xmm6, 2
+  pxor xmm5, xmm6
+  psllq xmm7, 1
+  pxor xmm5, xmm7
+  pxor xmm2, xmm4
+  pxor xmm2, xmm5
+
+  // Reflect result back
+  movdqa xmm0, xmm2
+  movdqa xmm1, xmm0
+  pand xmm1, xmm10
+  psrlw xmm0, 4
+  pand xmm0, xmm10
+  movdqa xmm2, xmm8
+  pshufb xmm2, xmm1
+  movdqa xmm1, xmm9
+  pshufb xmm1, xmm0
+  por xmm1, xmm2
+  movdqu [rdi], xmm1
+end;
+{$ENDIF}
+
+procedure GHASHMultiplySingle(var AX: TAESBlock; const LHPtr: TAESBlock);
+begin
+  {$IFDEF CPUX86_64}
+  if UsePCLMUL then
+  begin
+    GHASHMultiplyPCLMUL(AX, LHPtr);
+    Exit;
+  end;
+  {$ENDIF}
+  GHASHMultiplyScalar(AX, LHPtr);
+end;
+
+procedure GHASHUpdate(var AState: TAESBlock; const LHPtr: TAESBlock; const AData: TBytes; AOffset, ALen: Integer);
 var
   I, J, Blocks, Rem: Integer;
   Block: TAESBlock;
@@ -384,11 +522,25 @@ begin
   Blocks := ALen div 16;
   Rem := ALen mod 16;
 
+  {$IFDEF CPUX86_64}
+  if UsePCLMUL and (Blocks > 0) then
+  begin
+    GHASHUpdatePCLMUL(AState, LHPtr, @AData[AOffset], Blocks);
+    if Rem > 0 then
+    begin
+      FillChar(Block[0], 16, 0);
+      Move(AData[AOffset + Blocks * 16], Block[0], Rem);
+      GHASHUpdatePCLMUL(AState, LHPtr, @Block[0], 1);
+    end;
+    Exit;
+  end;
+  {$ENDIF}
+
   for I := 0 to Blocks - 1 do
   begin
     for J := 0 to 15 do
       AState[J] := AState[J] xor AData[AOffset + I * 16 + J];
-    GHASHMultiply(AState, AH);
+    GHASHMultiplyScalar(AState, LHPtr);
   end;
 
   if Rem > 0 then
@@ -397,7 +549,7 @@ begin
     Move(AData[AOffset + Blocks * 16], Block[0], Rem);
     for J := 0 to 15 do
       AState[J] := AState[J] xor Block[J];
-    GHASHMultiply(AState, AH);
+    GHASHMultiplyScalar(AState, LHPtr);
   end;
 end;
 
@@ -512,7 +664,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESNIEncryptBlock128(TAESNIBlock(J0), EncJ0, NiKey);
   SetLength(ATag, GCM_TAG_SIZE);
@@ -589,7 +741,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESNIEncryptBlock256(TAESNIBlock(J0), EncJ0, NiKey);
   SetLength(ATag, GCM_TAG_SIZE);
@@ -680,7 +832,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESEncryptBlock(J0, EncJ0, ExpandedKey, Nr);
   SetLength(ATag, GCM_TAG_SIZE);
@@ -752,7 +904,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESNIEncryptBlock128(TAESNIBlock(J0), EncJ0, NiKey);
   SetLength(TagBytes, GCM_TAG_SIZE);
@@ -833,7 +985,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESNIEncryptBlock256(TAESNIBlock(J0), EncJ0, NiKey);
   SetLength(TagBytes, GCM_TAG_SIZE);
@@ -927,7 +1079,7 @@ begin
 
   for I := 0 to 15 do
     S[I] := S[I] xor LenBlock[I];
-  GHASHMultiply(S, H);
+  GHASHMultiplySingle(S, H);
 
   AESEncryptBlock(J0, EncJ0, ExpandedKey, Nr);
   SetLength(TagBytes, GCM_TAG_SIZE);
