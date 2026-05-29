@@ -1365,21 +1365,25 @@ end;
 function ScalarShiftLeftU64x4(const a: TVecU64x4; count: Integer): TVecU64x4;
 var i: Integer;
 begin
+  if (count <= 0) or (count >= 64) then
+  begin
+    for i := 0 to 3 do Result.u[i] := 0;
+    Exit;
+  end;
   for i := 0 to 3 do
-    if (count > 0) and (count < 64) then
-      Result.u[i] := a.u[i] shl count
-    else
-      Result.u[i] := 0;
+    Result.u[i] := a.u[i] shl count;
 end;
 
 function ScalarShiftRightU64x4(const a: TVecU64x4; count: Integer): TVecU64x4;
 var i: Integer;
 begin
+  if (count <= 0) or (count >= 64) then
+  begin
+    for i := 0 to 3 do Result.u[i] := 0;
+    Exit;
+  end;
   for i := 0 to 3 do
-    if (count > 0) and (count < 64) then
-      Result.u[i] := a.u[i] shr count
-    else
-      Result.u[i] := 0;
+    Result.u[i] := a.u[i] shr count;
 end;
 
 function ScalarCmpEqU64x4(const a, b: TVecU64x4): TMask4;

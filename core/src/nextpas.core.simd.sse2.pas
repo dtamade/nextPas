@@ -2974,7 +2974,6 @@ asm
   punpcklqdq xmm0, xmm0
 
   xor r9, r9             // i = 0
-  mov al, r8b
 
 @loop16:
   lea rax, [r9 + 16]
@@ -2987,7 +2986,7 @@ asm
 @remainder:
   cmp r9, rdx
   jae @done
-  mov [rcx + r9], al
+  mov [rcx + r9], r8b
   inc r9
   jmp @remainder
 
