@@ -60,6 +60,7 @@ type
     constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean);
     destructor Destroy; override;
     procedure Process(const ALexer: TLexerResult);
+    function ToLexerResult: TLexerResult;
     function OutputTokenCount: LongInt;
     function OutputTokenAt(const AIndex: LongInt): TToken;
   end;
@@ -359,6 +360,11 @@ begin
         EmitToken(Tok);
     end;
   end;
+end;
+
+function TPreprocessor.ToLexerResult: TLexerResult;
+begin
+  Result := TLexerResult.CreateFromTokens(FOutputTokens, FOutputCount);
 end;
 
 function TPreprocessor.OutputTokenCount: LongInt;

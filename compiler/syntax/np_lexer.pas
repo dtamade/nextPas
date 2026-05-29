@@ -255,6 +255,8 @@ type
       const ADiagnostics: TDiagnosticsSink;
       const AFileId: TCoreId
     ); overload;
+    constructor CreateFromTokens(const ATokens: array of TToken;
+      const ACount: LongInt);
     function TokenCount: LongInt;
     function TokenAt(const AIndex: LongInt): TToken;
   end;
@@ -717,6 +719,23 @@ begin
   LexSource(ASourceText);
   { Trim to actual length so callers iterate the right range. }
   SetLength(FTokens, FTokenCount);
+end;
+
+constructor TLexerResult.CreateFromTokens(const ATokens: array of TToken;
+  const ACount: LongInt);
+var
+  I: LongInt;
+begin
+  inherited Create;
+  FTokenCount := ACount;
+  SetLength(FTokens, ACount);
+  for I := 0 to ACount - 1 do
+    FTokens[I] := ATokens[I];
+  FCurrentLine := 1;
+  FLineStartByte := 0;
+  FDiagnostics := nil;
+  FFileId := 0;
+  SetLength(FPendingTrivia, 0);
 end;
 
 procedure TLexerResult.ReportError(
