@@ -53,7 +53,8 @@ implementation
 
 uses
   nextpas.core.text.char,
-  nextpas.core.simd;
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec16;
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
@@ -150,7 +151,6 @@ end;
 
 function TStringView.Equals(const AOther: TStringView): Boolean;
 var
-  LNeedle, LData: TVecU8x16;
   LPos: SizeUInt;
 begin
   if FLen <> AOther.FLen then
@@ -162,9 +162,7 @@ begin
   LPos := 0;
   while LPos + 16 <= FLen do
   begin
-    Move(FData[LPos], LData.u[0], 16);
-    Move(AOther.FData[LPos], LNeedle.u[0], 16);
-    if VecU8x16CmpEq(LData, LNeedle) <> $FFFF then
+    if Vec16CmpEq2(@FData[LPos], @AOther.FData[LPos]) <> MASK16_ALL_SET then
       Exit(False);
     Inc(LPos, 16);
   end;
@@ -217,22 +215,17 @@ end;
 
 function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
 var
-  LNeedle, LData: TVecU8x16;
   LMask: TMask16;
   LPos: SizeUInt;
-  I: Integer;
 begin
   if FLen = 0 then
     Exit(-1);
-  for I := 0 to 15 do
-    LNeedle.u[I] := Byte(ACh);
   LPos := 0;
   while LPos + 16 <= FLen do
   begin
-    Move(FData[LPos], LData.u[0], 16);
-    LMask := VecU8x16CmpEq(LData, LNeedle);
-    if Mask16Any(LMask) then
-      Exit(PtrInt(LPos) + Mask16FirstSet(LMask));
+    LMask := Vec16CmpEq(@FData[LPos], Byte(ACh));
+    if LMask <> MASK16_NONE_SET then
+      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
     Inc(LPos, 16);
   end;
   while LPos < FLen do
@@ -258,12 +251,10 @@ end;
 
 function TStringView.IndexOfStr(const ANeedle: TStringView): PtrInt;
 var
-  LFirst: TVecU8x16;
-  LData: TVecU8x16;
-  LMask: TMask16;
+  LMaskFirst, LMaskLast, LCombined: TMask16;
   LPos: SizeUInt;
-  LBit: Integer;
-  I: Integer;
+  LBit: Int32;
+  LLastOfs: SizeUInt;
 begin
   if ANeedle.FLen = 0 then
     Exit(0);
@@ -271,25 +262,26 @@ begin
     Exit(-1);
   if ANeedle.FLen = 1 then
     Exit(IndexOf(ANeedle.FData[0]));
-  for I := 0 to 15 do
-    LFirst.u[I] := Byte(ANeedle.FData[0]);
+  LLastOfs := ANeedle.FLen - 1;
   LPos := 0;
-  while LPos + 16 <= FLen - ANeedle.FLen + 1 do
+  while LPos + 16 + LLastOfs <= FLen do
   begin
-    Move(FData[LPos], LData.u[0], 16);
-    LMask := VecU8x16CmpEq(LData, LFirst);
-    while Mask16Any(LMask) do
+    LMaskFirst := Vec16CmpEq(@FData[LPos], Byte(ANeedle.FData[0]));
+    LMaskLast := Vec16CmpEq(@FData[LPos + LLastOfs], Byte(ANeedle.FData[LLastOfs]));
+    LCombined := LMaskFirst and LMaskLast;
+    while LCombined <> MASK16_NONE_SET do
     begin
-      LBit := Mask16FirstSet(LMask);
+      LBit := Vec16Ctz(LCombined);
       if Slice(LPos + SizeUInt(LBit), ANeedle.FLen).Equals(ANeedle) then
         Exit(PtrInt(LPos) + LBit);
-      LMask := LMask and not TMask16(1 shl LBit);
+      LCombined := LCombined and not TMask16(TMask16(1) shl LBit);
     end;
     Inc(LPos, 16);
   end;
   while LPos <= FLen - ANeedle.FLen do
   begin
-    if FData[LPos] = ANeedle.FData[0] then
+    if (FData[LPos] = ANeedle.FData[0]) and
+       (FData[LPos + LLastOfs] = ANeedle.FData[LLastOfs]) then
       if Slice(LPos, ANeedle.FLen).Equals(ANeedle) then
         Exit(PtrInt(LPos));
     Inc(LPos);
@@ -304,22 +296,15 @@ end;
 
 function TStringView.CountChar(const ACh: AnsiChar): SizeUInt;
 var
-  LNeedle, LData: TVecU8x16;
-  LMask: TMask16;
   LPos: SizeUInt;
-  I: Integer;
 begin
   Result := 0;
   if FLen = 0 then
     Exit;
-  for I := 0 to 15 do
-    LNeedle.u[I] := Byte(ACh);
   LPos := 0;
   while LPos + 16 <= FLen do
   begin
-    Move(FData[LPos], LData.u[0], 16);
-    LMask := VecU8x16CmpEq(LData, LNeedle);
-    Inc(Result, Mask16PopCount(LMask));
+    Inc(Result, Vec16Popcnt(Vec16CmpEq(@FData[LPos], Byte(ACh))));
     Inc(LPos, 16);
   end;
   while LPos < FLen do

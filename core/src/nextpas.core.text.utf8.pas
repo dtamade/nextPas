@@ -32,7 +32,8 @@ function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 implementation
 
 uses
-  nextpas.core.simd,
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec16,
   nextpas.core.simd.dispatch;
 
 function UTF8IsValidScalar(const AData: PByte; const ALen: SizeUInt): Boolean;
@@ -164,26 +165,15 @@ end;
 
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
-  LData, LMaskVec, LContVec: TVecU8x16;
-  LMask: TMask16;
   LPos: SizeUInt;
-  I: Integer;
 begin
   Result := 0;
   if ALen = 0 then
     Exit;
-  for I := 0 to 15 do
-  begin
-    LMaskVec.u[I] := $C0;
-    LContVec.u[I] := $80;
-  end;
   LPos := 0;
   while LPos + 16 <= ALen do
   begin
-    Move(AData[LPos], LData.u[0], 16);
-    LData := VecU8x16And(LData, LMaskVec);
-    LMask := VecU8x16CmpEq(LData, LContVec);
-    Inc(Result, 16 - Mask16PopCount(LMask));
+    Inc(Result, 16 - Vec16Popcnt(Vec16CmpRange(@AData[LPos], $80, $BF)));
     Inc(LPos, 16);
   end;
   while LPos < ALen do
