@@ -9,6 +9,12 @@ uses
   np_base_types, np_lexer;
 
 type
+  IIncludeResolver = interface
+    function ResolveInclude(const AName: string;
+      const AFromFileId: TCoreId;
+      out APath: string; out AContent: string): Boolean;
+  end;
+
   TDefineEntry = record
     Name: string;
     Value: string;
@@ -43,10 +49,13 @@ type
   private
     FDefines: TDefineTable;
     FOwnsDefines: Boolean;
+    FIncludeResolver: IIncludeResolver;
     FStack: array of TConditionalFrame;
     FStackCount: LongInt;
     FOutputTokens: array of TToken;
     FOutputCount: LongInt;
+    FCurrentFileId: TCoreId;
+    FNextFileId: TCoreId;
     function IsActive: Boolean;
     procedure PushFrame(ACondition: Boolean);
     procedure HandleElse;
@@ -56,8 +65,10 @@ type
     function ParseDirectiveName(const ALexeme: string;
       out ADirective, AArg: string): Boolean;
     function EvalSimpleCondition(const AArg: string): Boolean;
+    procedure ProcessInclude(const AArg: string);
   public
-    constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean);
+    constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
+      AIncludeResolver: IIncludeResolver);
     destructor Destroy; override;
     procedure Process(const ALexer: TLexerResult);
     function ToLexerResult: TLexerResult;
@@ -181,15 +192,19 @@ end;
 
 { TPreprocessor }
 
-constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean);
+constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
+  AIncludeResolver: IIncludeResolver);
 begin
   inherited Create;
   FDefines := ADefines;
   FOwnsDefines := AOwnsDefines;
+  FIncludeResolver := AIncludeResolver;
   FStackCount := 0;
   SetLength(FStack, 0);
   FOutputCount := 0;
   SetLength(FOutputTokens, 0);
+  FCurrentFileId := 0;
+  FNextFileId := 1000;
 end;
 
 destructor TPreprocessor.Destroy;
@@ -309,6 +324,57 @@ begin
     Result := FDefines.IsDefined(AArg);
 end;
 
+procedure TPreprocessor.ProcessInclude(const AArg: string);
+var
+  IncName, Path, Content: string;
+  IncLexer: TLexerResult;
+  IncFileId: TCoreId;
+  I: LongInt;
+  Tok: TToken;
+  Dir, DirArg: string;
+begin
+  IncName := Trim(AArg);
+  if (Length(IncName) >= 2) and (IncName[1] = '''') and
+    (IncName[Length(IncName)] = '''') then
+    IncName := Copy(IncName, 2, Length(IncName) - 2);
+  if IncName = '' then Exit;
+  if FIncludeResolver = nil then Exit;
+  if not FIncludeResolver.ResolveInclude(IncName, FCurrentFileId, Path, Content) then
+    Exit;
+  Inc(FNextFileId);
+  IncFileId := FNextFileId;
+  IncLexer := TLexerResult.Create(Content, nil, IncFileId);
+  for I := 0 to IncLexer.TokenCount - 1 do
+  begin
+    Tok := IncLexer.TokenAt(I);
+    if Tok.Kind = tkEOF then
+      Continue;
+    if Tok.Kind = tkCompilerDirective then
+    begin
+      if not ParseDirectiveName(Tok.Lexeme, Dir, DirArg) then
+      begin
+        if IsActive then EmitToken(Tok);
+        Continue;
+      end;
+      if Dir = 'ifdef' then PushFrame(EvalSimpleCondition(DirArg))
+      else if Dir = 'ifndef' then PushFrame(not EvalSimpleCondition(DirArg))
+      else if Dir = 'else' then HandleElse
+      else if Dir = 'elseif' then HandleElseIf(EvalSimpleCondition(DirArg))
+      else if (Dir = 'endif') or (Dir = 'ifend') then HandleEndIf
+      else if Dir = 'define' then begin if IsActive then FDefines.Define(DirArg); end
+      else if Dir = 'undef' then begin if IsActive then FDefines.Undef(DirArg); end
+      else if (Dir = 'i') or (Dir = 'include') then begin if IsActive then ProcessInclude(DirArg); end
+      else begin if IsActive then EmitToken(Tok); end;
+    end
+    else
+    begin
+      if IsActive then
+        EmitToken(Tok);
+    end;
+  end;
+  IncLexer.Free;
+end;
+
 procedure TPreprocessor.Process(const ALexer: TLexerResult);
 var
   I: LongInt;
@@ -317,6 +383,8 @@ var
 begin
   FOutputCount := 0;
   FStackCount := 0;
+  if ALexer.TokenCount > 0 then
+    FCurrentFileId := ALexer.TokenAt(0).FileId;
   for I := 0 to ALexer.TokenCount - 1 do
   begin
     Tok := ALexer.TokenAt(I);
@@ -347,6 +415,11 @@ begin
       begin
         if IsActive then
           FDefines.Undef(Arg);
+      end
+      else if (Dir = 'i') or (Dir = 'include') then
+      begin
+        if IsActive then
+          ProcessInclude(Arg);
       end
       else
       begin

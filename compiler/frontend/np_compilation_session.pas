@@ -784,7 +784,7 @@ begin
   RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
     FDiagnosticsSink, FRootFileId);
   Defines := TDefineTable.Create;
-  PP := TPreprocessor.Create(Defines, True);
+  PP := TPreprocessor.Create(Defines, True, nil);
   PP.Process(RawLexer);
   FLexerResult := PP.ToLexerResult;
   PP.Free;

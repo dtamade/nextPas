@@ -22,7 +22,7 @@ var
   Lexer: TLexerResult;
 begin
   Lexer := TLexerResult.Create(ASource, nil, 0);
-  Result := TPreprocessor.Create(ADefines, False);
+  Result := TPreprocessor.Create(ADefines, False, nil);
   Result.Process(Lexer);
   Lexer.Free;
 end;
