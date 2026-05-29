@@ -16,6 +16,7 @@ function GetCurrentThreadId: DWORD; stdcall; external 'kernel32' name 'GetCurren
 function QueryPerformanceFrequency(var lpFrequency: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceFrequency';
 function QueryPerformanceCounter(var lpPerformanceCount: Int64): BOOL; stdcall; external 'kernel32' name 'QueryPerformanceCounter';
 procedure GetSystemTimeAsFileTime(var lpSystemTimeAsFileTime: FILETIME); stdcall; external 'kernel32' name 'GetSystemTimeAsFileTime';
+function GetTimeZoneInformation(var lpTimeZoneInformation): DWORD; stdcall; external 'kernel32' name 'GetTimeZoneInformation';
 function SwitchToThread: BOOL; stdcall; external 'kernel32' name 'SwitchToThread';
 procedure Sleep(dwMilliseconds: DWORD); stdcall; external 'kernel32' name 'Sleep';
 function GetLastError: DWORD; stdcall; external 'kernel32' name 'GetLastError';

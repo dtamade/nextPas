@@ -53,6 +53,10 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
 {$ENDIF}
+{$IFDEF NEXTPAS_WINDOWS}
+uses
+  nextpas.core.platform.windows.ffi;
+{$ENDIF}
 
 function platform_monotonic_ns: TPlatformTimeNanoseconds;
 begin
@@ -101,8 +105,11 @@ begin
 end;
 {$ELSE}
 {$IFDEF NEXTPAS_WINDOWS}
+var
+  LTzi: array[0..43] of Int32;
 begin
-  Result := 0;
+  GetTimeZoneInformation(LTzi);
+  Result := -LTzi[0] * 60;
 end;
 {$ELSE}
 begin
