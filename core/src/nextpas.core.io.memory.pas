@@ -18,7 +18,7 @@ uses
   nextpas.core.errors;
 
 type
-  TBytesStream = class(TInterfacedObject, IReader, IWriter, IStream)
+  TBytesStream = class(TInterfacedObject, IReader, IWriter, IStream, IReaderAt, IWriterAt, IByteReader, IByteWriter, IStringWriter)
   private
     FData: TBytes;
     FSize: SizeUInt;
@@ -33,6 +33,11 @@ type
     function GetSize: Int64;
     function GetPosition: Int64;
     procedure SetPosition(const AValue: Int64);
+    function ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+    function WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+    function ReadByte: Byte;
+    procedure WriteByte(const AValue: Byte);
+    function WriteString(const AStr: string): SizeUInt;
   end;
 
 function CreateBytesStream(const AInitialCapacity: SizeUInt): IStream;
@@ -142,6 +147,65 @@ begin
   if AValue < 0 then
     raise EArgumentError.Create('TBytesStream.SetPosition: negative position');
   FPosition := SizeUInt(AValue);
+end;
+
+function TBytesStream.ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+var
+  LAvail: SizeUInt;
+begin
+  if AOffset < 0 then
+    raise EArgumentError.Create('TBytesStream.ReadAt: negative offset');
+  if SizeUInt(AOffset) >= FSize then
+    Exit(0);
+  LAvail := FSize - SizeUInt(AOffset);
+  if ACount < LAvail then
+    Result := ACount
+  else
+    Result := LAvail;
+  if Result > 0 then
+    Move(FData[SizeUInt(AOffset)], ABuf, Result);
+end;
+
+function TBytesStream.WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+var
+  LEnd: SizeUInt;
+begin
+  if AOffset < 0 then
+    raise EArgumentError.Create('TBytesStream.WriteAt: negative offset');
+  if ACount = 0 then
+    Exit(0);
+  LEnd := SizeUInt(AOffset) + ACount;
+  if LEnd > SizeUInt(Length(FData)) then
+  begin
+    if LEnd < SizeUInt(Length(FData)) * 2 then
+      SetLength(FData, Length(FData) * 2)
+    else
+      SetLength(FData, LEnd);
+  end;
+  Move(ABuf, FData[SizeUInt(AOffset)], ACount);
+  if LEnd > FSize then
+    FSize := LEnd;
+  Result := ACount;
+end;
+
+function TBytesStream.ReadByte: Byte;
+begin
+  if FPosition >= FSize then
+    raise EIOError.Create('TBytesStream.ReadByte: EOF');
+  Result := FData[FPosition];
+  Inc(FPosition);
+end;
+
+procedure TBytesStream.WriteByte(const AValue: Byte);
+begin
+  Write(AValue, 1);
+end;
+
+function TBytesStream.WriteString(const AStr: string): SizeUInt;
+begin
+  if Length(AStr) = 0 then
+    Exit(0);
+  Result := Write(AStr[1], SizeUInt(Length(AStr)));
 end;
 
 end.

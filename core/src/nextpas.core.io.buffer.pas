@@ -5,7 +5,8 @@ unit nextpas.core.io.buffer;
 interface
 
 uses
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.errors;
 
 const
   DEFAULT_BUFFER_SIZE = 4096;
@@ -16,15 +17,19 @@ function CreateBufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = 
 implementation
 
 type
-  TBufferedReader = class(TInterfacedObject, IReader)
+  TBufferedReader = class(TInterfacedObject, IReader, IByteReader, IByteScanner)
   private
     FInner: IReader;
     FBuf: array of Byte;
     FBufPos: SizeUInt;
     FBufLen: SizeUInt;
+    FLastByte: Byte;
+    FHasLast: Boolean;
   public
     constructor Create(const AInner: IReader; const ABufSize: SizeUInt);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function ReadByte: Byte;
+    procedure UnreadByte;
   end;
 
   TBufferedWriter = class(TInterfacedObject, IWriter, IFlusher)
@@ -60,6 +65,7 @@ begin
   SetLength(FBuf, ABufSize);
   FBufPos := 0;
   FBufLen := 0;
+  FHasLast := False;
 end;
 
 function TBufferedReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -107,6 +113,29 @@ begin
   Move(FBuf[0], LDst^, LFromBuf);
   FBufPos := LFromBuf;
   Inc(Result, LFromBuf);
+end;
+
+function TBufferedReader.ReadByte: Byte;
+var
+  LN: SizeUInt;
+begin
+  if FHasLast then
+  begin
+    Result := FLastByte;
+    FHasLast := False;
+    Exit;
+  end;
+  LN := Read(Result, 1);
+  if LN = 0 then
+    raise EIOError.Create('TBufferedReader.ReadByte: EOF');
+  FLastByte := Result;
+end;
+
+procedure TBufferedReader.UnreadByte;
+begin
+  if FHasLast then
+    raise EInvalidOperationError.Create('TBufferedReader.UnreadByte: already unread');
+  FHasLast := True;
 end;
 
 { TBufferedWriter }

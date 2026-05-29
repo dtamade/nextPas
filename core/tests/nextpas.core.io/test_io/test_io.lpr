@@ -472,6 +472,128 @@ begin
   LR.Close;
 end;
 
+{ New interface tests }
+
+procedure TestReaderAt;
+var
+  LS: IStream;
+  LRA: IReaderAt;
+  LBuf: array[0..2] of Byte;
+  LData: TBytes;
+begin
+  LData := TBytes.Create(10, 20, 30, 40, 50);
+  LS := BytesStreamFrom(LData);
+  LRA := LS as IReaderAt;
+  CheckEqual(SizeUInt(3), LRA.ReadAt(LBuf[0], 3, 2), 'read 3 at offset 2');
+  CheckEqual(Byte(30), LBuf[0]);
+  CheckEqual(Byte(50), LBuf[2]);
+  CheckEqual(SizeUInt(0), LRA.ReadAt(LBuf[0], 3, 10), 'past end');
+end;
+
+procedure TestWriterAt;
+var
+  LS: IStream;
+  LWA: IWriterAt;
+  LBuf: array[0..2] of Byte;
+begin
+  LS := BytesStream(16);
+  LS.Write(LBuf[0], 5);
+  LWA := LS as IWriterAt;
+  LBuf[0] := $AA; LBuf[1] := $BB;
+  LWA.WriteAt(LBuf[0], 2, 1);
+  LS.Seek(1, soBeginning);
+  LS.Read(LBuf[0], 2);
+  CheckEqual(Byte($AA), LBuf[0]);
+  CheckEqual(Byte($BB), LBuf[1]);
+end;
+
+procedure TestByteReaderStream;
+var
+  LS: IStream;
+  LBR: IByteReader;
+begin
+  LS := BytesStreamFrom(TBytes.Create($DE, $AD));
+  LBR := LS as IByteReader;
+  CheckEqual(Byte($DE), LBR.ReadByte, 'first');
+  CheckEqual(Byte($AD), LBR.ReadByte, 'second');
+end;
+
+procedure TestByteScanner;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LB: Byte;
+begin
+  LS := BytesStreamFrom(TBytes.Create(1, 2, 3));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  LB := LBS.ReadByte;
+  CheckEqual(Byte(1), LB, 'read 1');
+  LBS.UnreadByte;
+  LB := LBS.ReadByte;
+  CheckEqual(Byte(1), LB, 'unread then re-read');
+  LB := LBS.ReadByte;
+  CheckEqual(Byte(2), LB, 'next byte');
+end;
+
+procedure TestStringWriter;
+var
+  LS: IStream;
+  LSW: IStringWriter;
+  LBuf: array[0..4] of Byte;
+begin
+  LS := BytesStream(16);
+  LSW := LS as IStringWriter;
+  CheckEqual(SizeUInt(5), LSW.WriteString('hello'), 'wrote 5');
+  LS.Seek(0, soBeginning);
+  LS.Read(LBuf[0], 5);
+  CheckEqual(Byte(Ord('h')), LBuf[0]);
+  CheckEqual(Byte(Ord('o')), LBuf[4]);
+end;
+
+procedure TestSectionReader;
+var
+  LS: IStream;
+  LR: IReader;
+  LBuf: array[0..9] of Byte;
+  LData: TBytes;
+begin
+  LData := TBytes.Create(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+  LS := BytesStreamFrom(LData);
+  LR := nextpas.core.io.SectionReader(LS as IReaderAt, 3, 4);
+  CheckEqual(SizeUInt(4), LR.Read(LBuf[0], 10), 'limited to 4');
+  CheckEqual(Byte(3), LBuf[0]);
+  CheckEqual(Byte(6), LBuf[3]);
+  CheckEqual(SizeUInt(0), LR.Read(LBuf[0], 10), 'EOF');
+end;
+
+procedure TestPipeLargeData;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LData: array[0..3999] of Byte;
+  LOut: array[0..3999] of Byte;
+  LI: Integer;
+  LTotal, LN: SizeUInt;
+begin
+  CreatePipe(LR, LW);
+  for LI := 0 to 3999 do
+    LData[LI] := Byte(LI and $FF);
+  LW.Write(LData[0], 4000);
+  LW.Close;
+  LTotal := 0;
+  repeat
+    LN := LR.Read(LOut[LTotal], 4000 - LTotal);
+    if LN = 0 then Break;
+    Inc(LTotal, LN);
+  until LTotal >= 4000;
+  CheckEqual(SizeUInt(4000), LTotal, 'all data received');
+  CheckEqual(Byte(0), LOut[0]);
+  CheckEqual(Byte(255), LOut[255]);
+  LR.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io');
 
@@ -506,6 +628,14 @@ begin
 
   T.Run('Pipe basic', @TestPipeBasic);
   T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
+  T.Run('Pipe large data', @TestPipeLargeData);
+
+  T.Run('ReaderAt', @TestReaderAt);
+  T.Run('WriterAt', @TestWriterAt);
+  T.Run('ByteReader stream', @TestByteReaderStream);
+  T.Run('ByteScanner', @TestByteScanner);
+  T.Run('StringWriter', @TestStringWriter);
+  T.Run('SectionReader', @TestSectionReader);
 
   T.Summary;
 end.
