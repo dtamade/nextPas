@@ -32,6 +32,16 @@ procedure GemmQuantizedI8_PackedB(AA: PInt8; AB: PInt8; AC: PSingle;
 
 function DotI8(AA, AB: PInt8; ACount: SizeUInt): Int32;
 
+// INT4 quantization (nibble-packed: 2 values per byte)
+procedure QuantizeSymmetricF32ToI4(ASrc: PSingle; ADst: PByte;
+  ACount: SizeUInt; out AScale: Single);
+
+procedure DequantizeI4ToF32(ASrc: PByte; ADst: PSingle;
+  ACount: SizeUInt; AScale: Single);
+
+// INT4 dot product: A is INT8 (activation), B is INT4 packed (weights)
+function DotI8xI4(AA: PInt8; AB: PByte; ACount: SizeUInt): Int32;
+
 implementation
 
 uses
@@ -175,6 +185,91 @@ begin
   for LI := 0 to AM - 1 do
     for LJ := 0 to AN - 1 do
       AC[LI * AN + LJ] := DotI8(@AA[LI * AK], @AB[LJ * AK], AK) * LScale;
+end;
+
+// INT4 symmetric quantization: pack 2 nibbles per byte (low=even, high=odd)
+procedure QuantizeSymmetricF32ToI4(ASrc: PSingle; ADst: PByte;
+  ACount: SizeUInt; out AScale: Single);
+var
+  LI: SizeUInt;
+  LMax, LVal: Single;
+  LQ0, LQ1: Int32;
+  LByteCount: SizeUInt;
+begin
+  if ACount = 0 then begin AScale := 1.0; Exit; end;
+
+  LMax := 0;
+  for LI := 0 to ACount - 1 do
+  begin
+    LVal := System.Abs(ASrc[LI]);
+    if LVal > LMax then LMax := LVal;
+  end;
+
+  if LMax < 1e-10 then
+  begin
+    AScale := 1.0;
+    LByteCount := (ACount + 1) div 2;
+    FillChar(ADst^, LByteCount, 0);
+    Exit;
+  end;
+
+  AScale := LMax / 7.0;
+
+  LI := 0;
+  while LI + 1 < ACount do
+  begin
+    LQ0 := System.Round(ASrc[LI] / AScale);
+    if LQ0 > 7 then LQ0 := 7;
+    if LQ0 < -8 then LQ0 := -8;
+    LQ1 := System.Round(ASrc[LI + 1] / AScale);
+    if LQ1 > 7 then LQ1 := 7;
+    if LQ1 < -8 then LQ1 := -8;
+    ADst[LI div 2] := Byte((LQ0 and $0F) or ((LQ1 and $0F) shl 4));
+    Inc(LI, 2);
+  end;
+  if LI < ACount then
+  begin
+    LQ0 := System.Round(ASrc[LI] / AScale);
+    if LQ0 > 7 then LQ0 := 7;
+    if LQ0 < -8 then LQ0 := -8;
+    ADst[LI div 2] := Byte(LQ0 and $0F);
+  end;
+end;
+
+procedure DequantizeI4ToF32(ASrc: PByte; ADst: PSingle;
+  ACount: SizeUInt; AScale: Single);
+var
+  LI: SizeUInt;
+  LByte: Byte;
+  LNibble: Int8;
+begin
+  for LI := 0 to ACount - 1 do
+  begin
+    LByte := ASrc[LI div 2];
+    if (LI and 1) = 0 then
+      LNibble := Int8((LByte and $0F) or (-(LByte and $08) and $F0))
+    else
+      LNibble := Int8(((LByte shr 4) and $0F) or (-((LByte shr 4) and $08) and $F0));
+    ADst[LI] := LNibble * AScale;
+  end;
+end;
+
+function DotI8xI4(AA: PInt8; AB: PByte; ACount: SizeUInt): Int32;
+var
+  LI: SizeUInt;
+  LByte: Byte;
+  LNibble: Int32;
+begin
+  Result := 0;
+  for LI := 0 to ACount - 1 do
+  begin
+    LByte := AB[LI div 2];
+    if (LI and 1) = 0 then
+      LNibble := Int32(Int8((LByte and $0F) or (-(LByte and $08) and $F0)))
+    else
+      LNibble := Int32(Int8(((LByte shr 4) and $0F) or (-((LByte shr 4) and $08) and $F0)));
+    Result := Result + Int32(AA[LI]) * LNibble;
+  end;
 end;
 
 end.

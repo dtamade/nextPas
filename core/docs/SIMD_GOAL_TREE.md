@@ -15,7 +15,10 @@ nextpas.core.simd
 ├── G6: 文本/内存 SIMD 加速          [100%] ✅
 ├── G7: GEMM 微内核 (linalg.gemm)    [100%] ✅
 ├── G8: FFT SIMD 化 (signal)         [100%] ✅
-└── G9: RTL 依赖清零                 [ 90%] ✅
+├── G9: RTL 依赖清零                 [ 90%] ✅
+├── G10: 高级计算 (parallel/quant/NEON) [100%] ✅
+├── G11: SIMD 深化 (INT8 dot/RealFft) [100%] ✅
+└── G12: 算法层 (Winograd/Attention/Strassen) [100%] ✅
 ```
 
 ---
