@@ -9,8 +9,8 @@ unit np_semantic_analyzer;
 interface
 
 uses
-  np_ast_facade, np_base_types, np_diagnostics_sink, np_source_database,
-  np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
+  np_ast_facade, np_base_types, np_diagnostics_sink, np_preprocessor,
+  np_source_database, np_unit_graph, np_semantic_model, np_green_tree, np_lexer;
 
 type
   TProcedureBodyEntry = record
@@ -8556,6 +8556,8 @@ var
   F: Text;
   SourcePath: string;
   TmpDiag: TDiagnosticsSink;
+  PP: TPreprocessor;
+  PPDefines: TDefineTable;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -8587,6 +8589,16 @@ begin
       end;
       Close(F);
       UnitLexer := TLexerResult.Create(SourceText);
+      PPDefines := TDefineTable.Create;
+      PPDefines.SeedFPCDefines;
+      PP := TPreprocessor.Create(PPDefines, True, nil);
+      try
+        PP.Process(UnitLexer);
+        UnitLexer.Free;
+        UnitLexer := PP.ToLexerResult;
+      finally
+        PP.Free;
+      end;
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
       if (UnitTree <> nil) and UnitTree.IsValid and
         (UnitTree.RootNode <> nil) then
