@@ -8,6 +8,9 @@ uses
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
+{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.ffi,
+{$ENDIF}
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
@@ -285,6 +288,118 @@ begin
   Check(LGot, 'ENotFoundError raised');
 end;
 
+procedure TestAppend;
+var
+  LF: IFile;
+  LData: TBytes;
+begin
+  FsWriteFile(GTmpDir + '/append.txt', TBytes.Create(Ord('a'), Ord('b'), Ord('c')));
+  LF := FsOpen(GTmpDir + '/append.txt', [fmAppend]);
+  LF.Write(PAnsiChar('Z')^, 1);
+  LF.Close;
+  LData := FsReadFile(GTmpDir + '/append.txt');
+  CheckEqual(Int64(4), Int64(Length(LData)), 'len 4 after append');
+  CheckEqual(Byte(Ord('a')), LData[0], 'original preserved');
+  CheckEqual(Byte(Ord('Z')), LData[3], 'appended at end');
+end;
+
+procedure TestExclusive;
+var
+  LGot: Boolean;
+begin
+  FsWriteFile(GTmpDir + '/excl.txt', TBytes.Create(1));
+  LGot := False;
+  try
+    FsOpenFile(GTmpDir + '/excl.txt', [fmWrite, fmCreate, fmExclusive], PermDefault);
+  except
+    on E: EAlreadyExistsError do
+      LGot := True;
+  end;
+  Check(LGot, 'EAlreadyExistsError on exclusive existing');
+end;
+
+procedure TestReadAtPositionIndependent;
+var
+  LF: IFile;
+  LRA: IReaderAt;
+  LBuf: array[0..1] of Byte;
+  LPosBefore, LPosAfter: Int64;
+begin
+  FsWriteFile(GTmpDir + '/posindep.bin', TBytes.Create(10, 20, 30, 40, 50));
+  LF := FsOpen(GTmpDir + '/posindep.bin', [fmRead]);
+  LF.Seek(1, soBeginning);
+  LPosBefore := LF.GetPosition;
+  LRA := LF as IReaderAt;
+  LRA.ReadAt(LBuf[0], 2, 3);
+  LPosAfter := LF.GetPosition;
+  CheckEqual(Byte(40), LBuf[0], 'readat offset 3');
+  CheckEqual(LPosBefore, LPosAfter, 'ReadAt leaves position unchanged');
+  LF.Close;
+end;
+
+procedure TestChmodAndPerm;
+var
+  LInfo: TFileInfo;
+begin
+  FsWriteFile(GTmpDir + '/perm.txt', TBytes.Create(1), PermOwnerRead or PermOwnerWrite);
+  FsChmod(GTmpDir + '/perm.txt', PermOwnerRead or PermOwnerWrite or PermOwnerExec);
+  LInfo := FsStat(GTmpDir + '/perm.txt');
+{$IFDEF NEXTPAS_UNIX}
+  CheckEqual(Int64(PermOwnerRead or PermOwnerWrite or PermOwnerExec),
+    Int64(LInfo.Permission), 'perm 0700');
+{$ENDIF}
+end;
+
+procedure TestTruncatePath;
+begin
+  FsWriteFile(GTmpDir + '/trunc.bin', TBytes.Create(1, 2, 3, 4, 5, 6, 7, 8));
+  FsTruncate(GTmpDir + '/trunc.bin', 3);
+  CheckEqual(Int64(3), FsFileSize(GTmpDir + '/trunc.bin'), 'truncated to 3');
+end;
+
+procedure TestTempFileInDir;
+var
+  LF: IFile;
+  LName: string;
+begin
+  FsMkdir(GTmpDir + '/tmpdir');
+  LF := FsTempFile(GTmpDir + '/tmpdir', 'pre_');
+  LName := LF.Name;
+  LF.Write(PAnsiChar('hi')^, 2);
+  LF.Close;
+  Check(Pos(GTmpDir + '/tmpdir/pre_', LName) = 1, 'temp file created in ADir');
+  Check(FsExists(LName), 'temp file exists');
+end;
+
+procedure TestLstat;
+begin
+  FsWriteFile(GTmpDir + '/lst.txt', TBytes.Create(1, 2));
+  Check(not FsLstat(GTmpDir + '/lst.txt').IsSymlink, 'regular not symlink');
+  Check(FsLstat(GTmpDir + '/lst.txt').FileType = nextpas.core.fs.base.ftRegular, 'regular');
+end;
+
+{$IFDEF NEXTPAS_UNIX}
+procedure TestRemoveAllSymlinkRoot;
+var
+  LTarget, LLink: string;
+begin
+  { Build a real dir with a file, and a symlink pointing at it. RemoveAll on
+    the symlink must delete the link only, leaving the target intact. }
+  LTarget := GTmpDir + '/rmtarget';
+  LLink := GTmpDir + '/rmlink';
+  FsMkdir(LTarget);
+  FsWriteFile(LTarget + '/keep.txt', TBytes.Create(42));
+  if symlink(PAnsiChar(LTarget), PAnsiChar(LLink)) <> 0 then
+  begin
+    Check(True, 'symlink unsupported, skip');
+    Exit;
+  end;
+  FsRemoveAll(LLink);
+  Check(not FsExists(LLink), 'symlink removed');
+  Check(FsExists(LTarget + '/keep.txt'), 'target tree intact');
+end;
+{$ENDIF}
+
 begin
   SetupTmpDir;
   try
@@ -318,6 +433,17 @@ begin
     T.Run('PathIsAbs', @TestPathIsAbs);
 
     T.Run('Open not found', @TestOpenNotFound);
+
+    T.Run('Append', @TestAppend);
+    T.Run('Exclusive create', @TestExclusive);
+    T.Run('ReadAt position-independent', @TestReadAtPositionIndependent);
+    T.Run('Chmod + perm', @TestChmodAndPerm);
+    T.Run('Truncate path', @TestTruncatePath);
+    T.Run('TempFile in dir', @TestTempFileInDir);
+    T.Run('Lstat', @TestLstat);
+{$IFDEF NEXTPAS_UNIX}
+    T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
+{$ENDIF}
 
     T.Summary;
   finally

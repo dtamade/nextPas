@@ -17,18 +17,23 @@ procedure FsWriteAtomic(const APath: string; const AData: TBytes;
 function FsCopyFile(const ASrc, ADst: string): Int64;
 function FsTempFile(const ADir, APattern: string): IFile;
 function FsStat(const APath: string): TFileInfo;
+function FsLstat(const APath: string): TFileInfo;
 function FsExists(const APath: string): Boolean;
 function FsIsDir(const APath: string): Boolean;
 function FsIsFile(const APath: string): Boolean;
 function FsFileSize(const APath: string): Int64;
+procedure FsChmod(const APath: string; const APerm: TFilePermission);
+procedure FsTruncate(const APath: string; const ASize: Int64);
 
 implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
+  nextpas.core.platform.random,
   nextpas.core.fs.stream;
 
 function FsReadFile(const APath: string): TBytes;
@@ -39,11 +44,7 @@ var
 begin
   LResult := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
   if LResult <> 0 then
-  begin
-    if LResult = 2 then
-      raise ENotFoundError.Create('file not found: ' + APath);
-    raise EIOError.Create('read file failed (' + IntToStr(LResult) + '): ' + APath);
-  end;
+    RaiseFsError(LResult, 'read file', APath);
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(LData^, Result[0], LLen);
@@ -73,7 +74,14 @@ begin
     LPtr := nil;
   LResult := platform_fs_write_atomic(PAnsiChar(APath), LPtr, PtrUInt(Length(AData)));
   if LResult <> 0 then
-    raise EIOError.Create('atomic write failed (' + IntToStr(LResult) + '): ' + APath);
+    RaiseFsError(LResult, 'atomic write', APath);
+  { platform_fs_write_atomic creates with default perms; honor caller perm. }
+  if APerm <> PermDefault then
+  begin
+    LResult := platform_file_chmod(PAnsiChar(APath), UInt32(APerm));
+    if LResult <> 0 then
+      RaiseFsError(LResult, 'chmod', APath);
+  end;
 end;
 
 function FsCopyFile(const ASrc, ADst: string): Int64;
@@ -105,18 +113,75 @@ begin
 end;
 
 function FsTempFile(const ADir, APattern: string): IFile;
+const
+  HEX: array[0..15] of AnsiChar = '0123456789abcdef';
+  MAX_ATTEMPTS = 32;
 var
   LPathBuf: array[0..1023] of AnsiChar;
   LFd: Int32;
   LResult: Int32;
   LPath: string;
+  LRand: array[0..7] of Byte;
+  LHex: string;
+  LI, LAttempt: Integer;
 begin
-  LResult := platform_fs_mktemp(PAnsiChar(ADir + '/' + APattern),
-    PAnsiChar(''), @LPathBuf[0], SizeOf(LPathBuf), LFd);
-  if LResult <> 0 then
-    raise EIOError.Create('mktemp failed (' + IntToStr(LResult) + ')');
-  LPath := StrPas(@LPathBuf[0]);
-  Result := FsFromHandle(LFd, LPath);
+  { Empty ADir: defer to platform temp-dir helper (system temp). }
+  if ADir = '' then
+  begin
+    LResult := platform_fs_mktemp(PAnsiChar(APattern), PAnsiChar(''),
+      @LPathBuf[0], SizeOf(LPathBuf), LFd);
+    if LResult <> 0 then
+      raise EIOError.Create('mktemp failed (' + IntToStr(LResult) + ')');
+    LPath := StrPas(@LPathBuf[0]);
+    Result := FsFromHandle(LFd, LPath);
+    Exit;
+  end;
+
+  { Explicit ADir: create the temp file there with O_EXCL + random suffix. }
+  for LAttempt := 0 to MAX_ATTEMPTS - 1 do
+  begin
+    if platform_random_bytes(@LRand[0], 8) <> 0 then
+      raise EIOError.Create('tempfile: random source failed');
+    SetLength(LHex, 16);
+    for LI := 0 to 7 do
+    begin
+      LHex[LI * 2 + 1] := Char(HEX[(LRand[LI] shr 4) and $F]);
+      LHex[LI * 2 + 2] := Char(HEX[LRand[LI] and $F]);
+    end;
+    LPath := ADir + '/' + APattern + LHex;
+    try
+      Result := FsOpenFile(LPath, [fmRead, fmWrite, fmCreate, fmExclusive], PermDefault);
+      Exit;
+    except
+      on E: EAlreadyExistsError do
+        Continue;
+    end;
+  end;
+  raise EIOError.Create('tempfile: exhausted attempts in ' + ADir);
+end;
+
+procedure FillFileInfo(const APath: string; const LPlatStat: TPlatformFileStat;
+  out AInfo: TFileInfo);
+begin
+  AInfo.Name := APath;
+  AInfo.Size := LPlatStat.Size;
+  AInfo.Permission := TFilePermission(LPlatStat.Mode and $FFF);
+  AInfo.ModTime := LPlatStat.ModTime;
+  AInfo.AccessTime := LPlatStat.AccessTime;
+  AInfo.CreateTime := LPlatStat.CreateTime;
+  AInfo.IsDir := LPlatStat.FileType = nextpas.core.platform.files.base.ftDirectory;
+  AInfo.IsSymlink := LPlatStat.FileType = nextpas.core.platform.files.base.ftSymlink;
+  case LPlatStat.FileType of
+    nextpas.core.platform.files.base.ftRegular: AInfo.FileType := nextpas.core.fs.base.ftRegular;
+    nextpas.core.platform.files.base.ftDirectory: AInfo.FileType := nextpas.core.fs.base.ftDirectory;
+    nextpas.core.platform.files.base.ftSymlink: AInfo.FileType := nextpas.core.fs.base.ftSymlink;
+    nextpas.core.platform.files.base.ftCharDevice: AInfo.FileType := nextpas.core.fs.base.ftCharDevice;
+    nextpas.core.platform.files.base.ftBlockDevice: AInfo.FileType := nextpas.core.fs.base.ftBlockDevice;
+    nextpas.core.platform.files.base.ftFifo: AInfo.FileType := nextpas.core.fs.base.ftFifo;
+    nextpas.core.platform.files.base.ftSocket: AInfo.FileType := nextpas.core.fs.base.ftSocket;
+  else
+    AInfo.FileType := nextpas.core.fs.base.ftUnknown;
+  end;
 end;
 
 function FsStat(const APath: string): TFileInfo;
@@ -126,26 +191,19 @@ var
 begin
   LResult := platform_file_stat(PAnsiChar(APath), LPlatStat);
   if LResult <> 0 then
-  begin
-    if LResult = 2 then
-      raise ENotFoundError.Create('file not found: ' + APath);
-    raise EIOError.Create('stat failed (' + IntToStr(LResult) + '): ' + APath);
-  end;
-  Result.Name := APath;
-  Result.Size := LPlatStat.Size;
-  Result.Permission := TFilePermission(LPlatStat.Mode and $FFF);
-  Result.ModTime := LPlatStat.ModTime;
-  Result.AccessTime := LPlatStat.AccessTime;
-  Result.CreateTime := LPlatStat.CreateTime;
-  Result.IsDir := LPlatStat.FileType = nextpas.core.platform.files.base.ftDirectory;
-  Result.IsSymlink := LPlatStat.FileType = nextpas.core.platform.files.base.ftSymlink;
-  case LPlatStat.FileType of
-    nextpas.core.platform.files.base.ftRegular: Result.FileType := nextpas.core.fs.base.ftRegular;
-    nextpas.core.platform.files.base.ftDirectory: Result.FileType := nextpas.core.fs.base.ftDirectory;
-    nextpas.core.platform.files.base.ftSymlink: Result.FileType := nextpas.core.fs.base.ftSymlink;
-  else
-    Result.FileType := nextpas.core.fs.base.ftUnknown;
-  end;
+    RaiseFsError(LResult, 'stat', APath);
+  FillFileInfo(APath, LPlatStat, Result);
+end;
+
+function FsLstat(const APath: string): TFileInfo;
+var
+  LPlatStat: TPlatformFileStat;
+  LResult: Int32;
+begin
+  LResult := platform_file_lstat(PAnsiChar(APath), LPlatStat);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'lstat', APath);
+  FillFileInfo(APath, LPlatStat, Result);
 end;
 
 function FsExists(const APath: string): Boolean;
@@ -169,7 +227,25 @@ var
 begin
   LResult := platform_fs_file_size(PAnsiChar(APath), Result);
   if LResult <> 0 then
-    raise EIOError.Create('file_size failed (' + IntToStr(LResult) + '): ' + APath);
+    RaiseFsError(LResult, 'file_size', APath);
+end;
+
+procedure FsChmod(const APath: string; const APerm: TFilePermission);
+var
+  LResult: Int32;
+begin
+  LResult := platform_file_chmod(PAnsiChar(APath), UInt32(APerm));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'chmod', APath);
+end;
+
+procedure FsTruncate(const APath: string; const ASize: Int64);
+var
+  LResult: Int32;
+begin
+  LResult := platform_file_truncate_path(PAnsiChar(APath), ASize);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'truncate', APath);
 end;
 
 end.

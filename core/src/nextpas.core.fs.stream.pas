@@ -21,6 +21,7 @@ implementation
 uses
   SysUtils,
   nextpas.core.errors,
+  nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
@@ -31,7 +32,6 @@ type
     FName: string;
     FClosed: Boolean;
     procedure CheckOpen;
-    procedure CheckResult(AResult: Int32; const AOp: string);
   public
     constructor Create(const AHandle: TPlatformFileHandle; const AName: string);
     destructor Destroy; override;
@@ -50,8 +50,9 @@ type
     function WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
   end;
 
-function ModeToOpenCreate(const AMode: TFileMode;
-  out AOpen: TPlatformFileOpenMode; out ACreate: TPlatformFileCreateMode): UInt32;
+procedure ModeToOpenCreate(const AMode: TFileMode;
+  out AOpen: TPlatformFileOpenMode; out ACreate: TPlatformFileCreateMode;
+  out AAppend, ASync: Boolean);
 var
   LHasRead, LHasWrite: Boolean;
 begin
@@ -79,7 +80,8 @@ begin
   else
     ACreate := fcmOpenExisting;
 
-  Result := UInt32(PermDefault);
+  AAppend := fmAppend in AMode;
+  ASync := fmSync in AMode;
 end;
 
 function PlatformFileTypeToFileType(AFt: TPlatformFileType): TFileType;
@@ -115,20 +117,14 @@ var
   LHandle: TPlatformFileHandle;
   LOpen: TPlatformFileOpenMode;
   LCreate: TPlatformFileCreateMode;
+  LAppend, LSync: Boolean;
   LResult: Int32;
 begin
-  ModeToOpenCreate(AMode, LOpen, LCreate);
-  LResult := platform_file_open(PAnsiChar(APath), LOpen, LCreate, LHandle);
+  ModeToOpenCreate(AMode, LOpen, LCreate, LAppend, LSync);
+  LResult := platform_file_open_ex(PAnsiChar(APath), LOpen, LCreate,
+    LAppend, LSync, UInt32(APerm), LHandle);
   if LResult <> 0 then
-  begin
-    case LResult of
-      2: raise ENotFoundError.Create('file not found: ' + APath);
-      13: raise EPermissionError.Create('permission denied: ' + APath);
-      17: raise EAlreadyExistsError.Create('file exists: ' + APath);
-    else
-      raise EIOError.Create('open failed (' + IntToStr(LResult) + '): ' + APath);
-    end;
-  end;
+    RaiseFsError(LResult, 'open', APath);
   Result := TFile.Create(LHandle, APath);
 end;
 
@@ -163,12 +159,6 @@ begin
     raise EInvalidOperationError.Create('file is closed');
 end;
 
-procedure TFile.CheckResult(AResult: Int32; const AOp: string);
-begin
-  if AResult <> 0 then
-    raise EIOError.Create(AOp + ' failed (' + IntToStr(AResult) + '): ' + FName);
-end;
-
 function TFile.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LBytesRead: PtrUInt;
@@ -179,7 +169,7 @@ begin
     Exit(0);
   LResult := platform_file_read(FHandle, @ABuf, ACount, LBytesRead);
   if LResult <> 0 then
-    raise EIOError.Create('read failed (' + IntToStr(LResult) + '): ' + FName);
+    RaiseFsError(LResult, 'read', FName);
   Result := LBytesRead;
 end;
 
@@ -193,7 +183,7 @@ begin
     Exit(0);
   LResult := platform_file_write(FHandle, @ABuf, ACount, LBytesWritten);
   if LResult <> 0 then
-    raise EIOError.Create('write failed (' + IntToStr(LResult) + '): ' + FName);
+    RaiseFsError(LResult, 'write', FName);
   Result := LBytesWritten;
 end;
 
@@ -210,7 +200,8 @@ begin
     soEnd: LOrigin := fsoEnd;
   end;
   LResult := platform_file_seek(FHandle, AOffset, LOrigin, LNewPos);
-  CheckResult(LResult, 'seek');
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'seek', FName);
   Result := LNewPos;
 end;
 
@@ -224,12 +215,14 @@ end;
 
 function TFile.GetSize: Int64;
 var
-  LSaved, LEnd: Int64;
+  LStat: TPlatformFileStat;
+  LResult: Int32;
 begin
-  LSaved := Seek(0, soCurrent);
-  LEnd := Seek(0, soEnd);
-  Seek(LSaved, soBeginning);
-  Result := LEnd;
+  CheckOpen;
+  LResult := platform_file_fstat(FHandle, LStat);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'fstat', FName);
+  Result := LStat.Size;
 end;
 
 function TFile.GetPosition: Int64;
@@ -252,8 +245,10 @@ var
   LPlatStat: TPlatformFileStat;
   LResult: Int32;
 begin
-  LResult := platform_file_stat(PAnsiChar(FName), LPlatStat);
-  CheckResult(LResult, 'stat');
+  CheckOpen;
+  LResult := platform_file_fstat(FHandle, LPlatStat);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'fstat', FName);
   Result.Name := FName;
   Result.Size := LPlatStat.Size;
   Result.FileType := PlatformFileTypeToFileType(LPlatStat.FileType);
@@ -266,37 +261,51 @@ begin
 end;
 
 procedure TFile.Sync;
+var
+  LResult: Int32;
 begin
   CheckOpen;
-  CheckResult(platform_file_sync(FHandle), 'sync');
+  LResult := platform_file_sync(FHandle);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'sync', FName);
 end;
 
 procedure TFile.Truncate(const ASize: Int64);
+var
+  LResult: Int32;
 begin
   CheckOpen;
-  CheckResult(platform_file_truncate(FHandle, ASize), 'truncate');
+  LResult := platform_file_truncate(FHandle, ASize);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'truncate', FName);
 end;
 
 function TFile.ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
 var
-  LSaved: Int64;
+  LBytesRead: PtrUInt;
+  LResult: Int32;
 begin
   CheckOpen;
-  LSaved := Seek(0, soCurrent);
-  Seek(AOffset, soBeginning);
-  Result := Read(ABuf, ACount);
-  Seek(LSaved, soBeginning);
+  if ACount = 0 then
+    Exit(0);
+  LResult := platform_file_pread(FHandle, @ABuf, ACount, AOffset, LBytesRead);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'pread', FName);
+  Result := LBytesRead;
 end;
 
 function TFile.WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
 var
-  LSaved: Int64;
+  LBytesWritten: PtrUInt;
+  LResult: Int32;
 begin
   CheckOpen;
-  LSaved := Seek(0, soCurrent);
-  Seek(AOffset, soBeginning);
-  Result := Write(ABuf, ACount);
-  Seek(LSaved, soBeginning);
+  if ACount = 0 then
+    Exit(0);
+  LResult := platform_file_pwrite(FHandle, @ABuf, ACount, AOffset, LBytesWritten);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'pwrite', FName);
+  Result := LBytesWritten;
 end;
 
 end.

@@ -9,16 +9,27 @@ uses
 
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
+  APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ACount: PtrUInt; out ABytesRead: PtrUInt): Int32;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
   ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32;
+function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;
+function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
 function platform_file_unlink(const APath: PAnsiChar): Int32;
@@ -61,6 +72,13 @@ uses
 {$IFDEF NEXTPAS_UNIX}
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+begin
+  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, 438, AHandle);
+end;
+
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
+  APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
 var
   LFlags: Int32;
 begin
@@ -76,7 +94,11 @@ begin
     fcmOpenOrCreate:    LFlags := LFlags or O_CREAT;
     fcmTruncateExisting: LFlags := LFlags or O_TRUNC;
   end;
-  AHandle.Value := open(APath, LFlags, 438);
+  if AAppend then
+    LFlags := LFlags or O_APPEND;
+  if ASync then
+    LFlags := LFlags or O_SYNC;
+  AHandle.Value := open(APath, LFlags, APerm);
   if AHandle.Value < 0 then
     Result := platform_get_errno
   else
@@ -130,6 +152,42 @@ begin
   end;
 end;
 
+function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+var
+  LResult: PtrInt;
+begin
+  LResult := pread(AHandle.Value, ABuf, ACount, AOffset);
+  if LResult < 0 then
+  begin
+    ABytesRead := 0;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    ABytesRead := PtrUInt(LResult);
+    Result := 0;
+  end;
+end;
+
+function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+var
+  LResult: PtrInt;
+begin
+  LResult := pwrite(AHandle.Value, ABuf, ACount, AOffset);
+  if LResult < 0 then
+  begin
+    ABytesWritten := 0;
+    Result := platform_get_errno;
+  end
+  else
+  begin
+    ABytesWritten := PtrUInt(LResult);
+    Result := 0;
+  end;
+end;
+
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
   AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32;
 var
@@ -170,61 +228,9 @@ begin
     Result := platform_get_errno;
 end;
 
-function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
-var
 {$IFDEF NEXTPAS_LINUX}
-  LStat: TPlatformLinuxStat;
-{$ENDIF}
-{$IFDEF NEXTPAS_MACOS}
-  LStat: TDarwinStat;
-{$ENDIF}
-{$IFDEF NEXTPAS_FREEBSD}
-  LStat: TFreeBSDStat;
-{$ENDIF}
+procedure ClassifyStatType(var AStat: TPlatformFileStat);
 begin
-  FillChar(AStat, SizeOf(AStat), 0);
-{$IFDEF NEXTPAS_LINUX}
-  if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
-    Exit(platform_get_errno);
-  AStat.Size := LStat.st_size;
-  AStat.Mode := LStat.st_mode;
-  AStat.Uid := LStat.st_uid;
-  AStat.Gid := LStat.st_gid;
-  AStat.NLink := UInt32(LStat.st_nlink);
-  AStat.Dev := LStat.st_dev;
-  AStat.Ino := LStat.st_ino;
-  AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
-  AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
-  AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
-{$ENDIF}
-{$IFDEF NEXTPAS_MACOS}
-  if fpstat(APath, @LStat) <> 0 then
-    Exit(platform_get_errno);
-  AStat.Size := LStat.st_size;
-  AStat.Mode := UInt32(LStat.st_mode);
-  AStat.Uid := LStat.st_uid;
-  AStat.Gid := LStat.st_gid;
-  AStat.NLink := UInt32(LStat.st_nlink);
-  AStat.Dev := UInt64(LStat.st_dev);
-  AStat.Ino := LStat.st_ino;
-  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
-  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
-  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
-{$ENDIF}
-{$IFDEF NEXTPAS_FREEBSD}
-  if fpstat(APath, @LStat) <> 0 then
-    Exit(platform_get_errno);
-  AStat.Size := LStat.st_size;
-  AStat.Mode := UInt32(LStat.st_mode);
-  AStat.Uid := LStat.st_uid;
-  AStat.Gid := LStat.st_gid;
-  AStat.NLink := UInt32(LStat.st_nlink);
-  AStat.Dev := LStat.st_dev;
-  AStat.Ino := LStat.st_ino;
-  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
-  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
-  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
-{$ENDIF}
   case AStat.Mode and S_IFMT of
     S_IFREG:  AStat.FileType := ftRegular;
     S_IFDIR:  AStat.FileType := ftDirectory;
@@ -236,7 +242,141 @@ begin
   else
     AStat.FileType := ftUnknown;
   end;
+end;
+{$ELSE}
+procedure ClassifyStatType(var AStat: TPlatformFileStat);
+begin
+  case AStat.Mode and S_IFMT of
+    S_IFREG:  AStat.FileType := ftRegular;
+    S_IFDIR:  AStat.FileType := ftDirectory;
+    S_IFLNK:  AStat.FileType := ftSymlink;
+    S_IFCHR:  AStat.FileType := ftCharDevice;
+    S_IFBLK:  AStat.FileType := ftBlockDevice;
+    S_IFIFO:  AStat.FileType := ftFifo;
+    S_IFSOCK: AStat.FileType := ftSocket;
+  else
+    AStat.FileType := ftUnknown;
+  end;
+end;
+{$ENDIF}
+
+{$IFDEF NEXTPAS_LINUX}
+procedure FillPlatformStat(const LStat: TPlatformLinuxStat; out AStat: TPlatformFileStat);
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := LStat.st_mode;
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := Int64(LStat.st_mtime) * 1000000000 + Int64(LStat.st_mtime_nsec);
+  AStat.AccessTime := Int64(LStat.st_atime) * 1000000000 + Int64(LStat.st_atime_nsec);
+  AStat.CreateTime := Int64(LStat.st_ctime) * 1000000000 + Int64(LStat.st_ctime_nsec);
+  ClassifyStatType(AStat);
+end;
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+procedure FillPlatformStat(const LStat: TDarwinStat; out AStat: TPlatformFileStat);
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := UInt32(LStat.st_mode);
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := UInt64(LStat.st_dev);
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
+  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
+  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
+  ClassifyStatType(AStat);
+end;
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+procedure FillPlatformStat(const LStat: TFreeBSDStat; out AStat: TPlatformFileStat);
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  AStat.Size := LStat.st_size;
+  AStat.Mode := UInt32(LStat.st_mode);
+  AStat.Uid := LStat.st_uid;
+  AStat.Gid := LStat.st_gid;
+  AStat.NLink := UInt32(LStat.st_nlink);
+  AStat.Dev := LStat.st_dev;
+  AStat.Ino := LStat.st_ino;
+  AStat.ModTime := LStat.st_mtime * 1000000000 + LStat.st_mtimensec;
+  AStat.AccessTime := LStat.st_atime * 1000000000 + LStat.st_atimensec;
+  AStat.CreateTime := LStat.st_ctime * 1000000000 + LStat.st_ctimensec;
+  ClassifyStatType(AStat);
+end;
+{$ENDIF}
+
+function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+var
+  LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
+         {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+begin
+{$IFDEF NEXTPAS_LINUX}
+  if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
+    Exit(platform_get_errno);
+{$ELSE}
+  if fpstat(APath, @LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ENDIF}
+  FillPlatformStat(LStat, AStat);
   Result := 0;
+end;
+
+function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+var
+  LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
+         {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+begin
+{$IFDEF NEXTPAS_LINUX}
+  if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
+    Exit(platform_get_errno);
+{$ELSE}
+  if fplstat(APath, @LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ENDIF}
+  FillPlatformStat(LStat, AStat);
+  Result := 0;
+end;
+
+function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;
+var
+  LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
+         {$IFDEF NEXTPAS_MACOS}TDarwinStat{$ENDIF}
+         {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF};
+begin
+{$IFDEF NEXTPAS_LINUX}
+  if __fxstat(1, AHandle.Value, LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ELSE}
+  if fpfstat(AHandle.Value, @LStat) <> 0 then
+    Exit(platform_get_errno);
+{$ENDIF}
+  FillPlatformStat(LStat, AStat);
+  Result := 0;
+end;
+
+function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  if chmod(APath, AMode) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
+begin
+  if truncate(APath, ASize) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -539,14 +679,26 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
+begin
+  Result := platform_file_open_ex(APath, AMode, ACreate, False, False, 438, AHandle);
+end;
+
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
+  ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean;
+  APerm: UInt32; out AHandle: TPlatformFileHandle): Int32;
+const
+  FILE_APPEND_DATA = $0004;
+  FILE_FLAG_WRITE_THROUGH = $80000000;
 var
-  LAccess, LDisposition: DWORD;
+  LAccess, LDisposition, LFlags: DWORD;
 begin
   case AMode of
     fomReadOnly:  LAccess := GENERIC_READ;
     fomWriteOnly: LAccess := GENERIC_WRITE;
     fomReadWrite: LAccess := GENERIC_READ or GENERIC_WRITE;
   end;
+  if AAppend then
+    LAccess := LAccess or FILE_APPEND_DATA;
   case ACreate of
     fcmOpenExisting:     LDisposition := OPEN_EXISTING;
     fcmCreateAlways:     LDisposition := CREATE_ALWAYS;
@@ -554,7 +706,10 @@ begin
     fcmOpenOrCreate:     LDisposition := OPEN_ALWAYS;
     fcmTruncateExisting: LDisposition := TRUNCATE_EXISTING;
   end;
-  AHandle.Value := CreateFileA(APath, LAccess, FILE_SHARE_READ, nil, LDisposition, $80, nil);
+  LFlags := $80;
+  if ASync then
+    LFlags := LFlags or FILE_FLAG_WRITE_THROUGH;
+  AHandle.Value := CreateFileA(APath, LAccess, FILE_SHARE_READ, nil, LDisposition, LFlags, nil);
   if AHandle.Value = HANDLE(PtrInt(-1)) then
     Result := Int32(GetLastError)
   else
@@ -597,6 +752,50 @@ var
 begin
   LWritten := 0;
   if WriteFile(AHandle.Value, ABuf, DWORD(ACount), @LWritten, nil) then
+  begin
+    ABytesWritten := LWritten;
+    Result := 0;
+  end
+  else
+  begin
+    ABytesWritten := 0;
+    Result := Int32(GetLastError);
+  end;
+end;
+
+function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32;
+var
+  LOvl: OVERLAPPED;
+  LRead: DWORD;
+begin
+  FillChar(LOvl, SizeOf(LOvl), 0);
+  LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
+  LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
+  LRead := 0;
+  if ReadFile(AHandle.Value, ABuf, DWORD(ACount), @LRead, @LOvl) then
+  begin
+    ABytesRead := LRead;
+    Result := 0;
+  end
+  else
+  begin
+    ABytesRead := 0;
+    Result := Int32(GetLastError);
+  end;
+end;
+
+function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
+  ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32;
+var
+  LOvl: OVERLAPPED;
+  LWritten: DWORD;
+begin
+  FillChar(LOvl, SizeOf(LOvl), 0);
+  LOvl.Offset := DWORD(AOffset and $FFFFFFFF);
+  LOvl.OffsetHigh := DWORD((AOffset shr 32) and $FFFFFFFF);
+  LWritten := 0;
+  if WriteFile(AHandle.Value, ABuf, DWORD(ACount), @LWritten, @LOvl) then
   begin
     ABytesWritten := LWritten;
     Result := 0;
@@ -654,15 +853,78 @@ var
 begin
   FillChar(AStat, SizeOf(AStat), 0);
   if not GetFileAttributesExA(APath, GetFileExInfoStandard, @LData) then
-    Exit(-1);
+    Exit(Int32(GetLastError));
   LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
-  if (LData.dwFileAttributes and $10) <> 0 then
+  if (LData.dwFileAttributes and $400) <> 0 then
+    AStat.FileType := ftSymlink
+  else if (LData.dwFileAttributes and $10) <> 0 then
     AStat.FileType := ftDirectory
   else
     AStat.FileType := ftRegular;
   Result := 0;
+end;
+
+function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
+begin
+  { Windows GetFileAttributesEx does not follow reparse points by default,
+    so stat already reports symlink type. lstat == stat on this backend. }
+  Result := platform_file_stat(APath, AStat);
+end;
+
+function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;
+var
+  LInfo: BY_HANDLE_FILE_INFORMATION;
+  LSize: UInt64;
+begin
+  FillChar(AStat, SizeOf(AStat), 0);
+  if not GetFileInformationByHandle(AHandle.Value, @LInfo) then
+    Exit(Int32(GetLastError));
+  LSize := UInt64(LInfo.nFileSizeHigh) shl 32 or LInfo.nFileSizeLow;
+  AStat.Size := Int64(LSize);
+  AStat.Mode := LInfo.dwFileAttributes;
+  AStat.NLink := LInfo.nNumberOfLinks;
+  if (LInfo.dwFileAttributes and $400) <> 0 then
+    AStat.FileType := ftSymlink
+  else if (LInfo.dwFileAttributes and $10) <> 0 then
+    AStat.FileType := ftDirectory
+  else
+    AStat.FileType := ftRegular;
+  Result := 0;
+end;
+
+function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+const
+  FILE_ATTRIBUTE_READONLY = $1;
+  FILE_ATTRIBUTE_NORMAL = $80;
+var
+  LData: WIN32_FILE_ATTRIBUTE_DATA;
+  LAttr: DWORD;
+begin
+  if not GetFileAttributesExA(APath, GetFileExInfoStandard, @LData) then
+    Exit(Int32(GetLastError));
+  LAttr := LData.dwFileAttributes;
+  { Map owner-write bit (0o200 = $80) to the read-only attribute. }
+  if (AMode and $80) <> 0 then
+    LAttr := LAttr and not DWORD(FILE_ATTRIBUTE_READONLY)
+  else
+    LAttr := LAttr or FILE_ATTRIBUTE_READONLY;
+  if SetFileAttributesA(APath, LAttr) then
+    Result := 0
+  else
+    Result := Int32(GetLastError);
+end;
+
+function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  Result := platform_file_open(APath, fomReadWrite, fcmOpenExisting, LHandle);
+  if Result <> 0 then
+    Exit;
+  Result := platform_file_truncate(LHandle, ASize);
+  platform_file_close(LHandle);
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -787,13 +1049,20 @@ end;
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := -1; end;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := -1; end;
+function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; AOffset: Int64; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := -1; end;
+function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer; ACount: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := -1; end;
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := -1; end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := -1; end;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := -1; end;
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
+function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
+function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := -1; end;
+function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := -1; end;
+function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := -1; end;
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := -1; end;
 function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := -1; end;
 function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := -1; end;

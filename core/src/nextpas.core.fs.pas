@@ -39,10 +39,13 @@ procedure WriteAtomic(const APath: string; const AData: TBytes;
 function CopyFile(const ASrc, ADst: string): Int64; inline;
 function TempFile(const ADir, APattern: string): IFile; inline;
 function Stat(const APath: string): TFileInfo; inline;
+function Lstat(const APath: string): TFileInfo; inline;
 function Exists(const APath: string): Boolean; inline;
 function IsDir(const APath: string): Boolean; inline;
 function IsFile(const APath: string): Boolean; inline;
 function FileSize(const APath: string): Int64; inline;
+procedure Chmod(const APath: string; const APerm: TFilePermission); inline;
+procedure Truncate(const APath: string; const ASize: Int64); inline;
 
 { Directory operations }
 function Mkdir(const APath: string;
@@ -109,6 +112,11 @@ begin
   Result := nextpas.core.fs.util.FsStat(APath);
 end;
 
+function Lstat(const APath: string): TFileInfo;
+begin
+  Result := nextpas.core.fs.util.FsLstat(APath);
+end;
+
 function Exists(const APath: string): Boolean;
 begin
   Result := nextpas.core.fs.util.FsExists(APath);
@@ -127,6 +135,16 @@ end;
 function FileSize(const APath: string): Int64;
 begin
   Result := nextpas.core.fs.util.FsFileSize(APath);
+end;
+
+procedure Chmod(const APath: string; const APerm: TFilePermission);
+begin
+  nextpas.core.fs.util.FsChmod(APath, APerm);
+end;
+
+procedure Truncate(const APath: string; const ASize: Int64);
+begin
+  nextpas.core.fs.util.FsTruncate(APath, ASize);
 end;
 
 function Mkdir(const APath: string; const APerm: TFilePermission): Boolean;

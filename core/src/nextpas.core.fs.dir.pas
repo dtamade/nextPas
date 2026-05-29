@@ -28,6 +28,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
@@ -38,6 +39,7 @@ type
   private
     FHandle: TPlatformDirHandle;
     FCurrent: TDirEntry;
+    FName: string;
     FOpen: Boolean;
     FHasEntry: Boolean;
   public
@@ -55,9 +57,10 @@ var
   LResult: Int32;
 begin
   inherited Create;
+  FName := APath;
   LResult := platform_dir_open(PAnsiChar(APath), FHandle);
   if LResult <> 0 then
-    raise EIOError.Create('opendir failed (' + IntToStr(LResult) + '): ' + APath);
+    RaiseFsError(LResult, 'opendir', APath);
   FOpen := True;
   FHasEntry := False;
 end;
@@ -81,6 +84,9 @@ begin
   begin
     FHasEntry := False;
     Result := False;
+    { Contract: 0 = entry, 1 = end-of-directory, anything else = errno. }
+    if LResult <> 1 then
+      RaiseFsError(LResult, 'readdir', FName);
     Exit;
   end;
   FCurrent.Name := StrPas(@LPlatEntry.Name[0]);
@@ -171,13 +177,24 @@ begin
     Result := platform_file_unlink(PAnsiChar(APath)) = 0;
 end;
 
+{ True only for a real directory; a symlink to a directory returns False so
+  callers unlink the link instead of recursing into its target. }
+function IsRealDir(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  if platform_file_lstat(PAnsiChar(APath), LStat) <> 0 then
+    Exit(False);
+  Result := LStat.FileType = nextpas.core.platform.files.base.ftDirectory;
+end;
+
 function FsRemoveAll(const APath: string): Boolean;
 var
   LIter: IDirIterator;
   LEntry: TDirEntry;
   LChild: string;
 begin
-  if not platform_fs_is_dir(PAnsiChar(APath)) then
+  if not IsRealDir(APath) then
     Exit(platform_file_unlink(PAnsiChar(APath)) = 0);
 
   LIter := FsOpenDir(APath);
@@ -185,7 +202,7 @@ begin
   begin
     LEntry := LIter.Entry;
     LChild := APath + '/' + LEntry.Name;
-    if LEntry.IsDir then
+    if IsRealDir(LChild) then
       FsRemoveAll(LChild)
     else
       platform_file_unlink(PAnsiChar(LChild));
