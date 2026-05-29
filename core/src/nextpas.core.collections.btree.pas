@@ -65,6 +65,29 @@ type
     property Count: SizeUInt read FCount;
   end;
 
+  generic TBTreeSet<T> = class
+  public type
+    TCompareFunc = function(const A, B: T; aData: Pointer): SizeInt;
+  private type
+    TInner = specialize TBTreeMap<T, Byte>;
+  private
+    FInner: TInner;
+  public
+    constructor Create(ACompare: TCompareFunc; ACompareData: Pointer = nil);
+    destructor Destroy; override;
+
+    procedure Add(const AItem: T);
+    function Contains(const AItem: T): Boolean;
+    function Remove(const AItem: T): Boolean;
+    procedure Clear;
+
+    function Min(out AItem: T): Boolean;
+    function Max(out AItem: T): Boolean;
+
+    function GetCount: SizeUInt;
+    property Count: SizeUInt read GetCount;
+  end;
+
 implementation
 
 { Node management }
@@ -527,6 +550,57 @@ begin
   FreeNodeRecursive(FRoot);
   FRoot := nil;
   FCount := 0;
+end;
+
+{ TBTreeSet }
+
+constructor TBTreeSet.Create(ACompare: TCompareFunc; ACompareData: Pointer);
+begin
+  inherited Create;
+  FInner := TInner.Create(TInner.TCompareFunc(ACompare), ACompareData);
+end;
+
+destructor TBTreeSet.Destroy;
+begin
+  FInner.Free;
+  inherited Destroy;
+end;
+
+procedure TBTreeSet.Add(const AItem: T);
+begin
+  FInner.Put(AItem, 0);
+end;
+
+function TBTreeSet.Contains(const AItem: T): Boolean;
+begin
+  Result := FInner.ContainsKey(AItem);
+end;
+
+function TBTreeSet.Remove(const AItem: T): Boolean;
+begin
+  Result := FInner.Remove(AItem);
+end;
+
+procedure TBTreeSet.Clear;
+begin
+  FInner.Clear;
+end;
+
+function TBTreeSet.Min(out AItem: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.Min(AItem, LDummy);
+end;
+
+function TBTreeSet.Max(out AItem: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.Max(AItem, LDummy);
+end;
+
+function TBTreeSet.GetCount: SizeUInt;
+begin
+  Result := FInner.Count;
 end;
 
 end.
