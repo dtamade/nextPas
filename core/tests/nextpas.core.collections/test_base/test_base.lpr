@@ -60,6 +60,8 @@ begin
     Exit(APathFromTest);
   if FileExists(APathFromRoot) then
     Exit(APathFromRoot);
+  if FileExists('src/' + ExtractFileName(APathFromRoot)) then
+    Exit('src/' + ExtractFileName(APathFromRoot));
   Result := APathFromTest;
 end;
 
