@@ -499,25 +499,21 @@ begin
   Result := AVX2CmpGtI32x8(b, a);
 end;
 
-function AVX2CmpGtI32x8(const a, b: TVecI32x8): TMask8;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpcmpgtd ymm0, ymm0, [rcx]
+function AVX2CmpGtI32x8(const a, b: TVecI32x8): TMask8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+    // SysV: rdi=@a, rsi=@b, result in eax
+    vmovdqu  ymm0, [rdi]
+    vpcmpgtd ymm0, ymm0, [rsi]
     vmovmskps eax, ymm0
-    mov     mask, eax
     vzeroupper
-  end;
-
-  Result := TMask8(mask);
+  {$ELSE}
+    // Win64: rcx=@a, rdx=@b, result in eax
+    vmovdqu  ymm0, [rcx]
+    vpcmpgtd ymm0, ymm0, [rdx]
+    vmovmskps eax, ymm0
+    vzeroupper
+  {$ENDIF}
 end;
 
 // ✅ P0-2: 补充缺失的比较函数
@@ -538,40 +534,36 @@ end;
 
 // I32x8 Min/Max Operations
 
-function AVX2MinI32x8(const a, b: TVecI32x8): TVecI32x8;
-var
-  pa, pb, pr: Pointer;
-begin
-  pr := @Result;
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rax, pr
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpminsd ymm0, ymm0, [rcx]   // Signed min
-    vmovdqu [rax], ymm0
+function AVX2MinI32x8(const a, b: TVecI32x8): TVecI32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+    // SysV: rdi=@Result, rsi=@a, rdx=@b
+    vmovdqu ymm0, [rsi]
+    vpminsd ymm0, ymm0, [rdx]
+    vmovdqu [rdi], ymm0
     vzeroupper
-  end;
+  {$ELSE}
+    // Win64: rcx=@Result, rdx=@a, r8=@b
+    vmovdqu ymm0, [rdx]
+    vpminsd ymm0, ymm0, [r8]
+    vmovdqu [rcx], ymm0
+    vzeroupper
+  {$ENDIF}
 end;
 
-function AVX2MaxI32x8(const a, b: TVecI32x8): TVecI32x8;
-var
-  pa, pb, pr: Pointer;
-begin
-  pr := @Result;
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rax, pr
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpmaxsd ymm0, ymm0, [rcx]   // Signed max
-    vmovdqu [rax], ymm0
+function AVX2MaxI32x8(const a, b: TVecI32x8): TVecI32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+    // SysV: rdi=@Result, rsi=@a, rdx=@b
+    vmovdqu ymm0, [rsi]
+    vpmaxsd ymm0, ymm0, [rdx]
+    vmovdqu [rdi], ymm0
     vzeroupper
-  end;
+  {$ELSE}
+    // Win64: rcx=@Result, rdx=@a, r8=@b
+    vmovdqu ymm0, [rdx]
+    vpmaxsd ymm0, ymm0, [r8]
+    vmovdqu [rcx], ymm0
+    vzeroupper
+  {$ENDIF}
 end;

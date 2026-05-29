@@ -295,29 +295,20 @@ begin
   end;
 end;
 
-function AVX2DotF64x4(const a, b: TVecF64x4): Double;
-var
-  pa, pb: Pointer;
-begin
-  pa := @a;
-  pb := @b;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    vmovupd ymm0, [rax]      // 加载 a
-    vmovupd ymm1, [rdx]      // 加载 b
-    vmulpd  ymm0, ymm0, ymm1 // a * b
-
-    // 水平规约
-    vhaddpd ymm0, ymm0, ymm0 // [0+1, 0+1, 2+3, 2+3]
-
-    // 将高 128 位和低 128 位相加
-    vextractf128 xmm1, ymm0, 1 // 提取高 128 位
-    addsd   xmm0, xmm1          // 相加低位标量
-
-    vmovsd  [result], xmm0
-    vzeroupper               // 清理 YMM 寄存器状态
-  end;
+function AVX2DotF64x4(const a, b: TVecF64x4): Double; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovupd ymm0, [rdi]
+  vmovupd ymm1, [rsi]
+  {$ELSE}
+  vmovupd ymm0, [rcx]
+  vmovupd ymm1, [rdx]
+  {$ENDIF}
+  vmulpd  ymm0, ymm0, ymm1
+  vhaddpd ymm0, ymm0, ymm0
+  vextractf128 xmm1, ymm0, 1
+  addsd   xmm0, xmm1
+  vzeroupper
 end;
 
 
@@ -1008,21 +999,17 @@ end;
 // === AVX2 Integer Multiply Shared Kernels ===
 // Low-half vector multiply has the same bit pattern for signed and unsigned lanes.
 
-procedure AVX2MulDwordVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpmulld xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2MulDwordVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpmulld xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpmulld xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
 procedure AVX2MulDwordVecImpl(const a, b: TVecI32x4; out r: TVecI32x4); inline;
@@ -1035,21 +1022,17 @@ begin
   AVX2MulDwordVecRaw(@a, @b, @r);
 end;
 
-procedure AVX2MulWordVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpmullw xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2MulWordVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpmullw xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpmullw xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
 procedure AVX2MulWordVecImpl(const a, b: TVecI16x8; out r: TVecI16x8); inline;
@@ -1067,199 +1050,154 @@ begin
   AVX2MulDwordVecImpl(a, b, Result);
 end;
 
-procedure AVX2AndVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpand   xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2AndVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpand   xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpand   xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
-procedure AVX2OrVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpor    xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2OrVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpor    xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpor    xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
-procedure AVX2XorVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpxor   xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2XorVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpxor   xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpxor   xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
-procedure AVX2NotVecRaw(const aPtr, rPtr: Pointer);
-var
-  pa, pr: Pointer;
-begin
-  pa := aPtr;
-  pr := rPtr;
-  asm
-    mov      rax, pa
-    mov      rcx, pr
-    vmovdqu  xmm0, [rax]
-    vpcmpeqd xmm1, xmm1, xmm1
-    vpxor    xmm0, xmm0, xmm1
-    vmovdqu  [rcx], xmm0
-  end;
+procedure AVX2NotVecRaw(const aPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu  xmm0, [rdi]
+  vpcmpeqd xmm1, xmm1, xmm1
+  vpxor    xmm0, xmm0, xmm1
+  vmovdqu  [rsi], xmm0
+  {$ELSE}
+  vmovdqu  xmm0, [rcx]
+  vpcmpeqd xmm1, xmm1, xmm1
+  vpxor    xmm0, xmm0, xmm1
+  vmovdqu  [rdx], xmm0
+  {$ENDIF}
 end;
 
-procedure AVX2AndNotVecRaw(const aPtr, bPtr, rPtr: Pointer);
-var
-  pa, pb, pr: Pointer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  pr := rPtr;
-  asm
-    mov    rax, pa
-    mov    rdx, pb
-    mov    rcx, pr
-    vmovdqu xmm0, [rax]
-    vpandn  xmm0, xmm0, [rdx]
-    vmovdqu [rcx], xmm0
-  end;
+procedure AVX2AndNotVecRaw(const aPtr, bPtr, rPtr: Pointer); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu xmm0, [rdi]
+  vpandn  xmm0, xmm0, [rsi]
+  vmovdqu [rdx], xmm0
+  {$ELSE}
+  vmovdqu xmm0, [rcx]
+  vpandn  xmm0, xmm0, [rdx]
+  vmovdqu [r8], xmm0
+  {$ENDIF}
 end;
 
 // Eq compare raw helpers shared by signed/unsigned wrappers of the same lane width.
-function AVX2CmpEqDwordMaskRaw(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  xmm0, [rax]
-    vpcmpeqd xmm0, xmm0, [rdx]
-    vmovmskps eax, xmm0
-    mov      mask, eax
-  end;
-  Result := mask;
+function AVX2CmpEqDwordMaskRaw(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu  xmm0, [rdi]
+  vpcmpeqd xmm0, xmm0, [rsi]
+  vmovmskps eax, xmm0
+  {$ELSE}
+  vmovdqu  xmm0, [rcx]
+  vpcmpeqd xmm0, xmm0, [rdx]
+  vmovmskps eax, xmm0
+  {$ENDIF}
 end;
 
-function AVX2CmpEqWordMaskRaw(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  xmm0, [rax]
-    vpcmpeqw xmm0, xmm0, [rdx]
-    vpmovmskb eax, xmm0
-    mov      mask, eax
-  end;
-  Result := mask;
+function AVX2CmpEqWordMaskRaw(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu   xmm0, [rdi]
+  vpcmpeqw  xmm0, xmm0, [rsi]
+  vpmovmskb eax, xmm0
+  {$ELSE}
+  vmovdqu   xmm0, [rcx]
+  vpcmpeqw  xmm0, xmm0, [rdx]
+  vpmovmskb eax, xmm0
+  {$ENDIF}
 end;
 
-function AVX2CmpEqByteMaskRaw(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  xmm0, [rax]
-    vpcmpeqb xmm0, xmm0, [rdx]
-    vpmovmskb eax, xmm0
-    mov      mask, eax
-  end;
-  Result := mask;
+function AVX2CmpEqByteMaskRaw(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu   xmm0, [rdi]
+  vpcmpeqb  xmm0, xmm0, [rsi]
+  vpmovmskb eax, xmm0
+  {$ELSE}
+  vmovdqu   xmm0, [rcx]
+  vpcmpeqb  xmm0, xmm0, [rdx]
+  vpmovmskb eax, xmm0
+  {$ENDIF}
 end;
 
-function AVX2CmpEqQwordMaskRaw(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  xmm0, [rax]
-    vpcmpeqq xmm0, xmm0, [rdx]
-    vmovmskpd eax, xmm0
-    mov      mask, eax
-  end;
-  Result := mask;
+function AVX2CmpEqQwordMaskRaw(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu   xmm0, [rdi]
+  vpcmpeqq  xmm0, xmm0, [rsi]
+  vmovmskpd eax, xmm0
+  {$ELSE}
+  vmovdqu   xmm0, [rcx]
+  vpcmpeqq  xmm0, xmm0, [rdx]
+  vmovmskpd eax, xmm0
+  {$ENDIF}
 end;
 
-function AVX2CmpEqDwordMaskRaw256(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  ymm0, [rax]
-    vpcmpeqd ymm0, ymm0, [rdx]
-    vmovmskps eax, ymm0
-    mov      mask, eax
-    vzeroupper
-  end;
-  Result := mask;
+function AVX2CmpEqDwordMaskRaw256(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu   ymm0, [rdi]
+  vpcmpeqd  ymm0, ymm0, [rsi]
+  vmovmskps eax, ymm0
+  vzeroupper
+  {$ELSE}
+  vmovdqu   ymm0, [rcx]
+  vpcmpeqd  ymm0, ymm0, [rdx]
+  vmovmskps eax, ymm0
+  vzeroupper
+  {$ENDIF}
 end;
 
-function AVX2CmpEqQwordMaskRaw256(const aPtr, bPtr: Pointer): Integer;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := aPtr;
-  pb := bPtr;
-  asm
-    mov      rax, pa
-    mov      rdx, pb
-    vmovdqu  ymm0, [rax]
-    vpcmpeqq ymm0, ymm0, [rdx]
-    vmovmskpd eax, ymm0
-    mov      mask, eax
-    vzeroupper
-  end;
-  Result := mask;
+function AVX2CmpEqQwordMaskRaw256(const aPtr, bPtr: Pointer): Integer; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu   ymm0, [rdi]
+  vpcmpeqq  ymm0, ymm0, [rsi]
+  vmovmskpd eax, ymm0
+  vzeroupper
+  {$ELSE}
+  vmovdqu   ymm0, [rcx]
+  vpcmpeqq  ymm0, ymm0, [rdx]
+  vmovmskpd eax, ymm0
+  vzeroupper
+  {$ENDIF}
 end;
 
 // === I32x4 Bitwise Operations (128-bit) ===
@@ -2711,25 +2649,17 @@ begin
 end;
 
 // I64x4 大于比较 (VPCMPGTQ ymm)
-function AVX2CmpGtI64x4(const a, b: TVecI64x4): TMask4;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpcmpgtq ymm0, ymm0, [rcx]
-    vmovmskpd eax, ymm0
-    mov     mask, eax
-    vzeroupper
-  end;
-
-  Result := TMask4(mask);
+function AVX2CmpGtI64x4(const a, b: TVecI64x4): TMask4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu  ymm0, [rdi]
+  vpcmpgtq ymm0, ymm0, [rsi]
+  {$ELSE}
+  vmovdqu  ymm0, [rcx]
+  vpcmpgtq ymm0, ymm0, [rdx]
+  {$ENDIF}
+  vmovmskpd eax, ymm0
+  vzeroupper
 end;
 
 // I64x4 小于比较 (a < b = b > a)
@@ -2759,68 +2689,57 @@ end;
 // I64x4 Utility Operations
 
 // I64x4 加载 (从内存加载 4×Int64)
-function AVX2LoadI64x4(p: PInt64): TVecI64x4;
-var
-  pr: Pointer;
-begin
-  pr := @Result;
-
-  asm
-    mov     rax, pr
-    mov     rdx, p
-    vmovdqu ymm0, [rdx]
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+function AVX2LoadI64x4(p: PInt64): TVecI64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu ymm0, [rsi]
+  vmovdqu [rdi], ymm0
+  {$ELSE}
+  vmovdqu ymm0, [rdx]
+  vmovdqu [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // I64x4 存储 (存储 4×Int64 到内存)
-procedure AVX2StoreI64x4(p: PInt64; const a: TVecI64x4);
-var
-  pa: Pointer;
-begin
-  pa := @a;
-
-  asm
-    mov     rax, p
-    mov     rdx, pa
-    vmovdqu ymm0, [rdx]
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+procedure AVX2StoreI64x4(p: PInt64; const a: TVecI64x4); assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu ymm0, [rsi]
+  vmovdqu [rdi], ymm0
+  {$ELSE}
+  vmovdqu ymm0, [rdx]
+  vmovdqu [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // I64x4 广播 (将单个值广播到所有通道)
-function AVX2SplatI64x4(value: Int64): TVecI64x4;
-var
-  pr: Pointer;
-  LValuePtr: PInt64;
-begin
-  pr := @Result;
-  LValuePtr := @value;
-
-  asm
-    mov     rax, pr
-    mov     rdx, LValuePtr
-    vpbroadcastq ymm0, [rdx]
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+function AVX2SplatI64x4(value: Int64): TVecI64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovq    xmm0, rsi
+  vpbroadcastq ymm0, xmm0
+  vmovdqu  [rdi], ymm0
+  {$ELSE}
+  vmovq    xmm0, rdx
+  vpbroadcastq ymm0, xmm0
+  vmovdqu  [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // I64x4 零向量
-function AVX2ZeroI64x4: TVecI64x4;
-var
-  pr: Pointer;
-begin
-  pr := @Result;
-
-  asm
-    mov     rax, pr
-    vpxor   ymm0, ymm0, ymm0
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+function AVX2ZeroI64x4: TVecI64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vpxor   ymm0, ymm0, ymm0
+  vmovdqu [rdi], ymm0
+  {$ELSE}
+  vpxor   ymm0, ymm0, ymm0
+  vmovdqu [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // === U32x8 Operations (native 256-bit AVX2) ===
@@ -2896,37 +2815,33 @@ begin
 end;
 
 // U32x8 大于比较 (使用符号位翻转技巧)
-function AVX2CmpGtU32x8(const a, b: TVecU32x8): TMask8;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-const
-  SIGN_BIT: UInt32 = $80000000;
-begin
-  pa := @a;
-  pb := @b;
-
-  // 无符号比较: XOR $80000000 转换为有符号比较
-  asm
-    mov     rdx, pa
-    mov     rcx, pb
-    // 创建符号位掩码
-    mov     eax, $80000000
-    vmovd   xmm2, eax
-    vpbroadcastd ymm2, xmm2     // ymm2 = [$80000000, $80000000, ...]
-    // 加载并翻转符号位
-    vmovdqu ymm0, [rdx]
-    vpxor   ymm0, ymm0, ymm2    // a XOR $80000000
-    vmovdqu ymm1, [rcx]
-    vpxor   ymm1, ymm1, ymm2    // b XOR $80000000
-    // 有符号比较
-    vpcmpgtd ymm0, ymm0, ymm1
-    vmovmskps eax, ymm0
-    mov     mask, eax
-    vzeroupper
-  end;
-
-  Result := TMask8(mask);
+function AVX2CmpGtU32x8(const a, b: TVecU32x8): TMask8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // 创建符号位掩码
+  mov     eax, $80000000
+  vmovd   xmm2, eax
+  vpbroadcastd ymm2, xmm2
+  // 加载并翻转符号位
+  vmovdqu ymm0, [rdi]
+  vpxor   ymm0, ymm0, ymm2
+  vmovdqu ymm1, [rsi]
+  vpxor   ymm1, ymm1, ymm2
+  {$ELSE}
+  // 创建符号位掩码
+  mov     eax, $80000000
+  vmovd   xmm2, eax
+  vpbroadcastd ymm2, xmm2
+  // 加载并翻转符号位
+  vmovdqu ymm0, [rcx]
+  vpxor   ymm0, ymm0, ymm2
+  vmovdqu ymm1, [rdx]
+  vpxor   ymm1, ymm1, ymm2
+  {$ENDIF}
+  // 有符号比较
+  vpcmpgtd ymm0, ymm0, ymm1
+  vmovmskps eax, ymm0
+  vzeroupper
 end;
 
 // U32x8 小于比较 (a < b = b > a，使用符号位翻转)
@@ -2954,43 +2869,33 @@ begin
 end;
 
 // U32x8 无符号最小值 (VPMINUD ymm)
-function AVX2MinU32x8(const a, b: TVecU32x8): TVecU32x8;
-var
-  pa, pb, pr: Pointer;
-begin
-  pr := @Result;
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rax, pr
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpminud ymm0, ymm0, [rcx]   // Unsigned min
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+function AVX2MinU32x8(const a, b: TVecU32x8): TVecU32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu ymm0, [rsi]
+  vpminud ymm0, ymm0, [rdx]
+  vmovdqu [rdi], ymm0
+  {$ELSE}
+  vmovdqu ymm0, [rdx]
+  vpminud ymm0, ymm0, [r8]
+  vmovdqu [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // U32x8 无符号最大值 (VPMAXUD ymm)
-function AVX2MaxU32x8(const a, b: TVecU32x8): TVecU32x8;
-var
-  pa, pb, pr: Pointer;
-begin
-  pr := @Result;
-  pa := @a;
-  pb := @b;
-
-  asm
-    mov     rax, pr
-    mov     rdx, pa
-    mov     rcx, pb
-    vmovdqu ymm0, [rdx]
-    vpmaxud ymm0, ymm0, [rcx]   // Unsigned max
-    vmovdqu [rax], ymm0
-    vzeroupper
-  end;
+function AVX2MaxU32x8(const a, b: TVecU32x8): TVecU32x8; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  vmovdqu ymm0, [rsi]
+  vpmaxud ymm0, ymm0, [rdx]
+  vmovdqu [rdi], ymm0
+  {$ELSE}
+  vmovdqu ymm0, [rdx]
+  vpmaxud ymm0, ymm0, [r8]
+  vmovdqu [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // === U64x4 Operations (native 256-bit AVX2) ===
@@ -3054,35 +2959,33 @@ begin
 end;
 
 // U64x4 大于比较 (使用符号位翻转技巧)
-function AVX2CmpGtU64x4(const a, b: TVecU64x4): TMask4;
-var
-  pa, pb: Pointer;
-  mask: Integer;
-begin
-  pa := @a;
-  pb := @b;
-
-  // 无符号比较: XOR $8000000000000000 转换为有符号比较
-  asm
-    mov     rdx, pa
-    mov     rcx, pb
-    // 创建符号位掩码 (64-bit)
-    mov     rax, $8000000000000000
-    vmovq   xmm2, rax
-    vpbroadcastq ymm2, xmm2     // ymm2 = [$8000..., $8000..., ...]
-    // 加载并翻转符号位
-    vmovdqu ymm0, [rdx]
-    vpxor   ymm0, ymm0, ymm2    // a XOR $8000...
-    vmovdqu ymm1, [rcx]
-    vpxor   ymm1, ymm1, ymm2    // b XOR $8000...
-    // 有符号比较
-    vpcmpgtq ymm0, ymm0, ymm1
-    vmovmskpd eax, ymm0
-    mov     mask, eax
-    vzeroupper
-  end;
-
-  Result := TMask4(mask);
+function AVX2CmpGtU64x4(const a, b: TVecU64x4): TMask4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // 创建符号位掩码 (64-bit)
+  mov     rax, $8000000000000000
+  vmovq   xmm2, rax
+  vpbroadcastq ymm2, xmm2
+  // 加载并翻转符号位
+  vmovdqu ymm0, [rdi]
+  vpxor   ymm0, ymm0, ymm2
+  vmovdqu ymm1, [rsi]
+  vpxor   ymm1, ymm1, ymm2
+  {$ELSE}
+  // 创建符号位掩码 (64-bit)
+  mov     rax, $8000000000000000
+  vmovq   xmm2, rax
+  vpbroadcastq ymm2, xmm2
+  // 加载并翻转符号位
+  vmovdqu ymm0, [rcx]
+  vpxor   ymm0, ymm0, ymm2
+  vmovdqu ymm1, [rdx]
+  vpxor   ymm1, ymm1, ymm2
+  {$ENDIF}
+  // 有符号比较
+  vpcmpgtq ymm0, ymm0, ymm1
+  vmovmskpd eax, ymm0
+  vzeroupper
 end;
 
 // U64x4 小于比较 (a < b = b > a)
@@ -3115,25 +3018,26 @@ end;
 
 // F64x4 倒数近似 (1/x)
 // 注意: 没有原生 vrcppd 指令，使用 vdivpd 实现精确倒数
-function AVX2RcpF64x4(const a: TVecF64x4): TVecF64x4;
-var
-  pa, pr: Pointer;
-begin
-  pr := @Result;
-  pa := @a;
-
-  asm
-    mov     rax, pr
-    mov     rdx, pa
-    // 创建全1.0的向量
-    mov     rcx, $3FF0000000000000    // 1.0 in IEEE 754 double
-    vmovq   xmm1, rcx
-    vpbroadcastq ymm1, xmm1           // ymm1 = [1.0, 1.0, 1.0, 1.0]
-    vmovupd ymm0, [rdx]
-    vdivpd  ymm0, ymm1, ymm0          // 1.0 / a
-    vmovupd [rax], ymm0
-    vzeroupper
-  end;
+function AVX2RcpF64x4(const a: TVecF64x4): TVecF64x4; assembler; nostackframe;
+asm
+  {$IFDEF UNIX}
+  // 创建全1.0的向量
+  mov     rax, $3FF0000000000000
+  vmovq   xmm1, rax
+  vpbroadcastq ymm1, xmm1
+  vmovupd ymm0, [rsi]
+  vdivpd  ymm0, ymm1, ymm0
+  vmovupd [rdi], ymm0
+  {$ELSE}
+  // 创建全1.0的向量
+  mov     rax, $3FF0000000000000
+  vmovq   xmm1, rax
+  vpbroadcastq ymm1, xmm1
+  vmovupd ymm0, [rdx]
+  vdivpd  ymm0, ymm1, ymm0
+  vmovupd [rcx], ymm0
+  {$ENDIF}
+  vzeroupper
 end;
 
 // === Mask Operations (AVX2) ===
