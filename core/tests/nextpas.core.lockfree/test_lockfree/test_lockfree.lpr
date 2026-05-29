@@ -357,9 +357,9 @@ var
 begin
   LD := TIntDeque.Create(8);
   Check(LD.IsEmpty, 'empty');
-  LD.Push(10);
-  LD.Push(20);
-  LD.Push(30);
+  Check(LD.TryPush(10), 'push 1');
+  Check(LD.TryPush(20), 'push 2');
+  Check(LD.TryPush(30), 'push 3');
   CheckEqual(Int64(3), Int64(LD.ApproxCount), 'count 3');
   Check(LD.TryPop(LV), 'pop');
   CheckEqual(Int64(30), Int64(LV), 'LIFO pop');

@@ -20,7 +20,7 @@ type
     FBottom: Int64;
   public
     constructor Create(const ACapacity: PtrUInt);
-    procedure Push(const AValue: T);
+    function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
     function IsEmpty: Boolean;
@@ -49,13 +49,18 @@ begin
   FBottom := 0;
 end;
 
-procedure TWorkStealingDeque.Push(const AValue: T);
+function TWorkStealingDeque.TryPush(const AValue: T): Boolean;
 var
-  LBottom: Int64;
+  LBottom, LTop, LSize: Int64;
 begin
   LBottom := AtomicLoad64(FBottom, moRelaxed);
+  LTop := AtomicLoad64(FTop, moAcquire);
+  LSize := LBottom - LTop;
+  if LSize >= Int64(FCapacity) then
+    Exit(False);
   FBuffer[PtrUInt(LBottom) and FMask] := AValue;
   AtomicStore64(FBottom, LBottom + 1, moRelease);
+  Result := True;
 end;
 
 function TWorkStealingDeque.TryPop(out AValue: T): Boolean;
@@ -63,14 +68,14 @@ var
   LBottom, LTop: Int64;
 begin
   LBottom := AtomicLoad64(FBottom, moRelaxed) - 1;
-  AtomicStore64(FBottom, LBottom, moRelaxed);
-  LTop := AtomicLoad64(FTop, moAcquire);
+  AtomicStore64(FBottom, LBottom, moSeqCst);
+  LTop := AtomicLoad64(FTop, moSeqCst);
   if LTop <= LBottom then
   begin
     AValue := FBuffer[PtrUInt(LBottom) and FMask];
     if LTop = LBottom then
     begin
-      if AtomicCompareExchange64(FTop, LTop, LTop + 1, moAcqRel) <> LTop then
+      if AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop then
       begin
         AtomicStore64(FBottom, LBottom + 1, moRelaxed);
         Exit(False);
@@ -90,12 +95,12 @@ function TWorkStealingDeque.TrySteal(out AValue: T): Boolean;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moAcquire);
-  LBottom := AtomicLoad64(FBottom, moAcquire);
+  LTop := AtomicLoad64(FTop, moSeqCst);
+  LBottom := AtomicLoad64(FBottom, moSeqCst);
   if LTop >= LBottom then
     Exit(False);
   AValue := FBuffer[PtrUInt(LTop) and FMask];
-  if AtomicCompareExchange64(FTop, LTop, LTop + 1, moAcqRel) <> LTop then
+  if AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop then
     Exit(False);
   Result := True;
 end;
@@ -104,8 +109,8 @@ function TWorkStealingDeque.IsEmpty: Boolean;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moAcquire);
-  LBottom := AtomicLoad64(FBottom, moAcquire);
+  LTop := AtomicLoad64(FTop, moSeqCst);
+  LBottom := AtomicLoad64(FBottom, moSeqCst);
   Result := LTop >= LBottom;
 end;
 
@@ -113,8 +118,8 @@ function TWorkStealingDeque.ApproxCount: PtrUInt;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moAcquire);
-  LBottom := AtomicLoad64(FBottom, moAcquire);
+  LTop := AtomicLoad64(FTop, moSeqCst);
+  LBottom := AtomicLoad64(FBottom, moSeqCst);
   if LBottom > LTop then
     Result := PtrUInt(LBottom - LTop)
   else

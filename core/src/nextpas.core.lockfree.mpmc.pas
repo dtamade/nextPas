@@ -77,6 +77,8 @@ var
   LIdx: PtrUInt;
   LSeq, LDiff: Int64;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   while True do
   begin
     LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
@@ -89,6 +91,7 @@ begin
       begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
+        LockFreeWakeData(@FDataEpoch);
         Result := True;
         Exit;
       end;
@@ -118,6 +121,7 @@ begin
       begin
         AValue := FSlots[LIdx].Value;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+        LockFreeWakeSpace(@FSpaceEpoch);
         Result := True;
         Exit;
       end;

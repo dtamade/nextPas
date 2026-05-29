@@ -74,6 +74,8 @@ function TSpscQueue.TryEnqueue(const AValue: T): Boolean;
 var
   LTail: Int64;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   LTail := FTail;
   if LTail - FHeadCache >= Int64(FCapacity) then
   begin
@@ -84,6 +86,7 @@ begin
   FSlots[LTail and Int64(FMask)] := AValue;
   FTail := LTail + 1;
   AtomicStore64(FTailPublished, LTail + 1, moRelease);
+  LockFreeWakeData(@FDataEpoch);
   Result := True;
 end;
 
@@ -101,6 +104,7 @@ begin
   AValue := FSlots[LHead and Int64(FMask)];
   FHead := LHead + 1;
   AtomicStore64(FHeadPublished, LHead + 1, moRelease);
+  LockFreeWakeSpace(@FSpaceEpoch);
   Result := True;
 end;
 
@@ -214,6 +218,8 @@ var
   LI: PtrUInt;
   LCount: PtrUInt;
 begin
+  if Length(AValues) = 0 then
+    Exit(0);
   LTail := FTail;
   LAvail := Int64(FCapacity) - (LTail - FHeadCache);
   if LAvail <= 0 then
@@ -230,6 +236,7 @@ begin
     FSlots[(LTail + Int64(LI)) and Int64(FMask)] := AValues[LI];
   FTail := LTail + Int64(LCount);
   AtomicStore64(FTailPublished, FTail, moRelease);
+  LockFreeWakeData(@FDataEpoch);
   Result := LCount;
 end;
 
@@ -239,6 +246,8 @@ var
   LI: PtrUInt;
   LCount: PtrUInt;
 begin
+  if (AMaxCount = 0) or (Length(AValues) = 0) then
+    Exit(0);
   LHead := FHead;
   LAvail := FTailCache - LHead;
   if LAvail <= 0 then
@@ -257,6 +266,7 @@ begin
     AValues[LI] := FSlots[(LHead + Int64(LI)) and Int64(FMask)];
   FHead := LHead + Int64(LCount);
   AtomicStore64(FHeadPublished, FHead, moRelease);
+  LockFreeWakeSpace(@FSpaceEpoch);
   Result := LCount;
 end;
 
